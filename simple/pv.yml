@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: esopster-box-2-pv
+  labels:
+    type: local
+spec:
+  storageClassName: gp2
+  capacity:
+    storage: 100Gi
+  accessModes:
+    - ReadWriteMany

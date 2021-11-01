@@ -1,0 +1,7 @@
+apiVersion: opster.opster.io/v1alpha1
+kind: Es
+metadata:
+  name: es-sample
+spec:
+  # Add fields here
+  foo: bar

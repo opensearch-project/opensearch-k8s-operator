@@ -1,0 +1,27 @@
+apiVersion: opster.opster.io/v1alpha1
+kind: Es
+metadata:
+  name: opster-opensearch
+  finalizers:
+    - idan
+spec:
+  general:
+    clusterName: opster-os-crd
+    esPort: 9200
+    vendor: opensearch
+    version: latest
+    serviceName: es-svc
+  masters:
+    replicas: 3
+    diskSize: 30
+    NodeSelector:
+    cpu: 4
+    memory: 16
+  nodes:
+    replicas: 3
+    diskSize: 100
+    NodeSelector:
+    cpu: 4
+    memory: 16
+    ingest: true
+
