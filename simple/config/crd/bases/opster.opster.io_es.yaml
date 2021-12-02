@@ -62,6 +62,8 @@ spec:
                   diskSize:
                     format: int32
                     type: integer
+                  jvm:
+                    type: string
                   memory:
                     format: int32
                     type: integer
@@ -81,7 +83,9 @@ spec:
                     format: int32
                     type: integer
                   ingest:
-                    type: boolean
+                    type: string
+                  jvm:
+                    type: string
                   memory:
                     format: int32
                     type: integer

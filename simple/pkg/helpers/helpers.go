@@ -15,7 +15,6 @@ func ContainsString(slice []string, s string) bool {
 
 }
 
-
 func removeString(slice []string, s string) (result []string) {
 	for _, item := range slice {
 		if item == s {
@@ -26,16 +25,16 @@ func removeString(slice []string, s string) (result []string) {
 	return
 }
 
-func CreateInitmasters(cr *opsterv1alpha1.Es ) string {
-	 i:= cr.Spec.Masters.Replicas
-	 p:= int(i)
+func CreateInitmasters(cr *opsterv1alpha1.Es) string {
+	i := cr.Spec.Masters.Replicas
+	p := int(i)
 
-	 var masters = ""
-	 for x := 0 ; x < p ; x++ {
-	 	masters=fmt.Sprintf("%s-master-%d,%s",cr.Spec.General.ClusterName,x,masters)
-	 }
+	var masters = ""
+	for x := 0; x < p; x++ {
+		masters = fmt.Sprintf("%s-master-%d,%s", cr.Spec.General.ClusterName, x, masters)
+	}
 	if last := len(masters) - 1; last >= 0 && masters[last] == ',' {
-		 masters = masters[:last]
+		masters = masters[:last]
 	}
 	return masters
 

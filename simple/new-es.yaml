@@ -2,11 +2,12 @@ apiVersion: opster.opster.io/v1alpha1
 kind: Es
 metadata:
   name: opster-opensearch
+  namespace: operator-os
   finalizers:
     - idan
 spec:
   general:
-    clusterName: opster-os-crd
+    clusterName: os-from-operator
     esPort: 9200
     vendor: opensearch
     version: latest
@@ -23,5 +24,5 @@ spec:
     NodeSelector:
     cpu: 4
     memory: 16
-    ingest: true
+    ingest: "true"
 

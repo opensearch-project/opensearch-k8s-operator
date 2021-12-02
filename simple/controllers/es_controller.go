@@ -85,7 +85,6 @@ func (r *EsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		fmt.Println("start reconcile - Phase: RUNNING")
 		//	reqLogger.info("start reconcile - Phase: RUNNING")
 
-
 		//err = ctrl.SetControllerReference(instance, ns, r.Scheme)
 		//if err != nil {
 		//	// requeue with error
@@ -104,8 +103,8 @@ func (r *EsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 
 		myFinalizerName := "idan"
 
-
-		 /// ------ check if CRD has been deleted ------
+		fmt.Println("second")
+		/// ------ check if CRD has been deleted ------
 		if instance.ObjectMeta.DeletionTimestamp.IsZero() {
 			if !helpers.ContainsString(instance.GetFinalizers(), myFinalizerName) {
 				controllerutil.AddFinalizer(instance, myFinalizerName)
@@ -133,12 +132,17 @@ func (r *EsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		}
 
 		/// ----- build resources ------
-		service :=builders.NewServiceForCR(instance)
+		service := builders.NewServiceForCR(instance)
 		stsm := builders.NewMasterSTSForCR(instance)
 		ns := builders.NewNsForCR(instance)
 		cm := builders.NewCmForCR(instance)
 		headless_service := builders.NewHeadlessServiceForCR(instance)
+		stsn := builders.NewNodeSTSForCR(instance)
 
+
+		kibana := builders.NewKibanaForCR(instance)
+		kibana_cm := builders.NewCmKibanaForCR(instance)
+		kibana_service := builders.NewKibanaSvcForCr(instance)
 
 		/// ------ Create NameSpace -------
 		ns_query := &corev1.Namespace{}
@@ -156,29 +160,17 @@ func (r *EsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		} else if err != nil {
 			// requeue with err
 			//		reqLogger.Error(err, "cannot create pod")
-			fmt.Println(err,"Cannot create namespace")
+			fmt.Println(err, "Cannot create namespace")
 			return ctrl.Result{}, err
 		}
 
 		/// ------ Create ConfigMap -------
-		cm_query := &corev1.ConfigMap{}
-		// try to see if the pod already exists
-		err = r.Get(context.TODO(), req.NamespacedName, cm_query)
-		if err != nil && errors.IsNotFound(err) {
-			// does not exist, create a pod
-			err = r.Create(context.TODO(), cm)
-			if err != nil {
-				return ctrl.Result{}, err
-			}
-			// Successfully created a Pod
-			//		reqLogger.Info("Pod Created successfully", "name", pod.Name)
-			fmt.Println("Cm Created successfully", "name", cm.Name)
-		} else if err != nil {
-			// requeue with err
-			//		reqLogger.Error(err, "cannot create pod")
-			fmt.Println(err,"Cannot create Configmap "+ cm.Name)
+		err = r.Create(context.TODO(), cm)
+		if err != nil {
+			fmt.Println(err, "Cannot create Configmap "+cm.Name)
 			return ctrl.Result{}, err
 		}
+		fmt.Println("Cm Created successfully", "name", cm.Name)
 
 		/// ------ Create Headleass Service -------
 		service_query := &corev1.Service{}
@@ -193,10 +185,9 @@ func (r *EsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			fmt.Println("service Created successfully", "name", headless_service.Name)
 		} else if err != nil {
 			// requeue with err
-			fmt.Println(err,"Cannot create Headless Service")
+			fmt.Println(err, "Cannot create Headless Service")
 			return ctrl.Result{}, err
 		}
-
 
 		/// ------ Create External Service -------
 		service_query = &corev1.Service{}
@@ -215,27 +206,67 @@ func (r *EsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			return ctrl.Result{}, err
 		}
 
-			/// ------ Create Es Masters StatefulSet -------
-			sts_query := &sts.StatefulSet{}
-			// try to see if the pod already exists
-			err = r.Get(context.TODO(), req.NamespacedName, sts_query)
-			if err != nil && errors.IsNotFound(err) {
-				// does not exist, create a pod
-				err = r.Create(context.TODO(), stsm)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-				fmt.Println("StatefulSet Created successfully", "name", stsm.Name)
-				return ctrl.Result{}, nil
-			} else if err != nil {
-				// requeue with err
-				fmt.Println(err, "Cannot create STS")
+		/// ------ Create Es Masters StatefulSet -------
+		sts_query := &sts.StatefulSet{}
+		// try to see if the pod already exists
+		err = r.Get(context.TODO(), req.NamespacedName, sts_query)
+		if err != nil && errors.IsNotFound(err) {
+			// does not exist, create a pod
+			err = r.Create(context.TODO(), stsm)
+			if err != nil {
 				return ctrl.Result{}, err
-			} else {
-				// don't requeue, it will happen automatically when
-				// pod status changes
-				return ctrl.Result{}, nil
 			}
+			fmt.Println("StatefulSet Created successfully", "name", stsm.Name)
+		} else if err != nil {
+			// requeue with err
+			fmt.Println(err, "Cannot create STS")
+			return ctrl.Result{}, err
+		}
+
+		/// ------ Create Es Nodes StatefulSet -------
+		sts_query = &sts.StatefulSet{}
+		// try to see if the pod already exists
+		err = r.Get(context.TODO(), req.NamespacedName, sts_query)
+		if err != nil && errors.IsNotFound(err) {
+			// does not exist, create a pod
+			err = r.Create(context.TODO(), stsn)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			fmt.Println("StatefulSet Created successfully", "name", stsn.Name)
+		} else if err != nil {
+			// requeue with err
+			fmt.Println(err, "Cannot create STS")
+			return ctrl.Result{}, err
+		}
+
+		/// ------ create kibana cm ------- ///
+		err = r.Create(context.TODO(), kibana_cm)
+		if err != nil {
+			fmt.Println(err, "Cannot create Kibana Configmap "+cm.Name)
+			return ctrl.Result{}, err
+		}
+		fmt.Println("KIbana Cm Created successfully", "name", cm.Name)
+
+		/// -------- create kibana service ------- ///
+		err = r.Create(context.TODO(), kibana_service)
+		if err != nil {
+			fmt.Println(err, "Cannot create Kibana service "+cm.Name)
+			return ctrl.Result{}, err
+		}
+		fmt.Println("Kibana service Created successfully", "name", cm.Name)
+
+		/// ------- create kibana sts ------- ///
+		err = r.Create(context.TODO(), kibana)
+		if err != nil {
+			fmt.Println(err, "Cannot create Kibana STS "+cm.Name)
+			return ctrl.Result{}, err
+		}
+		fmt.Println("KIbana STS Created successfully - ", "name : ", cm.Name)
+
+		fmt.Println("Finshed reconcilng (please wait few minutes for fully operative cluster) - Phase: DONE")
+		//sinstance.Status.Phase = opsterv1alpha1.PhaseDone
+		return ctrl.Result{}, nil
 
 	case opsterv1alpha1.PhaseDone:
 		//		reqLogger.Info("start reconcile: DONE")
@@ -254,7 +285,6 @@ func (r *EsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	return ctrl.Result{}, nil
 }
 
-
 // SetupWithManager sets up the controller with the Manager.
 func (r *EsReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	err := ctrl.NewControllerManagedBy(mgr).
@@ -270,7 +300,6 @@ func (r *EsReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return nil
 }
 
-
 func (r *EsReconciler) deleteExternalResources(es *opsterv1alpha1.Es) error {
 	namespace := es.Spec.General.ClusterName
 
@@ -279,8 +308,8 @@ func (r *EsReconciler) deleteExternalResources(es *opsterv1alpha1.Es) error {
 	fmt.Println("Cluster", es.Name, "has been deleted, Delete namesapce ", namespace)
 	err := r.Delete(context.TODO(), nsToDel)
 	if err != nil {
-		 return err
+		return err
 	}
-	fmt.Println("NS" ,namespace ,"Deleted successfully")
-	return  nil
+	fmt.Println("NS", namespace, "Deleted successfully")
+	return nil
 }

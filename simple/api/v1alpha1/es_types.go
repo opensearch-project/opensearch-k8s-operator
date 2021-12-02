@@ -32,38 +32,36 @@ const (
 type EsGeneral struct {
 
 	//+kubebuilder:default="Opster_cluster"
-	ClusterName	string `json:"clusterName,omitempty"`
-	EsPort	int32 `json:"esPort,omitempty"`
+	ClusterName string `json:"clusterName,omitempty"`
+	EsPort      int32  `json:"esPort,omitempty"`
 	/////////+kubebuilder:validation:Enum=Opensearch,Elasticsearch,Op,Es,OP,ES
-	Vendor string `json:"vendor,omitempty"`
-	Version string `json:"version,omitempty"`
+	Vendor         string `json:"vendor,omitempty"`
+	Version        string `json:"version,omitempty"`
 	ServiceAccount string `json:"serviceAccount,omitempty"`
-	ServiceName	string	`json:"serviceName,omitempty"`
-
+	ServiceName    string `json:"serviceName,omitempty"`
 }
 
 type EsNodes struct {
-	Replicas int32	`json:"replicas,omitempty"`
-	DiskSize int32	`json:"diskSize,omitempty"`
-	NodeSelector	string	`json:"nodeSelector,omitempty"`
-	Cpu	int32 	`json:"cpu,omitempty"`
-	Memory int32 `json:"memory,omitempty"`
-	ingest bool	`json:"ingest,omitempty"`
+	Replicas     int32  `json:"replicas,omitempty"`
+	DiskSize     int32  `json:"diskSize,omitempty"`
+	NodeSelector string `json:"nodeSelector,omitempty"`
+	Cpu          int32  `json:"cpu,omitempty"`
+	Memory       int32  `json:"memory,omitempty"`
+	Ingest       string `json:"ingest,omitempty"`
+	Jvm          string `json:"jvm,omitempty"`
 }
-
 
 type EsMasters struct {
 	/////////+kubebuilder:validation:Enum=3,5
-	Replicas int32	`json:"replicas,omitempty"`
-	DiskSize int32	`json:"diskSize,omitempty"`
-	NodeSelector	string	`json:"nodeSelector,omitempty"`
-	Cpu	int32 	`json:"cpu,omitempty"`
-	Memory int32 `json:"memory,omitempty"`
+	Replicas     int32  `json:"replicas,omitempty"`
+	DiskSize     int32  `json:"diskSize,omitempty"`
+	NodeSelector string `json:"nodeSelector,omitempty"`
+	Cpu          int32  `json:"cpu,omitempty"`
+	Memory       int32  `json:"memory,omitempty"`
+	Jvm          string `json:"jvm,omitempty"`
 }
 
-
 type EsConf struct {
-
 }
 
 // EsSpec defines the desired state of Es
@@ -75,9 +73,8 @@ type EsSpec struct {
 
 	General EsGeneral `json:"general,omitempty"`
 	Masters EsMasters `json:"masters,omitempty"`
-	Nodes   EsNodes `json:"nodes,omitempty"`
+	Nodes   EsNodes   `json:"nodes,omitempty"`
 }
-
 
 // EsStatus defines the observed state of Es
 type EsStatus struct {

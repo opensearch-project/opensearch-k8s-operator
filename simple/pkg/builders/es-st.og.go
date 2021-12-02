@@ -1,6 +1,7 @@
 package builders
 
 import (
+	"fmt"
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -16,26 +17,29 @@ import (
 )
 
 func NewMasterSTSForCR(cr *opsterv1alpha1.Es) *sts.StatefulSet {
+	disk := fmt.Sprint(cr.Spec.Masters.DiskSize)
+
 	pvt := corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Name: "idan"},
+		ObjectMeta: metav1.ObjectMeta{Name: "pvc"},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 			Resources: corev1.ResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("100Gi"),
+					corev1.ResourceStorage: resource.MustParse(disk),
 				},
 			},
 		},
 	}
 
-	cluster_init_node:=helpers.CreateInitmasters(cr)
+	cluster_init_node := helpers.CreateInitmasters(cr)
 	//var vendor string
 	labels := map[string]string{
 		"app": cr.Name,
 	}
 
-	i, err:= strconv.ParseInt("420",10,32)
+	i, err := strconv.ParseInt("420", 10, 32)
 	if err != nil {
+		fmt.Println("here panic")
 		panic(err)
 	}
 	mode := int32(i)
@@ -45,31 +49,35 @@ func NewMasterSTSForCR(cr *opsterv1alpha1.Es) *sts.StatefulSet {
 	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
 		cr.Spec.General.Vendor == "Opensearch" ||
 		cr.Spec.General.Vendor == "opensearch" {
-	//	vendor = "opensearchproject/opensearch"
+		//	vendor = "opensearchproject/opensearch"
 	} else {
 		//vendor ="elasticsearch"
 	}
 
+	//var jvm string
+	////if cr.Spec.Masters.Jvm == "" {
+	////	jvm = "-Xmx512M -Xms512M"
+	////}
+
 	return &sts.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName+"-master",
+			Name:      cr.Spec.General.ClusterName + "-master",
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
-
 		},
-		Spec:  sts.StatefulSetSpec{
-			Replicas:             &cr.Spec.Masters.Replicas,
-			Selector:             &metav1.LabelSelector{
+		Spec: sts.StatefulSetSpec{
+			Replicas: &cr.Spec.Masters.Replicas,
+			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
 
-			Template:             corev1.PodTemplateSpec{
+			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
 					Annotations: nil,
 				},
-				Spec:       corev1.PodSpec{
-					Containers:         []corev1.Container{
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
 						{
 							Env: []corev1.EnvVar{corev1.EnvVar{
 								Name:      "cluster.initial_master_nodes",
@@ -77,96 +85,86 @@ func NewMasterSTSForCR(cr *opsterv1alpha1.Es) *sts.StatefulSet {
 								ValueFrom: nil,
 							},
 								corev1.EnvVar{
-								Name:      "discovery.seed_hosts",
-								Value:     cr.Spec.General.ServiceName+"-headleass-service",
-								ValueFrom: nil,
-
+									Name:      "discovery.seed_hosts",
+									Value:     cr.Spec.General.ServiceName + "-headleass-service",
+									ValueFrom: nil,
 								},
 								corev1.EnvVar{
-								Name:      "cluster.name",
-								Value:     cr.Spec.General.ClusterName,
-								ValueFrom: nil,
-
+									Name:      "cluster.name",
+									Value:     cr.Spec.General.ClusterName,
+									ValueFrom: nil,
 								},
 								corev1.EnvVar{
-								Name:      "network.host",
-								Value:     "0.0.0.0",
-								ValueFrom: nil,
-
+									Name:      "network.host",
+									Value:     "0.0.0.0",
+									ValueFrom: nil,
 								},
 								corev1.EnvVar{
 									Name:      "OPENSEARCH_JAVA_OPTS",
 									Value:     "-Xmx512M -Xms512M",
 									ValueFrom: nil,
-
 								},
 								corev1.EnvVar{
 									Name:      "node.data",
 									Value:     "true",
 									ValueFrom: nil,
-
 								},
 								corev1.EnvVar{
 									Name:      "node.master",
 									Value:     "true",
 									ValueFrom: nil,
-
 								},
 								corev1.EnvVar{
 									Name:      "node.ingest",
-									Value:     "true",
+									Value:     "false",
 									ValueFrom: nil,
-
 								},
 								corev1.EnvVar{
 									Name:      "node.remote_cluster_client",
 									Value:     "true",
 									ValueFrom: nil,
-
 								},
-
 							},
-
 
 							Name:  cr.Name,
 							Image: "774082015892.dkr.ecr.us-east-1.amazonaws.com/opensearchproject:opensearch",
 							Ports: []corev1.ContainerPort{
 								{
-									Name:         cr.Spec.General.ServiceName,
+									Name:          cr.Spec.General.ServiceName+"-port",
 									ContainerPort: cr.Spec.General.EsPort,
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:             "idan",
-									MountPath:        "/usr/share/opensearch/data",
+									Name:      "pvc",
+									MountPath: "/usr/share/opensearch/data",
 								},
 								{
-									Name: 			"opensearch-yml",
-									MountPath: 		"/usr/share/opensearch/config/opensearch.yml",
-									SubPath: "opensearch.yml",
+									Name:      "opensearch-yml",
+									MountPath: "/usr/share/opensearch/config/opensearch.yml",
+									SubPath:   "opensearch.yml",
 								},
 							},
 						},
 					},
 					InitContainers: []corev1.Container{{
-						Name: "init",
-						Image: "774082015892.dkr.ecr.us-east-1.amazonaws.com/busybox:1.27.2",
-						Command: []string{"sh","-c"},
-						Args: []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+						Name:    "init",
+						Image:   "774082015892.dkr.ecr.us-east-1.amazonaws.com/busybox:1.27.2",
+						Command: []string{"sh", "-c"},
+						Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 						SecurityContext: &corev1.SecurityContext{
 							RunAsUser: &runas,
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
-								Name:      "idan",
+								Name:      "pvc",
 								MountPath: "/usr/share/opensearch/data",
 							},
 						},
 					},
 					},
 					Volumes: []corev1.Volume{
-						{ 	Name:        "opensearch-yml",
+						{Name: "opensearch-yml",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									LocalObjectReference: corev1.LocalObjectReference{Name: "opensearch-yml"},
@@ -177,17 +175,188 @@ func NewMasterSTSForCR(cr *opsterv1alpha1.Es) *sts.StatefulSet {
 					},
 					//NodeSelector:       nil,
 					ServiceAccountName: cr.Spec.General.ServiceAccount,
-				//	Affinity:           nil,
+					//	Affinity:           nil,
 				},
 			},
-			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{pvt,
-			},
-			ServiceName:          cr.Spec.General.ServiceName,
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{pvt},
+			ServiceName:          cr.Spec.General.ServiceName + "-svc",
 		},
 	}
 }
 
+func NewNodeSTSForCR(cr *opsterv1alpha1.Es) *sts.StatefulSet {
 
+	/////// Declerations //////
+
+	var jvm string
+	disk := fmt.Sprint(cr.Spec.Nodes.DiskSize)
+	pvt := corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{Name: "pvc"},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(disk),
+				},
+			},
+		},
+	}
+
+	cluster_init_node := helpers.CreateInitmasters(cr)
+	//var vendor string
+	labels := map[string]string{
+		"app": cr.Name,
+	}
+
+	i, err := strconv.ParseInt("420", 10, 32)
+	if err != nil {
+		panic(err)
+	}
+	mode := int32(i)
+	//storageClass := "gp2"
+	runas := int64(0)
+
+	if cr.Spec.Nodes.Jvm == "" {
+		jvm = "-Xmx512M -Xms512M"
+	}
+
+	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
+		cr.Spec.General.Vendor == "Opensearch" ||
+		cr.Spec.General.Vendor == "opensearch" {
+		//	vendor = "opensearchproject/opensearch"
+	} else {
+		//vendor ="elasticsearch"
+	}
+
+	//var ingest string
+
+	//if cr.Spec.Nodes.Ingest != "" {
+	//	ingest = "true"
+	//}
+	return &sts.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Spec.General.ClusterName + "-node",
+			Namespace: cr.Spec.General.ClusterName,
+			Labels:    labels,
+		},
+		Spec: sts.StatefulSetSpec{
+			Replicas: &cr.Spec.Nodes.Replicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: labels,
+			},
+
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels:      labels,
+					Annotations: nil,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{
+						{
+							Env: []corev1.EnvVar{corev1.EnvVar{
+								Name:      "cluster.initial_master_nodes",
+								Value:     cluster_init_node,
+								ValueFrom: nil,
+							},
+								corev1.EnvVar{
+									Name:      "discovery.seed_hosts",
+									Value:     cr.Spec.General.ServiceName + "-headleass-service",
+									ValueFrom: nil,
+								},
+								corev1.EnvVar{
+									Name:      "cluster.name",
+									Value:     cr.Spec.General.ClusterName,
+									ValueFrom: nil,
+								},
+								corev1.EnvVar{
+									Name:      "network.host",
+									Value:     "0.0.0.0",
+									ValueFrom: nil,
+								},
+								corev1.EnvVar{
+									Name:      "OPENSEARCH_JAVA_OPTS",
+									Value:     jvm,
+									ValueFrom: nil,
+								},
+								corev1.EnvVar{
+									Name:      "node.data",
+									Value:     "true",
+									ValueFrom: nil,
+								},
+								corev1.EnvVar{
+									Name:      "node.master",
+									Value:     "false",
+									ValueFrom: nil,
+								},
+								corev1.EnvVar{
+									Name:      "node.ingest",
+									Value:     "true",
+									ValueFrom: nil,
+								},
+								corev1.EnvVar{
+									Name:      "node.remote_cluster_client",
+									Value:     "true",
+									ValueFrom: nil,
+								},
+							},
+
+							Name:  cr.Name,
+							Image: "774082015892.dkr.ecr.us-east-1.amazonaws.com/opensearchproject:opensearch",
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          cr.Spec.General.ServiceName,
+									ContainerPort: cr.Spec.General.EsPort,
+								},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "pvc",
+									MountPath: "/usr/share/opensearch/data",
+								},
+								{
+									Name:      "opensearch-yml",
+									MountPath: "/usr/share/opensearch/config/opensearch.yml",
+									SubPath:   "opensearch.yml",
+								},
+							},
+						},
+					},
+					InitContainers: []corev1.Container{{
+						Name:    "init",
+						Image:   "774082015892.dkr.ecr.us-east-1.amazonaws.com/busybox:1.27.2",
+						Command: []string{"sh", "-c"},
+						Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+						SecurityContext: &corev1.SecurityContext{
+							RunAsUser: &runas,
+						},
+						VolumeMounts: []corev1.VolumeMount{
+							{
+								Name:      "pvc",
+								MountPath: "/usr/share/opensearch/data",
+							},
+						},
+					},
+					},
+					Volumes: []corev1.Volume{
+						{Name: "opensearch-yml",
+							VolumeSource: corev1.VolumeSource{
+								ConfigMap: &corev1.ConfigMapVolumeSource{
+									LocalObjectReference: corev1.LocalObjectReference{Name: "opensearch-yml"},
+									DefaultMode:          &mode,
+								},
+							},
+						},
+					},
+					//NodeSelector:       nil,
+					ServiceAccountName: cr.Spec.General.ServiceAccount,
+					//	Affinity:           nil,
+				},
+			},
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{pvt},
+			ServiceName:          cr.Spec.General.ServiceName + "-svc",
+		},
+	}
+}
 
 //func NewPVCForCR(cr *opsterv1alpha1.Es) *corev1.PersistentVolumeClaimTemplate {
 //
@@ -207,7 +376,6 @@ func NewMasterSTSForCR(cr *opsterv1alpha1.Es) *sts.StatefulSet {
 //	}
 //}
 
-
 func NewHeadlessServiceForCR(cr *opsterv1alpha1.Es) *corev1.Service {
 
 	labels := map[string]string{
@@ -215,30 +383,30 @@ func NewHeadlessServiceForCR(cr *opsterv1alpha1.Es) *corev1.Service {
 	}
 
 	return &corev1.Service{
-		TypeMeta:   metav1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName+"-headleass-service",
+			Name:      cr.Spec.General.ServiceName + "-headleass-service",
 			Namespace: cr.Spec.General.ClusterName,
-			Labels: labels,
+			Labels:    labels,
 		},
-		Spec:       corev1.ServiceSpec{
+		Spec: corev1.ServiceSpec{
 			ClusterIP: "None",
-			Ports:   []corev1.ServicePort{
+			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
-					Name:       "http",
-					Protocol:   "TCP",
-					Port:       cr.Spec.General.EsPort,
+					Name:     "http",
+					Protocol: "TCP",
+					Port:     cr.Spec.General.EsPort,
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.EsPort,
 					},
 				},
 				corev1.ServicePort{
-					Name:       "transport",
-					Protocol:   "TCP",
-					Port:       9300,
+					Name:     "transport",
+					Protocol: "TCP",
+					Port:     9300,
 					TargetPort: intstr.IntOrString{
 						IntVal: 9300,
 						StrVal: "9300",
@@ -251,7 +419,6 @@ func NewHeadlessServiceForCR(cr *opsterv1alpha1.Es) *corev1.Service {
 	}
 }
 
-
 func NewServiceForCR(cr *opsterv1alpha1.Es) *corev1.Service {
 
 	labels := map[string]string{
@@ -259,47 +426,47 @@ func NewServiceForCR(cr *opsterv1alpha1.Es) *corev1.Service {
 	}
 
 	return &corev1.Service{
-		TypeMeta:   metav1.TypeMeta{
+		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName+"service",
+			Name:      cr.Spec.General.ServiceName + "-svc",
 			Namespace: cr.Spec.General.ClusterName,
-			Labels: labels,
+			Labels:    labels,
 		},
-		Spec:       corev1.ServiceSpec{
-			Ports:   []corev1.ServicePort{
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
-					Name:       "http",
-					Protocol:   "TCP",
-					Port:       cr.Spec.General.EsPort,
+					Name:     "http",
+					Protocol: "TCP",
+					Port:     cr.Spec.General.EsPort,
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.EsPort,
 					},
 				},
 				corev1.ServicePort{
-					Name:       "transport",
-					Protocol:   "TCP",
-					Port:       9300,
+					Name:     "transport",
+					Protocol: "TCP",
+					Port:     9300,
 					TargetPort: intstr.IntOrString{
 						IntVal: 9300,
 						StrVal: "9300",
 					},
 				},
 				corev1.ServicePort{
-					Name:       "metrics",
-					Protocol:   "TCP",
-					Port:       9600,
+					Name:     "metrics",
+					Protocol: "TCP",
+					Port:     9600,
 					TargetPort: intstr.IntOrString{
 						IntVal: 9600,
 						StrVal: "9600",
 					},
 				},
 				corev1.ServicePort{
-					Name:       "rca",
-					Protocol:   "TCP",
-					Port:       9650,
+					Name:     "rca",
+					Protocol: "TCP",
+					Port:     9650,
 					TargetPort: intstr.IntOrString{
 						IntVal: 9650,
 						StrVal: "9650",
@@ -317,13 +484,11 @@ func NewNsForCR(cr *opsterv1alpha1.Es) *corev1.Namespace {
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cr.Spec.General.ClusterName,
-			},
+		},
 	}
 }
 
-
 func NewCmForCR(cr *opsterv1alpha1.Es) *corev1.ConfigMap {
-
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
