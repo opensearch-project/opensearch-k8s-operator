@@ -1,5 +1,5 @@
 # opensearch-k8s-operator
-Opster &amp; SberBank OpenSearch k8s Operator
+OpenSearch k8s Operator
 The Operator is reconciling the Os CRD, a crd that defining OpensearchCluster (data,masters and opensearch-dashboard).
 After the reconciliation the opeartor will create a full working OpenSearch cluster.
 
