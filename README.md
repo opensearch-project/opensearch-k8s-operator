@@ -10,10 +10,13 @@ After the reconciliation the opeartor will create a full working OpenSearch clus
 
 # create opensearch-cluster
 use os-cluster.yaml to difine your cluster - when "ClusterName" is also the Namespace that the cluster will create in.
-kubectl create os-cluster.yml
+kubectl create os-cluster.yaml
+  kubectl create os-cluster.yaml
     
 # delete opensearch-cluster
  to delete cluster please delete your Os cluster resource ,that will delete the clsuter namespace and all resources.
+  kubectl get os --all-namespaces
+  kubectl delete os os-from-operator -n <namespace>
     
  # issues for the future 
   - error handling.
