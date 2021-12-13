@@ -7,7 +7,7 @@ Opster &amp; SberBank OpenSearch k8s Operator
   - make insatll
 
 # create opensearch-cluster
-    use os-cluster.yaml to difine your cluster - when "ClusterName" is also the Namespace that the cluster will create in.
+  - use os-cluster.yaml to difine your cluster - when "ClusterName" is also the Namespace that the cluster will create in.
     kubectl create os-cluster.yml
     
 # delete opensearch-cluster
