@@ -1,0 +1,20 @@
+# permissions for end users to view os.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: os-viewer-role
+rules:
+- apiGroups:
+  - opster.os-operator.opster.io
+  resources:
+  - os
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - opster.os-operator.opster.io
+  resources:
+  - os/status
+  verbs:
+  - get

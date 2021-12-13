@@ -1,0 +1,24 @@
+# permissions for end users to edit os.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: os-editor-role
+rules:
+- apiGroups:
+  - opster.os-operator.opster.io
+  resources:
+  - os
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opster.os-operator.opster.io
+  resources:
+  - os/status
+  verbs:
+  - get

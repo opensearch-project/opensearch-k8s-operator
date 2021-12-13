@@ -1,0 +1,7 @@
+apiVersion: opster.os-operator.opster.io/v1
+kind: Os
+metadata:
+  name: os-sample
+spec:
+  # Add fields here
+  foo: bar
