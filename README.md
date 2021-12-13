@@ -9,11 +9,11 @@ After the reconciliation the opeartor will create a full working OpenSearch clus
   - make insatll
 
 # create opensearch-cluster
-  - use os-cluster.yaml to difine your cluster - when "ClusterName" is also the Namespace that the cluster will create in.
-    kubectl create os-cluster.yml
+use os-cluster.yaml to difine your cluster - when "ClusterName" is also the Namespace that the cluster will create in.
+kubectl create os-cluster.yml
     
 # delete opensearch-cluster
-    to delete cluster please delete your Os cluster resource ,that will delete the clsuter namespace and all resources.
+ to delete cluster please delete your Os cluster resource ,that will delete the clsuter namespace and all resources.
     
  # issues for the future 
   - error handling.
