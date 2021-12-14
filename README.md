@@ -26,5 +26,4 @@ kubectl create os-cluster.yaml
   - implement versions.
   - exposing the cluster with seleted vendor (ingress/haproxy/etc...).
   - supports in local-storage.
-     
-   
+  - proper logging.
