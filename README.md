@@ -1,19 +1,19 @@
-# Opensearch-k8s-operator
-The Operator is reconciling the OpenSearch CRD, a CRD for defining an OpensearchCluster (data,masters and opensearch-dashboard).
+# OpenSearch-k8s-operator
+The Operator is reconciling the OpenSearch CRD, a CRD for defining an OpenSearch cluster (data,masters and opensearch-dashboard).
 When the reconciliation is done, the opeartor will create a full working OpenSearch cluster.
 
-# Insatlling the operator
+# Installing the operator
   - clone the repo
   - make manifests
   - make insatll
 
-# Create opensearch-cluster
+# Create openSearch-cluster
 Use os-cluster.yaml to define your cluster - when the "ClusterName" is also the namespace that the new cluster will resides in.
 kubectl create os-cluster.yaml
 
     kubectl create os-cluster.yaml
     
-# Delete opensearch-cluster
+# Delete openSearch-cluster
  In order to delete the cluster please delete your OpenSearch cluster resource; this will delete the cluster namespace and all its resources.
  
     kubectl get os --all-namespaces
