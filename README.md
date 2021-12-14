@@ -27,3 +27,4 @@ kubectl create os-cluster.yaml
   - exposing the cluster with seleted vendor (ingress/haproxy/etc...).
   - supports in local-storage.
   - proper logging.
+  - enable OS/ES auto-upgrade.
