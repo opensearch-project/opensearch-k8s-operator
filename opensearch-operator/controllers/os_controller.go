@@ -82,23 +82,6 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		instance.Status.Phase = opsterv1.PhaseRunning
 	case opsterv1.PhaseRunning:
 		fmt.Println("start reconcile - Phase: RUNNING")
-		//	reqLogger.info("start reconcile - Phase: RUNNING")
-
-		//err = ctrl.SetControllerReference(instance, ns, r.Scheme)
-		//if err != nil {
-		//	// requeue with error
-		//	return ctrl.Result{}, err
-		//}
-		//err := ctrl.SetControllerReference(instance, sts, r.Scheme)
-		//if err != nil {
-		//	// requeue with error
-		//	return ctrl.Result{}, err
-		//}
-		//err = ctrl.SetControllerReference(instance, service, r.Scheme)
-		//if err != nil {
-		//	// requeue with error
-		//	return ctrl.Result{}, err
-		//}
 
 		myFinalizerName := "Opster"
 
