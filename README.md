@@ -1,5 +1,6 @@
 # OpenSearch-k8s-operator
-The Operator is reconciling the OpenSearch CRD, a CRD for defining an OpenSearch cluster (data,masters and opensearch-dashboard).
+The Operator is used for creating an OpenSearch cluster.
+it uses a CRD in order to define the OpenSearch cluster (loading data,masters nodes and opensearch-dashboard).
 When the reconciliation is done, the opeartor will create a full working OpenSearch cluster.
 
 # Installing the operator
@@ -27,3 +28,7 @@ kubectl create os-cluster.yaml
   - supports in local-storage.
   - proper logging.
   - enable OS/ES auto-upgrade.
+
+# Contributions welcome
+If you want to conribute to this project please reach out to us at: k8s.operatorOpenSearch@opster.com.
+Thank you!
