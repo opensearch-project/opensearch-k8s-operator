@@ -32,6 +32,8 @@ Use os-cluster.yaml to define your cluster - note that the `ClusterName` is also
 
     kubectl create os-cluster.yaml
     
+- Note: the current installation deploys with the default demo certificate provided by OpenSearch. 
+
 ## Deleting an OpenSearch cluster
 In order to delete the cluster, please delete your OpenSearch cluster resource; this will delete the cluster namespace and all its resources.
  
