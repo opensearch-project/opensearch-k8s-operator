@@ -131,7 +131,7 @@ func NewMasterSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 							},
 
 							Name:  cr.Name,
-							Image: "774082015892.dkr.ecr.us-east-1.amazonaws.com/opensearchproject:opensearch",
+							Image: "opensearchproject/opensearch:1.0.0",
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          cr.Spec.General.ServiceName+"-port",
@@ -153,7 +153,7 @@ func NewMasterSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 					},
 					InitContainers: []corev1.Container{{
 						Name:    "init",
-						Image:   "774082015892.dkr.ecr.us-east-1.amazonaws.com/busybox:1.27.2",
+						Image:   "busybox",
 						Command: []string{"sh", "-c"},
 						Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 						SecurityContext: &corev1.SecurityContext{
@@ -305,7 +305,7 @@ func NewNodeSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 							},
 
 							Name:  cr.Name,
-							Image: "774082015892.dkr.ecr.us-east-1.amazonaws.com/opensearchproject:opensearch",
+							Image: "opensearchproject/opensearch:1.0.0",
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          cr.Spec.General.ServiceName,
@@ -327,7 +327,7 @@ func NewNodeSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 					},
 					InitContainers: []corev1.Container{{
 						Name:    "init",
-						Image:   "774082015892.dkr.ecr.us-east-1.amazonaws.com/busybox:1.27.2",
+						Image:   "busybox",
 						Command: []string{"sh", "-c"},
 						Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 						SecurityContext: &corev1.SecurityContext{
