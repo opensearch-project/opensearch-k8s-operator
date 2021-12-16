@@ -11,7 +11,7 @@ import (
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
-func NewKibanaForCR(cr *opsterv1.Os) *sts.Deployment {
+func New_OS_Dashboard_ForCR(cr *opsterv1.Os) *sts.Deployment {
 
 	labels := map[string]string{
 		"app": cr.Name,
@@ -27,7 +27,7 @@ func NewKibanaForCR(cr *opsterv1.Os) *sts.Deployment {
 
 	return &sts.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-kibana",
+			Name:      cr.Spec.General.ClusterName + "-os-dash",
 			Namespace: cr.Spec.General.ClusterName,
 			Labels: labels,
 		},
@@ -44,18 +44,18 @@ func NewKibanaForCR(cr *opsterv1.Os) *sts.Deployment {
 				Spec: corev1.PodSpec{
 					Volumes: []corev1.Volume{
 						corev1.Volume{
-							Name: "kibana",
+							Name: "os-dash",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									DefaultMode:          &mode,
-									LocalObjectReference: corev1.LocalObjectReference{Name: "kibana"},
+									LocalObjectReference: corev1.LocalObjectReference{Name: "os-dash"},
 								},
 							},
 						},
 					},
 					Containers: []corev1.Container{
 						{
-							Name:  "kibana-container",
+							Name:  "os-dash-container",
 						//	Image: "docker.elastic.co/kibana/kibana:" + cr.Spec.General.Version,
 							Image: "opensearchproject/opensearch-dashboards:1.0.0",
 							Ports: []corev1.ContainerPort{
@@ -76,7 +76,7 @@ func NewKibanaForCR(cr *opsterv1.Os) *sts.Deployment {
 									},
 								},
 									VolumeMounts: []corev1.VolumeMount{
-										{Name: "kibana",
+										{Name: "os-dash",
 											MountPath: "/usr/share/kibana/config/kibana.yml",
 											SubPath:   "kibana.yml",
 										},
@@ -90,11 +90,11 @@ func NewKibanaForCR(cr *opsterv1.Os) *sts.Deployment {
 	}
 }
 
-func NewCmKibanaForCR(cr *opsterv1.Os) *corev1.ConfigMap {
+func NewCm_OS_Dashboard_ForCR(cr *opsterv1.Os) *corev1.ConfigMap {
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "kibana",
+			Name:      "os-dash",
 			Namespace: cr.Spec.General.ClusterName,
 		},
 		Data: map[string]string{
@@ -103,7 +103,7 @@ func NewCmKibanaForCR(cr *opsterv1.Os) *corev1.ConfigMap {
 	}
 }
 
-func NewKibanaSvcForCr(cr *opsterv1.Os) *corev1.Service {
+func New_OS_Dashboard_SvcForCr(cr *opsterv1.Os) *corev1.Service {
 
 	labels := map[string]string{
 		"app": cr.Name,
@@ -115,14 +115,14 @@ func NewKibanaSvcForCr(cr *opsterv1.Os) *corev1.Service {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName + "-k-svc",
+			Name:      cr.Spec.General.ServiceName + "-dash-svc",
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
-					Name:     "kibana",
+					Name:     "os-dash",
 					Protocol: "TCP",
 					Port:     5601,
 					TargetPort: intstr.IntOrString{

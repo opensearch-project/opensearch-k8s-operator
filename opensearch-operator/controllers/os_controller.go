@@ -21,6 +21,7 @@ import (
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/tools/record"
 	"os-operator.io/pkg/builders"
 	"os-operator.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -37,8 +38,10 @@ import (
 type OsReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Recorder record.EventRecorder
 }
 
+//+kubebuilder:rbac:groups="opster.os-operator.opster.io",resources=events,verbs=create;patch
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
@@ -76,6 +79,9 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	}
 	fmt.Println("ENTER switch")
 	switch instance.Status.Phase {
+	case opsterv1.PhaseError:
+		return ctrl.Result{}, nil
+
 	case opsterv1.PhasePending:
 		//	reqLogger.info("start reconcile - Phase: PENDING")
 		fmt.Println("start reconcile - Phase: PENDING")
@@ -122,10 +128,9 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		headless_service := builders.NewHeadlessServiceForCR(instance)
 		stsn := builders.NewNodeSTSForCR(instance)
 
-
-		kibana := builders.NewKibanaForCR(instance)
-		kibana_cm := builders.NewCmKibanaForCR(instance)
-		kibana_service := builders.NewKibanaSvcForCr(instance)
+		os_dash := builders.New_OS_Dashboard_ForCR(instance)
+		os_dash_cm := builders.NewCm_OS_Dashboard_ForCR(instance)
+		os_dash_service := builders.New_OS_Dashboard_SvcForCr(instance)
 
 		/// ------ Create NameSpace -------
 		ns_query := &corev1.Namespace{}
@@ -135,17 +140,15 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			// does not exist, create a ns
 			err = r.Create(context.TODO(), ns)
 			if err != nil {
-				return ctrl.Result{}, err
+				fmt.Println(err, "Cannotççç create namespace")
+				instance.Status.Phase = opsterv1.PhaseError
+				r.Recorder.Event(instance, "Warning", "Cluster already exist", fmt.Sprintf("cluster: %s already exist, please delete it and create a new one ( run - kubectl get ns %s --all to watch the existed cluster )", instance.Spec.General.ClusterName, instance.Spec.General.ClusterName))
+				return ctrl.Result{}, nil
 			}
 			// Successfully created a ns
 			fmt.Println("ns Created successfully", "name", ns.Name)
-		} else if err != nil {
-			// requeue with err
-			//		reqLogger.Error(err, "cannot create ns")
-			fmt.Println(err, "Cannot create namespace")
-			return ctrl.Result{}, err
-		}
 
+		}
 		/// if ns not exist, assuming that cluster not exist ////
 
 		/// ------ Create ConfigMap -------
@@ -194,28 +197,28 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 
 
 		/// ------ create opensearch dashboard cm ------- ///
-		err = r.Create(context.TODO(), kibana_cm)
+		err = r.Create(context.TODO(), os_dash_cm)
 		if err != nil {
-			fmt.Println(err, "Cannot create Kibana Configmap "+cm.Name)
+			fmt.Println(err, "Cannot create Opensearch-Dashboard Configmap "+cm.Name)
 			return ctrl.Result{}, err
 		}
-		fmt.Println("KIbana Cm Created successfully", "name", cm.Name)
+		fmt.Println("Opensearch-Dashboard Cm Created successfully", "name", cm.Name)
 
-		/// -------- create kibana service ------- ///
-		err = r.Create(context.TODO(), kibana_service)
+		/// -------- create Opensearch-Dashboard service ------- ///
+		err = r.Create(context.TODO(), os_dash_service)
 		if err != nil {
-			fmt.Println(err, "Cannot create Kibana service "+cm.Name)
+			fmt.Println(err, "Cannot create Opensearch-Dashboard service "+cm.Name)
 			return ctrl.Result{}, err
 		}
-		fmt.Println("Kibana service Created successfully", "name", cm.Name)
+		fmt.Println("Opensearch-Dashboard service Created successfully", "name", cm.Name)
 
-		/// ------- create kibana sts ------- ///
-		err = r.Create(context.TODO(), kibana)
+		/// ------- create Opensearch-Dashboard sts ------- ///
+		err = r.Create(context.TODO(), os_dash)
 		if err != nil {
-			fmt.Println(err, "Cannot create Kibana STS "+cm.Name)
+			fmt.Println(err, "Cannot create Opensearch-Dashboard STS "+cm.Name)
 			return ctrl.Result{}, err
 		}
-		fmt.Println("KIbana STS Created successfully - ", "name : ", cm.Name)
+		fmt.Println("Opensearch-Dashboard STS Created successfully - ", "name : ", cm.Name)
 
 		fmt.Println("Finshed reconcilng (please wait few minutes for fully operative cluster) - Phase: DONE")
 		//instance.Status.Phase = opsterv1alpha1.PhaseDone
