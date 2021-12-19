@@ -8,6 +8,7 @@ The project is currently a work in progress and is not (yet) recommended for use
 - [x] Deploy a new OS cluster.
 - [x] Ability to deploy multiple clusters.
 - [x] Spin up OS dashboards.
+- [ ] Operator Monitoring, with Prometheus and Grafana.
 - [ ] Configuration of all node roles (master, data, coordinating..).
 - [ ] Scale the cluster resources (manually), per nodes' role group. 
 - [ ] Drain strategy for scale down.
