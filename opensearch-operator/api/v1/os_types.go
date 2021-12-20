@@ -24,7 +24,7 @@ const (
 	PhasePending = "PENDING"
 	PhaseRunning = "RUNNING"
 	PhaseDone    = "DONE"
-	PhaseError    = "ERROR"
+	PhaseError   = "ERROR"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
