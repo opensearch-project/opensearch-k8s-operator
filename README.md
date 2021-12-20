@@ -43,5 +43,5 @@ In order to delete the cluster, please delete your OpenSearch cluster resource; 
     
  
 # Contributions
-We welcome contributions! If you want to conribute to this project please reach out to us at: <operator@opster.com>. 
+We welcome contributions! If you want to contribute to this project please reach out to us at: <operator@opster.com>. 
 
