@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
@@ -31,13 +32,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	opsterv1 "os-operator.io/api/v1"
-
 )
 
 // OsReconciler reconciles a Os object
 type OsReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 }
 
@@ -167,7 +167,6 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		}
 		fmt.Println("service Created successfully", "name", headless_service.Name)
 
-
 		/// ------ Create External Service -------
 		err = r.Create(context.TODO(), service)
 		if err != nil {
@@ -175,8 +174,6 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			return ctrl.Result{}, err
 		}
 		fmt.Println("service Created successfully", "name", service.Name)
-
-
 
 		/// ------ Create Es Masters StatefulSet -------
 		err = r.Create(context.TODO(), stsm)
@@ -186,7 +183,6 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		}
 		fmt.Println("StatefulSet Created successfully", "name", stsm.Name)
 
-
 		/// ------ Create Es Nodes StatefulSet -------
 		err = r.Create(context.TODO(), stsn)
 		if err != nil {
@@ -194,7 +190,6 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			return ctrl.Result{}, err
 		}
 		fmt.Println("StatefulSet Created successfully", "name", stsn.Name)
-
 
 		/// ------ create opensearch dashboard cm ------- ///
 		err = r.Create(context.TODO(), os_dash_cm)
@@ -243,7 +238,6 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	}
 	return ctrl.Result{}, nil
 }
-
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OsReconciler) SetupWithManager(mgr ctrl.Manager) error {

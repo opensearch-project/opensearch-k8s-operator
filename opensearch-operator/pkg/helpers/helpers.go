@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"fmt"
+
 	opsterv1 "os-operator.io/api/v1"
 )
 
@@ -15,15 +16,15 @@ func ContainsString(slice []string, s string) bool {
 
 }
 
-func removeString(slice []string, s string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return
-}
+// func removeString(slice []string, s string) (result []string) {
+// 	for _, item := range slice {
+// 		if item == s {
+// 			continue
+// 		}
+// 		result = append(result, item)
+// 	}
+// 	return
+// }
 
 func CreateInitmasters(cr *opsterv1.Os) string {
 	i := cr.Spec.Masters.Replicas

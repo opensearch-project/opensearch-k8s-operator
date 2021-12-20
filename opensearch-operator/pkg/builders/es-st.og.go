@@ -2,6 +2,7 @@ package builders
 
 import (
 	"fmt"
+
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -9,14 +10,12 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"os-operator.io/pkg/helpers"
 
-
 	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
 	"strconv"
 
 	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
 	opsterv1 "os-operator.io/api/v1"
 )
-
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
@@ -50,13 +49,13 @@ func NewMasterSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 	//storageClass := "gp2"
 	runas := int64(0)
 
-	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
-		cr.Spec.General.Vendor == "Opensearch" ||
-		cr.Spec.General.Vendor == "opensearch" {
-		//	vendor = "opensearchproject/opensearch"
-	} else {
-		//vendor ="elasticsearch"
-	}
+	// if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
+	// 	cr.Spec.General.Vendor == "Opensearch" ||
+	// 	cr.Spec.General.Vendor == "opensearch" {
+	//	vendor = "opensearchproject/opensearch"
+	// } else {
+	//vendor ="elasticsearch"
+	// }
 
 	//var jvm string
 	////if cr.Spec.Masters.Jvm == "" {
@@ -83,47 +82,48 @@ func NewMasterSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Env: []corev1.EnvVar{corev1.EnvVar{
-								Name:      "cluster.initial_master_nodes",
-								Value:     cluster_init_node,
-								ValueFrom: nil,
-							},
-								corev1.EnvVar{
+							Env: []corev1.EnvVar{
+								{
+									Name:      "cluster.initial_master_nodes",
+									Value:     cluster_init_node,
+									ValueFrom: nil,
+								},
+								{
 									Name:      "discovery.seed_hosts",
 									Value:     cr.Spec.General.ServiceName + "-headleass-service",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "cluster.name",
 									Value:     cr.Spec.General.ClusterName,
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "network.host",
 									Value:     "0.0.0.0",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "OPENSEARCH_JAVA_OPTS",
 									Value:     "-Xmx512M -Xms512M",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.data",
 									Value:     "true",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.master",
 									Value:     "true",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.ingest",
 									Value:     "false",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.remote_cluster_client",
 									Value:     "true",
 									ValueFrom: nil,
@@ -134,7 +134,7 @@ func NewMasterSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 							Image: "opensearchproject/opensearch:1.0.0",
 							Ports: []corev1.ContainerPort{
 								{
-									Name:          cr.Spec.General.ServiceName+"-port",
+									Name:          cr.Spec.General.ServiceName + "-port",
 									ContainerPort: cr.Spec.General.OsPort,
 								},
 							},
@@ -224,13 +224,13 @@ func NewNodeSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 		jvm = "-Xmx512M -Xms512M"
 	}
 
-	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
-		cr.Spec.General.Vendor == "Opensearch" ||
-		cr.Spec.General.Vendor == "opensearch" {
-		//	vendor = "opensearchproject/opensearch"
-	} else {
-		//vendor ="elasticsearch"
-	}
+	// if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
+	// 	cr.Spec.General.Vendor == "Opensearch" ||
+	// 	cr.Spec.General.Vendor == "opensearch" {
+	// 	//	vendor = "opensearchproject/opensearch"
+	// } else {
+	//vendor ="elasticsearch"
+	// }
 
 	//var ingest string
 
@@ -257,47 +257,48 @@ func NewNodeSTSForCR(cr *opsterv1.Os) *sts.StatefulSet {
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Env: []corev1.EnvVar{corev1.EnvVar{
-								Name:      "cluster.initial_master_nodes",
-								Value:     cluster_init_node,
-								ValueFrom: nil,
-							},
-								corev1.EnvVar{
+							Env: []corev1.EnvVar{
+								{
+									Name:      "cluster.initial_master_nodes",
+									Value:     cluster_init_node,
+									ValueFrom: nil,
+								},
+								{
 									Name:      "discovery.seed_hosts",
 									Value:     cr.Spec.General.ServiceName + "-headleass-service",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "cluster.name",
 									Value:     cr.Spec.General.ClusterName,
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "network.host",
 									Value:     "0.0.0.0",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "OPENSEARCH_JAVA_OPTS",
 									Value:     jvm,
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.data",
 									Value:     "true",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.master",
 									Value:     "false",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.ingest",
 									Value:     "true",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.remote_cluster_client",
 									Value:     "true",
 									ValueFrom: nil,
@@ -399,7 +400,7 @@ func NewHeadlessServiceForCR(cr *opsterv1.Os) *corev1.Service {
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "None",
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
+				{
 					Name:     "http",
 					Protocol: "TCP",
 					Port:     cr.Spec.General.OsPort,
@@ -407,7 +408,7 @@ func NewHeadlessServiceForCR(cr *opsterv1.Os) *corev1.Service {
 						IntVal: cr.Spec.General.OsPort,
 					},
 				},
-				corev1.ServicePort{
+				{
 					Name:     "transport",
 					Protocol: "TCP",
 					Port:     9300,
@@ -441,7 +442,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
+				{
 					Name:     "http",
 					Protocol: "TCP",
 					Port:     cr.Spec.General.OsPort,
@@ -449,7 +450,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 						IntVal: cr.Spec.General.OsPort,
 					},
 				},
-				corev1.ServicePort{
+				{
 					Name:     "transport",
 					Protocol: "TCP",
 					Port:     9300,
@@ -458,7 +459,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 						StrVal: "9300",
 					},
 				},
-				corev1.ServicePort{
+				{
 					Name:     "metrics",
 					Protocol: "TCP",
 					Port:     9600,
@@ -467,7 +468,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 						StrVal: "9600",
 					},
 				},
-				corev1.ServicePort{
+				{
 					Name:     "rca",
 					Protocol: "TCP",
 					Port:     9650,
