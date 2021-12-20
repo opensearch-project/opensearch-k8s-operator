@@ -10,7 +10,7 @@ The project is currently a work in progress and is not (yet) recommended for use
 - [x] Spin up OS dashboards.
 - [ ] Operator Monitoring, with Prometheus and Grafana.
 - [ ] Configuration of all node roles (master, data, coordinating..).
-- [ ] Scale the cluster resources (manually), per nodes' role group. 
+- [ ] Scale the cluster resources (manually), per nodes' role group.
 - [ ] Drain strategy for scale down.
 - [ ] Cluster configurations and nodes' settings updates.
 - [ ] Single/Rolling restarts.
@@ -32,16 +32,15 @@ The project is currently a work in progress and is not (yet) recommended for use
 Use os-cluster.yaml to define your cluster - note that the `ClusterName` is also the namespace that the new cluster will reside in.
 
     kubectl create os-cluster.yaml
-    
-- Note: the current installation deploys with the default demo certificate provided by OpenSearch. 
+
+- Note: the current installation deploys with the default demo certificate provided by OpenSearch.
 
 ## Deleting an OpenSearch cluster
 In order to delete the cluster, please delete your OpenSearch cluster resource; this will delete the cluster namespace and all its resources.
- 
+
     kubectl get os --all-namespaces
     kubectl delete os os-from-operator -n <namespace>
-    
- 
-# Contributions
-We welcome contributions! If you want to conribute to this project please reach out to us at: <operator@opster.com>. 
 
+
+# Contributions
+We welcome contributions! If you want to contribute to this project please reach out to us at: <operator@opster.com>.
