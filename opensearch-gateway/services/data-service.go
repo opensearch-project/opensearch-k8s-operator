@@ -60,3 +60,25 @@ func mainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	}
 	return response, err
 }
+
+func catNodes(client *opensearch.Client) (responses.CatNodesResponse, error) {
+	req := opensearchapi.CatNodesRequest{Format: "json"}
+	catNodesRes, err := req.Do(context.Background(), client)
+	var response responses.CatNodesResponse
+	if err == nil {
+		defer catNodesRes.Body.Close()
+		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
+	}
+	return response, err
+}
+
+func nodesStats(client *opensearch.Client) (responses.NodeStatResponse, error) {
+	req := opensearchapi.NodesStatsRequest{}
+	catNodesRes, err := req.Do(context.Background(), client)
+	var response responses.NodeStatResponse
+	if err == nil {
+		defer catNodesRes.Body.Close()
+		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
+	}
+	return response, err
+}
