@@ -1,0 +1,14 @@
+package responses
+
+type CatIndicesResponse struct {
+	Health       string `json:"health"`
+	Status       string `json:"status"`
+	Index        string `json:"index"`
+	Uuid         string `json:"uuid"`
+	Pri          string `json:"pri"`
+	Rep          string `json:"rep"`
+	DocsCount    string `json:"docs.count"`
+	DocsDeleted  string `json:"docs.deleted"`
+	StoreSize    string `json:"tore.size"`
+	PriStoreSize string `json:"pri.store.size"`
+}
