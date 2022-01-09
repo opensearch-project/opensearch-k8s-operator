@@ -9,6 +9,13 @@ rules:
 - apiGroups:
   - opster.os-operator.opster.io
   resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - opster.os-operator.opster.io
+  resources:
   - os
   verbs:
   - create

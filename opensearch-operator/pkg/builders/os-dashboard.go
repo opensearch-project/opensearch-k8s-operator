@@ -4,10 +4,19 @@ import (
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	opsterv1 "os-operator.io/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strconv"
 )
+
+type OsReconciler struct {
+	client.Client
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
+}
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
@@ -29,7 +38,7 @@ func New_OS_Dashboard_ForCR(cr *opsterv1.Os) *sts.Deployment {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ClusterName + "-os-dash",
 			Namespace: cr.Spec.General.ClusterName,
-			Labels: labels,
+			Labels:    labels,
 		},
 		Spec: sts.DeploymentSpec{
 			Replicas: &rep,
@@ -55,8 +64,8 @@ func New_OS_Dashboard_ForCR(cr *opsterv1.Os) *sts.Deployment {
 					},
 					Containers: []corev1.Container{
 						{
-							Name:  "os-dash-container",
-						//	Image: "docker.elastic.co/kibana/kibana:" + cr.Spec.General.Version,
+							Name: "os-dash-container",
+							//	Image: "docker.elastic.co/kibana/kibana:" + cr.Spec.General.Version,
 							Image: "opensearchproject/opensearch-dashboards:1.0.0",
 							Ports: []corev1.ContainerPort{
 								{
@@ -64,25 +73,24 @@ func New_OS_Dashboard_ForCR(cr *opsterv1.Os) *sts.Deployment {
 									ContainerPort: port,
 								},
 							},
-								Env: []corev1.EnvVar{corev1.EnvVar{
-									Name:      "OPENSEARCH_HOSTS",
-									Value:      "https://"+cr.Spec.General.ServiceName + "-svc" + "." + cr.Spec.General.ClusterName + ":9200",
+							Env: []corev1.EnvVar{corev1.EnvVar{
+								Name:      "OPENSEARCH_HOSTS",
+								Value:     "https://" + cr.Spec.General.ServiceName + "-svc" + "." + cr.Spec.General.ClusterName + ":9200",
+								ValueFrom: nil,
+							},
+								corev1.EnvVar{
+									Name:      "SERVER_HOST",
+									Value:     "0.0.0.0",
 									ValueFrom: nil,
 								},
-									corev1.EnvVar{
-										Name:      "SERVER_HOST",
-										Value:     "0.0.0.0",
-										ValueFrom: nil,
-									},
-								},
-									VolumeMounts: []corev1.VolumeMount{
-										{Name: "os-dash",
-											MountPath: "/usr/share/kibana/config/kibana.yml",
-											SubPath:   "kibana.yml",
-										},
-									},
-
 							},
+							VolumeMounts: []corev1.VolumeMount{
+								{Name: "os-dash",
+									MountPath: "/usr/share/kibana/config/kibana.yml",
+									SubPath:   "kibana.yml",
+								},
+							},
+						},
 					},
 				},
 			},
