@@ -8,13 +8,13 @@ import (
 	"opensearch-k8-operator/opensearch-gateway/responses"
 )
 
-type ClusterDataService struct {
+type OsClusterClient struct {
 	client   *opensearch.Client
 	MainPage responses.MainResponse
 }
 
-func NewClusterDataService(config opensearch.Config) (*ClusterDataService, error) {
-	service := new(ClusterDataService)
+func NewOsClusterClient(config opensearch.Config) (*OsClusterClient, error) {
+	service := new(OsClusterClient)
 	client, err := opensearch.NewClient(config)
 	if err == nil {
 		service.client = client
@@ -30,26 +30,6 @@ func NewClusterDataService(config opensearch.Config) (*ClusterDataService, error
 	return service, err
 }
 
-func (service *ClusterDataService) HasIndicesWithNoReplica() (bool, error) {
-	req := opensearchapi.CatIndicesRequest{Format: "json"}
-	indicesRes, err := req.Do(context.Background(), service.client)
-	if err != nil {
-		return false, err
-	}
-	var response []responses.CatIndicesResponse
-	defer indicesRes.Body.Close()
-	err = json.NewDecoder(indicesRes.Body).Decode(&response)
-	if err != nil {
-		return false, err
-	}
-	for _, index := range response {
-		if index.Rep == "" || index.Rep == "0" {
-			return true, err
-		}
-	}
-	return false, err
-}
-
 func mainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	req := opensearchapi.InfoRequest{}
 	infoRes, err := req.Do(context.Background(), client)
@@ -61,9 +41,9 @@ func mainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	return response, err
 }
 
-func catNodes(client *opensearch.Client) (responses.CatNodesResponse, error) {
+func CatNodes(client *OsClusterClient) (responses.CatNodesResponse, error) {
 	req := opensearchapi.CatNodesRequest{Format: "json"}
-	catNodesRes, err := req.Do(context.Background(), client)
+	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.CatNodesResponse
 	if err == nil {
 		defer catNodesRes.Body.Close()
@@ -72,13 +52,27 @@ func catNodes(client *opensearch.Client) (responses.CatNodesResponse, error) {
 	return response, err
 }
 
-func nodesStats(client *opensearch.Client) (responses.NodeStatResponse, error) {
+func NodesStats(client *OsClusterClient) (responses.NodeStatResponse, error) {
 	req := opensearchapi.NodesStatsRequest{}
-	catNodesRes, err := req.Do(context.Background(), client)
+	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.NodeStatResponse
 	if err == nil {
 		defer catNodesRes.Body.Close()
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
+	}
+	return response, err
+}
+
+func CatIndices(client *OsClusterClient) ([]responses.CatIndicesResponse, error) {
+	req := opensearchapi.CatIndicesRequest{Format: "json"}
+	indicesRes, err := req.Do(context.Background(), client.client)
+	var response []responses.CatIndicesResponse
+	if err != nil {
+		return response, err
+	}
+	if err == nil {
+		defer indicesRes.Body.Close()
+		err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	}
 	return response, err
 }

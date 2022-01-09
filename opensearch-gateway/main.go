@@ -19,7 +19,7 @@ func main() {
 		Password:  "admin",
 	}
 
-	dataService, err := services.NewClusterDataService(config)
+	dataService, err := services.NewOsClusterClient(config)
 	if err == nil {
 		mainPage := dataService.MainPage
 		fmt.Printf("main page:%v", mainPage)
