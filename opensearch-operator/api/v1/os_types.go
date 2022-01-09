@@ -21,36 +21,14 @@ import (
 )
 
 const (
-	PhasePending  = "PENDING"
-	PhaseRunning  = "RUNNING"
-	PhaseDone     = "DONE"
-	PhaseError    = "ERROR"
-	PhaseUpdating = "UPDATING"
-	PhaseCheck    = "Checking"
+	PhasePending = "PENDING"
+	PhaseRunning = "RUNNING"
+	PhaseDone    = "DONE"
+	PhaseError   = "ERROR"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
-
-//type OsMasters struct {
-//	/////////+kubebuilder:validation:Enum=3,5
-//	Replicas     int32  `json:"replicas,omitempty"`
-//	DiskSize     int32  `json:"diskSize,omitempty"`
-//	NodeSelector string `json:"nodeSelector,omitempty"`
-//	Cpu          int32  `json:"cpu,omitempty"`
-//	Memory       int32  `json:"memory,omitempty"`
-//	Jvm          string `json:"jvm,omitempty"`
-//}
-//
-//type Node struct {
-//	Replicas     int32  `json:"replicas,omitempty"`
-//	DiskSize     int32  `json:"diskSize,omitempty"`
-//	NodeSelector string `json:"nodeSelector,omitempty"`
-//	Cpu          int32  `json:"cpu,omitempty"`
-//	Memory       int32  `json:"memory,omitempty"`
-//	Ingest       string `json:"ingest,omitempty"`
-//	Jvm          string `json:"jvm,omitempty"`
-//}
 
 type OsGeneral struct {
 
@@ -94,8 +72,6 @@ type OsSpec struct {
 	General    OsGeneral  `json:"general,omitempty"`
 	OsConfMgmt OsConfMgmt `json:"osConfMgmt,omitempty"`
 	OsNodes    []OsNode   `json:"osNodes"`
-	//Masters OsMasters `json:"masters,omitempty"`
-	//Nodes   OsNodes   `json:"nodes,omitempty"`
 }
 
 // OsStatus defines the observed state of Es

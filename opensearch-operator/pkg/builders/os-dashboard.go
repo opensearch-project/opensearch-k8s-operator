@@ -113,6 +113,8 @@ func NewCm_OS_Dashboard_ForCR(cr *opsterv1.Os) *corev1.ConfigMap {
 
 func New_OS_Dashboard_SvcForCr(cr *opsterv1.Os) *corev1.Service {
 
+	var port int32 = 5601
+
 	labels := map[string]string{
 		"app": cr.Name,
 	}
@@ -132,9 +134,9 @@ func New_OS_Dashboard_SvcForCr(cr *opsterv1.Os) *corev1.Service {
 				corev1.ServicePort{
 					Name:     "os-dash",
 					Protocol: "TCP",
-					Port:     5601,
+					Port:     port,
 					TargetPort: intstr.IntOrString{
-						IntVal: 5601,
+						IntVal: port,
 					},
 				},
 			},

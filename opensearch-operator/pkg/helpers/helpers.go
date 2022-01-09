@@ -9,7 +9,6 @@ import (
 	opsterv1 "os-operator.io/api/v1"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	//	"k8s.io/apimachinery/pkg/api/errors"
 )
 
 type OsReconciler struct {
