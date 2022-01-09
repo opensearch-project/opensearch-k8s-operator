@@ -1,7 +1,7 @@
 package services
 
 func HasIndicesWithNoReplica(service *OsClusterClient) (bool, error) {
-	response, err := CatIndices(service)
+	response, err := service.CatIndices()
 	if err != nil {
 		return false, err
 	}

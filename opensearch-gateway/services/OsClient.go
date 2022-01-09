@@ -41,7 +41,7 @@ func mainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	return response, err
 }
 
-func CatNodes(client *OsClusterClient) (responses.CatNodesResponse, error) {
+func (client *OsClusterClient) CatNodes() (responses.CatNodesResponse, error) {
 	req := opensearchapi.CatNodesRequest{Format: "json"}
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.CatNodesResponse
@@ -52,7 +52,7 @@ func CatNodes(client *OsClusterClient) (responses.CatNodesResponse, error) {
 	return response, err
 }
 
-func NodesStats(client *OsClusterClient) (responses.NodeStatResponse, error) {
+func (client *OsClusterClient) NodesStats() (responses.NodeStatResponse, error) {
 	req := opensearchapi.NodesStatsRequest{}
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.NodeStatResponse
@@ -63,16 +63,14 @@ func NodesStats(client *OsClusterClient) (responses.NodeStatResponse, error) {
 	return response, err
 }
 
-func CatIndices(client *OsClusterClient) ([]responses.CatIndicesResponse, error) {
+func (client *OsClusterClient) CatIndices() ([]responses.CatIndicesResponse, error) {
 	req := opensearchapi.CatIndicesRequest{Format: "json"}
 	indicesRes, err := req.Do(context.Background(), client.client)
 	var response []responses.CatIndicesResponse
 	if err != nil {
 		return response, err
 	}
-	if err == nil {
-		defer indicesRes.Body.Close()
-		err = json.NewDecoder(indicesRes.Body).Decode(&response)
-	}
+	defer indicesRes.Body.Close()
+	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }
