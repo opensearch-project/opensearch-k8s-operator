@@ -3,6 +3,7 @@
 IMG ?= controller:latest
 # Produce CRDs that work back to Kubernetes 1.11 (no version conversion)
 CRD_OPTIONS ?= "crd:trivialVersions=true,preserveUnknownFields=false"
+PROJECT_PATH=$(CURDIR)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
@@ -45,6 +46,9 @@ generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and
 
 fmt: ## Run go fmt against code.
 	go fmt ./...
+
+lint:
+	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v1.38-alpine golangci-lint run -E gofmt --skip-dirs=./vendor --deadline=10m
 
 vet: ## Run go vet against code.
 	go vet ./...
