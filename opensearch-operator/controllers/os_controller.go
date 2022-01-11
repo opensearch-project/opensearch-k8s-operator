@@ -139,7 +139,9 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 				sts_from_crd := builders.NewSTSForCR(instance, instance.Spec.OsNodes[nodeGroup])
 				// Get the existing StatefulSet from the cluster
 				sts_from_env := sts.StatefulSet{}
-				if err := r.Get(context.TODO(), client.ObjectKey{Name: instance.Spec.General.ClusterName + "-" + instance.Spec.OsNodes[nodeGroup].Compenent, Namespace: instance.Spec.General.ClusterName}, &sts_from_env); err != nil {
+				sts_name := instance.Spec.General.ClusterName + "-" + instance.Spec.OsNodes[nodeGroup].Compenent
+				sts_namespace := instance.Spec.General.ClusterName
+				if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: sts_namespace}, &sts_from_env); err != nil {
 					return ctrl.Result{}, err
 				}
 				//sts_from_crd.Spec.Template.Spec.Containers[1].EnvFrom[1].

@@ -35,7 +35,7 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.OsNode) *sts.StatefulSet {
 		},
 	}
 
-	cluster_init_node := helpers.CreateInitmasters(cr)
+	cluster_init_node := helpers.CreateInitMasters(cr)
 	//var vendor string
 	labels := map[string]string{
 		"app": cr.Name,
