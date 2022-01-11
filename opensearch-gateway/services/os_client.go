@@ -22,7 +22,7 @@ func NewOsClusterClient(config opensearch.Config) (*OsClusterClient, error) {
 	pingReq := opensearchapi.PingRequest{}
 	pingRes, err := pingReq.Do(context.Background(), client)
 	if err == nil && pingRes.StatusCode == 200 {
-		mainPageResponse, err := mainPage(client)
+		mainPageResponse, err := MainPage(client)
 		if err == nil {
 			service.MainPage = mainPageResponse
 		}
@@ -30,7 +30,7 @@ func NewOsClusterClient(config opensearch.Config) (*OsClusterClient, error) {
 	return service, err
 }
 
-func mainPage(client *opensearch.Client) (responses.MainResponse, error) {
+func MainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	req := opensearchapi.InfoRequest{}
 	infoRes, err := req.Do(context.Background(), client)
 	var response responses.MainResponse
