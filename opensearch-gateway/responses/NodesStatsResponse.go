@@ -1,5 +1,17 @@
 package responses
 
+type NodesStatsResponse struct {
+	GeneralInfo NodesStatsGeneralInfoResponse `json:"_nodes"`
+	ClusterName string                        `json:"cluster_name"`
+	Nodes       map[string]NodeStatResponse   `json:"nodes"`
+}
+
+type NodesStatsGeneralInfoResponse struct {
+	Total      int `json:"total"`
+	Successful int `json:"successful"`
+	Failed     int `json:"failed"`
+}
+
 type NodeStatResponse struct {
 	Id                string
 	Name              string                               `json:"name"`

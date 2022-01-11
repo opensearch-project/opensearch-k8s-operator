@@ -52,10 +52,10 @@ func (client *OsClusterClient) CatNodes() (responses.CatNodesResponse, error) {
 	return response, err
 }
 
-func (client *OsClusterClient) NodesStats() (responses.NodeStatResponse, error) {
+func (client *OsClusterClient) NodesStats() (responses.NodesStatsResponse, error) {
 	req := opensearchapi.NodesStatsRequest{}
 	catNodesRes, err := req.Do(context.Background(), client.client)
-	var response responses.NodeStatResponse
+	var response responses.NodesStatsResponse
 	if err == nil {
 		defer catNodesRes.Body.Close()
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)

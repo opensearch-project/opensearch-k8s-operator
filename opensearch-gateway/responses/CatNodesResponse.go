@@ -10,5 +10,5 @@ type CatNodesResponse struct {
 	Load15m     string `json:"load_15m"`
 	NodeRole    string `json:"node.role"`
 	Master      string `json:"master"`
-	name        string `json:"name"`
+	Name        string `json:"name"`
 }
