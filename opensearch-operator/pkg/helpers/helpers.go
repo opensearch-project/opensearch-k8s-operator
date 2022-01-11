@@ -1,10 +1,20 @@
 package helpers
 
 import (
+	"context"
 	"fmt"
-
-	opsterv1 "os-operator.io/api/v1"
+	sts "k8s.io/api/apps/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/tools/record"
+	"reflect"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type OsReconciler struct {
+	client.Client
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
+}
 
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
@@ -16,27 +26,53 @@ func ContainsString(slice []string, s string) bool {
 
 }
 
-// func removeString(slice []string, s string) (result []string) {
-// 	for _, item := range slice {
-// 		if item == s {
-// 			continue
-// 		}
-// 		result = append(result, item)
-// 	}
-// 	return
-// }
-
-func CreateInitmasters(cr *opsterv1.Os) string {
-	i := cr.Spec.Masters.Replicas
-	p := int(i)
-
-	var masters = ""
-	for x := 0; x < p; x++ {
-		masters = fmt.Sprintf("%s-master-%d,%s", cr.Spec.General.ClusterName, x, masters)
+func removeString(slice []string, s string) (result []string) {
+	for _, item := range slice {
+		if item == s {
+			continue
+		}
+		result = append(result, item)
 	}
-	if last := len(masters) - 1; last >= 0 && masters[last] == ',' {
-		masters = masters[:last]
-	}
-	return masters
+	return
+}
 
+func (r *OsReconciler) UpdateResource(ctx context.Context, instance *sts.StatefulSet) error {
+	err := r.Update(ctx, instance)
+	if err != nil {
+		fmt.Println(err, "Cannot update resource")
+		r.Recorder.Event(instance, "Warning", "Cannot update resource", fmt.Sprintf("Cannot update resource "))
+		return err
+	}
+	return nil
+}
+
+func getField(v *sts.StatefulSetSpec, field string) interface{} {
+
+	r := reflect.ValueOf(v)
+	f := reflect.Indirect(r).FieldByName(field).Interface()
+	return f
+}
+
+func setField(v *sts.StatefulSetSpec, field string) reflect.Value {
+
+	//	reflect.ValueOf(v).Elem().FieldByName(field).SetString("sss")
+
+	r := reflect.ValueOf(v)
+	ty := r.Type()
+	fmt.Println(ty)
+	f := reflect.Indirect(r).FieldByName(field)
+	return f
+}
+
+func getNamesInStruct(inter interface{}) []string {
+	rv := reflect.Indirect(reflect.ValueOf(inter))
+
+	var names []string
+
+	for i := 0; i < rv.NumField(); i++ {
+		x := rv.Type().Field(i).Name
+		names = append(names, x)
+		fmt.Println(x)
+	}
+	return names
 }

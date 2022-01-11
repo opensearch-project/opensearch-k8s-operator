@@ -1,14 +1,22 @@
 package builders
 
 import (
-	"strconv"
-
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	opsterv1 "os-operator.io/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
 )
+
+type OsReconciler struct {
+	client.Client
+	Scheme   *runtime.Scheme
+	Recorder record.EventRecorder
+}
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
@@ -44,7 +52,7 @@ func New_OS_Dashboard_ForCR(cr *opsterv1.Os) *sts.Deployment {
 				},
 				Spec: corev1.PodSpec{
 					Volumes: []corev1.Volume{
-						{
+						corev1.Volume{
 							Name: "os-dash",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -65,13 +73,12 @@ func New_OS_Dashboard_ForCR(cr *opsterv1.Os) *sts.Deployment {
 									ContainerPort: port,
 								},
 							},
-							Env: []corev1.EnvVar{
-								{
-									Name:      "OPENSEARCH_HOSTS",
-									Value:     "https://" + cr.Spec.General.ServiceName + "-svc" + "." + cr.Spec.General.ClusterName + ":9200",
-									ValueFrom: nil,
-								},
-								{
+							Env: []corev1.EnvVar{corev1.EnvVar{
+								Name:      "OPENSEARCH_HOSTS",
+								Value:     "https://" + cr.Spec.General.ServiceName + "-svc" + "." + cr.Spec.General.ClusterName + ":9200",
+								ValueFrom: nil,
+							},
+								corev1.EnvVar{
 									Name:      "SERVER_HOST",
 									Value:     "0.0.0.0",
 									ValueFrom: nil,
@@ -106,6 +113,8 @@ func NewCm_OS_Dashboard_ForCR(cr *opsterv1.Os) *corev1.ConfigMap {
 
 func New_OS_Dashboard_SvcForCr(cr *opsterv1.Os) *corev1.Service {
 
+	var port int32 = 5601
+
 	labels := map[string]string{
 		"app": cr.Name,
 	}
@@ -122,12 +131,12 @@ func New_OS_Dashboard_SvcForCr(cr *opsterv1.Os) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				{
+				corev1.ServicePort{
 					Name:     "os-dash",
 					Protocol: "TCP",
-					Port:     5601,
+					Port:     port,
 					TargetPort: intstr.IntOrString{
-						IntVal: 5601,
+						IntVal: port,
 					},
 				},
 			},

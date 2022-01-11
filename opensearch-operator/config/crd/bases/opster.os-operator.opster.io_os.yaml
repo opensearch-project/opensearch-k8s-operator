@@ -37,6 +37,9 @@ spec:
             description: EsSpec defines the desired state of Es
             properties:
               general:
+                description: "INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run \"make\" to regenerate code after modifying this
+                  file \n // Foo is an example field of Es. Edit es_types.go to remove/update"
                 properties:
                   clusterName:
                     default: Opster_cluster
@@ -54,47 +57,50 @@ spec:
                   version:
                     type: string
                 type: object
-              masters:
+              osConfMgmt:
+                description: OsConfMgmt defines which addiionals services will be
+                  deployed
                 properties:
-                  cpu:
-                    format: int32
-                    type: integer
-                  diskSize:
-                    format: int32
-                    type: integer
-                  jvm:
-                    type: string
-                  memory:
-                    format: int32
-                    type: integer
-                  nodeSelector:
-                    type: string
-                  replicas:
-                    description: ///////+kubebuilder:validation:Enum=3,5
-                    format: int32
-                    type: integer
+                  VerUpdate:
+                    type: boolean
+                  autoScaler:
+                    type: boolean
+                  kibana:
+                    type: boolean
+                  monitoring:
+                    type: boolean
+                  scaler:
+                    type: boolean
                 type: object
-              nodes:
-                properties:
-                  cpu:
-                    format: int32
-                    type: integer
-                  diskSize:
-                    format: int32
-                    type: integer
-                  ingest:
-                    type: string
-                  jvm:
-                    type: string
-                  memory:
-                    format: int32
-                    type: integer
-                  nodeSelector:
-                    type: string
-                  replicas:
-                    format: int32
-                    type: integer
-                type: object
+              osNodes:
+                items:
+                  properties:
+                    compenent:
+                      type: string
+                    cpu:
+                      format: int32
+                      type: integer
+                    data:
+                      type: string
+                    diskSize:
+                      format: int32
+                      type: integer
+                    ingest:
+                      type: string
+                    jvm:
+                      type: string
+                    memory:
+                      format: int32
+                      type: integer
+                    nodeSelector:
+                      type: string
+                    replicas:
+                      format: int32
+                      type: integer
+                  type: object
+                type: array
+            required:
+            - osNodes
             type: object
           status:
             description: OsStatus defines the observed state of Es

@@ -42,27 +42,25 @@ type OsGeneral struct {
 	ServiceName    string `json:"serviceName,omitempty"`
 }
 
-type OsNodes struct {
+type OsNode struct {
+	Compenent    string `json:"compenent,omitempty"`
 	Replicas     int32  `json:"replicas,omitempty"`
 	DiskSize     int32  `json:"diskSize,omitempty"`
 	NodeSelector string `json:"nodeSelector,omitempty"`
 	Cpu          int32  `json:"cpu,omitempty"`
 	Memory       int32  `json:"memory,omitempty"`
+	Jvm          string `json:"jvm,omitempty"`
 	Ingest       string `json:"ingest,omitempty"`
-	Jvm          string `json:"jvm,omitempty"`
+	Data         string `json:"data,omitempty"`
 }
 
-type OsMasters struct {
-	/////////+kubebuilder:validation:Enum=3,5
-	Replicas     int32  `json:"replicas,omitempty"`
-	DiskSize     int32  `json:"diskSize,omitempty"`
-	NodeSelector string `json:"nodeSelector,omitempty"`
-	Cpu          int32  `json:"cpu,omitempty"`
-	Memory       int32  `json:"memory,omitempty"`
-	Jvm          string `json:"jvm,omitempty"`
-}
-
-type OsConf struct {
+// OsConfMgmt defines which addiionals services will be deployed
+type OsConfMgmt struct {
+	Scaler     bool `json:"scaler,omitempty"`
+	AutoScaler bool `json:"autoScaler,omitempty"`
+	Monitoring bool `json:"monitoring,omitempty"`
+	Kibana     bool `json:"kibana,omitempty"`
+	VerUpdate  bool `json:"VerUpdate,omitempty"`
 }
 
 // EsSpec defines the desired state of Es
@@ -71,10 +69,9 @@ type OsSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	//
 	//// Foo is an example field of Es. Edit es_types.go to remove/update
-
-	General OsGeneral `json:"general,omitempty"`
-	Masters OsMasters `json:"masters,omitempty"`
-	Nodes   OsNodes   `json:"nodes,omitempty"`
+	General    OsGeneral  `json:"general,omitempty"`
+	OsConfMgmt OsConfMgmt `json:"osConfMgmt,omitempty"`
+	OsNodes    []OsNode   `json:"osNodes"`
 }
 
 // OsStatus defines the observed state of Es
