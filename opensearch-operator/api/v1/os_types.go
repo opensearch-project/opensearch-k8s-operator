@@ -78,8 +78,8 @@ type OsSpec struct {
 type OsStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	Phase string `json:"phase,omitempty"`
+	Phase             string              `json:"phase,omitempty"`
+	ComponenetsStatus []ComponenetsStatus `json:"componenetsStatus"`
 }
 
 //+kubebuilder:object:root=true
@@ -92,6 +92,12 @@ type Os struct {
 
 	Spec   OsSpec   `json:"spec,omitempty"`
 	Status OsStatus `json:"status,omitempty"`
+}
+
+type ComponenetsStatus struct {
+	Component   string `json:"component,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 //+kubebuilder:object:root=true

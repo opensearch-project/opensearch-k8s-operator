@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package opensearch
 
 import (
 	"context"
@@ -23,6 +23,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
+	os_cluster "os-operator.io/controllers/cluster"
+	"os-operator.io/controllers/dashboard"
+	scaler "os-operator.io/controllers/scaler"
 	"os-operator.io/pkg/builders"
 	"os-operator.io/pkg/helpers"
 	"reflect"
@@ -58,10 +61,8 @@ type OsReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	//_ = log.FromContext(ctx)
-
 	//	reqLogger := r.Log.WithValues("es", req.NamespacedName)
 	//	reqLogger.Info("=== Reconciling ES")
-
 	myFinalizerName := "Opster"
 
 	instance := &opsterv1.Os{}
@@ -111,63 +112,99 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		instance.Status.Phase = opsterv1.PhasePending
 
 	}
+	var errs error
+	var res ctrl.Result
+
 	fmt.Println("ENTER switch")
 	switch instance.Status.Phase {
 	case opsterv1.PhasePending:
 		//	reqLogger.info("start reconcile - Phase: PENDING")
-		fmt.Println("start reconcile - Phase: PENDING")
+
 		instance.Status.Phase = opsterv1.PhaseRunning
+		componentStatus := opsterv1.ComponenetsStatus{
+			Component:   "",
+			Status:      "",
+			Description: "",
+		}
+		instance.Status.ComponenetsStatus = append(instance.Status.ComponenetsStatus, componentStatus)
+		err = r.Status().Update(context.TODO(), instance)
+		if err != nil {
+			return ctrl.Result{}, err
+
+		}
+		return ctrl.Result{Requeue: true}, errs
+
 	case opsterv1.PhaseRunning:
 		fmt.Println("start reconcile - Phase: RUNNING")
 
 		/// ------ Create NameSpace -------
-		ns := builders.NewNsForCR(instance)
 
 		ns_query := &corev1.Namespace{}
 		// try to see if the ns already exists
-		scaled := false
-		new_spec := sts.StatefulSetSpec{}
 		err := r.Get(context.TODO(), client.ObjectKey{Name: instance.Spec.General.ClusterName}, ns_query)
 		if err == nil {
-			// if ns is already exist, check if there is changes in cluster
-			// in that function the operator will check if the cluster reached to the desired state
+			namespace := instance.Spec.General.ClusterName
 			nodeGroups := len(instance.Spec.OsNodes)
-			var scaled_one bool
+
+			// if ns is already exist, check if all cluster and kibana are deployed properly - if a necessary resource ass been deleted - recreate it
+
+			cluster := os_cluster.ClusterReconciler{
+				Client:   r.Client,
+				Scheme:   r.Scheme,
+				Recorder: r.Recorder,
+				State:    os_cluster.State{},
+				Instnce:  instance,
+			}
+
+			cluster, res, errs = cluster.InternalReconcile(ctx)
+			if cluster.State.Status == "Failed" {
+				fmt.Println(res)
+				return ctrl.Result{}, errs
+			}
+
+			r.Recorder.Event(instance, "Normal", "Cluster keeps his desired state", fmt.Sprintf("Cluster %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
+
 			for nodeGroup := 0; nodeGroup < nodeGroups; nodeGroup++ {
-				// checking if every node group is equal to what configured in the crd
-				// Build the StatefulSet has hw should be from the drd
-				sts_from_crd := builders.NewSTSForCR(instance, instance.Spec.OsNodes[nodeGroup])
 				// Get the existing StatefulSet from the cluster
 				sts_from_env := sts.StatefulSet{}
 				sts_name := instance.Spec.General.ClusterName + "-" + instance.Spec.OsNodes[nodeGroup].Compenent
-				sts_namespace := instance.Spec.General.ClusterName
-				if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: sts_namespace}, &sts_from_env); err != nil {
+
+				if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &sts_from_env); err != nil {
 					return ctrl.Result{}, err
 				}
-				//sts_from_crd.Spec.Template.Spec.Containers[1].EnvFrom[1].
-				new_spec, scaled_one, err = helpers.CheckUpdates(sts_from_env.Spec, sts_from_crd.Spec, instance, nodeGroup)
+				scale := scaler.ScalerReconciler{
+					Client:     r.Client,
+					Scheme:     r.Scheme,
+					Recorder:   r.Recorder,
+					State:      scaler.State{},
+					Instnce:    instance,
+					StsFromEnv: sts_from_env,
+					Group:      nodeGroup,
+				}
+				scale, res, errs = scale.InternalReconcile(ctx)
 				if err != nil {
-					r.Recorder.Event(instance, "Warning", "something went worng ", fmt.Sprintf("something went worng)"))
-					return ctrl.Result{}, nil
+					instance.Status.Phase = opsterv1.PhaseError
 				}
-				if scaled_one {
-					scaled = true
-					r.Recorder.Event(instance, "Normal", "Operator scaled resource", fmt.Sprintf("Scaled %s Replicas - from %s to %s )", instance.Spec.General.ClusterName+"-"+instance.Spec.OsNodes[nodeGroup].Compenent, sts_from_env.Spec.Replicas, sts_from_crd.Spec.Replicas))
-					sts_from_env.Spec = new_spec
-					if err := r.Update(ctx, &sts_from_env); err != nil {
-						return ctrl.Result{}, err
-					}
-				}
+			}
 
+			dash := dashboard.DashboardReconciler{
+				Client:   r.Client,
+				Scheme:   r.Scheme,
+				Recorder: r.Recorder,
+				State:    dashboard.State{},
+				Instnce:  instance,
 			}
-			// if scale = true, so one or more resources has updated - return nil to operator - done reconcile
-			if scaled {
-				fmt.Println("Scaled - done reconcile")
-				r.Recorder.Event(instance, "Normal", "Operator applied new configuration", fmt.Sprintf("Done reconcile"))
-				return ctrl.Result{}, nil
+			dash, res, errs = dash.InternalReconcile(ctx)
+			if dash.State.Status == "Failed" {
+				return ctrl.Result{}, errs
 			}
+			r.Recorder.Event(instance, "Normal", "Kibana keeps his desired state", fmt.Sprintf("Kibana %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
+
 		} else {
+
 			// if ns not exist in cluster, try to create it
+
+			ns := builders.NewNsForCR(instance)
 			err = r.Create(context.TODO(), ns)
 			if err != nil {
 				// if ns cannot create ,  inform it and done reconcile
@@ -177,91 +214,11 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 				return ctrl.Result{}, nil
 			}
 			fmt.Println("ns Created successfully", "name", ns.Name)
-		}
-		// if ns created successfully -  start to create other resources
-		//// ------------- start do build other resources ---------------
+			return ctrl.Result{Requeue: true}, nil
 
-		/// ------ Create ConfigMap -------
-		cm := builders.NewCmForCR(instance)
-
-		err = r.Create(context.TODO(), cm)
-		if err != nil {
-			fmt.Println(err, "Cannot create Configmap "+cm.Name)
-			return ctrl.Result{}, err
-		}
-		fmt.Println("Cm Created successfully", "name", cm.Name)
-
-		/// ------ Create Headleass Service -------
-		headless_service := builders.NewHeadlessServiceForCR(instance)
-
-		err = r.Create(context.TODO(), headless_service)
-		if err != nil {
-			fmt.Println(err, "Cannot create Headless Service")
-			return ctrl.Result{}, err
-		}
-		fmt.Println("service Created successfully", "name", headless_service.Name)
-
-		/// ------ Create External Service -------
-		service := builders.NewServiceForCR(instance)
-
-		err = r.Create(context.TODO(), service)
-		if err != nil {
-			fmt.Println(err, "Cannot create service")
-			return ctrl.Result{}, err
-		}
-		fmt.Println("service Created successfully", "name", service.Name)
-
-		///// ------ Create Es Nodes StatefulSet -------
-		NodesCount := len(instance.Spec.OsNodes)
-
-		for x := 0; x < NodesCount; x++ {
-			sts_for_build := builders.NewSTSForCR(instance, instance.Spec.OsNodes[x])
-			/// ------ Create Es StatefulSet -------
-			fmt.Println("Starting create ", instance.Spec.OsNodes[x].Compenent, " Sts")
-			//	r.StsCreate(ctx, &sts_for_build)
-			err = r.Create(context.TODO(), sts_for_build)
-			if err != nil {
-				fmt.Println(err, "Cannot create ", instance.Spec.OsNodes[x].Compenent, " Sts")
-				return ctrl.Result{}, err
-			}
-			fmt.Println(instance.Spec.OsNodes[x].Compenent, " StatefulSet has Created successfully")
-		}
-
-		if instance.Spec.OsConfMgmt.Kibana {
-			/// ------ create opensearch dashboard cm ------- ///
-			os_dash_cm := builders.NewCm_OS_Dashboard_ForCR(instance)
-
-			err = r.Create(context.TODO(), os_dash_cm)
-			if err != nil {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard Configmap "+cm.Name)
-				return ctrl.Result{}, err
-			}
-			fmt.Println("Opensearch-Dashboard Cm Created successfully", "name", cm.Name)
-
-			/// -------- create Opensearch-Dashboard service ------- ///
-			os_dash_service := builders.New_OS_Dashboard_SvcForCr(instance)
-
-			err = r.Create(context.TODO(), os_dash_service)
-			if err != nil {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard service "+cm.Name)
-				return ctrl.Result{}, err
-			}
-			fmt.Println("Opensearch-Dashboard service Created successfully", "name", cm.Name)
-
-			/// ------- create Opensearch-Dashboard sts ------- ///
-			os_dash := builders.New_OS_Dashboard_ForCR(instance)
-
-			err = r.Create(context.TODO(), os_dash)
-			if err != nil {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard STS "+cm.Name)
-				return ctrl.Result{}, err
-			}
-			fmt.Println("Opensearch-Dashboard STS Created successfully - ", "name : ", cm.Name)
 		}
 
 		// -------- all resources has been created -----------
-		fmt.Println("Finshed reconcilng (please wait few minutes for fully operative cluster) - Phase: DONE")
-		r.Recorder.Event(instance, "Normal", "Cluster has created", fmt.Sprintf("Cluster %s has been created - (please wait few minutes for fully operative cluster) )", instance.Spec.General.ClusterName))
 
 		// if finished to build all resource -  done reconcile
 		return ctrl.Result{}, nil
@@ -309,17 +266,6 @@ func (r *OsReconciler) deleteExternalResources(es *opsterv1.Os) error {
 	fmt.Println("NS", namespace, "Deleted successfully")
 	return nil
 }
-
-//func (r *OsReconciler) StsCreate(ctx context.Context, log logr.Logger, sts *sts.StatefulSet) error {
-//
-//	if err := r.Create(ctx, sts); err != nil {
-//		if !errors.IsConflict(err) {
-//			log.V(2).Error(err, "unable to create Statefulset")
-//			return err
-//		}
-//	}
-//	return nil
-//}
 
 func getField(v *sts.StatefulSet, field string) int {
 	r := reflect.ValueOf(v)

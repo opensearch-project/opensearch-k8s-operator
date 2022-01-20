@@ -39,3 +39,11 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - opster.os-operator.opster.io
+  resources:
+  - os/status/componenetsStatus
+  verbs:
+  - get
+  - patch
+  - update
