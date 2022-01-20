@@ -19,6 +19,7 @@ package main
 import (
 	"flag"
 	"os"
+	"os-operator.io/controllers/opensearch"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -32,7 +33,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	opsterv1 "os-operator.io/api/v1"
-	"os-operator.io/controllers"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -78,7 +78,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.OsReconciler{
+	if err = (&opensearch.OsReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("containerset-controller"),

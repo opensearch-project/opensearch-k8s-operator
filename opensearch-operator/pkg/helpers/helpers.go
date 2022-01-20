@@ -6,6 +6,7 @@ import (
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
+	opsterv1 "os-operator.io/api/v1"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -46,7 +47,7 @@ func (r *OsReconciler) UpdateResource(ctx context.Context, instance *sts.Statefu
 	return nil
 }
 
-func getField(v *sts.StatefulSetSpec, field string) interface{} {
+func GetField(v *sts.StatefulSetSpec, field string) interface{} {
 
 	r := reflect.ValueOf(v)
 	f := reflect.Indirect(r).FieldByName(field).Interface()
@@ -72,7 +73,32 @@ func getNamesInStruct(inter interface{}) []string {
 	for i := 0; i < rv.NumField(); i++ {
 		x := rv.Type().Field(i).Name
 		names = append(names, x)
-		fmt.Println(x)
 	}
 	return names
+}
+
+func RemoveIt(ss opsterv1.ComponenetsStatus, ssSlice []opsterv1.ComponenetsStatus) []opsterv1.ComponenetsStatus {
+	for idx, v := range ssSlice {
+		if v == ss {
+			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
+		}
+	}
+	return ssSlice
+}
+
+func Remove(slice []opsterv1.ComponenetsStatus, componenet string) []opsterv1.ComponenetsStatus {
+	emptyStatus := opsterv1.ComponenetsStatus{
+		Component:   "",
+		Status:      "",
+		Description: "",
+	}
+	for i := 0; i < len(slice); i++ {
+		if slice[i].Component == componenet {
+			slice[i] = slice[len(slice)-1]    // Copy last element to index i.
+			slice[len(slice)-1] = emptyStatus // Erase last element (write zero value).
+			slice = slice[:len(slice)-1]
+		}
+
+	}
+	return slice
 }
