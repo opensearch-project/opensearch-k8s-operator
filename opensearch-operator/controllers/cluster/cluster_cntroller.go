@@ -91,22 +91,22 @@ func (r *ClusterReconciler) InternalReconcile(ctx context.Context) (ClusterRecon
 	}
 
 	///// ------ Create Es Nodes StatefulSet -------
-	NodesCount := len(r.Instnce.Spec.OsNodes)
+	NodesCount := len(r.Instnce.Spec.NodePools)
 	sts := sts.StatefulSet{}
 
 	for x := 0; x < NodesCount; x++ {
-		sts_for_build := builders.NewSTSForCR(r.Instnce, r.Instnce.Spec.OsNodes[x])
-		stsName := r.Instnce.Spec.General.ClusterName + "-" + r.Instnce.Spec.OsNodes[x].Compenent
+		sts_for_build := builders.NewSTSForCR(r.Instnce, r.Instnce.Spec.NodePools[x])
+		stsName := r.Instnce.Spec.General.ClusterName + "-" + r.Instnce.Spec.NodePools[x].Compenent
 		if err := r.Get(context.TODO(), client.ObjectKey{Name: stsName, Namespace: namesapce}, &sts); err != nil {
 			/// ------ Create Es StatefulSet -------
-			fmt.Println("Starting create ", r.Instnce.Spec.OsNodes[x].Compenent, " Sts")
+			fmt.Println("Starting create ", r.Instnce.Spec.NodePools[x].Compenent, " Sts")
 			//	r.StsCreate(ctx, &sts_for_build)
 			err := r.Create(context.TODO(), sts_for_build)
 			if err != nil {
 				cluster_reconciler.State.Status = "Failed"
 				return cluster_reconciler, ctrl.Result{}, err
 			}
-			fmt.Println(r.Instnce.Spec.OsNodes[x].Compenent, " StatefulSet has Created successfully")
+			fmt.Println(r.Instnce.Spec.NodePools[x].Compenent, " StatefulSet has Created successfully")
 		}
 
 	}

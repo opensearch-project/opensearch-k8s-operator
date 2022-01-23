@@ -18,7 +18,7 @@ import (
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
-func NewSTSForCR(cr *opsterv1.Os, node opsterv1.OsNode) *sts.StatefulSet {
+func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 	disk := fmt.Sprint(node.DiskSize)
 
 	//disk := fmt.Sprint(cr.Spec.Masters.DiskSize)
@@ -142,7 +142,7 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.OsNode) *sts.StatefulSet {
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          cr.Spec.General.ServiceName + "-port",
-									ContainerPort: cr.Spec.General.OsPort,
+									ContainerPort: cr.Spec.General.HttpPort,
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
@@ -217,9 +217,9 @@ func NewHeadlessServiceForCR(cr *opsterv1.Os) *corev1.Service {
 				corev1.ServicePort{
 					Name:     "http",
 					Protocol: "TCP",
-					Port:     cr.Spec.General.OsPort,
+					Port:     cr.Spec.General.HttpPort,
 					TargetPort: intstr.IntOrString{
-						IntVal: cr.Spec.General.OsPort,
+						IntVal: cr.Spec.General.HttpPort,
 					},
 				},
 				corev1.ServicePort{
@@ -259,9 +259,9 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 				corev1.ServicePort{
 					Name:     "http",
 					Protocol: "TCP",
-					Port:     cr.Spec.General.OsPort,
+					Port:     cr.Spec.General.HttpPort,
 					TargetPort: intstr.IntOrString{
-						IntVal: cr.Spec.General.OsPort,
+						IntVal: cr.Spec.General.HttpPort,
 					},
 				},
 				corev1.ServicePort{

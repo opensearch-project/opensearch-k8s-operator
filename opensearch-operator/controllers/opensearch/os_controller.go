@@ -144,7 +144,7 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		err := r.Get(context.TODO(), client.ObjectKey{Name: instance.Spec.General.ClusterName}, ns_query)
 		if err == nil {
 			namespace := instance.Spec.General.ClusterName
-			nodeGroups := len(instance.Spec.OsNodes)
+			nodeGroups := len(instance.Spec.NodePools)
 
 			// if ns is already exist, check if all cluster and kibana are deployed properly - if a necessary resource ass been deleted - recreate it
 
@@ -167,7 +167,7 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			for nodeGroup := 0; nodeGroup < nodeGroups; nodeGroup++ {
 				// Get the existing StatefulSet from the cluster
 				sts_from_env := sts.StatefulSet{}
-				sts_name := instance.Spec.General.ClusterName + "-" + instance.Spec.OsNodes[nodeGroup].Compenent
+				sts_name := instance.Spec.General.ClusterName + "-" + instance.Spec.NodePools[nodeGroup].Compenent
 
 				if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &sts_from_env); err != nil {
 					return ctrl.Result{}, err
@@ -183,23 +183,26 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 				}
 				scale, res, errs = scale.InternalReconcile(ctx)
 				if err != nil {
+
 					instance.Status.Phase = opsterv1.PhaseError
+
 				}
 			}
+			if instance.Spec.Dashboards.Enable {
 
-			dash := dashboard.DashboardReconciler{
-				Client:   r.Client,
-				Scheme:   r.Scheme,
-				Recorder: r.Recorder,
-				State:    dashboard.State{},
-				Instnce:  instance,
+				dash := dashboard.DashboardReconciler{
+					Client:   r.Client,
+					Scheme:   r.Scheme,
+					Recorder: r.Recorder,
+					State:    dashboard.State{},
+					Instnce:  instance,
+				}
+				dash, res, errs = dash.InternalReconcile(ctx)
+				if dash.State.Status == "Failed" {
+					return ctrl.Result{}, errs
+				}
+				r.Recorder.Event(instance, "Normal", "Kibana keeps his desired state", fmt.Sprintf("Kibana %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
 			}
-			dash, res, errs = dash.InternalReconcile(ctx)
-			if dash.State.Status == "Failed" {
-				return ctrl.Result{}, errs
-			}
-			r.Recorder.Event(instance, "Normal", "Kibana keeps his desired state", fmt.Sprintf("Kibana %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
-
 		} else {
 
 			// if ns not exist in cluster, try to create it
@@ -210,7 +213,7 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 				// if ns cannot create ,  inform it and done reconcile
 				fmt.Println(err, "Cannot create namespace")
 				instance.Status.Phase = opsterv1.PhaseError
-				r.Recorder.Event(instance, "Warning", "Cluster cannot be created", fmt.Sprintf("cannot create cluster %s )", instance.Spec.General.ClusterName))
+				r.Recorder.Event(instance, "ERROR", "Cluster cannot be created", fmt.Sprintf("cannot create cluster %s )", instance.Spec.General.ClusterName))
 				return ctrl.Result{}, nil
 			}
 			fmt.Println("ns Created successfully", "name", ns.Name)
@@ -220,16 +223,11 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 
 		// -------- all resources has been created -----------
 
-		// if finished to build all resource -  done reconcile
 		return ctrl.Result{}, nil
 
-		// needs to implement errors handling, when error appears delete
-		// all related resources and return error without crushing operator
-		//}
-	case opsterv1.PhaseDone:
-		//		reqLogger.Info("start reconcile: DONE")
-		// reconcile without requeuing
-		fmt.Sprint("enter to DONE Phase")
+	case opsterv1.PhaseError:
+		r.Recorder.Event(instance, "ERROR", "The operator faced some errors", fmt.Sprintf(""))
+
 		return ctrl.Result{}, nil
 
 	default:
@@ -237,12 +235,7 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		return ctrl.Result{}, nil
 
 	}
-	err = r.Status().Update(context.TODO(), instance)
-	if err != nil {
-		return ctrl.Result{}, err
 
-	}
-	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

@@ -44,7 +44,7 @@ spec:
                   clusterName:
                     default: Opster_cluster
                     type: string
-                  osPort:
+                  httpPort:
                     format: int32
                     type: integer
                   serviceAccount:
@@ -57,22 +57,7 @@ spec:
                   version:
                     type: string
                 type: object
-              osConfMgmt:
-                description: OsConfMgmt defines which addiionals services will be
-                  deployed
-                properties:
-                  VerUpdate:
-                    type: boolean
-                  autoScaler:
-                    type: boolean
-                  kibana:
-                    type: boolean
-                  monitoring:
-                    type: boolean
-                  scaler:
-                    type: boolean
-                type: object
-              osNodes:
+              nodePools:
                 items:
                   properties:
                     compenent:
@@ -99,8 +84,26 @@ spec:
                       type: integer
                   type: object
                 type: array
+              osConfMgmt:
+                description: OsConfMgmt defines which addiionals services will be
+                  deployed
+                properties:
+                  VerUpdate:
+                    type: boolean
+                  autoScaler:
+                    type: boolean
+                  monitoring:
+                    type: boolean
+                  scaler:
+                    type: boolean
+                type: object
+              osDashboards:
+                properties:
+                  enable:
+                    type: boolean
+                type: object
             required:
-            - osNodes
+            - nodePools
             type: object
           status:
             description: OsStatus defines the observed state of Es

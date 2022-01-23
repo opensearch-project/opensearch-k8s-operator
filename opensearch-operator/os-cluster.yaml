@@ -8,13 +8,14 @@ metadata:
 spec:
   general:
     clusterName: os-from-operator
-    osPort: 9200
+    httpPort: 9200
     vendor: opensearch
     version: latest
     serviceName: es-svc
-  osConfMgmt:
-    kibana: true
-  osNodes:
+  osDashboards:
+    enable: true
+  osConfMgmt: {}
+  nodePools:
     - compenent: masters
       replicas: 3
       diskSize: 30

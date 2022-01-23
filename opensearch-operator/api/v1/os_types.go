@@ -34,7 +34,7 @@ type OsGeneral struct {
 
 	//+kubebuilder:default="Opster_cluster"
 	ClusterName string `json:"clusterName,omitempty"`
-	OsPort      int32  `json:"osPort,omitempty"`
+	HttpPort    int32  `json:"httpPort,omitempty"`
 	/////////+kubebuilder:validation:Enum=Opensearch,Elasticsearch,Op,Es,OP,ES
 	Vendor         string `json:"vendor,omitempty"`
 	Version        string `json:"version,omitempty"`
@@ -42,7 +42,7 @@ type OsGeneral struct {
 	ServiceName    string `json:"serviceName,omitempty"`
 }
 
-type OsNode struct {
+type NodePool struct {
 	Compenent    string `json:"compenent,omitempty"`
 	Replicas     int32  `json:"replicas,omitempty"`
 	DiskSize     int32  `json:"diskSize,omitempty"`
@@ -59,8 +59,11 @@ type OsConfMgmt struct {
 	Scaler     bool `json:"scaler,omitempty"`
 	AutoScaler bool `json:"autoScaler,omitempty"`
 	Monitoring bool `json:"monitoring,omitempty"`
-	Kibana     bool `json:"kibana,omitempty"`
 	VerUpdate  bool `json:"VerUpdate,omitempty"`
+}
+
+type OsDashboards struct {
+	Enable bool `json:"enable,omitempty"`
 }
 
 // EsSpec defines the desired state of Es
@@ -69,9 +72,10 @@ type OsSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	//
 	//// Foo is an example field of Es. Edit es_types.go to remove/update
-	General    OsGeneral  `json:"general,omitempty"`
-	OsConfMgmt OsConfMgmt `json:"osConfMgmt,omitempty"`
-	OsNodes    []OsNode   `json:"osNodes"`
+	General    OsGeneral    `json:"general,omitempty"`
+	OsConfMgmt OsConfMgmt   `json:"osConfMgmt,omitempty"`
+	Dashboards OsDashboards `json:"osDashboards,omitempty"`
+	NodePools  []NodePool   `json:"nodePools"`
 }
 
 // OsStatus defines the observed state of Es

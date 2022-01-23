@@ -39,18 +39,17 @@ type ScalerReconciler struct {
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
 
 func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ScalerReconciler, ctrl.Result, error) {
-	fmt.Sprint("scale config")
-
 	var found bool
-	if *r.StsFromEnv.Spec.Replicas == r.Instnce.Spec.OsNodes[r.Group].Replicas {
+	if *r.StsFromEnv.Spec.Replicas == r.Instnce.Spec.NodePools[r.Group].Replicas {
 		return ScalerReconciler{}, ctrl.Result{}, nil
 
 	} else {
+		group := fmt.Sprintf("Group-%d", r.Group)
 		var componentStatus opsterv1.ComponenetsStatus
 		comp := r.Instnce.Status.ComponenetsStatus
 		for i := 0; i < len(comp); i++ {
 			if comp[i].Component == "Scaler" {
-				if comp[i].Description == "Group-"+string(r.Group) {
+				if comp[i].Description == group {
 					found = true
 					if comp[i].Status == "Running" {
 						{
@@ -59,20 +58,20 @@ func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ScalerReconci
 							done := true
 							if !done {
 								scaler_reconcile := setReconcilerStatus(&ScalerReconciler{}, "Running")
-								return scaler_reconcile, ctrl.Result{}, nil
 								r.Recorder.Event(r.Instnce, "Normal", "one scale is already in progress on that group ", fmt.Sprintf("one scale is already in progress on that group"))
+								return scaler_reconcile, ctrl.Result{}, nil
 							} else {
 								// if scale logic is done - remove componentStatus
 								componentStatus = opsterv1.ComponenetsStatus{
 									Component:   "Scaler",
 									Status:      "Running",
-									Description: "Group-" + string(r.Group),
+									Description: group,
 								}
 								newStatus := helpers.RemoveIt(componentStatus, comp)
 								r.Instnce.Status.ComponenetsStatus = newStatus
 								r.Status().Update(ctx, r.Instnce)
 								r.Recorder.Event(r.Instnce, "Normal", "done scaling", fmt.Sprintf("done scaling"))
-								r.StsFromEnv.Spec.Replicas = &r.Instnce.Spec.OsNodes[r.Group].Replicas
+								r.StsFromEnv.Spec.Replicas = &r.Instnce.Spec.NodePools[r.Group].Replicas
 								if err := r.Update(ctx, &r.StsFromEnv); err != nil {
 									scaler_reconcile := setReconcilerStatus(&ScalerReconciler{}, "Failed")
 									return scaler_reconcile, ctrl.Result{}, err
@@ -95,7 +94,7 @@ func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ScalerReconci
 			componentStatus = opsterv1.ComponenetsStatus{
 				Component:   "Scaler",
 				Status:      "Running",
-				Description: "Group-" + string(r.Group),
+				Description: group,
 			}
 			r.Recorder.Event(r.Instnce, "Normal", "add new status event about scale ", fmt.Sprintf("add new status event about scale "))
 			r.Instnce.Status.ComponenetsStatus = append(r.Instnce.Status.ComponenetsStatus, componentStatus)
