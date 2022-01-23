@@ -43,7 +43,7 @@ type OsGeneral struct {
 }
 
 type NodePool struct {
-	Compenent    string `json:"compenent,omitempty"`
+	Component    string `json:"component,omitempty"`
 	Replicas     int32  `json:"replicas,omitempty"`
 	DiskSize     int32  `json:"diskSize,omitempty"`
 	NodeSelector string `json:"nodeSelector,omitempty"`
@@ -56,7 +56,6 @@ type NodePool struct {
 
 // OsConfMgmt defines which addiionals services will be deployed
 type OsConfMgmt struct {
-	Scaler     bool `json:"scaler,omitempty"`
 	AutoScaler bool `json:"autoScaler,omitempty"`
 	Monitoring bool `json:"monitoring,omitempty"`
 	VerUpdate  bool `json:"VerUpdate,omitempty"`

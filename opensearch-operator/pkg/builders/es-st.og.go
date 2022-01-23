@@ -35,14 +35,14 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 		},
 	}
 
-	cluster_init_node := helpers.CreateInitMasters(cr)
+	clusterInitNode := helpers.CreateInitMasters(cr)
 	//var vendor string
 	labels := map[string]string{
 		"app": cr.Name,
 	}
 
 	var masterRole string
-	if node.Compenent != "masters" {
+	if node.Component != "masters" {
 		masterRole = "false"
 	} else {
 		masterRole = "true"
@@ -72,7 +72,7 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 
 	return &sts.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-" + node.Compenent,
+			Name:      cr.Spec.General.ClusterName + "-" + node.Component,
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
@@ -92,45 +92,45 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 						{
 							Env: []corev1.EnvVar{{
 								Name:      "cluster.initial_master_nodes",
-								Value:     cluster_init_node,
+								Value:     clusterInitNode,
 								ValueFrom: nil,
 							},
-								corev1.EnvVar{
+								{
 									Name:      "discovery.seed_hosts",
 									Value:     cr.Spec.General.ServiceName + "-headleass-service",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "cluster.name",
 									Value:     cr.Spec.General.ClusterName,
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "network.host",
 									Value:     "0.0.0.0",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "OPENSEARCH_JAVA_OPTS",
 									Value:     jvm,
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.data",
 									Value:     "true",
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.master",
 									Value:     masterRole,
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.ingest",
 									Value:     node.Ingest,
 									ValueFrom: nil,
 								},
-								corev1.EnvVar{
+								{
 									Name:      "node.remote_cluster_client",
 									Value:     "true",
 									ValueFrom: nil,
@@ -214,7 +214,7 @@ func NewHeadlessServiceForCR(cr *opsterv1.Os) *corev1.Service {
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "None",
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
+				{
 					Name:     "http",
 					Protocol: "TCP",
 					Port:     cr.Spec.General.HttpPort,
@@ -222,7 +222,7 @@ func NewHeadlessServiceForCR(cr *opsterv1.Os) *corev1.Service {
 						IntVal: cr.Spec.General.HttpPort,
 					},
 				},
-				corev1.ServicePort{
+				{
 					Name:     "transport",
 					Protocol: "TCP",
 					Port:     9300,
@@ -256,7 +256,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
+				{
 					Name:     "http",
 					Protocol: "TCP",
 					Port:     cr.Spec.General.HttpPort,
@@ -264,7 +264,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 						IntVal: cr.Spec.General.HttpPort,
 					},
 				},
-				corev1.ServicePort{
+				{
 					Name:     "transport",
 					Protocol: "TCP",
 					Port:     9300,
@@ -273,7 +273,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 						StrVal: "9300",
 					},
 				},
-				corev1.ServicePort{
+				{
 					Name:     "metrics",
 					Protocol: "TCP",
 					Port:     9600,
@@ -282,7 +282,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 						StrVal: "9600",
 					},
 				},
-				corev1.ServicePort{
+				{
 					Name:     "rca",
 					Protocol: "TCP",
 					Port:     9650,

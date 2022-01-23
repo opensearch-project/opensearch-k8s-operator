@@ -53,7 +53,7 @@ func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, inst
 			changes = append(changes, field)
 
 			//scaled := true
-			//fmt.Println("You scaled - Replicas on " + instance.Spec.General.ClusterName + "-" + instance.Spec.nodePools[count].Compenent)
+			//fmt.Println("You scaled - Replicas on " + instance.Spec.General.ClusterName + "-" + instance.Spec.nodePools[count].Component)
 		}
 	}
 	return sts_env, nil, changes
@@ -65,7 +65,7 @@ func CreateInitMasters(cr *opsterv1.Os) string {
 
 	var i int32
 	for x := 0; x > NodesCount; x++ {
-		comp := cr.Spec.NodePools[x].Compenent
+		comp := cr.Spec.NodePools[x].Component
 		if comp == "masters" {
 			i = cr.Spec.NodePools[x].Replicas
 		}

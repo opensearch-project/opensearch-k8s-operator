@@ -28,7 +28,7 @@ type ScalerReconciler struct {
 	Scheme     *runtime.Scheme
 	Recorder   record.EventRecorder
 	State      State
-	Instnce    *opsterv1.Os
+	Instance   *opsterv1.Os
 	StsFromEnv sts.StatefulSet
 	Group      int
 }
@@ -38,15 +38,15 @@ type ScalerReconciler struct {
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
 
-func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ScalerReconciler, ctrl.Result, error) {
+func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ctrl.Result, error) {
 	var found bool
-	if *r.StsFromEnv.Spec.Replicas == r.Instnce.Spec.NodePools[r.Group].Replicas {
-		return ScalerReconciler{}, ctrl.Result{}, nil
+	if *r.StsFromEnv.Spec.Replicas == r.Instance.Spec.NodePools[r.Group].Replicas {
+		return ctrl.Result{}, nil
 
 	} else {
 		group := fmt.Sprintf("Group-%d", r.Group)
 		var componentStatus opsterv1.ComponenetsStatus
-		comp := r.Instnce.Status.ComponenetsStatus
+		comp := r.Instance.Status.ComponenetsStatus
 		for i := 0; i < len(comp); i++ {
 			if comp[i].Component == "Scaler" {
 				if comp[i].Description == group {
@@ -57,9 +57,8 @@ func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ScalerReconci
 
 							done := true
 							if !done {
-								scaler_reconcile := setReconcilerStatus(&ScalerReconciler{}, "Running")
-								r.Recorder.Event(r.Instnce, "Normal", "one scale is already in progress on that group ", fmt.Sprintf("one scale is already in progress on that group"))
-								return scaler_reconcile, ctrl.Result{}, nil
+								r.Recorder.Event(r.Instance, "Normal", "one scale is already in progress on that group ", fmt.Sprintf("one scale is already in progress on that group"))
+								return ctrl.Result{}, nil
 							} else {
 								// if scale logic is done - remove componentStatus
 								componentStatus = opsterv1.ComponenetsStatus{
@@ -68,22 +67,19 @@ func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ScalerReconci
 									Description: group,
 								}
 								newStatus := helpers.RemoveIt(componentStatus, comp)
-								r.Instnce.Status.ComponenetsStatus = newStatus
-								r.Status().Update(ctx, r.Instnce)
-								r.Recorder.Event(r.Instnce, "Normal", "done scaling", fmt.Sprintf("done scaling"))
-								r.StsFromEnv.Spec.Replicas = &r.Instnce.Spec.NodePools[r.Group].Replicas
+								r.Instance.Status.ComponenetsStatus = newStatus
+								r.Status().Update(ctx, r.Instance)
+								r.Recorder.Event(r.Instance, "Normal", "done scaling", fmt.Sprintf("done scaling"))
+								r.StsFromEnv.Spec.Replicas = &r.Instance.Spec.NodePools[r.Group].Replicas
 								if err := r.Update(ctx, &r.StsFromEnv); err != nil {
-									scaler_reconcile := setReconcilerStatus(&ScalerReconciler{}, "Failed")
-									return scaler_reconcile, ctrl.Result{}, err
+									return ctrl.Result{}, err
 								}
-								scaler_reconcile := setReconcilerStatus(&ScalerReconciler{}, "Done")
-								return scaler_reconcile, ctrl.Result{}, nil
+								return ctrl.Result{}, nil
 							}
 						}
 					} else if comp[i].Status == "Failed" {
-						r.Recorder.Event(r.Instnce, "Normal", "something want worng with scaling operation", fmt.Sprintf("something went worng)"))
-						scaler_reconcile := setReconcilerStatus(&ScalerReconciler{}, "Failed")
-						return scaler_reconcile, ctrl.Result{}, nil
+						r.Recorder.Event(r.Instance, "Normal", "something want worng with scaling operation", fmt.Sprintf("something went worng)"))
+						return ctrl.Result{}, nil
 					}
 				}
 			}
@@ -96,27 +92,13 @@ func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ScalerReconci
 				Status:      "Running",
 				Description: group,
 			}
-			r.Recorder.Event(r.Instnce, "Normal", "add new status event about scale ", fmt.Sprintf("add new status event about scale "))
-			r.Instnce.Status.ComponenetsStatus = append(r.Instnce.Status.ComponenetsStatus, componentStatus)
-			r.Status().Update(ctx, r.Instnce)
+			r.Recorder.Event(r.Instance, "Normal", "add new status event about scale ", fmt.Sprintf("add new status event about scale "))
+			r.Instance.Status.ComponenetsStatus = append(r.Instance.Status.ComponenetsStatus, componentStatus)
+			r.Status().Update(ctx, r.Instance)
 
 			// -----  Now start scaling logic ------
 
 		}
 	}
-	scaler_reconcile := setReconcilerStatus(&ScalerReconciler{}, "Done")
-	return scaler_reconcile, ctrl.Result{Requeue: true}, nil
-}
-func setReconcilerStatus(cluster *ScalerReconciler, stat string) ScalerReconciler {
-	new := ScalerReconciler{
-		Client:   cluster.Client,
-		Scheme:   cluster.Scheme,
-		Recorder: cluster.Recorder,
-		State: State{
-			Compenent: controllerName,
-			Status:    "Running",
-		},
-		Instnce: cluster.Instnce,
-	}
-	return new
+	return ctrl.Result{Requeue: true}, nil
 }

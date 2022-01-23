@@ -60,7 +60,7 @@ spec:
               nodePools:
                 items:
                   properties:
-                    compenent:
+                    component:
                       type: string
                     cpu:
                       format: int32
@@ -93,8 +93,6 @@ spec:
                   autoScaler:
                     type: boolean
                   monitoring:
-                    type: boolean
-                  scaler:
                     type: boolean
                 type: object
               osDashboards:

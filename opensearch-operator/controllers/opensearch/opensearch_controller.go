@@ -153,10 +153,10 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 				Scheme:   r.Scheme,
 				Recorder: r.Recorder,
 				State:    os_cluster.State{},
-				Instnce:  instance,
+				Instance: instance,
 			}
 
-			cluster, res, errs = cluster.InternalReconcile(ctx)
+			res, errs = cluster.InternalReconcile(ctx)
 			if cluster.State.Status == "Failed" {
 				fmt.Println(res)
 				return ctrl.Result{}, errs
@@ -167,7 +167,7 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 			for nodeGroup := 0; nodeGroup < nodeGroups; nodeGroup++ {
 				// Get the existing StatefulSet from the cluster
 				sts_from_env := sts.StatefulSet{}
-				sts_name := instance.Spec.General.ClusterName + "-" + instance.Spec.NodePools[nodeGroup].Compenent
+				sts_name := instance.Spec.General.ClusterName + "-" + instance.Spec.NodePools[nodeGroup].Component
 
 				if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &sts_from_env); err != nil {
 					return ctrl.Result{}, err
@@ -177,11 +177,11 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 					Scheme:     r.Scheme,
 					Recorder:   r.Recorder,
 					State:      scaler.State{},
-					Instnce:    instance,
+					Instance:   instance,
 					StsFromEnv: sts_from_env,
 					Group:      nodeGroup,
 				}
-				scale, res, errs = scale.InternalReconcile(ctx)
+				res, errs = scale.InternalReconcile(ctx)
 				if err != nil {
 
 					instance.Status.Phase = opsterv1.PhaseError
@@ -195,9 +195,9 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 					Scheme:   r.Scheme,
 					Recorder: r.Recorder,
 					State:    dashboard.State{},
-					Instnce:  instance,
+					Instance: instance,
 				}
-				dash, res, errs = dash.InternalReconcile(ctx)
+				res, errs = dash.InternalReconcile(ctx)
 				if dash.State.Status == "Failed" {
 					return ctrl.Result{}, errs
 				}
@@ -233,9 +233,7 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 	default:
 		//	reqLogger.Info("NOTHING WILL HAPPEN - DEFAULT")
 		return ctrl.Result{}, nil
-
 	}
-
 }
 
 // SetupWithManager sets up the controller with the Manager.
