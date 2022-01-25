@@ -4,37 +4,30 @@ The k8s OpenSearch Operator is composed of multiple entities, all deployed on ku
 ![alt text](assets/K8sOperator.png "Operator components diagram")
 
 # The operator entities are divided into the following categories:
-- OpenSearch Operator
-- Long living services
-- Operators (Controllers)
-- On demand workers services
+- Triggers
+- Reconcilers
+- Exporters
 
-# The OpenSearch Operator responsibilities
-1. Load and maintains the long running services according to the installation config. 
-2. Listen to API requests for operations need to be done on both cluster/s and kubernetes.
-3. Provide status from operations executed by it.  
+# The Triggers responsibilities
+1. Watch for any change in the CRD (Operator) or any anomaly defined by user (AutoScaler)  
+2. Trigger required reconcile components 
+3. Allow/Block parallel reconcile work  
 
-# Long running services
-1. Initiated by the operator manager and will remain up as long the operator is up. 
-2. Responsible for executing its logic every scheduling threshold.
-3. Update its status to be used by the operator manager.
+# Reconcilers
+1. Initiated by the Triggers components. 
+2. Responsible for executing its logic end to end.
+3. Each Reconciler manage it own status.
 
-# Operators (controllers)
-1. Initiated by the operator manager according to the configuration.
-2. Watch it's CRD type for changes.
-3. Loading a worker service for executing app logic.
-4. Update its status to be used by the operator manager.
+# Exporters
+1. Export metrics and OS knowledge.
 
-# On demand worker service
-1. Initiated by the operator (controller).
-2. Executes its operation and update the status to be used by the operator (controller). 
 
-Most interactions with the operator will be performed through the operator manager.
+Most interactions with the operator will be performed through the OpenSearch operator.
 This can be done in 2 ways:
-1. Updating its yaml files and CRD. 
+1. Updating its CRD. 
 2. Sending API request.
 
 - On both cases the flow will be as follow:
-1. The Operator manager will create/update the operator (controller) CRD.
-2. The Operator (controller) is watching the CRD for changes; if a change was made to the CRD that requires actions to be taken by its worker, it will load a worker to run the app login. Once triggered, the on demand service will communicate with the OpenSearch clusters through the OpenSearch Gateway using OpenSearch REST API
-3. On successful worker logic execution, the Operator (controller) will communicate with kubernetes through k8s APIs, modifying resources files as needed.
+1. The Operator validates parallel is allowed.
+2. The Operator will trigger relevant reconcilers.
+3. Each reconciler will perform its end to end logic. take care of needed cleanups and status management. 
