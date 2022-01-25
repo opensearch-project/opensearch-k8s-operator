@@ -1,4 +1,4 @@
-package scaler
+package controllers
 
 import (
 	"context"
@@ -13,15 +13,9 @@ import (
 )
 
 const (
-	controllerName           = "scaler-controller"
-	configHashAnnotationName = "opster.os-operator.opster.io/config-hash"
+	controllerNamed           = "scaler-controller"
+	configHashAnnotationNamed = "opster.os-operator.opster.io/config-hash"
 )
-
-type State struct {
-	Compenent string `json:"compenent,omitempty"`
-	Status    string `json:"status,omitempty"`
-	Err       error  `json:"err,omitempty"`
-}
 
 type ScalerReconciler struct {
 	client.Client
@@ -38,7 +32,7 @@ type ScalerReconciler struct {
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
 
-func (r *ScalerReconciler) InternalReconcile(ctx context.Context) (ctrl.Result, error) {
+func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var found bool
 	if *r.StsFromEnv.Spec.Replicas == r.Instance.Spec.NodePools[r.Group].Replicas {
 		return ctrl.Result{}, nil

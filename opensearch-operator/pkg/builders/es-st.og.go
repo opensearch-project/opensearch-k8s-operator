@@ -23,6 +23,43 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 
 	//disk := fmt.Sprint(cr.Spec.Masters.DiskSize)
 
+	rolesMap := map[string]string{
+		"master":                "",
+		"data":                  "",
+		"data_content":          "",
+		"data_hot":              "",
+		"data_warm":             "",
+		"data_cold":             "",
+		"data_frozen":           "",
+		"ingest":                "",
+		"ml":                    "",
+		"remote_cluster_client": "",
+		"transform":             "",
+	}
+
+	rolesSlice := []string{
+		"master",
+		"data",
+		"data_content",
+		"data_hot",
+		"data_warm",
+		"data_cold",
+		"data_frozen",
+		"ingest",
+		"ml",
+		"remote_cluster_client",
+		"transform",
+	}
+
+	for i := 0; i < len(rolesSlice); i++ {
+		if helpers.ContainsString(node.Roles, rolesSlice[i]) {
+			rolesMap[rolesSlice[i]] = "true"
+		} else {
+			rolesMap[rolesSlice[i]] = "false"
+		}
+
+	}
+
 	pvt := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "pvc"},
 		Spec: corev1.PersistentVolumeClaimSpec{
@@ -39,13 +76,6 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 	//var vendor string
 	labels := map[string]string{
 		"app": cr.Name,
-	}
-
-	var masterRole string
-	if node.Component != "masters" {
-		masterRole = "false"
-	} else {
-		masterRole = "true"
 	}
 
 	i, err := strconv.ParseInt("420", 10, 32)
@@ -117,22 +147,57 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 								},
 								{
 									Name:      "node.data",
-									Value:     "true",
+									Value:     rolesMap["data"],
 									ValueFrom: nil,
 								},
 								{
 									Name:      "node.master",
-									Value:     masterRole,
+									Value:     rolesMap["master"],
 									ValueFrom: nil,
 								},
 								{
 									Name:      "node.ingest",
-									Value:     node.Ingest,
+									Value:     rolesMap["ingest"],
 									ValueFrom: nil,
 								},
 								{
 									Name:      "node.remote_cluster_client",
-									Value:     "true",
+									Value:     rolesMap["remote_cluster_client"],
+									ValueFrom: nil,
+								},
+								{
+									Name:      "node.data_content",
+									Value:     rolesMap["data_content"],
+									ValueFrom: nil,
+								},
+								{
+									Name:      "node.data_hot",
+									Value:     rolesMap["data_hot"],
+									ValueFrom: nil,
+								},
+								{
+									Name:      "node.data_warm",
+									Value:     rolesMap["data_warm"],
+									ValueFrom: nil,
+								},
+								{
+									Name:      "node.data_cold",
+									Value:     rolesMap["data_cold"],
+									ValueFrom: nil,
+								},
+								{
+									Name:      "node.data_frozen",
+									Value:     rolesMap["data_frozen"],
+									ValueFrom: nil,
+								},
+								{
+									Name:      "node.ml",
+									Value:     rolesMap["ml"],
+									ValueFrom: nil,
+								},
+								{
+									Name:      "node.transform",
+									Value:     rolesMap["transform"],
 									ValueFrom: nil,
 								},
 							},

@@ -1,10 +1,11 @@
-package cluster
+package controllers
 
 import (
 	"context"
 	"fmt"
 	sts "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "os-operator.io/api/v1"
@@ -37,7 +38,7 @@ type ClusterReconciler struct {
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/status/componenetsStatus,verbs=get;update;patch
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
 
-func (r *ClusterReconciler) InternalReconcile(ctx context.Context) (ctrl.Result, error) {
+func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Result, error) {
 
 	cm := v1.ConfigMap{}
 	namespace := r.Instance.Spec.General.ClusterName
@@ -45,12 +46,13 @@ func (r *ClusterReconciler) InternalReconcile(ctx context.Context) (ctrl.Result,
 	cmName := "opensearch-yml"
 
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: cmName, Namespace: namespace}, &cm); err != nil {
-
 		clusterCm := builders.NewCmForCR(r.Instance)
 		err = r.Create(context.TODO(), clusterCm)
 		if err != nil {
-			fmt.Println(err, "Cannot create Configmap "+clusterCm.Name)
-			return ctrl.Result{}, err
+			if !errors.IsAlreadyExists(err) {
+				fmt.Println(err, "Cannot create Configmap "+clusterCm.Name)
+				return ctrl.Result{}, err
+			}
 		}
 		fmt.Println("Cm Created successfully", "name", clusterCm.Name)
 	}
@@ -58,14 +60,15 @@ func (r *ClusterReconciler) InternalReconcile(ctx context.Context) (ctrl.Result,
 	headleassService := v1.Service{}
 	serviceName := r.Instance.Spec.General.ServiceName + "-headleass-service"
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &headleassService); err != nil {
-
 		/// ------ Create Headleass Service -------
 		headless_service := builders.NewHeadlessServiceForCR(r.Instance)
 
 		err = r.Create(context.TODO(), headless_service)
 		if err != nil {
-			fmt.Println(err, "Cannot create Headless Service")
-			return ctrl.Result{}, err
+			if !errors.IsAlreadyExists(err) {
+				fmt.Println(err, "Cannot create Headless Service")
+				return ctrl.Result{}, err
+			}
 		}
 		fmt.Println("service Created successfully", "name", headless_service.Name)
 	}
@@ -79,8 +82,11 @@ func (r *ClusterReconciler) InternalReconcile(ctx context.Context) (ctrl.Result,
 
 		err = r.Create(context.TODO(), clusterService)
 		if err != nil {
-			fmt.Println(err, "Cannot create service")
-			return ctrl.Result{}, err
+			if !errors.IsAlreadyExists(err) {
+				fmt.Println(err, "Cannot create service")
+				return ctrl.Result{}, err
+			}
+
 		}
 		fmt.Println("service Created successfully", "name", service.Name)
 
@@ -99,11 +105,22 @@ func (r *ClusterReconciler) InternalReconcile(ctx context.Context) (ctrl.Result,
 			//	r.StsCreate(ctx, &sts_for_build)
 			err := r.Create(context.TODO(), sts_for_build)
 			if err != nil {
-				return ctrl.Result{}, err
+				if !errors.IsAlreadyExists(err) {
+					fmt.Println(err, "Cannot create-"+stsName+" node group")
+					return ctrl.Result{}, err
+				}
 			}
-			fmt.Println(r.Instance.Spec.NodePools[x].Component, " StatefulSet has Created successfully")
+			fmt.Println(r.Instance.Spec.NodePools[x].Component, " StatefulSet has Created successfully"+"-"+stsName)
 		}
 
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := opsterv1.AddToScheme(mgr.GetScheme()); err != nil {
+	}
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&opsterv1.Os{}).
+		Complete(r)
 }

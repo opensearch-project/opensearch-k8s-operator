@@ -1,5 +1,10 @@
 /*
-Copyright 2021.
+
+First, it will contain the necessary imports.
+*/
+
+/*
+Copyright 2022 The Kubernetes authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -13,12 +18,20 @@ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 See the License for the specific language governing permissions and
 limitations under the License.
 */
-
+// +kubebuilder:docs-gen:collapse=Apache License
 package controllers
 
 import (
+	"context"
+	"fmt"
+	"github.com/onsi/gomega/gexec"
+	"k8s.io/client-go/tools/record"
+	opsterv1 "os-operator.io/api/v1"
 	"path/filepath"
 	"testing"
+	"time"
+
+	ctrl "sigs.k8s.io/controller-runtime"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -29,17 +42,25 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	opsterv1 "os-operator.io/api/v1"
 	//+kubebuilder:scaffold:imports
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
+// +kubebuilder:docs-gen:collapse=Imports
+
+/*
+Now, let's go through the code generated.
+*/
+
+var (
+	cfg       *rest.Config
+	k8sClient client.Client // You'll be using this client in your tests.
+	testEnv   *envtest.Environment
+	ctx       context.Context
+	cancel    context.CancelFunc
+)
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -47,34 +68,82 @@ func TestAPIs(t *testing.T) {
 	RunSpecsWithDefaultAndCustomReporters(t,
 		"Controller Suite",
 		[]Reporter{printer.NewlineReporter{}})
+
 }
 
-var _ = BeforeSuite(func() {
-	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+const (
+	ClusterName       = "cluster-test"
+	ClusterNameSpaces = "default"
+)
 
-	By("bootstrapping test environment")
+var _ = BeforeSuite(func() {
+
+	var recorder record.EventRecorder
+
+	OpensearchCluster := ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
+
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	//logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+
+	ctx := context.Background()
+	By("bootstrappifng test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
-	var err error
-	cfg, err = testEnv.Start()
-	Expect(err).NotTo(HaveOccurred())
-	Expect(cfg).NotTo(BeNil())
 
+	cfg, err := testEnv.Start()
+	Expect(err).NotTo(HaveOccurred())
+	fmt.Println(err)
+	Expect(cfg).NotTo(BeNil())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = scheme.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 	err = opsterv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-
-	//+kubebuilder:scaffold:scheme
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
+	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+	Expect(err).ToNot(HaveOccurred())
+
+	err = (&OsReconciler{
+		Client:   k8sManager.GetClient(),
+		Scheme:   scheme.Scheme,
+		Instance: &OpensearchCluster,
+		Recorder: recorder,
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	err = (&ClusterReconciler{
+		Client:   k8sManager.GetClient(),
+		Scheme:   scheme.Scheme,
+		Instance: &OpensearchCluster,
+		Recorder: recorder,
+	}).SetupWithManager(k8sManager)
+	Expect(err).ToNot(HaveOccurred())
+
+	go func() {
+		defer GinkgoRecover()
+		err = k8sManager.Start(ctx)
+		Expect(err).ToNot(HaveOccurred(), "failed to run manager")
+	}()
+
+	k8sClient = k8sManager.GetClient()
+	Expect(k8sClient).ToNot(BeNil())
+
 }, 60)
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
+	gexec.KillAndWait(5 * time.Second)
 	err := testEnv.Stop()
-	Expect(err).NotTo(HaveOccurred())
+	Expect(err).ToNot(HaveOccurred())
 })

@@ -37,7 +37,7 @@ type DashboardReconciler struct {
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
 
-func (r *DashboardReconciler) InternalReconcile(ctx context.Context) (ctrl.Result, error) {
+func (r *DashboardReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	/// ------ create opensearch dashboard cm ------- ///
 
 	kibanaDeploy := sts.Deployment{}

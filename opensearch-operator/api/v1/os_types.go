@@ -43,15 +43,14 @@ type OsGeneral struct {
 }
 
 type NodePool struct {
-	Component    string `json:"component,omitempty"`
-	Replicas     int32  `json:"replicas,omitempty"`
-	DiskSize     int32  `json:"diskSize,omitempty"`
-	NodeSelector string `json:"nodeSelector,omitempty"`
-	Cpu          int32  `json:"cpu,omitempty"`
-	Memory       int32  `json:"memory,omitempty"`
-	Jvm          string `json:"jvm,omitempty"`
-	Ingest       string `json:"ingest,omitempty"`
-	Data         string `json:"data,omitempty"`
+	Component    string   `json:"component,omitempty"`
+	Replicas     int32    `json:"replicas,omitempty"`
+	DiskSize     int32    `json:"diskSize,omitempty"`
+	NodeSelector string   `json:"nodeSelector,omitempty"`
+	Cpu          int32    `json:"cpu,omitempty"`
+	Memory       int32    `json:"memory,omitempty"`
+	Jvm          string   `json:"jvm,omitempty"`
+	Roles        []string `json:"roles"`
 }
 
 // OsConfMgmt defines which addiionals services will be deployed

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package opensearch
+package controllers
 
 import (
 	"context"
@@ -23,11 +23,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
-	os_cluster "os-operator.io/controllers/cluster"
 	"os-operator.io/controllers/dashboard"
-	scaler "os-operator.io/controllers/scaler"
+	"time"
+
+	//os_cluster "os-operator.io/controllers/tests"
 	"os-operator.io/pkg/builders"
 	"os-operator.io/pkg/helpers"
+	//"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"reflect"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
@@ -43,6 +45,7 @@ type OsReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
+	Instance *opsterv1.Os
 }
 
 //+kubebuilder:rbac:groups="opster.os-operator.opster.io",resources=events,verbs=create;patch
@@ -148,21 +151,25 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 
 			// if ns is already exist, check if all cluster and kibana are deployed properly - if a necessary resource ass been deleted - recreate it
 
-			cluster := os_cluster.ClusterReconciler{
+			cluster := ClusterReconciler{
 				Client:   r.Client,
 				Scheme:   r.Scheme,
 				Recorder: r.Recorder,
-				State:    os_cluster.State{},
+				State:    State{},
 				Instance: instance,
 			}
 
-			res, errs = cluster.InternalReconcile(ctx)
+			res, errs = cluster.Reconcile(ctx, req)
 			if cluster.State.Status == "Failed" {
 				fmt.Println(res)
 				return ctrl.Result{}, errs
 			}
 
-			r.Recorder.Event(instance, "Normal", "Cluster keeps his desired state", fmt.Sprintf("Cluster %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
+			fmt.Println("out of cluster controller------------ -")
+
+			//r.Recorder.Event(instance, "Normal", "Cluster keeps his desired state", fmt.Sprintf("Cluster %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
+
+			fmt.Println("after recored cluster controller------------ -")
 
 			for nodeGroup := 0; nodeGroup < nodeGroups; nodeGroup++ {
 				// Get the existing StatefulSet from the cluster
@@ -172,16 +179,16 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 				if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &sts_from_env); err != nil {
 					return ctrl.Result{}, err
 				}
-				scale := scaler.ScalerReconciler{
+				scale := ScalerReconciler{
 					Client:     r.Client,
 					Scheme:     r.Scheme,
 					Recorder:   r.Recorder,
-					State:      scaler.State{},
+					State:      State{},
 					Instance:   instance,
 					StsFromEnv: sts_from_env,
 					Group:      nodeGroup,
 				}
-				res, errs = scale.InternalReconcile(ctx)
+				res, errs = scale.Reconcile(ctx, req)
 				if err != nil {
 
 					instance.Status.Phase = opsterv1.PhaseError
@@ -197,11 +204,11 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 					State:    dashboard.State{},
 					Instance: instance,
 				}
-				res, errs = dash.InternalReconcile(ctx)
+				res, errs = dash.Reconcile(ctx, req)
 				if dash.State.Status == "Failed" {
 					return ctrl.Result{}, errs
 				}
-				r.Recorder.Event(instance, "Normal", "Kibana keeps his desired state", fmt.Sprintf("Kibana %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
+				//r.Recorder.Event(instance, "Normal", "Kibana keeps his desired state", fmt.Sprintf("Kibana %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
 			}
 		} else {
 
@@ -223,7 +230,7 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 
 		// -------- all resources has been created -----------
 
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 
 	case opsterv1.PhaseError:
 		r.Recorder.Event(instance, "ERROR", "The operator faced some errors", fmt.Sprintf(""))
@@ -232,7 +239,7 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 
 	default:
 		//	reqLogger.Info("NOTHING WILL HAPPEN - DEFAULT")
-		return ctrl.Result{}, nil
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
 }
 

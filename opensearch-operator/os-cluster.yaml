@@ -22,18 +22,22 @@ spec:
       NodeSelector:
       cpu: 4
       memory: 16
-      ingest: "false"
+      roles:
+        - "master"
+        - "data"
     - component: nodes
       replicas: 3
       diskSize: 100
       NodeSelector:
       cpu: 4
       memory: 16
-      ingest: "true"
+      roles:
+        - "data"
     - component: coordinators
       replicas: 3
       diskSize: 100
       NodeSelector:
       cpu: 4
-      memory: 16
-      ingest: "false"
+      roles:
+        - "data_frozen"
+        - "ingest"
