@@ -3,24 +3,25 @@ package controllers
 import (
 	"context"
 	"fmt"
+
 	sts "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "os-operator.io/api/v1"
-	"os-operator.io/pkg/builders"
+	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/builders"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	controllerName           = "cluster-controller"
-	configHashAnnotationName = "cluster.k8s.elastic.co/config-hash"
+	configHashAnnotationName = "cluster.opensearch.opster.io/config-hash"
 )
 
 type State struct {
-	Component string `json:"compenent,omitempty"`
+	Component string `json:"component,omitempty"`
 	Status    string `json:"status,omitempty"`
 	Err       error  `json:"err,omitempty"`
 }
@@ -30,13 +31,13 @@ type ClusterReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 	State    State
-	Instance *opsterv1.Os
+	Instance *opsterv1.OpenSearchCluster
 }
 
-//+kubebuilder:rbac:groups="opster.os-operator.opster.io",resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/status/componenetsStatus,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
+//+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/status/componentsStatus,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/finalizers,verbs=update
 
 func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Result, error) {
 
@@ -57,10 +58,10 @@ func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Resul
 		fmt.Println("Cm Created successfully", "name", clusterCm.Name)
 	}
 
-	headleassService := v1.Service{}
-	serviceName := r.Instance.Spec.General.ServiceName + "-headleass-service"
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &headleassService); err != nil {
-		/// ------ Create Headleass Service -------
+	headlessService := v1.Service{}
+	serviceName := r.Instance.Spec.General.ServiceName + "-headless-service"
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &headlessService); err != nil {
+		/// ------ Create Headless Service -------
 		headless_service := builders.NewHeadlessServiceForCR(r.Instance)
 
 		err = r.Create(context.TODO(), headless_service)
@@ -119,8 +120,9 @@ func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Resul
 
 func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	if err := opsterv1.AddToScheme(mgr.GetScheme()); err != nil {
+		return err
 	}
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.Os{}).
+		For(&opsterv1.OpenSearchCluster{}).
 		Complete(r)
 }

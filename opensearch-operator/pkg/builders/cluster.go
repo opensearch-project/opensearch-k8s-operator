@@ -2,23 +2,24 @@ package builders
 
 import (
 	"fmt"
+
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"os-operator.io/pkg/helpers"
+	"opensearch.opster.io/pkg/helpers"
 
 	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
 	"strconv"
 
 	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
-	opsterv1 "os-operator.io/api/v1"
+	opsterv1 "opensearch.opster.io/api/v1"
 )
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
-func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
+func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.StatefulSet {
 	disk := fmt.Sprint(node.DiskSize)
 
 	//disk := fmt.Sprint(cr.Spec.Masters.DiskSize)
@@ -89,9 +90,11 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 
 	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
 		cr.Spec.General.Vendor == "Opensearch" ||
-		cr.Spec.General.Vendor == "opensearch" {
+		cr.Spec.General.Vendor == "opensearch" ||
+		cr.Spec.General.Vendor == "" {
 		//	vendor = "opensearchproject/opensearch"
 	} else {
+		panic("vendor=elasticsearch not implemented")
 		//vendor ="elasticsearch"
 	}
 
@@ -127,7 +130,7 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 							},
 								{
 									Name:      "discovery.seed_hosts",
-									Value:     cr.Spec.General.ServiceName + "-headleass-service",
+									Value:     cr.Spec.General.ServiceName + "-headless-service",
 									ValueFrom: nil,
 								},
 								{
@@ -260,7 +263,7 @@ func NewSTSForCR(cr *opsterv1.Os, node opsterv1.NodePool) *sts.StatefulSet {
 	}
 }
 
-func NewHeadlessServiceForCR(cr *opsterv1.Os) *corev1.Service {
+func NewHeadlessServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 	labels := map[string]string{
 		"app": cr.Name,
@@ -272,7 +275,7 @@ func NewHeadlessServiceForCR(cr *opsterv1.Os) *corev1.Service {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName + "-headleass-service",
+			Name:      cr.Spec.General.ServiceName + "-headless-service",
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
@@ -303,7 +306,7 @@ func NewHeadlessServiceForCR(cr *opsterv1.Os) *corev1.Service {
 	}
 }
 
-func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
+func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 	labels := map[string]string{
 		"app": cr.Name,
@@ -363,7 +366,7 @@ func NewServiceForCR(cr *opsterv1.Os) *corev1.Service {
 	}
 }
 
-func NewNsForCR(cr *opsterv1.Os) *corev1.Namespace {
+func NewNsForCR(cr *opsterv1.OpenSearchCluster) *corev1.Namespace {
 
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
@@ -372,7 +375,7 @@ func NewNsForCR(cr *opsterv1.Os) *corev1.Namespace {
 	}
 }
 
-func NewCmForCR(cr *opsterv1.Os) *corev1.ConfigMap {
+func NewCmForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{

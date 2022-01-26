@@ -19,56 +19,58 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
+
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
-	"os-operator.io/controllers/dashboard"
-	"time"
+	"opensearch.opster.io/controllers/dashboard"
 
-	//os_cluster "os-operator.io/controllers/tests"
-	"os-operator.io/pkg/builders"
-	"os-operator.io/pkg/helpers"
+	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/helpers"
+
 	//"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"reflect"
+
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	opsterv1 "os-operator.io/api/v1"
+	opsterv1 "opensearch.opster.io/api/v1"
 )
 
-// OsReconciler reconciles a Os object
-type OsReconciler struct {
+// OpenSearchClusterReconciler reconciles a OpenSearchCluster object
+type OpenSearchClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opsterv1.Os
+	Instance *opsterv1.OpenSearchCluster
 }
 
-//+kubebuilder:rbac:groups="opster.os-operator.opster.io",resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
+//+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the Os object against the actual cluster state, and then
+// the OpenSearchCluster object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
-func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	//_ = log.FromContext(ctx)
 	//	reqLogger := r.Log.WithValues("es", req.NamespacedName)
 	//	reqLogger.Info("=== Reconciling ES")
 	myFinalizerName := "Opster"
 
-	instance := &opsterv1.Os{}
+	instance := &opsterv1.OpenSearchCluster{}
 	err := r.Get(context.TODO(), req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -124,12 +126,12 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 		//	reqLogger.info("start reconcile - Phase: PENDING")
 
 		instance.Status.Phase = opsterv1.PhaseRunning
-		componentStatus := opsterv1.ComponenetsStatus{
+		componentStatus := opsterv1.ComponentsStatus{
 			Component:   "",
 			Status:      "",
 			Description: "",
 		}
-		instance.Status.ComponenetsStatus = append(instance.Status.ComponenetsStatus, componentStatus)
+		instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, componentStatus)
 		err = r.Status().Update(context.TODO(), instance)
 		if err != nil {
 			return ctrl.Result{}, err
@@ -244,14 +246,14 @@ func (r *OsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Re
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OsReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.Os{}).
+		For(&opsterv1.OpenSearchCluster{}).
 		Complete(r)
 }
 
 // delete associated cluster resources //
-func (r *OsReconciler) deleteExternalResources(es *opsterv1.Os) error {
+func (r *OpenSearchClusterReconciler) deleteExternalResources(es *opsterv1.OpenSearchCluster) error {
 	namespace := es.Spec.General.ClusterName
 
 	nsToDel := builders.NewNsForCR(es)

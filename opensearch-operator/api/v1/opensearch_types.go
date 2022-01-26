@@ -30,9 +30,9 @@ const (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type OsGeneral struct {
+type GeneralConfig struct {
 
-	//+kubebuilder:default="Opster_cluster"
+	//+kubebuilder:default="opster-cluster"
 	ClusterName string `json:"clusterName,omitempty"`
 	HttpPort    int32  `json:"httpPort,omitempty"`
 	/////////+kubebuilder:validation:Enum=Opensearch,Elasticsearch,Op,Es,OP,ES
@@ -53,64 +53,61 @@ type NodePool struct {
 	Roles        []string `json:"roles"`
 }
 
-// OsConfMgmt defines which addiionals services will be deployed
-type OsConfMgmt struct {
+// ConfMgmt defines which additional services will be deployed
+type ConfMgmt struct {
 	AutoScaler bool `json:"autoScaler,omitempty"`
 	Monitoring bool `json:"monitoring,omitempty"`
 	VerUpdate  bool `json:"VerUpdate,omitempty"`
 }
 
-type OsDashboards struct {
+type DashboardsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 }
 
-// EsSpec defines the desired state of Es
-type OsSpec struct {
+// ClusterSpec defines the desired state of OpenSearchCluster
+type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	//
-	//// Foo is an example field of Es. Edit es_types.go to remove/update
-	General    OsGeneral    `json:"general,omitempty"`
-	OsConfMgmt OsConfMgmt   `json:"osConfMgmt,omitempty"`
-	Dashboards OsDashboards `json:"osDashboards,omitempty"`
-	NodePools  []NodePool   `json:"nodePools"`
+	General    GeneralConfig    `json:"general,omitempty"`
+	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
+	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
+	NodePools  []NodePool       `json:"nodePools"`
 }
 
-// OsStatus defines the observed state of Es
-type OsStatus struct {
+// ClusterStatus defines the observed state of Es
+type ClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Phase             string              `json:"phase,omitempty"`
-	ComponenetsStatus []ComponenetsStatus `json:"componenetsStatus"`
+	Phase            string             `json:"phase,omitempty"`
+	ComponentsStatus []ComponentsStatus `json:"componentsStatus"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
-
+//+kubebuilder:resource:shortName=os;opensearch
 // Es is the Schema for the es API
-type Os struct {
+type OpenSearchCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OsSpec   `json:"spec,omitempty"`
-	Status OsStatus `json:"status,omitempty"`
+	Spec   ClusterSpec   `json:"spec,omitempty"`
+	Status ClusterStatus `json:"status,omitempty"`
 }
 
-type ComponenetsStatus struct {
+type ComponentsStatus struct {
 	Component   string `json:"component,omitempty"`
 	Status      string `json:"status,omitempty"`
 	Description string `json:"description,omitempty"`
 }
 
 //+kubebuilder:object:root=true
-
 // EsList contains a list of Es
-type OsList struct {
+type OpenSearchClusterList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Os `json:"items"`
+	Items           []OpenSearchCluster `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&Os{}, &OsList{})
+	SchemeBuilder.Register(&OpenSearchCluster{}, &OpenSearchClusterList{})
 }

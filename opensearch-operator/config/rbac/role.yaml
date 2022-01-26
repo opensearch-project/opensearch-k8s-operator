@@ -7,16 +7,16 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - opster.os-operator.opster.io
+  - opensearch.opster.io
   resources:
   - events
   verbs:
   - create
   - patch
 - apiGroups:
-  - opster.os-operator.opster.io
+  - opensearch.opster.io
   resources:
-  - os
+  - opensearchcluster
   verbs:
   - create
   - delete
@@ -26,23 +26,23 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opster.os-operator.opster.io
+  - opensearch.opster.io
   resources:
-  - os/finalizers
+  - opensearchcluster/finalizers
   verbs:
   - update
 - apiGroups:
-  - opster.os-operator.opster.io
+  - opensearch.opster.io
   resources:
-  - os/status
+  - opensearchcluster/status
   verbs:
   - get
   - patch
   - update
 - apiGroups:
-  - opster.os-operator.opster.io
+  - opensearch.opster.io
   resources:
-  - os/status/componenetsStatus
+  - opensearchcluster/status/componentsStatus
   verbs:
   - get
   - patch

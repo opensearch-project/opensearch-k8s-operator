@@ -1,4 +1,4 @@
-module os-operator.io
+module opensearch.opster.io
 
 go 1.16
 

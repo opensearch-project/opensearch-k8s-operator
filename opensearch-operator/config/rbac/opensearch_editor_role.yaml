@@ -2,12 +2,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: os-editor-role
+  name: opensearchcluster-editor-role
 rules:
 - apiGroups:
-  - opster.os-operator.opster.io
+  - opensearch.opster.io
   resources:
-  - os
+  - opensearchcluster
   verbs:
   - create
   - delete
@@ -17,8 +17,8 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opster.os-operator.opster.io
+  - opensearch.opster.io
   resources:
-  - os/status
+  - opensearchcluster/status
   verbs:
   - get

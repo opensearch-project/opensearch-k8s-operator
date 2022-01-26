@@ -2,12 +2,13 @@ package helpers
 
 import (
 	"fmt"
+
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/kube-openapi/pkg/validation/errors"
-	opsterv1 "os-operator.io/api/v1"
+	opsterv1 "opensearch.opster.io/api/v1"
 )
 
-func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, instance *opsterv1.Os, count int, check string) (x sts.StatefulSetSpec, err error, changes []string) {
+func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, instance *opsterv1.OpenSearchCluster, count int, check string) (x sts.StatefulSetSpec, err error, changes []string) {
 
 	if check != "" {
 
@@ -60,7 +61,7 @@ func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, inst
 
 }
 
-func CreateInitMasters(cr *opsterv1.Os) string {
+func CreateInitMasters(cr *opsterv1.OpenSearchCluster) string {
 	NodesCount := len(cr.Spec.NodePools)
 
 	var i int32

@@ -24,24 +24,31 @@ The project is currently a work in progress and is not (yet) recommended for use
 
 # Getting Started
 ## Installing the Operator
-- Clone the repo.
-- Make manifests.
-- Make install.
+
+- Clone the repo
+- Run `make build manifests` to build the controller binary and the manifests
+- Start a kubernetes cluster (e.g. with k3d or minikube) and make sure your `~/.kube/config` points to it
+- Run `make install` to create the CRD in the kubernetes cluster
 
 ## Deploying a new OpenSearch cluster
-Use os-cluster.yaml to define your cluster - note that the `ClusterName` is also the namespace that the new cluster will reside in.
 
-    kubectl create os-cluster.yaml
-    
-- Note: the current installation deploys with the default demo certificate provided by OpenSearch. 
+Go to `opensearch-operator` and use `opensearch-cluster.yaml` as a starting point to define your cluster - note that the `clusterName` is also the namespace that the new cluster will reside in. Then run:
+
+```bash
+kubectl apply -f opensearch-cluster.yaml
+```
+
+Note: the current installation deploys with the default demo certificate provided by OpenSearch.
 
 ## Deleting an OpenSearch cluster
-In order to delete the cluster, please delete your OpenSearch cluster resource; this will delete the cluster namespace and all its resources.
- 
-    kubectl get os --all-namespaces
-    kubectl delete os os-from-operator -n <namespace>
-    
- 
-# Contributions
-We welcome contributions! If you want to contribute to this project please reach out to us at: <operator@opster.com>. 
 
+In order to delete the cluster, please delete your OpenSearch cluster resource; this will delete the cluster namespace and all its resources.
+
+```bash
+kubectl get opensearchclusters --all-namespaces
+kubectl delete opensearchclusters my-cluster -n <namespace>
+```
+
+# Contributions
+
+We welcome contributions! If you want to contribute to this project please reach out to us at: <operator@opster.com>.

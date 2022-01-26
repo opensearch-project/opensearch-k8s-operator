@@ -1,20 +1,20 @@
-apiVersion: opster.os-operator.opster.io/v1
-kind: Os
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
 metadata:
-  name: opster-opensearch
-  namespace: operator-os
+  name: my-cluster
+  namespace: default
   finalizers:
     - Opster
 spec:
   general:
-    clusterName: os-from-operator
+    clusterName: my-cluster
     httpPort: 9200
     vendor: opensearch
     version: latest
     serviceName: es-svc
-  osDashboards:
+  dashboards:
     enable: true
-  osConfMgmt: {}
+  confMgmt: {}
   nodePools:
     - component: masters
       replicas: 3

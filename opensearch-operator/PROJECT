@@ -1,16 +1,16 @@
-domain: os-operator.opster.io
+domain: opensearch.opster.io
 layout:
 - go.kubebuilder.io/v3
-projectName: os-operator
-repo: os-operator.io
+projectName: opensearch-operator
+repo: opensearch.opster.io
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: os-operator.opster.io
+  domain: opensearch.opster.io
   group: opster
-  kind: Os
-  path: os-operator.io/api/v1
+  kind: OpenSearchCluster
+  path: opensearch.opster.io/api/v1
   version: v1
 version: "3"
