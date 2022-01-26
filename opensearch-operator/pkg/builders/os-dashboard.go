@@ -20,7 +20,7 @@ type OsReconciler struct {
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
-func New_OS_Dashboard_ForCR(cr *opsterv1.Os) *sts.Deployment {
+func NewOsDashboardForCR(cr *opsterv1.Os) *sts.Deployment {
 
 	labels := map[string]string{
 		"app": cr.Name,
@@ -98,7 +98,7 @@ func New_OS_Dashboard_ForCR(cr *opsterv1.Os) *sts.Deployment {
 	}
 }
 
-func NewCm_OS_Dashboard_ForCR(cr *opsterv1.Os) *corev1.ConfigMap {
+func NewCmOsDashboardForCR(cr *opsterv1.Os) *corev1.ConfigMap {
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -111,7 +111,7 @@ func NewCm_OS_Dashboard_ForCR(cr *opsterv1.Os) *corev1.ConfigMap {
 	}
 }
 
-func New_OS_Dashboard_SvcForCr(cr *opsterv1.Os) *corev1.Service {
+func NewOsDashboardSvcForCr(cr *opsterv1.Os) *corev1.Service {
 
 	var port int32 = 5601
 
@@ -130,15 +130,14 @@ func New_OS_Dashboard_SvcForCr(cr *opsterv1.Os) *corev1.Service {
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				corev1.ServicePort{
-					Name:     "os-dash",
-					Protocol: "TCP",
-					Port:     port,
-					TargetPort: intstr.IntOrString{
-						IntVal: port,
-					},
+			Ports: []corev1.ServicePort{{
+				Name:     "os-dash",
+				Protocol: "TCP",
+				Port:     port,
+				TargetPort: intstr.IntOrString{
+					IntVal: port,
 				},
+			},
 			},
 			Selector: labels,
 		},

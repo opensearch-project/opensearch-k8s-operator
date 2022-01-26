@@ -1,0 +1,91 @@
+package controllers
+
+import (
+	"context"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	opsterv1 "os-operator.io/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"time"
+
+	//. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+)
+
+const (
+	timeout  = time.Second * 30
+	interval = time.Millisecond * 250
+)
+
+func IsCreated(ctx context.Context, k8sClient client.Client, obj client.Object) {
+	EventuallyWithOffset(1, func() bool {
+		if err := k8sClient.Get(ctx, client.ObjectKey{
+			Namespace: obj.GetNamespace(),
+			Name:      obj.GetName(),
+		}, obj); err != nil {
+			return false
+		}
+		return true
+	}, timeout, interval).Should(BeTrue())
+}
+
+func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1.Os {
+
+	OpensearchCluster := &opsterv1.Os{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Os",
+			APIVersion: "opster.os-operator.opster.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      ClusterName,
+			Namespace: ClusterNameSpaces,
+		},
+		Spec: opsterv1.OsSpec{
+			General: opsterv1.OsGeneral{
+				ClusterName: "default",
+				HttpPort:    9200,
+				Vendor:      "opensearch",
+				Version:     "latest",
+				ServiceName: "es-svc",
+			},
+			OsConfMgmt: opsterv1.OsConfMgmt{
+				AutoScaler: false,
+				Monitoring: false,
+				VerUpdate:  false,
+			},
+			Dashboards: opsterv1.OsDashboards{Enable: true},
+			NodePools: []opsterv1.NodePool{{
+				Component:    "master",
+				Replicas:     5,
+				DiskSize:     32,
+				NodeSelector: "",
+				Cpu:          4,
+				Memory:       16,
+				Roles: []string{
+					"master",
+					"data",
+				}}, {
+				Component:    "nodes",
+				Replicas:     3,
+				DiskSize:     32,
+				NodeSelector: "",
+				Cpu:          4,
+				Memory:       16,
+				Roles: []string{
+					"data",
+				}}, {
+				Component:    "client",
+				Replicas:     3,
+				DiskSize:     32,
+				NodeSelector: "",
+				Cpu:          4,
+				Memory:       16,
+				Roles: []string{
+					"data",
+					"ingest",
+				},
+			}},
+		},
+		Status: opsterv1.OsStatus{ComponenetsStatus: nil},
+	}
+	return *OpensearchCluster
+}
