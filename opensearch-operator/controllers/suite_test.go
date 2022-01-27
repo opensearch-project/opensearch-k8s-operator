@@ -24,12 +24,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/onsi/gomega/gexec"
-	"k8s.io/client-go/tools/record"
-	opsterv1 "os-operator.io/api/v1"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/onsi/gomega/gexec"
+	"k8s.io/client-go/tools/record"
+	opsterv1 "opensearch.opster.io/api/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -114,7 +115,7 @@ var _ = BeforeSuite(func() {
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	err = (&OsReconciler{
+	err = (&OpenSearchClusterReconciler{
 		Client:   k8sManager.GetClient(),
 		Scheme:   scheme.Scheme,
 		Instance: &OpensearchCluster,

@@ -2,13 +2,14 @@ package controllers
 
 import (
 	"context"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -30,8 +31,8 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 		Name:      "cluster-test",
 		Namespace: "default",
 	}
-	Context("When createing a OS kind Instance", func() {
-		It("should create a new os cluster ", func() {
+	Context("When createing a OpenSearchCluster kind Instance", func() {
+		It("should create a new opensearch cluster ", func() {
 
 			OpensearchCluster := ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
 
@@ -47,13 +48,13 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterNameSpaces, Name: "opensearch-yml"}, &cm); err != nil {
 					return false
 				}
-				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterNameSpaces, Name: "os-dash"}, &cm); err != nil {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterNameSpaces, Name: "opensearch-dashboards"}, &cm); err != nil {
 					return false
 				}
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterNameSpaces, Name: OpensearchCluster.Spec.General.ServiceName + "-svc"}, &service); err != nil {
 					return false
 				}
-				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterNameSpaces, Name: OpensearchCluster.Spec.General.ServiceName + "-headleass-service"}, &service); err != nil {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterNameSpaces, Name: OpensearchCluster.Spec.General.ServiceName + "-headless-service"}, &service); err != nil {
 					return false
 				}
 				for i := 0; i < len(OpensearchCluster.Spec.NodePools); i++ {

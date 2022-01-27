@@ -3,15 +3,16 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"reflect"
+
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "os-operator.io/api/v1"
-	"reflect"
+	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type OsReconciler struct {
+type OpenSearchReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
@@ -37,7 +38,7 @@ func removeString(slice []string, s string) (result []string) {
 	return
 }
 
-func (r *OsReconciler) UpdateResource(ctx context.Context, instance *sts.StatefulSet) error {
+func (r *OpenSearchReconciler) UpdateResource(ctx context.Context, instance *sts.StatefulSet) error {
 	err := r.Update(ctx, instance)
 	if err != nil {
 		fmt.Println(err, "Cannot update resource")
@@ -77,7 +78,7 @@ func getNamesInStruct(inter interface{}) []string {
 	return names
 }
 
-func RemoveIt(ss opsterv1.ComponenetsStatus, ssSlice []opsterv1.ComponenetsStatus) []opsterv1.ComponenetsStatus {
+func RemoveIt(ss opsterv1.ComponentsStatus, ssSlice []opsterv1.ComponentsStatus) []opsterv1.ComponentsStatus {
 	for idx, v := range ssSlice {
 		if v == ss {
 			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
@@ -86,8 +87,8 @@ func RemoveIt(ss opsterv1.ComponenetsStatus, ssSlice []opsterv1.ComponenetsStatu
 	return ssSlice
 }
 
-func Remove(slice []opsterv1.ComponenetsStatus, componenet string) []opsterv1.ComponenetsStatus {
-	emptyStatus := opsterv1.ComponenetsStatus{
+func Remove(slice []opsterv1.ComponentsStatus, componenet string) []opsterv1.ComponentsStatus {
+	emptyStatus := opsterv1.ComponentsStatus{
 		Component:   "",
 		Status:      "",
 		Description: "",

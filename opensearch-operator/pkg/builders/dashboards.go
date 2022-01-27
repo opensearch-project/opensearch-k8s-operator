@@ -1,26 +1,18 @@
 package builders
 
 import (
+	"strconv"
+
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/client-go/tools/record"
-	opsterv1 "os-operator.io/api/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"strconv"
+	opsterv1 "opensearch.opster.io/api/v1"
 )
-
-type OsReconciler struct {
-	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-}
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
-func NewOsDashboardForCR(cr *opsterv1.Os) *sts.Deployment {
+func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deployment {
 
 	labels := map[string]string{
 		"app": cr.Name,
@@ -36,7 +28,7 @@ func NewOsDashboardForCR(cr *opsterv1.Os) *sts.Deployment {
 
 	return &sts.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-os-dash",
+			Name:      cr.Spec.General.ClusterName + "-dashboards",
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
@@ -52,40 +44,41 @@ func NewOsDashboardForCR(cr *opsterv1.Os) *sts.Deployment {
 				},
 				Spec: corev1.PodSpec{
 					Volumes: []corev1.Volume{
-						corev1.Volume{
-							Name: "os-dash",
+						{
+							Name: "dashboards-config",
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									DefaultMode:          &mode,
-									LocalObjectReference: corev1.LocalObjectReference{Name: "os-dash"},
+									LocalObjectReference: corev1.LocalObjectReference{Name: "opensearch-dashboards"},
 								},
 							},
 						},
 					},
 					Containers: []corev1.Container{
 						{
-							Name: "os-dash-container",
+							Name: "dashboards",
 							//	Image: "docker.elastic.co/kibana/kibana:" + cr.Spec.General.Version,
 							Image: "opensearchproject/opensearch-dashboards:1.0.0",
 							Ports: []corev1.ContainerPort{
 								{
-									Name:          "k-port-5601",
+									Name:          "http",
 									ContainerPort: port,
 								},
 							},
-							Env: []corev1.EnvVar{corev1.EnvVar{
-								Name:      "OPENSEARCH_HOSTS",
-								Value:     "https://" + cr.Spec.General.ServiceName + "-svc" + "." + cr.Spec.General.ClusterName + ":9200",
-								ValueFrom: nil,
-							},
-								corev1.EnvVar{
+							Env: []corev1.EnvVar{
+								{
+									Name:      "OPENSEARCH_HOSTS",
+									Value:     "https://" + cr.Spec.General.ServiceName + "-svc" + "." + cr.Spec.General.ClusterName + ":9200",
+									ValueFrom: nil,
+								},
+								{
 									Name:      "SERVER_HOST",
 									Value:     "0.0.0.0",
 									ValueFrom: nil,
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
-								{Name: "os-dash",
+								{Name: "dashboards-config",
 									MountPath: "/usr/share/kibana/config/kibana.yml",
 									SubPath:   "kibana.yml",
 								},
@@ -98,11 +91,11 @@ func NewOsDashboardForCR(cr *opsterv1.Os) *sts.Deployment {
 	}
 }
 
-func NewCmOsDashboardForCR(cr *opsterv1.Os) *corev1.ConfigMap {
+func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "os-dash",
+			Name:      "opensearch-dashboards",
 			Namespace: cr.Spec.General.ClusterName,
 		},
 		Data: map[string]string{
@@ -111,7 +104,7 @@ func NewCmOsDashboardForCR(cr *opsterv1.Os) *corev1.ConfigMap {
 	}
 }
 
-func NewOsDashboardSvcForCr(cr *opsterv1.Os) *corev1.Service {
+func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 	var port int32 = 5601
 
@@ -125,13 +118,13 @@ func NewOsDashboardSvcForCr(cr *opsterv1.Os) *corev1.Service {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName + "-dash-svc",
+			Name:      cr.Spec.General.ServiceName + "-dashboards-svc",
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{{
-				Name:     "os-dash",
+				Name:     "http",
 				Protocol: "TCP",
 				Port:     port,
 				TargetPort: intstr.IntOrString{

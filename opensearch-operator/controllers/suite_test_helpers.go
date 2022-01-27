@@ -2,10 +2,11 @@ package controllers
 
 import (
 	"context"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	opsterv1 "os-operator.io/api/v1"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"time"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	opsterv1 "opensearch.opster.io/api/v1"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	//. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -28,31 +29,31 @@ func IsCreated(ctx context.Context, k8sClient client.Client, obj client.Object) 
 	}, timeout, interval).Should(BeTrue())
 }
 
-func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1.Os {
+func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1.OpenSearchCluster {
 
-	OpensearchCluster := &opsterv1.Os{
+	OpensearchCluster := &opsterv1.OpenSearchCluster{
 		TypeMeta: metav1.TypeMeta{
-			Kind:       "Os",
-			APIVersion: "opster.os-operator.opster.io/v1",
+			Kind:       "OpenSearchCluster",
+			APIVersion: "opensearch.opster.io/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      ClusterName,
 			Namespace: ClusterNameSpaces,
 		},
-		Spec: opsterv1.OsSpec{
-			General: opsterv1.OsGeneral{
+		Spec: opsterv1.ClusterSpec{
+			General: opsterv1.GeneralConfig{
 				ClusterName: "default",
 				HttpPort:    9200,
 				Vendor:      "opensearch",
 				Version:     "latest",
 				ServiceName: "es-svc",
 			},
-			OsConfMgmt: opsterv1.OsConfMgmt{
+			ConfMgmt: opsterv1.ConfMgmt{
 				AutoScaler: false,
 				Monitoring: false,
 				VerUpdate:  false,
 			},
-			Dashboards: opsterv1.OsDashboards{Enable: true},
+			Dashboards: opsterv1.DashboardsConfig{Enable: true},
 			NodePools: []opsterv1.NodePool{{
 				Component:    "master",
 				Replicas:     5,
@@ -85,7 +86,7 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 				},
 			}},
 		},
-		Status: opsterv1.OsStatus{ComponenetsStatus: nil},
+		Status: opsterv1.ClusterStatus{ComponentsStatus: nil},
 	}
 	return *OpensearchCluster
 }

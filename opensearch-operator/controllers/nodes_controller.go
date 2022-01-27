@@ -3,18 +3,19 @@ package controllers
 import (
 	"context"
 	"fmt"
+
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "os-operator.io/api/v1"
-	"os-operator.io/pkg/helpers"
+	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	controllerNamed           = "scaler-controller"
-	configHashAnnotationNamed = "opster.os-operator.opster.io/config-hash"
+	configHashAnnotationNamed = "opensearch.opster.io/config-hash"
 )
 
 type ScalerReconciler struct {
@@ -22,15 +23,15 @@ type ScalerReconciler struct {
 	Scheme     *runtime.Scheme
 	Recorder   record.EventRecorder
 	State      State
-	Instance   *opsterv1.Os
+	Instance   *opsterv1.OpenSearchCluster
 	StsFromEnv sts.StatefulSet
 	Group      int
 }
 
-//+kubebuilder:rbac:groups="opster.os-operator.opster.io",resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opster.os-operator.opster.io,resources=os/finalizers,verbs=update
+//+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/finalizers,verbs=update
 
 func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var found bool
@@ -39,8 +40,8 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 	} else {
 		group := fmt.Sprintf("Group-%d", r.Group)
-		var componentStatus opsterv1.ComponenetsStatus
-		comp := r.Instance.Status.ComponenetsStatus
+		var componentStatus opsterv1.ComponentsStatus
+		comp := r.Instance.Status.ComponentsStatus
 		for i := 0; i < len(comp); i++ {
 			if comp[i].Component == "Scaler" {
 				if comp[i].Description == group {
@@ -55,13 +56,13 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 								return ctrl.Result{}, nil
 							} else {
 								// if scale logic is done - remove componentStatus
-								componentStatus = opsterv1.ComponenetsStatus{
+								componentStatus = opsterv1.ComponentsStatus{
 									Component:   "Scaler",
 									Status:      "Running",
 									Description: group,
 								}
 								newStatus := helpers.RemoveIt(componentStatus, comp)
-								r.Instance.Status.ComponenetsStatus = newStatus
+								r.Instance.Status.ComponentsStatus = newStatus
 								r.Status().Update(ctx, r.Instance)
 								r.Recorder.Event(r.Instance, "Normal", "done scaling", fmt.Sprintf("done scaling"))
 								r.StsFromEnv.Spec.Replicas = &r.Instance.Spec.NodePools[r.Group].Replicas
@@ -81,13 +82,13 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// if not found componentStatus and replcias not equals
 		if !found {
 			// starting new componentStatus
-			componentStatus = opsterv1.ComponenetsStatus{
+			componentStatus = opsterv1.ComponentsStatus{
 				Component:   "Scaler",
 				Status:      "Running",
 				Description: group,
 			}
 			r.Recorder.Event(r.Instance, "Normal", "add new status event about scale ", fmt.Sprintf("add new status event about scale "))
-			r.Instance.Status.ComponenetsStatus = append(r.Instance.Status.ComponenetsStatus, componentStatus)
+			r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, componentStatus)
 			r.Status().Update(ctx, r.Instance)
 
 			// -----  Now start scaling logic ------

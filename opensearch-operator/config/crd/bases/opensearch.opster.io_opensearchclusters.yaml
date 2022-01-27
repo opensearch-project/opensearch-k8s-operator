@@ -6,14 +6,17 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: os.opster.os-operator.opster.io
+  name: opensearchclusters.opensearch.opster.io
 spec:
-  group: opster.os-operator.opster.io
+  group: opensearch.opster.io
   names:
-    kind: Os
-    listKind: OsList
-    plural: os
-    singular: os
+    kind: OpenSearchCluster
+    listKind: OpenSearchClusterList
+    plural: opensearchclusters
+    shortNames:
+    - os
+    - opensearch
+    singular: opensearchcluster
   scope: Namespaced
   versions:
   - name: v1
@@ -34,15 +37,29 @@ spec:
           metadata:
             type: object
           spec:
-            description: EsSpec defines the desired state of Es
+            description: ClusterSpec defines the desired state of OpenSearchCluster
             properties:
+              confMgmt:
+                description: ConfMgmt defines which additional services will be deployed
+                properties:
+                  VerUpdate:
+                    type: boolean
+                  autoScaler:
+                    type: boolean
+                  monitoring:
+                    type: boolean
+                type: object
+              dashboards:
+                properties:
+                  enable:
+                    type: boolean
+                type: object
               general:
-                description: "INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run \"make\" to regenerate code after modifying this
-                  file \n // Foo is an example field of Es. Edit es_types.go to remove/update"
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
                 properties:
                   clusterName:
-                    default: Opster_cluster
+                    default: opster-cluster
                     type: string
                   httpPort:
                     format: int32
@@ -86,29 +103,13 @@ spec:
                   - roles
                   type: object
                 type: array
-              osConfMgmt:
-                description: OsConfMgmt defines which addiionals services will be
-                  deployed
-                properties:
-                  VerUpdate:
-                    type: boolean
-                  autoScaler:
-                    type: boolean
-                  monitoring:
-                    type: boolean
-                type: object
-              osDashboards:
-                properties:
-                  enable:
-                    type: boolean
-                type: object
             required:
             - nodePools
             type: object
           status:
-            description: OsStatus defines the observed state of Es
+            description: ClusterStatus defines the observed state of Es
             properties:
-              componenetsStatus:
+              componentsStatus:
                 items:
                   properties:
                     component:
@@ -125,7 +126,7 @@ spec:
                   this file'
                 type: string
             required:
-            - componenetsStatus
+            - componentsStatus
             type: object
         type: object
     served: true

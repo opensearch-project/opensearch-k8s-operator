@@ -1,0 +1,7 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: opensearch-sample
+spec:
+  # Add fields here
+  foo: bar

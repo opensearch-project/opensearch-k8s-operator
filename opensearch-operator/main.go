@@ -19,7 +19,9 @@ package main
 import (
 	"flag"
 	"os"
-	"os-operator.io/controllers"
+
+	"opensearch.opster.io/controllers"
+
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
@@ -31,7 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	opsterv1 "os-operator.io/api/v1"
+	opsterv1 "opensearch.opster.io/api/v1"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -70,19 +72,19 @@ func main() {
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "a867c7dc.os-operator.opster.io",
+		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
 
-	if err = (&controllers.OsReconciler{
+	if err = (&controllers.OpenSearchClusterReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("containerset-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "Os")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchCluster")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
