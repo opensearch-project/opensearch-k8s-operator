@@ -6,12 +6,8 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
       - name: golangci-lint
         run: |
           cd opensearch-operator
           go get .
           golangci-lint run
-        uses: golangci/golangci-lint-action@v2
-        with:
-          version: v1.42
