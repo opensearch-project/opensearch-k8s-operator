@@ -14,5 +14,6 @@ jobs:
       - name: Test
         run: |
           echo "A initial message"
-          pwd
+          echo "$pwd"
+          cd opensearch-k8s-operator
           echo "$pwd"
