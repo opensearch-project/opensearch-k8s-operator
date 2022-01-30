@@ -15,5 +15,7 @@ jobs:
         run: |
           echo "A initial message"
           echo "$pwd"
-          cd opensearch-k8s-operator
+          echo "ls -l"
+          echo "$ls"
+
           echo "$pwd"
