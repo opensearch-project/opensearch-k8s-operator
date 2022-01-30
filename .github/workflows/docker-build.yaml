@@ -3,7 +3,6 @@ on:
   pull_request:
     branches:
       - "main"
-
 jobs:
   docker-build:
     name: Docker Build
@@ -14,4 +13,6 @@ jobs:
       - name: Docker Build
         run: |
           cd opensearch-operator
+          go get opensearch.opster.io/pkg/builders
+          go get opensearch.opster.io/pkg/helpers
           make docker-build

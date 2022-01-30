@@ -68,6 +68,8 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
+	go get opensearch.opster.io/pkg/builders
+	go get opensearch.opster.io/pkg/helpers
 	docker build -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
