@@ -11,5 +11,8 @@ jobs:
           go-version: 1.16.x
       - name: Checkout code
         uses: actions/checkout@v2
+        working-directory: opensearch-operator
       - name: Test
         run: make test
+        working-directory: opensearch-operator
+
