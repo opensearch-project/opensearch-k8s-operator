@@ -12,4 +12,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2.3.4
       - name: Docker Build
-        run: make docker-build
+        run: |
+          cd opensearch-operator
+          make docker-build

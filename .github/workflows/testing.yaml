@@ -13,10 +13,7 @@ jobs:
         uses: actions/checkout@v2
       - name: Test
         run: |
-          echo "A initial message"
-          pwd
-          ls
+          echo "Starting Tests"
           cd opensearch-operator
-          echo "After cd"
           ls
           make test
