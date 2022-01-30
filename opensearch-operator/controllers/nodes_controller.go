@@ -13,11 +13,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	controllerNamed           = "scaler-controller"
-	configHashAnnotationNamed = "opensearch.opster.io/config-hash"
-)
-
 type ScalerReconciler struct {
 	client.Client
 	Scheme     *runtime.Scheme
@@ -52,7 +47,7 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 
 							done := true
 							if !done {
-								r.Recorder.Event(r.Instance, "Normal", "one scale is already in progress on that group ", fmt.Sprintf("one scale is already in progress on that group"))
+								r.Recorder.Event(r.Instance, "Normal", "one scale is already in progress on that group ", "one scale is already in progress on that group")
 								return ctrl.Result{}, nil
 							} else {
 								// if scale logic is done - remove componentStatus
@@ -63,8 +58,11 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 								}
 								newStatus := helpers.RemoveIt(componentStatus, comp)
 								r.Instance.Status.ComponentsStatus = newStatus
-								r.Status().Update(ctx, r.Instance)
-								r.Recorder.Event(r.Instance, "Normal", "done scaling", fmt.Sprintf("done scaling"))
+								if err := r.Status().Update(ctx, r.Instance); err != nil {
+									return ctrl.Result{}, err
+								}
+
+								r.Recorder.Event(r.Instance, "Normal", "done scaling", "done scaling")
 								r.StsFromEnv.Spec.Replicas = &r.Instance.Spec.NodePools[r.Group].Replicas
 								if err := r.Update(ctx, &r.StsFromEnv); err != nil {
 									return ctrl.Result{}, err
@@ -73,7 +71,7 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 							}
 						}
 					} else if comp[i].Status == "Failed" {
-						r.Recorder.Event(r.Instance, "Normal", "something want worng with scaling operation", fmt.Sprintf("something went worng)"))
+						r.Recorder.Event(r.Instance, "Normal", "something want worng with scaling operation", "something went worng)")
 						return ctrl.Result{}, nil
 					}
 				}
@@ -87,9 +85,11 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				Status:      "Running",
 				Description: group,
 			}
-			r.Recorder.Event(r.Instance, "Normal", "add new status event about scale ", fmt.Sprintf("add new status event about scale "))
+			r.Recorder.Event(r.Instance, "Normal", "add new status event about scale ", "add new status event about scale ")
 			r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, componentStatus)
-			r.Status().Update(ctx, r.Instance)
+			if err := r.Status().Update(ctx, r.Instance); err != nil {
+				return ctrl.Result{}, err
+			}
 
 			// -----  Now start scaling logic ------
 

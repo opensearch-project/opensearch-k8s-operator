@@ -10,10 +10,6 @@ import (
 
 func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, instance *opsterv1.OpenSearchCluster, count int, check string) (x sts.StatefulSetSpec, err error, changes []string) {
 
-	if check != "" {
-
-	}
-
 	fields := getNamesInStruct(sts_env)
 	changes = []string{}
 

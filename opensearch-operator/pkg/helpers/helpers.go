@@ -28,21 +28,11 @@ func ContainsString(slice []string, s string) bool {
 
 }
 
-func removeString(slice []string, s string) (result []string) {
-	for _, item := range slice {
-		if item == s {
-			continue
-		}
-		result = append(result, item)
-	}
-	return
-}
-
 func (r *OpenSearchReconciler) UpdateResource(ctx context.Context, instance *sts.StatefulSet) error {
 	err := r.Update(ctx, instance)
 	if err != nil {
 		fmt.Println(err, "Cannot update resource")
-		r.Recorder.Event(instance, "Warning", "Cannot update resource", fmt.Sprintf("Cannot update resource "))
+		r.Recorder.Event(instance, "Warning", "Cannot update resource", "Cannot update resource")
 		return err
 	}
 	return nil
@@ -55,16 +45,16 @@ func GetField(v *sts.StatefulSetSpec, field string) interface{} {
 	return f
 }
 
-func setField(v *sts.StatefulSetSpec, field string) reflect.Value {
-
-	//	reflect.ValueOf(v).Elem().FieldByName(field).SetString("sss")
-
-	r := reflect.ValueOf(v)
-	ty := r.Type()
-	fmt.Println(ty)
-	f := reflect.Indirect(r).FieldByName(field)
-	return f
-}
+//func setField(v *sts.StatefulSetSpec, field string) reflect.Value {
+//
+//	//	reflect.ValueOf(v).Elem().FieldByName(field).SetString("sss")
+//
+//	r := reflect.ValueOf(v)
+//	ty := r.Type()
+//	fmt.Println(ty)
+//	f := reflect.Indirect(r).FieldByName(field)
+//	return f
+//}
 
 func getNamesInStruct(inter interface{}) []string {
 	rv := reflect.Indirect(reflect.ValueOf(inter))

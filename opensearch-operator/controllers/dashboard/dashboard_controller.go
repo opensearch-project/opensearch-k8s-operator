@@ -14,11 +14,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	controllerName           = "kibana-controller"
-	configHashAnnotationName = "kibana.k8s.elastic.co/config-hash"
-)
-
 type State struct {
 	Component string `json:"compenent,omitempty"`
 	Status    string `json:"status,omitempty"`

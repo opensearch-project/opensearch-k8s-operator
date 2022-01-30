@@ -15,11 +15,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-const (
-	controllerName           = "cluster-controller"
-	configHashAnnotationName = "cluster.opensearch.opster.io/config-hash"
-)
-
 type State struct {
 	Component string `json:"component,omitempty"`
 	Status    string `json:"status,omitempty"`

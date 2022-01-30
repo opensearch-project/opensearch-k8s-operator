@@ -30,9 +30,6 @@ import (
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 
-	//"github.com/banzaicloud/operator-tools/pkg/reconciler"
-	"reflect"
-
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -191,11 +188,13 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 					Group:      nodeGroup,
 				}
 				res, errs = scale.Reconcile(ctx, req)
-				if err != nil {
-
+				if errs != nil {
 					instance.Status.Phase = opsterv1.PhaseError
-
 				}
+			}
+			if res.Requeue {
+				return ctrl.Result{Requeue: true}, nil
+
 			}
 			if instance.Spec.Dashboards.Enable {
 
@@ -207,8 +206,12 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 					Instance: instance,
 				}
 				res, errs = dash.Reconcile(ctx, req)
-				if dash.State.Status == "Failed" {
-					return ctrl.Result{}, errs
+				if errs != nil {
+					instance.Status.Phase = opsterv1.PhaseError
+				}
+				if res.Requeue {
+					return ctrl.Result{Requeue: true}, nil
+
 				}
 				//r.Recorder.Event(instance, "Normal", "Kibana keeps his desired state", fmt.Sprintf("Kibana %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
 			}
@@ -222,7 +225,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 				// if ns cannot create ,  inform it and done reconcile
 				fmt.Println(err, "Cannot create namespace")
 				instance.Status.Phase = opsterv1.PhaseError
-				r.Recorder.Event(instance, "ERROR", "Cluster cannot be created", fmt.Sprintf("cannot create cluster %s )", instance.Spec.General.ClusterName))
+				r.Recorder.Event(instance, "ERROR", "Cluster cannot be created", "cannot create cluster")
 				return ctrl.Result{}, nil
 			}
 			fmt.Println("ns Created successfully", "name", ns.Name)
@@ -235,7 +238,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 
 	case opsterv1.PhaseError:
-		r.Recorder.Event(instance, "ERROR", "The operator faced some errors", fmt.Sprintf(""))
+		r.Recorder.Event(instance, "ERROR", "The operator faced some errors", "")
 
 		return ctrl.Result{}, nil
 
@@ -267,8 +270,8 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(es *opsterv1.OpenS
 	return nil
 }
 
-func getField(v *sts.StatefulSet, field string) int {
-	r := reflect.ValueOf(v)
-	f := reflect.Indirect(r).FieldByName(field)
-	return int(f.Int())
-}
+//func getField(v *sts.StatefulSet, field string) int {
+//	r := reflect.ValueOf(v)
+//	f := reflect.Indirect(r).FieldByName(field)
+//	return int(f.Int())
+//}
