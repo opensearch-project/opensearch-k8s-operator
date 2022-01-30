@@ -6,5 +6,10 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     steps:
-      - name: golangci-lint
-        run: ls -l
+      - uses: actions/checkout@v2
+      - name: golangci-lint go
+        uses: golangci/golangci-lint-action@v2
+        with:
+          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+          version: v1.42
+          working-directory: opensearch-operator
