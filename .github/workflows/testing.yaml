@@ -14,8 +14,5 @@ jobs:
       - name: Test
         run: |
           echo "A initial message"
-          echo "$pwd"
-          echo "ls -l"
-          echo "$ls"
-
-          echo "$pwd"
+          pwd
+          ls
