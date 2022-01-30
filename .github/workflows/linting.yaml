@@ -7,8 +7,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: golangci-lint
-        run: |
-          pwd
-          cd opensearch-operator
-          go get .
-          golangci-lint run
+        run: ls -l
