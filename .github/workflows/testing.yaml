@@ -17,5 +17,6 @@ jobs:
           pwd
           ls
           cd opensearch-operator
+          echo "After cd"
           ls
           make test
