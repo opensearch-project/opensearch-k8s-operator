@@ -12,4 +12,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Test
-        run: go test ./opensearch-operator
+        run: |
+          echo "A initial message"
+          pwd
+          echo "$pwd"
