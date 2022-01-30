@@ -15,7 +15,7 @@ jobs:
         run: ls -l
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: cd
+        run: cd opensearch-operator
       - name: Test
-        run: |
-        cd opensearch-operator
-        make test
+        run: make test
