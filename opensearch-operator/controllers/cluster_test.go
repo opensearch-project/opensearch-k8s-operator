@@ -33,12 +33,11 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 		nodePool          = sts.StatefulSet{}
 		service           = corev1.Service{}
 		deploy            = sts.Deployment{}
-		ns                = corev1.Namespace{}
 		//cluster           = opsterv1.OpenSearchCluster{}
 		cluster2 = opsterv1.OpenSearchCluster{}
 	)
 
-	ns = ComposeNs(ClusterNameSpaces)
+	ns := ComposeNs(ClusterNameSpaces)
 
 	Context("When createing a OpenSearchCluster kind Instance", func() {
 		It("should create a new opensearch cluster ", func() {
@@ -50,6 +49,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 			Eventually(func() bool {
 
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: ClusterName}, &ns); err != nil {
+					return false
 				}
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: "opensearch-yml"}, &cm); err != nil {
 					return false
@@ -110,14 +110,8 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &cluster2); err != nil {
 					return false
 				}
-
 				newStatuss := len(cluster2.Status.ComponentsStatus)
-
-				if status == newStatuss {
-					return false
-				}
-
-				return true
+				return status != newStatuss
 			}, timeout, 30*time.Millisecond).Should(BeTrue())
 		})
 	})
@@ -148,10 +142,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 			By("Delete cluster ns ")
 			Eventually(func() bool {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: ClusterName}, &ns); err == nil {
-					if ns.Status.Phase == "Terminating" {
-						return true
-					}
-					return false
+					return ns.Status.Phase == "Terminating"
 				}
 				return true
 			}, timeout, interval).Should(BeTrue())

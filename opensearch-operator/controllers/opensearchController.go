@@ -197,6 +197,9 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 					Instance: instance,
 				}
 				res, errs = dash.Reconcile(ctx, req)
+				if errs != nil {
+					return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+				}
 			}
 		} else {
 
