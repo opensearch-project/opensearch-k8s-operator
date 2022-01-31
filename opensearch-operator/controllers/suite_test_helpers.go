@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	corev1 "k8s.io/api/core/v1"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -42,7 +43,7 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 		},
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
-				ClusterName: "default",
+				ClusterName: ClusterName,
 				HttpPort:    9200,
 				Vendor:      "opensearch",
 				Version:     "latest",
@@ -56,7 +57,7 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 			Dashboards: opsterv1.DashboardsConfig{Enable: true},
 			NodePools: []opsterv1.NodePool{{
 				Component:    "master",
-				Replicas:     5,
+				Replicas:     3,
 				DiskSize:     32,
 				NodeSelector: "",
 				Cpu:          4,
@@ -89,4 +90,13 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 		Status: opsterv1.ClusterStatus{ComponentsStatus: nil},
 	}
 	return *OpensearchCluster
+}
+
+func ComposeNs(name string) corev1.Namespace {
+
+	return corev1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: name,
+		},
+	}
 }
