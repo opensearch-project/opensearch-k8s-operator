@@ -104,7 +104,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 			status := len(OpensearchCluster.Status.ComponentsStatus)
 			Expect(k8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
 
-			By("Statuses checker ")
+			By("ComponentsStatus checker ")
 			Eventually(func() bool {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &cluster2); err != nil {
 					return false
