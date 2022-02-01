@@ -13,6 +13,8 @@ jobs:
       - name: Docker Build
         run: |
           cd opensearch-operator
+          cat Dockerfile
+          go version
           go get opensearch.opster.io/pkg/builders
           go get opensearch.opster.io/pkg/helpers
           make docker-build
