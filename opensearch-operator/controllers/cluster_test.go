@@ -111,7 +111,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				}
 				newStatuss := len(cluster2.Status.ComponentsStatus)
 				return status != newStatuss
-			}, timeout, 30*time.Millisecond).Should(BeTrue())
+			}, time.Second*60, 30*time.Millisecond).Should(BeFalse())
 		})
 	})
 
@@ -144,7 +144,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 					return ns.Status.Phase == "Terminating"
 				}
 				return true
-			}, time.Second*60, interval).Should(BeTrue())
+			}, timeout, interval).Should(BeTrue())
 		})
 	})
 
