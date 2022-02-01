@@ -144,7 +144,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 					return ns.Status.Phase == "Terminating"
 				}
 				return true
-			}, timeout, interval).Should(BeTrue())
+			}, time.Second*60, interval).Should(BeTrue())
 		})
 	})
 
