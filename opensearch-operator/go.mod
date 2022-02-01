@@ -3,7 +3,6 @@ module opensearch.opster.io
 go 1.16
 
 require (
-	github.com/banzaicloud/operator-tools v0.28.0 // indirect
 	github.com/hashicorp/golang-lru v0.5.4 // indirect
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0

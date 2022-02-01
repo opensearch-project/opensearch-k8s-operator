@@ -11,7 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
-	//banzi "github.com/banzaicloud/operator-tools/pkg/reconciler"
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
