@@ -12,8 +12,5 @@ jobs:
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
           version: v1.42
-          working-directory: opensearch-operator
-    run:
-      timeout: 10m
-
-
+          working-directory: opensearch-operator\
+          args: --timeout=10m
