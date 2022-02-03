@@ -25,8 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
-	"opensearch.opster.io/controllers/dashboard"
-
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 
@@ -117,7 +115,6 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	var errs error
 	var res ctrl.Result
 
-	fmt.Println("ENTER switch")
 	switch instance.Status.Phase {
 	case opsterv1.PhasePending:
 		//	reqLogger.info("start reconcile - Phase: PENDING")
@@ -137,19 +134,20 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		return ctrl.Result{Requeue: true}, errs
 
 	case opsterv1.PhaseRunning:
-		fmt.Println("start reconcile - Phase: RUNNING")
 
 		/// ------ Create NameSpace -------
 
 		ns_query := &corev1.Namespace{}
 		// try to see if the ns already exists
 		err := r.Get(context.TODO(), client.ObjectKey{Name: instance.Spec.General.ClusterName}, ns_query)
+
 		if err == nil {
 			namespace := instance.Spec.General.ClusterName
 			nodeGroups := len(instance.Spec.NodePools)
 
 			// if ns is already exist, check if all cluster and kibana are deployed properly - if a necessary resource ass been deleted - recreate it
 
+			// Start cluster reconciler
 			cluster := ClusterReconciler{
 				Client:   r.Client,
 				Scheme:   r.Scheme,
@@ -159,16 +157,11 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			}
 
 			res, errs = cluster.Reconcile(ctx, req)
-			if cluster.State.Status == "Failed" {
-				fmt.Println(res)
-				return ctrl.Result{}, errs
+			if errs != nil {
+				return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 			}
 
-			fmt.Println("out of cluster controller------------ -")
-
-			//r.Recorder.Event(instance, "Normal", "Cluster keeps his desired state", fmt.Sprintf("Cluster %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
-
-			fmt.Println("after recored cluster controller------------ -")
+			// Start nodes reconciler
 
 			for nodeGroup := 0; nodeGroup < nodeGroups; nodeGroup++ {
 				// Get the existing StatefulSet from the cluster
@@ -188,32 +181,25 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 					Group:      nodeGroup,
 				}
 				res, errs = scale.Reconcile(ctx, req)
-				if errs != nil {
-					instance.Status.Phase = opsterv1.PhaseError
-				}
 			}
 			if res.Requeue {
+				fmt.Println(errs)
 				return ctrl.Result{Requeue: true}, nil
-
 			}
+
 			if instance.Spec.Dashboards.Enable {
 
-				dash := dashboard.DashboardReconciler{
+				dash := DashboardReconciler{
 					Client:   r.Client,
 					Scheme:   r.Scheme,
 					Recorder: r.Recorder,
-					State:    dashboard.State{},
+					State:    State{},
 					Instance: instance,
 				}
 				res, errs = dash.Reconcile(ctx, req)
 				if errs != nil {
-					instance.Status.Phase = opsterv1.PhaseError
+					return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 				}
-				if res.Requeue {
-					return ctrl.Result{Requeue: true}, nil
-
-				}
-				//r.Recorder.Event(instance, "Normal", "Kibana keeps his desired state", fmt.Sprintf("Kibana %s has been created - (please wait few minutes for fully operative cluster))", instance.Spec.General.ClusterName))
 			}
 		} else {
 
@@ -224,9 +210,8 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			if err != nil {
 				// if ns cannot create ,  inform it and done reconcile
 				fmt.Println(err, "Cannot create namespace")
-				instance.Status.Phase = opsterv1.PhaseError
-				r.Recorder.Event(instance, "ERROR", "Cluster cannot be created", "cannot create cluster")
-				return ctrl.Result{}, nil
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create Namespace for cluster", "requeuing - fix the problem that you have with createing Namespace for cluster")
+				return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 			}
 			fmt.Println("ns Created successfully", "name", ns.Name)
 			return ctrl.Result{Requeue: true}, nil
@@ -236,11 +221,6 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		// -------- all resources has been created -----------
 
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-
-	case opsterv1.PhaseError:
-		r.Recorder.Event(instance, "ERROR", "The operator faced some errors", "")
-
-		return ctrl.Result{}, nil
 
 	default:
 		//	reqLogger.Info("NOTHING WILL HAPPEN - DEFAULT")

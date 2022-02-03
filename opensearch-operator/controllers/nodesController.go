@@ -2,8 +2,8 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -30,6 +30,7 @@ type ScalerReconciler struct {
 
 func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var found bool
+
 	if *r.StsFromEnv.Spec.Replicas == r.Instance.Spec.NodePools[r.Group].Replicas {
 		return ctrl.Result{}, nil
 
@@ -44,7 +45,6 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 					if comp[i].Status == "Running" {
 						{
 							// --- Now check if scaling is done logic ----
-
 							done := true
 							if !done {
 								r.Recorder.Event(r.Instance, "Normal", "one scale is already in progress on that group ", "one scale is already in progress on that group")
@@ -59,12 +59,15 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 								newStatus := helpers.RemoveIt(componentStatus, comp)
 								r.Instance.Status.ComponentsStatus = newStatus
 								if err := r.Status().Update(ctx, r.Instance); err != nil {
+									err = errors.New("Cannot update instance status")
 									return ctrl.Result{}, err
 								}
 
-								r.Recorder.Event(r.Instance, "Normal", "done scaling", "done scaling")
+								//r.Recorder.Event(r.Instance, "Normal", "done scaling", "done scaling")
 								r.StsFromEnv.Spec.Replicas = &r.Instance.Spec.NodePools[r.Group].Replicas
 								if err := r.Update(ctx, &r.StsFromEnv); err != nil {
+									err = errors.New("Cannot update instance status")
+
 									return ctrl.Result{}, err
 								}
 								return ctrl.Result{}, nil
@@ -85,12 +88,13 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 				Status:      "Running",
 				Description: group,
 			}
-			r.Recorder.Event(r.Instance, "Normal", "add new status event about scale ", "add new status event about scale ")
+			//r.Recorder.Event(r.Instance, "Normal", "add new status event about scale ", "add new status event about scale ")
+
 			r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, componentStatus)
 			if err := r.Status().Update(ctx, r.Instance); err != nil {
+				err = errors.New("Cannot update instance status")
 				return ctrl.Result{}, err
 			}
-
 			// -----  Now start scaling logic ------
 
 		}
