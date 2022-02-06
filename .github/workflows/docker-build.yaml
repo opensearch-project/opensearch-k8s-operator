@@ -5,9 +5,10 @@ on:
       - "main"
 jobs:
   docker-build:
-    container: public.ecr.aws/opsterio/go.1.17
+    runs-on: ubuntu-latest
+    container:
+      image: public.ecr.aws/opsterio/go.1.17
     name: Docker Build
-    runs-on: public.ecr.aws/opsterio/go.1.17
     steps:
       - name: Checkout
         uses: actions/checkout@v2.3.4
