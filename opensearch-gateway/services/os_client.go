@@ -123,3 +123,16 @@ func (client *OsClusterClient) PutClusterSettings(settingsJson string) (response
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
+
+func (client *OsClusterClient) ReRouteShard(rerouteJson string) (responses.ClusterRerouteResponse, error) {
+	body := strings.NewReader(rerouteJson)
+	req := opensearchapi.ClusterRerouteRequest{Body: body}
+	settingsRes, err := req.Do(context.Background(), client.client)
+	var response responses.ClusterRerouteResponse
+	if err != nil {
+		return response, err
+	}
+	defer settingsRes.Body.Close()
+	err = json.NewDecoder(settingsRes.Body).Decode(&response)
+	return response, err
+}
