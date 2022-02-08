@@ -75,7 +75,7 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", r.StsFromEnv.ObjectMeta.Name, *r.StsFromEnv.Spec.Replicas)
 	if err := r.Update(ctx, &r.StsFromEnv); err != nil {
 		r.Recorder.Event(r.Instance, "Normal", "failed to remove node ", fmt.Sprintf("Group-%d . Failed to remove node %s", r.Group, lastReplicaNodeName))
-		return ctrl.Result{}, err
+		return ctrl.Result{Requeue: true}, err
 	}
 	r.Recorder.Event(r.Instance, "Normal", "added node ", fmt.Sprintf("Group-%d . removed node %s", r.Group, lastReplicaNodeName))
 	helpers.RemoveIt(currentStatus, r.Instance.Status.ComponentsStatus)
