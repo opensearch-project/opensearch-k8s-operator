@@ -52,7 +52,7 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		return r.drainNode(ctx, currentStatus)
 	}
 	if currentStatus.Status == "Drained" {
-		r.decreaseOneNode(ctx, currentStatus)
+		return r.decreaseOneNode(ctx, currentStatus)
 	}
 	return ctrl.Result{}, nil
 }
