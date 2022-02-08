@@ -45,7 +45,7 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 			return r.excludeNode(ctx, currentStatus)
 		}
 		if desireReplicaDiff < 1 {
-			return r.excludeNode(ctx, currentStatus)
+			return r.increaseOneNode(ctx)
 		}
 	}
 	if currentStatus.Status == "Excluded" {
