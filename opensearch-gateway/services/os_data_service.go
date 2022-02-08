@@ -22,6 +22,34 @@ func HasIndicesWithNoReplica(service *OsClusterClient) (bool, error) {
 	return false, err
 }
 
+func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
+	var headers []string
+	response, err := service.CatShards(headers)
+	if err != nil {
+		return false, err
+	}
+	for _, shardsData := range response {
+		if shardsData.NodeName == nodeName {
+			return true, err
+		}
+	}
+	return false, err
+}
+
+func IndexHasShardsOnNode(service *OsClusterClient, index string, nodeName string) (bool, error) {
+	var headers []string
+	response, err := service.CatShards(headers)
+	if err != nil {
+		return false, err
+	}
+	for _, shardsData := range response {
+		if shardsData.NodeName == nodeName && shardsData.Index == index {
+			return true, err
+		}
+	}
+	return false, err
+}
+
 func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (bool, error) {
 	response, err := service.GetClusterSettings()
 	if err != nil {

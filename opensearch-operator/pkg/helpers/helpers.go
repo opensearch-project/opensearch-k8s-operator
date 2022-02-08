@@ -8,7 +8,7 @@ import (
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
+	opsterv1 "opensearch-k8-operator/opensearch-operator/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -66,6 +66,22 @@ func getNamesInStruct(inter interface{}) []string {
 		names = append(names, x)
 	}
 	return names
+}
+
+func FindFirstPartial(arr []opsterv1.ComponentsStatus, item opsterv1.ComponentsStatus, predicator func(opsterv1.ComponentsStatus, opsterv1.ComponentsStatus) (opsterv1.ComponentsStatus, bool)) (opsterv1.ComponentsStatus, bool) {
+	for i := 0; i < len(arr); i++ {
+		itemInArr, found := predicator(arr[i], item)
+		if found {
+			return itemInArr, found
+		}
+	}
+	return item, false
+}
+
+func Replace(remove opsterv1.ComponentsStatus, add opsterv1.ComponentsStatus, ssSlice []opsterv1.ComponentsStatus) []opsterv1.ComponentsStatus {
+	removedSlice := RemoveIt(remove, ssSlice)
+	fullSliced := append(removedSlice, add)
+	return fullSliced
 }
 
 func RemoveIt(ss opsterv1.ComponentsStatus, ssSlice []opsterv1.ComponentsStatus) []opsterv1.ComponentsStatus {

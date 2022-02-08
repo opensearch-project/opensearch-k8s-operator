@@ -19,24 +19,23 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"opensearch-k8-operator/opensearch-operator/pkg/builders"
 	"time"
 
+	"../../opensearch-operator/controllers/dashboard"
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
-	"opensearch.opster.io/controllers/dashboard"
 
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
+	opsterv1 "../../opensearch-operator/api/v1"
+	"../../opensearch-operator/pkg/helpers"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	opsterv1 "opensearch.opster.io/api/v1"
 )
 
 // OpenSearchClusterReconciler reconciles a OpenSearchCluster object

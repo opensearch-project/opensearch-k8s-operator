@@ -1,20 +1,24 @@
 package builders
 
 import (
+	"crypto/tls"
 	"fmt"
+	"github.com/opensearch-project/opensearch-go"
+	"net/http"
+	"opensearch-k8-operator/opensearch-gateway/services"
 
+	"../helpers"
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"opensearch.opster.io/pkg/helpers"
 
 	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
 	"strconv"
 
 	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
+	opsterv1 "opensearch-k8-operator/opensearch-operator/api/v1"
 )
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
@@ -386,4 +390,18 @@ func NewCmForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
 			"opensearch.yml": " plugins:\n        security:\n          allow_default_init_securityindex: true\n          allow_unsafe_democertificates: true\n          audit.type: internal_opensearch\n          authcz:\n            admin_dn:\n            - CN=kirk,OU=client,O=client,L=test, C=de\n          check_snapshot_restore_write_privileges: true\n          enable_snapshot_restore_privilege: true\n          restapi:\n            roles_enabled:\n            - all_access\n            - security_rest_api_access\n          ssl:\n            http:\n              enabled: true\n              pemcert_filepath: esnode.pem\n              pemkey_filepath: esnode-key.pem\n              pemtrustedcas_filepath: root-ca.pem\n            transport:\n              enforce_hostname_verification: false\n              pemcert_filepath: esnode.pem\n              pemkey_filepath: esnode-key.pem\n              pemtrustedcas_filepath: root-ca.pem\n          system_indices:\n            enabled: true\n            indices:\n            - .opendistro-alerting-config\n            - .opendistro-alerting-alert*\n            - .opendistro-anomaly-results*\n            - .opendistro-anomaly-detector*\n            - .opendistro-anomaly-checkpoints\n            - .opendistro-anomaly-detection-state\n            - .opendistro-reports-*\n            - .opendistro-notifications-*\n            - .opendistro-notebooks\n            - .opendistro-asynchronous-search-response*",
 		},
 	}
+}
+
+func NewOsClusterClient(r *opsterv1.OpenSearchCluster) (*services.OsClusterClient, error) {
+	clusterUrl := fmt.Sprintf("http://%s.%s:%d", r.Spec.General.ServiceName, r.ObjectMeta.ClusterName, r.Spec.General.HttpPort)
+	config := opensearch.Config{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+		Addresses: []string{clusterUrl},
+		Username:  "admin", // For testing only. Don't store credentials in code.
+		Password:  "admin",
+	}
+	return services.NewOsClusterClient(config)
+
 }
