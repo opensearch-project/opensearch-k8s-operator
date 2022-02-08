@@ -57,7 +57,7 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	return ctrl.Result{}, nil
 }
 
-func (r *ScalerReconciler) increaseOneNode(ctx context.Context, currentStatus opsterv1.ComponentsStatus) (ctrl.Result, error) {
+func (r *ScalerReconciler) increaseOneNode(ctx context.Context) (ctrl.Result, error) {
 	// -----  Now start add node ------
 	*r.StsFromEnv.Spec.Replicas++
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", r.StsFromEnv.ObjectMeta.Name, *r.StsFromEnv.Spec.Replicas)
