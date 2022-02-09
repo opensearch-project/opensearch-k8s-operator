@@ -41,10 +41,10 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	comp := r.Instance.Status.ComponentsStatus
 	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, getByDescriptionAndGroup)
 	if !found {
-		if desireReplicaDiff > 1 {
+		if desireReplicaDiff > 0 {
 			return r.excludeNode(ctx, currentStatus)
 		}
-		if desireReplicaDiff < 1 {
+		if desireReplicaDiff < 0 {
 			return r.increaseOneNode(ctx)
 		}
 	}
