@@ -3,31 +3,45 @@ package controllers
 import (
 	"context"
 	corev1 "k8s.io/api/core/v1"
-	"time"
-
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-
-	//. "github.com/onsi/ginkgo"
-	. "github.com/onsi/gomega"
 )
 
-const (
-	timeout  = time.Second * 30
-	interval = time.Millisecond * 250
-)
+func IsCreated(ctx context.Context, k8sClient client.Client, obj client.Object) bool {
+	if err := k8sClient.Get(ctx, client.ObjectKey{
+		Namespace: obj.GetNamespace(),
+		Name:      obj.GetName(),
+	}, obj); err != nil {
+		return false
+	}
+	return true
+}
 
-func IsCreated(ctx context.Context, k8sClient client.Client, obj client.Object) {
-	EventuallyWithOffset(1, func() bool {
-		if err := k8sClient.Get(ctx, client.ObjectKey{
-			Namespace: obj.GetNamespace(),
-			Name:      obj.GetName(),
-		}, obj); err != nil {
-			return false
-		}
+func IsNsDeleted(k8sClient client.Client, namespace corev1.Namespace) bool {
+	ns := corev1.Namespace{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: namespace.Name}, &ns); err == nil {
+		return ns.Status.Phase == "Terminating"
+	}
+	return true
+}
+
+func IsNsCreated(k8sClient client.Client, namespace corev1.Namespace) bool {
+	ns := corev1.Namespace{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: namespace.Name}, &ns); err == nil {
 		return true
-	}, timeout, interval).Should(BeTrue())
+	} else {
+		return false
+	}
+}
+
+func IsClusterCreated(k8sClient client.Client, cluster opsterv1.OpenSearchCluster) bool {
+	ns := corev1.Namespace{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, &ns); err == nil {
+		return true
+	} else {
+		return false
+	}
 }
 
 func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1.OpenSearchCluster {
@@ -87,7 +101,7 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 				},
 			}},
 		},
-		Status: opsterv1.ClusterStatus{ComponentsStatus: nil},
+		Status: opsterv1.ClusterStatus{ComponentsStatus: []opsterv1.ComponentStatus{}},
 	}
 	return *OpensearchCluster
 }

@@ -68,7 +68,7 @@ func getNamesInStruct(inter interface{}) []string {
 	return names
 }
 
-func RemoveIt(ss opsterv1.ComponentsStatus, ssSlice []opsterv1.ComponentsStatus) []opsterv1.ComponentsStatus {
+func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	for idx, v := range ssSlice {
 		if v == ss {
 			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
@@ -77,8 +77,8 @@ func RemoveIt(ss opsterv1.ComponentsStatus, ssSlice []opsterv1.ComponentsStatus)
 	return ssSlice
 }
 
-func Remove(slice []opsterv1.ComponentsStatus, componenet string) []opsterv1.ComponentsStatus {
-	emptyStatus := opsterv1.ComponentsStatus{
+func Remove(slice []opsterv1.ComponentStatus, componenet string) []opsterv1.ComponentStatus {
+	emptyStatus := opsterv1.ComponentStatus{
 		Component:   "",
 		Status:      "",
 		Description: "",

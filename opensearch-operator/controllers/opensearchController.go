@@ -120,7 +120,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 		//	reqLogger.info("start reconcile - Phase: PENDING")
 
 		instance.Status.Phase = opsterv1.PhaseRunning
-		componentStatus := opsterv1.ComponentsStatus{
+		componentStatus := opsterv1.ComponentStatus{
 			Component:   "",
 			Status:      "",
 			Description: "",
@@ -210,7 +210,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			if err != nil {
 				// if ns cannot create ,  inform it and done reconcile
 				fmt.Println(err, "Cannot create namespace")
-				r.Recorder.Event(r.Instance, "Warning", "Cannot create Namespace for cluster", "requeuing - fix the problem that you have with createing Namespace for cluster")
+				//	r.Recorder.Event(r.Instance, "Warning", "Cannot create Namespace for cluster", "requeuing - fix the problem that you have with createing Namespace for cluster")
 				return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 			}
 			fmt.Println("ns Created successfully", "name", ns.Name)

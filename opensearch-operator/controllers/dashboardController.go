@@ -43,7 +43,7 @@ func (r *DashboardReconciler) Reconcile(ctx context.Context, request ctrl.Reques
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				fmt.Println(err, "Cannot create Opensearch-Dashboard Deployment "+dashboards_deployment.Name)
-				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard deployment ", "Fix the problem you have on main Opensearch-Dashboard Deployment")
+				//	r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard deployment ", "Fix the problem you have on main Opensearch-Dashboard Deployment")
 				return ctrl.Result{}, err
 			}
 		}
@@ -60,7 +60,7 @@ func (r *DashboardReconciler) Reconcile(ctx context.Context, request ctrl.Reques
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				fmt.Println(err, "Cannot create Opensearch-Dashboard Configmap "+dashboards_cm.Name)
-				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard configmap ", "Fix the problem you have on main Opensearch-Dashboard ConfigMap")
+				//	r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard configmap ", "Fix the problem you have on main Opensearch-Dashboard ConfigMap")
 				return ctrl.Result{}, err
 			}
 		}
@@ -78,7 +78,7 @@ func (r *DashboardReconciler) Reconcile(ctx context.Context, request ctrl.Reques
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				fmt.Println(err, "Cannot create Opensearch-Dashboard service "+dashboards_svc.Name)
-				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard service ", "Fix the problem you have on main Opensearch-Dashboard Service")
+				// 	r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard service ", "Fix the problem you have on main Opensearch-Dashboard Service")
 				return ctrl.Result{}, err
 			}
 		}
