@@ -101,9 +101,17 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 				},
 			}},
 		},
-		Status: opsterv1.ClusterStatus{ComponentsStatus: []opsterv1.ComponentStatus{}},
+		Status: opsterv1.ClusterStatus{
+			ComponentsStatus: []opsterv1.ComponentStatus{{
+				Component:   "",
+				Status:      "",
+				Description: "",
+			},
+			},
+		},
 	}
 	return *OpensearchCluster
+
 }
 
 func ComposeNs(name string) corev1.Namespace {
