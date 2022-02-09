@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
-	"opensearch-k8-operator/opensearch-gateway/responses"
+	"opensearch.opster.io/opensearch-gateway/responses"
 	"strings"
 )
 

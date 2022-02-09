@@ -3,9 +3,9 @@ package controllers
 import (
 	"context"
 	"fmt"
+	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/builders"
 
-	opsterv1 "../../opensearch-operator/api/v1"
-	"../../opensearch-operator/pkg/builders"
 	sts "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"

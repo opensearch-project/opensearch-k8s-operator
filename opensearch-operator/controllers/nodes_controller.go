@@ -3,12 +3,12 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"opensearch-k8-operator/opensearch-gateway/services"
-	"opensearch-k8-operator/opensearch-operator/pkg/builders"
-
-	opsterv1 "../../opensearch-operator/api/v1"
-	"../../opensearch-operator/pkg/helpers"
 	sts "k8s.io/api/apps/v1"
+	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/helpers"
+
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -97,11 +97,12 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 	if err := r.Update(ctx, &r.StsFromEnv); err != nil {
 		return ctrl.Result{Requeue: true}, err
 	}
+	group := fmt.Sprintf("Group-%d", r.Group)
 	if excluded {
 		componentStatus := opsterv1.ComponentsStatus{
 			Component:   "Scaler",
 			Status:      "Excluded",
-			Description: fmt.Sprintf("Group-%d . Strated to drain node %s", r.Group, lastReplicaNodeName),
+			Description: group,
 		}
 		r.Recorder.Event(r.Instance, "Normal", "excluded node ", fmt.Sprintf("Group-%d . Failed to exclude node %s", r.Group, lastReplicaNodeName))
 		r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
@@ -111,7 +112,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 	componentStatus := opsterv1.ComponentsStatus{
 		Component:   "Scaler",
 		Status:      "Running",
-		Description: fmt.Sprintf("Group-%d . Failed to exclude node %s", r.Group, lastReplicaNodeName),
+		Description: group,
 	}
 	r.Recorder.Event(r.Instance, "Normal", "failed to exclude node ", fmt.Sprintf("Group-%d . Failed to exclude node %s", r.Group, lastReplicaNodeName))
 	r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)

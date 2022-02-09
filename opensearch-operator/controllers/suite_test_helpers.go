@@ -2,10 +2,10 @@ package controllers
 
 import (
 	"context"
+	opsterv1 "opensearch.opster.io/api/v1"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	//. "github.com/onsi/ginkgo"

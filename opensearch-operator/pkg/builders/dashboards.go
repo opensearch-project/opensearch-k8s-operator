@@ -1,13 +1,13 @@
 package builders
 
 import (
+	opsterv1 "opensearch.opster.io/api/v1"
 	"strconv"
 
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	opsterv1 "opensearch-k8-operator/opensearch-operator/api/v1"
 )
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///

@@ -18,9 +18,9 @@ package main
 
 import (
 	"flag"
-	"os"
-
+	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/controllers"
+	"os"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -32,8 +32,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	opsterv1 "opensearch.opster.io/api/v1"
 	//+kubebuilder:scaffold:imports
 )
 

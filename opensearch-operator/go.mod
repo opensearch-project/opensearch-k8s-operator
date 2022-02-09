@@ -6,6 +6,7 @@ require (
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.10.2
 	github.com/opensearch-project/opensearch-go v1.0.0
+	github.com/stretchr/testify v1.7.0
 	k8s.io/api v0.20.2
 	k8s.io/apimachinery v0.20.2
 	k8s.io/client-go v0.20.2

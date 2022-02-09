@@ -2,8 +2,8 @@ package services
 
 import (
 	"encoding/json"
-	"opensearch-k8-operator/opensearch-gateway/responses"
-	"opensearch-k8-operator/opensearch-operator/pkg/helpers"
+	"opensearch.opster.io/opensearch-gateway/responses"
+	"opensearch.opster.io/pkg/helpers"
 	"strings"
 )
 

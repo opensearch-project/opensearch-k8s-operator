@@ -2,10 +2,10 @@ package helpers
 
 import (
 	"fmt"
+	opsterv1 "opensearch.opster.io/api/v1"
 
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/kube-openapi/pkg/validation/errors"
-	opsterv1 "opensearch-k8-operator/opensearch-operator/api/v1"
 )
 
 func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, instance *opsterv1.OpenSearchCluster, count int, check string) (x sts.StatefulSetSpec, err error, changes []string) {
