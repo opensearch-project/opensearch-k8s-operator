@@ -18,9 +18,9 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
@@ -28,6 +28,7 @@ import (
 	"opensearch.opster.io/pkg/helpers"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -42,6 +43,7 @@ type OpenSearchClusterReconciler struct {
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
 	Instance *opsterv1.OpenSearchCluster
+	logr.Logger
 }
 
 //+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
@@ -59,9 +61,8 @@ type OpenSearchClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	//_ = log.FromContext(ctx)
-	//	reqLogger := r.Log.WithValues("es", req.NamespacedName)
-	//	reqLogger.Info("=== Reconciling ES")
+	r.Logger = log.Log.WithValues("cluster", req.NamespacedName)
+	r.Logger.Info("Reconciling OpenSearchCluster")
 	myFinalizerName := "Opster"
 
 	r.Instance = &opsterv1.OpenSearchCluster{}
@@ -114,7 +115,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	case opsterv1.PhaseRunning:
 		return r.reconcilePhaseRunning()
 	default:
-		// reqLogger.Info("NOTHING WILL HAPPEN - DEFAULT")
+		r.Logger.Info("NOTHING WILL HAPPEN - DEFAULT")
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
 }
@@ -127,22 +128,21 @@ func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // delete associated cluster resources //
-func (r *OpenSearchClusterReconciler) deleteExternalResources(es *opsterv1.OpenSearchCluster) error {
-	namespace := es.Spec.General.ClusterName
+func (r *OpenSearchClusterReconciler) deleteExternalResources(cluster *opsterv1.OpenSearchCluster) error {
+	namespace := cluster.Spec.General.ClusterName
+	nsToDel := builders.NewNsForCR(cluster)
 
-	nsToDel := builders.NewNsForCR(es)
-
-	fmt.Println("Cluster", es.Name, "has been deleted, Delete namesapce ", namespace)
+	r.Logger.Info("Cluster has been deleted. Deleting namespace")
 	err := r.Delete(context.TODO(), nsToDel)
 	if err != nil {
 		return err
 	}
-	fmt.Println("NS", namespace, "Deleted successfully")
+	r.Logger.Info("Namespace deleted successfully", "namespace", namespace)
 	return nil
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhasePending() (ctrl.Result, error) {
-	//	reqLogger.info("start reconcile - Phase: PENDING")
+	r.Logger.Info("start reconcile - Phase: PENDING")
 	r.Instance.Status.Phase = opsterv1.PhaseRunning
 	componentStatus := opsterv1.ComponentStatus{
 		Component:   "",
@@ -178,6 +178,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning() (ctrl.Result, erro
 	tls := TlsReconciler{
 		Client:   r.Client,
 		Recorder: r.Recorder,
+		Logger:   r.Logger.WithValues("controller", "tls"),
 		Instance: r.Instance,
 	}
 	state, err := tls.Reconcile(&controllerContext)
@@ -190,6 +191,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning() (ctrl.Result, erro
 	config := ConfigurationReconciler{
 		Client:   r.Client,
 		Recorder: r.Recorder,
+		Logger:   r.Logger.WithValues("controller", "configuration"),
 		Instance: r.Instance,
 	}
 	state, err = config.Reconcile(&controllerContext)
@@ -202,6 +204,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning() (ctrl.Result, erro
 	cluster := ClusterReconciler{
 		Client:   r.Client,
 		Recorder: r.Recorder,
+		Logger:   r.Logger.WithValues("controller", "cluster"),
 		Instance: r.Instance,
 	}
 	state, err = cluster.Reconcile(&controllerContext)
@@ -214,6 +217,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning() (ctrl.Result, erro
 	scaler := ScalerReconciler{
 		Client:   r.Client,
 		Recorder: r.Recorder,
+		Logger:   r.Logger.WithValues("controller", "scaler"),
 		Instance: r.Instance,
 	}
 	status, err := scaler.Reconcile(&controllerContext)
@@ -226,6 +230,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning() (ctrl.Result, erro
 		dash := DashboardReconciler{
 			Client:   r.Client,
 			Recorder: r.Recorder,
+			Logger:   r.Logger.WithValues("controller", "dashboards"),
 			Instance: r.Instance,
 		}
 		state, err = dash.Reconcile(&controllerContext)
@@ -244,11 +249,11 @@ func (r *OpenSearchClusterReconciler) createNamespace(instance *opsterv1.OpenSea
 	err := r.Create(context.TODO(), ns)
 	if err != nil {
 		// if ns cannot create ,  inform it and done reconcile
-		fmt.Println(err, "Cannot create namespace")
+		r.Logger.Error(err, "Failed to create namespace")
 		r.Recorder.Event(r.Instance, "Warning", "Cannot create Namespace for cluster", "requeuing - fix the problem that you have with creating Namespace for cluster")
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
-	fmt.Println("ns Created successfully", "name", ns.Name)
+	r.Logger.Info("Namespace created successfully", "namespace", ns.Name)
 	return ctrl.Result{}, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,6 +17,7 @@ import (
 type ClusterReconciler struct {
 	client.Client
 	Recorder record.EventRecorder
+	logr.Logger
 	Instance *opsterv1.OpenSearchCluster
 }
 
@@ -32,13 +34,13 @@ func (r *ClusterReconciler) Reconcile(controllerContext *ControllerContext) (*op
 		err = r.Create(context.TODO(), clusterService)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create service")
+				r.Logger.Error(err, "Cannot create service")
 				r.Recorder.Event(r.Instance, "Warning", "Cannot create opensearch Service ", "Requeue - Fix the problem you have on main Opensearc Service ")
 				return nil, err
 			}
 
 		}
-		fmt.Println("service Created successfully", "name", service.Name)
+		r.Logger.Info(fmt.Sprintf("service %s created successfully", clusterService.Name))
 	}
 
 	// Create StatefulSets for NodePools
@@ -50,28 +52,28 @@ func (r *ClusterReconciler) Reconcile(controllerContext *ControllerContext) (*op
 			err = r.Create(context.TODO(), targetService)
 			if err != nil {
 				if !errors.IsAlreadyExists(err) {
-					fmt.Println(err, "Cannot create Headless Service")
+					r.Logger.Error(err, fmt.Sprintf("Cannot create Headless Service for nodepool %s", nodePool.Component))
 					r.Recorder.Event(r.Instance, "Warning", "Cannot create Headless Service ", "Requeue - Fix the problem you have on main Opensearch Headless Service ")
 					return nil, err
 				}
 			}
-			fmt.Println("service Created successfully", "name", targetService.Name)
+			r.Logger.Info(fmt.Sprintf("service for nodepool %s created successfully", nodePool.Component))
 		}
 
 		stsName := r.Instance.Spec.General.ClusterName + "-" + nodePool.Component
 		targetSTS := builders.NewSTSForNodePool(r.Instance, nodePool, controllerContext.Volumes, controllerContext.VolumeMounts)
 		existingSTS := appsv1.StatefulSet{}
 		if err := r.Get(context.TODO(), client.ObjectKey{Name: stsName, Namespace: namespace}, &existingSTS); err != nil {
-			fmt.Printf("Creating statefulset for nodepool %s\n", nodePool.Component)
+			r.Logger.Info("Creating statefulset for nodepool " + nodePool.Component)
 			err = r.Create(context.TODO(), &targetSTS)
 			if err != nil {
 				if !errors.IsAlreadyExists(err) {
-					fmt.Println(err, "Cannot create-"+stsName+" node group")
+					r.Logger.Error(err, fmt.Sprintf("Cannot create statefulset for nodepool %s", nodePool.Component))
 					r.Recorder.Event(r.Instance, "Warning", "Cannot create Opensearch node group (StateFulSet) ", "Requeue - Fix the problem you have on one of Opensearch NodePools")
 					return nil, err
 				}
 			}
-			fmt.Println(nodePool.Component, " StatefulSet has Created successfully"+"-"+stsName)
+			r.Logger.Info(fmt.Sprintf("Statefulset %s created successfully", stsName))
 		}
 	}
 

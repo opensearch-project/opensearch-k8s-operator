@@ -8,6 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -38,9 +39,9 @@ var _ = Describe("TLS Controller", func() {
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 			underTest := TlsReconciler{
-				Client: k8sClient,
-				//Scheme:   scheme.Scheme,
+				Client:   k8sClient,
 				Instance: &spec,
+				Logger:   logr.Discard(),
 				//Recorder: recorder,
 			}
 			controllerContext := NewControllerContext()

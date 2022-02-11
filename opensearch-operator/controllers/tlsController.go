@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -15,12 +16,13 @@ import (
 type TlsReconciler struct {
 	client.Client
 	Recorder record.EventRecorder
+	logr.Logger
 	Instance *opsterv1.OpenSearchCluster
 }
 
 func (r *TlsReconciler) Reconcile(controllerContext *ControllerContext) (*opsterv1.ComponentStatus, error) {
 	if r.Instance.Spec.Security == nil || r.Instance.Spec.Security.Tls == nil {
-		fmt.Println("No security specified. Not doing anything")
+		r.Logger.Info("No security specified. Not doing anything")
 		return nil, nil
 	}
 	tlsConfig := r.Instance.Spec.Security.Tls
@@ -37,13 +39,13 @@ func (r *TlsReconciler) Reconcile(controllerContext *ControllerContext) (*opster
 }
 
 func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfaceConfig, controllerContext *ControllerContext) error {
-	fmt.Printf("Handling %s\n", name)
 	namespace := r.Instance.Spec.General.ClusterName
 	clusterName := r.Instance.Spec.General.ClusterName
 	ca_secret_name := clusterName + "-ca"
 	node_secret_name := clusterName + "-" + name + "-cert"
 
 	if config.Generate {
+		r.Logger.Info("Generating certificates", "interface", name)
 		// Check for existing CA secret
 		caSecret := corev1.Secret{}
 		var ca tls.Cert
@@ -51,23 +53,21 @@ func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfa
 			// Generate CA cert and put it into secret
 			ca, err = tls.GenerateCA(clusterName)
 			if err != nil {
-				fmt.Println("Failed to create CA")
+				r.Logger.Error(err, "Failed to create CA", "interface", name)
 				return err
 			}
 			caSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: ca_secret_name, Namespace: namespace}, Data: ca.SecretDataCA()}
 			if err := r.Create(context.TODO(), &caSecret); err != nil {
-				fmt.Println("Failed to store CA in secret")
+				r.Logger.Error(err, "Failed to store CA in secret", "interface", name)
 				return err
 			}
 		} else {
-			fmt.Println("Using existing CA secret")
 			ca = tls.CAFromSecret(caSecret.Data)
 		}
 
 		// Generate node cert, sign it and put it into secret
 		nodeSecret := corev1.Secret{}
 		if err := r.Get(context.TODO(), client.ObjectKey{Name: node_secret_name, Namespace: namespace}, &nodeSecret); err != nil {
-			fmt.Printf("Generating certificate for %s\n", name)
 			// Generate node cert and put it into secret
 			dnsNames := []string{
 				clusterName,
@@ -77,12 +77,12 @@ func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfa
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName, dnsNames)
 			if err != nil {
-				fmt.Println("Failed to create node certificate")
+				r.Logger.Error(err, "Failed to create node certificate", "interface", name)
 				return err
 			}
 			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: node_secret_name, Namespace: namespace}, Data: nodeCert.SecretData(&ca)}
 			if err := r.Create(context.TODO(), &nodeSecret); err != nil {
-				fmt.Println("Failed to store node certificate in secret")
+				r.Logger.Error(err, "Failed to store node certificate in secret", "interface", name)
 				return err
 			}
 		}

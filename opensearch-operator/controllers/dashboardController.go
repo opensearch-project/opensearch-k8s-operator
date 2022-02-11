@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/go-logr/logr"
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -16,6 +17,7 @@ import (
 type DashboardReconciler struct {
 	client.Client
 	Recorder record.EventRecorder
+	logr.Logger
 	Instance *opsterv1.OpenSearchCluster
 }
 
@@ -31,12 +33,12 @@ func (r *DashboardReconciler) Reconcile(controllerContext *ControllerContext) (*
 		err = r.Create(context.TODO(), dashboards_cm)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard Configmap "+dashboards_cm.Name)
+				r.Logger.Error(err, "Cannot create Opensearch-Dashboard Configmap "+dashboards_cm.Name)
 				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard configmap ", "Fix the problem you have on main Opensearch-Dashboard ConfigMap")
 				return nil, err
 			}
 		}
-		fmt.Println("Opensearch-Dashboard Cm Created successfully", "name", dashboards_cm.Name)
+		r.Logger.Info("Opensearch-Dashboard Cm Created successfully", "name", dashboards_cm.Name)
 
 	}
 
@@ -50,12 +52,12 @@ func (r *DashboardReconciler) Reconcile(controllerContext *ControllerContext) (*
 		err = r.Create(context.TODO(), dashboards_deployment)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard Deployment "+dashboards_deployment.Name)
+				r.Logger.Error(err, "Cannot create Opensearch-Dashboard Deployment "+dashboards_deployment.Name)
 				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard deployment ", "Fix the problem you have on main Opensearch-Dashboard Deployment")
 				return nil, err
 			}
 		}
-		fmt.Println("Opensearch-Dashboard Deployment Created successfully - ", "name : ", dashboards_deployment.Name)
+		r.Logger.Info("Opensearch-Dashboard Deployment Created successfully - ", "name : ", dashboards_deployment.Name)
 	}
 
 	kibanaService := corev1.Service{}
@@ -67,12 +69,12 @@ func (r *DashboardReconciler) Reconcile(controllerContext *ControllerContext) (*
 		err = r.Create(context.TODO(), dashboards_svc)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard service "+dashboards_svc.Name)
+				r.Logger.Error(err, "Cannot create Opensearch-Dashboard service "+dashboards_svc.Name)
 				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard service ", "Fix the problem you have on main Opensearch-Dashboard Service")
 				return nil, err
 			}
 		}
-		fmt.Println("Opensearch-Dashboard service Created successfully", "name", dashboards_svc.Name)
+		r.Logger.Info("Opensearch-Dashboard service Created successfully", "name", dashboards_svc.Name)
 	}
 
 	return nil, nil

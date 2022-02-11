@@ -2,11 +2,11 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
 
+	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +18,7 @@ import (
 type ConfigurationReconciler struct {
 	client.Client
 	Recorder record.EventRecorder
+	logr.Logger
 	Instance *opsterv1.OpenSearchCluster
 }
 
@@ -54,13 +55,11 @@ func (r *ConfigurationReconciler) Reconcile(controllerContext *ControllerContext
 		err = r.Create(context.TODO(), &cm)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Configmap "+configMapName)
-				// TODO: recorder
-				//r.Recorder.Event(r.Instance, "Warning", "Cannot create Configmap ", "Requeue - Fix the problem you have on main Opensearch ConfigMap")
+				r.Logger.Error(err, "Cannot create Configmap "+configMapName)
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create Configmap ", "Requeue - Fix the problem you have on main Opensearch ConfigMap")
 				return nil, err
 			}
 		}
-		fmt.Println("Cm Created successfully", "name", configMapName)
 	}
 	volume := corev1.Volume{Name: "config", VolumeSource: corev1.VolumeSource{ConfigMap: &corev1.ConfigMapVolumeSource{LocalObjectReference: corev1.LocalObjectReference{Name: configMapName}}}}
 	controllerContext.Volumes = append(controllerContext.Volumes, volume)

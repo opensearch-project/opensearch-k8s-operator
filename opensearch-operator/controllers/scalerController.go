@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -12,6 +13,7 @@ import (
 type ScalerReconciler struct {
 	client.Client
 	Recorder record.EventRecorder
+	logr.Logger
 	Instance *opsterv1.OpenSearchCluster
 }
 
