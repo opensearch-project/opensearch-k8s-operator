@@ -81,10 +81,10 @@ var _ = Describe("OpensearchCluster Controller", func() {
 					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards"}, &deploy); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: "opensearch-dashboards"}, &cm); err != nil {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards-config"}, &cm); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards-svc"}, &service); err != nil {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards"}, &service); err != nil {
 						return false
 					}
 				}

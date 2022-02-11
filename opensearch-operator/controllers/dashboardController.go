@@ -20,12 +20,30 @@ type DashboardReconciler struct {
 }
 
 func (r *DashboardReconciler) Reconcile(controllerContext *ControllerContext) (*opsterv1.ComponentStatus, error) {
+	namespace := r.Instance.Spec.General.ClusterName
 	/// ------ create opensearch dashboard cm ------- ///
+	kibanaCm := corev1.ConfigMap{}
+	cmName := fmt.Sprintf("%s-dashboards-config", r.Instance.Spec.General.ClusterName)
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: cmName, Namespace: namespace}, &kibanaCm); err != nil {
+		/// ------- create Opensearch-Dashboard Configmap ------- ///
+		dashboards_cm := builders.NewDashboardsConfigMapForCR(r.Instance, cmName)
+
+		err = r.Create(context.TODO(), dashboards_cm)
+		if err != nil {
+			if !errors.IsAlreadyExists(err) {
+				fmt.Println(err, "Cannot create Opensearch-Dashboard Configmap "+dashboards_cm.Name)
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard configmap ", "Fix the problem you have on main Opensearch-Dashboard ConfigMap")
+				return nil, err
+			}
+		}
+		fmt.Println("Opensearch-Dashboard Cm Created successfully", "name", dashboards_cm.Name)
+
+	}
 
 	kibanaDeploy := sts.Deployment{}
 	deployName := r.Instance.Spec.General.ClusterName + "-dashboards"
-	deployNamespace := r.Instance.Spec.General.ClusterName
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: deployName, Namespace: deployNamespace}, &kibanaDeploy); err != nil {
+
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: deployName, Namespace: namespace}, &kibanaDeploy); err != nil {
 		/// ------- create Opensearch-Dashboard deployment ------- ///
 		dashboards_deployment := builders.NewDashboardsDeploymentForCR(r.Instance)
 
@@ -40,28 +58,10 @@ func (r *DashboardReconciler) Reconcile(controllerContext *ControllerContext) (*
 		fmt.Println("Opensearch-Dashboard Deployment Created successfully - ", "name : ", dashboards_deployment.Name)
 	}
 
-	kibanaCm := corev1.ConfigMap{}
-	cmName := "opensearch-dashboards"
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: cmName, Namespace: deployNamespace}, &kibanaCm); err != nil {
-		/// ------- create Opensearch-Dashboard Configmap ------- ///
-		dashboards_cm := builders.NewDashboardsConfigMapForCR(r.Instance)
-
-		err = r.Create(context.TODO(), dashboards_cm)
-		if err != nil {
-			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard Configmap "+dashboards_cm.Name)
-				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard configmap ", "Fix the problem you have on main Opensearch-Dashboard ConfigMap")
-				return nil, err
-			}
-		}
-		fmt.Println("Opensearch-Dashboard Cm Created successfully", "name", dashboards_cm.Name)
-
-	}
-
 	kibanaService := corev1.Service{}
-	serviceName := r.Instance.Spec.General.ServiceName + "-dash-svc"
+	serviceName := r.Instance.Spec.General.ServiceName + "-dashboards"
 
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: deployNamespace}, &kibanaService); err != nil {
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &kibanaService); err != nil {
 		/// -------- create Opensearch-Dashboard service ------- ///
 		dashboards_svc := builders.NewDashboardsSvcForCr(r.Instance)
 		err = r.Create(context.TODO(), dashboards_svc)

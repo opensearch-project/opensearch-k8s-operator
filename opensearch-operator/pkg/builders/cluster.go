@@ -82,6 +82,15 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 		jvm = node.Jvm
 	}
 
+	probe := corev1.Probe{
+		PeriodSeconds:       20,
+		TimeoutSeconds:      5,
+		FailureThreshold:    10,
+		SuccessThreshold:    1,
+		InitialDelaySeconds: 10,
+		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
+	}
+
 	return sts.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ClusterName + "-" + node.Component,
@@ -134,11 +143,17 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 							Image: "opensearchproject/opensearch:1.0.0",
 							Ports: []corev1.ContainerPort{
 								{
-									Name:          cr.Spec.General.ServiceName + "-port",
+									Name:          "http",
 									ContainerPort: cr.Spec.General.HttpPort,
 								},
+								{
+									Name:          "transport",
+									ContainerPort: 9300,
+								},
 							},
-							VolumeMounts: volumeMounts,
+							StartupProbe:  &probe,
+							LivenessProbe: &probe,
+							VolumeMounts:  volumeMounts,
 						},
 					},
 					InitContainers: []corev1.Container{{
