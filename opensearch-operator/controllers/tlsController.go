@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/go-logr/logr"
@@ -86,27 +87,44 @@ func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfa
 				return err
 			}
 		}
-		// Extend opensearch.yml
-		if name == "transport" {
-			controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.ssl.transport.pemcert_filepath: tls-transport/tls.crt\n"+
-				"plugins.security.ssl.transport.pemkey_filepath: tls-transport/tls.key\n"+
-				"plugins.security.ssl.transport.pemtrustedcas_filepath: tls-transport/ca.crt\n"+
-				"plugins.security.ssl.transport.enforce_hostname_verification: false\n"+
-				fmt.Sprintf("plugins.security.nodes_dn: [\"CN=%s\"]\n", clusterName))
-		} else if name == "http" {
-			controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.ssl.http.enabled: true\n"+
-				"plugins.security.ssl.http.pemcert_filepath: tls-http/tls.crt\n"+
-				"plugins.security.ssl.http.pemkey_filepath: tls-http/tls.key\n"+
-				"plugins.security.ssl.http.pemtrustedcas_filepath: tls-http/ca.crt\n")
-		}
 		// Tell cluster controller to mount secrets
 		volume := corev1.Volume{Name: name + "-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: node_secret_name}}}
 		controllerContext.Volumes = append(controllerContext.Volumes, volume)
 		mount := corev1.VolumeMount{Name: name + "-cert", MountPath: "/usr/share/opensearch/config/tls-" + name}
 		controllerContext.VolumeMounts = append(controllerContext.VolumeMounts, mount)
 	} else {
-		// TODO
-		panic("Using existing certs from secrets not yet supported")
+		if config.CaSecret == nil || config.CertSecret == nil || config.KeySecret == nil {
+			err := errors.New("missing secret in spec")
+			r.Logger.Error(err, fmt.Sprintf("Not all secrets for %s provided", name))
+			return err
+		}
+		mount(name, "ca", "ca.crt", config.CaSecret, controllerContext)
+		mount(name, "key", "tls.key", config.KeySecret, controllerContext)
+		mount(name, "cert", "tls.crt", config.CertSecret, controllerContext)
+	}
+	// Extend opensearch.yml
+	if name == "transport" {
+		controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.ssl.transport.pemcert_filepath: tls-transport/tls.crt\n"+
+			"plugins.security.ssl.transport.pemkey_filepath: tls-transport/tls.key\n"+
+			"plugins.security.ssl.transport.pemtrustedcas_filepath: tls-transport/ca.crt\n"+
+			"plugins.security.ssl.transport.enforce_hostname_verification: false\n"+
+			fmt.Sprintf("plugins.security.nodes_dn: [\"CN=%s\"]\n", clusterName))
+	} else if name == "http" {
+		controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.ssl.http.enabled: true\n"+
+			"plugins.security.ssl.http.pemcert_filepath: tls-http/tls.crt\n"+
+			"plugins.security.ssl.http.pemkey_filepath: tls-http/tls.key\n"+
+			"plugins.security.ssl.http.pemtrustedcas_filepath: tls-http/ca.crt\n")
 	}
 	return nil
+}
+
+func mount(interfaceName string, name string, filename string, secret *opsterv1.TlsSecret, controllerContext *ControllerContext) {
+	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secret.SecretName}}}
+	controllerContext.Volumes = append(controllerContext.Volumes, volume)
+	secretKey := filename
+	if secret.Key != nil {
+		secretKey = *secret.Key
+	}
+	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s/%s", interfaceName, filename), SubPath: secretKey}
+	controllerContext.VolumeMounts = append(controllerContext.VolumeMounts, mount)
 }

@@ -26,11 +26,9 @@ var _ = Describe("TLS Controller", func() {
 		interval            = time.Second * 1
 	)
 
-	spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{Transport: &opsterv1.TlsInterfaceConfig{Generate: true}, Http: &opsterv1.TlsInterfaceConfig{Generate: true}}}}}
-
 	Context("When Reconciling the TLS configuration with no existing secrets", func() {
 		It("should create the needed secrets ", func() {
-
+			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{Transport: &opsterv1.TlsInterfaceConfig{Generate: true}, Http: &opsterv1.TlsInterfaceConfig{Generate: true}}}}}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
@@ -69,4 +67,62 @@ var _ = Describe("TLS Controller", func() {
 		})
 	})
 
+	Context("When Reconciling the TLS configuration with external certificates", func() {
+		It("Should not create secrets but only mount them", func() {
+			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: "tls-test-existingsecrets"}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+				Transport: &opsterv1.TlsInterfaceConfig{
+					Generate:   false,
+					CaSecret:   &opsterv1.TlsSecret{SecretName: "casecret-transport"},
+					KeySecret:  &opsterv1.TlsSecret{SecretName: "keysecret-transport"},
+					CertSecret: &opsterv1.TlsSecret{SecretName: "certsecret-transport"},
+				},
+				Http: &opsterv1.TlsInterfaceConfig{
+					Generate:   false,
+					CaSecret:   &opsterv1.TlsSecret{SecretName: "casecret-http"},
+					KeySecret:  &opsterv1.TlsSecret{SecretName: "keysecret-http"},
+					CertSecret: &opsterv1.TlsSecret{SecretName: "certsecret-http"},
+				}},
+			}}}
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "tls-test-existingsecrets",
+				},
+			}
+			err := k8sClient.Create(context.TODO(), &ns)
+			Expect(err).ToNot(HaveOccurred())
+			underTest := TlsReconciler{
+				Client:   k8sClient,
+				Instance: &spec,
+				Logger:   logr.Discard(),
+				//Recorder: recorder,
+			}
+			controllerContext := NewControllerContext()
+			_, err = underTest.Reconcile(&controllerContext)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(controllerContext.Volumes).Should(HaveLen(6))
+			Expect(controllerContext.VolumeMounts).Should(HaveLen(6))
+			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-transport", "transport-ca")).Should((BeTrue()))
+			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-transport", "transport-key")).Should((BeTrue()))
+			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-transport", "transport-cert")).Should((BeTrue()))
+			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-http", "http-ca")).Should((BeTrue()))
+			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-http", "http-key")).Should((BeTrue()))
+			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-http", "http-cert")).Should((BeTrue()))
+
+		})
+	})
+
 })
+
+func checkVolumeExists(volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, secretName string, volumeName string) bool {
+	for _, volume := range volumes {
+		if volume.Name == volumeName {
+			for _, mount := range volumeMounts {
+				if mount.Name == volumeName {
+					return volume.Secret.SecretName == secretName
+				}
+			}
+			return false
+		}
+	}
+	return false
+}

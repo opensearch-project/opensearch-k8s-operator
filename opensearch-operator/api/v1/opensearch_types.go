@@ -88,8 +88,8 @@ type TlsInterfaceConfig struct {
 
 // Reference to a secret
 type TlsSecret struct {
-	SecretName string `json:"secretName"`
-	Key        string `json:"key,omitempty"`
+	SecretName string  `json:"secretName"`
+	Key        *string `json:"key,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster
