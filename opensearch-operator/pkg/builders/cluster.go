@@ -2,43 +2,23 @@ package builders
 
 import (
 	"fmt"
+	"strings"
 
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"opensearch.opster.io/pkg/helpers"
-
-	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
-	"strconv"
-
-	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 )
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
-func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.StatefulSet {
+func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) sts.StatefulSet {
 	disk := fmt.Sprint(node.DiskSize)
 
-	//disk := fmt.Sprint(cr.Spec.Masters.DiskSize)
-
-	rolesMap := map[string]string{
-		"master":                "",
-		"data":                  "",
-		"data_content":          "",
-		"data_hot":              "",
-		"data_warm":             "",
-		"data_cold":             "",
-		"data_frozen":           "",
-		"ingest":                "",
-		"ml":                    "",
-		"remote_cluster_client": "",
-		"transform":             "",
-	}
-
-	rolesSlice := []string{
+	availableRoles := []string{
 		"master",
 		"data",
 		"data_content",
@@ -51,17 +31,14 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 		"remote_cluster_client",
 		"transform",
 	}
-
-	for i := 0; i < len(rolesSlice); i++ {
-		if helpers.ContainsString(node.Roles, rolesSlice[i]) {
-			rolesMap[rolesSlice[i]] = "true"
-		} else {
-			rolesMap[rolesSlice[i]] = "false"
+	var selectedRoles []string
+	for _, role := range node.Roles {
+		if helpers.ContainsString(availableRoles, role) {
+			selectedRoles = append(selectedRoles, role)
 		}
-
 	}
 
-	pvt := corev1.PersistentVolumeClaim{
+	pvc := corev1.PersistentVolumeClaim{
 		ObjectMeta: metav1.ObjectMeta{Name: "pvc"},
 		Spec: corev1.PersistentVolumeClaimSpec{
 			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
@@ -72,20 +49,20 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 			},
 		},
 	}
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "pvc",
+		MountPath: "/usr/share/opensearch/data",
+	})
 
 	clusterInitNode := helpers.CreateInitMasters(cr)
 	//var vendor string
 	labels := map[string]string{
-		"app": cr.Name,
+		"opensearch.cluster":  cr.Name,
+		"opensearch.nodepool": node.Component,
 	}
-
-	i, err := strconv.ParseInt("420", 10, 32)
-	if err != nil {
-		fmt.Println("here panic")
-		panic(err)
+	if helpers.ContainsString(selectedRoles, "master") {
+		labels["opensearch.role"] = "master"
 	}
-	mode := int32(i)
-	//storageClass := "gp2"
 	runas := int64(0)
 
 	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
@@ -101,9 +78,11 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 	var jvm string
 	if node.Jvm == "" {
 		jvm = "-Xmx512M -Xms512M"
+	} else {
+		jvm = node.Jvm
 	}
 
-	return &sts.StatefulSet{
+	return sts.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ClusterName + "-" + node.Component,
 			Namespace: cr.Spec.General.ClusterName,
@@ -114,7 +93,8 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
-
+			PodManagementPolicy: "Parallel",
+			UpdateStrategy:      sts.StatefulSetUpdateStrategy{Type: "RollingUpdate"},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
@@ -123,85 +103,30 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Env: []corev1.EnvVar{{
-								Name:      "cluster.initial_master_nodes",
-								Value:     clusterInitNode,
-								ValueFrom: nil,
-							},
+							Env: []corev1.EnvVar{
 								{
-									Name:      "discovery.seed_hosts",
-									Value:     cr.Spec.General.ServiceName + "-headless-service",
-									ValueFrom: nil,
+									Name:  "cluster.initial_master_nodes",
+									Value: clusterInitNode,
 								},
 								{
-									Name:      "cluster.name",
-									Value:     cr.Spec.General.ClusterName,
-									ValueFrom: nil,
+									Name:  "discovery.seed_hosts",
+									Value: cr.Spec.General.ServiceName,
 								},
 								{
-									Name:      "network.host",
-									Value:     "0.0.0.0",
-									ValueFrom: nil,
+									Name:  "cluster.name",
+									Value: cr.Spec.General.ClusterName,
 								},
 								{
-									Name:      "OPENSEARCH_JAVA_OPTS",
-									Value:     jvm,
-									ValueFrom: nil,
+									Name:  "network.host",
+									Value: "0.0.0.0",
 								},
 								{
-									Name:      "node.data",
-									Value:     rolesMap["data"],
-									ValueFrom: nil,
+									Name:  "OPENSEARCH_JAVA_OPTS",
+									Value: jvm,
 								},
 								{
-									Name:      "node.master",
-									Value:     rolesMap["master"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.ingest",
-									Value:     rolesMap["ingest"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.remote_cluster_client",
-									Value:     rolesMap["remote_cluster_client"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_content",
-									Value:     rolesMap["data_content"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_hot",
-									Value:     rolesMap["data_hot"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_warm",
-									Value:     rolesMap["data_warm"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_cold",
-									Value:     rolesMap["data_cold"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_frozen",
-									Value:     rolesMap["data_frozen"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.ml",
-									Value:     rolesMap["ml"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.transform",
-									Value:     rolesMap["transform"],
-									ValueFrom: nil,
+									Name:  "node.roles",
+									Value: strings.Join(selectedRoles, ","),
 								},
 							},
 
@@ -213,17 +138,7 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 									ContainerPort: cr.Spec.General.HttpPort,
 								},
 							},
-							VolumeMounts: []corev1.VolumeMount{
-								{
-									Name:      "pvc",
-									MountPath: "/usr/share/opensearch/data",
-								},
-								{
-									Name:      "opensearch-yml",
-									MountPath: "/usr/share/opensearch/config/opensearch.yml",
-									SubPath:   "opensearch.yml",
-								},
-							},
+							VolumeMounts: volumeMounts,
 						},
 					},
 					InitContainers: []corev1.Container{{
@@ -242,31 +157,23 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 						},
 					},
 					},
-					Volumes: []corev1.Volume{
-						{Name: "opensearch-yml",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									LocalObjectReference: corev1.LocalObjectReference{Name: "opensearch-yml"},
-									DefaultMode:          &mode,
-								},
-							},
-						},
-					},
+					Volumes: volumes,
 					//NodeSelector:       nil,
 					ServiceAccountName: cr.Spec.General.ServiceAccount,
 					//	Affinity:           nil,
 				},
 			},
-			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{pvt},
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{pvc},
 			ServiceName:          cr.Spec.General.ServiceName + "-svc",
 		},
 	}
 }
 
-func NewHeadlessServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 
 	labels := map[string]string{
-		"app": cr.Name,
+		"opensearch.cluster":  cr.Name,
+		"opensearch.nodepool": nodePool.Component,
 	}
 
 	return &corev1.Service{
@@ -275,7 +182,7 @@ func NewHeadlessServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName + "-headless-service",
+			Name:      fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component),
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
@@ -309,7 +216,7 @@ func NewHeadlessServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 	labels := map[string]string{
-		"app": cr.Name,
+		"opensearch.cluster": cr.Name,
 	}
 
 	return &corev1.Service{
@@ -318,7 +225,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName + "-svc",
+			Name:      cr.Spec.General.ServiceName,
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},

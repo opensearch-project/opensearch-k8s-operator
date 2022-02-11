@@ -4,78 +4,29 @@ import (
 	"context"
 	"fmt"
 
-	sts "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-type State struct {
-	Component string `json:"component,omitempty"`
-	Status    string `json:"status,omitempty"`
-	Err       error  `json:"err,omitempty"`
-}
-
 type ClusterReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	State    State
 	Instance *opsterv1.OpenSearchCluster
 }
 
-//+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/status/componentsStatus,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/finalizers,verbs=update
+func (r *ClusterReconciler) Reconcile(controllerContext *ControllerContext) (*opsterv1.ComponentStatus, error) {
 
-func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Result, error) {
-
-	cm := v1.ConfigMap{}
 	namespace := r.Instance.Spec.General.ClusterName
 
-	cmName := "opensearch-yml"
-
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: cmName, Namespace: namespace}, &cm); err != nil {
-		clusterCm := builders.NewCmForCR(r.Instance)
-		err = r.Create(context.TODO(), clusterCm)
-		if err != nil {
-			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Configmap "+clusterCm.Name)
-				r.Recorder.Event(r.Instance, "Warning", "Cannot create Configmap ", "Requeue - Fix the problem you have on main Opensearch ConfigMap")
-				return ctrl.Result{}, err
-			}
-		}
-		fmt.Println("Cm Created successfully", "name", clusterCm.Name)
-	}
-
-	headlessService := v1.Service{}
-	serviceName := r.Instance.Spec.General.ServiceName + "-headless-service"
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &headlessService); err != nil {
-		/// ------ Create Headless Service -------
-		headless_service := builders.NewHeadlessServiceForCR(r.Instance)
-		err = r.Create(context.TODO(), headless_service)
-		if err != nil {
-			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Headless Service")
-				r.Recorder.Event(r.Instance, "Warning", "Cannot create Headless Service ", "Requeue - Fix the problem you have on main Opensearch Headless Service ")
-
-				return ctrl.Result{}, err
-			}
-		}
-		fmt.Println("service Created successfully", "name", headless_service.Name)
-	}
-
 	service := v1.Service{}
-	serviceName = r.Instance.Spec.General.ServiceName + "-svc"
+	serviceName := r.Instance.Spec.General.ServiceName
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &service); err != nil {
-
-		/// ------ Create External Service -------
+		// Create External Service
 		clusterService := builders.NewServiceForCR(r.Instance)
 
 		err = r.Create(context.TODO(), clusterService)
@@ -83,43 +34,46 @@ func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Resul
 			if !errors.IsAlreadyExists(err) {
 				fmt.Println(err, "Cannot create service")
 				r.Recorder.Event(r.Instance, "Warning", "Cannot create opensearch Service ", "Requeue - Fix the problem you have on main Opensearc Service ")
-				return ctrl.Result{}, err
+				return nil, err
 			}
 
 		}
 		fmt.Println("service Created successfully", "name", service.Name)
-
 	}
 
-	///// ------ Create Es Nodes StatefulSet -------
-	NodesCount := len(r.Instance.Spec.NodePools)
-	sts := sts.StatefulSet{}
+	// Create StatefulSets for NodePools
+	for _, nodePool := range r.Instance.Spec.NodePools {
+		// Create headless service for sts
+		targetService := builders.NewHeadlessServiceForNodePool(r.Instance, &nodePool)
+		existingService := v1.Service{}
+		if err := r.Get(context.TODO(), client.ObjectKey{Name: targetService.Name, Namespace: namespace}, &existingService); err != nil {
+			err = r.Create(context.TODO(), targetService)
+			if err != nil {
+				if !errors.IsAlreadyExists(err) {
+					fmt.Println(err, "Cannot create Headless Service")
+					r.Recorder.Event(r.Instance, "Warning", "Cannot create Headless Service ", "Requeue - Fix the problem you have on main Opensearch Headless Service ")
+					return nil, err
+				}
+			}
+			fmt.Println("service Created successfully", "name", targetService.Name)
+		}
 
-	for x := 0; x < NodesCount; x++ {
-		sts_for_build := builders.NewSTSForCR(r.Instance, r.Instance.Spec.NodePools[x])
-		stsName := r.Instance.Spec.General.ClusterName + "-" + r.Instance.Spec.NodePools[x].Component
-		if err := r.Get(context.TODO(), client.ObjectKey{Name: stsName, Namespace: namespace}, &sts); err != nil {
-			/// ------ Create Es StatefulSet -------
-			fmt.Println("Starting create ", r.Instance.Spec.NodePools[x].Component, " Sts")
-			err = r.Create(context.TODO(), sts_for_build)
+		stsName := r.Instance.Spec.General.ClusterName + "-" + nodePool.Component
+		targetSTS := builders.NewSTSForNodePool(r.Instance, nodePool, controllerContext.Volumes, controllerContext.VolumeMounts)
+		existingSTS := appsv1.StatefulSet{}
+		if err := r.Get(context.TODO(), client.ObjectKey{Name: stsName, Namespace: namespace}, &existingSTS); err != nil {
+			fmt.Printf("Creating statefulset for nodepool %s\n", nodePool.Component)
+			err = r.Create(context.TODO(), &targetSTS)
 			if err != nil {
 				if !errors.IsAlreadyExists(err) {
 					fmt.Println(err, "Cannot create-"+stsName+" node group")
 					r.Recorder.Event(r.Instance, "Warning", "Cannot create Opensearch node group (StateFulSet) ", "Requeue - Fix the problem you have on one of Opensearch NodePools")
-					return ctrl.Result{}, err
+					return nil, err
 				}
 			}
-			fmt.Println(r.Instance.Spec.NodePools[x].Component, " StatefulSet has Created successfully"+"-"+stsName)
+			fmt.Println(nodePool.Component, " StatefulSet has Created successfully"+"-"+stsName)
 		}
 	}
-	return ctrl.Result{}, nil
-}
 
-func (r *ClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := opsterv1.AddToScheme(mgr.GetScheme()); err != nil {
-		return err
-	}
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.OpenSearchCluster{}).
-		Complete(r)
+	return nil, nil
 }

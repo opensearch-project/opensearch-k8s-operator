@@ -58,25 +58,15 @@ func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, inst
 }
 
 func CreateInitMasters(cr *opsterv1.OpenSearchCluster) string {
-	NodesCount := len(cr.Spec.NodePools)
-
-	var i int32
-	for x := 0; x > NodesCount; x++ {
-		comp := cr.Spec.NodePools[x].Component
-		if comp == "masters" {
-			i = cr.Spec.NodePools[x].Replicas
+	var masters = ""
+	for _, nodePool := range cr.Spec.NodePools {
+		if ContainsString(nodePool.Roles, "master") {
+			for i := 0; int32(i) < nodePool.Replicas; i++ {
+				masters = fmt.Sprintf("%s,%s-%s-%d", masters, cr.Spec.General.ClusterName, nodePool.Component, i)
+			}
 		}
 	}
-
-	p := int(i)
-
-	var masters = ""
-	for x := 0; x < p; x++ {
-		masters = fmt.Sprintf("%s-master-%d,%s", cr.Spec.General.ClusterName, x, masters)
-	}
-	if last := len(masters) - 1; last >= 0 && masters[last] == ',' {
-		masters = masters[:last]
-	}
+	masters = masters[1:] // Remove leading comma
 	return masters
 
 }
