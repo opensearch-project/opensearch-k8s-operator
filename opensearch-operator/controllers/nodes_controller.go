@@ -83,7 +83,7 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 }
 
 func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opsterv1.ComponentsStatus) (ctrl.Result, error) {
-	clusterClient, err := builders.NewOsClusterClient(r.Instance)
+	clusterClient, err := builders.NewOsClusterClient(r.Instance, r.Instance.Spec.NodePools[r.Group].Component)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -124,7 +124,7 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 	// -----  Now start add node ------
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", r.StsFromEnv.ObjectMeta.Name, *r.StsFromEnv.Spec.Replicas-1)
 
-	clusterClient, err := builders.NewOsClusterClient(r.Instance)
+	clusterClient, err := builders.NewOsClusterClient(r.Instance, r.Instance.Spec.NodePools[r.Group].Component)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -144,7 +144,7 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 		Status:      "Drained",
 		Description: group,
 	}
-	r.Recorder.Event(r.Instance, "Normal", "node is drained", fmt.Sprintf("Group-%d .node %s node is drained", r.Group, lastReplicaNodeName))
+	r.Recorder.Event(r.Instance, "Normal", "node has drained", fmt.Sprintf("Group-%d .node %s node is drained", r.Group, lastReplicaNodeName))
 	r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
 	err = r.Status().Update(ctx, r.Instance)
 	return ctrl.Result{Requeue: true}, err
