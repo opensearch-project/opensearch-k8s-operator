@@ -41,3 +41,13 @@ func TestHasIndicesWithNoReplica(t *testing.T) {
 	assert.True(t, hasNoReplicas, "index should have no replica")
 	deleteIndex(clusterClient, indexName)
 }
+
+func TestNodeExclude(t *testing.T) {
+	clusterClient := getClusterClient(t)
+	nodeExcluded, err := AppendExcludeNodeHost(clusterClient, "not-exists-node")
+	assert.Nil(t, err, "failed to perform AppendExcludeNodeHost logic")
+	assert.True(t, nodeExcluded, "node not excluded")
+	nodeExcluded, err = RemoveExcludeNodeHost(clusterClient, "not-exists-node")
+	assert.Nil(t, err, "failed to perform AppendExcludeNodeHost logic")
+	assert.True(t, nodeExcluded, "node not included")
+}

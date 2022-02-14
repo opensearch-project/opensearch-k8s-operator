@@ -24,9 +24,9 @@ func TestNodesStats(t *testing.T) {
 func TestCatIndices(t *testing.T) {
 	clusterClient := getClusterClient(t)
 	mapping := strings.NewReader(`{
-     'settings': {
-       'index': {
-            'number_of_shards': 1
+     "settings": {
+       "index": {
+            "number_of_shards": 1
             }
           }
      }`)
@@ -46,4 +46,67 @@ func TestCatIndices(t *testing.T) {
 
 	assert.True(t, indexExists, "index not found")
 	deleteIndex(clusterClient, indexName)
+}
+
+func TestCatShards(t *testing.T) {
+	clusterClient := getClusterClient(t)
+	mapping := strings.NewReader(`{
+     "settings": {
+       "index": {
+            "number_of_shards": 1,
+			"number_of_replicas": 1
+            }
+          }
+     }`)
+	indexName := "cat-shards-test"
+	createIndex(t, clusterClient, indexName, mapping)
+
+	var headers = make([]string, 0)
+	response, err := clusterClient.CatShards(headers)
+
+	assert.Nil(t, err, "failed to cat shards")
+	assert.NotEmpty(t, response, "cat shards response is empty")
+	indexExists := false
+	for _, res := range response {
+		if indexName == res.Index {
+			indexExists = true
+			break
+		}
+	}
+
+	assert.True(t, indexExists, "index not found")
+	deleteIndex(clusterClient, indexName)
+}
+
+func TestPutClusterSettings(t *testing.T) {
+	clusterClient := getClusterClient(t)
+	settingsJson := `{
+ 					 "transient" : {
+    					"indices.recovery.max_bytes_per_sec" : "20mb"
+  						}
+					}`
+
+	response, err := clusterClient.PutClusterSettings(settingsJson)
+
+	assert.Nil(t, err, "failed to put settings")
+	assert.NotEmpty(t, response.Transient, "transient settings are empty")
+
+	response, err = clusterClient.GetClusterSettings()
+	assert.Nil(t, err, "failed to put settings")
+	assert.NotEmpty(t, response.Transient, "transient settings are empty")
+
+	settingsJson = `{
+ 					 "transient" : {
+    					"indices.recovery.max_bytes_per_sec" : null
+  						}
+					}`
+	response, err = clusterClient.PutClusterSettings(settingsJson)
+	assert.Nil(t, err, "failed to reset settings")
+	indicesSettings := response.Transient["indices"]
+	if indicesSettings == nil {
+		assert.True(t, true, "transient settings are not empty")
+	} else {
+		maxBytesPerSec := indicesSettings.(map[string]map[string]interface{})
+		assert.Nil(t, maxBytesPerSec["recovery"]["max_bytes_per_sec"], "transient indices settings are not empty")
+	}
 }
