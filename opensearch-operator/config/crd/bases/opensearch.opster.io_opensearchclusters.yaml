@@ -152,6 +152,10 @@ spec:
                             - secretName
                             type: object
                         type: object
+                      nodesDn:
+                        items:
+                          type: string
+                        type: array
                       transport:
                         description: Configure tls usage for the interface
                         properties:

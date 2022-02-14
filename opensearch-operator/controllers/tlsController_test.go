@@ -2,11 +2,13 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
@@ -47,6 +49,8 @@ var _ = Describe("TLS Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(controllerContext.Volumes).Should(HaveLen(2))
 			Expect(controllerContext.VolumeMounts).Should(HaveLen(2))
+			fmt.Printf("%s\n", controllerContext.OpenSearchConfig)
+			Expect(helpers.ContainsString(controllerContext.OpenSearchConfig, "plugins.security.nodes_dn: [\"CN=tls-test\"]\n")).Should(BeTrue())
 
 			Eventually(func() bool {
 				caSecret := corev1.Secret{}
@@ -81,7 +85,9 @@ var _ = Describe("TLS Controller", func() {
 					CaSecret:   &opsterv1.TlsSecret{SecretName: "casecret-http"},
 					KeySecret:  &opsterv1.TlsSecret{SecretName: "keysecret-http"},
 					CertSecret: &opsterv1.TlsSecret{SecretName: "certsecret-http"},
-				}},
+				},
+				NodesDn: []string{"CN=mycn", "CN=othercn"},
+			},
 			}}}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
@@ -107,7 +113,7 @@ var _ = Describe("TLS Controller", func() {
 			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-http", "http-ca")).Should((BeTrue()))
 			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-http", "http-key")).Should((BeTrue()))
 			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-http", "http-cert")).Should((BeTrue()))
-
+			Expect(helpers.ContainsString(controllerContext.OpenSearchConfig, "plugins.security.nodes_dn: [\"CN=mycn\",\"CN=othercn\"]\n")).Should(BeTrue())
 		})
 	})
 

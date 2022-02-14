@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -27,19 +28,27 @@ func (r *TlsReconciler) Reconcile(controllerContext *ControllerContext) (*opster
 		return nil, nil
 	}
 	tlsConfig := r.Instance.Spec.Security.Tls
+	nodesDn := tlsConfig.NodesDn
 
-	if err := r.HandleInterface("transport", tlsConfig.Transport, controllerContext); err != nil {
+	if err := r.HandleInterface("transport", tlsConfig.Transport, controllerContext, &nodesDn); err != nil {
 		return nil, err
 	}
-	if err := r.HandleInterface("http", tlsConfig.Http, controllerContext); err != nil {
+	if err := r.HandleInterface("http", tlsConfig.Http, controllerContext, &nodesDn); err != nil {
 		return nil, err
+	}
+	if len(nodesDn) > 0 {
+		dnList := strings.Join(nodesDn, "\",\"")
+		controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, fmt.Sprintf("plugins.security.nodes_dn: [\"%s\"]\n", dnList))
 	}
 	// Temporary until securityconfig controller is working
 	controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.allow_unsafe_democertificates: true")
 	return nil, nil
 }
 
-func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfaceConfig, controllerContext *ControllerContext) error {
+func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfaceConfig, controllerContext *ControllerContext, nodesDn *[]string) error {
+	if config == nil {
+		return nil
+	}
 	namespace := r.Instance.Spec.General.ClusterName
 	clusterName := r.Instance.Spec.General.ClusterName
 	ca_secret_name := clusterName + "-ca"
@@ -92,6 +101,9 @@ func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfa
 		controllerContext.Volumes = append(controllerContext.Volumes, volume)
 		mount := corev1.VolumeMount{Name: name + "-cert", MountPath: "/usr/share/opensearch/config/tls-" + name}
 		controllerContext.VolumeMounts = append(controllerContext.VolumeMounts, mount)
+		if name == "transport" {
+			*nodesDn = append(*nodesDn, fmt.Sprintf("CN=%s", clusterName))
+		}
 	} else {
 		if config.CaSecret == nil || config.CertSecret == nil || config.KeySecret == nil {
 			err := errors.New("missing secret in spec")
@@ -107,8 +119,7 @@ func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfa
 		controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.ssl.transport.pemcert_filepath: tls-transport/tls.crt\n"+
 			"plugins.security.ssl.transport.pemkey_filepath: tls-transport/tls.key\n"+
 			"plugins.security.ssl.transport.pemtrustedcas_filepath: tls-transport/ca.crt\n"+
-			"plugins.security.ssl.transport.enforce_hostname_verification: false\n"+
-			fmt.Sprintf("plugins.security.nodes_dn: [\"CN=%s\"]\n", clusterName))
+			"plugins.security.ssl.transport.enforce_hostname_verification: false\n")
 	} else if name == "http" {
 		controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.ssl.http.enabled: true\n"+
 			"plugins.security.ssl.http.pemcert_filepath: tls-http/tls.crt\n"+

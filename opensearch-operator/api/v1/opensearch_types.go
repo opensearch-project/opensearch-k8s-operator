@@ -72,6 +72,7 @@ type Security struct {
 type TlsConfig struct {
 	Transport *TlsInterfaceConfig `json:"transport,omitempty"`
 	Http      *TlsInterfaceConfig `json:"http,omitempty"`
+	NodesDn   []string            `json:"nodesDn,omitempty"`
 }
 
 // Configure tls usage for the interface
