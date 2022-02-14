@@ -47,6 +47,7 @@ func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Resul
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				fmt.Println(err, "Cannot create Configmap "+clusterCm.Name)
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create Configmap ", "Requeue - Fix the problem you have on main Opensearch ConfigMap")
 				return ctrl.Result{}, err
 			}
 		}
@@ -58,11 +59,12 @@ func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Resul
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &headlessService); err != nil {
 		/// ------ Create Headless Service -------
 		headless_service := builders.NewHeadlessServiceForCR(r.Instance)
-
 		err = r.Create(context.TODO(), headless_service)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				fmt.Println(err, "Cannot create Headless Service")
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create Headless Service ", "Requeue - Fix the problem you have on main Opensearch Headless Service ")
+
 				return ctrl.Result{}, err
 			}
 		}
@@ -80,6 +82,7 @@ func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Resul
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				fmt.Println(err, "Cannot create service")
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create opensearch Service ", "Requeue - Fix the problem you have on main Opensearc Service ")
 				return ctrl.Result{}, err
 			}
 
@@ -98,17 +101,16 @@ func (r *ClusterReconciler) Reconcile(context.Context, ctrl.Request) (ctrl.Resul
 		if err := r.Get(context.TODO(), client.ObjectKey{Name: stsName, Namespace: namespace}, &sts); err != nil {
 			/// ------ Create Es StatefulSet -------
 			fmt.Println("Starting create ", r.Instance.Spec.NodePools[x].Component, " Sts")
-			//	r.StsCreate(ctx, &sts_for_build)
-			err := r.Create(context.TODO(), sts_for_build)
+			err = r.Create(context.TODO(), sts_for_build)
 			if err != nil {
 				if !errors.IsAlreadyExists(err) {
 					fmt.Println(err, "Cannot create-"+stsName+" node group")
+					r.Recorder.Event(r.Instance, "Warning", "Cannot create Opensearch node group (StateFulSet) ", "Requeue - Fix the problem you have on one of Opensearch NodePools")
 					return ctrl.Result{}, err
 				}
 			}
 			fmt.Println(r.Instance.Spec.NodePools[x].Component, " StatefulSet has Created successfully"+"-"+stsName)
 		}
-
 	}
 	return ctrl.Result{}, nil
 }

@@ -5,16 +5,18 @@ on:
       - "main"
 jobs:
   docker-build:
-    name: Docker Build
     runs-on: ubuntu-latest
+    container:
+      image: public.ecr.aws/opsterio/go.1.17
+    name: Docker Build
     steps:
       - name: Checkout
         uses: actions/checkout@v2.3.4
       - name: Docker Build
         run: |
           cd opensearch-operator
-          cat Dockerfile
           go version
+          go env
           go get opensearch.opster.io/pkg/builders
           go get opensearch.opster.io/pkg/helpers
           make docker-build
