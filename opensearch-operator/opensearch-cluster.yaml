@@ -26,7 +26,7 @@ spec:
         - "master"
         - "data"
     - component: nodes
-      replicas: 3
+      replicas: 2
       diskSize: 100
       NodeSelector:
       cpu: 4

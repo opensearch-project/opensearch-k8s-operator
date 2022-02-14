@@ -391,8 +391,8 @@ func NewCmForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
 	}
 }
 
-func NewOsClusterClient(r *opsterv1.OpenSearchCluster, componentName string) (*services.OsClusterClient, error) {
-	clusterUrl := fmt.Sprintf("https://%s-%s.%s-svc:%d", r.Spec.General.ClusterName, componentName, r.Spec.General.ServiceName, r.Spec.General.HttpPort)
+func NewOsClusterClient(r *opsterv1.OpenSearchCluster) (*services.OsClusterClient, error) {
+	clusterUrl := fmt.Sprintf("https://%s-svc.%s:%d", r.Spec.General.ServiceName, r.Spec.General.ClusterName, r.Spec.General.HttpPort)
 	config := opensearch.Config{
 		Transport: &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
