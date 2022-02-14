@@ -48,7 +48,7 @@ fmt: ## Run go fmt against code.
 	go fmt ./...
 
 lint:
-	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v1.38-alpine golangci-lint run -E gofmt --skip-dirs=./vendor --deadline=10m
+	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v1.42-alpine golangci-lint run -E gofmt --skip-dirs=./vendor --deadline=3m
 
 vet: ## Run go vet against code.
 	go vet ./...

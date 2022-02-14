@@ -270,7 +270,9 @@ func (r *OpenSearchClusterReconciler) updateStatus(status *opsterv1.ComponentSta
 		if !found {
 			r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, *status)
 		}
-		r.Status().Update(context.TODO(), r.Instance)
+		if err := r.Status().Update(context.TODO(), r.Instance); err != nil {
+			r.Logger.Error(err, "Failed to update status")
+		}
 	}
 }
 
