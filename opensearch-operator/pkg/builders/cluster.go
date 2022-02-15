@@ -309,3 +309,11 @@ func NewCmForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
 		},
 	}
 }
+
+func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
+	httpPort := int32(9200)
+	if cr.Spec.General.HttpPort > 0 {
+		httpPort = cr.Spec.General.HttpPort
+	}
+	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName, httpPort)
+}

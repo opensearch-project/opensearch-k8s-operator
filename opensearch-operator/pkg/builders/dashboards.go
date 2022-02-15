@@ -74,7 +74,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 							Env: []corev1.EnvVar{
 								{
 									Name:  "OPENSEARCH_HOSTS",
-									Value: "https://" + cr.Spec.General.ServiceName + "." + cr.Spec.General.ClusterName + ".svc.cluster.local:9200",
+									Value: URLForCluster(cr),
 								},
 								{
 									Name:  "SERVER_HOST",
