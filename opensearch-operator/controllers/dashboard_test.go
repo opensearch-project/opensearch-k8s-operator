@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	sts "k8s.io/api/apps/v1"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
@@ -21,16 +22,17 @@ var _ = Describe("OpensearchCluster Controller", func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		ClusterName       = "cluster-test-cluster"
+		ClusterName       = "cluster-test-dash"
 		ClusterNameSpaces = "default"
 		timeout           = time.Second * 30
 		interval          = time.Second * 1
 	)
 	var (
 		OpensearchCluster = ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
-		nodePool          = sts.StatefulSet{}
-		service           = corev1.Service{}
-		//deploy            = sts.Deployment{}
+		cm                = corev1.ConfigMap{}
+		//	nodePool          = sts.StatefulSet{}
+		service = corev1.Service{}
+		deploy  = sts.Deployment{}
 		//cluster           = opsterv1.OpenSearchCluster{}
 		//cluster2 = opsterv1.OpenSearchCluster{}
 	)
@@ -38,14 +40,12 @@ var _ = Describe("OpensearchCluster Controller", func() {
 	/// ------- Creation Check phase -------
 
 	ns := ComposeNs(ClusterName)
-	Context("When create OpenSearch CRD instance", func() {
-		It("should create cluster NS and CRD instance", func() {
-
+	Context("When create OpenSearch CRD - dash", func() {
+		It("should create cluster NS", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
-			fmt.Println(OpensearchCluster)
-
 			By("Create cluster ns ")
 			Eventually(func() bool {
+
 				if !IsNsCreated(k8sClient, ns) {
 					return false
 				}
@@ -59,26 +59,26 @@ var _ = Describe("OpensearchCluster Controller", func() {
 
 	/// ------- Tests logic Check phase -------
 
-	Context("When creating a OpenSearchCluster kind Instance", func() {
-		It("should create a new opensearch cluster ", func() {
+	Context("When createing a OpenSearchCluster kind Instance - and Dashboard is Enable", func() {
+		It("should create all Opensearch-dashboard resources", func() {
+			//fmt.Println(OpensearchCluster)
+			fmt.Println("\n DAShBOARD - START")
 
-			By("Opensearch cluster")
+			By("Opensearch Dashboard")
 			Eventually(func() bool {
-
-				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName}, &service); err != nil {
-					return false
-				}
-				for _, name := range []string{"master", "nodes", "client"} {
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: fmt.Sprintf("%s-%s", OpensearchCluster.Spec.General.ServiceName, name)}, &service); err != nil {
+				fmt.Println("\n DAShBOARD - START - 2")
+				//// -------- Dashboard tests ---------
+				if OpensearchCluster.Spec.Dashboards.Enable {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards"}, &deploy); err != nil {
+						return false
+					}
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards-config"}, &cm); err != nil {
+						return false
+					}
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards"}, &service); err != nil {
 						return false
 					}
 				}
-				for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-" + nodePoolSpec.Component}, &nodePool); err != nil {
-						return false
-					}
-				}
-
 				return true
 			}, timeout, interval).Should(BeTrue())
 		})
@@ -93,6 +93,7 @@ var _ = Describe("OpensearchCluster Controller", func() {
 
 			By("Delete cluster ns ")
 			Eventually(func() bool {
+				fmt.Println("\n check ns dashboard")
 				return IsNsDeleted(k8sClient, ns)
 			}, timeout, interval).Should(BeTrue())
 		})

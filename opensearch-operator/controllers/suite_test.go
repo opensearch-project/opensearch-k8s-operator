@@ -24,13 +24,12 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"path/filepath"
-	"testing"
-	"time"
-
 	"github.com/onsi/gomega/gexec"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"path/filepath"
+	"testing"
+	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -68,16 +67,11 @@ func TestAPIs(t *testing.T) {
 
 }
 
-const (
-	ClusterName       = "cluster-test"
-	ClusterNameSpaces = "default"
-)
-
 var _ = BeforeSuite(func() {
 
 	var recorder record.EventRecorder
 
-	OpensearchCluster := ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
+	//OpensearchCluster := ComposeOpensearchCrd("cluster-test", "default")
 
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	//logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
@@ -112,20 +106,13 @@ var _ = BeforeSuite(func() {
 	Expect(err).ToNot(HaveOccurred())
 
 	err = (&OpenSearchClusterReconciler{
-		Client:   k8sManager.GetClient(),
-		Scheme:   scheme.Scheme,
-		Instance: &OpensearchCluster,
+		Client: k8sManager.GetClient(),
+		Scheme: scheme.Scheme,
+		//	Instance: &OpensearchCluster,
 		Recorder: recorder,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
-	//err = (&DashboardReconciler{
-	//	Client:   k8sManager.GetClient(),
-	//	Scheme:   scheme.Scheme,
-	//	Instance: &OpensearchCluster,
-	//	Recorder: recorder,
-	//}).SetupWithManager(k8sManager)
-	Expect(err).ToNot(HaveOccurred())
 	go func() {
 		defer GinkgoRecover()
 		err = k8sManager.Start(ctx)

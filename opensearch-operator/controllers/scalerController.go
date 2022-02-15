@@ -48,7 +48,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool, contro
 		nodePoolSTS.Spec.Replicas = &nodePool.Replicas
 		err := r.Update(context.TODO(), &nodePoolSTS)
 		return nil, err
-		// TODO: Implemnt actual scaling logic
+		// TODO: Implement actual scaling logic
 		// var found bool
 		// name := fmt.Sprintf("Scaler-%s", nodePool.Component)
 		// var componentStatus opsterv1.ComponentStatus
