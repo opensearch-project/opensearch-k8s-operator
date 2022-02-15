@@ -30,13 +30,13 @@ type ScalerReconciler struct {
 
 func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
 	var found bool
-
+	fmt.Println("\n USING R -1 ")
 	if *r.StsFromEnv.Spec.Replicas == r.Instance.Spec.NodePools[r.Group].Replicas {
 		return ctrl.Result{}, nil
 
 	} else {
 		group := fmt.Sprintf("Group-%d", r.Group)
-		var componentStatus opsterv1.ComponentsStatus
+		var componentStatus opsterv1.ComponentStatus
 		comp := r.Instance.Status.ComponentsStatus
 		for i := 0; i < len(comp); i++ {
 			if comp[i].Component == "Scaler" {
@@ -47,17 +47,18 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 							// --- Now check if scaling is done logic ----
 							done := true
 							if !done {
-								r.Recorder.Event(r.Instance, "Normal", "one scale is already in progress on that group ", "one scale is already in progress on that group")
+								//r.Recorder.Event(r.Instance, "Normal", "one scale is already in progress on that group ", "one scale is already in progress on that group")
 								return ctrl.Result{}, nil
 							} else {
 								// if scale logic is done - remove componentStatus
-								componentStatus = opsterv1.ComponentsStatus{
+								componentStatus = opsterv1.ComponentStatus{
 									Component:   "Scaler",
 									Status:      "Running",
 									Description: group,
 								}
 								newStatus := helpers.RemoveIt(componentStatus, comp)
 								r.Instance.Status.ComponentsStatus = newStatus
+								fmt.Println("\n USING R -2 ")
 								if err := r.Status().Update(ctx, r.Instance); err != nil {
 									err = errors.New("Cannot update instance status")
 									return ctrl.Result{}, err
@@ -74,7 +75,7 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 							}
 						}
 					} else if comp[i].Status == "Failed" {
-						r.Recorder.Event(r.Instance, "Normal", "something want worng with scaling operation", "something went worng)")
+						//r.Recorder.Event(r.Instance, "Normal", "something want worng with scaling operation", "something went worng)")
 						return ctrl.Result{}, nil
 					}
 				}
@@ -83,7 +84,7 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		// if not found componentStatus and replcias not equals
 		if !found {
 			// starting new componentStatus
-			componentStatus = opsterv1.ComponentsStatus{
+			componentStatus = opsterv1.ComponentStatus{
 				Component:   "Scaler",
 				Status:      "Running",
 				Description: group,
@@ -100,4 +101,13 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 		}
 	}
 	return ctrl.Result{Requeue: true}, nil
+}
+
+func (r *ScalerReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	if err := opsterv1.AddToScheme(mgr.GetScheme()); err != nil {
+		return err
+	}
+	return ctrl.NewControllerManagedBy(mgr).
+		For(&opsterv1.OpenSearchCluster{}).
+		Complete(r)
 }
