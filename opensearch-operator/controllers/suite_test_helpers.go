@@ -122,3 +122,18 @@ func ComposeNs(name string) corev1.Namespace {
 		},
 	}
 }
+
+func DataNodeSize(cluster opsterv1.OpenSearchCluster) int {
+	dataNodesSize := 0
+	for i := 0; i < len(cluster.Spec.NodePools); i++ {
+		foundData := false
+		for j := 0; j < len(cluster.Spec.NodePools[i].Roles) && !foundData; j++ {
+			if cluster.Spec.NodePools[i].Roles[j] == "data" {
+				dataNodesSize++
+				foundData = true
+			}
+		}
+	}
+	return dataNodesSize
+
+}

@@ -27,16 +27,30 @@ func getClusterClient(t *testing.T) *OsClusterClient {
 	return clusterClient
 }
 
-func createIndex(t *testing.T, clusterClient *OsClusterClient, indexName string, mapping *strings.Reader) {
+func CreateIndex(t *testing.T, clusterClient *OsClusterClient, indexName string, mapping *strings.Reader) {
 	req := opensearchapi.IndicesCreateRequest{
 		Index: indexName,
 		Body:  mapping,
 	}
 	createIndexRes, err := req.Do(context.Background(), clusterClient.client)
-	assert.Nil(t, err, "failed to create index")
-	assert.Equal(t, createIndexRes.StatusCode, 200)
+	if t != nil {
+		assert.Nil(t, err, "failed to create index")
+		assert.Equal(t, createIndexRes.StatusCode, 200)
+	}
 }
 
-func deleteIndex(clusterClient *OsClusterClient, indexName string) {
+func UpdateIndexSettings(t *testing.T, clusterClient *OsClusterClient, indexName string, mapping *strings.Reader) {
+	req := opensearchapi.IndicesPutSettingsRequest{
+		Index: []string{indexName},
+		Body:  mapping,
+	}
+	createIndexRes, err := req.Do(context.Background(), clusterClient.client)
+	if t != nil {
+		assert.Nil(t, err, "failed to update index settings")
+		assert.Equal(t, createIndexRes.StatusCode, 200)
+	}
+}
+
+func DeleteIndex(clusterClient *OsClusterClient, indexName string) {
 	opensearchapi.IndicesDeleteRequest{Index: []string{indexName}}.Do(context.Background(), clusterClient.client)
 }

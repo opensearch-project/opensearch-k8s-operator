@@ -17,11 +17,11 @@ func TestHasNoIndicesWithNoReplica(t *testing.T) {
           }
      }`)
 	indexName := "cat-indices-test"
-	createIndex(t, clusterClient, indexName, mapping)
+	CreateIndex(t, clusterClient, indexName, mapping)
 	hasNoReplicas, err := HasIndicesWithNoReplica(clusterClient)
 	assert.Nil(t, err, "failed to perform HasIndicesWithNoReplica logic")
 	assert.False(t, hasNoReplicas, "all indices should have replica")
-	deleteIndex(clusterClient, indexName)
+	DeleteIndex(clusterClient, indexName)
 }
 
 func TestHasIndicesWithNoReplica(t *testing.T) {
@@ -35,11 +35,11 @@ func TestHasIndicesWithNoReplica(t *testing.T) {
           }
      }`)
 	indexName := "cat-indices-test"
-	createIndex(t, clusterClient, indexName, mapping)
+	CreateIndex(t, clusterClient, indexName, mapping)
 	hasNoReplicas, err := HasIndicesWithNoReplica(clusterClient)
 	assert.Nil(t, err, "failed to perform HasIndicesWithNoReplica logic")
 	assert.True(t, hasNoReplicas, "index should have no replica")
-	deleteIndex(clusterClient, indexName)
+	DeleteIndex(clusterClient, indexName)
 }
 
 func TestNodeExclude(t *testing.T) {

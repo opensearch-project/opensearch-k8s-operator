@@ -31,7 +31,7 @@ func TestCatIndices(t *testing.T) {
           }
      }`)
 	indexName := "cat-indices-test"
-	createIndex(t, clusterClient, indexName, mapping)
+	CreateIndex(t, clusterClient, indexName, mapping)
 	response, err := clusterClient.CatIndices()
 
 	assert.Nil(t, err, "failed to indices")
@@ -45,7 +45,7 @@ func TestCatIndices(t *testing.T) {
 	}
 
 	assert.True(t, indexExists, "index not found")
-	deleteIndex(clusterClient, indexName)
+	DeleteIndex(clusterClient, indexName)
 }
 
 func TestCatShards(t *testing.T) {
@@ -59,7 +59,7 @@ func TestCatShards(t *testing.T) {
           }
      }`)
 	indexName := "cat-shards-test"
-	createIndex(t, clusterClient, indexName, mapping)
+	CreateIndex(t, clusterClient, indexName, mapping)
 
 	var headers = make([]string, 0)
 	response, err := clusterClient.CatShards(headers)
@@ -75,7 +75,7 @@ func TestCatShards(t *testing.T) {
 	}
 
 	assert.True(t, indexExists, "index not found")
-	deleteIndex(clusterClient, indexName)
+	DeleteIndex(clusterClient, indexName)
 }
 
 func TestPutClusterSettings(t *testing.T) {

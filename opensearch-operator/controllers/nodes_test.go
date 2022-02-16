@@ -6,7 +6,10 @@ import (
 	. "github.com/onsi/gomega"
 	sts "k8s.io/api/apps/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/builders"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strings"
 	"time"
 	//+kubebuilder:scaffold:imports
 )
@@ -55,12 +58,19 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 		It("should to add new status about the operation", func() {
 
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &OpensearchCluster)).Should(Succeed())
-
+			dataNodesSize := DataNodeSize(OpensearchCluster)
+			clusterClient, err := builders.NewOsClusterClient(&OpensearchCluster)
+			Expect(err).Should(BeNil())
+			indexName := "index-test-0001"
+			indexSettings := strings.NewReader("{\"settings\":{\"index\":{\"number_of_shards\": " + string(dataNodesSize) + "1,\"number_of_replicas\": 0},\"routing\":{\"allocation\":{\"total_shards_per_node\": 1}}}}")
+			services.CreateIndex(nil, clusterClient, indexName, indexSettings)
 			newRep := OpensearchCluster.Spec.NodePools[0].Replicas - 1
 			OpensearchCluster.Spec.NodePools[0].Replicas = newRep
 
 			status := len(OpensearchCluster.Status.ComponentsStatus)
 			Expect(k8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
+			indexSettings = strings.NewReader("{\"index\" : {\"routing\":{\"allocation\":{\"total_shards_per_node\":2}}}}")
+			services.UpdateIndexSettings(nil, clusterClient, "index-test-0001", indexSettings)
 
 			By("ComponentsStatus checker ")
 			Eventually(func() bool {
@@ -70,6 +80,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				newStatuss := len(cluster2.Status.ComponentsStatus)
 				return status != newStatuss
 			}, time.Second*60, 30*time.Millisecond).Should(BeFalse())
+			services.DeleteIndex(clusterClient, indexName)
 		})
 	})
 
@@ -101,5 +112,4 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
-
 })
