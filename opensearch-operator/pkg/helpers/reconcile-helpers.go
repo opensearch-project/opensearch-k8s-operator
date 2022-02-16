@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"fmt"
+	"strings"
 
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/kube-openapi/pkg/validation/errors"
@@ -58,17 +59,15 @@ func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, inst
 }
 
 func CreateInitMasters(cr *opsterv1.OpenSearchCluster) string {
-	var masters = ""
+	var masters []string
 	for _, nodePool := range cr.Spec.NodePools {
 		if ContainsString(nodePool.Roles, "master") {
 			for i := 0; int32(i) < nodePool.Replicas; i++ {
-				masters = fmt.Sprintf("%s,%s-%s-%d", masters, cr.Spec.General.ClusterName, nodePool.Component, i)
+				masters = append(masters, fmt.Sprintf("%s-%s-%d", cr.Spec.General.ClusterName, nodePool.Component, i))
 			}
 		}
 	}
-	masters = masters[1:] // Remove leading comma
-	return masters
-
+	return strings.Join(masters, ",")
 }
 
 func CheckEquels(from_env *sts.StatefulSetSpec, from_crd *sts.StatefulSetSpec, text string) (int32, bool, error) {
