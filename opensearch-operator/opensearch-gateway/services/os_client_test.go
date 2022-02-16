@@ -45,7 +45,7 @@ func TestCatIndices(t *testing.T) {
 	}
 
 	assert.True(t, indexExists, "index not found")
-	DeleteIndex(clusterClient, indexName)
+	DeleteIndex(t, clusterClient, indexName)
 }
 
 func TestCatShards(t *testing.T) {
@@ -75,7 +75,7 @@ func TestCatShards(t *testing.T) {
 	}
 
 	assert.True(t, indexExists, "index not found")
-	DeleteIndex(clusterClient, indexName)
+	DeleteIndex(t, clusterClient, indexName)
 }
 
 func TestPutClusterSettings(t *testing.T) {

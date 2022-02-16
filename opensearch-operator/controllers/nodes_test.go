@@ -81,7 +81,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				newStatuss := len(cluster2.Status.ComponentsStatus)
 				return status != newStatuss
 			}, time.Second*60, 30*time.Millisecond).Should(BeFalse())
-			services.DeleteIndex(clusterClient, indexName)
+			services.DeleteIndex(nil, clusterClient, indexName)
 		})
 	})
 

@@ -21,7 +21,7 @@ func TestHasNoIndicesWithNoReplica(t *testing.T) {
 	hasNoReplicas, err := HasIndicesWithNoReplica(clusterClient)
 	assert.Nil(t, err, "failed to perform HasIndicesWithNoReplica logic")
 	assert.False(t, hasNoReplicas, "all indices should have replica")
-	DeleteIndex(clusterClient, indexName)
+	DeleteIndex(t, clusterClient, indexName)
 }
 
 func TestHasIndicesWithNoReplica(t *testing.T) {
@@ -39,7 +39,7 @@ func TestHasIndicesWithNoReplica(t *testing.T) {
 	hasNoReplicas, err := HasIndicesWithNoReplica(clusterClient)
 	assert.Nil(t, err, "failed to perform HasIndicesWithNoReplica logic")
 	assert.True(t, hasNoReplicas, "index should have no replica")
-	DeleteIndex(clusterClient, indexName)
+	DeleteIndex(t, clusterClient, indexName)
 }
 
 func TestNodeExclude(t *testing.T) {

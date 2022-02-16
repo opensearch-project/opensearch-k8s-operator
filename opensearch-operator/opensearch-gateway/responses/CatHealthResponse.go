@@ -10,7 +10,7 @@ type CatHealthResponse struct {
 	ReloadingShards     string `json:"relo"`
 	InitializingShards  string `json:"init"`
 	UnAssignShards      string `json:"unassign"`
-	PendingTasks        string `json:"pending_tasks" json:"ua"`
+	PendingTasks        string `json:"pending_tasks"`
 	ActiveShardsPercent string `json:"active_shards_percent"`
 	MaxTaskWaitTime     string `json:"max_task_wait_time"`
 }

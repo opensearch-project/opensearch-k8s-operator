@@ -51,6 +51,10 @@ func UpdateIndexSettings(t *testing.T, clusterClient *OsClusterClient, indexName
 	}
 }
 
-func DeleteIndex(clusterClient *OsClusterClient, indexName string) {
-	opensearchapi.IndicesDeleteRequest{Index: []string{indexName}}.Do(context.Background(), clusterClient.client)
+func DeleteIndex(t *testing.T, clusterClient *OsClusterClient, indexName string) {
+	response, err := opensearchapi.IndicesDeleteRequest{Index: []string{indexName}}.Do(context.Background(), clusterClient.client)
+	if t != nil {
+		assert.Nil(t, err, "failed to update index settings")
+		assert.Equal(t, response.StatusCode, 200)
+	}
 }
