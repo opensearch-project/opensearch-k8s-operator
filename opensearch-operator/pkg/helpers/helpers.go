@@ -93,7 +93,7 @@ func Remove(slice []opsterv1.ComponentStatus, componenet string) []opsterv1.Comp
 	}
 	return slice
 }
-func FindFirstPartial(arr []opsterv1.ComponentsStatus, item opsterv1.ComponentsStatus, predicator func(opsterv1.ComponentsStatus, opsterv1.ComponentsStatus) (opsterv1.ComponentsStatus, bool)) (opsterv1.ComponentsStatus, bool) {
+func FindFirstPartial(arr []opsterv1.ComponentStatus, item opsterv1.ComponentStatus, predicator func(opsterv1.ComponentStatus, opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool)) (opsterv1.ComponentStatus, bool) {
 	for i := 0; i < len(arr); i++ {
 		itemInArr, found := predicator(arr[i], item)
 		if found {
@@ -103,7 +103,7 @@ func FindFirstPartial(arr []opsterv1.ComponentsStatus, item opsterv1.ComponentsS
 	return item, false
 }
 
-func Replace(remove opsterv1.ComponentsStatus, add opsterv1.ComponentsStatus, ssSlice []opsterv1.ComponentsStatus) []opsterv1.ComponentsStatus {
+func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	removedSlice := RemoveIt(remove, ssSlice)
 	fullSliced := append(removedSlice, add)
 	return fullSliced
