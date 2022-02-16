@@ -9,6 +9,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"strconv"
 	"strings"
 	"time"
 	//+kubebuilder:scaffold:imports
@@ -62,7 +63,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 			clusterClient, err := builders.NewOsClusterClient(&OpensearchCluster)
 			Expect(err).Should(BeNil())
 			indexName := "index-test-0001"
-			indexSettings := strings.NewReader("{\"settings\":{\"index\":{\"number_of_shards\": " + string(dataNodesSize) + "1,\"number_of_replicas\": 0},\"routing\":{\"allocation\":{\"total_shards_per_node\": 1}}}}")
+			indexSettings := strings.NewReader("{\"settings\":{\"index\":{\"number_of_shards\": " + strconv.Itoa(dataNodesSize) + "1,\"number_of_replicas\": 0},\"routing\":{\"allocation\":{\"total_shards_per_node\": 1}}}}")
 			services.CreateIndex(nil, clusterClient, indexName, indexSettings)
 			newRep := OpensearchCluster.Spec.NodePools[0].Replicas - 1
 			OpensearchCluster.Spec.NodePools[0].Replicas = newRep
