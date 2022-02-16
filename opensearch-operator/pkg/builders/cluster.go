@@ -28,31 +28,31 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 	//disk := fmt.Sprint(cr.Spec.Masters.DiskSize)
 
 	rolesMap := map[string]string{
-		"master":                "",
-		"data":                  "",
-		"data_content":          "",
-		"data_hot":              "",
-		"data_warm":             "",
-		"data_cold":             "",
-		"data_frozen":           "",
-		"ingest":                "",
-		"ml":                    "",
-		"remote_cluster_client": "",
-		"transform":             "",
+		"master": "",
+		"data":   "",
+		//"data_content":          "",
+		//"data_hot":              "",
+		//"data_warm":             "",
+		//"data_cold":             "",
+		//"data_frozen":           "",
+		"ingest": "",
+		//"ml":                    "",
+		//"remote_cluster_client": "",
+		//"transform":             "",
 	}
 
 	rolesSlice := []string{
 		"master",
 		"data",
-		"data_content",
-		"data_hot",
-		"data_warm",
-		"data_cold",
-		"data_frozen",
+		//"data_content",
+		//"data_hot",
+		//"data_warm",:
+		//"data_cold",
+		//"data_frozen",
 		"ingest",
-		"ml",
-		"remote_cluster_client",
-		"transform",
+		//"ml",
+		//"remote_cluster_client",
+		//"transform",
 	}
 
 	for i := 0; i < len(rolesSlice); i++ {
@@ -166,46 +166,46 @@ func NewSTSForCR(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool) *sts.St
 									Value:     rolesMap["ingest"],
 									ValueFrom: nil,
 								},
-								{
-									Name:      "node.remote_cluster_client",
-									Value:     rolesMap["remote_cluster_client"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_content",
-									Value:     rolesMap["data_content"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_hot",
-									Value:     rolesMap["data_hot"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_warm",
-									Value:     rolesMap["data_warm"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_cold",
-									Value:     rolesMap["data_cold"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.data_frozen",
-									Value:     rolesMap["data_frozen"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.ml",
-									Value:     rolesMap["ml"],
-									ValueFrom: nil,
-								},
-								{
-									Name:      "node.transform",
-									Value:     rolesMap["transform"],
-									ValueFrom: nil,
-								},
+								//{
+								//	Name:      "node.remote_cluster_client",
+								//	Value:     rolesMap["remote_cluster_client"],
+								//	ValueFrom: nil,
+								//},
+								//{
+								//	Name:      "node.data_content",
+								//	Value:     rolesMap["data_content"],
+								//	ValueFrom: nil,
+								//},
+								//{
+								//	Name:      "node.data_hot",
+								//	Value:     rolesMap["data_hot"],
+								//	ValueFrom: nil,
+								//},
+								//{
+								//	Name:      "node.data_warm",
+								//	Value:     rolesMap["data_warm"],
+								//	ValueFrom: nil,
+								//},
+								//{
+								//	Name:      "node.data_cold",
+								//	Value:     rolesMap["data_cold"],
+								//	ValueFrom: nil,
+								//},
+								//{
+								//	Name:      "node.data_frozen",
+								//	Value:     rolesMap["data_frozen"],
+								//	ValueFrom: nil,
+								//},
+								//{
+								//	Name:      "node.ml",
+								//	Value:     rolesMap["ml"],
+								//	ValueFrom: nil,
+								//},
+								//{
+								//	Name:      "node.transform",
+								//	Value:     rolesMap["transform"],
+								//	ValueFrom: nil,
+								//},
 							},
 
 							Name:  cr.Name,

@@ -76,8 +76,8 @@ type ClusterSpec struct {
 type ClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Phase            string             `json:"phase,omitempty"`
-	ComponentsStatus []ComponentsStatus `json:"componentsStatus"`
+	Phase            string            `json:"phase,omitempty"`
+	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
 }
 
 //+kubebuilder:object:root=true
@@ -92,7 +92,7 @@ type OpenSearchCluster struct {
 	Status ClusterStatus `json:"status,omitempty"`
 }
 
-type ComponentsStatus struct {
+type ComponentStatus struct {
 	Component   string `json:"component,omitempty"`
 	Status      string `json:"status,omitempty"`
 	Description string `json:"description,omitempty"`

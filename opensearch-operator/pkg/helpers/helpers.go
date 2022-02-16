@@ -68,6 +68,31 @@ func getNamesInStruct(inter interface{}) []string {
 	return names
 }
 
+func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
+	for idx, v := range ssSlice {
+		if v == ss {
+			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
+		}
+	}
+	return ssSlice
+}
+
+func Remove(slice []opsterv1.ComponentStatus, componenet string) []opsterv1.ComponentStatus {
+	emptyStatus := opsterv1.ComponentStatus{
+		Component:   "",
+		Status:      "",
+		Description: "",
+	}
+	for i := 0; i < len(slice); i++ {
+		if slice[i].Component == componenet {
+			slice[i] = slice[len(slice)-1]    // Copy last element to index i.
+			slice[len(slice)-1] = emptyStatus // Erase last element (write zero value).
+			slice = slice[:len(slice)-1]
+		}
+
+	}
+	return slice
+}
 func FindFirstPartial(arr []opsterv1.ComponentsStatus, item opsterv1.ComponentsStatus, predicator func(opsterv1.ComponentsStatus, opsterv1.ComponentsStatus) (opsterv1.ComponentsStatus, bool)) (opsterv1.ComponentsStatus, bool) {
 	for i := 0; i < len(arr); i++ {
 		itemInArr, found := predicator(arr[i], item)
@@ -82,32 +107,6 @@ func Replace(remove opsterv1.ComponentsStatus, add opsterv1.ComponentsStatus, ss
 	removedSlice := RemoveIt(remove, ssSlice)
 	fullSliced := append(removedSlice, add)
 	return fullSliced
-}
-
-func RemoveIt(ss opsterv1.ComponentsStatus, ssSlice []opsterv1.ComponentsStatus) []opsterv1.ComponentsStatus {
-	for idx, v := range ssSlice {
-		if v == ss {
-			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
-		}
-	}
-	return ssSlice
-}
-
-func Remove(slice []opsterv1.ComponentsStatus, componenet string) []opsterv1.ComponentsStatus {
-	emptyStatus := opsterv1.ComponentsStatus{
-		Component:   "",
-		Status:      "",
-		Description: "",
-	}
-	for i := 0; i < len(slice); i++ {
-		if slice[i].Component == componenet {
-			slice[i] = slice[len(slice)-1]    // Copy last element to index i.
-			slice[len(slice)-1] = emptyStatus // Erase last element (write zero value).
-			slice = slice[:len(slice)-1]
-		}
-
-	}
-	return slice
 }
 
 // Find key in interface (recursively) and return value as interface
