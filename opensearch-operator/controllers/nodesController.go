@@ -34,7 +34,7 @@ func (r *ScalerReconciler) Reconcile(ctx context.Context, request ctrl.Request) 
 	var desireReplicaDiff = *r.StsFromEnv.Spec.Replicas - r.Instance.Spec.NodePools[r.Group].Replicas
 
 	group := fmt.Sprintf("Group-%d", r.Group)
-	componentStatus := opsterv1.ComponentsStatus{
+	componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
 		Description: group,
 	}
@@ -69,7 +69,7 @@ func (r *ScalerReconciler) increaseOneNode(ctx context.Context) (ctrl.Result, er
 	return ctrl.Result{}, nil
 }
 
-func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus opsterv1.ComponentsStatus) (ctrl.Result, error) {
+func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus opsterv1.ComponentStatus) (ctrl.Result, error) {
 	// -----  Now start add node ------
 	*r.StsFromEnv.Spec.Replicas--
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", r.StsFromEnv.ObjectMeta.Name, *r.StsFromEnv.Spec.Replicas)
@@ -82,7 +82,7 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 	return ctrl.Result{}, nil
 }
 
-func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opsterv1.ComponentsStatus) (ctrl.Result, error) {
+func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opsterv1.ComponentStatus) (ctrl.Result, error) {
 	clusterClient, err := builders.NewOsClusterClient(r.Instance)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -99,7 +99,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 	}
 	group := fmt.Sprintf("Group-%d", r.Group)
 	if excluded {
-		componentStatus := opsterv1.ComponentsStatus{
+		componentStatus := opsterv1.ComponentStatus{
 			Component:   "Scaler",
 			Status:      "Excluded",
 			Description: group,
@@ -109,7 +109,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 		return ctrl.Result{Requeue: true}, err
 	}
 
-	componentStatus := opsterv1.ComponentsStatus{
+	componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Running",
 		Description: group,
@@ -120,7 +120,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 	return ctrl.Result{Requeue: true}, err
 }
 
-func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1.ComponentsStatus) (ctrl.Result, error) {
+func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1.ComponentStatus) (ctrl.Result, error) {
 	// -----  Now start add node ------
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", r.StsFromEnv.ObjectMeta.Name, *r.StsFromEnv.Spec.Replicas-1)
 
@@ -139,7 +139,7 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 		return ctrl.Result{Requeue: true}, err
 	}
 	group := fmt.Sprintf("Group-%d", r.Group)
-	componentStatus := opsterv1.ComponentsStatus{
+	componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Drained",
 		Description: group,
@@ -150,7 +150,7 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 	return ctrl.Result{Requeue: true}, err
 }
 
-func getByDescriptionAndGroup(left opsterv1.ComponentsStatus, right opsterv1.ComponentsStatus) (opsterv1.ComponentsStatus, bool) {
+func getByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
 	if left.Description == right.Description && left.Component == left.Component {
 		return left, true
 	}
