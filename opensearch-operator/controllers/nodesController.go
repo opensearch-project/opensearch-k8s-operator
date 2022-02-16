@@ -77,9 +77,19 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 		r.Recorder.Event(r.Instance, "Normal", "failed to remove node ", fmt.Sprintf("Group-%d . Failed to remove node %s", r.Group, lastReplicaNodeName))
 		return ctrl.Result{Requeue: true}, err
 	}
-	r.Recorder.Event(r.Instance, "Normal", "added node ", fmt.Sprintf("Group-%d . removed node %s", r.Group, lastReplicaNodeName))
-	helpers.RemoveIt(currentStatus, r.Instance.Status.ComponentsStatus)
-	return ctrl.Result{}, nil
+	r.Recorder.Event(r.Instance, "Normal", "decrease node ", fmt.Sprintf("Group-%d . removed node %s", r.Group, lastReplicaNodeName))
+	r.Instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.Instance.Status.ComponentsStatus)
+	err := r.Status().Update(ctx, r.Instance)
+	clusterClient, err := builders.NewOsClusterClient(r.Instance)
+	if err != nil {
+		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%d . failed to remove node exclude %s", r.Group, lastReplicaNodeName))
+		return ctrl.Result{}, err
+	}
+	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	if !success || err != nil {
+		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%d . failed to remove node exclude %s", r.Group, lastReplicaNodeName))
+	}
+	return ctrl.Result{}, err
 }
 
 func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opsterv1.ComponentStatus) (ctrl.Result, error) {
@@ -104,8 +114,9 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 			Status:      "Excluded",
 			Description: group,
 		}
-		r.Recorder.Event(r.Instance, "Normal", "excluded node ", fmt.Sprintf("Group-%d . Failed to exclude node %s", r.Group, lastReplicaNodeName))
+		r.Recorder.Event(r.Instance, "Normal", "excluded node ", fmt.Sprintf("Group-%d .excluded node %s", r.Group, lastReplicaNodeName))
 		r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
+		err = r.Status().Update(ctx, r.Instance)
 		return ctrl.Result{Requeue: true}, err
 	}
 
