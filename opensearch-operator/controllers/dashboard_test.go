@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	sts "k8s.io/api/apps/v1"
+	"opensearch.opster.io/pkg/helpers"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -27,7 +28,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 		interval          = time.Second * 1
 	)
 	var (
-		OpensearchCluster = ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
+		OpensearchCluster = helpers.ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
 		cm                = corev1.ConfigMap{}
 		//	nodePool          = sts.StatefulSet{}
 		service = corev1.Service{}
@@ -38,17 +39,17 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 
 	/// ------- Creation Check phase -------
 
-	ns := ComposeNs(ClusterName)
+	ns := helpers.ComposeNs(ClusterName)
 	Context("When create OpenSearch CRD - dash", func() {
 		It("should create cluster NS", func() {
-			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.GetK8sClient().Create(context.Background(), &OpensearchCluster)).Should(Succeed())
 			By("Create cluster ns ")
 			Eventually(func() bool {
 
-				if !IsNsCreated(k8sClient, ns) {
+				if !helpers.IsNsCreated(helpers.GetK8sClient(), ns) {
 					return false
 				}
-				if !IsClusterCreated(k8sClient, OpensearchCluster) {
+				if !helpers.IsClusterCreated(helpers.GetK8sClient(), OpensearchCluster) {
 					return false
 				}
 				return true
@@ -68,13 +69,13 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				fmt.Println("\n DAShBOARD - START - 2")
 				//// -------- Dashboard tests ---------
 				if OpensearchCluster.Spec.Dashboards.Enable {
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards"}, &deploy); err != nil {
+					if err := helpers.GetK8sClient().Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards"}, &deploy); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: "opensearch-dashboards"}, &cm); err != nil {
+					if err := helpers.GetK8sClient().Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: "opensearch-dashboards"}, &cm); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards-svc"}, &service); err != nil {
+					if err := helpers.GetK8sClient().Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards-svc"}, &service); err != nil {
 						return false
 					}
 				}
@@ -88,12 +89,12 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 	Context("When deleting OpenSearch CRD ", func() {
 		It("should delete cluster NS and resources", func() {
 
-			Expect(k8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.GetK8sClient().Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
 
 			By("Delete cluster ns ")
 			Eventually(func() bool {
 				fmt.Println("\n check ns dashboard")
-				return IsNsDeleted(k8sClient, ns)
+				return helpers.IsNsDeleted(helpers.GetK8sClient(), ns)
 			}, timeout, interval).Should(BeTrue())
 		})
 	})

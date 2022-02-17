@@ -19,7 +19,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 // +kubebuilder:docs-gen:collapse=Apache License
-package controllers
+package helpers
 
 import (
 	"context"
@@ -27,6 +27,7 @@ import (
 	"github.com/onsi/gomega/gexec"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/controllers"
 	"path/filepath"
 	"testing"
 	"time"
@@ -54,8 +55,8 @@ Now, let's go through the code generated.
 */
 
 var (
-	k8sClient client.Client // You'll be using this client in your tests.
-	testEnv   *envtest.Environment
+	K8sClient client.Client // You'll be using this client in your tests.
+	TestEnv   *envtest.Environment
 )
 
 func TestAPIs(t *testing.T) {
@@ -78,12 +79,12 @@ var _ = BeforeSuite(func() {
 
 	ctx := context.Background()
 	By("bootstrappifng test environment")
-	testEnv = &envtest.Environment{
+	TestEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 
-	cfg, err := testEnv.Start()
+	cfg, err := TestEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	fmt.Println(err)
 	Expect(cfg).NotTo(BeNil())
@@ -96,16 +97,16 @@ var _ = BeforeSuite(func() {
 	err = opsterv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	K8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
-	Expect(k8sClient).NotTo(BeNil())
+	Expect(K8sClient).NotTo(BeNil())
 
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme: scheme.Scheme,
 	})
 	Expect(err).ToNot(HaveOccurred())
 
-	err = (&OpenSearchClusterReconciler{
+	err = (&controllers.OpenSearchClusterReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: scheme.Scheme,
 		//	Instance: &OpensearchCluster,
@@ -119,14 +120,22 @@ var _ = BeforeSuite(func() {
 		Expect(err).ToNot(HaveOccurred(), "failed to run manager")
 	}()
 
-	k8sClient = k8sManager.GetClient()
-	Expect(k8sClient).ToNot(BeNil())
+	K8sClient = k8sManager.GetClient()
+	Expect(K8sClient).ToNot(BeNil())
 
 }, 60)
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
 	gexec.KillAndWait(5 * time.Second)
-	err := testEnv.Stop()
+	err := TestEnv.Stop()
 	Expect(err).ToNot(HaveOccurred())
 })
+
+func GetK8sClient() client.Client {
+	return K8sClient
+}
+
+func GetTestEnv() *envtest.Environment {
+	return TestEnv
+}
