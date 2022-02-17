@@ -60,8 +60,14 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &OpensearchCluster)).Should(Succeed())
 			dataNodesSize := DataNodeSize(OpensearchCluster)
-			clusterClient, err := builders.NewOsClusterClient(&OpensearchCluster)
-			Expect(err).Should(BeNil())
+			var clusterClient *services.OsClusterClient = nil
+			var err error = nil
+			By("Creating open search client ")
+			Eventually(func() error {
+				clusterClient, err = builders.NewOsClusterClient(&OpensearchCluster)
+				return err
+
+			}, time.Minute*5, 2*time.Second).Should(BeNil())
 			indexName := "index-test-0001"
 			indexSettings := strings.NewReader("{\"settings\":{\"index\":{\"number_of_shards\": " + strconv.Itoa(dataNodesSize) + "1,\"number_of_replicas\": 0},\"routing\":{\"allocation\":{\"total_shards_per_node\": 1}}}}")
 			services.CreateIndex(nil, clusterClient, indexName, indexSettings)
