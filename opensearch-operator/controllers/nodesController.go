@@ -80,6 +80,10 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 	r.Recorder.Event(r.Instance, "Normal", "decrease node ", fmt.Sprintf("Group-%d . removed node %s", r.Group, lastReplicaNodeName))
 	r.Instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.Instance.Status.ComponentsStatus)
 	err := r.Status().Update(ctx, r.Instance)
+	if err != nil {
+		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%d . failed to remove node exclude %s", r.Group, lastReplicaNodeName))
+		return ctrl.Result{}, err
+	}
 	clusterClient, err := builders.NewOsClusterClient(r.Instance)
 	if err != nil {
 		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%d . failed to remove node exclude %s", r.Group, lastReplicaNodeName))

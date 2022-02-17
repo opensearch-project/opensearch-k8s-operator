@@ -158,7 +158,7 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 			mobj = subPath
 		}
 	}
-	val, ok := mobj[keys[len(keys)-1]].(interface{})
+	val, ok := mobj[keys[len(keys)-1]]
 	return val, ok
 }
 
