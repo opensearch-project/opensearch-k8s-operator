@@ -24,6 +24,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 
@@ -65,8 +66,8 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	r.Logger.Info("Reconciling OpenSearchCluster")
 	myFinalizerName := "Opster"
 
-	r.Instance = &opsterv1.OpenSearchCluster{}
-	err := r.Get(context.TODO(), req.NamespacedName, r.Instance)
+	instance := &opsterv1.OpenSearchCluster{}
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// object not found, could have been deleted after
@@ -79,9 +80,16 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	/// ------ check if CRD has been deleted ------ ///
 	///	if ns deleted, delete the associated resources ///
 	if r.Instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		if !helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
-			controllerutil.AddFinalizer(r.Instance, myFinalizerName)
-			if err := r.Update(ctx, r.Instance); err != nil {
+		if !helpers.ContainsString(instance.GetFinalizers(), myFinalizerName) {
+			// Use RetryOnConflict to update finalizer to handle any changes to resource
+			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
+					return err
+				}
+				controllerutil.AddFinalizer(instance, myFinalizerName)
+				return r.Update(ctx, instance)
+			})
+			if err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -96,8 +104,14 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			}
 
 			// remove our finalizer from the list and update it.
-			controllerutil.RemoveFinalizer(r.Instance, myFinalizerName)
-			if err := r.Update(ctx, r.Instance); err != nil {
+			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
+					return err
+				}
+				controllerutil.RemoveFinalizer(instance, myFinalizerName)
+				return r.Update(ctx, instance)
+			})
+			if err != nil {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
