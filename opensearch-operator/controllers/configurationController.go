@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
 	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
@@ -31,18 +32,22 @@ func (r *ConfigurationReconciler) Reconcile(controllerContext *ControllerContext
 	configMapName := clusterName + "-config"
 
 	// Add some default config for the security plugin
-	controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.audit.type: internal_opensearch\n"+
-		"plugins.security.allow_default_init_securityindex: true\n"+ // TODO: Remove after securityconfig is managed by controller
-		"plugins.security.enable_snapshot_restore_privilege: true\n"+
-		"plugins.security.check_snapshot_restore_write_privileges: true\n"+
-		`plugins.security.restapi.roles_enabled: ["all_access", "security_rest_api_access"]`+
-		"\nplugins.security.system_indices.enabled: true\n"+
-		`plugins.security.system_indices.indices: [".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]`)
+	controllerContext.AddConfig("plugins.security.audit.type", "internal_opensearch")
+	controllerContext.AddConfig("plugins.security.allow_default_init_securityindex", "true") // TODO: Remove after securityconfig is managed by controller
+	controllerContext.AddConfig("plugins.security.enable_snapshot_restore_privilege", "true")
+	controllerContext.AddConfig("plugins.security.check_snapshot_restore_write_privileges", "true")
+	controllerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
+	controllerContext.AddConfig("plugins.security.system_indices.enabled", "true")
+	controllerContext.AddConfig("plugins.security.system_indices.indices", `[".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]`)
 
 	cm := corev1.ConfigMap{}
 	// TODO: Update if exists
 	if err := r.Client.Get(context.TODO(), client.ObjectKey{Name: configMapName, Namespace: namespace}, &cm); err != nil {
-		data := strings.Join(controllerContext.OpenSearchConfig, "\n")
+		var sb strings.Builder
+		for key, value := range controllerContext.OpenSearchConfig {
+			sb.WriteString(fmt.Sprintf("%s: %s\n", key, value))
+		}
+		data := sb.String()
 		cm = corev1.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      configMapName,

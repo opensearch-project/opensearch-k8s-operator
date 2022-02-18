@@ -63,7 +63,9 @@ var _ = Describe("Configuration Controller", func() {
 				Recorder: &helpers.MockEventRecorder{},
 			}
 			controllerContext := NewControllerContext()
-			controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "foobar")
+			controllerContext.AddConfig("foo", "bar")
+			controllerContext.AddConfig("bar", "something")
+			controllerContext.AddConfig("bar", "baz")
 			_, err = underTest.Reconcile(&controllerContext)
 			Expect(err).ToNot(HaveOccurred())
 
@@ -77,7 +79,7 @@ var _ = Describe("Configuration Controller", func() {
 				if !exists {
 					return false
 				}
-				return strings.Contains(data, "foobar")
+				return strings.Contains(data, "foo: bar\n") && strings.Contains(data, "bar: baz\n")
 			}, timeout, interval).Should(BeTrue())
 
 		})

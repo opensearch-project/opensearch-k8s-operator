@@ -38,10 +38,10 @@ func (r *TlsReconciler) Reconcile(controllerContext *ControllerContext) (*opster
 	}
 	if len(nodesDn) > 0 {
 		dnList := strings.Join(nodesDn, "\",\"")
-		controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, fmt.Sprintf("plugins.security.nodes_dn: [\"%s\"]\n", dnList))
+		controllerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"%s\"]", dnList))
 	}
 	// Temporary until securityconfig controller is working
-	controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.allow_unsafe_democertificates: true")
+	controllerContext.AddConfig("plugins.security.allow_unsafe_democertificates", "true")
 	return nil, nil
 }
 
@@ -116,15 +116,15 @@ func (r *TlsReconciler) HandleInterface(name string, config *opsterv1.TlsInterfa
 	}
 	// Extend opensearch.yml
 	if name == "transport" {
-		controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.ssl.transport.pemcert_filepath: tls-transport/tls.crt\n"+
-			"plugins.security.ssl.transport.pemkey_filepath: tls-transport/tls.key\n"+
-			"plugins.security.ssl.transport.pemtrustedcas_filepath: tls-transport/ca.crt\n"+
-			"plugins.security.ssl.transport.enforce_hostname_verification: false\n")
+		controllerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", "tls-transport/tls.crt")
+		controllerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", "tls-transport/tls.key")
+		controllerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", "tls-transport/ca.crt")
+		controllerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "false") // TODO: Enable with per-node certificates
 	} else if name == "http" {
-		controllerContext.OpenSearchConfig = append(controllerContext.OpenSearchConfig, "plugins.security.ssl.http.enabled: true\n"+
-			"plugins.security.ssl.http.pemcert_filepath: tls-http/tls.crt\n"+
-			"plugins.security.ssl.http.pemkey_filepath: tls-http/tls.key\n"+
-			"plugins.security.ssl.http.pemtrustedcas_filepath: tls-http/ca.crt\n")
+		controllerContext.AddConfig("plugins.security.ssl.http.enabled", "true")
+		controllerContext.AddConfig("plugins.security.ssl.http.pemcert_filepath", "tls-http/tls.crt")
+		controllerContext.AddConfig("plugins.security.ssl.http.pemkey_filepath", "tls-http/tls.key")
+		controllerContext.AddConfig("plugins.security.ssl.http.pemtrustedcas_filepath", "tls-http/ca.crt")
 	}
 	return nil
 }
