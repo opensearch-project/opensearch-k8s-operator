@@ -6,8 +6,18 @@ import (
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 	"strings"
+	"testing"
 	"time"
 )
+
+func TestDataService(t *testing.T) {
+	RegisterFailHandler(Fail)
+	/*RunSpecsWithDefaultAndCustomReporters(t,
+	"Controller Suite",
+	[]Reporter{printer.NewlineReporter{}})*/
+	RunSpecs(t, "Tests")
+
+}
 
 var _ = Describe("OpensearchCLuster data service tests", func() {
 	//	ctx := context.Background()
