@@ -5,19 +5,9 @@ import (
 	. "github.com/onsi/gomega"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"strings"
-	"testing"
 	"time"
 )
-
-func TestOsDataService(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
-
-}
 
 var _ = Describe("OpensearchCLuster data service tests", func() {
 	//	ctx := context.Background()
