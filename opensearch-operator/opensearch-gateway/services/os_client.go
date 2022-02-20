@@ -2,9 +2,11 @@ package services
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
+	"net/http"
 	"opensearch.opster.io/opensearch-gateway/responses"
 	"strings"
 )
@@ -14,7 +16,19 @@ type OsClusterClient struct {
 	MainPage responses.MainResponse
 }
 
-func NewOsClusterClient(config opensearch.Config) (*OsClusterClient, error) {
+func NewOsClusterClient(clusterUrl string, username string, password string) (*OsClusterClient, error) {
+	config := opensearch.Config{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
+		Addresses: []string{clusterUrl},
+		Username:  username,
+		Password:  password,
+	}
+	return NewOsClusterClientFromConfig(config)
+}
+
+func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, error) {
 	service := new(OsClusterClient)
 	client, err := opensearch.NewClient(config)
 	if err == nil {

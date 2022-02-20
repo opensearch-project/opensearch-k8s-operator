@@ -1,12 +1,8 @@
 package builders
 
 import (
-	"crypto/tls"
 	"fmt"
-	"github.com/opensearch-project/opensearch-go"
-	"net/http"
 	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/helpers"
 
 	sts "k8s.io/api/apps/v1"
@@ -391,16 +387,10 @@ func NewCmForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
 	}
 }
 
-func NewOsClusterClient(r *opsterv1.OpenSearchCluster) (*services.OsClusterClient, error) {
-	clusterUrl := fmt.Sprintf("https://%s-svc.%s:%d", r.Spec.General.ServiceName, r.Namespace, r.Spec.General.HttpPort)
-	config := opensearch.Config{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-		Addresses: []string{clusterUrl},
-		Username:  "admin", // For testing only. Don't store credentials in code.
-		Password:  "admin",
-	}
-	return services.NewOsClusterClient(config)
+func UsernameAndPassword(r *opsterv1.OpenSearchCluster) (string, string) {
+	return "admin", "admin"
+}
 
+func ClusterUrl(r *opsterv1.OpenSearchCluster) string {
+	return fmt.Sprintf("https://%s-svc.%s:%d", r.Spec.General.ServiceName, r.Spec.General.ClusterName, r.Spec.General.HttpPort)
 }

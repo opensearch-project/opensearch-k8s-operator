@@ -84,7 +84,8 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%d . failed to remove node exclude %s", r.Group, lastReplicaNodeName))
 		return ctrl.Result{}, err
 	}
-	clusterClient, err := builders.NewOsClusterClient(r.Instance)
+	username, password := builders.UsernameAndPassword(r.Instance)
+	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
 	if err != nil {
 		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%d . failed to remove node exclude %s", r.Group, lastReplicaNodeName))
 		return ctrl.Result{}, err
@@ -97,7 +98,8 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 }
 
 func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opsterv1.ComponentStatus) (ctrl.Result, error) {
-	clusterClient, err := builders.NewOsClusterClient(r.Instance)
+	username, password := builders.UsernameAndPassword(r.Instance)
+	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -139,7 +141,8 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 	// -----  Now start add node ------
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", r.StsFromEnv.ObjectMeta.Name, *r.StsFromEnv.Spec.Replicas-1)
 
-	clusterClient, err := builders.NewOsClusterClient(r.Instance)
+	username, password := builders.UsernameAndPassword(r.Instance)
+	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

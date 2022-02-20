@@ -6,11 +6,29 @@ import (
 	. "github.com/onsi/gomega"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"strings"
+	"testing"
 	"time"
 )
 
-var _ = Describe("OpensearchCLuster Controller", func() {
+func TestOsClient(t *testing.T) {
+	RegisterFailHandler(Fail)
+	RunSpecsWithDefaultAndCustomReporters(t,
+		"Controller Suite",
+		[]Reporter{printer.NewlineReporter{}})
+
+}
+
+var _ = BeforeSuite(func() {
+	helpers.BeforeSuiteLogic()
+
+}, 60)
+
+var _ = AfterSuite(func() {
+	helpers.AfterSuiteLogic()
+})
+var _ = Describe("OpensearchCLuster API", func() {
 	//	ctx := context.Background()
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
@@ -21,56 +39,47 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 		interval    = time.Second * 1
 	)
 	var (
-		OpensearchCluster = helpers.ComposeOpensearchCrd(ClusterName, NameSpace)
-		/*nodePool          = sts.StatefulSet{}
-		cluster2          = opsterv1.OpenSearchCluster{}*/
+		OpensearchCluster                  = helpers.ComposeOpensearchCrd(ClusterName, NameSpace)
+		ClusterClient     *OsClusterClient = nil
 	)
 
 	/// ------- Creation Check phase -------
 
 	ns := helpers.ComposeNs(ClusterName)
-	Context("When create OpenSearch CRD - nodes", func() {
-		It("should create cluster NS and CRD instance", func() {
-			Expect(helpers.GetK8sClient().Create(context.Background(), &OpensearchCluster)).Should(Succeed())
-			By("Create cluster ns ")
-			Eventually(func() bool {
-				if !helpers.IsNsCreated(helpers.GetK8sClient(), ns) {
-					return false
-				}
-				if !helpers.IsClusterCreated(helpers.GetK8sClient(), OpensearchCluster) {
-					return false
-				}
-				return true
-			}, timeout, interval).Should(BeTrue())
-		})
+	BeforeEach(func() {
+		By("Creating open search client ")
+		Eventually(func() bool {
+			var err error = nil
+			if !helpers.IsNsCreated(helpers.K8sClient, ns) {
+				return false
+			}
+			if !helpers.IsClusterCreated(helpers.K8sClient, OpensearchCluster) {
+				return false
+			}
+			if !helpers.IsNsCreated(helpers.K8sClient, ns) {
+				return false
+			}
+			if !helpers.IsClusterCreated(helpers.K8sClient, OpensearchCluster) {
+				return false
+			}
+			ClusterClient, err = NewOsClusterClient(builders.ClusterUrl(&OpensearchCluster), "admin", "admin")
+			if err != nil {
+				return false
+			}
+			return true
+		}, timeout, interval).Should(BeTrue())
 	})
 
 	/// ------- Tests logic Check phase -------
 
 	Context("Test opensrearch api are as expected", func() {
 		It("Cat Nodes", func() {
-			var clusterClient *OsClusterClient = nil
-			var err error = nil
-			By("Creating open search client ")
-			Eventually(func() error {
-				clusterClient, err = builders.NewOsClusterClient(&OpensearchCluster)
-				return err
-
-			}, time.Minute*5, 2*time.Second).Should(BeNil())
-			response, err := clusterClient.CatNodes()
+			response, err := ClusterClient.CatNodes()
 			Expect(err).Should(BeNil())
 			Expect(response).ShouldNot(BeEmpty())
 			Expect(response.Ip).ShouldNot(BeEmpty())
 		})
 		It("Test Nodes Stats", func() {
-			var clusterClient *OsClusterClient = nil
-			var err error = nil
-			By("Creating open search client ")
-			Eventually(func() error {
-				clusterClient, err = builders.NewOsClusterClient(&OpensearchCluster)
-				return err
-
-			}, time.Minute*5, 2*time.Second).Should(BeNil())
 			mapping := strings.NewReader(`{
 											 "settings": {
 											   "index": {
@@ -79,8 +88,8 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 												  }
 											 }`)
 			indexName := "cat-indices-test"
-			CreateIndex(clusterClient, indexName, mapping)
-			response, err := clusterClient.CatIndices()
+			CreateIndex(ClusterClient, indexName, mapping)
+			response, err := ClusterClient.CatIndices()
 			Expect(err).Should(BeNil())
 			Expect(response).ShouldNot(BeEmpty())
 			indexExists := false
@@ -91,17 +100,9 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				}
 			}
 			Expect(indexExists).Should(BeTrue())
-			DeleteIndex(clusterClient, indexName)
+			DeleteIndex(ClusterClient, indexName)
 		})
 		It("Test Cat Indices", func() {
-			var clusterClient *OsClusterClient = nil
-			var err error = nil
-			By("Creating open search client ")
-			Eventually(func() error {
-				clusterClient, err = builders.NewOsClusterClient(&OpensearchCluster)
-				return err
-
-			}, time.Minute*5, 2*time.Second).Should(BeNil())
 			mapping := strings.NewReader(`{
 											 "settings": {
 											   "index": {
@@ -110,8 +111,8 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 												  }
 											 }`)
 			indexName := "cat-indices-test"
-			CreateIndex(clusterClient, indexName, mapping)
-			response, err := clusterClient.CatIndices()
+			CreateIndex(ClusterClient, indexName, mapping)
+			response, err := ClusterClient.CatIndices()
 			Expect(err).Should(BeNil())
 			Expect(response).ShouldNot(BeEmpty())
 			indexExists := false
@@ -122,17 +123,9 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				}
 			}
 			Expect(indexExists).Should(BeTrue())
-			DeleteIndex(clusterClient, indexName)
+			DeleteIndex(ClusterClient, indexName)
 		})
 		It("Test Cat Shards", func() {
-			var clusterClient *OsClusterClient = nil
-			var err error = nil
-			By("Creating open search client ")
-			Eventually(func() error {
-				clusterClient, err = builders.NewOsClusterClient(&OpensearchCluster)
-				return err
-
-			}, time.Minute*5, 2*time.Second).Should(BeNil())
 			mapping := strings.NewReader(`{
 											 "settings": {
 											   "index": {
@@ -142,10 +135,10 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 												  }
 											 }`)
 			indexName := "cat-shards-test"
-			CreateIndex(clusterClient, indexName, mapping)
+			CreateIndex(ClusterClient, indexName, mapping)
 
 			var headers = make([]string, 0)
-			response, err := clusterClient.CatShards(headers)
+			response, err := ClusterClient.CatShards(headers)
 			Expect(err).Should(BeNil())
 			Expect(response).ShouldNot(BeEmpty())
 			indexExists := false
@@ -156,28 +149,20 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				}
 			}
 			Expect(indexExists).Should(BeTrue())
-			DeleteIndex(clusterClient, indexName)
+			DeleteIndex(ClusterClient, indexName)
 		})
 		It("Test Put Cluster Settings", func() {
-			var clusterClient *OsClusterClient = nil
-			var err error = nil
-			By("Creating open search client ")
-			Eventually(func() error {
-				clusterClient, err = builders.NewOsClusterClient(&OpensearchCluster)
-				return err
-
-			}, time.Minute*5, 2*time.Second).Should(BeNil())
 			settingsJson := `{
  					 "transient" : {
     					"indices.recovery.max_bytes_per_sec" : "20mb"
   						}
 					}`
 
-			response, err := clusterClient.PutClusterSettings(settingsJson)
+			response, err := ClusterClient.PutClusterSettings(settingsJson)
 			Expect(err).ShouldNot(BeNil())
 			Expect(response.Transient).ShouldNot(BeEmpty())
 
-			response, err = clusterClient.GetClusterSettings()
+			response, err = ClusterClient.GetClusterSettings()
 			Expect(err).ShouldNot(BeNil())
 			Expect(response.Transient).ShouldNot(BeEmpty())
 
@@ -186,7 +171,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
     					"indices.recovery.max_bytes_per_sec" : null
   						}
 					}`
-			response, err = clusterClient.PutClusterSettings(settingsJson)
+			response, err = ClusterClient.PutClusterSettings(settingsJson)
 			Expect(err).ShouldNot(BeNil())
 			indicesSettings := response.Transient["indices"]
 			if indicesSettings == nil {
@@ -203,11 +188,11 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 	Context("When deleting OpenSearch CRD ", func() {
 		It("should delete cluster NS and resources", func() {
 
-			Expect(helpers.GetK8sClient().Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.K8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
 
 			By("Delete cluster ns ")
 			Eventually(func() bool {
-				return helpers.IsNsDeleted(helpers.GetK8sClient(), ns)
+				return helpers.IsNsDeleted(helpers.K8sClient, ns)
 			}, timeout, interval).Should(BeTrue())
 		})
 	})

@@ -40,13 +40,13 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 	ns := helpers.ComposeNs(ClusterName)
 	Context("When create OpenSearch CRD - nodes", func() {
 		It("should create cluster NS and CRD instance", func() {
-			Expect(helpers.GetK8sClient().Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.K8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
 			By("Create cluster ns ")
 			Eventually(func() bool {
-				if !helpers.IsNsCreated(helpers.GetK8sClient(), ns) {
+				if !helpers.IsNsCreated(helpers.K8sClient, ns) {
 					return false
 				}
-				if !helpers.IsClusterCreated(helpers.GetK8sClient(), OpensearchCluster) {
+				if !helpers.IsClusterCreated(helpers.K8sClient, OpensearchCluster) {
 					return false
 				}
 				return true
@@ -58,36 +58,37 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 
 	Context("When changing Opensearch NodePool Replicas", func() {
 		It("should to add new status about the operation", func() {
-			Expect(helpers.GetK8sClient().Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.K8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &OpensearchCluster)).Should(Succeed())
 			dataNodesSize := helpers.DataNodeSize(OpensearchCluster)
 			var clusterClient *services.OsClusterClient = nil
 			var err error = nil
 			By("Creating open search client ")
 			Eventually(func() error {
-				clusterClient, err = builders.NewOsClusterClient(&OpensearchCluster)
+				username, password := builders.UsernameAndPassword(&OpensearchCluster)
+				clusterClient, err = services.NewOsClusterClient(builders.ClusterUrl(&OpensearchCluster), username, password)
 				return err
 
 			}, time.Minute*5, 2*time.Second).Should(BeNil())
 			indexName := "index-test-0001"
 			indexSettings := strings.NewReader("{\"settings\":{\"index\":{\"number_of_shards\": " + strconv.Itoa(dataNodesSize) + "1,\"number_of_replicas\": 0},\"routing\":{\"allocation\":{\"total_shards_per_node\": 1}}}}")
-			services.CreateIndex(nil, clusterClient, indexName, indexSettings)
+			services.CreateIndex(clusterClient, indexName, indexSettings)
 			newRep := OpensearchCluster.Spec.NodePools[0].Replicas - 1
 			OpensearchCluster.Spec.NodePools[0].Replicas = newRep
 
 			status := len(OpensearchCluster.Status.ComponentsStatus)
-			Expect(helpers.GetK8sClient().Update(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.K8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
 			indexSettings = strings.NewReader("{\"index\" : {\"routing\":{\"allocation\":{\"total_shards_per_node\":2}}}}")
-			services.UpdateIndexSettings(nil, clusterClient, "index-test-0001", indexSettings)
+			services.UpdateIndexSettings(clusterClient, "index-test-0001", indexSettings)
 
 			By("ComponentsStatus checker ")
 			Eventually(func() bool {
-				if err := helpers.GetK8sClient().Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &cluster2); err != nil {
+				if err := helpers.K8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &cluster2); err != nil {
 					return false
 				}
 				newStatuss := len(cluster2.Status.ComponentsStatus)
 				return status != newStatuss
 			}, time.Second*60, 30*time.Millisecond).Should(BeFalse())
-			services.DeleteIndex(nil, clusterClient, indexName)
+			services.DeleteIndex(clusterClient, indexName)
 		})
 	})
 
@@ -95,7 +96,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 		It("should implement new number of replicas to the cluster", func() {
 			By("check replicas")
 			Eventually(func() bool {
-				if err := helpers.GetK8sClient().Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
+				if err := helpers.K8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
 					return false
 				}
 				if *nodePool.Spec.Replicas != cluster2.Spec.NodePools[0].Replicas {
@@ -111,11 +112,11 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 	Context("When deleting OpenSearch CRD ", func() {
 		It("should delete cluster NS and resources", func() {
 
-			Expect(helpers.GetK8sClient().Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.K8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
 
 			By("Delete cluster ns ")
 			Eventually(func() bool {
-				return helpers.IsNsDeleted(helpers.GetK8sClient(), ns)
+				return helpers.IsNsDeleted(helpers.K8sClient, ns)
 			}, timeout, interval).Should(BeTrue())
 		})
 	})

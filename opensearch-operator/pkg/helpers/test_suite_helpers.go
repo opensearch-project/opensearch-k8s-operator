@@ -2,11 +2,78 @@ package helpers
 
 import (
 	"context"
+	"fmt"
+	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/gomega"
+	"github.com/onsi/gomega/gexec"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"path/filepath"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/envtest"
+	logf "sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"time"
 )
+
+var (
+	K8sClient client.Client // You'll be using this client in your tests.
+	testEnv   *envtest.Environment
+)
+
+func BeforeSuiteLogic() {
+	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	//logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
+
+	ctx := context.Background()
+	By("bootstrappifng test environment")
+	testEnv = &envtest.Environment{
+		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
+		ErrorIfCRDPathMissing: true,
+	}
+
+	cfg, err := testEnv.Start()
+	Expect(err).NotTo(HaveOccurred())
+	fmt.Println(err)
+	Expect(cfg).NotTo(BeNil())
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	err = scheme.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+	err = opsterv1.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
+
+	K8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	Expect(err).NotTo(HaveOccurred())
+	Expect(K8sClient).NotTo(BeNil())
+
+	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+		Scheme: scheme.Scheme,
+	})
+	Expect(err).ToNot(HaveOccurred())
+
+	go func() {
+		defer GinkgoRecover()
+		err = k8sManager.Start(ctx)
+		Expect(err).ToNot(HaveOccurred(), "failed to run manager")
+	}()
+
+	K8sClient = k8sManager.GetClient()
+	Expect(K8sClient).ToNot(BeNil())
+
+}
+
+func AfterSuiteLogic() {
+	By("tearing down the test environment")
+	gexec.KillAndWait(5 * time.Second)
+	err := testEnv.Stop()
+	Expect(err).ToNot(HaveOccurred())
+}
 
 func IsCreated(ctx context.Context, k8sClient client.Client, obj client.Object) bool {
 	if err := k8sClient.Get(ctx, client.ObjectKey{
