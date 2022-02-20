@@ -19,15 +19,6 @@ func TestOsDataService(t *testing.T) {
 
 }
 
-var _ = BeforeSuite(func() {
-	helpers.BeforeSuiteLogic()
-
-}, 60)
-
-var _ = AfterSuite(func() {
-	helpers.AfterSuiteLogic()
-})
-
 var _ = Describe("OpensearchCLuster data service tests", func() {
 	//	ctx := context.Background()
 

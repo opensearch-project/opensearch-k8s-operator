@@ -6,28 +6,10 @@ import (
 	. "github.com/onsi/gomega"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"strings"
-	"testing"
 	"time"
 )
 
-func TestOsClient(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
-
-}
-
-var _ = BeforeSuite(func() {
-	helpers.BeforeSuiteLogic()
-
-}, 60)
-
-var _ = AfterSuite(func() {
-	helpers.AfterSuiteLogic()
-})
 var _ = Describe("OpensearchCLuster API", func() {
 	//	ctx := context.Background()
 
