@@ -1,0 +1,18 @@
+apiVersion: k3d.io/v1alpha2
+kind: Simple
+servers: 1
+agents: 1
+volumes:
+  - volume: /etc/os-release:/etc/os-release
+registries:
+  create: true
+options:
+  k3s:
+    extraServerArgs:
+      - --kube-scheduler-arg=v=2
+      - --log=/var/log/k3s.log
+      - --alsologtostderr
+    extraAgentArgs:
+      - --kubelet-arg=v=2
+      - --log=/var/log/k3s.log
+      - --alsologtostderr
