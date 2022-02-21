@@ -11,7 +11,13 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/portforward"
+	"k8s.io/client-go/transport/spdy"
+	"net/http"
+	"net/url"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"os"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,25 +28,26 @@ import (
 )
 
 var (
-	K8sClient client.Client // You'll be using this client in your tests.
-	testEnv   *envtest.Environment
+	K8sClient  client.Client // You'll be using this client in your tests.
+	testEnv    *envtest.Environment
+	RestConfig *rest.Config
 )
 
 func BeforeSuiteLogic() {
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	//logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
 
-	ctx := context.Background()
+	ctx := ctrl.SetupSignalHandler()
 	By("bootstrappifng test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
-
-	cfg, err := testEnv.Start()
+	var err error = nil
+	RestConfig, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	fmt.Println(err)
-	Expect(cfg).NotTo(BeNil())
+	Expect(RestConfig).NotTo(BeNil())
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -50,11 +57,11 @@ func BeforeSuiteLogic() {
 	err = opsterv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
-	K8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
+	K8sClient, err = client.New(RestConfig, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(K8sClient).NotTo(BeNil())
 
-	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
+	k8sManager, err := ctrl.NewManager(RestConfig, ctrl.Options{
 		Scheme: scheme.Scheme,
 	})
 	Expect(err).ToNot(HaveOccurred())
@@ -122,12 +129,69 @@ func IsServiceCreated(k8sClient client.Client, name string, namespace string) bo
 }
 
 func IsStsCreated(k8sClient client.Client, name string, namespace string) bool {
+	_, err := GetSts(k8sClient, name, namespace)
+	if err != nil {
+		return false
+	} else {
+		return true
+	}
+}
+
+func GetSts(k8sClient client.Client, name string, namespace string) (sts.StatefulSet, error) {
 	sts := sts.StatefulSet{}
 	if err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: name, Namespace: namespace}, &sts); err == nil {
-		return true
+		return sts, nil
 	} else {
-		return false
+		return sts, err
 	}
+}
+
+func GetPod(k8sClient client.Client, name string, namespace string) (corev1.Pod, error) {
+	pod := corev1.Pod{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: namespace}, &pod); err == nil {
+		return pod, nil
+	} else {
+		return pod, err
+	}
+}
+
+func CreatePortForward(namespace string, port int, podName string) error {
+	//+kubebuilder:rbac:groups=corev1,resources=pods,verbs=update,get,create,delete
+	//+system:anonymous:rbac:groups="",resources=pods,pods/portforward,namespace=cluster-test-nodes,verbs=update;get;create;delete;list
+	stopCh := make(<-chan struct{})
+	readyCh := make(chan struct{})
+
+	path := fmt.Sprintf("%sapi/v1/namespaces/%s/pods/%s/portforward", RestConfig.Host, namespace, podName)
+	serverURL, err := url.Parse(path)
+	transport, upgrader, err := spdy.RoundTripperFor(RestConfig)
+	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, serverURL)
+	if err != nil {
+		panic(err)
+	}
+
+	fw, err := portforward.New(dialer, []string{fmt.Sprintf("%d:%d", port, port)}, stopCh, readyCh, os.Stdout, os.Stdout)
+	if err != nil {
+		return err
+	}
+
+	if err := fw.ForwardPorts(); err != nil {
+		return err
+	}
+	/*urlStr := fmt.Sprintf("%sapi/v1/namespaces/%s/pods/%s/portforward", RestConfig.Host, namespace, podName)
+	hClient := http.Client{Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}}
+
+	res, err := hClient.Post(urlStr, "application/json", nil)
+	if err != nil {
+		return err
+	}
+	body, readErr := ioutil.ReadAll(res.Body)
+	if readErr != nil {
+		return err
+	}
+	fmt.Println(string(body))*/
+	return nil
 }
 
 func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1.OpenSearchCluster {
@@ -165,27 +229,7 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 				Roles: []string{
 					"master",
 					"data",
-				}}, {
-				Component:    "nodes",
-				Replicas:     3,
-				DiskSize:     32,
-				NodeSelector: "",
-				Cpu:          4,
-				Memory:       16,
-				Roles: []string{
-					"data",
-				}}, {
-				Component:    "client",
-				Replicas:     3,
-				DiskSize:     32,
-				NodeSelector: "",
-				Cpu:          4,
-				Memory:       16,
-				Roles: []string{
-					"data",
-					"ingest",
-				},
-			}},
+				}}},
 		},
 		Status: opsterv1.ClusterStatus{
 			ComponentsStatus: []opsterv1.ComponentStatus{{
@@ -222,4 +266,15 @@ func DataNodeSize(cluster opsterv1.OpenSearchCluster) int {
 	}
 	return dataNodesSize
 
+}
+func Retry(attempts int, sleep time.Duration, f func() bool) (err error) {
+	for i := 0; i < attempts; i++ {
+		result := f()
+		if result {
+			return nil
+		}
+		fmt.Println("retrying after error:", err)
+		time.Sleep(sleep)
+	}
+	return fmt.Errorf("after %d attempts, last error: %s", attempts, err)
 }

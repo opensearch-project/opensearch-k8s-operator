@@ -2,14 +2,19 @@ package services
 
 import (
 	"context"
+	"fmt"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
+	sts "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"testing"
+	"time"
 )
 
 func TestServices(t *testing.T) {
@@ -61,6 +66,7 @@ var _ = BeforeSuite(func() {
 		if err != nil {
 			return
 		}
+
 		if !helpers.IsServiceCreated(helpers.K8sClient, HeadLessServiceName, ClusterName) {
 			return
 		}
@@ -75,15 +81,36 @@ var _ = BeforeSuite(func() {
 			return
 		}
 	}
+	podName := fmt.Sprintf("%s-%s-%d", ClusterName, OpensearchCluster.Spec.NodePools[0].Component, 0)
 	if !helpers.IsStsCreated(helpers.K8sClient, StsName, ClusterName) {
-		sts := builders.NewSTSForCR(OpensearchCluster, OpensearchCluster.Spec.NodePools[0])
-		err := helpers.K8sClient.Create(context.TODO(), sts)
+		stsCr := builders.NewSTSForCR(OpensearchCluster, OpensearchCluster.Spec.NodePools[0])
+		err := helpers.K8sClient.Create(context.TODO(), stsCr)
+		ctrl.CreateOrUpdate(context.Background(), helpers.K8sClient, stsCr, func() error {
+			return nil
+		})
 		if err != nil {
 			return
 		}
-		if !helpers.IsStsCreated(helpers.K8sClient, StsName, ClusterName) {
-			return
-		}
+
+		var d time.Duration = 1000000000
+		helpers.Retry(1000, d, func() bool {
+			var stsi = sts.StatefulSet{}
+			var pod = corev1.Pod{}
+			stsi, err = helpers.GetSts(helpers.K8sClient, StsName, ClusterName)
+			if stsi.Status.AvailableReplicas > 1 {
+				return true
+			}
+			pod, err = helpers.GetPod(helpers.K8sClient, podName, ClusterName)
+			fmt.Println(pod.Status.PodIP)
+			return false
+		})
+
+	}
+	//	lastReplicaNodeName := fmt.Sprintf("%s-%d", r.StsFromEnv.ObjectMeta.Name, *r.StsFromEnv.Spec.Replicas)
+
+	err := helpers.CreatePortForward(ClusterName, 9200, podName)
+	if err != nil {
+		return
 	}
 
 }, 60)
