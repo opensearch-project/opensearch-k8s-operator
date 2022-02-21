@@ -7,16 +7,69 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - opensearch.opster.io
+  - apps
   resources:
-  - events
+  - deployments
   verbs:
   - create
+  - delete
+  - get
+  - list
   - patch
+  - update
+  - watch
 - apiGroups:
-  - opensearch.opster.io
+  - apps
   resources:
-  - opensearchcluster
+  - statefulsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - namespaces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - services
   verbs:
   - create
   - delete
@@ -28,13 +81,40 @@ rules:
 - apiGroups:
   - opensearch.opster.io
   resources:
-  - opensearchcluster/finalizers
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchclusters/finalizers
   verbs:
   - update
 - apiGroups:
   - opensearch.opster.io
   resources:
-  - opensearchcluster/status
+  - opensearchclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchclusters/status/componentsStatus
   verbs:
   - get
   - patch
