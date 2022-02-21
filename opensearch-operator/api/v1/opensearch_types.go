@@ -62,6 +62,37 @@ type DashboardsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 }
 
+// Security defines options for managing the opensearch-security plugin
+type Security struct {
+	Tls *TlsConfig `json:"tls,omitempty"`
+	// TBD: securityconfig
+}
+
+// Configure tls usage for transport and http interface
+type TlsConfig struct {
+	Transport *TlsInterfaceConfig `json:"transport,omitempty"`
+	Http      *TlsInterfaceConfig `json:"http,omitempty"`
+	NodesDn   []string            `json:"nodesDn,omitempty"`
+}
+
+// Configure tls usage for the interface
+type TlsInterfaceConfig struct {
+	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
+	Generate bool `json:"generate,omitempty"`
+	// Optional, secret that contains the ca certificate
+	CaSecret *TlsSecret `json:"caSecret,omitempty"`
+	// Optional, secret that contains the private key
+	KeySecret *TlsSecret `json:"keySecret,omitempty"`
+	// Optional, secret that contains the certificate for the private key, must be signed by the provided CA
+	CertSecret *TlsSecret `json:"certSecret,omitempty"`
+}
+
+// Reference to a secret
+type TlsSecret struct {
+	SecretName string  `json:"secretName"`
+	Key        *string `json:"key,omitempty"`
+}
+
 // ClusterSpec defines the desired state of OpenSearchCluster
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -69,6 +100,7 @@ type ClusterSpec struct {
 	General    GeneralConfig    `json:"general,omitempty"`
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
+	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
 }
 

@@ -2,12 +2,13 @@ package controllers
 
 import (
 	"context"
+	"time"
+
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	sts "k8s.io/api/apps/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 	//+kubebuilder:scaffold:imports
 )
 

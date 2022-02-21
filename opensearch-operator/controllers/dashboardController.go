@@ -3,96 +3,79 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/apimachinery/pkg/api/errors"
-	//v1 "k8s.io/client-go/applyconfigurations/core/v1"
 
+	"github.com/go-logr/logr"
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
-	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 type DashboardReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	State    State
+	logr.Logger
 	Instance *opsterv1.OpenSearchCluster
 }
 
-//+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/finalizers,verbs=update
-
-func (r *DashboardReconciler) Reconcile(ctx context.Context, request ctrl.Request) (ctrl.Result, error) {
+func (r *DashboardReconciler) Reconcile(controllerContext *ControllerContext) (*opsterv1.ComponentStatus, error) {
+	namespace := r.Instance.Spec.General.ClusterName
 	/// ------ create opensearch dashboard cm ------- ///
+	kibanaCm := corev1.ConfigMap{}
+	cmName := fmt.Sprintf("%s-dashboards-config", r.Instance.Spec.General.ClusterName)
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: cmName, Namespace: namespace}, &kibanaCm); err != nil {
+		/// ------- create Opensearch-Dashboard Configmap ------- ///
+		dashboards_cm := builders.NewDashboardsConfigMapForCR(r.Instance, cmName)
+
+		err = r.Create(context.TODO(), dashboards_cm)
+		if err != nil {
+			if !errors.IsAlreadyExists(err) {
+				r.Logger.Error(err, "Cannot create Opensearch-Dashboard Configmap "+dashboards_cm.Name)
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard configmap ", "Fix the problem you have on main Opensearch-Dashboard ConfigMap")
+				return nil, err
+			}
+		}
+		r.Logger.Info("Opensearch-Dashboard Cm Created successfully", "name", dashboards_cm.Name)
+
+	}
 
 	kibanaDeploy := sts.Deployment{}
 	deployName := r.Instance.Spec.General.ClusterName + "-dashboards"
-	deployNamespace := r.Instance.Spec.General.ClusterName
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: deployName, Namespace: deployNamespace}, &kibanaDeploy); err != nil {
+
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: deployName, Namespace: namespace}, &kibanaDeploy); err != nil {
 		/// ------- create Opensearch-Dashboard deployment ------- ///
 		dashboards_deployment := builders.NewDashboardsDeploymentForCR(r.Instance)
 
 		err = r.Create(context.TODO(), dashboards_deployment)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard Deployment "+dashboards_deployment.Name)
-				//	r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard deployment ", "Fix the problem you have on main Opensearch-Dashboard Deployment")
-				return ctrl.Result{}, err
+				r.Logger.Error(err, "Cannot create Opensearch-Dashboard Deployment "+dashboards_deployment.Name)
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard deployment ", "Fix the problem you have on main Opensearch-Dashboard Deployment")
+				return nil, err
 			}
 		}
-		fmt.Println("Opensearch-Dashboard Deployment Created successfully - ", "name : ", dashboards_deployment.Name)
-	}
-
-	kibanaCm := corev1.ConfigMap{}
-	cmName := "opensearch-dashboards"
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: cmName, Namespace: deployNamespace}, &kibanaCm); err != nil {
-		/// ------- create Opensearch-Dashboard Configmap ------- ///
-		dashboards_cm := builders.NewDashboardsConfigMapForCR(r.Instance)
-
-		err = r.Create(context.TODO(), dashboards_cm)
-		if err != nil {
-			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard Configmap "+dashboards_cm.Name)
-				//	r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard configmap ", "Fix the problem you have on main Opensearch-Dashboard ConfigMap")
-				return ctrl.Result{}, err
-			}
-		}
-		fmt.Println("Opensearch-Dashboard Cm Created successfully", "name", dashboards_cm.Name)
-
+		r.Logger.Info("Opensearch-Dashboard Deployment Created successfully - ", "name : ", dashboards_deployment.Name)
 	}
 
 	kibanaService := corev1.Service{}
-	serviceName := r.Instance.Spec.General.ServiceName + "-dash-svc"
+	serviceName := r.Instance.Spec.General.ServiceName + "-dashboards"
 
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: deployNamespace}, &kibanaService); err != nil {
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &kibanaService); err != nil {
 		/// -------- create Opensearch-Dashboard service ------- ///
 		dashboards_svc := builders.NewDashboardsSvcForCr(r.Instance)
 		err = r.Create(context.TODO(), dashboards_svc)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
-				fmt.Println(err, "Cannot create Opensearch-Dashboard service "+dashboards_svc.Name)
-				// 	r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard service ", "Fix the problem you have on main Opensearch-Dashboard Service")
-				return ctrl.Result{}, err
+				r.Logger.Error(err, "Cannot create Opensearch-Dashboard service "+dashboards_svc.Name)
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create OpenSearch-Dashboard service ", "Fix the problem you have on main Opensearch-Dashboard Service")
+				return nil, err
 			}
 		}
-		fmt.Println("Opensearch-Dashboard service Created successfully", "name", dashboards_svc.Name)
+		r.Logger.Info("Opensearch-Dashboard service Created successfully", "name", dashboards_svc.Name)
 	}
 
-	return ctrl.Result{}, nil
-}
-
-func (r *DashboardReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	if err := opsterv1.AddToScheme(mgr.GetScheme()); err != nil {
-		return err
-	}
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.OpenSearchCluster{}).
-		Complete(r)
+	return nil, nil
 }

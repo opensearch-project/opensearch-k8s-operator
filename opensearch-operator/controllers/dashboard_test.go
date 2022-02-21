@@ -3,8 +3,9 @@ package controllers
 import (
 	"context"
 	"fmt"
-	sts "k8s.io/api/apps/v1"
 	"time"
+
+	sts "k8s.io/api/apps/v1"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -16,7 +17,7 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var _ = Describe("OpensearchCLuster Controller", func() {
+var _ = Describe("OpensearchCluster Controller", func() {
 	//	ctx := context.Background()
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
@@ -71,10 +72,10 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards"}, &deploy); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: "opensearch-dashboards"}, &cm); err != nil {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards-config"}, &cm); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards-svc"}, &service); err != nil {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards"}, &service); err != nil {
 						return false
 					}
 				}
