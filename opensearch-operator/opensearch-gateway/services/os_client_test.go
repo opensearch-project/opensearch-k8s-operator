@@ -1,11 +1,9 @@
 package services
 
 import (
-	"context"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
 	"strings"
 	"time"
 )
@@ -15,36 +13,20 @@ var _ = Describe("OpensearchCLuster API", func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		ClusterName = "cluster-test-nodes"
-		NameSpace   = "default"
-		timeout     = time.Second * 30
-		interval    = time.Second * 1
+		timeout  = time.Second * 30
+		interval = time.Second * 1
 	)
 	var (
-		OpensearchCluster                  = helpers.ComposeOpensearchCrd(ClusterName, NameSpace)
-		ClusterClient     *OsClusterClient = nil
+		ClusterClient *OsClusterClient = nil
 	)
 
 	/// ------- Creation Check phase -------
 
-	ns := helpers.ComposeNs(ClusterName)
 	BeforeEach(func() {
 		By("Creating open search client ")
 		Eventually(func() bool {
 			var err error = nil
-			if !helpers.IsNsCreated(helpers.K8sClient, ns) {
-				return false
-			}
-			if !helpers.IsClusterCreated(helpers.K8sClient, OpensearchCluster) {
-				return false
-			}
-			if !helpers.IsNsCreated(helpers.K8sClient, ns) {
-				return false
-			}
-			if !helpers.IsClusterCreated(helpers.K8sClient, OpensearchCluster) {
-				return false
-			}
-			ClusterClient, err = NewOsClusterClient(builders.ClusterUrl(&OpensearchCluster), "admin", "admin")
+			ClusterClient, err = NewOsClusterClient(builders.ClusterUrl(OpensearchCluster), "admin", "admin")
 			if err != nil {
 				return false
 			}
@@ -162,20 +144,6 @@ var _ = Describe("OpensearchCLuster API", func() {
 				maxBytesPerSec := indicesSettings.(map[string]map[string]interface{})
 				Expect(maxBytesPerSec["recovery"]["max_bytes_per_sec"]).Should(BeNil())
 			}
-		})
-	})
-
-	/// ------- Deletion Check phase -------
-
-	Context("When deleting OpenSearch CRD ", func() {
-		It("should delete cluster NS and resources", func() {
-
-			Expect(helpers.K8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
-
-			By("Delete cluster ns ")
-			Eventually(func() bool {
-				return helpers.IsNsDeleted(helpers.K8sClient, ns)
-			}, timeout, interval).Should(BeTrue())
 		})
 	})
 })

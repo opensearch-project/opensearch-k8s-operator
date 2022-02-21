@@ -6,7 +6,9 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"github.com/onsi/gomega/gexec"
+	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -31,7 +33,7 @@ func BeforeSuiteLogic() {
 	ctx := context.Background()
 	By("bootstrappifng test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 
@@ -63,8 +65,8 @@ func BeforeSuiteLogic() {
 		Expect(err).ToNot(HaveOccurred(), "failed to run manager")
 	}()
 
-	K8sClient = k8sManager.GetClient()
-	Expect(K8sClient).ToNot(BeNil())
+	//K8sClient = k8sManager.GetClient()
+	//Expect(K8sClient).ToNot(BeNil())
 
 }
 
@@ -75,36 +77,53 @@ func AfterSuiteLogic() {
 	Expect(err).ToNot(HaveOccurred())
 }
 
-func IsCreated(ctx context.Context, k8sClient client.Client, obj client.Object) bool {
-	if err := k8sClient.Get(ctx, client.ObjectKey{
-		Namespace: obj.GetNamespace(),
-		Name:      obj.GetName(),
-	}, obj); err != nil {
-		return false
-	}
-	return true
-}
-
 func IsNsDeleted(k8sClient client.Client, namespace corev1.Namespace) bool {
 	ns := corev1.Namespace{}
-	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: namespace.Name}, &ns); err == nil {
+	if err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: namespace.Name, Namespace: namespace.Namespace}, &ns); err == nil {
 		return ns.Status.Phase == "Terminating"
 	}
 	return true
 }
 
-func IsNsCreated(k8sClient client.Client, namespace corev1.Namespace) bool {
+func IsNsCreated(k8sClient client.Client, ctx context.Context, namespace corev1.Namespace) bool {
 	ns := corev1.Namespace{}
-	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: namespace.Name}, &ns); err == nil {
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: namespace.Name}, &ns); err == nil {
 		return true
 	} else {
 		return false
 	}
 }
 
-func IsClusterCreated(k8sClient client.Client, cluster opsterv1.OpenSearchCluster) bool {
-	ns := corev1.Namespace{}
-	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, &ns); err == nil {
+func IsCrdCreated(k8sClient client.Client, cluster opsterv1.OpenSearchCluster) bool {
+	ns := opsterv1.OpenSearchCluster{}
+	if err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, &ns); err == nil {
+		return true
+	} else {
+		return false
+	}
+}
+
+func IsCmCreated(k8sClient client.Client, name string, namespace string) bool {
+	res := corev1.ConfigMap{}
+	if err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: name, Namespace: namespace}, &res); err == nil {
+		return true
+	} else {
+		return false
+	}
+}
+
+func IsServiceCreated(k8sClient client.Client, name string, namespace string) bool {
+	headlessService := v1.Service{}
+	if err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: name, Namespace: namespace}, &headlessService); err == nil {
+		return true
+	} else {
+		return false
+	}
+}
+
+func IsStsCreated(k8sClient client.Client, name string, namespace string) bool {
+	sts := sts.StatefulSet{}
+	if err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: name, Namespace: namespace}, &sts); err == nil {
 		return true
 	} else {
 		return false

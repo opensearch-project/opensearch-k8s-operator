@@ -366,7 +366,6 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 }
 
 func NewNsForCR(cr *opsterv1.OpenSearchCluster) *corev1.Namespace {
-
 	return &corev1.Namespace{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: cr.Spec.General.ClusterName,
@@ -375,7 +374,6 @@ func NewNsForCR(cr *opsterv1.OpenSearchCluster) *corev1.Namespace {
 }
 
 func NewCmForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
-
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "opensearch-yml",
@@ -393,4 +391,15 @@ func UsernameAndPassword(r *opsterv1.OpenSearchCluster) (string, string) {
 
 func ClusterUrl(r *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf("https://%s-svc.%s:%d", r.Spec.General.ServiceName, r.Spec.General.ClusterName, r.Spec.General.HttpPort)
+}
+
+func HeadlessName(r *opsterv1.OpenSearchCluster) string {
+	return r.Spec.General.ServiceName + "-headless-service"
+}
+func ServiceName(r *opsterv1.OpenSearchCluster) string {
+	return r.Spec.General.ServiceName + "-svc"
+}
+func StsName(r *opsterv1.OpenSearchCluster, node opsterv1.NodePool) string {
+	return r.Spec.General.ClusterName + "-" + node.Component
+
 }

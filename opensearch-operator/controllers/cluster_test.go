@@ -48,10 +48,10 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 
 			By("Create cluster ns ")
 			Eventually(func() bool {
-				if !helpers.IsNsCreated(helpers.K8sClient, ns) {
+				if !helpers.IsNsCreated(helpers.K8sClient, context.TODO(), ns) {
 					return false
 				}
-				if !helpers.IsClusterCreated(helpers.K8sClient, OpensearchCluster) {
+				if !helpers.IsCrdCreated(helpers.K8sClient, OpensearchCluster) {
 					return false
 				}
 				return true

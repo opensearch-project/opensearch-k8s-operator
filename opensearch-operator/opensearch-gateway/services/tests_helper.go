@@ -6,22 +6,6 @@ import (
 	"strings"
 )
 
-/*func getClusterClient(t *testing.T) *OsClusterClient {
-	// Initialize the client with SSL/TLS enabled.
-	config := opensearch.Config{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
-		Addresses: []string{"https://localhost:9200"},
-		Username:  "admin", // For testing only. Don't store credentials in code.
-		Password:  "admin",
-	}
-
-	clusterClient, err := NewOsClusterClient(config)
-	assert.Nil(t, err, "failed connection to cluster")
-	return clusterClient
-}*/
-
 func CreateIndex(clusterClient *OsClusterClient, indexName string, mapping *strings.Reader) {
 	req := opensearchapi.IndicesCreateRequest{
 		Index: indexName,
