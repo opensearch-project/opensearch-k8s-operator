@@ -1,13 +1,13 @@
 package builders
 
 import (
-	opsterv1 "opensearch.opster.io/api/v1"
-	"strconv"
+	"fmt"
 
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	opsterv1 "opensearch.opster.io/api/v1"
 )
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
@@ -15,16 +15,20 @@ import (
 func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deployment {
 
 	labels := map[string]string{
-		"app": cr.Name,
+		"opensearch.cluster.dashboards": cr.Name,
 	}
 	var rep int32 = 1
 	var port int32 = 5601
+	var mode int32 = 420
 
-	i, err := strconv.ParseInt("420", 10, 32)
-	if err != nil {
-		panic(err)
+	probe := corev1.Probe{
+		PeriodSeconds:       20,
+		TimeoutSeconds:      5,
+		FailureThreshold:    10,
+		SuccessThreshold:    1,
+		InitialDelaySeconds: 10,
+		ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/status", Port: intstr.IntOrString{IntVal: port}, Scheme: "HTTP"}},
 	}
-	mode := int32(i)
 
 	return &sts.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -49,7 +53,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 							VolumeSource: corev1.VolumeSource{
 								ConfigMap: &corev1.ConfigMapVolumeSource{
 									DefaultMode:          &mode,
-									LocalObjectReference: corev1.LocalObjectReference{Name: "opensearch-dashboards"},
+									LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Spec.General.ClusterName)},
 								},
 							},
 						},
@@ -65,22 +69,31 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 									ContainerPort: port,
 								},
 							},
+							StartupProbe:  &probe,
+							LivenessProbe: &probe,
 							Env: []corev1.EnvVar{
 								{
-									Name:      "OPENSEARCH_HOSTS",
-									Value:     "https://" + cr.Spec.General.ServiceName + "-svc" + "." + cr.Spec.General.ClusterName + ":9200",
-									ValueFrom: nil,
+									Name:  "OPENSEARCH_HOSTS",
+									Value: URLForCluster(cr),
 								},
 								{
-									Name:      "SERVER_HOST",
-									Value:     "0.0.0.0",
-									ValueFrom: nil,
+									Name:  "SERVER_HOST",
+									Value: "0.0.0.0",
+								},
+								// Temporary until securityconfig controller is implemented
+								{
+									Name:  "OPENSEARCH_USERNAME",
+									Value: "admin",
+								},
+								{
+									Name:  "OPENSEARCH_PASSWORD",
+									Value: "admin",
 								},
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{Name: "dashboards-config",
-									MountPath: "/usr/share/kibana/config/kibana.yml",
-									SubPath:   "kibana.yml",
+									MountPath: "/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml",
+									SubPath:   "opensearch_dashboards.yml",
 								},
 							},
 						},
@@ -91,15 +104,15 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 	}
 }
 
-func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
+func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string) *corev1.ConfigMap {
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "opensearch-dashboards",
+			Name:      name,
 			Namespace: cr.Spec.General.ClusterName,
 		},
 		Data: map[string]string{
-			"kibana.yml": "    elasticsearch.hosts: https://" + cr.Spec.General.ServiceName + "-svc." + cr.Spec.General.ClusterName + "\n    server.host: \"0\"\n    server.name: " + cr.Spec.General.ClusterName + "-kibana" + "\n    server.basePath: /es-002-kibana\n",
+			"opensearch_dashboards.yml": "server.name: " + cr.Spec.General.ClusterName + "-dashboards" + "\nopensearch.ssl.verificationMode: none\n",
 		},
 	}
 }
@@ -109,7 +122,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	var port int32 = 5601
 
 	labels := map[string]string{
-		"app": cr.Name,
+		"opensearch.cluster.dashboards": cr.Name,
 	}
 
 	return &corev1.Service{
@@ -118,7 +131,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName + "-dashboards-svc",
+			Name:      cr.Spec.General.ServiceName + "-dashboards",
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},

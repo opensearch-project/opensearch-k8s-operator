@@ -103,6 +103,103 @@ spec:
                   - roles
                   type: object
                 type: array
+              security:
+                description: Security defines options for managing the opensearch-security
+                  plugin
+                properties:
+                  tls:
+                    description: Configure tls usage for transport and http interface
+                    properties:
+                      http:
+                        description: Configure tls usage for the interface
+                        properties:
+                          caSecret:
+                            description: Optional, secret that contains the ca certificate
+                            properties:
+                              key:
+                                type: string
+                              secretName:
+                                type: string
+                            required:
+                            - secretName
+                            type: object
+                          certSecret:
+                            description: Optional, secret that contains the certificate
+                              for the private key, must be signed by the provided
+                              CA
+                            properties:
+                              key:
+                                type: string
+                              secretName:
+                                type: string
+                            required:
+                            - secretName
+                            type: object
+                          generate:
+                            description: If set to true the operator will generate
+                              a CA and certificates for the cluster to use, if false
+                              secrets with existing certificates must be supplied
+                            type: boolean
+                          keySecret:
+                            description: Optional, secret that contains the private
+                              key
+                            properties:
+                              key:
+                                type: string
+                              secretName:
+                                type: string
+                            required:
+                            - secretName
+                            type: object
+                        type: object
+                      nodesDn:
+                        items:
+                          type: string
+                        type: array
+                      transport:
+                        description: Configure tls usage for the interface
+                        properties:
+                          caSecret:
+                            description: Optional, secret that contains the ca certificate
+                            properties:
+                              key:
+                                type: string
+                              secretName:
+                                type: string
+                            required:
+                            - secretName
+                            type: object
+                          certSecret:
+                            description: Optional, secret that contains the certificate
+                              for the private key, must be signed by the provided
+                              CA
+                            properties:
+                              key:
+                                type: string
+                              secretName:
+                                type: string
+                            required:
+                            - secretName
+                            type: object
+                          generate:
+                            description: If set to true the operator will generate
+                              a CA and certificates for the cluster to use, if false
+                              secrets with existing certificates must be supplied
+                            type: boolean
+                          keySecret:
+                            description: Optional, secret that contains the private
+                              key
+                            properties:
+                              key:
+                                type: string
+                              secretName:
+                                type: string
+                            required:
+                            - secretName
+                            type: object
+                        type: object
+                    type: object
+                type: object
             required:
             - nodePools
             type: object

@@ -2,10 +2,11 @@ package helpers
 
 import (
 	"fmt"
-	opsterv1 "opensearch.opster.io/api/v1"
+	"strings"
 
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/kube-openapi/pkg/validation/errors"
+	opsterv1 "opensearch.opster.io/api/v1"
 )
 
 func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, instance *opsterv1.OpenSearchCluster, count int, check string) (x sts.StatefulSetSpec, err error, changes []string) {
@@ -58,30 +59,15 @@ func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, inst
 }
 
 func CreateInitMasters(cr *opsterv1.OpenSearchCluster) string {
-	NodesCount := len(cr.Spec.NodePools)
-	var i int32
-	var comp string
-	for x := 0; x < NodesCount; x++ {
-		roles := cr.Spec.NodePools[x].Roles
-		for _, role := range roles {
-			if role == "master" {
-				comp = cr.Spec.NodePools[x].Component
-				i = cr.Spec.NodePools[x].Replicas
+	var masters []string
+	for _, nodePool := range cr.Spec.NodePools {
+		if ContainsString(nodePool.Roles, "master") {
+			for i := 0; int32(i) < nodePool.Replicas; i++ {
+				masters = append(masters, fmt.Sprintf("%s-%s-%d", cr.Spec.General.ClusterName, nodePool.Component, i))
 			}
 		}
 	}
-
-	p := int(i)
-
-	var masters = ""
-	for x := 0; x < p; x++ {
-		masters = fmt.Sprintf("%s-%s-%d,%s", cr.Spec.General.ClusterName, comp, x, masters)
-	}
-	if last := len(masters) - 1; last >= 0 && masters[last] == ',' {
-		masters = masters[:last]
-	}
-	return masters
-
+	return strings.Join(masters, ",")
 }
 
 func CheckEquels(from_env *sts.StatefulSetSpec, from_crd *sts.StatefulSetSpec, text string) (int32, bool, error) {
