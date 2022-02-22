@@ -30,7 +30,7 @@ var _ = Describe("Configuration Controller", func() {
 			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
 
 			underTest := ConfigurationReconciler{
-				Client:   k8sClient,
+				Client:   helpers.K8sClient,
 				Instance: &spec,
 				Logger:   logr.Discard(),
 				Recorder: &helpers.MockEventRecorder{},
@@ -40,7 +40,7 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			configMap := corev1.ConfigMap{}
-			err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
+			err = helpers.K8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -52,12 +52,12 @@ var _ = Describe("Configuration Controller", func() {
 					Name: clusterName,
 				},
 			}
-			err := k8sClient.Create(context.TODO(), &ns)
+			err := helpers.K8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
 
 			underTest := ConfigurationReconciler{
-				Client:   k8sClient,
+				Client:   helpers.K8sClient,
 				Instance: &spec,
 				Logger:   logr.Discard(),
 				Recorder: &helpers.MockEventRecorder{},
@@ -71,7 +71,7 @@ var _ = Describe("Configuration Controller", func() {
 
 			Eventually(func() bool {
 				configMap := corev1.ConfigMap{}
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
+				err := helpers.K8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
 				if err != nil {
 					return false
 				}

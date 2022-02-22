@@ -87,9 +87,18 @@ func IsNsDeleted(k8sClient client.Client, namespace corev1.Namespace) bool {
 	return true
 }
 
-func IsNsCreated(k8sClient client.Client, ctx context.Context, namespace corev1.Namespace) bool {
+func IsNsCreated(k8sClient client.Client, namespace corev1.Namespace) bool {
 	ns := corev1.Namespace{}
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: namespace.Name}, &ns); err == nil {
+	if err := k8sClient.Get(context.TODO(), client.ObjectKey{Name: namespace.Name}, &ns); err == nil {
+		return true
+	} else {
+		return false
+	}
+}
+
+func IsClusterCreated(k8sClient client.Client, cluster opsterv1.OpenSearchCluster) bool {
+	ns := corev1.Namespace{}
+	if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: cluster.Name, Namespace: cluster.Namespace}, &ns); err == nil {
 		return true
 	} else {
 		return false

@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"opensearch.opster.io/pkg/helpers"
 	"time"
 
 	. "github.com/onsi/ginkgo"
@@ -27,7 +28,7 @@ var _ = Describe("OpensearchCluster Controller", func() {
 		interval          = time.Second * 1
 	)
 	var (
-		OpensearchCluster = ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
+		OpensearchCluster = helpers.ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
 		nodePool          = sts.StatefulSet{}
 		service           = corev1.Service{}
 		//deploy            = sts.Deployment{}
@@ -37,19 +38,19 @@ var _ = Describe("OpensearchCluster Controller", func() {
 
 	/// ------- Creation Check phase -------
 
-	ns := ComposeNs(ClusterName)
+	ns := helpers.ComposeNs(ClusterName)
 	Context("When create OpenSearch CRD instance", func() {
 		It("should create cluster NS and CRD instance", func() {
 
-			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.K8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
 			fmt.Println(OpensearchCluster)
 
 			By("Create cluster ns ")
 			Eventually(func() bool {
-				if !IsNsCreated(k8sClient, ns) {
+				if !helpers.IsNsCreated(helpers.K8sClient, ns) {
 					return false
 				}
-				if !IsClusterCreated(k8sClient, OpensearchCluster) {
+				if !helpers.IsClusterCreated(helpers.K8sClient, OpensearchCluster) {
 					return false
 				}
 				return true
@@ -65,16 +66,16 @@ var _ = Describe("OpensearchCluster Controller", func() {
 			By("Opensearch cluster")
 			Eventually(func() bool {
 
-				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName}, &service); err != nil {
+				if err := helpers.K8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName}, &service); err != nil {
 					return false
 				}
 				for _, name := range []string{"master", "nodes", "client"} {
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: fmt.Sprintf("%s-%s", OpensearchCluster.Spec.General.ServiceName, name)}, &service); err != nil {
+					if err := helpers.K8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: fmt.Sprintf("%s-%s", OpensearchCluster.Spec.General.ServiceName, name)}, &service); err != nil {
 						return false
 					}
 				}
 				for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-" + nodePoolSpec.Component}, &nodePool); err != nil {
+					if err := helpers.K8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-" + nodePoolSpec.Component}, &nodePool); err != nil {
 						return false
 					}
 				}
@@ -89,11 +90,11 @@ var _ = Describe("OpensearchCluster Controller", func() {
 	Context("When deleting OpenSearch CRD ", func() {
 		It("should delete cluster NS and resources", func() {
 
-			Expect(k8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(helpers.K8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
 
 			By("Delete cluster ns ")
 			Eventually(func() bool {
-				return IsNsDeleted(k8sClient, ns)
+				return helpers.IsNsDeleted(helpers.K8sClient, ns)
 			}, timeout, interval).Should(BeTrue())
 		})
 	})

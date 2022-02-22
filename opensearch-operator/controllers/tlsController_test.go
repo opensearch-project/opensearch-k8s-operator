@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"opensearch.opster.io/pkg/helpers"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -34,10 +35,10 @@ var _ = Describe("TLS Controller", func() {
 					Name: clusterName,
 				},
 			}
-			err := k8sClient.Create(context.TODO(), &ns)
+			err := helpers.K8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 			underTest := TlsReconciler{
-				Client:   k8sClient,
+				Client:   helpers.K8sClient,
 				Instance: &spec,
 				Logger:   logr.Discard(),
 				//Recorder: recorder,
@@ -54,17 +55,17 @@ var _ = Describe("TLS Controller", func() {
 
 			Eventually(func() bool {
 				caSecret := corev1.Secret{}
-				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: caSecretName, Namespace: clusterName}, &caSecret)
+				err = helpers.K8sClient.Get(context.Background(), client.ObjectKey{Name: caSecretName, Namespace: clusterName}, &caSecret)
 				if err != nil {
 					return false
 				}
 				transportSecret := corev1.Secret{}
-				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: transportSecretName, Namespace: clusterName}, &transportSecret)
+				err = helpers.K8sClient.Get(context.Background(), client.ObjectKey{Name: transportSecretName, Namespace: clusterName}, &transportSecret)
 				if err != nil {
 					return false
 				}
 				httpSecret := corev1.Secret{}
-				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: httpSecretName, Namespace: clusterName}, &httpSecret)
+				err = helpers.K8sClient.Get(context.Background(), client.ObjectKey{Name: httpSecretName, Namespace: clusterName}, &httpSecret)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
@@ -94,10 +95,10 @@ var _ = Describe("TLS Controller", func() {
 					Name: "tls-test-existingsecrets",
 				},
 			}
-			err := k8sClient.Create(context.TODO(), &ns)
+			err := helpers.K8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 			underTest := TlsReconciler{
-				Client:   k8sClient,
+				Client:   helpers.K8sClient,
 				Instance: &spec,
 				Logger:   logr.Discard(),
 				//Recorder: recorder,
