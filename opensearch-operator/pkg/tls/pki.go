@@ -88,7 +88,15 @@ func (cert *Cert) SecretData(ca *Cert) map[string][]byte {
 	return data
 }
 
-func (ca *Cert) CreateAndSignCertificate(commonName string, dnsnames []string) (cert Cert, err error) {
+func (cert *Cert) KeyData() []byte {
+	return cert.keyBytes
+}
+
+func (cert *Cert) CertData() []byte {
+	return cert.certBytes
+}
+
+func (ca *Cert) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error) {
 	tlscacert, err := ca.Cert()
 	if err != nil {
 		return
@@ -114,7 +122,8 @@ func (ca *Cert) CreateAndSignCertificate(commonName string, dnsnames []string) (
 	x509cert := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
-			CommonName: commonName,
+			CommonName:         commonName,
+			OrganizationalUnit: []string{orgUnit},
 		},
 		NotBefore:   time.Now(),
 		NotAfter:    time.Now().AddDate(1, 0, 0),

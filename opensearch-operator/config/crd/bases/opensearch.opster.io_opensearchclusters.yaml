@@ -111,7 +111,6 @@ spec:
                     description: Configure tls usage for transport and http interface
                     properties:
                       http:
-                        description: Configure tls usage for the interface
                         properties:
                           caSecret:
                             description: Optional, secret that contains the ca certificate
@@ -151,13 +150,14 @@ spec:
                             required:
                             - secretName
                             type: object
+                          secret:
+                            description: Optional, name of a secret that contains
+                              ca.crt, tls.key and tls.crt data, use either this or
+                              set the separate caSecret, keySecret and certSecret
+                              fields
+                            type: string
                         type: object
-                      nodesDn:
-                        items:
-                          type: string
-                        type: array
                       transport:
-                        description: Configure tls usage for the interface
                         properties:
                           caSecret:
                             description: Optional, secret that contains the ca certificate
@@ -197,6 +197,21 @@ spec:
                             required:
                             - secretName
                             type: object
+                          nodesDn:
+                            description: Allowed Certificate DNs for nodes, only used
+                              when existing certificates are provided
+                            items:
+                              type: string
+                            type: array
+                          perNode:
+                            description: Configure transport node certificate
+                            type: boolean
+                          secret:
+                            description: Optional, name of a secret that contains
+                              ca.crt, tls.key and tls.crt data, use either this or
+                              set the separate caSecret, keySecret and certSecret
+                              fields
+                            type: string
                         type: object
                     type: object
                 type: object

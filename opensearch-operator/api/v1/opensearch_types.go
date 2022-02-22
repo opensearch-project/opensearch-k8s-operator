@@ -70,15 +70,29 @@ type Security struct {
 
 // Configure tls usage for transport and http interface
 type TlsConfig struct {
-	Transport *TlsInterfaceConfig `json:"transport,omitempty"`
-	Http      *TlsInterfaceConfig `json:"http,omitempty"`
-	NodesDn   []string            `json:"nodesDn,omitempty"`
+	Transport *TlsConfigTransport `json:"transport,omitempty"`
+	Http      *TlsConfigHttp      `json:"http,omitempty"`
 }
 
-// Configure tls usage for the interface
-type TlsInterfaceConfig struct {
+type TlsConfigTransport struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
+	// Configure transport node certificate
+	PerNode           bool                 `json:"perNode,omitempty"`
+	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
+	NodesDn []string `json:"nodesDn,omitempty"`
+}
+
+type TlsConfigHttp struct {
+	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
+	Generate          bool                 `json:"generate,omitempty"`
+	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+}
+
+type TlsCertificateConfig struct {
+	// Optional, name of a secret that contains ca.crt, tls.key and tls.crt data, use either this or set the separate caSecret, keySecret and certSecret fields
+	Secret string `json:"secret,omitempty"`
 	// Optional, secret that contains the ca certificate
 	CaSecret *TlsSecret `json:"caSecret,omitempty"`
 	// Optional, secret that contains the private key

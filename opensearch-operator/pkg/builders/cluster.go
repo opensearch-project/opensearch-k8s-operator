@@ -81,6 +81,8 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 	} else {
 		jvm = node.Jvm
 	}
+	// Supress repeated log messages about a deprecated format for the publish address
+	jvm += " -Dopensearch.transport.cname_in_publish_address=true"
 
 	probe := corev1.Probe{
 		PeriodSeconds:       20,
@@ -126,8 +128,13 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 									Value: cr.Spec.General.ClusterName,
 								},
 								{
-									Name:  "network.host",
+									Name:  "network.bind_host",
 									Value: "0.0.0.0",
+								},
+								{
+									// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
+									Name:      "network.publish_host",
+									ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
 								},
 								{
 									Name:  "OPENSEARCH_JAVA_OPTS",
