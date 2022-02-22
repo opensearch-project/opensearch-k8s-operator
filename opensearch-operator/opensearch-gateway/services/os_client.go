@@ -67,10 +67,10 @@ func (client *OsClusterClient) CatHealth() (responses.CatHealthResponse, error) 
 	return response, err
 }
 
-func (client *OsClusterClient) CatNodes() (responses.CatNodesResponse, error) {
+func (client *OsClusterClient) CatNodes() ([]responses.CatNodesResponse, error) {
 	req := opensearchapi.CatNodesRequest{Format: "json"}
 	catNodesRes, err := req.Do(context.Background(), client.client)
-	var response responses.CatNodesResponse
+	var response []responses.CatNodesResponse
 	if err == nil {
 		defer catNodesRes.Body.Close()
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)

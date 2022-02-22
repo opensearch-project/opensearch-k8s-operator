@@ -12,12 +12,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/portforward"
-	"k8s.io/client-go/transport/spdy"
-	"net/http"
-	"net/url"
 	opsterv1 "opensearch.opster.io/api/v1"
-	"os"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -153,45 +148,6 @@ func GetPod(k8sClient client.Client, name string, namespace string) (corev1.Pod,
 	} else {
 		return pod, err
 	}
-}
-
-func CreatePortForward(namespace string, port int, podName string) error {
-	//+kubebuilder:rbac:groups=corev1,resources=pods,verbs=update,get,create,delete
-	//+system:anonymous:rbac:groups="",resources=pods,pods/portforward,namespace=cluster-test-nodes,verbs=update;get;create;delete;list
-	stopCh := make(<-chan struct{})
-	readyCh := make(chan struct{})
-
-	path := fmt.Sprintf("%sapi/v1/namespaces/%s/pods/%s/portforward", RestConfig.Host, namespace, podName)
-	serverURL, err := url.Parse(path)
-	transport, upgrader, err := spdy.RoundTripperFor(RestConfig)
-	dialer := spdy.NewDialer(upgrader, &http.Client{Transport: transport}, http.MethodPost, serverURL)
-	if err != nil {
-		panic(err)
-	}
-
-	fw, err := portforward.New(dialer, []string{fmt.Sprintf("%d:%d", port, port)}, stopCh, readyCh, os.Stdout, os.Stdout)
-	if err != nil {
-		return err
-	}
-
-	if err := fw.ForwardPorts(); err != nil {
-		return err
-	}
-	/*urlStr := fmt.Sprintf("%sapi/v1/namespaces/%s/pods/%s/portforward", RestConfig.Host, namespace, podName)
-	hClient := http.Client{Transport: &http.Transport{
-		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-	}}
-
-	res, err := hClient.Post(urlStr, "application/json", nil)
-	if err != nil {
-		return err
-	}
-	body, readErr := ioutil.ReadAll(res.Body)
-	if readErr != nil {
-		return err
-	}
-	fmt.Println(string(body))*/
-	return nil
 }
 
 func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1.OpenSearchCluster {

@@ -6,12 +6,13 @@ import (
 	"strings"
 )
 
-func CreateIndex(clusterClient *OsClusterClient, indexName string, mapping *strings.Reader) {
+func CreateIndex(clusterClient *OsClusterClient, indexName string, mapping *strings.Reader) (int, error) {
 	req := opensearchapi.IndicesCreateRequest{
 		Index: indexName,
 		Body:  mapping,
 	}
-	req.Do(context.Background(), clusterClient.client)
+	do, err := req.Do(context.Background(), clusterClient.client)
+	return do.StatusCode, err
 
 }
 
@@ -24,7 +25,8 @@ func UpdateIndexSettings(clusterClient *OsClusterClient, indexName string, mappi
 
 }
 
-func DeleteIndex(clusterClient *OsClusterClient, indexName string) {
-	opensearchapi.IndicesDeleteRequest{Index: []string{indexName}}.Do(context.Background(), clusterClient.client)
+func DeleteIndex(clusterClient *OsClusterClient, indexName string) (int, error) {
+	res, err := opensearchapi.IndicesDeleteRequest{Index: []string{indexName}}.Do(context.Background(), clusterClient.client)
+	return res.StatusCode, err
 
 }

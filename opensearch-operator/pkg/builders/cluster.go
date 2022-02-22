@@ -93,7 +93,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 
 	return sts.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-" + node.Component,
+			Name:      StsName(cr, &node),
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
@@ -197,7 +197,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component),
+			Name:      HeadlessName(cr, nodePool),
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
@@ -240,7 +240,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName,
+			Name:      ServiceName(cr),
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
@@ -316,4 +316,22 @@ func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 		httpPort = cr.Spec.General.HttpPort
 	}
 	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName, httpPort)
+}
+
+func HeadlessName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
+	return fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component)
+}
+
+func ServiceName(cr *opsterv1.OpenSearchCluster) string {
+	return cr.Spec.General.ServiceName
+}
+func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
+	return cr.Spec.General.ClusterName + "-" + nodePool.Component
+}
+func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
+	return "admin", "admin"
+}
+func ClusterUrl(cr *opsterv1.OpenSearchCluster) string {
+	return fmt.Sprintf("https://%s.%s", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName)
+
 }

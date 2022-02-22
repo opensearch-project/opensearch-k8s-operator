@@ -48,10 +48,10 @@ type NodeStatThreadPool struct {
 }
 
 type NodeStatBreakers struct {
-	LimitSizeInBytes     uint64 `json:"limit_size_in_bytes"`
-	EstimatedSizeInBytes uint64 `json:"estimated_size_in_bytes"`
-	Overhead             uint32 `json:"overhead"`
-	Tripped              uint32 `json:"tripped"`
+	LimitSizeInBytes     uint64  `json:"limit_size_in_bytes"`
+	EstimatedSizeInBytes uint64  `json:"estimated_size_in_bytes"`
+	Overhead             float32 `json:"overhead"`
+	Tripped              uint32  `json:"tripped"`
 }
 
 type NodeStatAdaptiveSelection struct {

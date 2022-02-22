@@ -3,7 +3,6 @@ package services
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"opensearch.opster.io/pkg/builders"
 	"strings"
 	"time"
 )
@@ -27,7 +26,7 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 		By("Creating open search client ")
 		Eventually(func() bool {
 			var err error = nil
-			ClusterClient, err = NewOsClusterClient(builders.ClusterUrl(OpensearchCluster), "admin", "admin")
+			ClusterClient, err = NewOsClusterClient(TestClusterUrl, TestClusterUserName, TestClusterPassword)
 			if err != nil {
 				return false
 			}
@@ -37,15 +36,17 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 	Context("Data Service Tests logic", func() {
 		It("Test Has No Indices With No Replica", func() {
 			mapping := strings.NewReader(`{
-											 'settings': {
-											   'index': {
-													'number_of_shards': 1,
-													'number_of_replicas': 1
+											 "settings": {
+											   "index": {
+													"number_of_shards": 1,
+													"number_of_replicas": 1
 													}
 												  }
 											 }`)
-			indexName := "cat-indices-test"
-			CreateIndex(ClusterClient, indexName, mapping)
+			indexName := "indices-no-rep-test"
+			DeleteIndex(ClusterClient, indexName)
+			success, err := CreateIndex(ClusterClient, indexName, mapping)
+			Expect(success == 200 || success == 201).Should(BeTrue())
 			hasNoReplicas, err := HasIndicesWithNoReplica(ClusterClient)
 			Expect(err).Should(BeNil())
 			Expect(hasNoReplicas).ShouldNot(BeTrue())
@@ -53,16 +54,19 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 		})
 		It("Test Has Indices With No Replica", func() {
 			mapping := strings.NewReader(`{
-											 'settings': {
-											   'index': {
-													'number_of_shards': 1,
-													'number_of_replicas': 0
+											 "settings": {
+											   "index": {
+													"number_of_shards": 1,
+													"number_of_replicas": 0
 													}
 												  }
 											 }`)
-			indexName := "cat-indices-test"
-			CreateIndex(ClusterClient, indexName, mapping)
-			hasNoReplicas, err := HasIndicesWithNoReplica(ClusterClient)
+			indexName := "indices-with-rep-test"
+			DeleteIndex(ClusterClient, indexName)
+			hasNoReplicas := false
+			success, err := CreateIndex(ClusterClient, indexName, mapping)
+			Expect(success == 200 || success == 201).Should(BeTrue())
+			hasNoReplicas, err = HasIndicesWithNoReplica(ClusterClient)
 			Expect(err).Should(BeNil())
 			Expect(hasNoReplicas).Should(BeTrue())
 			DeleteIndex(ClusterClient, indexName)

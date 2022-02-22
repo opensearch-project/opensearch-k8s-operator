@@ -3,7 +3,6 @@ package services
 import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	"opensearch.opster.io/pkg/builders"
 	"strings"
 	"time"
 )
@@ -26,7 +25,7 @@ var _ = Describe("OpensearchCLuster API", func() {
 		By("Creating open search client ")
 		Eventually(func() bool {
 			var err error = nil
-			ClusterClient, err = NewOsClusterClient(builders.ClusterUrl(OpensearchCluster), "admin", "admin")
+			ClusterClient, err = NewOsClusterClient(TestClusterUrl, TestClusterUserName, TestClusterPassword)
 			if err != nil {
 				return false
 			}
@@ -41,30 +40,13 @@ var _ = Describe("OpensearchCLuster API", func() {
 			response, err := ClusterClient.CatNodes()
 			Expect(err).Should(BeNil())
 			Expect(response).ShouldNot(BeEmpty())
-			Expect(response.Ip).ShouldNot(BeEmpty())
+			Expect(response[0].Ip).ShouldNot(BeEmpty())
 		})
 		It("Test Nodes Stats", func() {
-			mapping := strings.NewReader(`{
-											 "settings": {
-											   "index": {
-													"number_of_shards": 1
-													}
-												  }
-											 }`)
-			indexName := "cat-indices-test"
-			CreateIndex(ClusterClient, indexName, mapping)
-			response, err := ClusterClient.CatIndices()
+			response, err := ClusterClient.NodesStats()
 			Expect(err).Should(BeNil())
-			Expect(response).ShouldNot(BeEmpty())
-			indexExists := false
-			for _, res := range response {
-				if indexName == res.Index {
-					indexExists = true
-					break
-				}
-			}
-			Expect(indexExists).Should(BeTrue())
-			DeleteIndex(ClusterClient, indexName)
+			Expect(response).ShouldNot(BeNil())
+			Expect(response.Nodes).ShouldNot(BeEmpty())
 		})
 		It("Test Cat Indices", func() {
 			mapping := strings.NewReader(`{
@@ -75,6 +57,7 @@ var _ = Describe("OpensearchCLuster API", func() {
 												  }
 											 }`)
 			indexName := "cat-indices-test"
+			DeleteIndex(ClusterClient, indexName)
 			CreateIndex(ClusterClient, indexName, mapping)
 			response, err := ClusterClient.CatIndices()
 			Expect(err).Should(BeNil())
@@ -123,11 +106,11 @@ var _ = Describe("OpensearchCLuster API", func() {
 					}`
 
 			response, err := ClusterClient.PutClusterSettings(settingsJson)
-			Expect(err).ShouldNot(BeNil())
+			Expect(err).Should(BeNil())
 			Expect(response.Transient).ShouldNot(BeEmpty())
 
 			response, err = ClusterClient.GetClusterSettings()
-			Expect(err).ShouldNot(BeNil())
+			Expect(err).Should(BeNil())
 			Expect(response.Transient).ShouldNot(BeEmpty())
 
 			settingsJson = `{
@@ -136,7 +119,7 @@ var _ = Describe("OpensearchCLuster API", func() {
   						}
 					}`
 			response, err = ClusterClient.PutClusterSettings(settingsJson)
-			Expect(err).ShouldNot(BeNil())
+			Expect(err).Should(BeNil())
 			indicesSettings := response.Transient["indices"]
 			if indicesSettings == nil {
 				Expect(true).Should(BeTrue())
