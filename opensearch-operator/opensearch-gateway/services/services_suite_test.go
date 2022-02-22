@@ -35,6 +35,6 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	helpers.AfterSuiteLogic()
-	exec.New().Command("docker-compose", "-f", "../../test_resources/docker-compose.yml", "down")
+	exec.New().Command("docker-compose", "-f", "../../test_resources/docker-compose.yml", "down").Output()
 
 })

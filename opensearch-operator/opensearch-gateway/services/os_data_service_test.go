@@ -12,7 +12,7 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		timeout  = time.Second * 30
+		timeout  = time.Second * 120
 		interval = time.Second * 1
 	)
 
