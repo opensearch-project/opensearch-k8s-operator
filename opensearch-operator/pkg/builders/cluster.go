@@ -332,6 +332,7 @@ func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
 	return "admin", "admin"
 }
 func ClusterUrl(cr *opsterv1.OpenSearchCluster) string {
-	return fmt.Sprintf("https://%s.%s", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName)
+	return fmt.Sprintf("https://%s.%s:%d", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName, cr.Spec.General.HttpPort)
+	//return fmt.Sprintf("https://localhost:9212")
 
 }
