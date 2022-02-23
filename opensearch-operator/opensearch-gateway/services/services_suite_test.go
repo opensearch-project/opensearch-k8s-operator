@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/gomega"
 	"k8s.io/utils/exec"
 	"opensearch.opster.io/pkg/helpers"
+	"path/filepath"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	"testing"
 )
@@ -23,7 +24,7 @@ const (
 	TestClusterPassword = "admin"
 )
 
-var path = helpers.GetOperatorRootPath() + "/test_resources/docker-compose.yml"
+var path = filepath.Join(helpers.GetOperatorRootPath(), "test_resources/docker-compose.yml")
 
 var _ = BeforeSuite(func() {
 	helpers.BeforeSuiteLogic()
