@@ -11,6 +11,10 @@ jobs:
           go-version: 1.17.5
       - name: Checkout code
         uses: actions/checkout@v2
+      - name: Install Compose
+          uses: ndeloof/install-docker-compose
+          with:
+            legacy: true
       - name: Test
         run: |
           echo "Starting Tests"
