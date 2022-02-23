@@ -12,9 +12,9 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v2
       - name: Install Compose
-          uses: ndeloof/install-docker-compose
-          with:
-            legacy: true
+        uses: ndeloof/install-docker-compose
+        with:
+          legacy: true
       - name: Test
         run: |
           echo "Starting Tests"
