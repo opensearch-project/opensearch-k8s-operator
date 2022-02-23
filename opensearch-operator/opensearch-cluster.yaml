@@ -3,15 +3,13 @@ kind: OpenSearchCluster
 metadata:
   name: my-cluster
   namespace: default
-  finalizers:
-    - Opster
 spec:
   general:
     clusterName: my-cluster
     httpPort: 9200
     vendor: opensearch
     version: latest
-    serviceName: es-svc
+    serviceName: my-cluster
   dashboards:
     enable: true
   confMgmt: {}

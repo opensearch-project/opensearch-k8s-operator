@@ -32,17 +32,18 @@ type GeneralConfig struct {
 
 	//+kubebuilder:default="opster-cluster"
 	ClusterName string `json:"clusterName,omitempty"`
-	HttpPort    int32  `json:"httpPort,omitempty"`
-	/////////+kubebuilder:validation:Enum=Opensearch,Elasticsearch,Op,Es,OP,ES
+	//+kubebuilder:default=9200
+	HttpPort int32 `json:"httpPort,omitempty"`
+	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
 	Vendor         string `json:"vendor,omitempty"`
 	Version        string `json:"version,omitempty"`
 	ServiceAccount string `json:"serviceAccount,omitempty"`
-	ServiceName    string `json:"serviceName,omitempty"`
+	ServiceName    string `json:"serviceName"`
 }
 
 type NodePool struct {
-	Component    string   `json:"component,omitempty"`
-	Replicas     int32    `json:"replicas,omitempty"`
+	Component    string   `json:"component"`
+	Replicas     int32    `json:"replicas"`
 	DiskSize     int32    `json:"diskSize,omitempty"`
 	NodeSelector string   `json:"nodeSelector,omitempty"`
 	Cpu          int32    `json:"cpu,omitempty"`

@@ -62,6 +62,7 @@ spec:
                     default: opster-cluster
                     type: string
                   httpPort:
+                    default: 9200
                     format: int32
                     type: integer
                   serviceAccount:
@@ -69,10 +70,17 @@ spec:
                   serviceName:
                     type: string
                   vendor:
-                    description: ///////+kubebuilder:validation:Enum=Opensearch,Elasticsearch,Op,Es,OP,ES
+                    enum:
+                    - Opensearch
+                    - Op
+                    - OP
+                    - os
+                    - opensearch
                     type: string
                   version:
                     type: string
+                required:
+                - serviceName
                 type: object
               nodePools:
                 items:
@@ -100,6 +108,8 @@ spec:
                         type: string
                       type: array
                   required:
+                  - component
+                  - replicas
                   - roles
                   type: object
                 type: array

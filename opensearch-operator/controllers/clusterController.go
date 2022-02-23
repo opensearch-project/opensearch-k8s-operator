@@ -35,7 +35,7 @@ func (r *ClusterReconciler) Reconcile(controllerContext *ControllerContext) (*op
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				r.Logger.Error(err, "Cannot create service")
-				r.Recorder.Event(r.Instance, "Warning", "Cannot create opensearch Service ", "Requeue - Fix the problem you have on main Opensearc Service ")
+				//r.Recorder.Event(r.Instance, "Warning", "Cannot create opensearch Service ", "Requeue - Fix the problem you have on main Opensearc Service ")
 				return nil, err
 			}
 

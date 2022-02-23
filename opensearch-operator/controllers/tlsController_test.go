@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -255,6 +256,47 @@ var _ = Describe("TLS Controller", func() {
 		})
 	})
 
+	Context("When Creating an OpenSearchCluster with TLS configured", func() {
+		It("Should start a cluster successfully", func() {
+			clusterName := "tls-cluster"
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: "default"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
+					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+						Transport: &opsterv1.TlsConfigTransport{
+							Generate: true,
+							PerNode:  true,
+						},
+						Http: &opsterv1.TlsConfigHttp{
+							Generate: true,
+						},
+					}},
+					NodePools: []opsterv1.NodePool{
+						{
+							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"master", "data"},
+						},
+					},
+				}}
+			Expect(k8sClient.Create(context.Background(), &spec)).Should(Succeed())
+
+			By("Checking for Statefulset")
+			sts := appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-masters", Namespace: clusterName}, &sts)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+			Expect(*sts.Spec.Replicas).To(Equal(int32(3)))
+			Expect(checkVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
+			Expect(checkVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-http-cert", "http-cert")).Should((BeTrue()))
+			Expect(checkVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-config", "config")).Should((BeTrue()))
+			// Cleanup
+			Expect(k8sClient.Delete(context.Background(), &spec)).Should(Succeed())
+		})
+	})
+
 })
 
 func checkVolumeExists(volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, secretName string, volumeName string) bool {
@@ -262,7 +304,11 @@ func checkVolumeExists(volumes []corev1.Volume, volumeMounts []corev1.VolumeMoun
 		if volume.Name == volumeName {
 			for _, mount := range volumeMounts {
 				if mount.Name == volumeName {
-					return volume.Secret.SecretName == secretName
+					if volume.Secret != nil {
+						return volume.Secret.SecretName == secretName
+					} else if volume.ConfigMap != nil {
+						return volume.ConfigMap.Name == secretName
+					}
 				}
 			}
 			return false
