@@ -38,7 +38,7 @@ func BeforeSuiteLogic() {
 	ctx := ctrl.SetupSignalHandler()
 	By("bootstrappifng test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join(path, "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases"), filepath.Join(path, "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 	var err error = nil
