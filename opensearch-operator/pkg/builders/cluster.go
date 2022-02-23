@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	sts "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +15,7 @@ import (
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
-func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) sts.StatefulSet {
+func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.StatefulSet {
 	disk := fmt.Sprint(node.DiskSize)
 
 	availableRoles := []string{
@@ -91,19 +91,19 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
-	return sts.StatefulSet{
+	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ClusterName + "-" + node.Component,
 			Namespace: cr.Spec.General.ClusterName,
 			Labels:    labels,
 		},
-		Spec: sts.StatefulSetSpec{
+		Spec: appsv1.StatefulSetSpec{
 			Replicas: &node.Replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
 			PodManagementPolicy: "Parallel",
-			UpdateStrategy:      sts.StatefulSetUpdateStrategy{Type: "RollingUpdate"},
+			UpdateStrategy:      appsv1.StatefulSetUpdateStrategy{Type: "RollingUpdate"},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,

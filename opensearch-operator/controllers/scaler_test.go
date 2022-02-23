@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	sts "k8s.io/api/apps/v1"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
@@ -81,7 +82,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
 					return false
 				}
-				if *nodePool.Spec.Replicas != cluster2.Spec.NodePools[0].Replicas {
+				if pointer.Int32Deref(nodePool.Spec.Replicas, 1) != cluster2.Spec.NodePools[0].Replicas {
 					return false
 				}
 				return true

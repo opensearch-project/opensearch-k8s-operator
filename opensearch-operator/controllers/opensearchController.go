@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -68,12 +69,12 @@ type OpenSearchClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.Log.WithValues("cluster", req.NamespacedName)
+	r.Logger = log.FromContext(ctx).WithValues("cluster", req.NamespacedName)
 	r.Logger.Info("Reconciling OpenSearchCluster")
 	myFinalizerName := "Opster"
 
-	instance := &opsterv1.OpenSearchCluster{}
-	err := r.Get(ctx, req.NamespacedName, instance)
+	r.Instance = &opsterv1.OpenSearchCluster{}
+	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// object not found, could have been deleted after
@@ -86,14 +87,14 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	/// ------ check if CRD has been deleted ------ ///
 	///	if ns deleted, delete the associated resources ///
 	if r.Instance.ObjectMeta.DeletionTimestamp.IsZero() {
-		if !helpers.ContainsString(instance.GetFinalizers(), myFinalizerName) {
+		if !helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
 			// Use RetryOnConflict to update finalizer to handle any changes to resource
 			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
+				if err := r.Get(ctx, req.NamespacedName, r.Instance); err != nil {
 					return err
 				}
-				controllerutil.AddFinalizer(instance, myFinalizerName)
-				return r.Update(ctx, instance)
+				controllerutil.AddFinalizer(r.Instance, myFinalizerName)
+				return r.Update(ctx, r.Instance)
 			})
 			if err != nil {
 				return ctrl.Result{}, err
@@ -111,11 +112,11 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 			// remove our finalizer from the list and update it.
 			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
+				if err := r.Get(ctx, req.NamespacedName, r.Instance); err != nil {
 					return err
 				}
-				controllerutil.RemoveFinalizer(instance, myFinalizerName)
-				return r.Update(ctx, instance)
+				controllerutil.RemoveFinalizer(r.Instance, myFinalizerName)
+				return r.Update(ctx, r.Instance)
 			})
 			if err != nil {
 				return ctrl.Result{}, err
@@ -131,9 +132,9 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	switch r.Instance.Status.Phase {
 	case opsterv1.PhasePending:
-		return r.reconcilePhasePending()
+		return r.reconcilePhasePending(ctx)
 	case opsterv1.PhaseRunning:
-		return r.reconcilePhaseRunning()
+		return r.reconcilePhaseRunning(ctx)
 	default:
 		r.Logger.Info("NOTHING WILL HAPPEN - DEFAULT")
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
@@ -161,16 +162,22 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(cluster *opsterv1.
 	return nil
 }
 
-func (r *OpenSearchClusterReconciler) reconcilePhasePending() (ctrl.Result, error) {
+func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context) (ctrl.Result, error) {
 	r.Logger.Info("start reconcile - Phase: PENDING")
-	r.Instance.Status.Phase = opsterv1.PhaseRunning
 	componentStatus := opsterv1.ComponentStatus{
 		Component:   "",
 		Status:      "",
 		Description: "",
 	}
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
+			return err
+		}
+		r.Instance.Status.Phase = opsterv1.PhaseRunning
+		r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, componentStatus)
+		return r.Status().Update(ctx, r.Instance)
+	})
 	r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, componentStatus)
-	err := r.Status().Update(context.TODO(), r.Instance)
 	if err != nil {
 		return ctrl.Result{}, err
 
@@ -178,85 +185,70 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending() (ctrl.Result, erro
 	return ctrl.Result{Requeue: true}, nil
 }
 
-func (r *OpenSearchClusterReconciler) reconcilePhaseRunning() (ctrl.Result, error) {
+func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context) (ctrl.Result, error) {
 
 	/// ------ Create NameSpace -------
 	ns_query := &corev1.Namespace{}
 	// try to see if the ns already exists
-	err := r.Get(context.TODO(), client.ObjectKey{Name: r.Instance.Spec.General.ClusterName}, ns_query)
-	if err != nil {
+	err := r.Get(ctx, client.ObjectKey{Name: r.Instance.Spec.General.ClusterName}, ns_query)
+	if errors.IsNotFound(err) {
 		result, err := r.createNamespace(r.Instance)
 		if err != nil {
 			return result, err
 		}
+	} else if err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Run through all sub controllers to create or update all needed objects
-	controllerContext := NewControllerContext()
+	reconcilerContext := reconcilers.NewReconcilerContext()
 
-	// Reconcile TLS config
-	tls := TlsReconciler{
-		Client:   r.Client,
-		Recorder: r.Recorder,
-		Logger:   r.Logger.WithValues("controller", "tls"),
-		Instance: r.Instance,
-	}
-	state, err := tls.Reconcile(&controllerContext)
-	r.updateStatus(state)
-	if err != nil {
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	}
+	tls := reconcilers.NewTLSReconciler(
+		r.Client,
+		ctx,
+		&reconcilerContext,
+		r.Instance,
+	)
+	config := reconcilers.NewConfigurationReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
+	cluster := reconcilers.NewClusterReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
+	scaler := reconcilers.NewScalerReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
+	dashboards := reconcilers.NewDashboardsReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
 
-	// Reconcile opensearch configuration
-	config := ConfigurationReconciler{
-		Client:   r.Client,
-		Recorder: r.Recorder,
-		Logger:   r.Logger.WithValues("controller", "configuration"),
-		Instance: r.Instance,
+	componentReconcilers := []reconcilers.ComponentReconciler{
+		tls.Reconcile,
+		config.Reconcile,
+		cluster.Reconcile,
+		scaler.Reconcile,
+		dashboards.Reconcile,
 	}
-	state, err = config.Reconcile(&controllerContext)
-	r.updateStatus(state)
-	if err != nil {
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	}
-
-	// Reconcile cluster
-	cluster := ClusterReconciler{
-		Client:   r.Client,
-		Recorder: r.Recorder,
-		Logger:   r.Logger.WithValues("controller", "cluster"),
-		Instance: r.Instance,
-	}
-	state, err = cluster.Reconcile(&controllerContext)
-	r.updateStatus(state)
-	if err != nil {
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	}
-
-	// Scaler Reconcile
-	scaler := ScalerReconciler{
-		Client:   r.Client,
-		Recorder: r.Recorder,
-		Logger:   r.Logger.WithValues("controller", "scaler"),
-		Instance: r.Instance,
-	}
-	status, err := scaler.Reconcile(&controllerContext)
-	r.updateStatusList(status)
-	if err != nil {
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	}
-
-	if r.Instance.Spec.Dashboards.Enable {
-		dash := DashboardReconciler{
-			Client:   r.Client,
-			Recorder: r.Recorder,
-			Logger:   r.Logger.WithValues("controller", "dashboards"),
-			Instance: r.Instance,
-		}
-		state, err = dash.Reconcile(&controllerContext)
-		r.updateStatus(state)
-		if err != nil {
-			return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+	for _, rec := range componentReconcilers {
+		result, err := rec()
+		if err != nil || result.Requeue {
+			return result, err
 		}
 	}
 
@@ -275,29 +267,4 @@ func (r *OpenSearchClusterReconciler) createNamespace(instance *opsterv1.OpenSea
 	}
 	r.Logger.Info("Namespace created successfully", "namespace", ns.Name)
 	return ctrl.Result{}, nil
-}
-
-func (r *OpenSearchClusterReconciler) updateStatus(status *opsterv1.ComponentStatus) {
-	if status != nil {
-		found := false
-		for idx, value := range r.Instance.Status.ComponentsStatus {
-			if value.Component == status.Component {
-				r.Instance.Status.ComponentsStatus[idx] = *status
-				found = true
-				break
-			}
-		}
-		if !found {
-			r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, *status)
-		}
-		if err := r.Status().Update(context.TODO(), r.Instance); err != nil {
-			r.Logger.Error(err, "Failed to update status")
-		}
-	}
-}
-
-func (r *OpenSearchClusterReconciler) updateStatusList(statusList []opsterv1.ComponentStatus) {
-	for _, status := range statusList {
-		r.updateStatus(&status)
-	}
 }
