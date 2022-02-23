@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
@@ -51,9 +52,32 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		headlessService := builders.NewHeadlessServiceForNodePool(r.instance, &nodePool)
 		result.Combine(r.ReconcileResource(headlessService, reconciler.StatePresent))
 
-		sts := builders.NewSTSForNodePool(r.instance, nodePool, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
-		result.Combine(r.ReconcileResource(sts, reconciler.StatePresent))
+		result.Combine(r.reconcileNodeStatefulSet(nodePool))
 	}
 
 	return result.Result, result.Err
+}
+
+func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool) (*ctrl.Result, error) {
+	sts := builders.NewSTSForNodePool(r.instance, nodePool, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
+
+	// First ensure that the statefulset exists
+	result, err := r.ReconcileResource(sts, reconciler.StateCreated)
+	if err != nil || result != nil {
+		return result, err
+	}
+
+	// Next get the existing statefulset
+	existing := &appsv1.StatefulSet{}
+	err = r.Client.Get(r.ctx, client.ObjectKeyFromObject(sts), existing)
+	if err != nil {
+		return result, err
+	}
+
+	// Now set the desired replicas to be the existing replicas
+	// This will allow the scaler reconciler to function correctly
+	sts.Spec.Replicas = existing.Spec.Replicas
+
+	// Finally we enforce the desired state
+	return r.ReconcileResource(sts, reconciler.StatePresent)
 }
