@@ -9,6 +9,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
@@ -197,12 +198,12 @@ var _ = Describe("TLS Controller", func() {
 
 			Expect(controllerContext.Volumes).Should(HaveLen(6))
 			Expect(controllerContext.VolumeMounts).Should(HaveLen(6))
-			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-transport", "transport-ca")).Should((BeTrue()))
-			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-transport", "transport-key")).Should((BeTrue()))
-			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-transport", "transport-cert")).Should((BeTrue()))
-			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-http", "http-ca")).Should((BeTrue()))
-			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-http", "http-key")).Should((BeTrue()))
-			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-http", "http-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-transport", "transport-ca")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-transport", "transport-key")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-transport", "transport-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-http", "http-ca")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-http", "http-key")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-http", "http-cert")).Should((BeTrue()))
 
 			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
@@ -247,8 +248,8 @@ var _ = Describe("TLS Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 			Expect(controllerContext.Volumes).Should(HaveLen(2))
 			Expect(controllerContext.VolumeMounts).Should(HaveLen(2))
-			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "my-transport-certs", "transport-certs")).Should((BeTrue()))
-			Expect(checkVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "my-http-certs", "http-certs")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "my-transport-certs", "transport-certs")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "my-http-certs", "http-certs")).Should((BeTrue()))
 
 			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
@@ -289,30 +290,12 @@ var _ = Describe("TLS Controller", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 			Expect(*sts.Spec.Replicas).To(Equal(int32(3)))
-			Expect(checkVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
-			Expect(checkVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-http-cert", "http-cert")).Should((BeTrue()))
-			Expect(checkVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-config", "config")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-http-cert", "http-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-config", "config")).Should((BeTrue()))
 			// Cleanup
 			Expect(k8sClient.Delete(context.Background(), &spec)).Should(Succeed())
 		})
 	})
 
 })
-
-func checkVolumeExists(volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, secretName string, volumeName string) bool {
-	for _, volume := range volumes {
-		if volume.Name == volumeName {
-			for _, mount := range volumeMounts {
-				if mount.Name == volumeName {
-					if volume.Secret != nil {
-						return volume.Secret.SecretName == secretName
-					} else if volume.ConfigMap != nil {
-						return volume.ConfigMap.Name == secretName
-					}
-				}
-			}
-			return false
-		}
-	}
-	return false
-}

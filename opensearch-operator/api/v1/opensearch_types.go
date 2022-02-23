@@ -60,7 +60,21 @@ type ConfMgmt struct {
 }
 
 type DashboardsConfig struct {
+	Enable bool                 `json:"enable,omitempty"`
+	Tls    *DashboardsTlsConfig `json:"tls,omitempty"`
+}
+
+type DashboardsTlsConfig struct {
+	// Enable HTTPS for Dashboards
 	Enable bool `json:"enable,omitempty"`
+	// Generate certificate, if false either secret or keySecret & certSecret must be provided
+	Generate bool `json:"generate,omitempty"`
+	// Optional, name of a secret that contains tls.key and tls.crt data, use either this or set the separate keySecret and certSecret fields
+	Secret string `json:"secret,omitempty"`
+	// Optional, secret that contains the private key
+	KeySecret *TlsSecret `json:"keySecret,omitempty"`
+	// Optional, secret that contains the certificate for the private key, must be signed by the provided CA
+	CertSecret *TlsSecret `json:"certSecret,omitempty"`
 }
 
 // Security defines options for managing the opensearch-security plugin

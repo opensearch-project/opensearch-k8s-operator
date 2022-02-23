@@ -53,6 +53,42 @@ spec:
                 properties:
                   enable:
                     type: boolean
+                  tls:
+                    properties:
+                      certSecret:
+                        description: Optional, secret that contains the certificate
+                          for the private key, must be signed by the provided CA
+                        properties:
+                          key:
+                            type: string
+                          secretName:
+                            type: string
+                        required:
+                        - secretName
+                        type: object
+                      enable:
+                        description: Enable HTTPS for Dashboards
+                        type: boolean
+                      generate:
+                        description: Generate certificate, if false either secret
+                          or keySecret & certSecret must be provided
+                        type: boolean
+                      keySecret:
+                        description: Optional, secret that contains the private key
+                        properties:
+                          key:
+                            type: string
+                          secretName:
+                            type: string
+                        required:
+                        - secretName
+                        type: object
+                      secret:
+                        description: Optional, name of a secret that contains tls.key
+                          and tls.crt data, use either this or set the separate keySecret
+                          and certSecret fields
+                        type: string
+                    type: object
                 type: object
               general:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
