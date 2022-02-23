@@ -23,10 +23,12 @@ const (
 	TestClusterPassword = "admin"
 )
 
+var path = helpers.GetOperatorRootPath() + "/test_resources/docker-compose.yml"
+
 var _ = BeforeSuite(func() {
 	helpers.BeforeSuiteLogic()
 
-	cmd := exec.New().Command("docker-compose", "-f", "../../test_resources/docker-compose.yml", "up", "-d")
+	cmd := exec.New().Command("docker-compose", "-f", path, "up", "-d")
 	_, err := cmd.Output()
 	if err != nil {
 		fmt.Println("failed to start tests. please make sure docker compose is installed and configured in path")
@@ -35,6 +37,6 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	helpers.AfterSuiteLogic()
-	exec.New().Command("docker-compose", "-f", "../../test_resources/docker-compose.yml", "down").Output()
+	exec.New().Command("docker-compose", "-f", path, "down").Output()
 
 })

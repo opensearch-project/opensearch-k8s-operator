@@ -13,12 +13,14 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"os"
 	"path/filepath"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"strings"
 	"time"
 )
 
@@ -26,6 +28,7 @@ var (
 	K8sClient  client.Client // You'll be using this client in your tests.
 	testEnv    *envtest.Environment
 	RestConfig *rest.Config
+	path       = GetOperatorRootPath()
 )
 
 func BeforeSuiteLogic() {
@@ -35,7 +38,7 @@ func BeforeSuiteLogic() {
 	ctx := ctrl.SetupSignalHandler()
 	By("bootstrappifng test environment")
 	testEnv = &envtest.Environment{
-		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
+		CRDDirectoryPaths:     []string{filepath.Join(path, "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 	var err error = nil
@@ -157,6 +160,19 @@ func GetPod(k8sClient client.Client, name string, namespace string) (corev1.Pod,
 	} else {
 		return pod, err
 	}
+}
+
+func GetOperatorRootPath() string {
+	path, _ := os.Getwd()
+	index := strings.Index(path, "opensearch-k8-operator/opensearch-operator")
+	length := len("opensearch-k8s-operator/opensearch-operator")
+	if index < 0 {
+		return ""
+	}
+
+	inputFmt := path[0 : index+length]
+	return inputFmt
+
 }
 
 func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1.OpenSearchCluster {
