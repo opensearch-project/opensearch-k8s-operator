@@ -141,7 +141,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 		componentStatus := opsterv1.ComponentStatus{
 			Component:   "Scaler",
 			Status:      "Excluded",
-			Description: currentSts.ObjectMeta.Name,
+			Description: nodePoolGroupName,
 		}
 		r.Recorder.Event(r.Instance, "Normal", "excluded node ", fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
 		r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
