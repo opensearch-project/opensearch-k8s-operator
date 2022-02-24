@@ -28,10 +28,10 @@ var path = filepath.Join(helpers.GetOperatorRootPath(), "test_resources/docker-c
 
 var _ = BeforeSuite(func() {
 	cmd := exec.New().Command("docker-compose", "-f", path, "up", "-d")
-	_, err := cmd.Output()
-	if err != nil {
-		fmt.Println("failed to start tests. please make sure docker compose is installed and configured in path")
-	}
+
+	output, err := cmd.Output()
+	Expect(err).NotTo(HaveOccurred())
+	fmt.Println(string(output))
 }, 60)
 
 var _ = AfterSuite(func() {
