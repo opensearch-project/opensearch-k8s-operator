@@ -41,9 +41,9 @@ func BeforeSuiteLogic() {
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "..", "config", "crd", "bases"), filepath.Join(path, "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
-	var err error = nil
-	RestConfig, err = testEnv.Start()
+	restConfig, err := testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
+	RestConfig = restConfig
 	fmt.Println(err)
 	Expect(RestConfig).NotTo(BeNil())
 	if err != nil {

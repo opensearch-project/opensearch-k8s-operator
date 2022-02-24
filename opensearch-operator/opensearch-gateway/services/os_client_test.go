@@ -24,11 +24,11 @@ var _ = Describe("OpensearchCLuster API", func() {
 	BeforeEach(func() {
 		By("Creating open search client ")
 		Eventually(func() bool {
-			var err error = nil
-			ClusterClient, err = NewOsClusterClient(TestClusterUrl, TestClusterUserName, TestClusterPassword)
+			clusterClient, err := NewOsClusterClient(TestClusterUrl, TestClusterUserName, TestClusterPassword)
 			if err != nil {
 				return false
 			}
+			ClusterClient = clusterClient
 			return true
 		}, timeout, interval).Should(BeTrue())
 	})
@@ -57,8 +57,10 @@ var _ = Describe("OpensearchCLuster API", func() {
 												  }
 											 }`)
 			indexName := "cat-indices-test"
-			DeleteIndex(ClusterClient, indexName)
-			CreateIndex(ClusterClient, indexName, mapping)
+			_, err := DeleteIndex(ClusterClient, indexName)
+			Expect(err).Should(BeNil())
+			_, err = CreateIndex(ClusterClient, indexName, mapping)
+			Expect(err).Should(BeNil())
 			response, err := ClusterClient.CatIndices()
 			Expect(err).Should(BeNil())
 			Expect(response).ShouldNot(BeEmpty())
@@ -70,7 +72,7 @@ var _ = Describe("OpensearchCLuster API", func() {
 				}
 			}
 			Expect(indexExists).Should(BeTrue())
-			DeleteIndex(ClusterClient, indexName)
+			_, err = DeleteIndex(ClusterClient, indexName)
 		})
 		It("Test Cat Shards", func() {
 			mapping := strings.NewReader(`{
@@ -82,8 +84,8 @@ var _ = Describe("OpensearchCLuster API", func() {
 												  }
 											 }`)
 			indexName := "cat-shards-test"
-			CreateIndex(ClusterClient, indexName, mapping)
-
+			_, err := CreateIndex(ClusterClient, indexName, mapping)
+			Expect(err).Should(BeNil())
 			var headers = make([]string, 0)
 			response, err := ClusterClient.CatShards(headers)
 			Expect(err).Should(BeNil())
@@ -96,7 +98,9 @@ var _ = Describe("OpensearchCLuster API", func() {
 				}
 			}
 			Expect(indexExists).Should(BeTrue())
-			DeleteIndex(ClusterClient, indexName)
+			_, err = DeleteIndex(ClusterClient, indexName)
+			Expect(err).Should(BeNil())
+
 		})
 		It("Test Put Cluster Settings", func() {
 			settingsJson := `{

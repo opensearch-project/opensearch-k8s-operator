@@ -27,8 +27,6 @@ const (
 var path = filepath.Join(helpers.GetOperatorRootPath(), "test_resources/docker-compose.yml")
 
 var _ = BeforeSuite(func() {
-	helpers.BeforeSuiteLogic()
-
 	cmd := exec.New().Command("docker-compose", "-f", path, "up", "-d")
 	_, err := cmd.Output()
 	if err != nil {
@@ -37,7 +35,5 @@ var _ = BeforeSuite(func() {
 }, 60)
 
 var _ = AfterSuite(func() {
-	helpers.AfterSuiteLogic()
 	exec.New().Command("docker-compose", "-f", path, "down").Output()
-
 })

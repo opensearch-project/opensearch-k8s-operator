@@ -192,7 +192,7 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 }
 
 func getByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
-	if left.Description == right.Description && left.Component == left.Component {
+	if left.Description == right.Description && left.Component == right.Component {
 		return left, true
 	}
 	return right, false

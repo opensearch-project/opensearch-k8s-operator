@@ -21,7 +21,10 @@ func UpdateIndexSettings(clusterClient *OsClusterClient, indexName string, mappi
 		Index: []string{indexName},
 		Body:  mapping,
 	}
-	req.Do(context.Background(), clusterClient.client)
+	_, err := req.Do(context.Background(), clusterClient.client)
+	if err != nil {
+		return
+	}
 
 }
 

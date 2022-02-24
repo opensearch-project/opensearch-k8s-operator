@@ -25,11 +25,11 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 	BeforeEach(func() {
 		By("Creating open search client ")
 		Eventually(func() bool {
-			var err error = nil
-			ClusterClient, err = NewOsClusterClient(TestClusterUrl, TestClusterUserName, TestClusterPassword)
+			clusterClient, err := NewOsClusterClient(TestClusterUrl, TestClusterUserName, TestClusterPassword)
 			if err != nil {
 				return false
 			}
+			ClusterClient = clusterClient
 			return true
 		}, timeout, interval).Should(BeTrue())
 	})
