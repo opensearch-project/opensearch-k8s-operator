@@ -15,6 +15,11 @@ jobs:
         uses: KengoTODA/actions-setup-docker-compose@main
         with:
           version: '1.29.2'
+      - name: run docker-compose
+        uses: sudo-bot/action-docker-compose@latest
+        with:
+          # https://docs.docker.com/compose/reference/overview/
+          cli-args: "-f ./opensearch-operator/test_resources/docker-compose.yml up -d"
       - name: Test
         run: |
           echo "Starting Tests"
