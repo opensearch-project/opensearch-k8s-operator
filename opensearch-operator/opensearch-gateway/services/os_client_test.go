@@ -73,6 +73,7 @@ var _ = Describe("OpensearchCLuster API", func() {
 			}
 			Expect(indexExists).Should(BeTrue())
 			_, err = DeleteIndex(ClusterClient, indexName)
+			Expect(err).Should(BeNil())
 		})
 		It("Test Cat Shards", func() {
 			mapping := strings.NewReader(`{

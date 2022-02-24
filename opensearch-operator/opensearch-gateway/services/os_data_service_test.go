@@ -47,6 +47,7 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 			_, err := DeleteIndex(ClusterClient, indexName)
 			Expect(err).Should(BeNil())
 			success, err := CreateIndex(ClusterClient, indexName, mapping)
+			Expect(err).Should(BeNil())
 			Expect(success == 200 || success == 201).Should(BeTrue())
 			hasNoReplicas, err := HasIndicesWithNoReplica(ClusterClient)
 			Expect(err).Should(BeNil())

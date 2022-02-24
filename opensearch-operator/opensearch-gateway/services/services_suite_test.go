@@ -35,5 +35,8 @@ var _ = BeforeSuite(func() {
 }, 60)
 
 var _ = AfterSuite(func() {
-	exec.New().Command("docker-compose", "-f", path, "down").Output()
+	_, err := exec.New().Command("docker-compose", "-f", path, "down").Output()
+	if err != nil {
+		fmt.Println("failed to stop docker compose")
+	}
 })
