@@ -30,8 +30,9 @@ var _ = BeforeSuite(func() {
 	cmd := exec.New().Command("docker-compose", "-f", path, "up", "-d")
 
 	output, err := cmd.Output()
-	Expect(err).NotTo(HaveOccurred())
 	fmt.Println(string(output))
+	fmt.Println(err)
+	Expect(err).NotTo(HaveOccurred())
 }, 60)
 
 var _ = AfterSuite(func() {
