@@ -44,13 +44,15 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 												  }
 											 }`)
 			indexName := "indices-no-rep-test"
-			DeleteIndex(ClusterClient, indexName)
+			_, err := DeleteIndex(ClusterClient, indexName)
+			Expect(err).Should(BeNil())
 			success, err := CreateIndex(ClusterClient, indexName, mapping)
 			Expect(success == 200 || success == 201).Should(BeTrue())
 			hasNoReplicas, err := HasIndicesWithNoReplica(ClusterClient)
 			Expect(err).Should(BeNil())
 			Expect(hasNoReplicas).ShouldNot(BeTrue())
-			DeleteIndex(ClusterClient, indexName)
+			_, err = DeleteIndex(ClusterClient, indexName)
+			Expect(err).Should(BeNil())
 		})
 		It("Test Has Indices With No Replica", func() {
 			mapping := strings.NewReader(`{
@@ -62,14 +64,17 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 												  }
 											 }`)
 			indexName := "indices-with-rep-test"
-			DeleteIndex(ClusterClient, indexName)
+			_, err := DeleteIndex(ClusterClient, indexName)
+			Expect(err).Should(BeNil())
 			hasNoReplicas := false
 			success, err := CreateIndex(ClusterClient, indexName, mapping)
+			Expect(err).Should(BeNil())
 			Expect(success == 200 || success == 201).Should(BeTrue())
 			hasNoReplicas, err = HasIndicesWithNoReplica(ClusterClient)
 			Expect(err).Should(BeNil())
 			Expect(hasNoReplicas).Should(BeTrue())
-			DeleteIndex(ClusterClient, indexName)
+			_, err = DeleteIndex(ClusterClient, indexName)
+			Expect(err).Should(BeNil())
 		})
 		It("Test Node Exclude", func() {
 			nodeExcluded, err := AppendExcludeNodeHost(ClusterClient, "not-exists-node")
