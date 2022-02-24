@@ -160,89 +160,48 @@ spec:
                         properties:
                           caSecret:
                             description: Optional, secret that contains the ca certificate
+                              as ca.crt
                             properties:
-                              key:
+                              name:
+                                description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  TODO: Add other useful fields. apiVersion, kind,
+                                  uid?'
                                 type: string
-                              secretName:
-                                type: string
-                            required:
-                            - secretName
-                            type: object
-                          certSecret:
-                            description: Optional, secret that contains the certificate
-                              for the private key, must be signed by the provided
-                              CA
-                            properties:
-                              key:
-                                type: string
-                              secretName:
-                                type: string
-                            required:
-                            - secretName
                             type: object
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
                               secrets with existing certificates must be supplied
                             type: boolean
-                          keySecret:
-                            description: Optional, secret that contains the private
-                              key
-                            properties:
-                              key:
-                                type: string
-                              secretName:
-                                type: string
-                            required:
-                            - secretName
-                            type: object
                           secret:
-                            description: Optional, name of a secret that contains
-                              ca.crt, tls.key and tls.crt data, use either this or
-                              set the separate caSecret, keySecret and certSecret
-                              fields
-                            type: string
+                            description: Optional, name of a TLS secret that contains
+                              ca.crt, tls.key and tls.crt data. If ca.crt is in a
+                              different secret provide it via the caSecret field
+                            properties:
+                              name:
+                                description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  TODO: Add other useful fields. apiVersion, kind,
+                                  uid?'
+                                type: string
+                            type: object
                         type: object
                       transport:
                         properties:
                           caSecret:
                             description: Optional, secret that contains the ca certificate
+                              as ca.crt
                             properties:
-                              key:
+                              name:
+                                description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  TODO: Add other useful fields. apiVersion, kind,
+                                  uid?'
                                 type: string
-                              secretName:
-                                type: string
-                            required:
-                            - secretName
-                            type: object
-                          certSecret:
-                            description: Optional, secret that contains the certificate
-                              for the private key, must be signed by the provided
-                              CA
-                            properties:
-                              key:
-                                type: string
-                              secretName:
-                                type: string
-                            required:
-                            - secretName
                             type: object
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
                               secrets with existing certificates must be supplied
                             type: boolean
-                          keySecret:
-                            description: Optional, secret that contains the private
-                              key
-                            properties:
-                              key:
-                                type: string
-                              secretName:
-                                type: string
-                            required:
-                            - secretName
-                            type: object
                           nodesDn:
                             description: Allowed Certificate DNs for nodes, only used
                               when existing certificates are provided
@@ -253,11 +212,16 @@ spec:
                             description: Configure transport node certificate
                             type: boolean
                           secret:
-                            description: Optional, name of a secret that contains
-                              ca.crt, tls.key and tls.crt data, use either this or
-                              set the separate caSecret, keySecret and certSecret
-                              fields
-                            type: string
+                            description: Optional, name of a TLS secret that contains
+                              ca.crt, tls.key and tls.crt data. If ca.crt is in a
+                              different secret provide it via the caSecret field
+                            properties:
+                              name:
+                                description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  TODO: Add other useful fields. apiVersion, kind,
+                                  uid?'
+                                type: string
+                            type: object
                         type: object
                     type: object
                 type: object

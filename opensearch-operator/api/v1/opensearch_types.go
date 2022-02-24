@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -106,14 +107,10 @@ type TlsConfigHttp struct {
 }
 
 type TlsCertificateConfig struct {
-	// Optional, name of a secret that contains ca.crt, tls.key and tls.crt data, use either this or set the separate caSecret, keySecret and certSecret fields
-	Secret string `json:"secret,omitempty"`
-	// Optional, secret that contains the ca certificate
-	CaSecret *TlsSecret `json:"caSecret,omitempty"`
-	// Optional, secret that contains the private key
-	KeySecret *TlsSecret `json:"keySecret,omitempty"`
-	// Optional, secret that contains the certificate for the private key, must be signed by the provided CA
-	CertSecret *TlsSecret `json:"certSecret,omitempty"`
+	// Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field
+	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
+	// Optional, secret that contains the ca certificate as ca.crt
+	CaSecret corev1.LocalObjectReference `json:"caSecret,omitempty"`
 }
 
 // Reference to a secret

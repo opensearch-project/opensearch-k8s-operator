@@ -163,18 +163,16 @@ var _ = Describe("TLS Controller", func() {
 				Transport: &opsterv1.TlsConfigTransport{
 					Generate: false,
 					CertificateConfig: opsterv1.TlsCertificateConfig{
-						CaSecret:   &opsterv1.TlsSecret{SecretName: "casecret-transport"},
-						KeySecret:  &opsterv1.TlsSecret{SecretName: "keysecret-transport"},
-						CertSecret: &opsterv1.TlsSecret{SecretName: "certsecret-transport"},
+						Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
+						CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
 					},
 					NodesDn: []string{"CN=mycn", "CN=othercn"},
 				},
 				Http: &opsterv1.TlsConfigHttp{
 					Generate: false,
 					CertificateConfig: opsterv1.TlsCertificateConfig{
-						CaSecret:   &opsterv1.TlsSecret{SecretName: "casecret-http"},
-						KeySecret:  &opsterv1.TlsSecret{SecretName: "keysecret-http"},
-						CertSecret: &opsterv1.TlsSecret{SecretName: "certsecret-http"},
+						Secret:   corev1.LocalObjectReference{Name: "cert-http"},
+						CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
 					},
 				},
 			},
@@ -199,11 +197,11 @@ var _ = Describe("TLS Controller", func() {
 			Expect(controllerContext.Volumes).Should(HaveLen(6))
 			Expect(controllerContext.VolumeMounts).Should(HaveLen(6))
 			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-transport", "transport-ca")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-transport", "transport-key")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-transport", "transport-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "cert-transport", "transport-key")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "cert-transport", "transport-cert")).Should((BeTrue()))
 			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-http", "http-ca")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "keysecret-http", "http-key")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "certsecret-http", "http-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "cert-http", "http-key")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "cert-http", "http-cert")).Should((BeTrue()))
 
 			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
@@ -218,14 +216,14 @@ var _ = Describe("TLS Controller", func() {
 					Generate: false,
 					PerNode:  true,
 					CertificateConfig: opsterv1.TlsCertificateConfig{
-						Secret: "my-transport-certs",
+						Secret: corev1.LocalObjectReference{Name: "my-transport-certs"},
 					},
 					NodesDn: []string{"CN=mycn", "CN=othercn"},
 				},
 				Http: &opsterv1.TlsConfigHttp{
 					Generate: false,
 					CertificateConfig: opsterv1.TlsCertificateConfig{
-						Secret: "my-http-certs",
+						Secret: corev1.LocalObjectReference{Name: "my-http-certs"},
 					},
 				},
 			},
