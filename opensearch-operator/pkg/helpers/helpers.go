@@ -76,20 +76,36 @@ func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) [
 	}
 	return ssSlice
 }
+func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
+	removedSlice := RemoveIt(remove, ssSlice)
+	fullSliced := append(removedSlice, add)
+	return fullSliced
+}
 
-func Remove(slice []opsterv1.ComponentStatus, componenet string) []opsterv1.ComponentStatus {
-	emptyStatus := opsterv1.ComponentStatus{
-		Component:   "",
-		Status:      "",
-		Description: "",
-	}
-	for i := 0; i < len(slice); i++ {
-		if slice[i].Component == componenet {
-			slice[i] = slice[len(slice)-1]    // Copy last element to index i.
-			slice[len(slice)-1] = emptyStatus // Erase last element (write zero value).
-			slice = slice[:len(slice)-1]
+func FindFirstPartial(arr []opsterv1.ComponentStatus, item opsterv1.ComponentStatus, predicator func(opsterv1.ComponentStatus, opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool)) (opsterv1.ComponentStatus, bool) {
+	for i := 0; i < len(arr); i++ {
+		itemInArr, found := predicator(arr[i], item)
+		if found {
+			return itemInArr, found
 		}
-
 	}
-	return slice
+	return item, false
+}
+
+func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
+	mobj, ok := obj.(map[string]interface{})
+	if !ok {
+		return nil, false
+	}
+	for i := 0; i < len(keys)-1; i++ {
+		if currentVal, found := mobj[keys[i]]; found {
+			subPath, ok := currentVal.(map[string]interface{})
+			if !ok {
+				return nil, false
+			}
+			mobj = subPath
+		}
+	}
+	val, ok := mobj[keys[len(keys)-1]]
+	return val, ok
 }

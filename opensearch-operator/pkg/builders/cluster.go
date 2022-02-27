@@ -317,3 +317,15 @@ func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	}
 	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName, httpPort)
 }
+
+func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
+	return cr.Spec.General.ClusterName + "-" + nodePool.Component
+}
+func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
+	return "admin", "admin"
+}
+func ClusterUrl(cr *opsterv1.OpenSearchCluster) string {
+	return fmt.Sprintf("https://%s.%s:%d", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName, cr.Spec.General.HttpPort)
+	//return fmt.Sprintf("https://localhost:9212")
+
+}
