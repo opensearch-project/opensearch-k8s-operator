@@ -82,10 +82,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 					return false
 				}
 				oldCrd := ComposeOpensearchCrd(ClusterName, NameSpace)
-				if *nodePool.Spec.Replicas != oldCrd.Spec.NodePools[0].Replicas {
-					return false
-				}
-				return true
+				return *nodePool.Spec.Replicas != oldCrd.Spec.NodePools[0].Replicas
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
