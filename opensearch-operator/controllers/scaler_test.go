@@ -57,7 +57,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &OpensearchCluster)).Should(Succeed())
 
-			newRep := OpensearchCluster.Spec.NodePools[0].Replicas - 1
+			newRep := OpensearchCluster.Spec.NodePools[0].Replicas + 1
 			OpensearchCluster.Spec.NodePools[0].Replicas = newRep
 
 			status := len(OpensearchCluster.Status.ComponentsStatus)
