@@ -99,6 +99,7 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas)
 	if err := r.Update(ctx, &currentSts); err != nil {
 		r.Recorder.Event(r.Instance, "Normal", "failed to remove node ", fmt.Sprintf("Group-%s . Failed to remove node %s", nodePoolGroupName, lastReplicaNodeName))
+		r.Logger.Error(err, fmt.Sprintf("failed to remove node %s", lastReplicaNodeName))
 		return nil, err
 	}
 	r.Recorder.Event(r.Instance, "Normal", "decrease node ", fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
@@ -111,11 +112,13 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 	username, password := builders.UsernameAndPassword(r.Instance)
 	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
 	if err != nil {
+		r.Logger.Error(err, "failed to create os client")
 		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
 		return nil, err
 	}
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if !success || err != nil {
+		r.Logger.Error(err, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
 		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
 	}
 	return nil, err
@@ -125,6 +128,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 	username, password := builders.UsernameAndPassword(r.Instance)
 	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
 	if err != nil {
+		r.Logger.Error(err, "failed to create os client")
 		return nil, err
 	}
 	// -----  Now start remove node ------
@@ -132,6 +136,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 
 	excluded, err := services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if err != nil {
+		r.Logger.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
 		return nil, err
 	}
 	if err := r.Update(ctx, &currentSts); err != nil {
