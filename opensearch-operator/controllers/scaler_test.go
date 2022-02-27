@@ -22,7 +22,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 	const (
 		ClusterName = "cluster-test-nodes"
 		NameSpace   = "default"
-		timeout     = time.Second * 30
+		timeout     = time.Second * 120
 		interval    = time.Second * 1
 	)
 	var (
@@ -57,7 +57,7 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: OpensearchCluster.Name}, &OpensearchCluster)).Should(Succeed())
 
-			newRep := OpensearchCluster.Spec.NodePools[0].Replicas + 1
+			newRep := OpensearchCluster.Spec.NodePools[0].Replicas - 1
 			OpensearchCluster.Spec.NodePools[0].Replicas = newRep
 
 			status := len(OpensearchCluster.Status.ComponentsStatus)
@@ -81,7 +81,8 @@ var _ = Describe("OpensearchCLuster Controller", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
 					return false
 				}
-				if *nodePool.Spec.Replicas != cluster2.Spec.NodePools[0].Replicas {
+				oldCrd := ComposeOpensearchCrd(ClusterName, NameSpace)
+				if *nodePool.Spec.Replicas != oldCrd.Spec.NodePools[0].Replicas {
 					return false
 				}
 				return true
