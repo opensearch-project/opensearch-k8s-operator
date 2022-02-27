@@ -2,14 +2,15 @@ package controllers
 
 import (
 	"context"
-	"errors"
 	"fmt"
-
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -19,6 +20,11 @@ type ScalerReconciler struct {
 	logr.Logger
 	Instance *opsterv1.OpenSearchCluster
 }
+
+//+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcluster/finalizers,verbs=update
 
 func (r *ScalerReconciler) Reconcile(controllerContext *ControllerContext) ([]opsterv1.ComponentStatus, error) {
 	var statusList []opsterv1.ComponentStatus
@@ -35,77 +41,159 @@ func (r *ScalerReconciler) Reconcile(controllerContext *ControllerContext) ([]op
 }
 
 func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool, controllerContext *ControllerContext) (*opsterv1.ComponentStatus, error) {
-
 	namespace := r.Instance.Spec.General.ClusterName
-	sts_name := r.Instance.Spec.General.ClusterName + "-" + nodePool.Component
+	sts_name := builders.StsName(r.Instance, nodePool)
+	currentSts := appsv1.StatefulSet{}
 
-	nodePoolSTS := appsv1.StatefulSet{}
-
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &nodePoolSTS); err != nil {
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &currentSts); err != nil {
 		return nil, err
 	}
 
-	if *nodePoolSTS.Spec.Replicas == nodePool.Replicas {
+	var desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
+	if desireReplicaDiff == 0 {
 		return nil, nil
 	}
-	var found bool
-	name := fmt.Sprintf("Scaler-%s", nodePool.Component)
-	for _, existingStatus := range r.Instance.Status.ComponentsStatus {
-		if existingStatus.Component == name {
-			found = true
-			if existingStatus.Status == "Running" {
-				// --- Now check if scaling is done logic ----
-				done := true
-				if !done {
-					r.Recorder.Event(r.Instance, "Normal", "one scale is already in progress on that group ", "one scale is already in progress on that group")
-					return nil, nil
-				} else {
-					// if scale logic is done - remove componentStatus
-					componentStatus := opsterv1.ComponentStatus{
-						Component:   name,
-						Status:      "Running",
-						Description: "",
-					}
-					newStatus := helpers.RemoveIt(componentStatus, r.Instance.Status.ComponentsStatus)
-					r.Instance.Status.ComponentsStatus = newStatus
-					if err := r.Status().Update(context.TODO(), r.Instance); err != nil {
-						err = errors.New("cannot update instance status")
-						return nil, err
-					}
-
-					//r.Recorder.Event(r.Instance, "Normal", "done scaling", "done scaling")
-					nodePoolSTS.Spec.Replicas = &nodePool.Replicas
-					if err := r.Update(context.TODO(), &nodePoolSTS); err != nil {
-						err = errors.New("cannot update instance status")
-
-						return nil, err
-					}
-					return nil, nil
-				}
-			} else if existingStatus.Status == "Failed" {
-				r.Recorder.Event(r.Instance, "Normal", "something want worng with scaling operation", "something went worng)")
-				return nil, nil
-			}
-		}
+	componentStatus := opsterv1.ComponentStatus{
+		Component:   "Scaler",
+		Description: nodePool.Component,
 	}
-	// if not found componentStatus and replicas not equal
+	comp := r.Instance.Status.ComponentsStatus
+	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, getByDescriptionAndGroup)
 	if !found {
-		// starting new componentStatus
+		if desireReplicaDiff > 0 {
+			status, err := r.excludeNode(context.TODO(), currentStatus, currentSts, nodePool.Component)
+			return status, err
+
+		}
+		if desireReplicaDiff < 0 {
+			status, err := r.increaseOneNode(context.TODO(), currentSts, nodePool.Component)
+			return status, err
+		}
+	}
+	if currentStatus.Status == "Excluded" {
+		status, err := r.drainNode(context.TODO(), currentStatus, currentSts, nodePool.Component)
+		return status, err
+	}
+	if currentStatus.Status == "Drained" {
+		status, err := r.decreaseOneNode(context.TODO(), currentStatus, currentSts, nodePool.Component)
+		return status, err
+	}
+	return nil, nil
+}
+
+func (r *ScalerReconciler) increaseOneNode(ctx context.Context, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+	// -----  Now start add node ------
+	*currentSts.Spec.Replicas++
+	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, currentSts.Spec.Replicas)
+	if err := r.Update(ctx, &currentSts); err != nil {
+		r.Recorder.Event(r.Instance, "Normal", "failed to add node ", fmt.Sprintf("Group name-%s . Failed to add node %s", currentSts.Name, lastReplicaNodeName))
+		return nil, err
+	}
+	r.Recorder.Event(r.Instance, "Normal", "added node ", fmt.Sprintf("Group-%s . added node %s", nodePoolGroupName, lastReplicaNodeName))
+	return nil, nil
+}
+
+func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+	// -----  Now start add node ------
+	*currentSts.Spec.Replicas--
+	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas)
+	if err := r.Update(ctx, &currentSts); err != nil {
+		r.Recorder.Event(r.Instance, "Normal", "failed to remove node ", fmt.Sprintf("Group-%s . Failed to remove node %s", nodePoolGroupName, lastReplicaNodeName))
+		return nil, err
+	}
+	r.Recorder.Event(r.Instance, "Normal", "decrease node ", fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
+	r.Instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.Instance.Status.ComponentsStatus)
+	err := r.Status().Update(ctx, r.Instance)
+	if err != nil {
+		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+		return nil, err
+	}
+	username, password := builders.UsernameAndPassword(r.Instance)
+	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
+	if err != nil {
+		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+		return nil, err
+	}
+	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	if !success || err != nil {
+		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+	}
+	return nil, err
+}
+
+func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+	username, password := builders.UsernameAndPassword(r.Instance)
+	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
+	if err != nil {
+		return nil, err
+	}
+	// -----  Now start remove node ------
+	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas-1)
+
+	excluded, err := services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	if err != nil {
+		return nil, err
+	}
+	if err := r.Update(ctx, &currentSts); err != nil {
+		return nil, err
+	}
+	if excluded {
 		componentStatus := opsterv1.ComponentStatus{
-			Component:   name,
-			Status:      "Running",
-			Description: "",
+			Component:   "Scaler",
+			Status:      "Excluded",
+			Description: nodePoolGroupName,
 		}
-		//r.Recorder.Event(r.Instance, "Normal", "add new status event about scale ", "add new status event about scale ")
-
-		r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, componentStatus)
-		if err := r.Status().Update(context.TODO(), r.Instance); err != nil {
-			err = errors.New("cannot update instance status")
-			return nil, err
-		}
-		// -----  Now start scaling logic ------
-
+		r.Recorder.Event(r.Instance, "Normal", "excluded node ", fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
+		r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
+		err = r.Status().Update(ctx, r.Instance)
+		return &componentStatus, err
 	}
 
-	return nil, nil
+	componentStatus := opsterv1.ComponentStatus{
+		Component:   "Scaler",
+		Status:      "Running",
+		Description: nodePoolGroupName,
+	}
+	r.Recorder.Event(r.Instance, "Normal", "failed to exclude node ", fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
+	r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
+	err = r.Status().Update(ctx, r.Instance)
+	return &componentStatus, err
+}
+
+func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+	// -----  Now start add node ------
+	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas-1)
+
+	username, password := builders.UsernameAndPassword(r.Instance)
+	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
+	if err != nil {
+		return nil, err
+	}
+	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
+	if nodeNotEmpty {
+		r.Recorder.Event(r.Instance, "Normal", "draining node ", fmt.Sprintf("Group-%s . draining node %s", nodePoolGroupName, lastReplicaNodeName))
+		return nil, err
+	}
+	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	if !success {
+		r.Recorder.Event(r.Instance, "Normal", "node is empty but node is still excluded from allocation", fmt.Sprintf("Group-%s . node %s node is empty but node is still excluded from allocation", nodePoolGroupName, lastReplicaNodeName))
+		return nil, err
+	}
+
+	componentStatus := opsterv1.ComponentStatus{
+		Component:   "Scaler",
+		Status:      "Drained",
+		Description: nodePoolGroupName,
+	}
+	r.Recorder.Event(r.Instance, "Normal", "node has drained", fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
+	r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
+	err = r.Status().Update(ctx, r.Instance)
+	return &componentStatus, err
+}
+
+func getByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
+	if left.Description == right.Description && left.Component == right.Component {
+		return left, true
+	}
+	return right, false
 }
