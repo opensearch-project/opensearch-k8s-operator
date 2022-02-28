@@ -160,7 +160,9 @@ spec:
                         properties:
                           caSecret:
                             description: Optional, secret that contains the ca certificate
-                              as ca.crt
+                              as ca.crt. If this and generate=true is set the existing
+                              CA cert from that secret is used to generate the node
+                              certs. In this case must contain ca.crt and ca.key fields
                             properties:
                               name:
                                 description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
@@ -189,7 +191,9 @@ spec:
                         properties:
                           caSecret:
                             description: Optional, secret that contains the ca certificate
-                              as ca.crt
+                              as ca.crt. If this and generate=true is set the existing
+                              CA cert from that secret is used to generate the node
+                              certs. In this case must contain ca.crt and ca.key fields
                             properties:
                               name:
                                 description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names

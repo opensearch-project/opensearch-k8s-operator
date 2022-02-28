@@ -76,7 +76,13 @@ func (r *TlsReconciler) handleTransportGenerateGlobal(controllerContext *Control
 
 	r.Logger.Info("Generating certificates", "interface", "transport")
 
-	ca, err := r.caCert(caSecretName, namespace, clusterName)
+	var ca tls.Cert
+	var err error
+	if r.Instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
+		ca, err = r.providedCaCert(r.Instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
+	} else {
+		ca, err = r.caCert(caSecretName, namespace, clusterName)
+	}
 	if err != nil {
 		return err
 	}
@@ -124,7 +130,13 @@ func (r *TlsReconciler) handleTransportGeneratePerNode(controllerContext *Contro
 	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-transport-cert"
 
-	ca, err := r.caCert(caSecretName, namespace, clusterName)
+	var ca tls.Cert
+	var err error
+	if r.Instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
+		ca, err = r.providedCaCert(r.Instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
+	} else {
+		ca, err = r.caCert(caSecretName, namespace, clusterName)
+	}
 	if err != nil {
 		return err
 	}
@@ -203,7 +215,6 @@ func (r *TlsReconciler) handleTransportExistingCerts(perNode bool, certConfig op
 			return err
 		}
 		mountFolder("transport", "certs", certConfig.Secret.Name, controllerContext)
-		// TODO: Handle separate caSecret
 		// Extend opensearch.yml
 		controllerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", "tls-transport/${HOSTNAME}.crt")
 		controllerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", "tls-transport/${HOSTNAME}.key")
@@ -241,7 +252,13 @@ func (r *TlsReconciler) handleHttp(generate bool, certConfig opsterv1.TlsCertifi
 	if generate {
 		r.Logger.Info("Generating certificates", "interface", "http")
 
-		ca, err := r.caCert(caSecretName, namespace, clusterName)
+		var ca tls.Cert
+		var err error
+		if r.Instance.Spec.Security.Tls.Http.CertificateConfig.CaSecret.Name != "" {
+			ca, err = r.providedCaCert(r.Instance.Spec.Security.Tls.Http.CertificateConfig.CaSecret.Name, namespace)
+		} else {
+			ca, err = r.caCert(caSecretName, namespace, clusterName)
+		}
 		if err != nil {
 			return err
 		}
@@ -275,7 +292,7 @@ func (r *TlsReconciler) handleHttp(generate bool, certConfig opsterv1.TlsCertifi
 	} else {
 		if certConfig.Secret.Name == "" {
 			err := errors.New("missing secret in spec")
-			r.Logger.Error(err, "Not all secrets for transport provided")
+			r.Logger.Error(err, "Not all secrets for http provided")
 			return err
 		}
 		if certConfig.CaSecret.Name == "" {
@@ -312,6 +329,16 @@ func (r *TlsReconciler) caCert(secretName string, namespace string, clusterName 
 	} else {
 		ca = tls.CAFromSecret(caSecret.Data)
 	}
+	return ca, nil
+}
+
+func (r *TlsReconciler) providedCaCert(secretName string, namespace string) (tls.Cert, error) {
+	var ca tls.Cert
+	caSecret := corev1.Secret{}
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
+		return ca, err
+	}
+	ca = tls.CAFromSecret(caSecret.Data)
 	return ca, nil
 }
 

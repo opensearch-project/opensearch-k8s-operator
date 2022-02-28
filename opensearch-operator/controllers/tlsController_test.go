@@ -10,6 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
+	tls "opensearch.opster.io/pkg/tls"
 
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
@@ -293,6 +294,67 @@ var _ = Describe("TLS Controller", func() {
 			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-config", "config")).Should((BeTrue()))
 			// Cleanup
 			Expect(k8sClient.Delete(context.Background(), &spec)).Should(Succeed())
+		})
+	})
+
+	Context("When Reconciling the TLS configuration with external CA certificate", func() {
+		It("Should create certificates using that CA", func() {
+			clusterName := "tls-withca"
+			caSecretName := clusterName + "-myca"
+			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+				Transport: &opsterv1.TlsConfigTransport{
+					Generate: true,
+					PerNode:  true,
+					CertificateConfig: opsterv1.TlsCertificateConfig{
+						CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+					},
+				},
+				Http: &opsterv1.TlsConfigHttp{
+					Generate: true,
+					CertificateConfig: opsterv1.TlsCertificateConfig{
+						CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+					},
+				},
+			},
+			}}}
+			data := make(map[string][]byte)
+			ca, err := tls.GenerateCA(clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			data["ca.crt"] = ca.CertData()
+			data["ca.key"] = ca.KeyData()
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data:       data,
+			}
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+				},
+			}
+			err = k8sClient.Create(context.TODO(), &ns)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = k8sClient.Create(context.TODO(), &caSecret)
+			Expect(err).ToNot(HaveOccurred())
+
+			underTest := TlsReconciler{
+				Client:   k8sClient,
+				Instance: &spec,
+				Logger:   logr.Discard(),
+				//Recorder: recorder,
+			}
+			controllerContext := NewControllerContext()
+			_, err = underTest.Reconcile(&controllerContext)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(controllerContext.Volumes).Should(HaveLen(2))
+			Expect(controllerContext.VolumeMounts).Should(HaveLen(2))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, clusterName+"-http-cert", "http-cert")).Should((BeTrue()))
+
+			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=*,OU=tls-withca\"]"))
 		})
 	})
 
