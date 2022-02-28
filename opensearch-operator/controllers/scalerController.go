@@ -62,6 +62,10 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool, contro
 	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, getByDescriptionAndGroup)
 	if !found {
 		if desireReplicaDiff > 0 {
+			if !r.Instance.Spec.ConfMgmt.SmartScaler {
+				status, err := r.decreaseOneNode(context.TODO(), currentStatus, currentSts, nodePool.Component, r.Instance.Spec.ConfMgmt.SmartScaler)
+				return status, err
+			}
 			status, err := r.excludeNode(context.TODO(), currentStatus, currentSts, nodePool.Component)
 			return status, err
 
@@ -76,7 +80,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool, contro
 		return status, err
 	}
 	if currentStatus.Status == "Drained" {
-		status, err := r.decreaseOneNode(context.TODO(), currentStatus, currentSts, nodePool.Component)
+		status, err := r.decreaseOneNode(context.TODO(), currentStatus, currentSts, nodePool.Component, r.Instance.Spec.ConfMgmt.SmartScaler)
 		return status, err
 	}
 	return nil, nil
@@ -94,7 +98,7 @@ func (r *ScalerReconciler) increaseOneNode(ctx context.Context, currentSts appsv
 	return nil, nil
 }
 
-func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (*opsterv1.ComponentStatus, error) {
 	// -----  Now start add node ------
 	*currentSts.Spec.Replicas--
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas)
@@ -108,6 +112,9 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 	err := r.Status().Update(ctx, r.Instance)
 	if err != nil {
 		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+		return nil, err
+	}
+	if !smartDecrease {
 		return nil, err
 	}
 	username, password := builders.UsernameAndPassword(r.Instance)
