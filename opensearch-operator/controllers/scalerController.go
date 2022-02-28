@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
-
-	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -110,10 +111,17 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 		return nil, err
 	}
 	username, password := builders.UsernameAndPassword(r.Instance)
-	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
+	service, created, err := r.CreateNodePortServiceIfNotExists()
+	if err != nil {
+		return nil, err
+	}
+	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.Instance), username, password)
 	if err != nil {
 		r.Logger.Error(err, "failed to create os client")
 		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+		if created {
+			r.DeleteNodePortService(service)
+		}
 		return nil, err
 	}
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
@@ -121,14 +129,24 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 		r.Logger.Error(err, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
 		r.Recorder.Event(r.Instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
 	}
+	if created {
+		r.DeleteNodePortService(service)
+	}
 	return nil, err
 }
 
 func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
 	username, password := builders.UsernameAndPassword(r.Instance)
-	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
+	service, created, err := r.CreateNodePortServiceIfNotExists()
+	if err != nil {
+		return nil, err
+	}
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
 	if err != nil {
 		r.Logger.Error(err, "failed to create os client")
+		if created {
+			r.DeleteNodePortService(service)
+		}
 		return nil, err
 	}
 	// -----  Now start remove node ------
@@ -137,6 +155,9 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 	excluded, err := services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if err != nil {
 		r.Logger.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
+		if created {
+			r.DeleteNodePortService(service)
+		}
 		return nil, err
 	}
 	if err := r.Update(ctx, &currentSts); err != nil {
@@ -151,6 +172,9 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 		r.Recorder.Event(r.Instance, "Normal", "excluded node ", fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
 		r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
 		err = r.Status().Update(ctx, r.Instance)
+		if created {
+			r.DeleteNodePortService(service)
+		}
 		return &componentStatus, err
 	}
 
@@ -162,6 +186,9 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 	r.Recorder.Event(r.Instance, "Normal", "failed to exclude node ", fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
 	err = r.Status().Update(ctx, r.Instance)
+	if created {
+		r.DeleteNodePortService(service)
+	}
 	return &componentStatus, err
 }
 
@@ -170,8 +197,15 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas-1)
 
 	username, password := builders.UsernameAndPassword(r.Instance)
-	clusterClient, err := services.NewOsClusterClient(builders.ClusterUrl(r.Instance), username, password)
+	service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {
+		return nil, err
+	}
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+	if err != nil {
+		if created {
+			r.DeleteNodePortService(service)
+		}
 		return nil, err
 	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
@@ -193,6 +227,9 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 	r.Recorder.Event(r.Instance, "Normal", "node has drained", fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
 	r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
 	err = r.Status().Update(ctx, r.Instance)
+	if created {
+		r.DeleteNodePortService(service)
+	}
 	return &componentStatus, err
 }
 
@@ -201,4 +238,32 @@ func getByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.Comp
 		return left, true
 	}
 	return right, false
+}
+
+func (r *ScalerReconciler) CreateNodePortServiceIfNotExists() (corev1.Service, bool, error) {
+	// Create headless service for sts
+	namespace := r.Instance.Spec.General.ClusterName
+	targetService := builders.NewNodePortService(r.Instance)
+	existingService := corev1.Service{}
+	if err := r.Get(context.TODO(), client.ObjectKey{Name: targetService.Name, Namespace: namespace}, &existingService); err != nil {
+		err = r.Create(context.TODO(), targetService)
+		if err != nil {
+			if !errors.IsAlreadyExists(err) {
+				r.Logger.Error(err, "Cannot create service")
+				r.Recorder.Event(r.Instance, "Warning", "Cannot create service", "Requeue - Fix the problem you have on main Opensearch Headless Service ")
+				return *targetService, false, err
+			}
+		}
+		r.Logger.Info("service created successfully")
+		return *targetService, true, nil
+	}
+	return existingService, false, nil
+}
+
+func (r *ScalerReconciler) DeleteNodePortService(service corev1.Service) {
+	err := r.Delete(context.TODO(), &service)
+	if err != nil {
+		r.Logger.Error(err, "Cannot delete service")
+		r.Recorder.Event(r.Instance, "Warning", "Cannot delete service", "Requeue - Fix the problem you have on main Opensearch Headless Service ")
+	}
 }
