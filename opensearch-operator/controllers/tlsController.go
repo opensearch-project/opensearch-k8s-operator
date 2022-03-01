@@ -65,6 +65,49 @@ func (r *TlsReconciler) handleTransport(config *opsterv1.TlsConfigTransport, con
 			return err
 		}
 	}
+	err := r.handleAdminCertificate(config, controllerContext)
+	return err
+}
+
+func (r *TlsReconciler) handleAdminCertificate(tlsConfig *opsterv1.TlsConfigTransport, controllerContext *ControllerContext) error {
+	namespace := r.Instance.Spec.General.ClusterName
+	clusterName := r.Instance.Spec.General.ClusterName
+	caSecretName := clusterName + "-ca"
+	adminSecretName := clusterName + "-admin-cert"
+
+	if tlsConfig.Generate {
+		// Generate admin client certificate
+		var ca tls.Cert
+		var err error
+		if r.Instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
+			ca, err = r.providedCaCert(r.Instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
+		} else {
+			ca, err = r.caCert(caSecretName, namespace, clusterName)
+		}
+		if err != nil {
+			return err
+		}
+
+		adminSecret := corev1.Secret{}
+		if err := r.Get(context.TODO(), client.ObjectKey{Name: adminSecretName, Namespace: namespace}, &adminSecret); err != nil {
+			adminCert, err := ca.CreateAndSignCertificate("admin", clusterName, nil)
+			if err != nil {
+				r.Logger.Error(err, "Failed to create admin certificate", "interface", "transport")
+				return err
+			}
+			adminSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: adminSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: adminCert.SecretData(&ca)}
+			if err := r.Create(context.TODO(), &adminSecret); err != nil {
+				r.Logger.Error(err, "Failed to store admin certificate in secret", "interface", "transport")
+				return err
+			}
+		}
+		// Add admin_dn to config
+		controllerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"CN=admin,OU=%s\"]", clusterName))
+	} else {
+		// Add provided admin_dn to config
+		adminDn := strings.Join(tlsConfig.AdminDn, "\",\"")
+		controllerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"%s\"]", adminDn))
+	}
 	return nil
 }
 

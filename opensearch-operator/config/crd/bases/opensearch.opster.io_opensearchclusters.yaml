@@ -189,6 +189,13 @@ spec:
                         type: object
                       transport:
                         properties:
+                          adminDn:
+                            description: DNs of certificates that should have admin
+                              access, mainly used for securityconfig updates via securityadmin.sh,
+                              only used when existing certificates are provided
+                            items:
+                              type: string
+                            type: array
                           caSecret:
                             description: Optional, secret that contains the ca certificate
                               as ca.crt. If this and generate=true is set the existing

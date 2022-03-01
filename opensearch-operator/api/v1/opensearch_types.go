@@ -98,6 +98,8 @@ type TlsConfigTransport struct {
 	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
+	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
+	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsConfigHttp struct {

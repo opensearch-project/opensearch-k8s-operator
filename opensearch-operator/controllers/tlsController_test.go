@@ -29,9 +29,10 @@ var _ = Describe("TLS Controller", func() {
 	Context("When Reconciling the TLS configuration with no existing secrets", func() {
 		It("should create the needed secrets ", func() {
 			clusterName := "tls-test"
-			caSecretName := "tls-test-ca"
-			transportSecretName := "tls-test-transport-cert"
-			httpSecretName := "tls-test-http-cert"
+			caSecretName := clusterName + "-ca"
+			transportSecretName := clusterName + "-transport-cert"
+			httpSecretName := clusterName + "-http-cert"
+			adminSecretName := clusterName + "-admin-cert"
 			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
 				General: opsterv1.GeneralConfig{ClusterName: clusterName},
 				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
@@ -61,10 +62,18 @@ var _ = Describe("TLS Controller", func() {
 			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=tls-test,OU=tls-test\"]"))
+			value, exists = controllerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=admin,OU=tls-test\"]"))
 
 			Eventually(func() bool {
 				caSecret := corev1.Secret{}
 				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: caSecretName, Namespace: clusterName}, &caSecret)
+				if err != nil {
+					return false
+				}
+				adminSecret := corev1.Secret{}
+				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: adminSecretName, Namespace: clusterName}, &adminSecret)
 				if err != nil {
 					return false
 				}
@@ -84,9 +93,10 @@ var _ = Describe("TLS Controller", func() {
 	Context("When Reconciling the TLS configuration with no existing secrets and perNode certs activated", func() {
 		It("should create the needed secrets ", func() {
 			clusterName := "tls-pernode"
-			caSecretName := "tls-pernode-ca"
-			transportSecretName := "tls-pernode-transport-cert"
-			httpSecretName := "tls-pernode-http-cert"
+			caSecretName := clusterName + "-ca"
+			transportSecretName := clusterName + "-transport-cert"
+			httpSecretName := clusterName + "-http-cert"
+			adminSecretName := clusterName + "-admin-cert"
 			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
 				General: opsterv1.GeneralConfig{ClusterName: clusterName},
 				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
@@ -123,10 +133,18 @@ var _ = Describe("TLS Controller", func() {
 			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=*,OU=tls-pernode\"]"))
+			value, exists = controllerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=admin,OU=tls-pernode\"]"))
 
 			Eventually(func() bool {
 				caSecret := corev1.Secret{}
 				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: caSecretName, Namespace: clusterName}, &caSecret)
+				if err != nil {
+					return false
+				}
+				adminSecret := corev1.Secret{}
+				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: adminSecretName, Namespace: clusterName}, &adminSecret)
 				if err != nil {
 					return false
 				}
@@ -160,7 +178,8 @@ var _ = Describe("TLS Controller", func() {
 
 	Context("When Reconciling the TLS configuration with external certificates", func() {
 		It("Should not create secrets but only mount them", func() {
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: "tls-test-existingsecrets"}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+			clusterName := "tls-test-existingsecrets"
+			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 				Transport: &opsterv1.TlsConfigTransport{
 					Generate: false,
 					CertificateConfig: opsterv1.TlsCertificateConfig{
@@ -168,6 +187,7 @@ var _ = Describe("TLS Controller", func() {
 						CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
 					},
 					NodesDn: []string{"CN=mycn", "CN=othercn"},
+					AdminDn: []string{"CN=admin1", "CN=admin2"},
 				},
 				Http: &opsterv1.TlsConfigHttp{
 					Generate: false,
@@ -180,7 +200,7 @@ var _ = Describe("TLS Controller", func() {
 			}}}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "tls-test-existingsecrets",
+					Name: clusterName,
 				},
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
@@ -207,12 +227,16 @@ var _ = Describe("TLS Controller", func() {
 			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=mycn\",\"CN=othercn\"]"))
+			value, exists = controllerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=admin1\",\"CN=admin2\"]"))
 		})
 	})
 
 	Context("When Reconciling the TLS configuration with external per-node certificates", func() {
 		It("Should not create secrets but only mount them", func() {
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: "tls-test-existingsecretspernode"}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+			clusterName := "tls-test-existingsecretspernode"
+			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 				Transport: &opsterv1.TlsConfigTransport{
 					Generate: false,
 					PerNode:  true,
@@ -231,7 +255,7 @@ var _ = Describe("TLS Controller", func() {
 			}}}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: "tls-test-existingsecretspernode",
+					Name: clusterName,
 				},
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
@@ -336,6 +360,11 @@ var _ = Describe("TLS Controller", func() {
 
 			err = k8sClient.Create(context.TODO(), &caSecret)
 			Expect(err).ToNot(HaveOccurred())
+			Eventually(func() bool {
+				secret := corev1.Secret{}
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: caSecretName, Namespace: clusterName}, &secret)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
 
 			underTest := TlsReconciler{
 				Client:   k8sClient,
