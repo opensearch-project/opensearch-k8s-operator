@@ -94,7 +94,7 @@ func (r *ScalerReconciler) increaseOneNode(ctx context.Context, currentSts appsv
 		r.Recorder.Event(r.Instance, "Normal", "failed to add node ", fmt.Sprintf("Group name-%s . Failed to add node %s", currentSts.Name, lastReplicaNodeName))
 		return nil, err
 	}
-	r.Recorder.Event(r.Instance, "Normal", "added node ", fmt.Sprintf("Group-%s . added node %s", nodePoolGroupName, lastReplicaNodeName))
+	r.Logger.Info(fmt.Sprintf("Group-%s . added node %s", nodePoolGroupName, lastReplicaNodeName))
 	return nil, nil
 }
 
@@ -107,7 +107,7 @@ func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus op
 		r.Logger.Error(err, fmt.Sprintf("failed to remove node %s", lastReplicaNodeName))
 		return nil, err
 	}
-	r.Recorder.Event(r.Instance, "Normal", "decrease node ", fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
+	r.Logger.Info(fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.Instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.Instance.Status.ComponentsStatus)
 	err := r.Status().Update(ctx, r.Instance)
 	if err != nil {
@@ -176,7 +176,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 			Status:      "Excluded",
 			Description: nodePoolGroupName,
 		}
-		r.Recorder.Event(r.Instance, "Normal", "excluded node ", fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
+		r.Logger.Info(fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
 		r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
 		err = r.Status().Update(ctx, r.Instance)
 		if created {
@@ -190,7 +190,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 		Status:      "Running",
 		Description: nodePoolGroupName,
 	}
-	r.Recorder.Event(r.Instance, "Normal", "failed to exclude node ", fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
+	r.Logger.Info(fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
 	err = r.Status().Update(ctx, r.Instance)
 	if created {
@@ -217,7 +217,7 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
 	if nodeNotEmpty {
-		r.Recorder.Event(r.Instance, "Normal", "draining node ", fmt.Sprintf("Group-%s . draining node %s", nodePoolGroupName, lastReplicaNodeName))
+		r.Logger.Info(fmt.Sprintf("Group-%s . draining node %s", nodePoolGroupName, lastReplicaNodeName))
 		return nil, err
 	}
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
@@ -231,7 +231,7 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 		Status:      "Drained",
 		Description: nodePoolGroupName,
 	}
-	r.Recorder.Event(r.Instance, "Normal", "node has drained", fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
+	r.Logger.Info(fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
 	r.Instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.Instance.Status.ComponentsStatus)
 	err = r.Status().Update(ctx, r.Instance)
 	if created {
