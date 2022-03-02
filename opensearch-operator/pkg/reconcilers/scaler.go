@@ -60,7 +60,6 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) error 
 	namespace := r.instance.Spec.General.ClusterName
 	sts_name := builders.StsName(r.instance, nodePool)
 	currentSts := appsv1.StatefulSet{}
-
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &currentSts); err != nil {
 		return err
 	}
@@ -78,7 +77,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) error 
 	if !found {
 		if desireReplicaDiff > 0 {
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
-				status, err := r.decreaseOneNode(context.TODO(), currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
+				status, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
 				helpers.Replace(currentStatus, *status, r.instance.Status.ComponentsStatus)
 				return err
 			}
@@ -88,7 +87,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) error 
 
 		}
 		if desireReplicaDiff < 0 {
-			status, err := r.increaseOneNode(context.TODO(), currentSts, nodePool.Component)
+			status, err := r.increaseOneNode(currentSts, nodePool.Component)
 			helpers.Replace(currentStatus, *status, r.instance.Status.ComponentsStatus)
 			return err
 		}
@@ -99,18 +98,19 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) error 
 		return err
 	}
 	if currentStatus.Status == "Drained" {
-		status, err := r.decreaseOneNode(context.TODO(), currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
+		status, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
 		helpers.Replace(currentStatus, *status, r.instance.Status.ComponentsStatus)
 		return err
 	}
 	return nil
 }
 
-func (r *ScalerReconciler) increaseOneNode(ctx context.Context, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas++
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, currentSts.Spec.Replicas)
-	if err := r.Update(ctx, &currentSts); err != nil {
+	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
+	if err != nil {
 		r.recorder.Event(r.instance, "Normal", "failed to add node ", fmt.Sprintf("Group name-%s . Failed to add node %s", currentSts.Name, lastReplicaNodeName))
 		return nil, err
 	}
@@ -118,22 +118,18 @@ func (r *ScalerReconciler) increaseOneNode(ctx context.Context, currentSts appsv
 	return nil, nil
 }
 
-func (r *ScalerReconciler) decreaseOneNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (*opsterv1.ComponentStatus, error) {
+func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (*opsterv1.ComponentStatus, error) {
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas--
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas)
-	if err := r.Update(ctx, &currentSts); err != nil {
+	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
+	if err != nil {
 		r.recorder.Event(r.instance, "Normal", "failed to remove node ", fmt.Sprintf("Group-%s . Failed to remove node %s", nodePoolGroupName, lastReplicaNodeName))
 		lg.Error(err, fmt.Sprintf("failed to remove node %s", lastReplicaNodeName))
 		return nil, err
 	}
 	lg.Info(fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
-	err := r.Status().Update(ctx, r.instance)
-	if err != nil {
-		r.recorder.Event(r.instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
-		return nil, err
-	}
 	if !smartDecrease {
 		return nil, err
 	}
