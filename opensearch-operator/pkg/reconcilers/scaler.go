@@ -47,26 +47,28 @@ func NewScalerReconciler(
 }
 
 func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
+	requeue := false
+	var err error = nil
 	for _, nodePool := range r.instance.Spec.NodePools {
-		err := r.reconcileNodePool(&nodePool)
+		requeue, err = r.reconcileNodePool(&nodePool)
 		if err != nil {
-			return ctrl.Result{}, err
+			return ctrl.Result{Requeue: requeue}, err
 		}
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{Requeue: requeue}, nil
 }
 
-func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) error {
+func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool, error) {
 	namespace := r.instance.Spec.General.ClusterName
 	sts_name := builders.StsName(r.instance, nodePool)
 	currentSts := appsv1.StatefulSet{}
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &currentSts); err != nil {
-		return err
+		return false, err
 	}
 
 	var desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
 	if desireReplicaDiff == 0 {
-		return nil
+		return false, nil
 	}
 	componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
@@ -77,48 +79,43 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) error 
 	if !found {
 		if desireReplicaDiff > 0 {
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
-				status, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
-				helpers.Replace(currentStatus, *status, r.instance.Status.ComponentsStatus)
-				return err
+				requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
+				return requeue, err
 			}
-			status, err := r.excludeNode(context.TODO(), currentStatus, currentSts, nodePool.Component)
-			helpers.Replace(currentStatus, *status, r.instance.Status.ComponentsStatus)
-			return err
+			err := r.excludeNode(currentStatus, currentSts, nodePool.Component)
+			return true, err
 
 		}
 		if desireReplicaDiff < 0 {
-			status, err := r.increaseOneNode(currentSts, nodePool.Component)
-			helpers.Replace(currentStatus, *status, r.instance.Status.ComponentsStatus)
-			return err
+			requeue, err := r.increaseOneNode(currentSts, nodePool.Component)
+			return requeue, err
 		}
 	}
 	if currentStatus.Status == "Excluded" {
-		status, err := r.drainNode(context.TODO(), currentStatus, currentSts, nodePool.Component)
-		helpers.Replace(currentStatus, *status, r.instance.Status.ComponentsStatus)
-		return err
+		err := r.drainNode(currentStatus, currentSts, nodePool.Component)
+		return true, err
 	}
 	if currentStatus.Status == "Drained" {
-		status, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
-		helpers.Replace(currentStatus, *status, r.instance.Status.ComponentsStatus)
-		return err
+		requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
+		return requeue, err
 	}
-	return nil
+	return false, nil
 }
 
-func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePoolGroupName string) (bool, error) {
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas++
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, currentSts.Spec.Replicas)
 	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
 		r.recorder.Event(r.instance, "Normal", "failed to add node ", fmt.Sprintf("Group name-%s . Failed to add node %s", currentSts.Name, lastReplicaNodeName))
-		return nil, err
+		return true, err
 	}
 	lg.Info(fmt.Sprintf("Group-%s . added node %s", nodePoolGroupName, lastReplicaNodeName))
-	return nil, nil
+	return false, nil
 }
 
-func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (*opsterv1.ComponentStatus, error) {
+func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (bool, error) {
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas--
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas)
@@ -126,17 +123,17 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if err != nil {
 		r.recorder.Event(r.instance, "Normal", "failed to remove node ", fmt.Sprintf("Group-%s . Failed to remove node %s", nodePoolGroupName, lastReplicaNodeName))
 		lg.Error(err, fmt.Sprintf("failed to remove node %s", lastReplicaNodeName))
-		return nil, err
+		return true, err
 	}
 	lg.Info(fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
 	if !smartDecrease {
-		return nil, err
+		return false, err
 	}
 	username, password := builders.UsernameAndPassword(r.instance)
 	service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {
-		return nil, err
+		return true, err
 	}
 	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
@@ -145,7 +142,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 		if created {
 			r.DeleteNodePortService(service)
 		}
-		return nil, err
+		return true, err
 	}
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if !success || err != nil {
@@ -155,15 +152,15 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if created {
 		r.DeleteNodePortService(service)
 	}
-	return nil, err
+	return false, err
 }
 
-func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
 	username, password := builders.UsernameAndPassword(r.instance)
 	service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
 	if err != nil {
@@ -171,7 +168,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 		if created {
 			r.DeleteNodePortService(service)
 		}
-		return nil, err
+		return err
 	}
 	// -----  Now start remove node ------
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas-1)
@@ -182,10 +179,7 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 		if created {
 			r.DeleteNodePortService(service)
 		}
-		return nil, err
-	}
-	if err := r.Update(ctx, &currentSts); err != nil {
-		return nil, err
+		return err
 	}
 	if excluded {
 		componentStatus := opsterv1.ComponentStatus{
@@ -195,11 +189,10 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 		}
 		lg.Info(fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
 		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-		err = r.Status().Update(ctx, r.instance)
 		if created {
 			r.DeleteNodePortService(service)
 		}
-		return &componentStatus, err
+		return err
 	}
 
 	componentStatus := opsterv1.ComponentStatus{
@@ -209,38 +202,37 @@ func (r *ScalerReconciler) excludeNode(ctx context.Context, currentStatus opster
 	}
 	lg.Info(fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-	err = r.Status().Update(ctx, r.instance)
 	if created {
 		r.DeleteNodePortService(service)
 	}
-	return &componentStatus, err
+	return err
 }
 
-func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) (*opsterv1.ComponentStatus, error) {
+func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
 	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas-1)
 
 	username, password := builders.UsernameAndPassword(r.instance)
 	service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
 	if err != nil {
 		if created {
 			r.DeleteNodePortService(service)
 		}
-		return nil, err
+		return err
 	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
 	if nodeNotEmpty {
 		lg.Info(fmt.Sprintf("Group-%s . draining node %s", nodePoolGroupName, lastReplicaNodeName))
-		return nil, err
+		return err
 	}
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if !success {
 		r.recorder.Event(r.instance, "Normal", "node is empty but node is still excluded from allocation", fmt.Sprintf("Group-%s . node %s node is empty but node is still excluded from allocation", nodePoolGroupName, lastReplicaNodeName))
-		return nil, err
+		return err
 	}
 
 	componentStatus := opsterv1.ComponentStatus{
@@ -250,11 +242,10 @@ func (r *ScalerReconciler) drainNode(ctx context.Context, currentStatus opsterv1
 	}
 	lg.Info(fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-	err = r.Status().Update(ctx, r.instance)
 	if created {
 		r.DeleteNodePortService(service)
 	}
-	return &componentStatus, err
+	return err
 }
 
 func getByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
