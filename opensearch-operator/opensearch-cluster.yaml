@@ -14,7 +14,8 @@ spec:
     serviceName: es-svc
   dashboards:
     enable: true
-  confMgmt: {}
+  confMgmt:
+    smartScaler: true
   security:
     tls:
       transport:

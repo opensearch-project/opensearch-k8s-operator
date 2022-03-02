@@ -310,10 +310,60 @@ func NewCmForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
 	}
 }
 
-func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
+func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+	labels := map[string]string{
+		"opensearch.cluster": cr.Name,
+	}
+
+	return &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Spec.General.ServiceName + "-exposed",
+			Namespace: cr.Spec.General.ClusterName,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Protocol: "TCP",
+					Port:     cr.Spec.General.HttpPort,
+					TargetPort: intstr.IntOrString{
+						IntVal: cr.Spec.General.HttpPort,
+					},
+				},
+			},
+			Selector: labels,
+			Type:     "NodePort",
+		},
+	}
+}
+func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 	httpPort := int32(9200)
 	if cr.Spec.General.HttpPort > 0 {
 		httpPort = cr.Spec.General.HttpPort
 	}
-	return fmt.Sprintf("https://%s.%s.svc.cluster.local:%d", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName, httpPort)
+	return httpPort
+}
+func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
+	httpPort := PortForCluster(cr)
+	return fmt.Sprintf("https://%s.svc.cluster.local:%d", DnsOfService(cr), httpPort)
+	//return fmt.Sprintf("https://localhost:9212")
+}
+
+func DnsOfService(cr *opsterv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s.%s", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName)
+}
+
+func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
+	return cr.Spec.General.ClusterName + "-" + nodePool.Component
+}
+func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
+	return "admin", "admin"
+}
+func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
+	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
 }

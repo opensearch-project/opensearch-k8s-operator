@@ -64,9 +64,10 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 				ServiceName: "es-svc",
 			},
 			ConfMgmt: opsterv1.ConfMgmt{
-				AutoScaler: false,
-				Monitoring: false,
-				VerUpdate:  false,
+				AutoScaler:  false,
+				Monitoring:  false,
+				VerUpdate:   false,
+				SmartScaler: false,
 			},
 			Dashboards: opsterv1.DashboardsConfig{Enable: true},
 			NodePools: []opsterv1.NodePool{{
