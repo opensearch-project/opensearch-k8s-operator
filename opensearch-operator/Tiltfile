@@ -1,0 +1,23 @@
+set_team('52cc75cc-c4ed-462f-8ea7-a543d398a381')
+
+k8s_yaml(kustomize('config/default'))
+
+deps = ['controllers', 'main.go', 'api', 'pkg']
+
+local_resource('Watch & Compile', 
+    'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/manager main.go', 
+    deps=deps)
+
+DOCKERFILE = '''FROM gcr.io/distroless/base:debug-nonroot
+WORKDIR /
+COPY ./bin/manager /
+USER 65532:65532
+
+ENTRYPOINT ["/manager"]
+'''
+
+docker_build("controller", '.', 
+    dockerfile_contents=DOCKERFILE,
+    only=['./bin/manager'],
+    live_update=[sync('./bin/manager', '/manager')]
+)
