@@ -48,7 +48,7 @@ func NewScalerReconciler(
 
 func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	requeue := false
-	var err error = nil
+	var err error
 	for _, nodePool := range r.instance.Spec.NodePools {
 		requeue, err = r.reconcileNodePool(&nodePool)
 		if err != nil {
