@@ -1,4 +1,4 @@
-package controllers
+package reconcilers
 
 import (
 	"context"
@@ -10,7 +10,6 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -29,14 +28,16 @@ var _ = Describe("Configuration Controller", func() {
 		It("should not create a configmap ", func() {
 			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
 
-			underTest := ConfigurationReconciler{
-				Client:   k8sClient,
-				Instance: &spec,
-				Logger:   logr.Discard(),
-				Recorder: &helpers.MockEventRecorder{},
-			}
-			controllerContext := NewControllerContext()
-			_, err := underTest.Reconcile(&controllerContext)
+			reconcilerContext := NewReconcilerContext()
+
+			underTest := NewConfigurationReconciler(
+				k8sClient,
+				context.Background(),
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
 			configMap := corev1.ConfigMap{}
@@ -52,21 +53,23 @@ var _ = Describe("Configuration Controller", func() {
 					Name: clusterName,
 				},
 			}
-			err := k8sClient.Create(context.TODO(), &ns)
+			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
 
-			underTest := ConfigurationReconciler{
-				Client:   k8sClient,
-				Instance: &spec,
-				Logger:   logr.Discard(),
-				Recorder: &helpers.MockEventRecorder{},
-			}
-			controllerContext := NewControllerContext()
-			controllerContext.AddConfig("foo", "bar")
-			controllerContext.AddConfig("bar", "something")
-			controllerContext.AddConfig("bar", "baz")
-			_, err = underTest.Reconcile(&controllerContext)
+			reconcilerContext := NewReconcilerContext()
+
+			underTest := NewConfigurationReconciler(
+				k8sClient,
+				context.Background(),
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			reconcilerContext.AddConfig("foo", "bar")
+			reconcilerContext.AddConfig("bar", "something")
+			reconcilerContext.AddConfig("bar", "baz")
+			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() bool {
