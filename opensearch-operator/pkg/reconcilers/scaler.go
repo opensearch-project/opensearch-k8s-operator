@@ -127,6 +127,12 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	}
 	lg.Info(fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
+	err = r.Status().Update(r.ctx, r.instance)
+	if err != nil {
+		lg.Error(err, "failed to update status")
+		return false, err
+	}
+
 	if !smartDecrease {
 		return false, err
 	}
@@ -189,6 +195,11 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		}
 		lg.Info(fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
 		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+		err = r.Status().Update(r.ctx, r.instance)
+		if err != nil {
+			lg.Error(err, "failed to update status")
+			return err
+		}
 		if created {
 			r.DeleteNodePortService(service)
 		}
@@ -202,6 +213,11 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	}
 	lg.Info(fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+	err = r.Status().Update(r.ctx, r.instance)
+	if err != nil {
+		lg.Error(err, "failed to update status")
+		return err
+	}
 	if created {
 		r.DeleteNodePortService(service)
 	}
@@ -242,6 +258,11 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	}
 	lg.Info(fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+	err = r.Status().Update(r.ctx, r.instance)
+	if err != nil {
+		lg.Error(err, "failed to update status")
+		return err
+	}
 	if created {
 		r.DeleteNodePortService(service)
 	}
