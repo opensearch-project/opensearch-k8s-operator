@@ -12,7 +12,8 @@ spec:
     serviceName: my-cluster
   dashboards:
     enable: true
-  confMgmt: {}
+  confMgmt:
+    smartScaler: true
   security:
     tls:
       transport:

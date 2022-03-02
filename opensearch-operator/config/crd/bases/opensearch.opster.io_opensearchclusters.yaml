@@ -48,6 +48,8 @@ spec:
                     type: boolean
                   monitoring:
                     type: boolean
+                  smartScaler:
+                    type: boolean
                 type: object
               dashboards:
                 properties:
