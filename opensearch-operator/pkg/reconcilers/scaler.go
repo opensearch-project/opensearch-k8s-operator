@@ -105,7 +105,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePoolGroupName string) (bool, error) {
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas++
-	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, currentSts.Spec.Replicas)
+	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
 	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
 		r.recorder.Event(r.instance, "Normal", "failed to add node ", fmt.Sprintf("Group name-%s . Failed to add node %s", currentSts.Name, lastReplicaNodeName))
@@ -118,7 +118,7 @@ func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePo
 func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (bool, error) {
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas--
-	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas)
+	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
 	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
 		r.recorder.Event(r.instance, "Normal", "failed to remove node ", fmt.Sprintf("Group-%s . Failed to remove node %s", nodePoolGroupName, lastReplicaNodeName))
@@ -177,7 +177,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		return err
 	}
 	// -----  Now start remove node ------
-	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas-1)
+	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
 
 	excluded, err := services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if err != nil {
@@ -226,8 +226,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 
 func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
-	lastReplicaNodeName := fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, *currentSts.Spec.Replicas-1)
-
+	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
 	username, password := builders.UsernameAndPassword(r.instance)
 	service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {

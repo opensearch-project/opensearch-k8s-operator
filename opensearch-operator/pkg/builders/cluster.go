@@ -364,3 +364,6 @@ func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string
 func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
 	return "admin", "admin"
 }
+func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
+	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
+}
