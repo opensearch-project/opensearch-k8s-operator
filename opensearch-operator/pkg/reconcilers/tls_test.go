@@ -1,18 +1,16 @@
-package controllers
+package reconcilers
 
 import (
 	"context"
 	"fmt"
 	"time"
 
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 	tls "opensearch.opster.io/pkg/tls"
 
-	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -47,22 +45,22 @@ var _ = Describe("TLS Controller", func() {
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			underTest := TlsReconciler{
-				Client:   k8sClient,
-				Instance: &spec,
-				Logger:   logr.Discard(),
-				//Recorder: recorder,
-			}
-			controllerContext := NewControllerContext()
-			_, err = underTest.Reconcile(&controllerContext)
+			reconcilerContext := NewReconcilerContext()
+			underTest := NewTLSReconciler(
+				k8sClient,
+				context.Background(),
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
-			Expect(controllerContext.Volumes).Should(HaveLen(2))
-			Expect(controllerContext.VolumeMounts).Should(HaveLen(2))
-			//fmt.Printf("%s\n", controllerContext.OpenSearchConfig)
-			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
+			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
+			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
+			//fmt.Printf("%s\n", reconcilerContext.OpenSearchConfig)
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=tls-test,OU=tls-test\"]"))
-			value, exists = controllerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=admin,OU=tls-test\"]"))
 
@@ -117,23 +115,23 @@ var _ = Describe("TLS Controller", func() {
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			underTest := TlsReconciler{
-				Client:   k8sClient,
-				Instance: &spec,
-				Logger:   logr.Discard(),
-				//Recorder: recorder,
-			}
-			controllerContext := NewControllerContext()
-			_, err = underTest.Reconcile(&controllerContext)
+			reconcilerContext := NewReconcilerContext()
+			underTest := NewTLSReconciler(
+				k8sClient,
+				context.Background(),
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(controllerContext.Volumes).Should(HaveLen(2))
-			Expect(controllerContext.VolumeMounts).Should(HaveLen(2))
+			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
+			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
 
-			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=*,OU=tls-pernode\"]"))
-			value, exists = controllerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=admin,OU=tls-pernode\"]"))
 
@@ -205,29 +203,29 @@ var _ = Describe("TLS Controller", func() {
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			underTest := TlsReconciler{
-				Client:   k8sClient,
-				Instance: &spec,
-				Logger:   logr.Discard(),
-				//Recorder: recorder,
-			}
-			controllerContext := NewControllerContext()
-			_, err = underTest.Reconcile(&controllerContext)
+			reconcilerContext := NewReconcilerContext()
+			underTest := NewTLSReconciler(
+				k8sClient,
+				context.Background(),
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(controllerContext.Volumes).Should(HaveLen(6))
-			Expect(controllerContext.VolumeMounts).Should(HaveLen(6))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-transport", "transport-ca")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "cert-transport", "transport-key")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "cert-transport", "transport-cert")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "casecret-http", "http-ca")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "cert-http", "http-key")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "cert-http", "http-cert")).Should((BeTrue()))
+			Expect(reconcilerContext.Volumes).Should(HaveLen(6))
+			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(6))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "casecret-transport", "transport-ca")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-transport", "transport-key")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-transport", "transport-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "casecret-http", "http-ca")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-http", "http-key")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-http", "http-cert")).Should((BeTrue()))
 
-			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=mycn\",\"CN=othercn\"]"))
-			value, exists = controllerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=admin1\",\"CN=admin2\"]"))
 		})
@@ -260,64 +258,23 @@ var _ = Describe("TLS Controller", func() {
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			underTest := TlsReconciler{
-				Client:   k8sClient,
-				Instance: &spec,
-				Logger:   logr.Discard(),
-				//Recorder: recorder,
-			}
-			controllerContext := NewControllerContext()
-			_, err = underTest.Reconcile(&controllerContext)
+			reconcilerContext := NewReconcilerContext()
+			underTest := NewTLSReconciler(
+				k8sClient,
+				context.Background(),
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
-			Expect(controllerContext.Volumes).Should(HaveLen(2))
-			Expect(controllerContext.VolumeMounts).Should(HaveLen(2))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "my-transport-certs", "transport-certs")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, "my-http-certs", "http-certs")).Should((BeTrue()))
+			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
+			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "my-transport-certs", "transport-certs")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "my-http-certs", "http-certs")).Should((BeTrue()))
 
-			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=mycn\",\"CN=othercn\"]"))
-		})
-	})
-
-	Context("When Creating an OpenSearchCluster with TLS configured", func() {
-		It("Should start a cluster successfully", func() {
-			clusterName := "tls-cluster"
-			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: "default"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{
-							Generate: true,
-							PerNode:  true,
-						},
-						Http: &opsterv1.TlsConfigHttp{
-							Generate: true,
-						},
-					}},
-					NodePools: []opsterv1.NodePool{
-						{
-							Component: "masters",
-							Replicas:  3,
-							Roles:     []string{"master", "data"},
-						},
-					},
-				}}
-			Expect(k8sClient.Create(context.Background(), &spec)).Should(Succeed())
-
-			By("Checking for Statefulset")
-			sts := appsv1.StatefulSet{}
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-masters", Namespace: clusterName}, &sts)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
-			Expect(*sts.Spec.Replicas).To(Equal(int32(3)))
-			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-http-cert", "http-cert")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-config", "config")).Should((BeTrue()))
-			// Cleanup
-			Expect(k8sClient.Delete(context.Background(), &spec)).Should(Succeed())
 		})
 	})
 
@@ -366,22 +323,22 @@ var _ = Describe("TLS Controller", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			underTest := TlsReconciler{
-				Client:   k8sClient,
-				Instance: &spec,
-				Logger:   logr.Discard(),
-				//Recorder: recorder,
-			}
-			controllerContext := NewControllerContext()
-			_, err = underTest.Reconcile(&controllerContext)
+			reconcilerContext := NewReconcilerContext()
+			underTest := NewTLSReconciler(
+				k8sClient,
+				context.Background(),
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(controllerContext.Volumes).Should(HaveLen(2))
-			Expect(controllerContext.VolumeMounts).Should(HaveLen(2))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(controllerContext.Volumes, controllerContext.VolumeMounts, clusterName+"-http-cert", "http-cert")).Should((BeTrue()))
+			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
+			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, clusterName+"-http-cert", "http-cert")).Should((BeTrue()))
 
-			value, exists := controllerContext.OpenSearchConfig["plugins.security.nodes_dn"]
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=*,OU=tls-withca\"]"))
 		})
