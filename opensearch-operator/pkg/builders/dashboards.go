@@ -2,6 +2,7 @@ package builders
 
 import (
 	"fmt"
+	"strings"
 
 	sts "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -12,14 +13,32 @@ import (
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
-func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deployment {
+func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *sts.Deployment {
+	var replicas int32 = 1
+	var port int32 = 5601
+	var mode int32 = 420
+
+	volumes = append(volumes, corev1.Volume{
+		Name: "dashboards-config",
+		VolumeSource: corev1.VolumeSource{
+			ConfigMap: &corev1.ConfigMapVolumeSource{
+				DefaultMode:          &mode,
+				LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Spec.General.ClusterName)},
+			},
+		},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "dashboards-config",
+		MountPath: "/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml",
+		SubPath:   "opensearch_dashboards.yml",
+	})
 
 	labels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
 	}
-	var rep int32 = 1
-	var port int32 = 5601
-	var mode int32 = 420
+	var probeScheme corev1.URIScheme = "HTTP"
+	if cr.Spec.Dashboards.Tls != nil && cr.Spec.Dashboards.Tls.Enable {
+		probeScheme = "HTTPS"
+	}
 
 	probe := corev1.Probe{
 		PeriodSeconds:       20,
@@ -27,7 +46,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 		FailureThreshold:    10,
 		SuccessThreshold:    1,
 		InitialDelaySeconds: 10,
-		ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/status", Port: intstr.IntOrString{IntVal: port}, Scheme: "HTTP"}},
+		ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/status", Port: intstr.IntOrString{IntVal: port}, Scheme: probeScheme}},
 	}
 
 	return &sts.Deployment{
@@ -37,7 +56,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 			Labels:    labels,
 		},
 		Spec: sts.DeploymentSpec{
-			Replicas: &rep,
+			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -47,17 +66,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 					Annotations: nil,
 				},
 				Spec: corev1.PodSpec{
-					Volumes: []corev1.Volume{
-						{
-							Name: "dashboards-config",
-							VolumeSource: corev1.VolumeSource{
-								ConfigMap: &corev1.ConfigMapVolumeSource{
-									DefaultMode:          &mode,
-									LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Spec.General.ClusterName)},
-								},
-							},
-						},
-					},
+					Volumes: volumes,
 					Containers: []corev1.Container{
 						{
 							Name: "dashboards",
@@ -90,12 +99,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 									Value: "admin",
 								},
 							},
-							VolumeMounts: []corev1.VolumeMount{
-								{Name: "dashboards-config",
-									MountPath: "/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml",
-									SubPath:   "opensearch_dashboards.yml",
-								},
-							},
+							VolumeMounts: volumeMounts,
 						},
 					},
 				},
@@ -104,7 +108,15 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster) *sts.Deploymen
 	}
 }
 
-func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string) *corev1.ConfigMap {
+func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
+	config["server.name"] = cr.Spec.General.ClusterName + "-dashboards"
+	config["opensearch.ssl.verificationMode"] = "none"
+
+	var sb strings.Builder
+	for key, value := range config {
+		sb.WriteString(fmt.Sprintf("%s: %s\n", key, value))
+	}
+	data := sb.String()
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -112,7 +124,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string) *c
 			Namespace: cr.Spec.General.ClusterName,
 		},
 		Data: map[string]string{
-			"opensearch_dashboards.yml": "server.name: " + cr.Spec.General.ClusterName + "-dashboards" + "\nopensearch.ssl.verificationMode: none\n",
+			"opensearch_dashboards.yml": data,
 		},
 	}
 }

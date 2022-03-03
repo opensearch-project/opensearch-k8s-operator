@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -32,17 +33,18 @@ type GeneralConfig struct {
 
 	//+kubebuilder:default="opster-cluster"
 	ClusterName string `json:"clusterName,omitempty"`
-	HttpPort    int32  `json:"httpPort,omitempty"`
-	/////////+kubebuilder:validation:Enum=Opensearch,Elasticsearch,Op,Es,OP,ES
+	//+kubebuilder:default=9200
+	HttpPort int32 `json:"httpPort,omitempty"`
+	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
 	Vendor         string `json:"vendor,omitempty"`
 	Version        string `json:"version,omitempty"`
 	ServiceAccount string `json:"serviceAccount,omitempty"`
-	ServiceName    string `json:"serviceName,omitempty"`
+	ServiceName    string `json:"serviceName"`
 }
 
 type NodePool struct {
-	Component    string   `json:"component,omitempty"`
-	Replicas     int32    `json:"replicas,omitempty"`
+	Component    string   `json:"component"`
+	Replicas     int32    `json:"replicas"`
 	DiskSize     int32    `json:"diskSize,omitempty"`
 	NodeSelector string   `json:"nodeSelector,omitempty"`
 	Cpu          int32    `json:"cpu,omitempty"`
@@ -60,7 +62,21 @@ type ConfMgmt struct {
 }
 
 type DashboardsConfig struct {
+	Enable bool                 `json:"enable,omitempty"`
+	Tls    *DashboardsTlsConfig `json:"tls,omitempty"`
+}
+
+type DashboardsTlsConfig struct {
+	// Enable HTTPS for Dashboards
 	Enable bool `json:"enable,omitempty"`
+	// Generate certificate, if false either secret or keySecret & certSecret must be provided
+	Generate bool `json:"generate,omitempty"`
+	// Optional, name of a secret that contains tls.key and tls.crt data, use either this or set the separate keySecret and certSecret fields
+	Secret string `json:"secret,omitempty"`
+	// Optional, secret that contains the private key
+	KeySecret *TlsSecret `json:"keySecret,omitempty"`
+	// Optional, secret that contains the certificate for the private key, must be signed by the provided CA
+	CertSecret *TlsSecret `json:"certSecret,omitempty"`
 }
 
 // Security defines options for managing the opensearch-security plugin
@@ -71,21 +87,33 @@ type Security struct {
 
 // Configure tls usage for transport and http interface
 type TlsConfig struct {
-	Transport *TlsInterfaceConfig `json:"transport,omitempty"`
-	Http      *TlsInterfaceConfig `json:"http,omitempty"`
-	NodesDn   []string            `json:"nodesDn,omitempty"`
+	Transport *TlsConfigTransport `json:"transport,omitempty"`
+	Http      *TlsConfigHttp      `json:"http,omitempty"`
 }
 
-// Configure tls usage for the interface
-type TlsInterfaceConfig struct {
+type TlsConfigTransport struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
-	// Optional, secret that contains the ca certificate
-	CaSecret *TlsSecret `json:"caSecret,omitempty"`
-	// Optional, secret that contains the private key
-	KeySecret *TlsSecret `json:"keySecret,omitempty"`
-	// Optional, secret that contains the certificate for the private key, must be signed by the provided CA
-	CertSecret *TlsSecret `json:"certSecret,omitempty"`
+	// Configure transport node certificate
+	PerNode           bool                 `json:"perNode,omitempty"`
+	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
+	NodesDn []string `json:"nodesDn,omitempty"`
+	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
+	AdminDn []string `json:"adminDn,omitempty"`
+}
+
+type TlsConfigHttp struct {
+	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
+	Generate          bool                 `json:"generate,omitempty"`
+	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+}
+
+type TlsCertificateConfig struct {
+	// Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field
+	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
+	// Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
+	CaSecret corev1.LocalObjectReference `json:"caSecret,omitempty"`
 }
 
 // Reference to a secret
