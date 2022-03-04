@@ -32,6 +32,27 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		SubPath:   "opensearch_dashboards.yml",
 	})
 
+	env := []corev1.EnvVar{
+		{
+			Name:  "OPENSEARCH_HOSTS",
+			Value: URLForCluster(cr),
+		},
+		{
+			Name:  "SERVER_HOST",
+			Value: "0.0.0.0",
+		},
+	}
+
+	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
+		// Custom credentials supplied
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "username"}}})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "password"}}})
+	} else {
+		// Default values from demo configuration
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", Value: "admin"})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", Value: "admin"})
+	}
+
 	labels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
 	}
@@ -80,26 +101,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 							},
 							StartupProbe:  &probe,
 							LivenessProbe: &probe,
-							Env: []corev1.EnvVar{
-								{
-									Name:  "OPENSEARCH_HOSTS",
-									Value: URLForCluster(cr),
-								},
-								{
-									Name:  "SERVER_HOST",
-									Value: "0.0.0.0",
-								},
-								// Temporary until securityconfig controller is implemented
-								{
-									Name:  "OPENSEARCH_USERNAME",
-									Value: "admin",
-								},
-								{
-									Name:  "OPENSEARCH_PASSWORD",
-									Value: "admin",
-								},
-							},
-							VolumeMounts: volumeMounts,
+							Env:           env,
+							VolumeMounts:  volumeMounts,
 						},
 					},
 				},

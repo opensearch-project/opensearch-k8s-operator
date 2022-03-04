@@ -70,8 +70,6 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
-	// Temporary until securityconfig controller is working
-	r.reconcilerContext.AddConfig("plugins.security.allow_unsafe_democertificates", "true")
 	return ctrl.Result{}, nil
 }
 
@@ -279,7 +277,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 
 	// Extend opensearch.yml
-	r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"CN=*,OU=%s\"]", clusterName))
+	r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"CN=%s-*,OU=%s\"]", clusterName, clusterName))
 	r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", "tls-transport/${HOSTNAME}.crt")
 	r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", "tls-transport/${HOSTNAME}.key")
 	r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport/%s", CaCertKey))

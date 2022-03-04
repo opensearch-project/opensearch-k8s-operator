@@ -136,10 +136,7 @@ func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, d
 	if err != nil {
 		return
 	}
-	san, err := calculateExtension(commonName, dnsnames)
-	if err != nil {
-		return
-	}
+
 	x509cert := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
@@ -150,9 +147,13 @@ func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, d
 		NotAfter:    time.Now().AddDate(1, 0, 0),
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:    x509.KeyUsageDigitalSignature,
-		ExtraExtensions: []pkix.Extension{
-			san,
-		},
+	}
+	if len(dnsnames) > 0 {
+		san, err := calculateExtension(commonName, dnsnames)
+		if err != nil {
+			return cert, err
+		}
+		x509cert.ExtraExtensions = []pkix.Extension{san}
 	}
 
 	signed, err := x509.CreateCertificate(rand.Reader, x509cert, cacert, &keypair.PublicKey, tlscacert.PrivateKey)

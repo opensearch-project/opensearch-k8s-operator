@@ -61,6 +61,8 @@ type ConfMgmt struct {
 type DashboardsConfig struct {
 	Enable bool                 `json:"enable,omitempty"`
 	Tls    *DashboardsTlsConfig `json:"tls,omitempty"`
+	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
+	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -78,8 +80,8 @@ type DashboardsTlsConfig struct {
 
 // Security defines options for managing the opensearch-security plugin
 type Security struct {
-	Tls *TlsConfig `json:"tls,omitempty"`
-	// TBD: securityconfig
+	Tls    *TlsConfig      `json:"tls,omitempty"`
+	Config *SecurityConfig `json:"config,omitempty"`
 }
 
 // Configure tls usage for transport and http interface
@@ -117,6 +119,13 @@ type TlsCertificateConfig struct {
 type TlsSecret struct {
 	SecretName string  `json:"secretName"`
 	Key        *string `json:"key,omitempty"`
+}
+
+type SecurityConfig struct {
+	// Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
+	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
+	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster

@@ -147,7 +147,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 							},
 
 							Name:  cr.Name,
-							Image: "opensearchproject/opensearch:1.0.0",
+							Image: DockerImageForCluster(cr),
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
@@ -186,9 +186,14 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 				},
 			},
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{pvc},
-			ServiceName:          cr.Spec.General.ServiceName + "-svc",
+			ServiceName:          cr.Spec.General.ServiceName,
 		},
 	}
+}
+
+func DockerImageForCluster(cr *opsterv1.OpenSearchCluster) string {
+	// TODO: Determine version based on CR
+	return "opensearchproject/opensearch:1.2.3"
 }
 
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {

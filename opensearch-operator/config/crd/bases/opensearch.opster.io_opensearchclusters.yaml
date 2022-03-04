@@ -55,6 +55,16 @@ spec:
                 properties:
                   enable:
                     type: boolean
+                  opensearchCredentialsSecret:
+                    description: Secret that contains fields username and password
+                      for dashboards to use to login to opensearch, must only be supplied
+                      if a custom securityconfig is provided
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                    type: object
                   tls:
                     properties:
                       certSecret:
@@ -152,6 +162,30 @@ spec:
                 description: Security defines options for managing the opensearch-security
                   plugin
                 properties:
+                  config:
+                    properties:
+                      adminSecret:
+                        description: TLS Secret that contains a client certificate
+                          (tls.key, tls.crt, ca.crt) with admin rights in the opensearch
+                          cluster. Must be set if transport certificates are provided
+                          by user and not generated
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
+                      securityConfigSecret:
+                        description: Secret that contains the differnt yml files of
+                          the opensearch-security config (config.yml, internal_users.yml,
+                          ...)
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
+                    type: object
                   tls:
                     description: Configure tls usage for transport and http interface
                     properties:

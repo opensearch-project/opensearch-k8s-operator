@@ -151,4 +151,60 @@ var _ = Describe("Dashboards Reconciler", func() {
 		})
 	})
 
+	Context("When running the dashboards reconciler with a credentials secret supplied", func() {
+		It("should provide these credentials as env vars", func() {
+			clusterName := "dashboards-creds"
+			credentialsSecret := clusterName + "-creds"
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable:                      true,
+						OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: credentialsSecret},
+					},
+				}}
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+				},
+			}
+			err := k8sClient.Create(context.Background(), &ns)
+			Expect(err).ToNot(HaveOccurred())
+
+			reconcilerContext := NewReconcilerContext()
+			underTest := NewDashboardsReconciler(
+				k8sClient,
+				context.Background(),
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			deployment := appsv1.Deployment{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-dashboards", Namespace: clusterName}, &deployment)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			env := deployment.Spec.Template.Spec.Containers[0].Env
+			Expect(hasEnvWithSecretSource(env, "OPENSEARCH_USERNAME", credentialsSecret, "username")).To(BeTrue())
+			Expect(hasEnvWithSecretSource(env, "OPENSEARCH_PASSWORD", credentialsSecret, "password")).To(BeTrue())
+		})
+	})
+
 })
+
+func hasEnvWithSecretSource(env []corev1.EnvVar, name string, secretName string, secretKey string) bool {
+	for _, envVar := range env {
+		if envVar.Name != name {
+			continue
+		}
+		if envVar.ValueFrom == nil || envVar.ValueFrom.SecretKeyRef == nil {
+			return false
+		}
+		return envVar.ValueFrom.SecretKeyRef.LocalObjectReference.Name == secretName && envVar.ValueFrom.SecretKeyRef.Key == secretKey
+	}
+	return false
+}

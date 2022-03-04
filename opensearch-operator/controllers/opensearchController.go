@@ -230,6 +230,13 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		&reconcilerContext,
 		r.Instance,
 	)
+	securityconfig := reconcilers.NewSecurityconfigReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
 	config := reconcilers.NewConfigurationReconciler(
 		r.Client,
 		ctx,
@@ -261,6 +268,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 
 	componentReconcilers := []reconcilers.ComponentReconciler{
 		tls.Reconcile,
+		securityconfig.Reconcile,
 		config.Reconcile,
 		cluster.Reconcile,
 		scaler.Reconcile,
