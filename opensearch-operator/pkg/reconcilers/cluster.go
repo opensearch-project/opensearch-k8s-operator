@@ -57,6 +57,9 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.Combine(r.reconcileNodeStatefulSet(nodePool))
 	}
 
+	// Clean up statefulsets that are no longer in the spec
+	r.cleanupStatefulSets(&result)
+
 	return result.Result, result.Err
 }
 
@@ -90,4 +93,24 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool)
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+func (r *ClusterReconciler) cleanupStatefulSets(result *reconciler.CombinedResult) {
+	stsList := &appsv1.StatefulSetList{}
+	if err := r.Client.List(
+		r.ctx,
+		stsList,
+		client.InNamespace(r.instance.Name),
+		client.MatchingLabels{builders.ClusterLabel: r.instance.Name},
+	); err != nil {
+		result.Combine(&ctrl.Result{}, err)
+		return
+	}
+
+	for _, sts := range stsList.Items {
+		if !builders.STSInNodePools(sts, r.instance.Spec.NodePools) {
+			result.Combine(r.ReconcileResource(&sts, reconciler.StateAbsent))
+		}
+	}
+
 }

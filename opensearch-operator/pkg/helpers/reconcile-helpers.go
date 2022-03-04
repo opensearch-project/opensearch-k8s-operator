@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	sts "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/kube-openapi/pkg/validation/errors"
 	opsterv1 "opensearch.opster.io/api/v1"
 )
@@ -21,7 +21,7 @@ func CreateInitMasters(cr *opsterv1.OpenSearchCluster) string {
 	return strings.Join(masters, ",")
 }
 
-func CheckEquels(from_env *sts.StatefulSetSpec, from_crd *sts.StatefulSetSpec, text string) (int32, bool, error) {
+func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
 	field_env := GetField(from_env, text)
 	field_env_int_ptr, ok := field_env.(*int32)
 	if !ok {
