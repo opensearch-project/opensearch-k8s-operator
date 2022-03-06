@@ -169,12 +169,17 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	if err != nil {
 		return err
 	}
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
-	if err != nil {
-		lg.Error(err, "failed to create os client")
+
+	// Clean up created service at the end of the function
+	defer func() {
 		if created {
 			r.DeleteNodePortService(service)
 		}
+	}()
+
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+	if err != nil {
+		lg.Error(err, "failed to create os client")
 		return err
 	}
 	// -----  Now start remove node ------
@@ -183,9 +188,6 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	excluded, err := services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
-		if created {
-			r.DeleteNodePortService(service)
-		}
 		return err
 	}
 	if excluded {
@@ -201,9 +203,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 			lg.Error(err, "failed to update status")
 			return err
 		}
-		if created {
-			r.DeleteNodePortService(service)
-		}
+
 		return err
 	}
 
@@ -219,9 +219,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		lg.Error(err, "failed to update status")
 		return err
 	}
-	if created {
-		r.DeleteNodePortService(service)
-	}
+
 	return err
 }
 
@@ -233,11 +231,16 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	if err != nil {
 		return err
 	}
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
-	if err != nil {
+
+	// Clean up created service at the end of the function
+	defer func() {
 		if created {
 			r.DeleteNodePortService(service)
 		}
+	}()
+
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+	if err != nil {
 		return err
 	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
@@ -262,9 +265,6 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	if err != nil {
 		lg.Error(err, "failed to update status")
 		return err
-	}
-	if created {
-		r.DeleteNodePortService(service)
 	}
 	return err
 }

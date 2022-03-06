@@ -2,11 +2,15 @@ package reconcilers
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -109,8 +113,66 @@ func (r *ClusterReconciler) cleanupStatefulSets(result *reconciler.CombinedResul
 
 	for _, sts := range stsList.Items {
 		if !builders.STSInNodePools(sts, r.instance.Spec.NodePools) {
-			result.Combine(r.ReconcileResource(&sts, reconciler.StateAbsent))
+			result.Combine(r.removeStatefulSet(sts))
 		}
 	}
 
+}
+
+func (r *ClusterReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Result, error) {
+	if !r.instance.Spec.ConfMgmt.SmartScaler {
+		return r.ReconcileResource(&sts, reconciler.StateAbsent)
+	}
+
+	// Gracefully remove nodes
+	lg := log.FromContext(r.ctx)
+	username, password := builders.UsernameAndPassword(r.instance)
+
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s", r.instance.Spec.General.ServiceName, r.instance.Name), username, password)
+	if err != nil {
+		lg.Error(err, "failed to create os client")
+		return nil, err
+	}
+
+	workingOrdinal := pointer.Int32Deref(sts.Spec.Replicas, 1) - 1
+	lastReplicaNodeName := builders.ReplicaHostName(sts, workingOrdinal)
+	_, err = services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
+		return nil, err
+	}
+
+	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
+	if err != nil {
+		lg.Error(err, "failed to check shards on node")
+		return nil, err
+	}
+
+	if nodeNotEmpty {
+		return &ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 15 * time.Second,
+		}, nil
+	}
+
+	if workingOrdinal == 0 {
+		result, err := r.ReconcileResource(&sts, reconciler.StateAbsent)
+		if err != nil {
+			return result, err
+		}
+		_, err = services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+		if err != nil {
+			lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
+		}
+		return result, err
+	}
+
+	sts.Spec.Replicas = &workingOrdinal
+	result, err := r.ReconcileResource(&sts, reconciler.StatePresent)
+
+	_, err = services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
+	}
+	return result, err
 }
