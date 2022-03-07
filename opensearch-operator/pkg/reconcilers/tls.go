@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -98,7 +99,6 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
-	caSecretName := clusterName + "-ca"
 	adminSecretName := clusterName + "-admin-cert"
 
 	if tlsConfig.Generate {
@@ -108,14 +108,14 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 		if r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = r.caCert(caSecretName, namespace, clusterName)
+			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
 		if err != nil {
 			return err
 		}
 
 		adminSecret := corev1.Secret{}
-		if err := r.Get(context.TODO(), client.ObjectKey{Name: adminSecretName, Namespace: namespace}, &adminSecret); err != nil {
+		if err := r.Get(r.ctx, client.ObjectKey{Name: adminSecretName, Namespace: namespace}, &adminSecret); err != nil {
 			adminCert, err := ca.CreateAndSignCertificate("admin", clusterName, nil)
 			if err != nil {
 				r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
@@ -143,7 +143,6 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
-	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-transport-cert"
 
 	r.logger.Info("Generating certificates", "interface", "transport")
@@ -153,7 +152,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	if r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
 		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
 	} else {
-		ca, err = r.caCert(caSecretName, namespace, clusterName)
+		ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 	}
 	if err != nil {
 		return err
@@ -161,7 +160,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 	// Generate node cert, sign it and put it into secret
 	nodeSecret := corev1.Secret{}
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
+	if err := r.Get(r.ctx, client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
 		// Generate node cert and put it into secret
 		dnsNames := []string{
 			clusterName,
@@ -202,7 +201,6 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
-	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-transport-cert"
 
 	var ca tls.Cert
@@ -210,7 +208,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	if r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
 		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
 	} else {
-		ca, err = r.caCert(caSecretName, namespace, clusterName)
+		ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 	}
 	if err != nil {
 		return err
@@ -218,7 +216,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 
 	nodeSecret := corev1.Secret{}
 	exists := true
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
+	if err := r.Get(r.ctx, client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
 		nodeSecret.Data = make(map[string][]byte)
 		nodeSecret.ObjectMeta = metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}
 		exists = false
@@ -257,7 +255,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 		}
 	}
 	if exists {
-		if err := r.Update(context.TODO(), &nodeSecret); err != nil {
+		if err := r.Update(r.ctx, &nodeSecret); err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
 		}
@@ -326,7 +324,6 @@ func (r *TLSReconciler) handleHttp() error {
 	tlsConfig := r.instance.Spec.Security.Tls.Http
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
-	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-http-cert"
 
 	if tlsConfig.Generate {
@@ -337,7 +334,7 @@ func (r *TLSReconciler) handleHttp() error {
 		if r.instance.Spec.Security.Tls.Http.CertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Http.CertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = r.caCert(caSecretName, namespace, clusterName)
+			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
 		if err != nil {
 			return err
@@ -345,7 +342,7 @@ func (r *TLSReconciler) handleHttp() error {
 
 		// Generate node cert, sign it and put it into secret
 		nodeSecret := corev1.Secret{}
-		if err := r.Get(context.TODO(), client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
+		if err := r.Get(r.ctx, client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
 			// Generate node cert and put it into secret
 			dnsNames := []string{
 				clusterName,
@@ -394,34 +391,10 @@ func (r *TLSReconciler) handleHttp() error {
 	return nil
 }
 
-func (r *TLSReconciler) caCert(secretName string, namespace string, clusterName string) (tls.Cert, error) {
-	caSecret := corev1.Secret{}
-	var ca tls.Cert
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
-		// Generate CA cert and put it into secret
-		ca, err = r.pki.GenerateCA(clusterName)
-		if err != nil {
-			r.logger.Error(err, "Failed to create CA")
-			return ca, err
-		}
-		caSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace}, Data: ca.SecretDataCA()}
-		if err := ctrl.SetControllerReference(r.instance, &caSecret, r.Client.Scheme()); err != nil {
-			return ca, err
-		}
-		if err := r.Create(context.TODO(), &caSecret); err != nil {
-			r.logger.Error(err, "Failed to store CA in secret")
-			return ca, err
-		}
-	} else {
-		ca = r.pki.CAFromSecret(caSecret.Data)
-	}
-	return ca, nil
-}
-
 func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls.Cert, error) {
 	var ca tls.Cert
 	caSecret := corev1.Secret{}
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
+	if err := r.Get(r.ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
 		return ca, err
 	}
 	ca = r.pki.CAFromSecret(caSecret.Data)

@@ -53,9 +53,9 @@ var _ = Describe("Dashboards Reconciler", func() {
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						Tls: &opsterv1.DashboardsTlsConfig{
-							Enable:   true,
-							Generate: false,
-							Secret:   secretName,
+							Enable:            true,
+							Generate:          false,
+							CertificateConfig: opsterv1.TlsCertificateConfig{Secret: corev1.LocalObjectReference{Name: secretName}},
 						},
 					},
 				}}
@@ -69,41 +69,6 @@ var _ = Describe("Dashboards Reconciler", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 			Expect(helpers.CheckVolumeExists(deployment.Spec.Template.Spec.Volumes, deployment.Spec.Template.Spec.Containers[0].VolumeMounts, secretName, "tls-cert")).Should((BeTrue()))
-		})
-	})
-
-	Context("When running the dashboards reconciler with TLS enabled and an existing cert/key in separate secrets", func() {
-		It("should mount the secrets", func() {
-			clusterName := "dashboards-test-multisecret"
-			keySecretName := "my-key"
-			certSecretName := "my-cert"
-			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
-
-			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opsterv1.DashboardsConfig{
-						Enable: true,
-						Tls: &opsterv1.DashboardsTlsConfig{
-							Enable:     true,
-							Generate:   false,
-							KeySecret:  &opsterv1.TlsSecret{SecretName: keySecretName},
-							CertSecret: &opsterv1.TlsSecret{SecretName: certSecretName},
-						},
-					},
-				}}
-
-			_, underTest := newDashboardsReconciler(&spec)
-			_, err := underTest.Reconcile()
-			Expect(err).ToNot(HaveOccurred())
-			deployment := appsv1.Deployment{}
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-dashboards", Namespace: clusterName}, &deployment)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
-			Expect(helpers.CheckVolumeExists(deployment.Spec.Template.Spec.Volumes, deployment.Spec.Template.Spec.Containers[0].VolumeMounts, keySecretName, "tls-key")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(deployment.Spec.Template.Spec.Volumes, deployment.Spec.Template.Spec.Containers[0].VolumeMounts, certSecretName, "tls-cert")).Should((BeTrue()))
 		})
 	})
 

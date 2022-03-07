@@ -63,7 +63,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	namespace := r.instance.Namespace
 	sts_name := builders.StsName(r.instance, nodePool)
 	currentSts := appsv1.StatefulSet{}
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &currentSts); err != nil {
+	if err := r.Get(r.ctx, client.ObjectKey{Name: sts_name, Namespace: namespace}, &currentSts); err != nil {
 		return false, err
 	}
 
@@ -290,11 +290,11 @@ func (r *ScalerReconciler) CreateNodePortServiceIfNotExists() (corev1.Service, b
 	namespace := r.instance.Namespace
 	targetService := builders.NewNodePortService(r.instance)
 	existingService := corev1.Service{}
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: targetService.Name, Namespace: namespace}, &existingService); err != nil {
+	if err := r.Get(r.ctx, client.ObjectKey{Name: targetService.Name, Namespace: namespace}, &existingService); err != nil {
 		if err := ctrl.SetControllerReference(r.instance, targetService, r.Client.Scheme()); err != nil {
 			return *targetService, false, err
 		}
-		err = r.Create(context.TODO(), targetService)
+		err = r.Create(r.ctx, targetService)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {
 				lg.Error(err, "Cannot create service")
@@ -310,7 +310,7 @@ func (r *ScalerReconciler) CreateNodePortServiceIfNotExists() (corev1.Service, b
 
 func (r *ScalerReconciler) DeleteNodePortService(service corev1.Service) {
 	lg := log.FromContext(r.ctx)
-	err := r.Delete(context.TODO(), &service)
+	err := r.Delete(r.ctx, &service)
 	if err != nil {
 		lg.Error(err, "Cannot delete service")
 		r.recorder.Event(r.instance, "Warning", "Cannot delete service", "Requeue - Fix the problem you have on main Opensearch Headless Service ")

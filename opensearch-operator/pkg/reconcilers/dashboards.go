@@ -2,7 +2,6 @@ package reconcilers
 
 import (
 	"context"
-	"errors"
 	"fmt"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
@@ -12,6 +11,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -82,7 +82,6 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	}
 	clusterName := r.instance.Name
 	namespace := r.instance.Namespace
-	caSecretName := clusterName + "-ca"
 	tlsSecretName := clusterName + "-dashboards-cert"
 	tlsConfig := r.instance.Spec.Dashboards.Tls
 	var volumes []corev1.Volume
@@ -91,13 +90,20 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	if tlsConfig.Generate {
 		r.logger.Info("Generating certificates")
 		// Take CA from TLS reconciler or generate new one
-		ca, err := r.caCert(caSecretName, namespace, clusterName)
+		var ca tls.Cert
+		var err error
+		if tlsConfig.CertificateConfig.CaSecret.Name != "" {
+			ca, err = r.providedCaCert(tlsConfig.CertificateConfig.CaSecret.Name, namespace)
+		} else {
+			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+		}
 		if err != nil {
 			return volumes, volumeMounts, err
 		}
+
 		// Generate cert and create secret
 		tlsSecret := corev1.Secret{}
-		if err := r.Get(context.TODO(), client.ObjectKey{Name: tlsSecretName, Namespace: namespace}, &tlsSecret); err != nil {
+		if err := r.Get(r.ctx, client.ObjectKey{Name: tlsSecretName, Namespace: namespace}, &tlsSecret); err != nil {
 			// Generate tls cert and put it into secret
 			dnsNames := []string{
 				fmt.Sprintf("%s-dashboards", clusterName),
@@ -126,34 +132,10 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		volumeMounts = append(volumeMounts, mount)
 	} else {
 		r.logger.Info("Using externally provided certificates")
-		if tlsConfig.Secret != "" {
-			volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.Secret}}}
-			volumes = append(volumes, volume)
-			mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}
-			volumeMounts = append(volumeMounts, mount)
-		} else {
-			if tlsConfig.CertSecret == nil || tlsConfig.KeySecret == nil {
-				err := errors.New("generate=false but certSecret or keySecret not provided")
-				r.logger.Error(err, "Secret not provided")
-				return volumes, volumeMounts, err
-			}
-			secretKey := "tls.key"
-			if tlsConfig.KeySecret.Key != nil {
-				secretKey = *tlsConfig.KeySecret.Key
-			}
-			volume := corev1.Volume{Name: "tls-key", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.KeySecret.SecretName}}}
-			volumes = append(volumes, volume)
-			mount := corev1.VolumeMount{Name: "tls-key", MountPath: "/usr/share/opensearch-dashboards/certs/tls.key", SubPath: secretKey}
-			volumeMounts = append(volumeMounts, mount)
-			secretKey = "tls.crt"
-			if tlsConfig.CertSecret.Key != nil {
-				secretKey = *tlsConfig.CertSecret.Key
-			}
-			volume = corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.CertSecret.SecretName}}}
-			volumes = append(volumes, volume)
-			mount = corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs/tls.crt", SubPath: secretKey}
-			volumeMounts = append(volumeMounts, mount)
-		}
+		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.CertificateConfig.Secret.Name}}}
+		volumes = append(volumes, volume)
+		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}
+		volumeMounts = append(volumeMounts, mount)
 	}
 	// Update dashboards config
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.enabled", "true")
@@ -162,28 +144,13 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	return volumes, volumeMounts, nil
 }
 
-// TODO: Move to helpers and merge with method from tlscontroller
-func (r *DashboardsReconciler) caCert(secretName string, namespace string, clusterName string) (tls.Cert, error) {
-	caSecret := corev1.Secret{}
+func (r *DashboardsReconciler) providedCaCert(secretName string, namespace string) (tls.Cert, error) {
 	var ca tls.Cert
-	if err := r.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
-		// Generate CA cert and put it into secret
-		ca, err = r.pki.GenerateCA(clusterName)
-		if err != nil {
-			r.logger.Error(err, "Failed to create CA")
-			return ca, err
-		}
-		caSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace}, Data: ca.SecretDataCA()}
-		if err := ctrl.SetControllerReference(r.instance, &caSecret, r.Client.Scheme()); err != nil {
-			return ca, err
-		}
-		if err := r.Create(context.TODO(), &caSecret); err != nil {
-			r.logger.Error(err, "Failed to store CA in secret")
-			return ca, err
-		}
-	} else {
-		ca = r.pki.CAFromSecret(caSecret.Data)
+	caSecret := corev1.Secret{}
+	if err := r.Get(r.ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
+		return ca, err
 	}
+	ca = r.pki.CAFromSecret(caSecret.Data)
 	return ca, nil
 }
 
