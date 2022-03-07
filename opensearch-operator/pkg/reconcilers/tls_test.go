@@ -9,12 +9,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
-	tls "opensearch.opster.io/pkg/tls"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func newTLSReconciler(spec *opsterv1.OpenSearchCluster) (*ReconcilerContext, *TLSReconciler) {
+	reconcilerContext := NewReconcilerContext()
+	underTest := NewTLSReconciler(
+		k8sClient,
+		context.Background(),
+		&reconcilerContext,
+		spec,
+	)
+	underTest.pki = helpers.NewMockPKI()
+	return &reconcilerContext, underTest
+}
 
 var _ = Describe("TLS Controller", func() {
 
@@ -45,13 +56,7 @@ var _ = Describe("TLS Controller", func() {
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
+			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
@@ -115,13 +120,7 @@ var _ = Describe("TLS Controller", func() {
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
+			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -203,13 +202,7 @@ var _ = Describe("TLS Controller", func() {
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
+			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -258,13 +251,7 @@ var _ = Describe("TLS Controller", func() {
 			}
 			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
+			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
@@ -298,11 +285,10 @@ var _ = Describe("TLS Controller", func() {
 				},
 			},
 			}}}
-			data := make(map[string][]byte)
-			ca, err := tls.GenerateCA(clusterName)
-			Expect(err).ToNot(HaveOccurred())
-			data["ca.crt"] = ca.CertData()
-			data["ca.key"] = ca.KeyData()
+			data := map[string][]byte{
+				"ca.crt": []byte("ca.crt"),
+				"ca.key": []byte("ca.key"),
+			}
 			caSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
 				Data:       data,
@@ -312,7 +298,7 @@ var _ = Describe("TLS Controller", func() {
 					Name: clusterName,
 				},
 			}
-			err = k8sClient.Create(context.TODO(), &ns)
+			err := k8sClient.Create(context.TODO(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 
 			err = k8sClient.Create(context.TODO(), &caSecret)
@@ -323,13 +309,7 @@ var _ = Describe("TLS Controller", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
+			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 

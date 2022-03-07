@@ -2,7 +2,6 @@ package reconcilers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -19,6 +18,19 @@ import (
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+
+func newDashboardsReconciler(spec *opsterv1.OpenSearchCluster) (ReconcilerContext, *DashboardsReconciler) {
+	reconcilerContext := NewReconcilerContext()
+	underTest := NewDashboardsReconciler(
+		k8sClient,
+		context.Background(),
+		&helpers.MockEventRecorder{},
+		&reconcilerContext,
+		spec,
+	)
+	underTest.pki = helpers.NewMockPKI()
+	return reconcilerContext, underTest
+}
 
 var _ = Describe("Dashboards Reconciler", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
@@ -47,18 +59,10 @@ var _ = Describe("Dashboards Reconciler", func() {
 					Name: clusterName,
 				},
 			}
-			fmt.Printf("%s", k8sClient)
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewDashboardsReconciler(
-				k8sClient,
-				context.Background(),
-				&helpers.MockEventRecorder{},
-				&reconcilerContext,
-				&spec,
-			)
+			_, underTest := newDashboardsReconciler(&spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			deployment := appsv1.Deployment{}
@@ -92,17 +96,9 @@ var _ = Describe("Dashboards Reconciler", func() {
 					Name: clusterName,
 				},
 			}
-			fmt.Printf("%s", k8sClient)
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewDashboardsReconciler(
-				k8sClient,
-				context.Background(),
-				&helpers.MockEventRecorder{},
-				&reconcilerContext,
-				&spec,
-			)
+			_, underTest := newDashboardsReconciler(&spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			deployment := appsv1.Deployment{}
@@ -133,17 +129,10 @@ var _ = Describe("Dashboards Reconciler", func() {
 					Name: clusterName,
 				},
 			}
-			fmt.Printf("%s", k8sClient)
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewDashboardsReconciler(
-				k8sClient,
-				context.Background(),
-				&helpers.MockEventRecorder{},
-				&reconcilerContext,
-				&spec,
-			)
+			_, underTest := newDashboardsReconciler(&spec)
+			underTest.pki = helpers.NewMockPKI()
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			// Check if secret is mounted

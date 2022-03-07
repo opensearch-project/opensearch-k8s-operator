@@ -16,13 +16,34 @@ import (
 // Implementation based on https://github.com/rancher-sandbox/opni-opensearch-operator/blob/main/pkg/resources/opensearch/certs/certs.go
 //  and https://github.com/rancher-sandbox/opni-opensearch-operator/blob/main/pkg/pki/pki.go
 
+type PKI interface {
+	GenerateCA(name string) (ca Cert, err error)
+	CAFromSecret(data map[string][]byte) Cert
+}
+
+type Cert interface {
+	SecretDataCA() map[string][]byte
+	SecretData(ca Cert) map[string][]byte
+	KeyData() []byte
+	CertData() []byte
+	CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error)
+}
+
+// Dummy struct so that PKI interface can be implemented for easier mocking in tests
+type PkiImpl struct {
+}
+
+func NewPKI() PKI {
+	return &PkiImpl{}
+}
+
 // Represents a certificate with key
-type Cert struct {
+type PEMCert struct {
 	certBytes []byte
 	keyBytes  []byte
 }
 
-func GenerateCA(name string) (ca Cert, err error) {
+func (pki *PkiImpl) GenerateCA(name string) (ca Cert, err error) {
 	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
 	if err != nil {
 		return
@@ -66,38 +87,38 @@ func GenerateCA(name string) (ca Cert, err error) {
 		return
 	}
 
-	return Cert{certBytes: caPEM.Bytes(), keyBytes: caKeyPEM.Bytes()}, nil
+	return &PEMCert{certBytes: caPEM.Bytes(), keyBytes: caKeyPEM.Bytes()}, nil
 }
 
-func (cert *Cert) Cert() (tls.Certificate, error) {
+func (cert *PEMCert) cert() (tls.Certificate, error) {
 	return tls.X509KeyPair(cert.certBytes, cert.keyBytes)
 }
 
-func (ca *Cert) SecretDataCA() map[string][]byte {
+func (ca *PEMCert) SecretDataCA() map[string][]byte {
 	data := make(map[string][]byte)
 	data["ca.crt"] = ca.certBytes
 	data["ca.key"] = ca.keyBytes
 	return data
 }
 
-func (cert *Cert) SecretData(ca *Cert) map[string][]byte {
+func (cert *PEMCert) SecretData(ca Cert) map[string][]byte {
 	data := make(map[string][]byte)
 	data["tls.crt"] = cert.certBytes
 	data["tls.key"] = cert.keyBytes
-	data["ca.crt"] = ca.certBytes
+	data["ca.crt"] = ca.CertData()
 	return data
 }
 
-func (cert *Cert) KeyData() []byte {
+func (cert *PEMCert) KeyData() []byte {
 	return cert.keyBytes
 }
 
-func (cert *Cert) CertData() []byte {
+func (cert *PEMCert) CertData() []byte {
 	return cert.certBytes
 }
 
-func (ca *Cert) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error) {
-	tlscacert, err := ca.Cert()
+func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error) {
+	tlscacert, err := ca.cert()
 	if err != nil {
 		return
 	}
@@ -164,11 +185,11 @@ func (ca *Cert) CreateAndSignCertificate(commonName string, orgUnit string, dnsn
 	}
 	keyBytes := keyPEM.Bytes()
 
-	return Cert{keyBytes: keyBytes, certBytes: certBytes}, nil
+	return &PEMCert{keyBytes: keyBytes, certBytes: certBytes}, nil
 }
 
-func CAFromSecret(data map[string][]byte) Cert {
-	return Cert{certBytes: data["ca.crt"], keyBytes: data["ca.key"]}
+func (pki *PkiImpl) CAFromSecret(data map[string][]byte) Cert {
+	return &PEMCert{certBytes: data["ca.crt"], keyBytes: data["ca.key"]}
 }
 
 func calculateExtension(commonName string, dnsNames []string) (pkix.Extension, error) {

@@ -24,6 +24,7 @@ type TLSReconciler struct {
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
+	pki               tls.PKI
 }
 
 func NewTLSReconciler(
@@ -41,6 +42,7 @@ func NewTLSReconciler(
 		reconcilerContext: reconcilerContext,
 		instance:          instance,
 		logger:            log.FromContext(ctx),
+		pki:               tls.NewPKI(),
 	}
 }
 
@@ -121,7 +123,7 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 				r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
 				return err
 			}
-			adminSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: adminSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: adminCert.SecretData(&ca)}
+			adminSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: adminSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: adminCert.SecretData(ca)}
 			if err := r.Create(context.TODO(), &adminSecret); err != nil {
 				r.logger.Error(err, "Failed to store admin certificate in secret", "interface", "transport")
 				return err
@@ -171,7 +173,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			r.logger.Error(err, "Failed to create node certificate", "interface", "transport")
 			return err
 		}
-		nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(&ca)}
+		nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
 		if err := r.Create(context.TODO(), &nodeSecret); err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
@@ -349,7 +351,7 @@ func (r *TLSReconciler) handleHttp() error {
 				r.logger.Error(err, "Failed to create node certificate", "interface", "http")
 				return err
 			}
-			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(&ca)}
+			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
 			if err := r.Create(context.TODO(), &nodeSecret); err != nil {
 				r.logger.Error(err, "Failed to store node certificate in secret", "interface", "http")
 				return err
@@ -387,7 +389,7 @@ func (r *TLSReconciler) caCert(secretName string, namespace string, clusterName 
 	var ca tls.Cert
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
 		// Generate CA cert and put it into secret
-		ca, err = tls.GenerateCA(clusterName)
+		ca, err = r.pki.GenerateCA(clusterName)
 		if err != nil {
 			r.logger.Error(err, "Failed to create CA")
 			return ca, err
@@ -398,7 +400,7 @@ func (r *TLSReconciler) caCert(secretName string, namespace string, clusterName 
 			return ca, err
 		}
 	} else {
-		ca = tls.CAFromSecret(caSecret.Data)
+		ca = r.pki.CAFromSecret(caSecret.Data)
 	}
 	return ca, nil
 }
@@ -409,7 +411,7 @@ func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
 		return ca, err
 	}
-	ca = tls.CAFromSecret(caSecret.Data)
+	ca = r.pki.CAFromSecret(caSecret.Data)
 	return ca, nil
 }
 

@@ -26,6 +26,7 @@ type DashboardsReconciler struct {
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
+	pki               tls.PKI
 }
 
 func NewDashboardsReconciler(
@@ -45,6 +46,7 @@ func NewDashboardsReconciler(
 		recorder:          recorder,
 		instance:          instance,
 		logger:            log.FromContext(ctx),
+		pki:               tls.NewPKI(),
 	}
 }
 
@@ -105,7 +107,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 				r.logger.Error(err, "Failed to create tls certificate")
 				return volumes, volumeMounts, err
 			}
-			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(&ca)}
+			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
 			if err := r.Create(context.TODO(), &tlsSecret); err != nil {
 				r.logger.Error(err, "Failed to store tls certificate in secret")
 				return volumes, volumeMounts, err
@@ -160,7 +162,7 @@ func (r *DashboardsReconciler) caCert(secretName string, namespace string, clust
 	var ca tls.Cert
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
 		// Generate CA cert and put it into secret
-		ca, err = tls.GenerateCA(clusterName)
+		ca, err = r.pki.GenerateCA(clusterName)
 		if err != nil {
 			r.logger.Error(err, "Failed to create CA")
 			return ca, err
@@ -171,7 +173,7 @@ func (r *DashboardsReconciler) caCert(secretName string, namespace string, clust
 			return ca, err
 		}
 	} else {
-		ca = tls.CAFromSecret(caSecret.Data)
+		ca = r.pki.CAFromSecret(caSecret.Data)
 	}
 	return ca, nil
 }
