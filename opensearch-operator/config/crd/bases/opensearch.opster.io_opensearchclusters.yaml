@@ -107,6 +107,8 @@ spec:
                     type: string
                   serviceName:
                     type: string
+                  setVMMaxMapCount:
+                    type: boolean
                   vendor:
                     enum:
                     - Opensearch
