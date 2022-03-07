@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 )
@@ -128,7 +129,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
-	return &appsv1.StatefulSet{
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-" + node.Component,
 			Namespace: cr.Namespace,
@@ -230,6 +231,23 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 			ServiceName: cr.Spec.General.ServiceName + "-svc",
 		},
 	}
+
+	if cr.Spec.General.SetVMMaxMapCount {
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
+			Name:  "init-sysctl",
+			Image: "busybox:1.27.2",
+			Command: []string{
+				"sysctl",
+				"-w",
+				"vm.max_map_count=262144",
+			},
+			SecurityContext: &corev1.SecurityContext{
+				Privileged: pointer.Bool(true),
+			},
+		})
+	}
+
+	return sts
 }
 
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
