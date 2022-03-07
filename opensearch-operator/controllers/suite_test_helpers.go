@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -71,31 +72,28 @@ func ComposeOpensearchCrd(ClusterName string, ClusterNameSpaces string) opsterv1
 			},
 			Dashboards: opsterv1.DashboardsConfig{Enable: true},
 			NodePools: []opsterv1.NodePool{{
-				Component:    "master",
-				Replicas:     3,
-				DiskSize:     32,
-				NodeSelector: "",
-				Cpu:          4,
-				Memory:       16,
+				Component: "master",
+				Replicas:  3,
+				DiskSize:  32,
+				Cpu:       4,
+				Memory:    16,
 				Roles: []string{
 					"master",
 					"data",
 				}}, {
-				Component:    "nodes",
-				Replicas:     3,
-				DiskSize:     32,
-				NodeSelector: "",
-				Cpu:          4,
-				Memory:       16,
+				Component: "nodes",
+				Replicas:  3,
+				DiskSize:  32,
+				Cpu:       4,
+				Memory:    16,
 				Roles: []string{
 					"data",
 				}}, {
-				Component:    "client",
-				Replicas:     3,
-				DiskSize:     32,
-				NodeSelector: "",
-				Cpu:          4,
-				Memory:       16,
+				Component: "client",
+				Replicas:  3,
+				DiskSize:  32,
+				Cpu:       4,
+				Memory:    16,
 				Roles: []string{
 					"data",
 					"ingest",
