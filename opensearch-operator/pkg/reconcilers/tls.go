@@ -98,7 +98,7 @@ func (r *TLSReconciler) handleTransport() error {
 
 func (r *TLSReconciler) handleAdminCertificate() error {
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
-	namespace := r.instance.Spec.General.ClusterName
+	namespace := r.instance.Namespace
 	clusterName := r.instance.Spec.General.ClusterName
 	caSecretName := clusterName + "-ca"
 	adminSecretName := clusterName + "-admin-cert"
@@ -140,7 +140,7 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 }
 
 func (r *TLSReconciler) handleTransportGenerateGlobal() error {
-	namespace := r.instance.Spec.General.ClusterName
+	namespace := r.instance.Namespace
 	clusterName := r.instance.Spec.General.ClusterName
 	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-transport-cert"
@@ -196,7 +196,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	r.logger.Info("Generating certificates", "interface", "transport")
 
-	namespace := r.instance.Spec.General.ClusterName
+	namespace := r.instance.Namespace
 	clusterName := r.instance.Spec.General.ClusterName
 	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-transport-cert"
@@ -317,7 +317,7 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 
 func (r *TLSReconciler) handleHttp() error {
 	tlsConfig := r.instance.Spec.Security.Tls.Http
-	namespace := r.instance.Spec.General.ClusterName
+	namespace := r.instance.Namespace
 	clusterName := r.instance.Spec.General.ClusterName
 	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-http-cert"
@@ -427,4 +427,19 @@ func mountFolder(interfaceName string, name string, secretName string, reconcile
 	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
 	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s", interfaceName)}
 	reconcilerContext.VolumeMounts = append(reconcilerContext.VolumeMounts, mount)
+}
+
+func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
+	clusterName := r.instance.Spec.General.ClusterName
+	result := reconciler.CombinedResult{}
+	// Delete CA cert
+	secret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: r.instance.Namespace, Name: clusterName + "-ca"}}
+	result.Combine(r.ReconcileResource(&secret, reconciler.StateAbsent))
+	// Deletet transport cert
+	secret.ObjectMeta.Name = clusterName + "-transport-cert"
+	result.Combine(r.ReconcileResource(&secret, reconciler.StateAbsent))
+	// Delete http cert
+	secret.ObjectMeta.Name = clusterName + "-http-cert"
+	result.Combine(r.ReconcileResource(&secret, reconciler.StateAbsent))
+	return result.Result, result.Err
 }

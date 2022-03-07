@@ -26,7 +26,9 @@ var _ = Describe("Configuration Controller", func() {
 
 	Context("When Reconciling the configuration controller with no configuration snippets", func() {
 		It("should not create a configmap ", func() {
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
 
 			reconcilerContext := NewReconcilerContext()
 
@@ -48,14 +50,11 @@ var _ = Describe("Configuration Controller", func() {
 
 	Context("When Reconciling the configuration controller with some configuration snippets", func() {
 		It("should create a configmap ", func() {
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.Background(), &ns)
-			Expect(err).ToNot(HaveOccurred())
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
 
 			reconcilerContext := NewReconcilerContext()
 
@@ -69,7 +68,7 @@ var _ = Describe("Configuration Controller", func() {
 			reconcilerContext.AddConfig("foo", "bar")
 			reconcilerContext.AddConfig("bar", "something")
 			reconcilerContext.AddConfig("bar", "baz")
-			_, err = underTest.Reconcile()
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
 			Eventually(func() bool {

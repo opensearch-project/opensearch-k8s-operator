@@ -81,3 +81,19 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool)
 	// Finally we enforce the desired state
 	return r.ReconcileResource(sts, reconciler.StatePresent)
 }
+
+func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
+	result := reconciler.CombinedResult{}
+
+	clusterService := builders.NewServiceForCR(r.instance)
+	result.Combine(r.ReconcileResource(clusterService, reconciler.StateAbsent))
+
+	for _, nodePool := range r.instance.Spec.NodePools {
+		sts := builders.NewSTSForNodePool(r.instance, nodePool, nil, nil)
+		result.Combine(r.ReconcileResource(sts, reconciler.StateAbsent))
+		headlessService := builders.NewHeadlessServiceForNodePool(r.instance, &nodePool)
+		result.Combine(r.ReconcileResource(headlessService, reconciler.StateAbsent))
+	}
+
+	return result.Result, result.Err
+}

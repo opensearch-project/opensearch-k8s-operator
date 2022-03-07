@@ -52,7 +52,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 	return &sts.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ClusterName + "-dashboards",
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: sts.DeploymentSpec{
@@ -121,7 +121,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 		},
 		Data: map[string]string{
 			"opensearch_dashboards.yml": data,
@@ -144,7 +144,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ServiceName + "-dashboards",
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{

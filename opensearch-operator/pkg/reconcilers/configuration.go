@@ -97,10 +97,16 @@ func (r *ConfigurationReconciler) buildConfigMap() *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-config", r.instance.Spec.General.ClusterName),
-			Namespace: r.instance.Spec.General.ClusterName,
+			Namespace: r.instance.Namespace,
 		},
 		Data: map[string]string{
 			"opensearch.yml": data,
 		},
 	}
+}
+
+func (r *ConfigurationReconciler) DeleteResources() (ctrl.Result, error) {
+	cm := r.buildConfigMap()
+	_, err := r.ReconcileResource(cm, reconciler.StateAbsent)
+	return ctrl.Result{}, err
 }

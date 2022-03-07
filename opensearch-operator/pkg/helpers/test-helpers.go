@@ -57,6 +57,7 @@ func (cert *CertMock) SecretDataCA() map[string][]byte {
 		"ca.key": []byte("ca.key"),
 	}
 }
+
 func (cert *CertMock) SecretData(ca tls.Cert) map[string][]byte {
 	return map[string][]byte{
 		"ca.crt":  []byte("ca.crt"),
@@ -64,12 +65,15 @@ func (cert *CertMock) SecretData(ca tls.Cert) map[string][]byte {
 		"tls.crt": []byte("tls.crt"),
 	}
 }
+
 func (cert *CertMock) KeyData() []byte {
 	return []byte("tls.key")
 }
+
 func (cert *CertMock) CertData() []byte {
 	return []byte("tls.crt")
 }
+
 func (ca *CertMock) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert tls.Cert, err error) {
 	return &CertMock{}, nil
 }
@@ -77,6 +81,7 @@ func (ca *CertMock) CreateAndSignCertificate(commonName string, orgUnit string, 
 func (pki *PkiMock) GenerateCA(name string) (ca tls.Cert, err error) {
 	return &CertMock{}, nil
 }
+
 func (pki *PkiMock) CAFromSecret(data map[string][]byte) tls.Cert {
 	return &CertMock{}
 }

@@ -78,7 +78,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		return nil, nil, nil
 	}
 	clusterName := r.instance.Spec.General.ClusterName
-	namespace := clusterName
+	namespace := r.instance.Namespace
 	caSecretName := clusterName + "-ca"
 	tlsSecretName := clusterName + "-dashboards-cert"
 	tlsConfig := r.instance.Spec.Dashboards.Tls
@@ -176,4 +176,30 @@ func (r *DashboardsReconciler) caCert(secretName string, namespace string, clust
 		ca = r.pki.CAFromSecret(caSecret.Data)
 	}
 	return ca, nil
+}
+
+func (r *DashboardsReconciler) DeleteResources() (ctrl.Result, error) {
+	clusterName := r.instance.Spec.General.ClusterName
+	namespace := r.instance.Namespace
+	tlsSecretName := clusterName + "-dashboards-cert"
+	result := reconciler.CombinedResult{}
+
+	volumes, volumeMounts, err := r.handleTls()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts)
+	result.Combine(r.ReconcileResource(deployment, reconciler.StateAbsent))
+
+	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Spec.General.ClusterName), r.reconcilerContext.DashboardsConfig)
+	result.Combine(r.ReconcileResource(cm, reconciler.StateAbsent))
+
+	svc := builders.NewDashboardsSvcForCr(r.instance)
+	result.Combine(r.ReconcileResource(svc, reconciler.StateAbsent))
+
+	tlsSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}}
+	result.Combine(r.ReconcileResource(&tlsSecret, reconciler.StateAbsent))
+
+	return result.Result, result.Err
 }

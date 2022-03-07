@@ -43,27 +43,25 @@ var _ = Describe("Dashboards Reconciler", func() {
 		It("should mount the secret", func() {
 			clusterName := "dashboards-singlesecret"
 			secretName := "my-cert"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
-				Dashboards: opsterv1.DashboardsConfig{
-					Enable: true,
-					Tls: &opsterv1.DashboardsTlsConfig{
-						Enable:   true,
-						Generate: false,
-						Secret:   secretName,
+
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Tls: &opsterv1.DashboardsTlsConfig{
+							Enable:   true,
+							Generate: false,
+							Secret:   secretName,
+						},
 					},
-				},
-			}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.Background(), &ns)
-			Expect(err).ToNot(HaveOccurred())
+				}}
 
 			_, underTest := newDashboardsReconciler(&spec)
-			_, err = underTest.Reconcile()
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			deployment := appsv1.Deployment{}
 			Eventually(func() bool {
@@ -79,27 +77,25 @@ var _ = Describe("Dashboards Reconciler", func() {
 			clusterName := "dashboards-test-multisecret"
 			keySecretName := "my-key"
 			certSecretName := "my-cert"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
-				Dashboards: opsterv1.DashboardsConfig{
-					Enable: true,
-					Tls: &opsterv1.DashboardsTlsConfig{
-						Enable:     true,
-						Generate:   false,
-						KeySecret:  &opsterv1.TlsSecret{SecretName: keySecretName},
-						CertSecret: &opsterv1.TlsSecret{SecretName: certSecretName},
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Tls: &opsterv1.DashboardsTlsConfig{
+							Enable:     true,
+							Generate:   false,
+							KeySecret:  &opsterv1.TlsSecret{SecretName: keySecretName},
+							CertSecret: &opsterv1.TlsSecret{SecretName: certSecretName},
+						},
 					},
-				},
-			}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.Background(), &ns)
-			Expect(err).ToNot(HaveOccurred())
+				}}
+
 			_, underTest := newDashboardsReconciler(&spec)
-			_, err = underTest.Reconcile()
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			deployment := appsv1.Deployment{}
 			Eventually(func() bool {
@@ -114,16 +110,18 @@ var _ = Describe("Dashboards Reconciler", func() {
 	Context("When running the dashboards reconciler with TLS enabled and generate enabled", func() {
 		It("should create a cert", func() {
 			clusterName := "dashboards-test-generate"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
-				Dashboards: opsterv1.DashboardsConfig{
-					Enable: true,
-					Tls: &opsterv1.DashboardsTlsConfig{
-						Enable:   true,
-						Generate: true,
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Tls: &opsterv1.DashboardsTlsConfig{
+							Enable:   true,
+							Generate: true,
+						},
 					},
-				},
-			}}
+				}}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
