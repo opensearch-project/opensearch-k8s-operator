@@ -164,6 +164,17 @@ spec:
                 properties:
                   config:
                     properties:
+                      adminCredentialsSecret:
+                        description: Secret that contains fields username and password
+                          to be used by the operator to access the opensearch cluster
+                          for node draining. Must be set if custom securityconfig
+                          is provided.
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
                       adminSecret:
                         description: TLS Secret that contains a client certificate
                           (tls.key, tls.crt, ca.crt) with admin rights in the opensearch

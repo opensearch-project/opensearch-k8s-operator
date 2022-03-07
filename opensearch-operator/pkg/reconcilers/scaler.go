@@ -137,7 +137,10 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if !smartDecrease {
 		return false, err
 	}
-	username, password := builders.UsernameAndPassword(r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.Client, r.ctx, r.instance)
+	if err != nil {
+		return true, err
+	}
 	service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {
 		return true, err
@@ -164,7 +167,10 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 
 func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
-	username, password := builders.UsernameAndPassword(r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.Client, r.ctx, r.instance)
+	if err != nil {
+		return err
+	}
 	service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {
 		return err
@@ -228,7 +234,10 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
 	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
-	username, password := builders.UsernameAndPassword(r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.Client, r.ctx, r.instance)
+	if err != nil {
+		return err
+	}
 	service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {
 		return err
