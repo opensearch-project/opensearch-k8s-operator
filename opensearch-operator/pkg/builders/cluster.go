@@ -258,11 +258,6 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 	return sts
 }
 
-func DockerImageForCluster(cr *opsterv1.OpenSearchCluster) string {
-	// TODO: Determine version based on CR
-	return "opensearchproject/opensearch:1.2.3"
-}
-
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 
 	labels := map[string]string{
