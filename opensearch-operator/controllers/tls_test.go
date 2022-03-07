@@ -30,7 +30,7 @@ var _ = Describe("TLS Reconciler", func() {
 		spec := opsterv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
 			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
+				General: opsterv1.GeneralConfig{ServiceName: clusterName},
 				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: true,

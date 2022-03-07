@@ -96,7 +96,7 @@ func (r *ConfigurationReconciler) buildConfigMap() *corev1.ConfigMap {
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-config", r.instance.Spec.General.ClusterName),
+			Name:      fmt.Sprintf("%s-config", r.instance.Name),
 			Namespace: r.instance.Namespace,
 		},
 		Data: map[string]string{

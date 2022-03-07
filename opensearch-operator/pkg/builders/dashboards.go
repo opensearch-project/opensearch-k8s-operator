@@ -23,7 +23,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				DefaultMode:          &mode,
-				LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Spec.General.ClusterName)},
+				LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Name)},
 			},
 		},
 	})
@@ -51,7 +51,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 
 	return &sts.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-dashboards",
+			Name:      cr.Name + "-dashboards",
 			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
@@ -109,7 +109,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 }
 
 func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
-	config["server.name"] = cr.Spec.General.ClusterName + "-dashboards"
+	config["server.name"] = cr.Name + "-dashboards"
 	config["opensearch.ssl.verificationMode"] = "none"
 
 	var sb strings.Builder

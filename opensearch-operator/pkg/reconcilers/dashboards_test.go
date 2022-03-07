@@ -49,7 +49,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
 				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						Tls: &opsterv1.DashboardsTlsConfig{
@@ -82,7 +82,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
 				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						Tls: &opsterv1.DashboardsTlsConfig{
@@ -113,7 +113,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
 				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						Tls: &opsterv1.DashboardsTlsConfig{

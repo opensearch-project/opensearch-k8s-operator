@@ -99,7 +99,7 @@ func (r *TLSReconciler) handleTransport() error {
 func (r *TLSReconciler) handleAdminCertificate() error {
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
 	namespace := r.instance.Namespace
-	clusterName := r.instance.Spec.General.ClusterName
+	clusterName := r.instance.Name
 	caSecretName := clusterName + "-ca"
 	adminSecretName := clusterName + "-admin-cert"
 
@@ -141,7 +141,7 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 
 func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	namespace := r.instance.Namespace
-	clusterName := r.instance.Spec.General.ClusterName
+	clusterName := r.instance.Name
 	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-transport-cert"
 
@@ -197,7 +197,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	r.logger.Info("Generating certificates", "interface", "transport")
 
 	namespace := r.instance.Namespace
-	clusterName := r.instance.Spec.General.ClusterName
+	clusterName := r.instance.Name
 	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-transport-cert"
 
@@ -318,7 +318,7 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 func (r *TLSReconciler) handleHttp() error {
 	tlsConfig := r.instance.Spec.Security.Tls.Http
 	namespace := r.instance.Namespace
-	clusterName := r.instance.Spec.General.ClusterName
+	clusterName := r.instance.Name
 	caSecretName := clusterName + "-ca"
 	nodeSecretName := clusterName + "-http-cert"
 
@@ -430,7 +430,7 @@ func mountFolder(interfaceName string, name string, secretName string, reconcile
 }
 
 func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
-	clusterName := r.instance.Spec.General.ClusterName
+	clusterName := r.instance.Name
 	result := reconciler.CombinedResult{}
 	// Delete CA cert
 	secret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: r.instance.Namespace, Name: clusterName + "-ca"}}

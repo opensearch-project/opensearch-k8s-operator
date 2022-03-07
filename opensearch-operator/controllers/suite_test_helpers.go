@@ -11,7 +11,7 @@ import (
 )
 
 func CreateNamespace(k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) error {
-	ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: cluster.Spec.General.ClusterName}}
+	ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: cluster.Name}}
 	return k8sClient.Create(context.Background(), &ns)
 }
 
@@ -85,7 +85,6 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 		},
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
-				ClusterName: clusterName,
 				HttpPort:    9200,
 				Vendor:      "opensearch",
 				Version:     "latest",

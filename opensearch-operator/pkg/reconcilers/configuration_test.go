@@ -28,7 +28,7 @@ var _ = Describe("Configuration Controller", func() {
 		It("should not create a configmap ", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
-				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
+				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
 
 			reconcilerContext := NewReconcilerContext()
 
@@ -54,7 +54,7 @@ var _ = Describe("Configuration Controller", func() {
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
-				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}}}
+				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
 
 			reconcilerContext := NewReconcilerContext()
 

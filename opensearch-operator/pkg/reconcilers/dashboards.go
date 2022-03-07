@@ -61,7 +61,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Spec.General.ClusterName), r.reconcilerContext.DashboardsConfig)
+	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Name), r.reconcilerContext.DashboardsConfig)
 	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
 
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts)
@@ -77,7 +77,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	if r.instance.Spec.Dashboards.Tls == nil || !r.instance.Spec.Dashboards.Tls.Enable {
 		return nil, nil, nil
 	}
-	clusterName := r.instance.Spec.General.ClusterName
+	clusterName := r.instance.Name
 	namespace := r.instance.Namespace
 	caSecretName := clusterName + "-ca"
 	tlsSecretName := clusterName + "-dashboards-cert"
@@ -179,7 +179,7 @@ func (r *DashboardsReconciler) caCert(secretName string, namespace string, clust
 }
 
 func (r *DashboardsReconciler) DeleteResources() (ctrl.Result, error) {
-	clusterName := r.instance.Spec.General.ClusterName
+	clusterName := r.instance.Name
 	namespace := r.instance.Namespace
 	tlsSecretName := clusterName + "-dashboards-cert"
 	result := reconciler.CombinedResult{}
@@ -192,7 +192,7 @@ func (r *DashboardsReconciler) DeleteResources() (ctrl.Result, error) {
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts)
 	result.Combine(r.ReconcileResource(deployment, reconciler.StateAbsent))
 
-	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Spec.General.ClusterName), r.reconcilerContext.DashboardsConfig)
+	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", clusterName), r.reconcilerContext.DashboardsConfig)
 	result.Combine(r.ReconcileResource(cm, reconciler.StateAbsent))
 
 	svc := builders.NewDashboardsSvcForCr(r.instance)

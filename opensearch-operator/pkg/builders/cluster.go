@@ -95,7 +95,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-" + node.Component,
+			Name:      cr.Name + "-" + node.Component,
 			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
@@ -125,7 +125,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 								},
 								{
 									Name:  "cluster.name",
-									Value: cr.Spec.General.ClusterName,
+									Value: cr.Name,
 								},
 								{
 									Name:  "network.bind_host",
@@ -344,7 +344,7 @@ func DnsOfService(cr *opsterv1.OpenSearchCluster) string {
 }
 
 func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
-	return cr.Spec.General.ClusterName + "-" + nodePool.Component
+	return cr.Name + "-" + nodePool.Component
 }
 func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
 	return "admin", "admin"

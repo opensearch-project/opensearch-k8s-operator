@@ -30,9 +30,6 @@ const (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type GeneralConfig struct {
-
-	//+kubebuilder:default="opster-cluster"
-	ClusterName string `json:"clusterName,omitempty"`
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
