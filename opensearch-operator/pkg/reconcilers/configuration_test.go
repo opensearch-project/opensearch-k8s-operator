@@ -71,19 +71,57 @@ var _ = Describe("Configuration Controller", func() {
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
+			configMap := corev1.ConfigMap{}
 			Eventually(func() bool {
-				configMap := corev1.ConfigMap{}
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
-				if err != nil {
-					return false
-				}
-				data, exists := configMap.Data["opensearch.yml"]
-				if !exists {
-					return false
-				}
-				return strings.Contains(data, "foo: bar\n") && strings.Contains(data, "bar: baz\n")
+				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
+			data, exists := configMap.Data["opensearch.yml"]
+			Expect(exists).To(BeTrue())
+			Expect(strings.Contains(data, "foo: bar\n")).To(BeTrue())
+			Expect(strings.Contains(data, "bar: baz\n")).To(BeTrue())
+		})
+	})
+
+	Context("When Reconciling the configuration controller with extra config", func() {
+		clusterName := "extra-config"
+		It("should create a configmap with these items", func() {
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+				},
+			}
+			err := k8sClient.Create(context.Background(), &ns)
+			Expect(err).ToNot(HaveOccurred())
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{
+					ExtraConfig: "foo: bar\nother.item.to.add: true",
+				}}}
+
+			reconcilerContext := NewReconcilerContext()
+
+			underTest := NewConfigurationReconciler(
+				k8sClient,
+				context.Background(),
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			configMap := corev1.ConfigMap{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			data, exists := configMap.Data["opensearch.yml"]
+			Expect(exists).To(BeTrue())
+			Expect(strings.Contains(data, "foo: bar\n")).To(BeTrue())
+			Expect(strings.Contains(data, "other.item.to.add: true\n")).To(BeTrue())
 		})
 	})
 
