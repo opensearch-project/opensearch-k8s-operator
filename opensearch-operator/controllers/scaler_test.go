@@ -6,7 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
-	sts "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -28,7 +28,7 @@ var _ = Describe("Scaler Reconciler", func() {
 	)
 	var (
 		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace)
-		nodePool          = sts.StatefulSet{}
+		nodePool          = appsv1.StatefulSet{}
 		cluster2          = opsterv1.OpenSearchCluster{}
 	)
 
@@ -96,17 +96,12 @@ var _ = Describe("Scaler Reconciler", func() {
 	/// ------- Deletion Check phase -------
 
 	Context("When deleting OpenSearch CRD ", func() {
-		It("should delete cluster resources", func() {
-			Expect(k8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
-
-			Eventually(func() bool {
-				for _, nodePool := range OpensearchCluster.Spec.NodePools {
-					if !IsSTSDeleted(k8sClient, clusterName+"-"+nodePool.Component, namespace) {
-						return false
-					}
-				}
-				return true
-			}, timeout, interval).Should(BeTrue())
+		It("should set correct owner references", func() {
+			for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
+				nodePool := appsv1.StatefulSet{}
+				Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-" + nodePoolSpec.Component}, &nodePool)).To(Succeed())
+				Expect(HasOwnerReference(&nodePool, &OpensearchCluster)).To(BeTrue())
+			}
 		})
 	})
 

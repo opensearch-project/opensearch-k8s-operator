@@ -46,10 +46,12 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 
 	clusterService := builders.NewServiceForCR(r.instance)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(clusterService, reconciler.StatePresent))
 
 	for _, nodePool := range r.instance.Spec.NodePools {
 		headlessService := builders.NewHeadlessServiceForNodePool(r.instance, &nodePool)
+		result.CombineErr(ctrl.SetControllerReference(r.instance, headlessService, r.Client.Scheme()))
 		result.Combine(r.ReconcileResource(headlessService, reconciler.StatePresent))
 
 		result.Combine(r.reconcileNodeStatefulSet(nodePool))
@@ -60,6 +62,9 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool) (*ctrl.Result, error) {
 	sts := builders.NewSTSForNodePool(r.instance, nodePool, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
+	if err := ctrl.SetControllerReference(r.instance, sts, r.Client.Scheme()); err != nil {
+		return &ctrl.Result{}, err
+	}
 
 	// First ensure that the statefulset exists
 	result, err := r.ReconcileResource(sts, reconciler.StateCreated)
@@ -84,16 +89,5 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool)
 
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
-
-	clusterService := builders.NewServiceForCR(r.instance)
-	result.Combine(r.ReconcileResource(clusterService, reconciler.StateAbsent))
-
-	for _, nodePool := range r.instance.Spec.NodePools {
-		sts := builders.NewSTSForNodePool(r.instance, nodePool, nil, nil)
-		result.Combine(r.ReconcileResource(sts, reconciler.StateAbsent))
-		headlessService := builders.NewHeadlessServiceForNodePool(r.instance, &nodePool)
-		result.Combine(r.ReconcileResource(headlessService, reconciler.StateAbsent))
-	}
-
 	return result.Result, result.Err
 }

@@ -43,7 +43,7 @@ var _ = Describe("TLS Controller", func() {
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
 					General: opsterv1.GeneralConfig{},
 					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
@@ -97,7 +97,7 @@ var _ = Describe("TLS Controller", func() {
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
 					General: opsterv1.GeneralConfig{},
 					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
@@ -169,7 +169,7 @@ var _ = Describe("TLS Controller", func() {
 		It("Should not create secrets but only mount them", func() {
 			clusterName := "tls-test-existingsecrets"
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: false,
@@ -216,7 +216,7 @@ var _ = Describe("TLS Controller", func() {
 		It("Should not create secrets but only mount them", func() {
 			clusterName := "tls-test-existingsecretspernode"
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: false,
@@ -254,7 +254,7 @@ var _ = Describe("TLS Controller", func() {
 			clusterName := "tls-withca"
 			caSecretName := clusterName + "-myca"
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: true,

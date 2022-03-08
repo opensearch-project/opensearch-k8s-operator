@@ -7,6 +7,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
@@ -74,21 +75,20 @@ var _ = Describe("TLS Reconciler", func() {
 			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-config", "config")).Should((BeTrue()))
 		})
 
-		It("Should cleanup successfully", func() {
-			Expect(k8sClient.Delete(context.Background(), &spec)).Should(Succeed())
+		It("Should set correct owner references", func() {
+			cm := corev1.ConfigMap{}
+			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: namespace}, &cm)).To(Succeed())
+			Expect(HasOwnerReference(&cm, &spec)).To(BeTrue())
 
-			Eventually(func() bool {
-				if !IsConfigMapDeleted(k8sClient, clusterName+"-config", namespace) {
-					return false
-				}
-				if !IsSecretDeleted(k8sClient, clusterName+"-http-cert", namespace) {
-					return false
-				}
-				if !IsSecretDeleted(k8sClient, clusterName+"-transport-cert", namespace) {
-					return false
-				}
-				return IsSecretDeleted(k8sClient, clusterName+"-ca", namespace)
-			}, timeout, interval).Should(BeTrue())
+			secret := corev1.Secret{}
+			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-http-cert", Namespace: namespace}, &secret)).To(Succeed())
+			Expect(HasOwnerReference(&secret, &spec)).To(BeTrue())
+
+			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-transport-cert", Namespace: namespace}, &secret)).To(Succeed())
+			Expect(HasOwnerReference(&secret, &spec)).To(BeTrue())
+
+			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-ca", Namespace: namespace}, &secret)).To(Succeed())
+			Expect(HasOwnerReference(&secret, &spec)).To(BeTrue())
 		})
 	})
 

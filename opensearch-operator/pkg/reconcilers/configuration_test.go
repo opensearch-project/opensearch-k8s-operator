@@ -27,7 +27,7 @@ var _ = Describe("Configuration Controller", func() {
 	Context("When Reconciling the configuration controller with no configuration snippets", func() {
 		It("should not create a configmap ", func() {
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
 
 			reconcilerContext := NewReconcilerContext()
@@ -53,7 +53,7 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
 
 			reconcilerContext := NewReconcilerContext()

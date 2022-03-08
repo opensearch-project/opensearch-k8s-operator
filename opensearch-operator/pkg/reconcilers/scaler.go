@@ -282,6 +282,9 @@ func (r *ScalerReconciler) CreateNodePortServiceIfNotExists() (corev1.Service, b
 	targetService := builders.NewNodePortService(r.instance)
 	existingService := corev1.Service{}
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: targetService.Name, Namespace: namespace}, &existingService); err != nil {
+		if err := ctrl.SetControllerReference(r.instance, targetService, r.Client.Scheme()); err != nil {
+			return *targetService, false, err
+		}
 		err = r.Create(context.TODO(), targetService)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {

@@ -55,12 +55,10 @@ var _ = Describe("Cluster Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: OpensearchCluster.Spec.General.ServiceName}, &service); err != nil {
 					return false
 				}
-				for _, name := range []string{"master", "nodes", "client"} {
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: fmt.Sprintf("%s-%s", OpensearchCluster.Spec.General.ServiceName, name)}, &service); err != nil {
+				for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: fmt.Sprintf("%s-%s", OpensearchCluster.Spec.General.ServiceName, nodePoolSpec.Component)}, &service); err != nil {
 						return false
 					}
-				}
-				for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
 					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-" + nodePoolSpec.Component}, &nodePool); err != nil {
 						return false
 					}
@@ -68,23 +66,17 @@ var _ = Describe("Cluster Reconciler", func() {
 				return true
 			}, timeout, interval).Should(BeTrue())
 		})
-	})
-
-	/// ------- Deletion Check phase -------
-
-	Context("When deleting OpenSearch CRD ", func() {
-		It("should delete cluster resources", func() {
-			Expect(k8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
-
-			Eventually(func() bool {
-				for _, nodePool := range OpensearchCluster.Spec.NodePools {
-					if !IsSTSDeleted(k8sClient, clusterName+"-"+nodePool.Component, clusterName) {
-						return false
-					}
-				}
-				return IsServiceDeleted(k8sClient, OpensearchCluster.Spec.General.ServiceName, clusterName)
-			}, timeout, interval).Should(BeTrue())
+		It("should set correct owner references", func() {
+			service := corev1.Service{}
+			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: OpensearchCluster.Spec.General.ServiceName}, &service)).To(Succeed())
+			Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
+			for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
+				nodePool := appsv1.StatefulSet{}
+				Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-" + nodePoolSpec.Component}, &nodePool)).To(Succeed())
+				Expect(HasOwnerReference(&nodePool, &OpensearchCluster)).To(BeTrue())
+				Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-" + nodePoolSpec.Component}, &service)).To(Succeed())
+				Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
+			}
 		})
 	})
-
 })

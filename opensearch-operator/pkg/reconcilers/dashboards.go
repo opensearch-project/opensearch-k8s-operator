@@ -62,12 +62,15 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Name), r.reconcilerContext.DashboardsConfig)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
 
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(deployment, reconciler.StatePresent))
 
 	svc := builders.NewDashboardsSvcForCr(r.instance)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, svc, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(svc, reconciler.StatePresent))
 
 	return result.Result, result.Err
@@ -108,6 +111,9 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 				return volumes, volumeMounts, err
 			}
 			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
+			if err := ctrl.SetControllerReference(r.instance, &tlsSecret, r.Client.Scheme()); err != nil {
+				return nil, nil, err
+			}
 			if err := r.Create(context.TODO(), &tlsSecret); err != nil {
 				r.logger.Error(err, "Failed to store tls certificate in secret")
 				return volumes, volumeMounts, err
@@ -168,6 +174,9 @@ func (r *DashboardsReconciler) caCert(secretName string, namespace string, clust
 			return ca, err
 		}
 		caSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace}, Data: ca.SecretDataCA()}
+		if err := ctrl.SetControllerReference(r.instance, &caSecret, r.Client.Scheme()); err != nil {
+			return ca, err
+		}
 		if err := r.Create(context.TODO(), &caSecret); err != nil {
 			r.logger.Error(err, "Failed to store CA in secret")
 			return ca, err
@@ -179,27 +188,6 @@ func (r *DashboardsReconciler) caCert(secretName string, namespace string, clust
 }
 
 func (r *DashboardsReconciler) DeleteResources() (ctrl.Result, error) {
-	clusterName := r.instance.Name
-	namespace := r.instance.Namespace
-	tlsSecretName := clusterName + "-dashboards-cert"
 	result := reconciler.CombinedResult{}
-
-	volumes, volumeMounts, err := r.handleTls()
-	if err != nil {
-		return ctrl.Result{}, err
-	}
-
-	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts)
-	result.Combine(r.ReconcileResource(deployment, reconciler.StateAbsent))
-
-	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", clusterName), r.reconcilerContext.DashboardsConfig)
-	result.Combine(r.ReconcileResource(cm, reconciler.StateAbsent))
-
-	svc := builders.NewDashboardsSvcForCr(r.instance)
-	result.Combine(r.ReconcileResource(svc, reconciler.StateAbsent))
-
-	tlsSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}}
-	result.Combine(r.ReconcileResource(&tlsSecret, reconciler.StateAbsent))
-
 	return result.Result, result.Err
 }

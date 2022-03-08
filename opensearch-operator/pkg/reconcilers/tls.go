@@ -124,6 +124,9 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 				return err
 			}
 			adminSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: adminSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: adminCert.SecretData(ca)}
+			if err := ctrl.SetControllerReference(r.instance, &adminSecret, r.Client.Scheme()); err != nil {
+				return err
+			}
 			if err := r.Create(context.TODO(), &adminSecret); err != nil {
 				r.logger.Error(err, "Failed to store admin certificate in secret", "interface", "transport")
 				return err
@@ -174,6 +177,9 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			return err
 		}
 		nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
+		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
+			return err
+		}
 		if err := r.Create(context.TODO(), &nodeSecret); err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
@@ -258,6 +264,9 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			return err
 		}
 	} else {
+		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
+			return err
+		}
 		if err := r.Create(context.TODO(), &nodeSecret); err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
@@ -352,6 +361,9 @@ func (r *TLSReconciler) handleHttp() error {
 				return err
 			}
 			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
+			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
+				return err
+			}
 			if err := r.Create(context.TODO(), &nodeSecret); err != nil {
 				r.logger.Error(err, "Failed to store node certificate in secret", "interface", "http")
 				return err
@@ -395,6 +407,9 @@ func (r *TLSReconciler) caCert(secretName string, namespace string, clusterName 
 			return ca, err
 		}
 		caSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace}, Data: ca.SecretDataCA()}
+		if err := ctrl.SetControllerReference(r.instance, &caSecret, r.Client.Scheme()); err != nil {
+			return ca, err
+		}
 		if err := r.Create(context.TODO(), &caSecret); err != nil {
 			r.logger.Error(err, "Failed to store CA in secret")
 			return ca, err
@@ -430,16 +445,6 @@ func mountFolder(interfaceName string, name string, secretName string, reconcile
 }
 
 func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
-	clusterName := r.instance.Name
 	result := reconciler.CombinedResult{}
-	// Delete CA cert
-	secret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: r.instance.Namespace, Name: clusterName + "-ca"}}
-	result.Combine(r.ReconcileResource(&secret, reconciler.StateAbsent))
-	// Deletet transport cert
-	secret.ObjectMeta.Name = clusterName + "-transport-cert"
-	result.Combine(r.ReconcileResource(&secret, reconciler.StateAbsent))
-	// Delete http cert
-	secret.ObjectMeta.Name = clusterName + "-http-cert"
-	result.Combine(r.ReconcileResource(&secret, reconciler.StateAbsent))
 	return result.Result, result.Err
 }

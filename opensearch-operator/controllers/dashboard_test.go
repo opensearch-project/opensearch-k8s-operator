@@ -74,21 +74,10 @@ var _ = Describe("Dashboards Reconciler", func() {
 				return true
 			}, timeout, interval).Should(BeTrue())
 		})
-	})
-
-	/// ------- Deletion Check phase -------
-
-	Context("When deleting OpenSearch CRD ", func() {
-		It("should delete cluster resources", func() {
-			Expect(k8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
-
-			Eventually(func() bool {
-				if !IsDeploymentDeleted(k8sClient, clusterName+"-dashboards", clusterName) {
-					return false
-				}
-				return IsServiceDeleted(k8sClient, clusterName+"-dashboards", clusterName)
-			}, timeout, interval).Should(BeTrue())
+		It("should set correct owner references", func() {
+			Expect(HasOwnerReference(&deploy, &OpensearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
 		})
 	})
-
 })

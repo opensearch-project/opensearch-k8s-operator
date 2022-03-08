@@ -47,7 +47,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
 					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
@@ -80,7 +80,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
 					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
@@ -111,7 +111,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 		It("should create a cert", func() {
 			clusterName := "dashboards-test-generate"
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
 					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
