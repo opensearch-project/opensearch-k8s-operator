@@ -1,13 +1,21 @@
 package services
 
 import (
-	"encoding/json"
+	"strings"
+
 	"opensearch.opster.io/opensearch-gateway/responses"
 	"opensearch.opster.io/pkg/helpers"
-	"strings"
 )
 
 var ClusterSettingsExcludeBrokenPath = []string{"cluster", "routing", "allocation", "exclude", "_name"}
+
+type ClusterSettingsAllocation string
+
+const (
+	ClusterSettingsAllocationPrimaries ClusterSettingsAllocation = "primaries"
+	ClusterSettingsAllocationAll       ClusterSettingsAllocation = "all"
+	ClusterSettingsAllocationNone      ClusterSettingsAllocation = "none"
+)
 
 func HasIndicesWithNoReplica(service *OsClusterClient) (bool, error) {
 	response, err := service.CatIndices()
@@ -47,9 +55,8 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 		valAsString = val.(string) + "," + nodeNameToExclude
 	}
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
-	settingsAsJson, err := json.Marshal(settings)
 	if err == nil {
-		_, err = service.PutClusterSettings(string(settingsAsJson))
+		_, err = service.PutClusterSettings(settings)
 	}
 	return err == nil, err
 }
@@ -66,11 +73,16 @@ func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	valAsString := strings.ReplaceAll(val.(string), nodeNameToExclude, "")
 	valAsString = strings.ReplaceAll(valAsString, ",,", ",")
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
-	settingsAsJson, err := json.Marshal(settings)
 	if err == nil {
-		_, err = service.PutClusterSettings(string(settingsAsJson))
+		_, err = service.PutClusterSettings(settings)
 	}
 	return err == nil, err
+}
+
+func SetClusterShardAllocation(service *OsClusterClient, enableType ClusterSettingsAllocation) error {
+	settings := createClusterSettingsAllocationEnable(enableType)
+	_, err := service.PutClusterSettings(settings)
+	return err
 }
 
 func createClusterSettingsResponseWithExcludeName(exclude string) responses.ClusterSettingsResponse {
@@ -85,6 +97,18 @@ func createClusterSettingsResponseWithExcludeName(exclude string) responses.Clus
 					"exclude": map[string]interface{}{
 						"_name": val,
 					},
+				},
+			},
+		},
+	}}
+}
+
+func createClusterSettingsAllocationEnable(enable ClusterSettingsAllocation) responses.ClusterSettingsResponse {
+	return responses.ClusterSettingsResponse{Transient: map[string]interface{}{
+		"cluster": map[string]interface{}{
+			"routing": map[string]interface{}{
+				"allocation": map[string]interface{}{
+					"enable": enable,
 				},
 			},
 		},

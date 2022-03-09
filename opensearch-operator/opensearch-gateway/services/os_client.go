@@ -4,11 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
-	"net/http"
+	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"opensearch.opster.io/opensearch-gateway/responses"
-	"strings"
 )
 
 type OsClusterClient struct {
@@ -125,8 +128,8 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 	return response, err
 }
 
-func (client *OsClusterClient) PutClusterSettings(settingsJson string) (responses.ClusterSettingsResponse, error) {
-	body := strings.NewReader(settingsJson)
+func (client *OsClusterClient) PutClusterSettings(settings responses.ClusterSettingsResponse) (responses.ClusterSettingsResponse, error) {
+	body := opensearchutil.NewJSONReader(settings)
 	req := opensearchapi.ClusterPutSettingsRequest{Body: body}
 	settingsRes, err := req.Do(context.Background(), client.client)
 	var response responses.ClusterSettingsResponse
@@ -149,4 +152,24 @@ func (client *OsClusterClient) ReRouteShard(rerouteJson string) (responses.Clust
 	defer settingsRes.Body.Close()
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
+}
+
+func (client *OsClusterClient) GetClusterHealth() (responses.ClusterHealthResponse, error) {
+	req := opensearchapi.ClusterHealthRequest{
+		Timeout: 10 * time.Second,
+	}
+
+	health := responses.ClusterHealthResponse{}
+	resp, err := req.Do(context.Background(), client.client)
+	if err != nil {
+		return health, err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return health, ErrClusterHealthGetFailed(resp.String())
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&health)
+	return health, err
 }
