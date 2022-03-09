@@ -6,6 +6,7 @@ import (
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -63,6 +64,18 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.Combine(r.ReconcileResource(headlessService, reconciler.StatePresent))
 
 		result.Combine(r.reconcileNodeStatefulSet(nodePool))
+	}
+
+	// if Version isn't set we set it now to check for upgrades later.
+	if r.instance.Status.Version == "" {
+		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+				return err
+			}
+			r.instance.Status.Version = r.instance.Spec.General.Version
+			return r.Status().Update(r.ctx, r.instance)
+		})
+		result.CombineErr(err)
 	}
 
 	return result.Result, result.Err

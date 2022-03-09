@@ -166,6 +166,7 @@ type ClusterStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Phase            string            `json:"phase,omitempty"`
 	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
+	Version          string            `json:"version,omitempty"`
 }
 
 //+kubebuilder:object:root=true
