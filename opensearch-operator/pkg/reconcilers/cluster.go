@@ -49,6 +49,14 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(clusterService, reconciler.StatePresent))
 
+	discoveryService := builders.NewDiscoveryServiceForCR(r.instance)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.Scheme()))
+	result.Combine(r.ReconcileResource(discoveryService, reconciler.StatePresent))
+
+	passwordSecret := builders.PasswordSecret(r.instance)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.Scheme()))
+	result.Combine(r.ReconcileResource(passwordSecret, reconciler.StatePresent))
+
 	for _, nodePool := range r.instance.Spec.NodePools {
 		headlessService := builders.NewHeadlessServiceForNodePool(r.instance, &nodePool)
 		result.CombineErr(ctrl.SetControllerReference(r.instance, headlessService, r.Client.Scheme()))

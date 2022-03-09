@@ -46,6 +46,9 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 		}
 	}
 
+	// Need to inject the username and password into the pods for healthchecks
+	username, _ := UsernameAndPassword(cr)
+
 	pvc := corev1.PersistentVolumeClaim{}
 	dataVolume := corev1.Volume{}
 
@@ -136,6 +139,21 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
+	// Because the http endpoint requires auth we need to do it as a curl script
+	readinessProbe := corev1.Probe{
+		InitialDelaySeconds: 30,
+		PeriodSeconds:       30,
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: []string{
+					"/bin/bash",
+					"-c",
+					"curl -k -u ${OS_USER}:${OS_PASSWORD} --silent --fail https://localhost:9200",
+				},
+			},
+		},
+	}
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-" + node.Component,
@@ -147,8 +165,17 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
-			PodManagementPolicy: "Parallel",
-			UpdateStrategy:      appsv1.StatefulSetUpdateStrategy{Type: "RollingUpdate"},
+			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
+			UpdateStrategy: func() appsv1.StatefulSetUpdateStrategy {
+				if helpers.ContainsString(selectedRoles, "data") {
+					return appsv1.StatefulSetUpdateStrategy{
+						Type: appsv1.OnDeleteStatefulSetStrategyType,
+					}
+				}
+				return appsv1.StatefulSetUpdateStrategy{
+					Type: appsv1.RollingUpdateStatefulSetStrategyType,
+				}
+			}(),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
@@ -164,7 +191,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 								},
 								{
 									Name:  "discovery.seed_hosts",
-									Value: cr.Spec.General.ServiceName,
+									Value: fmt.Sprintf("%s-discvoery", cr.Name),
 								},
 								{
 									Name:  "cluster.name",
@@ -187,6 +214,21 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 									Name:  "node.roles",
 									Value: strings.Join(selectedRoles, ","),
 								},
+								{
+									Name:  "OS_USER",
+									Value: username,
+								},
+								{
+									Name: "OS_PASSWORD",
+									ValueFrom: &corev1.EnvVarSource{
+										SecretKeyRef: &corev1.SecretKeySelector{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: fmt.Sprintf("%s-admin-password", cr.Name),
+											},
+											Key: "password",
+										},
+									},
+								},
 							},
 
 							Name:      cr.Name,
@@ -202,9 +244,10 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 									ContainerPort: 9300,
 								},
 							},
-							StartupProbe:  &probe,
-							LivenessProbe: &probe,
-							VolumeMounts:  volumeMounts,
+							StartupProbe:   &probe,
+							LivenessProbe:  &probe,
+							ReadinessProbe: &readinessProbe,
+							VolumeMounts:   volumeMounts,
 						},
 					},
 					InitContainers: []corev1.Container{{
@@ -303,7 +346,6 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 }
 
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
-
 	labels := map[string]string{
 		ClusterLabel: cr.Name,
 	}
@@ -362,6 +404,36 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	}
 }
 
+func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+	labels := map[string]string{
+		ClusterLabel: cr.Name,
+	}
+
+	return &corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-discovery", cr.Name),
+			Namespace: cr.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.ServiceSpec{
+			PublishNotReadyAddresses: true,
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "transport",
+					Protocol: "TCP",
+					Port:     9300,
+					TargetPort: intstr.IntOrString{
+						IntVal: 9300,
+						StrVal: "9300",
+					},
+				},
+			},
+			ClusterIP: corev1.ClusterIPNone,
+			Selector:  labels,
+		},
+	}
+}
+
 func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		ClusterLabel: cr.Name,
@@ -404,6 +476,19 @@ func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
 	return fmt.Sprintf("https://%s.svc.cluster.local:%d", DnsOfService(cr), httpPort)
 	//return fmt.Sprintf("https://localhost:9212")
+}
+
+func PasswordSecret(cr *opsterv1.OpenSearchCluster) *corev1.Secret {
+	_, password := UsernameAndPassword(cr)
+	return &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-admin-password", cr.Name),
+			Namespace: cr.Namespace,
+		},
+		StringData: map[string]string{
+			"password": password,
+		},
+	}
 }
 
 func DnsOfService(cr *opsterv1.OpenSearchCluster) string {
