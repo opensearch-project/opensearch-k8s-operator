@@ -23,7 +23,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				DefaultMode:          &mode,
-				LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Spec.General.ClusterName)},
+				LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Name)},
 			},
 		},
 	})
@@ -51,8 +51,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 
 	return &sts.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-dashboards",
-			Namespace: cr.Spec.General.ClusterName,
+			Name:      cr.Name + "-dashboards",
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: sts.DeploymentSpec{
@@ -109,7 +109,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 }
 
 func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
-	config["server.name"] = cr.Spec.General.ClusterName + "-dashboards"
+	config["server.name"] = cr.Name + "-dashboards"
 	config["opensearch.ssl.verificationMode"] = "none"
 
 	var sb strings.Builder
@@ -121,7 +121,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 		},
 		Data: map[string]string{
 			"opensearch_dashboards.yml": data,
@@ -144,7 +144,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ServiceName + "-dashboards",
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{

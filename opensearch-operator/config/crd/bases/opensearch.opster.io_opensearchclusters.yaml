@@ -96,9 +96,6 @@ spec:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code after modifying this file'
                 properties:
-                  clusterName:
-                    default: opster-cluster
-                    type: string
                   httpPort:
                     default: 9200
                     format: int32

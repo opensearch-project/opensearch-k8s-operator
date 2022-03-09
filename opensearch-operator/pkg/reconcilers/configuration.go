@@ -57,6 +57,9 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", `[".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]`)
 
 	cm := r.buildConfigMap()
+	if err := ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()); err != nil {
+		return ctrl.Result{}, err
+	}
 	result, err := r.ReconcileResource(cm, reconciler.StatePresent)
 	if err != nil {
 		r.recorder.Event(r.instance, "Warning", "Cannot create Configmap ", "Requeue - Fix the problem you have on main Opensearch ConfigMap")
@@ -96,11 +99,15 @@ func (r *ConfigurationReconciler) buildConfigMap() *corev1.ConfigMap {
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-config", r.instance.Spec.General.ClusterName),
-			Namespace: r.instance.Spec.General.ClusterName,
+			Name:      fmt.Sprintf("%s-config", r.instance.Name),
+			Namespace: r.instance.Namespace,
 		},
 		Data: map[string]string{
 			"opensearch.yml": data,
 		},
 	}
+}
+
+func (r *ConfigurationReconciler) DeleteResources() (ctrl.Result, error) {
+	return ctrl.Result{}, nil
 }

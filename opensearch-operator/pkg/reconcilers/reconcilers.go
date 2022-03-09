@@ -27,7 +27,7 @@ func NewReconcilerContext() ReconcilerContext {
 func (c *ReconcilerContext) AddConfig(key string, value string) {
 	_, exists := c.OpenSearchConfig[key]
 	if exists {
-		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten", key)
+		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
 	}
 	c.OpenSearchConfig[key] = value
 }
@@ -35,7 +35,7 @@ func (c *ReconcilerContext) AddConfig(key string, value string) {
 func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 	_, exists := c.DashboardsConfig[key]
 	if exists {
-		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten", key)
+		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
 	}
 	c.DashboardsConfig[key] = value
 }

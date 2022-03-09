@@ -17,43 +17,35 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var _ = Describe("OpensearchCluster Controller", func() {
-	//	ctx := context.Background()
+var _ = Describe("Dashboards Reconciler", func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		ClusterName       = "cluster-test-dash"
-		ClusterNameSpaces = "default"
-		timeout           = time.Second * 30
-		interval          = time.Second * 1
+		clusterName = "cluster-test-dash"
+		namespace   = clusterName
+		timeout     = time.Second * 30
+		interval    = time.Second * 1
 	)
 	var (
-		OpensearchCluster = ComposeOpensearchCrd(ClusterName, ClusterNameSpaces)
+		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace)
 		cm                = corev1.ConfigMap{}
-		//	nodePool          = sts.StatefulSet{}
-		service = corev1.Service{}
-		deploy  = sts.Deployment{}
-		//cluster           = opsterv1.OpenSearchCluster{}
-		//cluster2 = opsterv1.OpenSearchCluster{}
+		service           = corev1.Service{}
+		deploy            = sts.Deployment{}
 	)
 
 	/// ------- Creation Check phase -------
 
-	ns := ComposeNs(ClusterName)
 	Context("When create OpenSearch CRD - dash", func() {
-		It("should create cluster NS", func() {
-			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+		It("Should create the namespace first", func() {
+			Expect(CreateNamespace(k8sClient, &OpensearchCluster)).Should(Succeed())
 			By("Create cluster ns ")
 			Eventually(func() bool {
-
-				if !IsNsCreated(k8sClient, ns) {
-					return false
-				}
-				if !IsClusterCreated(k8sClient, OpensearchCluster) {
-					return false
-				}
-				return true
+				return IsNsCreated(k8sClient, namespace)
 			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should apply the cluster instance successfully", func() {
+			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
 		})
 	})
 
@@ -69,34 +61,23 @@ var _ = Describe("OpensearchCluster Controller", func() {
 				fmt.Println("\n DAShBOARD - START - 2")
 				//// -------- Dashboard tests ---------
 				if OpensearchCluster.Spec.Dashboards.Enable {
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards"}, &deploy); err != nil {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-dashboards"}, &deploy); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: ClusterName + "-dashboards-config"}, &cm); err != nil {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-dashboards-config"}, &cm); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: ClusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards"}, &service); err != nil {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards"}, &service); err != nil {
 						return false
 					}
 				}
 				return true
 			}, timeout, interval).Should(BeTrue())
 		})
-	})
-
-	/// ------- Deletion Check phase -------
-
-	Context("When deleting OpenSearch CRD ", func() {
-		It("should delete cluster NS and resources", func() {
-
-			Expect(k8sClient.Delete(context.Background(), &OpensearchCluster)).Should(Succeed())
-
-			By("Delete cluster ns ")
-			Eventually(func() bool {
-				fmt.Println("\n check ns dashboard")
-				return IsNsDeleted(k8sClient, ns)
-			}, timeout, interval).Should(BeTrue())
+		It("should set correct owner references", func() {
+			Expect(HasOwnerReference(&deploy, &OpensearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
 		})
 	})
-
 })

@@ -2,7 +2,6 @@ package reconcilers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -20,6 +19,19 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
+func newDashboardsReconciler(spec *opsterv1.OpenSearchCluster) (ReconcilerContext, *DashboardsReconciler) {
+	reconcilerContext := NewReconcilerContext()
+	underTest := NewDashboardsReconciler(
+		k8sClient,
+		context.Background(),
+		&helpers.MockEventRecorder{},
+		&reconcilerContext,
+		spec,
+	)
+	underTest.pki = helpers.NewMockPKI()
+	return reconcilerContext, underTest
+}
+
 var _ = Describe("Dashboards Reconciler", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
@@ -31,35 +43,25 @@ var _ = Describe("Dashboards Reconciler", func() {
 		It("should mount the secret", func() {
 			clusterName := "dashboards-singlesecret"
 			secretName := "my-cert"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
-				Dashboards: opsterv1.DashboardsConfig{
-					Enable: true,
-					Tls: &opsterv1.DashboardsTlsConfig{
-						Enable:   true,
-						Generate: false,
-						Secret:   secretName,
-					},
-				},
-			}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			fmt.Printf("%s", k8sClient)
-			err := k8sClient.Create(context.Background(), &ns)
-			Expect(err).ToNot(HaveOccurred())
 
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewDashboardsReconciler(
-				k8sClient,
-				context.Background(),
-				&helpers.MockEventRecorder{},
-				&reconcilerContext,
-				&spec,
-			)
-			_, err = underTest.Reconcile()
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Tls: &opsterv1.DashboardsTlsConfig{
+							Enable:   true,
+							Generate: false,
+							Secret:   secretName,
+						},
+					},
+				}}
+
+			_, underTest := newDashboardsReconciler(&spec)
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			deployment := appsv1.Deployment{}
 			Eventually(func() bool {
@@ -75,35 +77,25 @@ var _ = Describe("Dashboards Reconciler", func() {
 			clusterName := "dashboards-test-multisecret"
 			keySecretName := "my-key"
 			certSecretName := "my-cert"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
-				Dashboards: opsterv1.DashboardsConfig{
-					Enable: true,
-					Tls: &opsterv1.DashboardsTlsConfig{
-						Enable:     true,
-						Generate:   false,
-						KeySecret:  &opsterv1.TlsSecret{SecretName: keySecretName},
-						CertSecret: &opsterv1.TlsSecret{SecretName: certSecretName},
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Tls: &opsterv1.DashboardsTlsConfig{
+							Enable:     true,
+							Generate:   false,
+							KeySecret:  &opsterv1.TlsSecret{SecretName: keySecretName},
+							CertSecret: &opsterv1.TlsSecret{SecretName: certSecretName},
+						},
 					},
-				},
-			}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			fmt.Printf("%s", k8sClient)
-			err := k8sClient.Create(context.Background(), &ns)
-			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewDashboardsReconciler(
-				k8sClient,
-				context.Background(),
-				&helpers.MockEventRecorder{},
-				&reconcilerContext,
-				&spec,
-			)
-			_, err = underTest.Reconcile()
+				}}
+
+			_, underTest := newDashboardsReconciler(&spec)
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			deployment := appsv1.Deployment{}
 			Eventually(func() bool {
@@ -118,32 +110,27 @@ var _ = Describe("Dashboards Reconciler", func() {
 	Context("When running the dashboards reconciler with TLS enabled and generate enabled", func() {
 		It("should create a cert", func() {
 			clusterName := "dashboards-test-generate"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName, ServiceName: clusterName},
-				Dashboards: opsterv1.DashboardsConfig{
-					Enable: true,
-					Tls: &opsterv1.DashboardsTlsConfig{
-						Enable:   true,
-						Generate: true,
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Tls: &opsterv1.DashboardsTlsConfig{
+							Enable:   true,
+							Generate: true,
+						},
 					},
-				},
-			}}
+				}}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
 				},
 			}
-			fmt.Printf("%s", k8sClient)
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewDashboardsReconciler(
-				k8sClient,
-				context.Background(),
-				&helpers.MockEventRecorder{},
-				&reconcilerContext,
-				&spec,
-			)
+			_, underTest := newDashboardsReconciler(&spec)
+			underTest.pki = helpers.NewMockPKI()
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			// Check if secret is mounted

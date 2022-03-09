@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"opensearch.opster.io/opensearch-gateway/services"
@@ -59,7 +60,7 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 }
 
 func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool, error) {
-	namespace := r.instance.Spec.General.ClusterName
+	namespace := r.instance.Namespace
 	sts_name := builders.StsName(r.instance, nodePool)
 	currentSts := appsv1.StatefulSet{}
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: sts_name, Namespace: namespace}, &currentSts); err != nil {
@@ -277,10 +278,13 @@ func getByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.Comp
 
 func (r *ScalerReconciler) CreateNodePortServiceIfNotExists() (corev1.Service, bool, error) {
 	lg := log.FromContext(r.ctx)
-	namespace := r.instance.Spec.General.ClusterName
+	namespace := r.instance.Namespace
 	targetService := builders.NewNodePortService(r.instance)
 	existingService := corev1.Service{}
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: targetService.Name, Namespace: namespace}, &existingService); err != nil {
+		if err := ctrl.SetControllerReference(r.instance, targetService, r.Client.Scheme()); err != nil {
+			return *targetService, false, err
+		}
 		err = r.Create(context.TODO(), targetService)
 		if err != nil {
 			if !errors.IsAlreadyExists(err) {

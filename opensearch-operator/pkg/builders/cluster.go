@@ -95,8 +95,8 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 
 	return &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-" + node.Component,
-			Namespace: cr.Spec.General.ClusterName,
+			Name:      cr.Name + "-" + node.Component,
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: appsv1.StatefulSetSpec{
@@ -125,7 +125,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 								},
 								{
 									Name:  "cluster.name",
-									Value: cr.Spec.General.ClusterName,
+									Value: cr.Name,
 								},
 								{
 									Name:  "network.bind_host",
@@ -205,7 +205,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component),
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
@@ -248,7 +248,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ServiceName,
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
@@ -295,28 +295,6 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	}
 }
 
-func NewNsForCR(cr *opsterv1.OpenSearchCluster) *corev1.Namespace {
-
-	return &corev1.Namespace{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: cr.Spec.General.ClusterName,
-		},
-	}
-}
-
-func NewCmForCR(cr *opsterv1.OpenSearchCluster) *corev1.ConfigMap {
-
-	return &corev1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "opensearch-yml",
-			Namespace: cr.Spec.General.ClusterName,
-		},
-		Data: map[string]string{
-			"opensearch.yml": " plugins:\n        security:\n          allow_default_init_securityindex: true\n          allow_unsafe_democertificates: true\n          audit.type: internal_opensearch\n          authcz:\n            admin_dn:\n            - CN=kirk,OU=client,O=client,L=test, C=de\n          check_snapshot_restore_write_privileges: true\n          enable_snapshot_restore_privilege: true\n          restapi:\n            roles_enabled:\n            - all_access\n            - security_rest_api_access\n          ssl:\n            http:\n              enabled: true\n              pemcert_filepath: esnode.pem\n              pemkey_filepath: esnode-key.pem\n              pemtrustedcas_filepath: root-ca.pem\n            transport:\n              enforce_hostname_verification: false\n              pemcert_filepath: esnode.pem\n              pemkey_filepath: esnode-key.pem\n              pemtrustedcas_filepath: root-ca.pem\n          system_indices:\n            enabled: true\n            indices:\n            - .opendistro-alerting-config\n            - .opendistro-alerting-alert*\n            - .opendistro-anomaly-results*\n            - .opendistro-anomaly-detector*\n            - .opendistro-anomaly-checkpoints\n            - .opendistro-anomaly-detection-state\n            - .opendistro-reports-*\n            - .opendistro-notifications-*\n            - .opendistro-notebooks\n            - .opendistro-asynchronous-search-response*",
-		},
-	}
-}
-
 func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		"opensearch.cluster": cr.Name,
@@ -329,7 +307,7 @@ func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ServiceName + "-exposed",
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
@@ -362,11 +340,11 @@ func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 }
 
 func DnsOfService(cr *opsterv1.OpenSearchCluster) string {
-	return fmt.Sprintf("%s.%s", cr.Spec.General.ServiceName, cr.Spec.General.ClusterName)
+	return fmt.Sprintf("%s.%s", cr.Spec.General.ServiceName, cr.Namespace)
 }
 
 func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
-	return cr.Spec.General.ClusterName + "-" + nodePool.Component
+	return cr.Name + "-" + nodePool.Component
 }
 func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
 	return "admin", "admin"

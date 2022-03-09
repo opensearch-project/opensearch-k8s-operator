@@ -26,6 +26,7 @@ type DashboardsReconciler struct {
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
+	pki               tls.PKI
 }
 
 func NewDashboardsReconciler(
@@ -45,6 +46,7 @@ func NewDashboardsReconciler(
 		recorder:          recorder,
 		instance:          instance,
 		logger:            log.FromContext(ctx),
+		pki:               tls.NewPKI(),
 	}
 }
 
@@ -59,13 +61,16 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Spec.General.ClusterName), r.reconcilerContext.DashboardsConfig)
+	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Name), r.reconcilerContext.DashboardsConfig)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
 
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(deployment, reconciler.StatePresent))
 
 	svc := builders.NewDashboardsSvcForCr(r.instance)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, svc, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(svc, reconciler.StatePresent))
 
 	return result.Result, result.Err
@@ -75,8 +80,8 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	if r.instance.Spec.Dashboards.Tls == nil || !r.instance.Spec.Dashboards.Tls.Enable {
 		return nil, nil, nil
 	}
-	clusterName := r.instance.Spec.General.ClusterName
-	namespace := clusterName
+	clusterName := r.instance.Name
+	namespace := r.instance.Namespace
 	caSecretName := clusterName + "-ca"
 	tlsSecretName := clusterName + "-dashboards-cert"
 	tlsConfig := r.instance.Spec.Dashboards.Tls
@@ -105,7 +110,10 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 				r.logger.Error(err, "Failed to create tls certificate")
 				return volumes, volumeMounts, err
 			}
-			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(&ca)}
+			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
+			if err := ctrl.SetControllerReference(r.instance, &tlsSecret, r.Client.Scheme()); err != nil {
+				return nil, nil, err
+			}
 			if err := r.Create(context.TODO(), &tlsSecret); err != nil {
 				r.logger.Error(err, "Failed to store tls certificate in secret")
 				return volumes, volumeMounts, err
@@ -160,18 +168,26 @@ func (r *DashboardsReconciler) caCert(secretName string, namespace string, clust
 	var ca tls.Cert
 	if err := r.Get(context.TODO(), client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
 		// Generate CA cert and put it into secret
-		ca, err = tls.GenerateCA(clusterName)
+		ca, err = r.pki.GenerateCA(clusterName)
 		if err != nil {
 			r.logger.Error(err, "Failed to create CA")
 			return ca, err
 		}
 		caSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace}, Data: ca.SecretDataCA()}
+		if err := ctrl.SetControllerReference(r.instance, &caSecret, r.Client.Scheme()); err != nil {
+			return ca, err
+		}
 		if err := r.Create(context.TODO(), &caSecret); err != nil {
 			r.logger.Error(err, "Failed to store CA in secret")
 			return ca, err
 		}
 	} else {
-		ca = tls.CAFromSecret(caSecret.Data)
+		ca = r.pki.CAFromSecret(caSecret.Data)
 	}
 	return ca, nil
+}
+
+func (r *DashboardsReconciler) DeleteResources() (ctrl.Result, error) {
+	result := reconciler.CombinedResult{}
+	return result.Result, result.Err
 }

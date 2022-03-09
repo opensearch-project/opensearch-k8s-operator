@@ -45,29 +45,6 @@ func GetField(v *sts.StatefulSetSpec, field string) interface{} {
 	return f
 }
 
-//func setField(v *sts.StatefulSetSpec, field string) reflect.Value {
-//
-//	//	reflect.ValueOf(v).Elem().FieldByName(field).SetString("sss")
-//
-//	r := reflect.ValueOf(v)
-//	ty := r.Type()
-//	fmt.Println(ty)
-//	f := reflect.Indirect(r).FieldByName(field)
-//	return f
-//}
-
-func getNamesInStruct(inter interface{}) []string {
-	rv := reflect.Indirect(reflect.ValueOf(inter))
-
-	var names []string
-
-	for i := 0; i < rv.NumField(); i++ {
-		x := rv.Type().Field(i).Name
-		names = append(names, x)
-	}
-	return names
-}
-
 func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	for idx, v := range ssSlice {
 		if v == ss {
