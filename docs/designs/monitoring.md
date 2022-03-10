@@ -72,7 +72,7 @@ Prometheus will be managed by Prometheus Operator, which will be installed by th
         prometheus-controller[/Prometheus Controller/]
         alert-manager[/Alert Manager/]
         grafana[/Grafana/]-- Query -->prometheus[/Prometheus/]
-        
+        \
         prometheus-. Node Discovery .->service-monitor-ss-1
         prometheus-. Node Discovery .->service-monitor-ss-2
         prometheus-- Read Metrics -->plugin11
