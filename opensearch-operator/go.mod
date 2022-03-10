@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	cloud.google.com/go v0.99.0 // indirect
+	github.com/Masterminds/semver v1.5.0
 	github.com/banzaicloud/operator-tools v0.28.1
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-logr/logr v1.2.2

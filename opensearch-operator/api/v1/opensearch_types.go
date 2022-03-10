@@ -39,7 +39,9 @@ type GeneralConfig struct {
 	ServiceName      string `json:"serviceName"`
 	SetVMMaxMapCount bool   `json:"setVMMaxMapCount,omitempty"`
 	// Extra items to add to the opensearch.yml
-	ExtraConfig string `json:"extraConfig,omitempty"`
+	ExtraConfig string     `json:"extraConfig,omitempty"`
+	DefaultRepo *string    `json:"defaultRepo,omitempty"`
+	Image       *ImageSpec `json:",inline"`
 }
 
 type NodePool struct {
@@ -149,6 +151,12 @@ type SecurityConfig struct {
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
 }
 
+type ImageSpec struct {
+	Image            *string                       `json:"image,omitempty"`
+	ImagePullPolicy  *corev1.PullPolicy            `json:"imagePullPolicy,omitempty"`
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+}
+
 // ClusterSpec defines the desired state of OpenSearchCluster
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -197,4 +205,18 @@ type OpenSearchClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(&OpenSearchCluster{}, &OpenSearchClusterList{})
+}
+
+func (s ImageSpec) GetImagePullPolicy() (_ corev1.PullPolicy) {
+	if p := s.ImagePullPolicy; p != nil {
+		return *p
+	}
+	return
+}
+
+func (s ImageSpec) GetImage() string {
+	if s.Image == nil {
+		return ""
+	}
+	return *s.Image
 }

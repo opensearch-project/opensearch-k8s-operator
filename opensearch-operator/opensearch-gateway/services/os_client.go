@@ -11,6 +11,7 @@ import (
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"k8s.io/utils/pointer"
 	"opensearch.opster.io/opensearch-gateway/responses"
 )
 
@@ -124,6 +125,25 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 		return response, err
 	}
 	defer settingsRes.Body.Close()
+	err = json.NewDecoder(settingsRes.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) GetFlatClusterSettings() (responses.FlatClusterSettingsResponse, error) {
+	req := opensearchapi.ClusterGetSettingsRequest{
+		FlatSettings: pointer.BoolPtr(true),
+	}
+	settingsRes, err := req.Do(context.Background(), client.client)
+	var response responses.FlatClusterSettingsResponse
+	if err != nil {
+		return response, err
+	}
+	defer settingsRes.Body.Close()
+
+	if settingsRes.IsError() {
+		return response, ErrClusterHealthGetFailed(settingsRes.String())
+	}
+
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }

@@ -9,6 +9,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -45,6 +46,10 @@ func NewClusterReconciler(
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	//lg := log.FromContext(r.ctx)
 	result := reconciler.CombinedResult{}
+	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))
@@ -54,7 +59,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.Scheme()))
 	result.Combine(r.ReconcileResource(discoveryService, reconciler.StatePresent))
 
-	passwordSecret := builders.PasswordSecret(r.instance)
+	passwordSecret := builders.PasswordSecret(r.instance, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.Scheme()))
 	result.Combine(r.ReconcileResource(passwordSecret, reconciler.StatePresent))
 
@@ -63,7 +68,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.CombineErr(ctrl.SetControllerReference(r.instance, headlessService, r.Client.Scheme()))
 		result.Combine(r.ReconcileResource(headlessService, reconciler.StatePresent))
 
-		result.Combine(r.reconcileNodeStatefulSet(nodePool))
+		result.Combine(r.reconcileNodeStatefulSet(nodePool, username))
 	}
 
 	// if Version isn't set we set it now to check for upgrades later.
@@ -81,8 +86,8 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool) (*ctrl.Result, error) {
-	sts := builders.NewSTSForNodePool(r.instance, nodePool, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
+func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
+	sts := builders.NewSTSForNodePool(username, r.instance, nodePool, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
 	if err := ctrl.SetControllerReference(r.instance, sts, r.Client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
 	}

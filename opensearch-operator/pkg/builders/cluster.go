@@ -23,7 +23,13 @@ const (
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
-func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.StatefulSet {
+func NewSTSForNodePool(
+	username string,
+	cr *opsterv1.OpenSearchCluster,
+	node opsterv1.NodePool,
+	volumes []corev1.Volume,
+	volumeMounts []corev1.VolumeMount,
+) *appsv1.StatefulSet {
 	disk := fmt.Sprint(node.DiskSize)
 
 	availableRoles := []string{
@@ -45,9 +51,6 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 			selectedRoles = append(selectedRoles, role)
 		}
 	}
-
-	// Need to inject the username and password into the pods for healthchecks
-	username, _ := UsernameAndPassword(cr)
 
 	pvc := corev1.PersistentVolumeClaim{}
 	dataVolume := corev1.Volume{}
@@ -154,6 +157,8 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 		},
 	}
 
+	image := helpers.ResolveImage(cr, node)
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-" + node.Component,
@@ -231,9 +236,9 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 								},
 							},
 
-							Name:      cr.Name,
-							Image:     DockerImageForCluster(cr),
-							Resources: node.Resources,
+							Name:            cr.Name,
+							Image:           image.GetImage(),
+							ImagePullPolicy: image.GetImagePullPolicy(),
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
@@ -271,6 +276,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 					NodeSelector:       node.NodeSelector,
 					Tolerations:        node.Tolerations,
 					Affinity:           node.Affinity,
+					ImagePullSecrets:   image.ImagePullSecrets,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -478,8 +484,7 @@ func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	//return fmt.Sprintf("https://localhost:9212")
 }
 
-func PasswordSecret(cr *opsterv1.OpenSearchCluster) *corev1.Secret {
-	_, password := UsernameAndPassword(cr)
+func PasswordSecret(cr *opsterv1.OpenSearchCluster, password string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-admin-password", cr.Name),
@@ -519,6 +524,12 @@ func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName st
 	caCert := "/certs/ca.crt"
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
+
+	// Dummy node spec required to resolve image
+	node := opsterv1.NodePool{
+		Component: "securityconfig",
+	}
+
 	volumes = append(volumes, corev1.Volume{
 		Name:         "securityconfig",
 		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: instance.Spec.Security.Config.SecurityconfigSecret.Name}},
@@ -548,6 +559,8 @@ func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName st
 	terminationGracePeriodSeconds := int64(5)
 	backoffLimit := int32(0)
 
+	image := helpers.ResolveImage(instance, node)
+
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
 		Spec: batchv1.JobSpec{
@@ -557,14 +570,16 @@ func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName st
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 					Containers: []corev1.Container{{
-						Name:         "updater",
-						Image:        DockerImageForCluster(instance),
-						Command:      []string{"/bin/bash", "-c"},
-						Args:         []string{arg},
-						VolumeMounts: volumeMounts,
+						Name:            "updater",
+						Image:           image.GetImage(),
+						ImagePullPolicy: image.GetImagePullPolicy(),
+						Command:         []string{"/bin/bash", "-c"},
+						Args:            []string{arg},
+						VolumeMounts:    volumeMounts,
 					}},
-					Volumes:       volumes,
-					RestartPolicy: corev1.RestartPolicyNever,
+					Volumes:          volumes,
+					RestartPolicy:    corev1.RestartPolicyNever,
+					ImagePullSecrets: image.ImagePullSecrets,
 				},
 			},
 		},

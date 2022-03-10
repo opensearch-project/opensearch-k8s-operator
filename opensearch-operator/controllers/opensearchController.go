@@ -273,6 +273,13 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		&reconcilerContext,
 		r.Instance,
 	)
+	upgrade := reconcilers.NewUpgradeReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
 
 	componentReconcilers := []reconcilers.ComponentReconciler{
 		tls.Reconcile,
@@ -281,6 +288,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		cluster.Reconcile,
 		scaler.Reconcile,
 		dashboards.Reconcile,
+		upgrade.Reconcile,
 	}
 	for _, rec := range componentReconcilers {
 		result, err := rec()
