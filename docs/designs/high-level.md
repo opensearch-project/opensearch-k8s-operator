@@ -99,6 +99,5 @@ The operator wants to accomplish two goals from security standpoint: Secure from
 
 ### Interacting with the Operator
 
-Can be done in 2 ways:
-1. Updating its CRD. 
-2. Sending API request.
+Updating the Custom Resource is currently the only way to communicate with the Operator. 
+
