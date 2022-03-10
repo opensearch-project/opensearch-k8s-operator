@@ -120,7 +120,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 			if err := ctrl.SetControllerReference(r.instance, &tlsSecret, r.Client.Scheme()); err != nil {
 				return nil, nil, err
 			}
-			if err := r.Create(context.TODO(), &tlsSecret); err != nil {
+			if err := r.Create(r.ctx, &tlsSecret); err != nil {
 				r.logger.Error(err, "Failed to store tls certificate in secret")
 				return volumes, volumeMounts, err
 			}

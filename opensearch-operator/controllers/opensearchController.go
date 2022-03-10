@@ -158,6 +158,13 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		&reconcilerContext,
 		r.Instance,
 	)
+	securityconfig := reconcilers.NewSecurityconfigReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
 	config := reconcilers.NewConfigurationReconciler(
 		r.Client,
 		ctx,
@@ -182,6 +189,7 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 
 	componentReconcilers := []reconcilers.ComponentReconciler{
 		tls.DeleteResources,
+		securityconfig.DeleteResources,
 		config.DeleteResources,
 		cluster.DeleteResources,
 		dashboards.DeleteResources,

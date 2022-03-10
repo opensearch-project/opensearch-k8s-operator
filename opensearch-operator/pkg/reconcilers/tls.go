@@ -125,7 +125,7 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 			if err := ctrl.SetControllerReference(r.instance, &adminSecret, r.Client.Scheme()); err != nil {
 				return err
 			}
-			if err := r.Create(context.TODO(), &adminSecret); err != nil {
+			if err := r.Create(r.ctx, &adminSecret); err != nil {
 				r.logger.Error(err, "Failed to store admin certificate in secret", "interface", "transport")
 				return err
 			}
@@ -177,7 +177,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
 			return err
 		}
-		if err := r.Create(context.TODO(), &nodeSecret); err != nil {
+		if err := r.Create(r.ctx, &nodeSecret); err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
 		}
@@ -263,7 +263,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
 			return err
 		}
-		if err := r.Create(context.TODO(), &nodeSecret); err != nil {
+		if err := r.Create(r.ctx, &nodeSecret); err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
 		}
@@ -359,7 +359,7 @@ func (r *TLSReconciler) handleHttp() error {
 			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
 				return err
 			}
-			if err := r.Create(context.TODO(), &nodeSecret); err != nil {
+			if err := r.Create(r.ctx, &nodeSecret); err != nil {
 				r.logger.Error(err, "Failed to store node certificate in secret", "interface", "http")
 				return err
 			}

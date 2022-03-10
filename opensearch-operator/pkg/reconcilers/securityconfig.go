@@ -23,7 +23,6 @@ import (
 
 const (
 	checksumAnnotation = "securityconfig/checksum"
-	securityconfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
 )
 
 type SecurityconfigReconciler struct {
@@ -106,6 +105,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	}
 	r.logger.Info("Starting securityconfig update job")
 	job = r.job(jobName, namespace, checksum, adminCertName)
+	if err := ctrl.SetControllerReference(r.instance, &job, r.Client.Scheme()); err != nil {
+		return ctrl.Result{}, err
+	}
 	_, err = r.ReconcileResource(&job, reconciler.StateCreated)
 	return ctrl.Result{}, err
 }
@@ -198,4 +200,9 @@ func (r *SecurityconfigReconciler) determineAdminSecret() string {
 	} else {
 		return ""
 	}
+}
+
+func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {
+	result := reconciler.CombinedResult{}
+	return result.Result, result.Err
 }
