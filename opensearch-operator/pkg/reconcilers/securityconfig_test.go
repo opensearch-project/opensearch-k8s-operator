@@ -68,8 +68,9 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				&spec,
 			)
 			result, err := underTest.Reconcile()
-			Expect(err).To(HaveOccurred())
+			Expect(err).ToNot(HaveOccurred())
 			Expect(result.IsZero()).To(BeFalse())
+			Expect(result.Requeue).To(BeTrue())
 		})
 	})
 

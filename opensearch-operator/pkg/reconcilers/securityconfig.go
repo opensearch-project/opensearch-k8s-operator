@@ -12,6 +12,7 @@ import (
 	"github.com/go-logr/logr"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -73,6 +74,10 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	// Wait for secret to be available
 	configSecret := corev1.Secret{}
 	if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
+		if apierrors.IsNotFound(err) {
+			r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
+		}
 		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
 	}
 
