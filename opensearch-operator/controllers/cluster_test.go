@@ -79,4 +79,26 @@ var _ = Describe("Cluster Reconciler", func() {
 			}
 		})
 	})
+
+	/// ------- Tests nodepool cleanup -------
+	Context("When updating an OpensearchCluster kind instance", func() {
+		It("should remove old node pools", func() {
+			// Fetch the latest version of the opensearch object
+			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster)).Should(Succeed())
+
+			// Update the opensearch object
+			OpensearchCluster.Spec.NodePools = OpensearchCluster.Spec.NodePools[:2]
+			Expect(k8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
+
+			Eventually(func() bool {
+				stsList := &appsv1.StatefulSetList{}
+				err := k8sClient.List(context.Background(), stsList, client.InNamespace(OpensearchCluster.Name))
+				if err != nil {
+					return false
+				}
+
+				return len(stsList.Items) == 2
+			})
+		})
+	})
 })

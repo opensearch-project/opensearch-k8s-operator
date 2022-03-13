@@ -10,10 +10,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	opsterv1 "opensearch.opster.io/api/v1"
+	v1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 )
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
+
+const (
+	ClusterLabel  = "opster.io/opensearch-cluster"
+	NodePoolLabel = "opster.io/opensearch-nodepool"
+)
 
 func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.StatefulSet {
 	disk := fmt.Sprint(node.DiskSize)
@@ -57,8 +63,8 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 	clusterInitNode := helpers.CreateInitMasters(cr)
 	//var vendor string
 	labels := map[string]string{
-		"opensearch.cluster":  cr.Name,
-		"opensearch.nodepool": node.Component,
+		ClusterLabel:  cr.Name,
+		NodePoolLabel: node.Component,
 	}
 	if helpers.ContainsString(selectedRoles, "master") {
 		labels["opensearch.role"] = "master"
@@ -194,8 +200,8 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 
 	labels := map[string]string{
-		"opensearch.cluster":  cr.Name,
-		"opensearch.nodepool": nodePool.Component,
+		ClusterLabel:  cr.Name,
+		NodePoolLabel: nodePool.Component,
 	}
 
 	return &corev1.Service{
@@ -238,7 +244,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 	labels := map[string]string{
-		"opensearch.cluster": cr.Name,
+		ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -297,7 +303,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		"opensearch.cluster": cr.Name,
+		ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -351,4 +357,13 @@ func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
 }
 func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
+}
+
+func STSInNodePools(sts appsv1.StatefulSet, nodepools []v1.NodePool) bool {
+	for _, nodepool := range nodepools {
+		if sts.Labels[NodePoolLabel] == nodepool.Component {
+			return true
+		}
+	}
+	return false
 }

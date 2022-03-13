@@ -3,9 +3,11 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/utils/pointer"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 
@@ -49,14 +51,20 @@ func NewScalerReconciler(
 
 func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	requeue := false
+	results := &reconciler.CombinedResult{}
 	var err error
 	for _, nodePool := range r.instance.Spec.NodePools {
 		requeue, err = r.reconcileNodePool(&nodePool)
 		if err != nil {
-			return ctrl.Result{Requeue: requeue}, err
+			results.Combine(&ctrl.Result{Requeue: requeue}, err)
 		}
 	}
-	return ctrl.Result{Requeue: requeue}, nil
+	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+
+	// Clean up old node pools
+	r.cleanupStatefulSets(results)
+
+	return results.Result, results.Err
 }
 
 func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool, error) {
@@ -169,12 +177,17 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	if err != nil {
 		return err
 	}
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
-	if err != nil {
-		lg.Error(err, "failed to create os client")
+
+	// Clean up created service at the end of the function
+	defer func() {
 		if created {
 			r.DeleteNodePortService(service)
 		}
+	}()
+
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+	if err != nil {
+		lg.Error(err, "failed to create os client")
 		return err
 	}
 	// -----  Now start remove node ------
@@ -183,9 +196,6 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	excluded, err := services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
-		if created {
-			r.DeleteNodePortService(service)
-		}
 		return err
 	}
 	if excluded {
@@ -201,9 +211,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 			lg.Error(err, "failed to update status")
 			return err
 		}
-		if created {
-			r.DeleteNodePortService(service)
-		}
+
 		return err
 	}
 
@@ -219,9 +227,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		lg.Error(err, "failed to update status")
 		return err
 	}
-	if created {
-		r.DeleteNodePortService(service)
-	}
+
 	return err
 }
 
@@ -233,11 +239,16 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	if err != nil {
 		return err
 	}
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
-	if err != nil {
+
+	// Clean up created service at the end of the function
+	defer func() {
 		if created {
 			r.DeleteNodePortService(service)
 		}
+	}()
+
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+	if err != nil {
 		return err
 	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
@@ -262,9 +273,6 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	if err != nil {
 		lg.Error(err, "failed to update status")
 		return err
-	}
-	if created {
-		r.DeleteNodePortService(service)
 	}
 	return err
 }
@@ -306,4 +314,85 @@ func (r *ScalerReconciler) DeleteNodePortService(service corev1.Service) {
 		lg.Error(err, "Cannot delete service")
 		r.recorder.Event(r.instance, "Warning", "Cannot delete service", "Requeue - Fix the problem you have on main Opensearch Headless Service ")
 	}
+}
+
+func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult) {
+	stsList := &appsv1.StatefulSetList{}
+	if err := r.Client.List(
+		r.ctx,
+		stsList,
+		client.InNamespace(r.instance.Name),
+		client.MatchingLabels{builders.ClusterLabel: r.instance.Name},
+	); err != nil {
+		result.Combine(&ctrl.Result{}, err)
+		return
+	}
+
+	for _, sts := range stsList.Items {
+		if !builders.STSInNodePools(sts, r.instance.Spec.NodePools) {
+			result.Combine(r.removeStatefulSet(sts))
+		}
+	}
+
+}
+
+func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Result, error) {
+	if !r.instance.Spec.ConfMgmt.SmartScaler {
+		return r.ReconcileResource(&sts, reconciler.StateAbsent)
+	}
+
+	// Gracefully remove nodes
+	lg := log.FromContext(r.ctx)
+	username, password := builders.UsernameAndPassword(r.instance)
+
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Name), username, password)
+	if err != nil {
+		lg.Error(err, "failed to create os client")
+		return nil, err
+	}
+
+	workingOrdinal := pointer.Int32Deref(sts.Spec.Replicas, 1) - 1
+	lastReplicaNodeName := builders.ReplicaHostName(sts, workingOrdinal)
+	_, err = services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
+		return nil, err
+	}
+
+	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
+	if err != nil {
+		lg.Error(err, "failed to check shards on node")
+		return nil, err
+	}
+
+	if nodeNotEmpty {
+		return &ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 15 * time.Second,
+		}, nil
+	}
+
+	if workingOrdinal == 0 {
+		result, err := r.ReconcileResource(&sts, reconciler.StateAbsent)
+		if err != nil {
+			return result, err
+		}
+		_, err = services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+		if err != nil {
+			lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
+		}
+		return result, err
+	}
+
+	sts.Spec.Replicas = &workingOrdinal
+	result, err := r.ReconcileResource(&sts, reconciler.StatePresent)
+	if err != nil {
+		return result, err
+	}
+
+	_, err = services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
+	}
+	return result, err
 }
