@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	v1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
@@ -44,19 +45,54 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 		}
 	}
 
-	pvc := corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{Name: "pvc"},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(disk),
+	pvc := corev1.PersistentVolumeClaim{}
+	dataVolume := corev1.Volume{}
+
+	if node.Persistence == nil || node.Persistence.PersistenceSource.PVC != nil {
+		pvc = corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{Name: "data"},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: func() []corev1.PersistentVolumeAccessMode {
+					if node.Persistence == nil {
+						return []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
+					}
+					return node.Persistence.PersistenceSource.PVC.AccessModes
+				}(),
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse(disk),
+					},
 				},
+				StorageClassName: func() *string {
+					if node.Persistence == nil {
+						return nil
+					}
+					return &node.Persistence.PVC.StorageClassName
+				}(),
 			},
-		},
+		}
 	}
+
+	if node.Persistence != nil {
+		dataVolume.Name = "data"
+
+		if node.Persistence.PersistenceSource.HostPath != nil {
+			dataVolume.VolumeSource = corev1.VolumeSource{
+				HostPath: node.Persistence.PersistenceSource.HostPath,
+			}
+		}
+
+		if node.Persistence.PersistenceSource.EmptyDir != nil {
+			dataVolume.VolumeSource = corev1.VolumeSource{
+				EmptyDir: node.Persistence.PersistenceSource.EmptyDir,
+			}
+		}
+
+		volumes = append(volumes, dataVolume)
+	}
+
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
-		Name:      "pvc",
+		Name:      "data",
 		MountPath: "/usr/share/opensearch/data",
 	})
 
@@ -99,7 +135,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
-	return &appsv1.StatefulSet{
+	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-" + node.Component,
 			Namespace: cr.Namespace,
@@ -179,22 +215,45 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 						},
 						VolumeMounts: []corev1.VolumeMount{
 							{
-								Name:      "pvc",
+								Name:      "data",
 								MountPath: "/usr/share/opensearch/data",
 							},
 						},
 					},
 					},
-					Volumes: volumes,
-					//NodeSelector:       nil,
+					Volumes:            volumes,
 					ServiceAccountName: cr.Spec.General.ServiceAccount,
-					//	Affinity:           nil,
+					NodeSelector:       node.NodeSelector,
+					Tolerations:        node.Tolerations,
+					Affinity:           node.Affinity,
 				},
 			},
-			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{pvc},
-			ServiceName:          cr.Spec.General.ServiceName + "-svc",
+			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
+				if node.Persistence == nil || node.Persistence.PersistenceSource.PVC != nil {
+					return []corev1.PersistentVolumeClaim{pvc}
+				}
+				return []corev1.PersistentVolumeClaim{}
+			}(),
+			ServiceName: cr.Spec.General.ServiceName + "-svc",
 		},
 	}
+
+	if cr.Spec.General.SetVMMaxMapCount {
+		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
+			Name:  "init-sysctl",
+			Image: "busybox:1.27.2",
+			Command: []string{
+				"sysctl",
+				"-w",
+				"vm.max_map_count=262144",
+			},
+			SecurityContext: &corev1.SecurityContext{
+				Privileged: pointer.Bool(true),
+			},
+		})
+	}
+
+	return sts
 }
 
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
