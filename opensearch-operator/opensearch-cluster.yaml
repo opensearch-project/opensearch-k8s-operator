@@ -5,7 +5,6 @@ metadata:
   namespace: default
 spec:
   general:
-    clusterName: my-cluster
     httpPort: 9200
     vendor: opensearch
     version: latest
@@ -25,8 +24,8 @@ spec:
       replicas: 3
       diskSize: 30
       NodeSelector:
-      cpu: 4
-      memory: 16
+      cpu: 1
+      memory: 1
       roles:
         - "master"
         - "data"
@@ -34,14 +33,14 @@ spec:
       replicas: 3
       diskSize: 100
       NodeSelector:
-      cpu: 4
-      memory: 16
+      cpu: 1
+      memory: 1
       roles:
         - "data"
     - component: coordinators
       replicas: 3
       diskSize: 100
       NodeSelector:
-      cpu: 4
+      cpu: 1
       roles:
         - "ingest"

@@ -30,27 +30,44 @@ const (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type GeneralConfig struct {
-
-	//+kubebuilder:default="opster-cluster"
-	ClusterName string `json:"clusterName,omitempty"`
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
-	Vendor         string `json:"vendor,omitempty"`
-	Version        string `json:"version,omitempty"`
-	ServiceAccount string `json:"serviceAccount,omitempty"`
-	ServiceName    string `json:"serviceName"`
+	Vendor           string `json:"vendor,omitempty"`
+	Version          string `json:"version,omitempty"`
+	ServiceAccount   string `json:"serviceAccount,omitempty"`
+	ServiceName      string `json:"serviceName"`
+	SetVMMaxMapCount bool   `json:"setVMMaxMapCount,omitempty"`
 }
 
 type NodePool struct {
-	Component    string   `json:"component"`
-	Replicas     int32    `json:"replicas"`
-	DiskSize     int32    `json:"diskSize,omitempty"`
-	NodeSelector string   `json:"nodeSelector,omitempty"`
-	Cpu          int32    `json:"cpu,omitempty"`
-	Memory       int32    `json:"memory,omitempty"`
-	Jvm          string   `json:"jvm,omitempty"`
-	Roles        []string `json:"roles"`
+	Component    string              `json:"component"`
+	Replicas     int32               `json:"replicas"`
+	DiskSize     int32               `json:"diskSize,omitempty"`
+	Cpu          int32               `json:"cpu,omitempty"`
+	Memory       int32               `json:"memory,omitempty"`
+	Jvm          string              `json:"jvm,omitempty"`
+	Roles        []string            `json:"roles"`
+	Tolerations  []corev1.Toleration `json:"tolerations,omitempty"`
+	NodeSelector map[string]string   `json:"nodeSelector,omitempty"`
+	Affinity     *corev1.Affinity    `json:"affinity,omitempty"`
+	Persistence  *PersistenceConfig  `json:"persistence,omitempty"`
+}
+
+// PersistencConfig defines options for data persistence
+type PersistenceConfig struct {
+	PersistenceSource `json:",inline"`
+}
+
+type PersistenceSource struct {
+	PVC      *PVCSource                   `json:"pvc,omitempty"`
+	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
+	HostPath *corev1.HostPathVolumeSource `json:"hostPath,omitempty"`
+}
+
+type PVCSource struct {
+	StorageClassName string                              `json:"storageClass,omitempty"`
+	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 }
 
 // ConfMgmt defines which additional services will be deployed
@@ -64,25 +81,23 @@ type ConfMgmt struct {
 type DashboardsConfig struct {
 	Enable bool                 `json:"enable,omitempty"`
 	Tls    *DashboardsTlsConfig `json:"tls,omitempty"`
+	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
+	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
 	// Enable HTTPS for Dashboards
 	Enable bool `json:"enable,omitempty"`
-	// Generate certificate, if false either secret or keySecret & certSecret must be provided
+	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
-	// Optional, name of a secret that contains tls.key and tls.crt data, use either this or set the separate keySecret and certSecret fields
-	Secret string `json:"secret,omitempty"`
-	// Optional, secret that contains the private key
-	KeySecret *TlsSecret `json:"keySecret,omitempty"`
-	// Optional, secret that contains the certificate for the private key, must be signed by the provided CA
-	CertSecret *TlsSecret `json:"certSecret,omitempty"`
+	// foobar
+	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
 }
 
 // Security defines options for managing the opensearch-security plugin
 type Security struct {
-	Tls *TlsConfig `json:"tls,omitempty"`
-	// TBD: securityconfig
+	Tls    *TlsConfig      `json:"tls,omitempty"`
+	Config *SecurityConfig `json:"config,omitempty"`
 }
 
 // Configure tls usage for transport and http interface
@@ -120,6 +135,15 @@ type TlsCertificateConfig struct {
 type TlsSecret struct {
 	SecretName string  `json:"secretName"`
 	Key        *string `json:"key,omitempty"`
+}
+
+type SecurityConfig struct {
+	// Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
+	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
+	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
+	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
+	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster

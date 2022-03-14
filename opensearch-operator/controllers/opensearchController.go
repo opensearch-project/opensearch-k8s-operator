@@ -21,11 +21,9 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
-	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/reconcilers"
 
@@ -104,10 +102,10 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else {
 		if helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
 			// our finalizer is present, so lets handle any external dependency
-			if err := r.deleteExternalResources(r.Instance); err != nil {
+			if result, err := r.deleteExternalResources(ctx); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
-				return ctrl.Result{}, err
+				return result, err
 			}
 
 			// remove our finalizer from the list and update it.
@@ -121,8 +119,8 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, nil
 		}
+		return ctrl.Result{}, nil
 	}
 
 	/// if crd not deleted started phase 1
@@ -149,17 +147,61 @@ func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 // delete associated cluster resources //
-func (r *OpenSearchClusterReconciler) deleteExternalResources(cluster *opsterv1.OpenSearchCluster) error {
-	namespace := cluster.Spec.General.ClusterName
-	nsToDel := builders.NewNsForCR(cluster)
+func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Context) (ctrl.Result, error) {
+	r.Logger.Info("Deleting resources")
+	// Run through all sub controllers to delete existing objects
+	reconcilerContext := reconcilers.NewReconcilerContext()
 
-	r.Logger.Info("Cluster has been deleted. Deleting namespace")
-	err := r.Delete(context.TODO(), nsToDel)
-	if err != nil {
-		return err
+	tls := reconcilers.NewTLSReconciler(
+		r.Client,
+		ctx,
+		&reconcilerContext,
+		r.Instance,
+	)
+	securityconfig := reconcilers.NewSecurityconfigReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
+	config := reconcilers.NewConfigurationReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
+	cluster := reconcilers.NewClusterReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
+	dashboards := reconcilers.NewDashboardsReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		&reconcilerContext,
+		r.Instance,
+	)
+
+	componentReconcilers := []reconcilers.ComponentReconciler{
+		tls.DeleteResources,
+		securityconfig.DeleteResources,
+		config.DeleteResources,
+		cluster.DeleteResources,
+		dashboards.DeleteResources,
 	}
-	r.Logger.Info("Namespace deleted successfully", "namespace", namespace)
-	return nil
+	for _, rec := range componentReconcilers {
+		result, err := rec()
+		if err != nil || result.Requeue {
+			return result, err
+		}
+	}
+	r.Logger.Info("Finished deleting resources")
+	return ctrl.Result{}, nil
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context) (ctrl.Result, error) {
@@ -187,25 +229,19 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 
 func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context) (ctrl.Result, error) {
 
-	/// ------ Create NameSpace -------
-	ns_query := &corev1.Namespace{}
-	// try to see if the ns already exists
-	err := r.Get(ctx, client.ObjectKey{Name: r.Instance.Spec.General.ClusterName}, ns_query)
-	if errors.IsNotFound(err) {
-		result, err := r.createNamespace(r.Instance)
-		if err != nil {
-			return result, err
-		}
-	} else if err != nil {
-		return ctrl.Result{}, err
-	}
-
 	// Run through all sub controllers to create or update all needed objects
 	reconcilerContext := reconcilers.NewReconcilerContext()
 
 	tls := reconcilers.NewTLSReconciler(
 		r.Client,
 		ctx,
+		&reconcilerContext,
+		r.Instance,
+	)
+	securityconfig := reconcilers.NewSecurityconfigReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
 		&reconcilerContext,
 		r.Instance,
 	)
@@ -240,6 +276,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 
 	componentReconcilers := []reconcilers.ComponentReconciler{
 		tls.Reconcile,
+		securityconfig.Reconcile,
 		config.Reconcile,
 		cluster.Reconcile,
 		scaler.Reconcile,
@@ -254,17 +291,4 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 
 	// -------- all resources has been created -----------
 	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-}
-
-func (r *OpenSearchClusterReconciler) createNamespace(instance *opsterv1.OpenSearchCluster) (ctrl.Result, error) {
-	ns := builders.NewNsForCR(instance)
-	err := r.Create(context.TODO(), ns)
-	if err != nil {
-		// if ns cannot create ,  inform it and done reconcile
-		r.Logger.Error(err, "Failed to create namespace")
-		r.Recorder.Event(r.Instance, "Warning", "Cannot create Namespace for cluster", "requeuing - fix the problem that you have with creating Namespace for cluster")
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
-	}
-	r.Logger.Info("Namespace created successfully", "namespace", ns.Name)
-	return ctrl.Result{}, nil
 }

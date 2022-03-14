@@ -23,7 +23,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		VolumeSource: corev1.VolumeSource{
 			ConfigMap: &corev1.ConfigMapVolumeSource{
 				DefaultMode:          &mode,
-				LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Spec.General.ClusterName)},
+				LocalObjectReference: corev1.LocalObjectReference{Name: fmt.Sprintf("%s-dashboards-config", cr.Name)},
 			},
 		},
 	})
@@ -31,6 +31,27 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		MountPath: "/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml",
 		SubPath:   "opensearch_dashboards.yml",
 	})
+
+	env := []corev1.EnvVar{
+		{
+			Name:  "OPENSEARCH_HOSTS",
+			Value: URLForCluster(cr),
+		},
+		{
+			Name:  "SERVER_HOST",
+			Value: "0.0.0.0",
+		},
+	}
+
+	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
+		// Custom credentials supplied
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "username"}}})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "password"}}})
+	} else {
+		// Default values from demo configuration
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", Value: "admin"})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", Value: "admin"})
+	}
 
 	labels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
@@ -51,8 +72,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 
 	return &sts.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ClusterName + "-dashboards",
-			Namespace: cr.Spec.General.ClusterName,
+			Name:      cr.Name + "-dashboards",
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: sts.DeploymentSpec{
@@ -80,26 +101,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 							},
 							StartupProbe:  &probe,
 							LivenessProbe: &probe,
-							Env: []corev1.EnvVar{
-								{
-									Name:  "OPENSEARCH_HOSTS",
-									Value: URLForCluster(cr),
-								},
-								{
-									Name:  "SERVER_HOST",
-									Value: "0.0.0.0",
-								},
-								// Temporary until securityconfig controller is implemented
-								{
-									Name:  "OPENSEARCH_USERNAME",
-									Value: "admin",
-								},
-								{
-									Name:  "OPENSEARCH_PASSWORD",
-									Value: "admin",
-								},
-							},
-							VolumeMounts: volumeMounts,
+							Env:           env,
+							VolumeMounts:  volumeMounts,
 						},
 					},
 				},
@@ -109,7 +112,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 }
 
 func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
-	config["server.name"] = cr.Spec.General.ClusterName + "-dashboards"
+	config["server.name"] = cr.Name + "-dashboards"
 	config["opensearch.ssl.verificationMode"] = "none"
 
 	var sb strings.Builder
@@ -121,7 +124,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      name,
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 		},
 		Data: map[string]string{
 			"opensearch_dashboards.yml": data,
@@ -144,7 +147,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Spec.General.ServiceName + "-dashboards",
-			Namespace: cr.Spec.General.ClusterName,
+			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{

@@ -1,76 +1,34 @@
 package helpers
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
-	sts "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kube-openapi/pkg/validation/errors"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/tls"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-func CheckUpdates(sts_env sts.StatefulSetSpec, sts_crd sts.StatefulSetSpec, instance *opsterv1.OpenSearchCluster, count int, check string) (x sts.StatefulSetSpec, err error, changes []string) {
-
-	fields := getNamesInStruct(sts_env)
-	changes = []string{}
-
-	//type fields_changes struct{
-	//	nodegroup string `json:"nodegroup,omitempty"`
-	//	change []string `json:"changes,omitempty"`
-	//}
-	//changes := []fields_changes{}
-
-	for i := 0; i < len(fields); i++ {
-
-		field := fields[i]
-		field_env := GetField(&sts_env, field)
-		field_env_int_ptr, ok := field_env.(*int32)
-		if !ok {
-			fmt.Println(!ok)
-			return sts_env, err, changes
-		}
-		if field_env_int_ptr == nil {
-			return sts_env, err, changes
-		}
-		field_env_int := *field_env_int_ptr
-
-		field_crd := GetField(&sts_crd, field)
-		field_crd_int_ptr, ok := field_crd.(*int32)
-		if !ok {
-			fmt.Println(!ok)
-			return sts_env, err, changes
-		}
-		if field_crd_int_ptr == nil {
-			return sts_env, err, changes
-		}
-		field_crd_int := *field_crd_int_ptr
-
-		// Check if sts replica count from cluster is equal to what configured in CRD
-		if field_env_int != field_crd_int {
-			//if not equal - change env replica count to what configured in CRD
-			changes = append(changes, field)
-
-			//scaled := true
-			//fmt.Println("You scaled - Replicas on " + instance.Spec.General.ClusterName + "-" + instance.Spec.nodePools[count].Component)
-		}
-	}
-	return sts_env, nil, changes
-
-}
 
 func CreateInitMasters(cr *opsterv1.OpenSearchCluster) string {
 	var masters []string
 	for _, nodePool := range cr.Spec.NodePools {
 		if ContainsString(nodePool.Roles, "master") {
 			for i := 0; int32(i) < nodePool.Replicas; i++ {
-				masters = append(masters, fmt.Sprintf("%s-%s-%d", cr.Spec.General.ClusterName, nodePool.Component, i))
+				masters = append(masters, fmt.Sprintf("%s-%s-%d", cr.Name, nodePool.Component, i))
 			}
 		}
 	}
 	return strings.Join(masters, ",")
 }
 
-func CheckEquels(from_env *sts.StatefulSetSpec, from_crd *sts.StatefulSetSpec, text string) (int32, bool, error) {
+func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
 	field_env := GetField(from_env, text)
 	field_env_int_ptr, ok := field_env.(*int32)
 	if !ok {
@@ -99,4 +57,32 @@ func CheckEquels(from_env *sts.StatefulSetSpec, from_crd *sts.StatefulSetSpec, t
 	} else {
 		return *field_crd_int_ptr, true, nil
 	}
+}
+
+func ReadOrGenerateCaCert(pki tls.PKI, k8sClient client.Client, ctx context.Context, instance *opsterv1.OpenSearchCluster) (tls.Cert, error) {
+	namespace := instance.Namespace
+	clusterName := instance.Name
+	secretName := clusterName + "-ca"
+	logger := log.FromContext(ctx)
+	caSecret := corev1.Secret{}
+	var ca tls.Cert
+	if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
+		// Generate CA cert and put it into secret
+		ca, err = pki.GenerateCA(clusterName)
+		if err != nil {
+			logger.Error(err, "Failed to create CA")
+			return ca, err
+		}
+		caSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace}, Data: ca.SecretDataCA()}
+		if err := ctrl.SetControllerReference(instance, &caSecret, k8sClient.Scheme()); err != nil {
+			return ca, err
+		}
+		if err := k8sClient.Create(ctx, &caSecret); err != nil {
+			logger.Error(err, "Failed to store CA in secret")
+			return ca, err
+		}
+	} else {
+		ca = pki.CAFromSecret(caSecret.Data)
+	}
+	return ca, nil
 }
