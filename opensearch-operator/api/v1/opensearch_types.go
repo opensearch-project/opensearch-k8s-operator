@@ -83,25 +83,23 @@ type ConfMgmt struct {
 type DashboardsConfig struct {
 	Enable bool                 `json:"enable,omitempty"`
 	Tls    *DashboardsTlsConfig `json:"tls,omitempty"`
+	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
+	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
 	// Enable HTTPS for Dashboards
 	Enable bool `json:"enable,omitempty"`
-	// Generate certificate, if false either secret or keySecret & certSecret must be provided
+	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
-	// Optional, name of a secret that contains tls.key and tls.crt data, use either this or set the separate keySecret and certSecret fields
-	Secret string `json:"secret,omitempty"`
-	// Optional, secret that contains the private key
-	KeySecret *TlsSecret `json:"keySecret,omitempty"`
-	// Optional, secret that contains the certificate for the private key, must be signed by the provided CA
-	CertSecret *TlsSecret `json:"certSecret,omitempty"`
+	// foobar
+	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
 }
 
 // Security defines options for managing the opensearch-security plugin
 type Security struct {
-	Tls *TlsConfig `json:"tls,omitempty"`
-	// TBD: securityconfig
+	Tls    *TlsConfig      `json:"tls,omitempty"`
+	Config *SecurityConfig `json:"config,omitempty"`
 }
 
 // Configure tls usage for transport and http interface
@@ -139,6 +137,15 @@ type TlsCertificateConfig struct {
 type TlsSecret struct {
 	SecretName string  `json:"secretName"`
 	Key        *string `json:"key,omitempty"`
+}
+
+type SecurityConfig struct {
+	// Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
+	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
+	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
+	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
+	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster

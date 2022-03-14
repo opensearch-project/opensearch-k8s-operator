@@ -55,41 +55,46 @@ spec:
                 properties:
                   enable:
                     type: boolean
+                  opensearchCredentialsSecret:
+                    description: Secret that contains fields username and password
+                      for dashboards to use to login to opensearch, must only be supplied
+                      if a custom securityconfig is provided
+                    properties:
+                      name:
+                        description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                          TODO: Add other useful fields. apiVersion, kind, uid?'
+                        type: string
+                    type: object
                   tls:
                     properties:
-                      certSecret:
-                        description: Optional, secret that contains the certificate
-                          for the private key, must be signed by the provided CA
+                      caSecret:
+                        description: Optional, secret that contains the ca certificate
+                          as ca.crt. If this and generate=true is set the existing
+                          CA cert from that secret is used to generate the node certs.
+                          In this case must contain ca.crt and ca.key fields
                         properties:
-                          key:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
                             type: string
-                          secretName:
-                            type: string
-                        required:
-                        - secretName
                         type: object
                       enable:
                         description: Enable HTTPS for Dashboards
                         type: boolean
                       generate:
-                        description: Generate certificate, if false either secret
-                          or keySecret & certSecret must be provided
+                        description: Generate certificate, if false secret must be
+                          provided
                         type: boolean
-                      keySecret:
-                        description: Optional, secret that contains the private key
-                        properties:
-                          key:
-                            type: string
-                          secretName:
-                            type: string
-                        required:
-                        - secretName
-                        type: object
                       secret:
-                        description: Optional, name of a secret that contains tls.key
-                          and tls.crt data, use either this or set the separate keySecret
-                          and certSecret fields
-                        type: string
+                        description: Optional, name of a TLS secret that contains
+                          ca.crt, tls.key and tls.crt data. If ca.crt is in a different
+                          secret provide it via the caSecret field
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
                     type: object
                 type: object
               general:
@@ -1133,6 +1138,41 @@ spec:
                 description: Security defines options for managing the opensearch-security
                   plugin
                 properties:
+                  config:
+                    properties:
+                      adminCredentialsSecret:
+                        description: Secret that contains fields username and password
+                          to be used by the operator to access the opensearch cluster
+                          for node draining. Must be set if custom securityconfig
+                          is provided.
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
+                      adminSecret:
+                        description: TLS Secret that contains a client certificate
+                          (tls.key, tls.crt, ca.crt) with admin rights in the opensearch
+                          cluster. Must be set if transport certificates are provided
+                          by user and not generated
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
+                      securityConfigSecret:
+                        description: Secret that contains the differnt yml files of
+                          the opensearch-security config (config.yml, internal_users.yml,
+                          ...)
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
+                    type: object
                   tls:
                     description: Configure tls usage for transport and http interface
                     properties:
