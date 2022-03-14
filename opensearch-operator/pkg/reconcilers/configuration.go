@@ -44,16 +44,18 @@ func NewConfigurationReconciler(
 }
 
 func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
-	if r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0 {
+	if (r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0) && r.instance.Spec.General.ExtraConfig == "" {
 		return ctrl.Result{}, nil
 	}
-	// Add some default config for the security plugin
-	r.reconcilerContext.AddConfig("plugins.security.audit.type", "internal_opensearch")
-	r.reconcilerContext.AddConfig("plugins.security.enable_snapshot_restore_privilege", "true")
-	r.reconcilerContext.AddConfig("plugins.security.check_snapshot_restore_write_privileges", "true")
-	r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
-	r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
-	r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", `[".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]`)
+	if len(r.reconcilerContext.OpenSearchConfig) > 0 {
+		// Add some default config for the security plugin
+		r.reconcilerContext.AddConfig("plugins.security.audit.type", "internal_opensearch")
+		r.reconcilerContext.AddConfig("plugins.security.enable_snapshot_restore_privilege", "true")
+		r.reconcilerContext.AddConfig("plugins.security.check_snapshot_restore_write_privileges", "true")
+		r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
+		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
+		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", `[".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]`)
+	}
 
 	cm := r.buildConfigMap()
 	if err := ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()); err != nil {
@@ -93,6 +95,10 @@ func (r *ConfigurationReconciler) buildConfigMap() *corev1.ConfigMap {
 	var sb strings.Builder
 	for key, value := range r.reconcilerContext.OpenSearchConfig {
 		sb.WriteString(fmt.Sprintf("%s: %s\n", key, value))
+	}
+	if r.instance.Spec.General.ExtraConfig != "" {
+		sb.WriteString(r.instance.Spec.General.ExtraConfig)
+		sb.WriteString("\n")
 	}
 	data := sb.String()
 

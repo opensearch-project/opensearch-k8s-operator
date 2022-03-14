@@ -38,6 +38,8 @@ type GeneralConfig struct {
 	ServiceAccount   string `json:"serviceAccount,omitempty"`
 	ServiceName      string `json:"serviceName"`
 	SetVMMaxMapCount bool   `json:"setVMMaxMapCount,omitempty"`
+	// Extra items to add to the opensearch.yml
+	ExtraConfig string `json:"extraConfig,omitempty"`
 }
 
 type NodePool struct {
