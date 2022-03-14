@@ -10,12 +10,13 @@ Here are the steps arranged by priority:
 4. Spin up OpenSearch dashboard, with monitor and test - Done
 5. Infrastructure for adding new on demand and worker services - Done
 6. Basic OpenSearch Gateway, used for communicating with the OpenSearch cluster - Done
-7. Security service - In progress
-8. Scaler service - In progress
+7. Security service - Done
+8. Scaler service - Done
 9. Cluster resources service
 10. Rolling upgrade
 
 # Phase 2
-1. Advanced allocation strategies
-2. Automatic scaler
-3. Snapshot and restore
+1. OpenSearch Operator CLI
+2. Advanced allocation strategies
+3. Automatic scaler
+4. Snapshot and restore
