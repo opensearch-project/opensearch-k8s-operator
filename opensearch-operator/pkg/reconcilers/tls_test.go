@@ -121,7 +121,7 @@ var _ = Describe("TLS Controller", func() {
 
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
-			Expect(value).To(Equal("[\"CN=*,OU=tls-pernode\"]"))
+			Expect(value).To(Equal("[\"CN=tls-pernode-*,OU=tls-pernode\"]"))
 			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=admin,OU=tls-pernode\"]"))
@@ -300,7 +300,7 @@ var _ = Describe("TLS Controller", func() {
 
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
-			Expect(value).To(Equal("[\"CN=*,OU=tls-withca\"]"))
+			Expect(value).To(Equal("[\"CN=tls-withca-*,OU=tls-withca\"]"))
 		})
 	})
 

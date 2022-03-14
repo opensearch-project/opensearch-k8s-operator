@@ -5,21 +5,22 @@ import (
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
-	v1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 )
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
 const (
-	ClusterLabel  = "opster.io/opensearch-cluster"
-	NodePoolLabel = "opster.io/opensearch-nodepool"
+	ClusterLabel                     = "opster.io/opensearch-cluster"
+	NodePoolLabel                    = "opster.io/opensearch-nodepool"
+	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
 func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.StatefulSet {
@@ -189,7 +190,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 							},
 
 							Name:  cr.Name,
-							Image: "opensearchproject/opensearch:1.0.0",
+							Image: DockerImageForCluster(cr),
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
@@ -234,7 +235,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 				}
 				return []corev1.PersistentVolumeClaim{}
 			}(),
-			ServiceName: cr.Spec.General.ServiceName + "-svc",
+			ServiceName: cr.Spec.General.ServiceName,
 		},
 	}
 
@@ -254,6 +255,11 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 	}
 
 	return sts
+}
+
+func DockerImageForCluster(cr *opsterv1.OpenSearchCluster) string {
+	// TODO: Determine version based on CR
+	return "opensearchproject/opensearch:1.2.3"
 }
 
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
@@ -411,18 +417,75 @@ func DnsOfService(cr *opsterv1.OpenSearchCluster) string {
 func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
 	return cr.Name + "-" + nodePool.Component
 }
-func UsernameAndPassword(cr *opsterv1.OpenSearchCluster) (string, string) {
-	return "admin", "admin"
-}
+
 func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
 }
 
-func STSInNodePools(sts appsv1.StatefulSet, nodepools []v1.NodePool) bool {
+func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
 	for _, nodepool := range nodepools {
 		if sts.Labels[NodePoolLabel] == nodepool.Component {
 			return true
 		}
 	}
 	return false
+}
+
+func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName string, namespace string, checksum string, adminCertName string) batchv1.Job {
+	dns := DnsOfService(instance)
+	adminCert := "/certs/tls.crt"
+	adminKey := "/certs/tls.key"
+	caCert := "/certs/ca.crt"
+	var volumes []corev1.Volume
+	var volumeMounts []corev1.VolumeMount
+	volumes = append(volumes, corev1.Volume{
+		Name:         "securityconfig",
+		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: instance.Spec.Security.Config.SecurityconfigSecret.Name}},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "securityconfig",
+		MountPath: "/securityconfig",
+	})
+	volumes = append(volumes, corev1.Volume{
+		Name:         "admin-cert",
+		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: adminCertName}},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "admin-cert",
+		MountPath: "/certs",
+	})
+
+	arg := "ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;" +
+		"chmod +x $ADMIN;" +
+		"count=0;" +
+		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd /securityconfig/ -icl -nhnv -h %s.svc.cluster.local -p 9300 || (( count++ >= 20 )); do", caCert, adminCert, adminKey, dns) +
+		"  sleep 20; " +
+		"done"
+	annotations := map[string]string{
+		securityconfigChecksumAnnotation: checksum,
+	}
+	terminationGracePeriodSeconds := int64(5)
+	backoffLimit := int32(0)
+
+	return batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
+		Spec: batchv1.JobSpec{
+			BackoffLimit: &backoffLimit,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Name: jobName},
+				Spec: corev1.PodSpec{
+					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+					Containers: []corev1.Container{{
+						Name:         "updater",
+						Image:        DockerImageForCluster(instance),
+						Command:      []string{"/bin/bash", "-c"},
+						Args:         []string{arg},
+						VolumeMounts: volumeMounts,
+					}},
+					Volumes:       volumes,
+					RestartPolicy: corev1.RestartPolicyNever,
+				},
+			},
+		},
+	}
 }
