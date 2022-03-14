@@ -15,7 +15,7 @@ The project is currently a work in progress and is not (yet) recommended for use
 - [x] Scale the cluster resources (manually), per nodes' role group. 
 - [x] Drain strategy for scale down.
 - [ ] Cluster configurations and nodes' settings updates.
-- [ ] Single/Rolling restarts.
+- [ ] Rolling restarts - through API.
 - [ ] Version updates.
 - [ ] Scaling nodes' disks - increase/replace disks.
 - [ ] Change nodes' memory allocation and limits.

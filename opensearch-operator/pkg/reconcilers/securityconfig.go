@@ -109,7 +109,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	r.logger.Info("Starting securityconfig update job")
-	job = r.job(jobName, namespace, checksum, adminCertName)
+	job = builders.NewSecurityconfigUpdateJob(r.instance, jobName, namespace, checksum, adminCertName)
 	if err := ctrl.SetControllerReference(r.instance, &job, r.Client.Scheme()); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -136,65 +136,6 @@ func checksum(data map[string][]byte) (string, error) {
 		}
 	}
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
-}
-
-func (r *SecurityconfigReconciler) job(jobName string, namespace string, checksum string, adminCertName string) batchv1.Job {
-	dns := builders.DnsOfService(r.instance)
-	adminCert := "/certs/tls.crt"
-	adminKey := "/certs/tls.key"
-	caCert := "/certs/ca.crt"
-	var volumes []corev1.Volume
-	var volumeMounts []corev1.VolumeMount
-	volumes = append(volumes, corev1.Volume{
-		Name:         "securityconfig",
-		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: r.instance.Spec.Security.Config.SecurityconfigSecret.Name}},
-	})
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{
-		Name:      "securityconfig",
-		MountPath: "/securityconfig",
-	})
-	volumes = append(volumes, corev1.Volume{
-		Name:         "admin-cert",
-		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: adminCertName}},
-	})
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{
-		Name:      "admin-cert",
-		MountPath: "/certs",
-	})
-
-	arg := "ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;" +
-		"chmod +x $ADMIN;" +
-		"count=0;" +
-		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd /securityconfig/ -icl -nhnv -h %s.svc.cluster.local -p 9300 || (( count++ >= 20 )); do", caCert, adminCert, adminKey, dns) +
-		"  sleep 20; " +
-		"done"
-	annotations := map[string]string{
-		checksumAnnotation: checksum,
-	}
-	terminationGracePeriodSeconds := int64(5)
-	backoffLimit := int32(0)
-
-	return batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
-		Spec: batchv1.JobSpec{
-			BackoffLimit: &backoffLimit,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Name: jobName},
-				Spec: corev1.PodSpec{
-					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
-					Containers: []corev1.Container{{
-						Name:         "updater",
-						Image:        builders.DockerImageForCluster(r.instance),
-						Command:      []string{"/bin/bash", "-c"},
-						Args:         []string{arg},
-						VolumeMounts: volumeMounts,
-					}},
-					Volumes:       volumes,
-					RestartPolicy: corev1.RestartPolicyNever,
-				},
-			},
-		},
-	}
 }
 
 func (r *SecurityconfigReconciler) determineAdminSecret() string {

@@ -77,18 +77,12 @@ var _ = Describe("Securityconfig Reconciler", func() {
 	Context("When Reconciling the securityconfig reconciler with securityconfig secret configured and available", func() {
 		It("should start an update job", func() {
 			// Create namespace and secrets first
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.Background(), &ns)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 			configSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig", Namespace: clusterName},
 				StringData: map[string]string{"config.yml": "foobar"},
 			}
-			err = k8sClient.Create(context.Background(), &configSecret)
+			err := k8sClient.Create(context.Background(), &configSecret)
 			Expect(err).ToNot(HaveOccurred())
 			adminCertSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: "admin-cert", Namespace: clusterName},
@@ -122,7 +116,6 @@ var _ = Describe("Securityconfig Reconciler", func() {
 
 			job := batchv1.Job{}
 			Eventually(func() bool {
-
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
