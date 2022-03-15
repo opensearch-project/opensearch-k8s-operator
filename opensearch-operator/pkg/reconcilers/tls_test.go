@@ -9,12 +9,23 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
-	tls "opensearch.opster.io/pkg/tls"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+func newTLSReconciler(spec *opsterv1.OpenSearchCluster) (*ReconcilerContext, *TLSReconciler) {
+	reconcilerContext := NewReconcilerContext()
+	underTest := NewTLSReconciler(
+		k8sClient,
+		context.Background(),
+		&reconcilerContext,
+		spec,
+	)
+	underTest.pki = helpers.NewMockPKI()
+	return &reconcilerContext, underTest
+}
 
 var _ = Describe("TLS Controller", func() {
 
@@ -31,28 +42,18 @@ var _ = Describe("TLS Controller", func() {
 			transportSecretName := clusterName + "-transport-cert"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName},
-				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{Generate: true},
-					Http:      &opsterv1.TlsConfigHttp{Generate: true},
-				}},
-			}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.TODO(), &ns)
-			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
-			_, err = underTest.Reconcile()
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+						Transport: &opsterv1.TlsConfigTransport{Generate: true},
+						Http:      &opsterv1.TlsConfigHttp{Generate: true},
+					}},
+				}}
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+			reconcilerContext, underTest := newTLSReconciler(&spec)
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
 			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
@@ -95,34 +96,24 @@ var _ = Describe("TLS Controller", func() {
 			transportSecretName := clusterName + "-transport-cert"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ClusterName: clusterName},
-				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{Generate: true, PerNode: true},
-					Http:      &opsterv1.TlsConfigHttp{Generate: true},
-				}},
-				NodePools: []opsterv1.NodePool{
-					{
-						Component: "masters",
-						Replicas:  3,
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+						Transport: &opsterv1.TlsConfigTransport{Generate: true, PerNode: true},
+						Http:      &opsterv1.TlsConfigHttp{Generate: true},
+					}},
+					NodePools: []opsterv1.NodePool{
+						{
+							Component: "masters",
+							Replicas:  3,
+						},
 					},
-				},
-			}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.TODO(), &ns)
-			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
-			_, err = underTest.Reconcile()
+				}}
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+			reconcilerContext, underTest := newTLSReconciler(&spec)
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
@@ -130,7 +121,7 @@ var _ = Describe("TLS Controller", func() {
 
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
-			Expect(value).To(Equal("[\"CN=*,OU=tls-pernode\"]"))
+			Expect(value).To(Equal("[\"CN=tls-pernode-*,OU=tls-pernode\"]"))
 			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=admin,OU=tls-pernode\"]"))
@@ -177,40 +168,30 @@ var _ = Describe("TLS Controller", func() {
 	Context("When Reconciling the TLS configuration with external certificates", func() {
 		It("Should not create secrets but only mount them", func() {
 			clusterName := "tls-test-existingsecrets"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-				Transport: &opsterv1.TlsConfigTransport{
-					Generate: false,
-					CertificateConfig: opsterv1.TlsCertificateConfig{
-						Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
-						CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+					Transport: &opsterv1.TlsConfigTransport{
+						Generate: false,
+						CertificateConfig: opsterv1.TlsCertificateConfig{
+							Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
+							CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
+						},
+						NodesDn: []string{"CN=mycn", "CN=othercn"},
+						AdminDn: []string{"CN=admin1", "CN=admin2"},
 					},
-					NodesDn: []string{"CN=mycn", "CN=othercn"},
-					AdminDn: []string{"CN=admin1", "CN=admin2"},
-				},
-				Http: &opsterv1.TlsConfigHttp{
-					Generate: false,
-					CertificateConfig: opsterv1.TlsCertificateConfig{
-						Secret:   corev1.LocalObjectReference{Name: "cert-http"},
-						CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
+					Http: &opsterv1.TlsConfigHttp{
+						Generate: false,
+						CertificateConfig: opsterv1.TlsCertificateConfig{
+							Secret:   corev1.LocalObjectReference{Name: "cert-http"},
+							CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
+						},
 					},
 				},
-			},
-			}}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.TODO(), &ns)
-			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
-			_, err = underTest.Reconcile()
+				}}}
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+			reconcilerContext, underTest := newTLSReconciler(&spec)
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(reconcilerContext.Volumes).Should(HaveLen(6))
@@ -234,38 +215,28 @@ var _ = Describe("TLS Controller", func() {
 	Context("When Reconciling the TLS configuration with external per-node certificates", func() {
 		It("Should not create secrets but only mount them", func() {
 			clusterName := "tls-test-existingsecretspernode"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-				Transport: &opsterv1.TlsConfigTransport{
-					Generate: false,
-					PerNode:  true,
-					CertificateConfig: opsterv1.TlsCertificateConfig{
-						Secret: corev1.LocalObjectReference{Name: "my-transport-certs"},
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+					Transport: &opsterv1.TlsConfigTransport{
+						Generate: false,
+						PerNode:  true,
+						CertificateConfig: opsterv1.TlsCertificateConfig{
+							Secret: corev1.LocalObjectReference{Name: "my-transport-certs"},
+						},
+						NodesDn: []string{"CN=mycn", "CN=othercn"},
 					},
-					NodesDn: []string{"CN=mycn", "CN=othercn"},
-				},
-				Http: &opsterv1.TlsConfigHttp{
-					Generate: false,
-					CertificateConfig: opsterv1.TlsCertificateConfig{
-						Secret: corev1.LocalObjectReference{Name: "my-http-certs"},
+					Http: &opsterv1.TlsConfigHttp{
+						Generate: false,
+						CertificateConfig: opsterv1.TlsCertificateConfig{
+							Secret: corev1.LocalObjectReference{Name: "my-http-certs"},
+						},
 					},
 				},
-			},
-			}}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.TODO(), &ns)
-			Expect(err).ToNot(HaveOccurred())
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
-			_, err = underTest.Reconcile()
+				}}}
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+			reconcilerContext, underTest := newTLSReconciler(&spec)
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
 			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
@@ -282,40 +253,35 @@ var _ = Describe("TLS Controller", func() {
 		It("Should create certificates using that CA", func() {
 			clusterName := "tls-withca"
 			caSecretName := clusterName + "-myca"
-			spec := opsterv1.OpenSearchCluster{Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{ClusterName: clusterName}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-				Transport: &opsterv1.TlsConfigTransport{
-					Generate: true,
-					PerNode:  true,
-					CertificateConfig: opsterv1.TlsCertificateConfig{
-						CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+					Transport: &opsterv1.TlsConfigTransport{
+						Generate: true,
+						PerNode:  true,
+						CertificateConfig: opsterv1.TlsCertificateConfig{
+							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+						},
+					},
+					Http: &opsterv1.TlsConfigHttp{
+						Generate: true,
+						CertificateConfig: opsterv1.TlsCertificateConfig{
+							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+						},
 					},
 				},
-				Http: &opsterv1.TlsConfigHttp{
-					Generate: true,
-					CertificateConfig: opsterv1.TlsCertificateConfig{
-						CaSecret: corev1.LocalObjectReference{Name: caSecretName},
-					},
-				},
-			},
-			}}}
-			data := make(map[string][]byte)
-			ca, err := tls.GenerateCA(clusterName)
-			Expect(err).ToNot(HaveOccurred())
-			data["ca.crt"] = ca.CertData()
-			data["ca.key"] = ca.KeyData()
+				}}}
+			data := map[string][]byte{
+				"ca.crt": []byte("ca.crt"),
+				"ca.key": []byte("ca.key"),
+			}
 			caSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
 				Data:       data,
 			}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err = k8sClient.Create(context.TODO(), &ns)
-			Expect(err).ToNot(HaveOccurred())
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 
-			err = k8sClient.Create(context.TODO(), &caSecret)
+			err := k8sClient.Create(context.Background(), &caSecret)
 			Expect(err).ToNot(HaveOccurred())
 			Eventually(func() bool {
 				secret := corev1.Secret{}
@@ -323,13 +289,7 @@ var _ = Describe("TLS Controller", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			reconcilerContext := NewReconcilerContext()
-			underTest := NewTLSReconciler(
-				k8sClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
+			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -340,7 +300,7 @@ var _ = Describe("TLS Controller", func() {
 
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
-			Expect(value).To(Equal("[\"CN=*,OU=tls-withca\"]"))
+			Expect(value).To(Equal("[\"CN=tls-withca-*,OU=tls-withca\"]"))
 		})
 	})
 

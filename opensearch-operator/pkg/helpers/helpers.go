@@ -2,21 +2,14 @@ package helpers
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"reflect"
 
 	sts "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/client-go/tools/record"
+	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
-
-type OpenSearchReconciler struct {
-	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-}
 
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
@@ -28,44 +21,11 @@ func ContainsString(slice []string, s string) bool {
 
 }
 
-func (r *OpenSearchReconciler) UpdateResource(ctx context.Context, instance *sts.StatefulSet) error {
-	err := r.Update(ctx, instance)
-	if err != nil {
-		fmt.Println(err, "Cannot update resource")
-		r.Recorder.Event(instance, "Warning", "Cannot update resource", "Cannot update resource")
-		return err
-	}
-	return nil
-}
-
 func GetField(v *sts.StatefulSetSpec, field string) interface{} {
 
 	r := reflect.ValueOf(v)
 	f := reflect.Indirect(r).FieldByName(field).Interface()
 	return f
-}
-
-//func setField(v *sts.StatefulSetSpec, field string) reflect.Value {
-//
-//	//	reflect.ValueOf(v).Elem().FieldByName(field).SetString("sss")
-//
-//	r := reflect.ValueOf(v)
-//	ty := r.Type()
-//	fmt.Println(ty)
-//	f := reflect.Indirect(r).FieldByName(field)
-//	return f
-//}
-
-func getNamesInStruct(inter interface{}) []string {
-	rv := reflect.Indirect(reflect.ValueOf(inter))
-
-	var names []string
-
-	for i := 0; i < rv.NumField(); i++ {
-		x := rv.Type().Field(i).Name
-		names = append(names, x)
-	}
-	return names
 }
 
 func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
@@ -108,4 +68,23 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	}
 	val, ok := mobj[keys[len(keys)-1]]
 	return val, ok
+}
+
+func UsernameAndPassword(k8sClient client.Client, ctx context.Context, cr *opsterv1.OpenSearchCluster) (string, string, error) {
+	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
+		// Read credentials from secret
+		credentialsSecret := corev1.Secret{}
+		if err := k8sClient.Get(ctx, client.ObjectKey{Name: cr.Spec.Security.Config.AdminCredentialsSecret.Name, Namespace: cr.Namespace}, &credentialsSecret); err != nil {
+			return "", "", err
+		}
+		username, usernameExists := credentialsSecret.Data["username"]
+		password, passwordExists := credentialsSecret.Data["password"]
+		if !usernameExists || !passwordExists {
+			return "", "", errors.New("username or password field missing")
+		}
+		return string(username), string(password), nil
+	} else {
+		// Use default demo credentials
+		return "admin", "admin", nil
+	}
 }
