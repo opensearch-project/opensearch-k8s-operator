@@ -100,6 +100,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			r.instance.Status.ComponentsStatus = append(r.instance.Status.ComponentsStatus, currentStatus)
 			return r.Status().Update(r.ctx, r.instance)
 		})
+		r.recorder.Eventf(r.instance, "Normal", "upgrading", "beginning upgrade of data node pool %s", currentStatus.Component)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
@@ -114,6 +115,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			r.instance.Status.ComponentsStatus = append(r.instance.Status.ComponentsStatus, currentStatus)
 			return r.Status().Update(r.ctx, r.instance)
 		})
+		r.recorder.Eventf(r.instance, "Normal", "upgrading", "beginning rollout of non data node pool %s", currentStatus.Component)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
@@ -143,6 +145,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			}
 			return r.Status().Update(r.ctx, r.instance)
 		})
+		r.recorder.Event(r.instance, "Normal", "upgrading", "cluster upgrade completed")
 		return ctrl.Result{}, err
 	default:
 		// We should never get here so return an error
@@ -166,6 +169,7 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 
 	// Don't allow version downgrades as they might cause unexpected issues
 	if new.LessThan(existing) {
+		r.recorder.Event(r.instance, "Warning", "invalid version", "specified version is lower than the current version")
 		return ErrVersionDowngrade
 	}
 
@@ -177,6 +181,7 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 	}
 
 	if !upgradeConstraint.Check(new) {
+		r.recorder.Event(r.instance, "Warning", "invalid version", "specified version is more than 1 major version greater than existing")
 		return ErrMajorVersionJump
 	}
 
@@ -342,6 +347,7 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 				Description: pool.Component,
 			}
 			r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+			r.recorder.Eventf(r.instance, "Normal", "upgrading", "completed upgrade of data node pool %s", currentStatus.Component)
 			return r.Status().Update(r.ctx, r.instance)
 		})
 	}
