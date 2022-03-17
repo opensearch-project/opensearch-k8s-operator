@@ -151,6 +151,10 @@ type SecurityConfig struct {
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
 }
 
+type UpgradeOptions struct {
+	DrainDataNodes bool `json:"drainDataNodes,omitempty"`
+}
+
 type ImageSpec struct {
 	Image            *string                       `json:"image,omitempty"`
 	ImagePullPolicy  *corev1.PullPolicy            `json:"imagePullPolicy,omitempty"`
@@ -161,11 +165,12 @@ type ImageSpec struct {
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	General    GeneralConfig    `json:"general,omitempty"`
-	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
-	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
-	Security   *Security        `json:"security,omitempty"`
-	NodePools  []NodePool       `json:"nodePools"`
+	General        GeneralConfig    `json:"general,omitempty"`
+	ConfMgmt       ConfMgmt         `json:"confMgmt,omitempty"`
+	Dashboards     DashboardsConfig `json:"dashboards,omitempty"`
+	Security       *Security        `json:"security,omitempty"`
+	UpgradeOptions *UpgradeOptions  `json:"upgradeOptions,omitempty"`
+	NodePools      []NodePool       `json:"nodePools"`
 }
 
 // ClusterStatus defines the observed state of Es
@@ -219,4 +224,8 @@ func (s ImageSpec) GetImage() string {
 		return ""
 	}
 	return *s.Image
+}
+
+func (s *ClusterSpec) DrainDataNodes() bool {
+	return s.UpgradeOptions != nil && s.UpgradeOptions.DrainDataNodes
 }

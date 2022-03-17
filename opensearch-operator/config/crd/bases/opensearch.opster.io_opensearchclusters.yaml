@@ -1329,6 +1329,11 @@ spec:
                         type: object
                     type: object
                 type: object
+              upgradeOptions:
+                properties:
+                  drainDataNodes:
+                    type: boolean
+                type: object
             required:
             - nodePools
             type: object

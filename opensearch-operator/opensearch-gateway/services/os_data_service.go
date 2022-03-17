@@ -52,7 +52,20 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
 	var valAsString = nodeNameToExclude
 	if ok && val != "" {
-		valAsString = val.(string) + "," + nodeNameToExclude
+		// Test whether name is already excluded
+		var found bool
+		valArr := strings.Split(val.(string), ",")
+		for _, name := range valArr {
+			if name == nodeNameToExclude {
+				found = true
+				break
+			}
+		}
+		if !found {
+			valArr = append(valArr, nodeNameToExclude)
+		}
+
+		valAsString = strings.Join(valArr, ",")
 	}
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
 	if err == nil {

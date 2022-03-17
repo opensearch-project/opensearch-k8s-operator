@@ -309,6 +309,11 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 	}
 
 	if health.Status != "green" {
+		// If we are draining nodes we don't need to worry about allocation
+		if r.instance.Spec.DrainDataNodes() {
+			return nil
+		}
+
 		// Check cluster shard routing
 		flatSettings, err := r.osClient.GetFlatClusterSettings()
 		if err != nil {
@@ -352,16 +357,47 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 		})
 	}
 
-	// Update cluster routing then delete appropriate ordinal pod
-	if err := services.SetClusterShardAllocation(r.osClient, services.ClusterSettingsAllocationPrimaries); err != nil {
-		return err
-	}
 	deleteOrdinal := pointer.Int32Deref(sts.Spec.Replicas, 1) - 1 - sts.Status.UpdatedReplicas
+	lastReplicaNodeName := builders.ReplicaHostName(*sts, deleteOrdinal)
 
-	return r.Delete(r.ctx, &corev1.Pod{
+	if r.instance.Spec.DrainDataNodes() {
+		// If we are draining nodes then drain the working node
+		_, err = services.AppendExcludeNodeHost(r.osClient, lastReplicaNodeName)
+		if err != nil {
+			return err
+		}
+
+		// Check if there are any shards on the node
+		nodeNotEmpty, err := services.HasShardsOnNode(r.osClient, lastReplicaNodeName)
+		if err != nil {
+			return err
+		}
+		// If the node isn't empty requeue to wait for shards to drain
+		if nodeNotEmpty {
+			return nil
+		}
+	} else {
+		// Update cluster routing before deleting appropriate ordinal pod
+		if err := services.SetClusterShardAllocation(r.osClient, services.ClusterSettingsAllocationPrimaries); err != nil {
+			return err
+		}
+	}
+
+	err = r.Delete(r.ctx, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%d", stsName, deleteOrdinal),
-			Namespace: r.instance.Namespace,
+			Name:      lastReplicaNodeName,
+			Namespace: sts.Namespace,
 		},
 	})
+	if err != nil {
+		return err
+	}
+
+	// If we are draining nodes remove the exclusion after the pod is deleted
+	if r.instance.Spec.DrainDataNodes() {
+		_, err = services.RemoveExcludeNodeHost(r.osClient, lastReplicaNodeName)
+		return err
+	}
+
+	return nil
 }
