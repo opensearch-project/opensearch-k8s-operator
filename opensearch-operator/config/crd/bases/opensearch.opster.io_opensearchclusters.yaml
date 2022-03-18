@@ -1011,16 +1011,14 @@ spec:
                     component:
                       type: string
                     cpu:
-                      format: int32
-                      type: integer
+                      type: string
                     diskSize:
                       format: int32
                       type: integer
                     jvm:
                       type: string
                     memory:
-                      format: int32
-                      type: integer
+                      type: string
                     nodeSelector:
                       additionalProperties:
                         type: string

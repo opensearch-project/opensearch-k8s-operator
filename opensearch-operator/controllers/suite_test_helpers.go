@@ -110,8 +110,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Component: "master",
 				Replicas:  3,
 				DiskSize:  32,
-				Cpu:       4,
-				Memory:    16,
+				Cpu:       "4",
+				Memory:    "512Mi",
 				Roles: []string{
 					"master",
 					"data",
@@ -119,16 +119,16 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Component: "nodes",
 				Replicas:  3,
 				DiskSize:  32,
-				Cpu:       4,
-				Memory:    16,
+				Cpu:       "4",
+				Memory:    "512Mi",
 				Roles: []string{
 					"data",
 				}}, {
 				Component: "client",
 				Replicas:  3,
 				DiskSize:  32,
-				Cpu:       4,
-				Memory:    16,
+				Cpu:       "4",
+				Memory:    "512Mi",
 				Roles: []string{
 					"data",
 					"ingest",

@@ -46,8 +46,8 @@ type NodePool struct {
 	Component    string              `json:"component"`
 	Replicas     int32               `json:"replicas"`
 	DiskSize     int32               `json:"diskSize,omitempty"`
-	Cpu          int32               `json:"cpu,omitempty"`
-	Memory       int32               `json:"memory,omitempty"`
+	Cpu          string              `json:"cpu,omitempty"`
+	Memory       string              `json:"memory,omitempty"`
 	Jvm          string              `json:"jvm,omitempty"`
 	Roles        []string            `json:"roles"`
 	Tolerations  []corev1.Toleration `json:"tolerations,omitempty"`
