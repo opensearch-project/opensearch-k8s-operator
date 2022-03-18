@@ -1,0 +1,20 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-first-cluster
+  namespace: default
+spec:
+  general:
+    serviceName: my-first-cluster
+  dashboards:
+    enable: true
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: 30
+      NodeSelector:
+      cpu: "0.3"
+      memory: "2Gi"
+      roles:
+        - "data"
+        - "master"
