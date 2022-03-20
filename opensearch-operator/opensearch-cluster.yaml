@@ -11,6 +11,13 @@ spec:
     serviceName: my-cluster
   dashboards:
     enable: true
+    resources:
+      requests:
+         memory: "1Gi"
+         cpu: "500m"
+      limits:
+         memory: "1Gi"
+         cpu: "500m"
   confMgmt:
     smartScaler: true
   security:
@@ -24,8 +31,13 @@ spec:
       replicas: 3
       diskSize: 30
       NodeSelector:
-      cpu: 1
-      memory: 1
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
       roles:
         - "master"
         - "data"
@@ -33,14 +45,25 @@ spec:
       replicas: 3
       diskSize: 100
       NodeSelector:
-      cpu: 1
-      memory: 1
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
       roles:
         - "data"
     - component: coordinators
       replicas: 3
       diskSize: 100
       NodeSelector:
-      cpu: 1
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
       roles:
         - "ingest"
