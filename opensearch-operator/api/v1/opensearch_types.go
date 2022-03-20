@@ -43,17 +43,16 @@ type GeneralConfig struct {
 }
 
 type NodePool struct {
-	Component    string              `json:"component"`
-	Replicas     int32               `json:"replicas"`
-	DiskSize     int32               `json:"diskSize,omitempty"`
-	Cpu          string              `json:"cpu,omitempty"`
-	Memory       string              `json:"memory,omitempty"`
-	Jvm          string              `json:"jvm,omitempty"`
-	Roles        []string            `json:"roles"`
-	Tolerations  []corev1.Toleration `json:"tolerations,omitempty"`
-	NodeSelector map[string]string   `json:"nodeSelector,omitempty"`
-	Affinity     *corev1.Affinity    `json:"affinity,omitempty"`
-	Persistence  *PersistenceConfig  `json:"persistence,omitempty"`
+	Component    string                      `json:"component"`
+	Replicas     int32                       `json:"replicas"`
+	DiskSize     int32                       `json:"diskSize,omitempty"`
+	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
+	Jvm          string                      `json:"jvm,omitempty"`
+	Roles        []string                    `json:"roles"`
+	Tolerations  []corev1.Toleration         `json:"tolerations,omitempty"`
+	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
+	Persistence  *PersistenceConfig          `json:"persistence,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -81,8 +80,9 @@ type ConfMgmt struct {
 }
 
 type DashboardsConfig struct {
-	Enable bool                 `json:"enable,omitempty"`
-	Tls    *DashboardsTlsConfig `json:"tls,omitempty"`
+	Enable    bool                        `json:"enable,omitempty"`
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	Tls       *DashboardsTlsConfig        `json:"tls,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
 	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 }

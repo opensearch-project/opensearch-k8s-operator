@@ -17,7 +17,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 	var replicas int32 = 1
 	var port int32 = 5601
 	var mode int32 = 420
-
+	resources := cr.Spec.Dashboards.Resources
 	volumes = append(volumes, corev1.Volume{
 		Name: "dashboards-config",
 		VolumeSource: corev1.VolumeSource{
@@ -92,7 +92,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 						{
 							Name: "dashboards",
 							//	Image: "docker.elastic.co/kibana/kibana:" + cr.Spec.General.Version,
-							Image: "opensearchproject/opensearch-dashboards:1.0.0",
+							Image:     "opensearchproject/opensearch-dashboards:1.0.0",
+							Resources: resources,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",

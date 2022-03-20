@@ -8,13 +8,25 @@ spec:
     serviceName: my-first-cluster
   dashboards:
     enable: true
+    resources:
+      requests:
+         memory: "1Gi"
+         cpu: "500m"
+      limits:
+         memory: "1Gi"
+         cpu: "500m"
   nodePools:
     - component: masters
       replicas: 3
       diskSize: 30
       NodeSelector:
-      cpu: "0.3"
-      memory: "2Gi"
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
       roles:
         - "data"
         - "master"

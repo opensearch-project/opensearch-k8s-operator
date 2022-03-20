@@ -25,10 +25,6 @@ const (
 
 func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.StatefulSet {
 	disk := fmt.Sprint(node.DiskSize)
-	cpuLimit := node.Cpu
-	memLimit := node.Memory
-	cpuReq := node.Cpu
-	memReq := node.Memory
 
 	availableRoles := []string{
 		"master",
@@ -193,18 +189,9 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 								},
 							},
 
-							Name:  cr.Name,
-							Image: DockerImageForCluster(cr),
-							Resources: corev1.ResourceRequirements{
-								Limits: corev1.ResourceList{
-									"cpu":    resource.MustParse(cpuLimit),
-									"memory": resource.MustParse(memLimit),
-								},
-								Requests: corev1.ResourceList{
-									"cpu":    resource.MustParse(cpuReq),
-									"memory": resource.MustParse(memReq),
-								},
-							},
+							Name:      cr.Name,
+							Image:     DockerImageForCluster(cr),
+							Resources: node.Resources,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
