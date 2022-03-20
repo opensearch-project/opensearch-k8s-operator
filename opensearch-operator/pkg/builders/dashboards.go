@@ -14,7 +14,7 @@ import (
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
 func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *sts.Deployment {
-	var replicas int32 = 1
+	var replicas int32 = cr.Spec.Dashboards.Replicas
 	var port int32 = 5601
 	var mode int32 = 420
 	resources := cr.Spec.Dashboards.Resources

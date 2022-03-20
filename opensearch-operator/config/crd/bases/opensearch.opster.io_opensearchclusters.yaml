@@ -65,6 +65,9 @@ spec:
                           TODO: Add other useful fields. apiVersion, kind, uid?'
                         type: string
                     type: object
+                  replicas:
+                    format: int32
+                    type: integer
                   resources:
                     description: ResourceRequirements describes the compute resource
                       requirements.
@@ -123,6 +126,8 @@ spec:
                             type: string
                         type: object
                     type: object
+                required:
+                - replicas
                 type: object
               general:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
