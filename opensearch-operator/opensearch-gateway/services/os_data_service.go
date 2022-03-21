@@ -127,3 +127,60 @@ func createClusterSettingsAllocationEnable(enable ClusterSettingsAllocation) res
 		},
 	}}
 }
+
+func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bool, error) {
+	health, err := service.CatHealth()
+	if err != nil {
+		return false, err
+	}
+
+	if health.Status == "green" {
+		return true, nil
+	}
+
+	if drainNodes {
+		return false, nil
+	}
+
+	flatSettings, err := service.GetFlatClusterSettings()
+	if err != nil {
+		return false, err
+	}
+
+	if flatSettings.Transient.ClusterRoutingAllocationEnable == string(ClusterSettingsAllocationAll) {
+		return false, nil
+	}
+
+	// Set shard routing to all
+	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationAll); err != nil {
+		return false, err
+	}
+
+	return false, nil
+}
+
+func PreparePodForDelete(service *OsClusterClient, podName string, drainNode bool) (bool, error) {
+	if drainNode {
+		// If we are draining nodes then drain the working node
+		_, err := AppendExcludeNodeHost(service, podName)
+		if err != nil {
+			return false, err
+		}
+
+		// Check if there are any shards on the node
+		nodeNotEmpty, err := HasShardsOnNode(service, podName)
+		if err != nil {
+			return false, err
+		}
+		// If the node isn't empty requeue to wait for shards to drain
+		if nodeNotEmpty {
+			return false, nil
+		}
+		return true, nil
+	}
+	// Update cluster routing before deleting appropriate ordinal pod
+	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationPrimaries); err != nil {
+		return false, err
+	}
+	return true, nil
+}

@@ -14,7 +14,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
@@ -297,40 +296,11 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 		return err
 	}
 
-	// If not all nodes are ready requeue
-	if sts.Status.ReadyReplicas != sts.Status.Replicas {
-		return nil
-	}
-
-	// Check cluster health
-	health, err := r.osClient.CatHealth()
+	ready, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.DrainDataNodes())
 	if err != nil {
 		return err
 	}
-
-	if health.Status != "green" {
-		// If we are draining nodes we don't need to worry about allocation
-		if r.instance.Spec.DrainDataNodes() {
-			return nil
-		}
-
-		// Check cluster shard routing
-		flatSettings, err := r.osClient.GetFlatClusterSettings()
-		if err != nil {
-			return err
-		}
-
-		// If shard routing is all return and requeue
-		if flatSettings.Transient.ClusterRoutingAllocationEnable == string(services.ClusterSettingsAllocationAll) {
-			return nil
-		}
-
-		// Set shard routing to all
-		if err := services.SetClusterShardAllocation(r.osClient, services.ClusterSettingsAllocationAll); err != nil {
-			return err
-		}
-
-		// return and requeue
+	if !ready {
 		return nil
 	}
 
@@ -357,35 +327,19 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 		})
 	}
 
-	deleteOrdinal := pointer.Int32Deref(sts.Spec.Replicas, 1) - 1 - sts.Status.UpdatedReplicas
-	lastReplicaNodeName := builders.ReplicaHostName(*sts, deleteOrdinal)
+	workingPod := builders.WorkingPodForRollingRestart(sts)
 
-	if r.instance.Spec.DrainDataNodes() {
-		// If we are draining nodes then drain the working node
-		_, err = services.AppendExcludeNodeHost(r.osClient, lastReplicaNodeName)
-		if err != nil {
-			return err
-		}
-
-		// Check if there are any shards on the node
-		nodeNotEmpty, err := services.HasShardsOnNode(r.osClient, lastReplicaNodeName)
-		if err != nil {
-			return err
-		}
-		// If the node isn't empty requeue to wait for shards to drain
-		if nodeNotEmpty {
-			return nil
-		}
-	} else {
-		// Update cluster routing before deleting appropriate ordinal pod
-		if err := services.SetClusterShardAllocation(r.osClient, services.ClusterSettingsAllocationPrimaries); err != nil {
-			return err
-		}
+	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.DrainDataNodes())
+	if err != nil {
+		return err
+	}
+	if !ready {
+		return nil
 	}
 
 	err = r.Delete(r.ctx, &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      lastReplicaNodeName,
+			Name:      workingPod,
 			Namespace: sts.Namespace,
 		},
 	})
@@ -395,7 +349,7 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 
 	// If we are draining nodes remove the exclusion after the pod is deleted
 	if r.instance.Spec.DrainDataNodes() {
-		_, err = services.RemoveExcludeNodeHost(r.osClient, lastReplicaNodeName)
+		_, err = services.RemoveExcludeNodeHost(r.osClient, workingPod)
 		return err
 	}
 

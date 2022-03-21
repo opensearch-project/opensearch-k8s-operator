@@ -508,6 +508,11 @@ func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
 }
 
+func WorkingPodForRollingRestart(sts *appsv1.StatefulSet) string {
+	ordinal := pointer.Int32Deref(sts.Spec.Replicas, 1) - 1 - sts.Status.UpdatedReplicas
+	return ReplicaHostName(*sts, ordinal)
+}
+
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
 	for _, nodepool := range nodepools {
 		if sts.Labels[NodePoolLabel] == nodepool.Component {

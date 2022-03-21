@@ -5,7 +5,7 @@ import (
 	"errors"
 	"reflect"
 
-	sts "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,7 +21,7 @@ func ContainsString(slice []string, s string) bool {
 
 }
 
-func GetField(v *sts.StatefulSetSpec, field string) interface{} {
+func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 
 	r := reflect.ValueOf(v)
 	f := reflect.Indirect(r).FieldByName(field).Interface()
