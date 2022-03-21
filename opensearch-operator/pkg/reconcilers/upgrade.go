@@ -174,8 +174,8 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 	}
 
 	// Don't allow more than one major version upgrade
-	nextMajor := existing.IncMajor()
-	upgradeConstraint, err := semver.NewConstraint(fmt.Sprintf("^%s", nextMajor.String()))
+	nextMajor := existing.IncMajor().IncMajor()
+	upgradeConstraint, err := semver.NewConstraint(fmt.Sprintf("< %s", nextMajor.String()))
 	if err != nil {
 		return err
 	}
