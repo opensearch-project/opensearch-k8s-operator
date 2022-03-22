@@ -23,7 +23,7 @@ spec:
     serviceName: my-first-cluster
   dashboards:
     enable: true
-    replicas: 2
+    replicas: 1
     resources:
       requests:
          memory: "512Mi"

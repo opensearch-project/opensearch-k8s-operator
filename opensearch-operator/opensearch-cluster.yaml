@@ -11,7 +11,7 @@ spec:
     serviceName: my-cluster
   dashboards:
     enable: true
-    replicas: 2
+    replicas: 1
     resources:
       requests:
          memory: "1Gi"
