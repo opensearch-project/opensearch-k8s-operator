@@ -45,6 +45,7 @@ var _ = Describe("Cluster Reconciler", func() {
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
 		})
+
 	})
 
 	/// ------- Tests logic Check phase -------
@@ -66,6 +67,14 @@ var _ = Describe("Cluster Reconciler", func() {
 				return true
 			}, timeout, interval).Should(BeTrue())
 		})
+
+		It("should apply the right cluster resources successfully", func() {
+			for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
+				Expect(nodePoolSpec.Resources.Limits.Cpu()).Should(Equal("500m"))
+				Expect(nodePoolSpec.Resources.Limits.Memory()).Should(Equal("2Gi"))
+			}
+		})
+
 		It("should set correct owner references", func() {
 			service := corev1.Service{}
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: OpensearchCluster.Spec.General.ServiceName}, &service)).To(Succeed())
