@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"path"
-	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -17,18 +16,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-func CreateInitMasters(cr *opsterv1.OpenSearchCluster) string {
-	var masters []string
-	for _, nodePool := range cr.Spec.NodePools {
-		if ContainsString(nodePool.Roles, "master") {
-			for i := 0; int32(i) < nodePool.Replicas; i++ {
-				masters = append(masters, fmt.Sprintf("%s-%s-%d", cr.Name, nodePool.Component, i))
-			}
-		}
-	}
-	return strings.Join(masters, ",")
-}
 
 func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
 	field_env := GetField(from_env, text)
@@ -89,26 +76,30 @@ func ReadOrGenerateCaCert(pki tls.PKI, k8sClient client.Client, ctx context.Cont
 	return ca, nil
 }
 
-func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool opsterv1.NodePool) (result opsterv1.ImageSpec) {
+func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (result opsterv1.ImageSpec) {
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch"
 
 	var version string
 
 	// Calculate version based on upgrading status
-	componentStatus := opsterv1.ComponentStatus{
-		Component:   "Upgrader",
-		Description: nodePool.Component,
-	}
-	_, found := FindFirstPartial(cr.Status.ComponentsStatus, componentStatus, GetByDescriptionAndGroup)
-
-	if cr.Status.Version == "" || cr.Status.Version == cr.Spec.General.Version {
+	if nodePool == nil {
 		version = cr.Spec.General.Version
 	} else {
-		if found {
+		componentStatus := opsterv1.ComponentStatus{
+			Component:   "Upgrader",
+			Description: nodePool.Component,
+		}
+		_, found := FindFirstPartial(cr.Status.ComponentsStatus, componentStatus, GetByDescriptionAndGroup)
+
+		if cr.Status.Version == "" || cr.Status.Version == cr.Spec.General.Version {
 			version = cr.Spec.General.Version
 		} else {
-			version = cr.Status.Version
+			if found {
+				version = cr.Spec.General.Version
+			} else {
+				version = cr.Status.Version
+			}
 		}
 	}
 

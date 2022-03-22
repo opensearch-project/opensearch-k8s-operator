@@ -180,6 +180,7 @@ type ClusterStatus struct {
 	Phase            string            `json:"phase,omitempty"`
 	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
 	Version          string            `json:"version,omitempty"`
+	Initialized      bool              `json:"initialized,omitempty"`
 }
 
 //+kubebuilder:object:root=true

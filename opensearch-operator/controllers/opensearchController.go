@@ -24,12 +24,15 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/reconcilers"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,6 +58,7 @@ type OpenSearchClusterReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;create;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
@@ -143,6 +147,12 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opsterv1.OpenSearchCluster{}).
+		Owns(&corev1.Pod{}).
+		Owns(&corev1.Secret{}).
+		Owns(&corev1.ConfigMap{}).
+		Owns(&corev1.Service{}).
+		Owns(&appsv1.Deployment{}).
+		Owns(&appsv1.StatefulSet{}).
 		Complete(r)
 }
 
@@ -228,6 +238,16 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context) (ctrl.Result, error) {
+	// Update initialized status first
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
+			return err
+		}
+		r.Instance.Status.Initialized = builders.AllMastersReady(ctx, r.Client, r.Instance)
+		return r.Status().Update(ctx, r.Instance)
+	}); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	// Run through all sub controllers to create or update all needed objects
 	reconcilerContext := reconcilers.NewReconcilerContext()

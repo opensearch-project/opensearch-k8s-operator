@@ -63,6 +63,14 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.Scheme()))
 	result.Combine(r.ReconcileResource(passwordSecret, reconciler.StatePresent))
 
+	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.Scheme()))
+	if r.instance.Status.Initialized {
+		result.Combine(r.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
+	} else {
+		result.Combine(r.ReconcileResource(bootstrapPod, reconciler.StatePresent))
+	}
+
 	for _, nodePool := range r.instance.Spec.NodePools {
 		headlessService := builders.NewHeadlessServiceForNodePool(r.instance, &nodePool)
 		result.CombineErr(ctrl.SetControllerReference(r.instance, headlessService, r.Client.Scheme()))
