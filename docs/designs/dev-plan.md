@@ -24,3 +24,4 @@ Here are the steps arranged by priority:
 2. Advanced shards allocation strategies
 3. Automatic scaler
 4. Snapshot and restore
+5. Roles and users CRDs
