@@ -13,11 +13,11 @@ Here are the steps arranged by priority:
 7. Security service - Done
 8. Monitoring service, build-in prometheus exporter - In progress
 9. Rolling upgrade - In progress
-10. Cluster resources reconciler (Disk, CPU and Memory) - TODO
-11. Cluster configuration reconciler (for opensearch.yaml configs) - TODO
+10. Cluster resources reconciler (Disk, CPU and Memory) - In progress
+11. Documentation (internal design and user guides) - In progress
 12. Release automations and process (ECR, operatorshub, github) - In progress
 13. Rolling restarts - for user requests - TODO.
-14. Documentation (internal design and user guides) - In progress
+15. Cluster configuration reconciler (for opensearch.yaml configs) - TODO
 
 # Phase 2
 1. OpenSearch Operator CLI
