@@ -70,8 +70,8 @@ var _ = Describe("Cluster Reconciler", func() {
 
 		It("should apply the right cluster resources successfully", func() {
 			for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
-				Expect(nodePoolSpec.Resources.Limits.Cpu()).Should(Equal("500m"))
-				Expect(nodePoolSpec.Resources.Limits.Memory()).Should(Equal("2Gi"))
+				Expect(nodePoolSpec.Resources.Limits.Cpu().String()).Should(Equal("500m"))
+				Expect(nodePoolSpec.Resources.Limits.Memory().String()).Should(Equal("2Gi"))
 			}
 		})
 
