@@ -60,6 +60,7 @@ type OpenSearchClusterReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;create;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=events,verbs=create;update;patch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -239,14 +240,16 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 
 func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context) (ctrl.Result, error) {
 	// Update initialized status first
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
-			return err
+	if !r.Instance.Status.Initialized {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
+				return err
+			}
+			r.Instance.Status.Initialized = builders.AllMastersReady(ctx, r.Client, r.Instance)
+			return r.Status().Update(ctx, r.Instance)
+		}); err != nil {
+			return ctrl.Result{}, err
 		}
-		r.Instance.Status.Initialized = builders.AllMastersReady(ctx, r.Client, r.Instance)
-		return r.Status().Update(ctx, r.Instance)
-	}); err != nil {
-		return ctrl.Result{}, err
 	}
 
 	// Run through all sub controllers to create or update all needed objects

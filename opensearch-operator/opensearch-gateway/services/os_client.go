@@ -15,6 +15,23 @@ import (
 	"opensearch.opster.io/opensearch-gateway/responses"
 )
 
+var (
+	AdditionalSystemIndices = []string{
+		".opendistro-alerting-config",
+		".opendistro-alerting-alert*",
+		".opendistro-anomaly-results*",
+		".opendistro-anomaly-detector*",
+		".opendistro-anomaly-checkpoints",
+		".opendistro-anomaly-detection-state",
+		".opendistro-reports-*",
+		".opendistro-notifications-*",
+		".opendistro-notebooks",
+		".opensearch-observability",
+		".opendistro-asynchronous-search-response*",
+		".replication-metadata-store",
+	}
+)
+
 type OsClusterClient struct {
 	client   *opensearch.Client
 	MainPage responses.MainResponse
@@ -60,8 +77,8 @@ func MainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	return response, err
 }
 
-func (client *OsClusterClient) CatHealth() (responses.CatHealthResponse, error) {
-	req := opensearchapi.CatHealthRequest{Format: "json"}
+func (client *OsClusterClient) GetHealth() (responses.CatHealthResponse, error) {
+	req := opensearchapi.ClusterHealthRequest{}
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.CatHealthResponse
 	if err == nil {
@@ -105,8 +122,53 @@ func (client *OsClusterClient) CatIndices() ([]responses.CatIndicesResponse, err
 	return response, err
 }
 
+func (client *OsClusterClient) CatSystemIndices() ([]responses.CatIndicesResponse, error) {
+	systemIndices := []string{
+		".kibana_1",
+		".opendistro_security",
+	}
+	systemIndices = append(systemIndices, AdditionalSystemIndices...)
+
+	req := opensearchapi.CatIndicesRequest{
+		Index:           systemIndices,
+		ExpandWildcards: "all",
+		Format:          "json",
+	}
+
+	indicesRes, err := req.Do(context.Background(), client.client)
+	var response []responses.CatIndicesResponse
+	if err != nil {
+		return response, err
+	}
+	defer indicesRes.Body.Close()
+	err = json.NewDecoder(indicesRes.Body).Decode(&response)
+	return response, err
+}
+
 func (client *OsClusterClient) CatShards(headers []string) ([]responses.CatShardsResponse, error) {
 	req := opensearchapi.CatShardsRequest{Format: "json", H: headers}
+	indicesRes, err := req.Do(context.Background(), client.client)
+	var response []responses.CatShardsResponse
+	if err != nil {
+		return response, err
+	}
+	defer indicesRes.Body.Close()
+	err = json.NewDecoder(indicesRes.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) CatSystemShards(headers []string) ([]responses.CatShardsResponse, error) {
+	systemIndices := []string{
+		".kibana_1",
+		".opendistro_security",
+	}
+	systemIndices = append(systemIndices, AdditionalSystemIndices...)
+
+	req := opensearchapi.CatShardsRequest{
+		Index:  systemIndices,
+		Format: "json",
+		H:      headers,
+	}
 	indicesRes, err := req.Do(context.Background(), client.client)
 	var response []responses.CatShardsResponse
 	if err != nil {

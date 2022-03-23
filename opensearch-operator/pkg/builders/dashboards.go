@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 )
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
@@ -18,6 +19,9 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 	var port int32 = 5601
 	var mode int32 = 420
 	resources := cr.Spec.Dashboards.Resources
+
+	image := helpers.ResolveDashboardsImage(cr)
+
 	volumes = append(volumes, corev1.Volume{
 		Name: "dashboards-config",
 		VolumeSource: corev1.VolumeSource{
@@ -90,10 +94,10 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 					Volumes: volumes,
 					Containers: []corev1.Container{
 						{
-							Name: "dashboards",
-							//	Image: "docker.elastic.co/kibana/kibana:" + cr.Spec.General.Version,
-							Image:     "opensearchproject/opensearch-dashboards:1.0.0",
-							Resources: resources,
+							Name:            "dashboards",
+							Image:           image.GetImage(),
+							ImagePullPolicy: image.GetImagePullPolicy(),
+							Resources:       resources,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
@@ -106,6 +110,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 							VolumeMounts:  volumeMounts,
 						},
 					},
+					ImagePullSecrets: image.ImagePullSecrets,
 				},
 			},
 		},

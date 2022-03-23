@@ -10,7 +10,9 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/types"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
 )
@@ -29,9 +31,10 @@ var _ = Describe("Cluster Reconciler", func() {
 		consistently = time.Second * 10
 	)
 	var (
-		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace)
-		nodePool          = appsv1.StatefulSet{}
-		service           = corev1.Service{}
+		OpensearchCluster      = ComposeOpensearchCrd(clusterName, namespace)
+		nodePool               = appsv1.StatefulSet{}
+		service                = corev1.Service{}
+		preUpgradeStatusLength int
 	)
 
 	/// ------- Creation Check phase -------
@@ -78,6 +81,70 @@ var _ = Describe("Cluster Reconciler", func() {
 			}
 		})
 
+		It("should create a bootstrap pod", func() {
+			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      bootstrapName,
+					Namespace: OpensearchCluster.Namespace,
+				}, &corev1.Pod{})
+			}, timeout, interval).Should(Succeed())
+			wg := sync.WaitGroup{}
+			for _, nodePool := range OpensearchCluster.Spec.NodePools {
+				wg.Add(1)
+				By(fmt.Sprintf("checking %s nodepool initial master", nodePool.Component))
+				go func(nodePool opsterv1.NodePool) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					Eventually(func() []corev1.EnvVar {
+						sts := &appsv1.StatefulSet{}
+						if err := k8sClient.Get(context.Background(), types.NamespacedName{
+							Namespace: OpensearchCluster.Namespace,
+							Name:      clusterName + "-" + nodePool.Component,
+						}, sts); err != nil {
+							return []corev1.EnvVar{}
+						}
+						return sts.Spec.Template.Spec.Containers[0].Env
+					}, timeout, interval).Should(ContainElement(corev1.EnvVar{
+						Name:  "cluster.initial_master_nodes",
+						Value: bootstrapName,
+					}))
+				}(nodePool)
+			}
+			wg.Wait()
+		})
+		It("should create a discovery service", func() {
+			discoveryName := fmt.Sprintf("%s-discovery", OpensearchCluster.Name)
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      discoveryName,
+					Namespace: OpensearchCluster.Namespace,
+				}, &corev1.Service{})
+			}, timeout, interval).Should(Succeed())
+			wg := sync.WaitGroup{}
+			for _, nodePool := range OpensearchCluster.Spec.NodePools {
+				wg.Add(1)
+				By(fmt.Sprintf("checking %s nodepool initial master", nodePool.Component))
+				go func(nodePool opsterv1.NodePool) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					Eventually(func() []corev1.EnvVar {
+						sts := &appsv1.StatefulSet{}
+						if err := k8sClient.Get(context.Background(), types.NamespacedName{
+							Namespace: OpensearchCluster.Namespace,
+							Name:      clusterName + "-" + nodePool.Component,
+						}, sts); err != nil {
+							return []corev1.EnvVar{}
+						}
+						return sts.Spec.Template.Spec.Containers[0].Env
+					}, timeout, interval).Should(ContainElement(corev1.EnvVar{
+						Name:  "discovery.seed_hosts",
+						Value: discoveryName,
+					}))
+				}(nodePool)
+			}
+			wg.Wait()
+		})
 		It("should set correct owner references", func() {
 			service := corev1.Service{}
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: OpensearchCluster.Spec.General.ServiceName}, &service)).To(Succeed())
@@ -165,6 +232,7 @@ var _ = Describe("Cluster Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return err
 				}
+				preUpgradeStatusLength = len(OpensearchCluster.Status.ComponentsStatus)
 				OpensearchCluster.Status.ComponentsStatus = append(OpensearchCluster.Status.ComponentsStatus, status)
 				return k8sClient.Status().Update(context.Background(), &OpensearchCluster)
 			}()).To(Succeed())
@@ -182,6 +250,68 @@ var _ = Describe("Cluster Reconciler", func() {
 				}
 				return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.1.0"
 			}, timeout, interval).Should(BeTrue())
+		})
+	})
+	When("a cluster is upgraded", func() {
+		Specify("updating the status should succeed", func() {
+			currentStatus := opsterv1.ComponentStatus{
+				Component:   "Upgrader",
+				Status:      "Upgrading",
+				Description: "nodes",
+			}
+			componentStatus := opsterv1.ComponentStatus{
+				Component:   "Upgrader",
+				Status:      "Upgraded",
+				Description: "nodes",
+			}
+			masterComponentStatus := opsterv1.ComponentStatus{
+				Component:   "Upgrader",
+				Status:      "Upgraded",
+				Description: "master",
+			}
+			Expect(func() error {
+				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
+					return err
+				}
+				OpensearchCluster.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, OpensearchCluster.Status.ComponentsStatus)
+				OpensearchCluster.Status.ComponentsStatus = append(OpensearchCluster.Status.ComponentsStatus, masterComponentStatus)
+				return k8sClient.Status().Update(context.Background(), &OpensearchCluster)
+			}()).To(Succeed())
+		})
+		It("should cleanup the status", func() {
+			Eventually(func() bool {
+				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
+					return false
+				}
+				return len(OpensearchCluster.Status.ComponentsStatus) == preUpgradeStatusLength
+			}, timeout, interval)
+			Eventually(func() bool {
+				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
+					return false
+				}
+				return OpensearchCluster.Status.Version == "1.1.0"
+			}, timeout, interval)
+		})
+		It("should update all the node pools", func() {
+			wg := sync.WaitGroup{}
+			for _, nodePool := range OpensearchCluster.Spec.NodePools {
+				wg.Add(1)
+				go func(nodePool opsterv1.NodePool) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					Eventually(func() bool {
+						sts := &appsv1.StatefulSet{}
+						if err := k8sClient.Get(context.Background(), types.NamespacedName{
+							Namespace: OpensearchCluster.Namespace,
+							Name:      clusterName + "-" + nodePool.Component,
+						}, sts); err != nil {
+							return false
+						}
+						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.1.0"
+					}, timeout, interval).Should(BeTrue())
+				}(nodePool)
+			}
+			wg.Wait()
 		})
 	})
 })

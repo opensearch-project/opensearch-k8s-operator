@@ -153,7 +153,7 @@ func NewSTSForNodePool(
 				Command: []string{
 					"/bin/bash",
 					"-c",
-					"curl -k -u ${OS_USER}:${OS_PASSWORD} --silent --fail https://localhost:9200",
+					"curl -k -u ${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD} --silent --fail https://localhost:9200",
 				},
 			},
 		},
@@ -222,11 +222,11 @@ func NewSTSForNodePool(
 									Value: strings.Join(selectedRoles, ","),
 								},
 								{
-									Name:  "OS_USER",
+									Name:  "OPENSEARCH_USER",
 									Value: username,
 								},
 								{
-									Name: "OS_PASSWORD",
+									Name: "OPENSEARCH_PASSWORD",
 									ValueFrom: &corev1.EnvVarSource{
 										SecretKeyRef: &corev1.SecretKeySelector{
 											LocalObjectReference: corev1.LocalObjectReference{
@@ -241,6 +241,7 @@ func NewSTSForNodePool(
 							Name:            "opensearch",
 							Image:           image.GetImage(),
 							ImagePullPolicy: image.GetImagePullPolicy(),
+							Resources:       node.Resources,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",
@@ -731,4 +732,20 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 		}
 	}
 	return true
+}
+
+func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) int32 {
+	count := int32(0)
+	for _, nodePool := range cr.Spec.NodePools {
+		if helpers.ContainsString(nodePool.Roles, "data") {
+			sts := &appsv1.StatefulSet{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      StsName(cr, &nodePool),
+				Namespace: cr.Namespace,
+			}, sts); err == nil {
+				count = count + pointer.Int32Deref(sts.Spec.Replicas, 1)
+			}
+		}
+	}
+	return count
 }

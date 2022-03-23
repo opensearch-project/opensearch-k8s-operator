@@ -24,12 +24,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/onsi/gomega/gexec"
-	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/onsi/gomega/gexec"
+	"k8s.io/client-go/tools/record"
+	opsterv1 "opensearch.opster.io/api/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -68,9 +69,6 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-
-	var recorder record.EventRecorder
-
 	//OpensearchCluster := ComposeOpensearchCrd("cluster-test", "default")
 
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
@@ -109,7 +107,7 @@ var _ = BeforeSuite(func() {
 		Client: k8sManager.GetClient(),
 		Scheme: scheme.Scheme,
 		//	Instance: &OpensearchCluster,
-		Recorder: recorder,
+		Recorder: record.NewFakeRecorder(20),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 

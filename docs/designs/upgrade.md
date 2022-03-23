@@ -44,11 +44,11 @@ The upgrade principals follow the recommendations for completing a rolling upgra
  - Master eligible nodes should be upgraded last
 
 We also include the additional logic:
- - The version should not be a downgrade (this is prevent unsupported states)
+ - The version should not be a downgrade (this is to prevent unsupported states)
  - The version should not jump more than one major version (again avoid unsupported states)
  - Nodes hosting shards (data nodes) should be upgraded first
- - If a data node will be retaining its persistent data during upgrade, shard allocation should be modified to prior to upgrade prevent any unnecessary shard relocations during the upgrade
- - If a data node will lose its persistent data during upgrade, i.e. it is using ephemral storage, it should be drained of shards prior to upgrade.
+ - If a data node will be retaining its persistent data during upgrade, shard allocation should be modified prior to upgrade to prevent any unnecessary shard relocations during the upgrade
+ - If a data node will lose its persistent data during upgrade, i.e. it is using ephemeral storage, it should be drained of shards prior to upgrade.
 
 ## Upgrade reconciler design
 

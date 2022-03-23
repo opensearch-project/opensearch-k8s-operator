@@ -128,6 +128,9 @@ spec:
                     type: object
                 required:
                 - replicas
+                  version:
+                    type: string
+                - version
                 type: object
               general:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster

@@ -68,7 +68,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 
 	// If version validation fails log a warning and do nothing
 	if err := r.validateUpgrade(); err != nil {
-		lg.V(1).Error(err, "version validation vailed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
+		lg.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
 		return ctrl.Result{}, err
 	}
 
@@ -78,7 +78,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Name), username, password)
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Namespace), username, password)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -287,6 +287,7 @@ func (r *UpgradeReconciler) findNextPool(pools []opsterv1.NodePool) (opsterv1.No
 
 func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 	// Fetch the STS
+	lg := log.FromContext(r.ctx).WithValues("reconciler", "scaler")
 	stsName := builders.StsName(r.instance, &pool)
 	sts := &appsv1.StatefulSet{}
 	if err := r.Get(r.ctx, types.NamespacedName{
@@ -294,6 +295,11 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 		Namespace: r.instance.Namespace,
 	}, sts); err != nil {
 		return err
+	}
+
+	dataCount := builders.DataNodesCount(r.ctx, r.Client, r.instance)
+	if dataCount == 2 && r.instance.Spec.DrainDataNodes() {
+		lg.Info("only 2 data nodes and drain is set, some shards may not drain")
 	}
 
 	ready, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.DrainDataNodes())
@@ -329,7 +335,7 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 
 	workingPod := builders.WorkingPodForRollingRestart(sts)
 
-	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.DrainDataNodes())
+	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.DrainDataNodes(), dataCount)
 	if err != nil {
 		return err
 	}

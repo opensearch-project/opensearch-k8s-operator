@@ -128,3 +128,33 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 		path.Join(defaultRepo, defaultImage), version))
 	return
 }
+
+func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
+	defaultRepo := "docker.io/opensearchproject"
+	defaultImage := "opensearch-dashboards"
+
+	// If a custom image is specified, use it.
+	if cr.Spec.General.Image != nil {
+		if cr.Spec.General.Image.ImagePullPolicy != nil {
+			result.ImagePullPolicy = cr.Spec.General.Image.ImagePullPolicy
+		}
+		if len(cr.Spec.General.Image.ImagePullSecrets) > 0 {
+			result.ImagePullSecrets = cr.Spec.General.Image.ImagePullSecrets
+		}
+		if cr.Spec.General.Image.Image != nil {
+			// If image is set, nothing else needs to be done
+			result.Image = cr.Spec.General.Image.Image
+			return
+		}
+	}
+
+	// If a different image repo is requested, use that with the default image
+	// name and version tag.
+	if cr.Spec.General.DefaultRepo != nil {
+		defaultRepo = *cr.Spec.General.DefaultRepo
+	}
+
+	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+		path.Join(defaultRepo, defaultImage), cr.Spec.Dashboards.Version))
+	return
+}
