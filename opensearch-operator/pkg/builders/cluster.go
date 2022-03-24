@@ -189,8 +189,9 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 								},
 							},
 
-							Name:  cr.Name,
-							Image: DockerImageForCluster(cr),
+							Name:      cr.Name,
+							Image:     DockerImageForCluster(cr),
+							Resources: node.Resources,
 							Ports: []corev1.ContainerPort{
 								{
 									Name:          "http",

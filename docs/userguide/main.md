@@ -23,16 +23,30 @@ spec:
     serviceName: my-first-cluster
   dashboards:
     enable: true
+    replicas: 1
+    resources:
+      requests:
+         memory: "512Mi"
+         cpu: "200m"
+      limits:
+         memory: "512Mi"
+         cpu: "200m"
   nodePools:
     - component: masters
       replicas: 3
       diskSize: 30
       NodeSelector:
-      cpu: 1
-      memory: 1
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
       roles:
-        - "master"
         - "data"
+        - "master"
+
 ```
 
 Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`) you will see that after a few seconds the operator will create several pods: Three pods for the opensearch cluster (`my-first-cluster-masters-0/1/2`) and one pod for the dashboards instance. After the pods are showing ready (normally takes about 1-2 minutes) you can connect to your cluster using port-forwarding:

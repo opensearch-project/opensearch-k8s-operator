@@ -5,6 +5,8 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -110,8 +112,11 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Component: "master",
 				Replicas:  3,
 				DiskSize:  32,
-				Cpu:       4,
-				Memory:    16,
+				Resources: corev1.ResourceRequirements{
+					Limits: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("500m"),
+						v1.ResourceMemory: resource.MustParse("2Gi"),
+					}},
 				Roles: []string{
 					"master",
 					"data",
@@ -119,16 +124,22 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Component: "nodes",
 				Replicas:  3,
 				DiskSize:  32,
-				Cpu:       4,
-				Memory:    16,
+				Resources: corev1.ResourceRequirements{
+					Limits: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("500m"),
+						v1.ResourceMemory: resource.MustParse("2Gi"),
+					}},
 				Roles: []string{
 					"data",
 				}}, {
 				Component: "client",
 				Replicas:  3,
 				DiskSize:  32,
-				Cpu:       4,
-				Memory:    16,
+				Resources: corev1.ResourceRequirements{
+					Limits: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("500m"),
+						v1.ResourceMemory: resource.MustParse("2Gi"),
+					}},
 				Roles: []string{
 					"data",
 					"ingest",
