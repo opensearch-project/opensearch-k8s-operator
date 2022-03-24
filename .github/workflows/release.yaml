@@ -17,20 +17,23 @@ jobs:
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
           echo "LATE_IMG=public.ecr.aws/opsterio/opense arch-operator:latest" >> $GITHUB_ENV
-      - name: set aws certs
-        run: |
-          export AWS_ACCESS_KEY_ID=$AWS_ACCESS_KEY_ID
-          export AWS_SECRET_ACCESS_KEY=$AWS_SECRET_ACCESS_KEY
-          export AWS_REGION=$AWS_DEFAULT_REGION
       - name: Test
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
         run: |
           echo $RELEASE_VERSION
           echo ${{ env.RELEASE_VERSION }}
           echo "IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION" >> $GITHUB_ENV
           echo $AWS_ACCESS_KEY_ID
-          echo $AWS_DEFAULT_REGION
+          echo $AWS_REGION
           echo $AWS_SECRET_ACCESS_KEY
       - name: Build Release
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
         run: |
           cd opensearch-operator
           go version
