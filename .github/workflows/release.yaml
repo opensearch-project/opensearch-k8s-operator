@@ -5,7 +5,8 @@ on:
 jobs:
   docker-build:
     runs-on: ubuntu-latest
-    environment: k8s-operator
+    environment:
+      name: k8s-operator
     container:
       image: public.ecr.aws/opsterio/go.1.17:with-aws-cli
     name: Docker Build
