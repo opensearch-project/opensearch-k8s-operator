@@ -61,7 +61,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 				}(),
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(disk),
+						corev1.ResourceStorage: resource.MustParse(disk + "Gi"),
 					},
 				},
 				StorageClassName: func() *string {
