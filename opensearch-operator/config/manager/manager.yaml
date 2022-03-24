@@ -29,28 +29,28 @@ spec:
         - /manager
         args:
         - --leader-elect
-        image: controller:latest
+        image: public.ecr.aws/opsterio/opensearch-operator:latest
         name: manager
         securityContext:
           allowPrivilegeEscalation: false
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8081
-          initialDelaySeconds: 15
-          periodSeconds: 20
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8081
-          initialDelaySeconds: 5
-          periodSeconds: 10
+#        livenessProbe:
+#          httpGet:
+#            path: /healthz
+#            port: 8081
+#          initialDelaySeconds: 15
+#          periodSeconds: 20
+#        readinessProbe:
+#          httpGet:
+#            path: /readyz
+#            port: 8081
+#          initialDelaySeconds: 5
+#          periodSeconds: 10
         resources:
           limits:
-            cpu: 100m
-            memory: 30Mi
+            cpu: 2
+            memory: 2Gi
           requests:
-            cpu: 100m
-            memory: 20Mi
+            cpu: 2
+            memory: 2Gi
       serviceAccountName: controller-manager
       terminationGracePeriodSeconds: 10
