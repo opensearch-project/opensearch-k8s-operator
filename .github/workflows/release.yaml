@@ -22,7 +22,7 @@ jobs:
           echo $RELEASE_VERSION
           echo ${{ env.RELEASE_VERSION }}
           echo "IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION" >> $GITHUB_ENV
-      - name: Build Release
+      - name: Build and Push Release
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
