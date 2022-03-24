@@ -33,7 +33,3 @@ jobs:
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
           make docker-build
           make docker-push
-  push:
-    runs-on: ubuntu-latest
-    container:
-      image: public.ecr.aws/opsterio/go.1.17
