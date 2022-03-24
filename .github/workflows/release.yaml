@@ -24,7 +24,7 @@ jobs:
           echo "IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION" >> $GITHUB_ENV
           echo $AWS_ACCESS_KEY_ID
           echo $AWS_DEFAULT_REGION
-          echo &AWS_SECRET_ACCESS_KEY
+          echo $AWS_SECRET_ACCESS_KEY
       - name: Build Release
         run: |
           cd opensearch-operator
