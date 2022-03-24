@@ -1,0 +1,30 @@
+name: "Publish Release"
+on:
+  release:
+    types: [published]
+jobs:
+  docker-build:
+    runs-on: ubuntu-latest
+    container:
+      image: public.ecr.aws/opsterio/go.1.17
+    name: Docker Build
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: set Env
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION" >> $GITHUB_ENV
+      - name: Test
+        run: |
+          echo $RELEASE_VERSION
+          echo ${{ env.RELEASE_VERSION }}
+      - name: docker build
+        run: |
+          cd opensearch-operator
+          go version
+          go env
+          go get opensearch.opster.io/pkg/builders
+          go get opensearch.opster.io/pkg/helpers
+          make docker-build
+          make docker-push
