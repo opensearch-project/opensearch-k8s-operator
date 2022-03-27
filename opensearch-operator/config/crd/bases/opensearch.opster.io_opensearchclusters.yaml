@@ -126,10 +126,10 @@ spec:
                             type: string
                         type: object
                     type: object
-                required:
-                - replicas
                   version:
                     type: string
+                required:
+                - replicas
                 - version
                 type: object
               general:
