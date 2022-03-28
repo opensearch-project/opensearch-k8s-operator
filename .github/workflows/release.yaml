@@ -40,4 +40,4 @@ jobs:
           make docker-build
           make docker-push
           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION public.ecr.aws/opsterio/opensearch-operator:latest
-          docker push spublic.ecr.aws/opsterio/opensearch-operator:latest
+          docker push public.ecr.aws/opsterio/opensearch-operator:latest
