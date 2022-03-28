@@ -16,9 +16,9 @@ The project is currently a work in progress and is not (yet) recommended for use
 - [x] Drain strategy for scale down.
 - [ ] Cluster configurations and nodes' settings updates.
 - [ ] Rolling restarts - through API.
-- [ ] Version updates.
+- [x] Version updates.
 - [ ] Scaling nodes' disks - increase/replace disks.
-- [ ] Change nodes' memory allocation and limits.
+- [x] Change nodes' memory allocation and limits.
 - [ ] Control shard balancing and allocation.
 - [ ] Advanced allocation strategies: AZ/Rack awareness, Hot/Warm.
 - [x] Secured installation features.
