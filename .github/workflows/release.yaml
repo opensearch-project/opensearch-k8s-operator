@@ -39,3 +39,5 @@ jobs:
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
           make docker-build
           make docker-push
+          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION public.ecr.aws/opsterio/opensearch-operator:latest
+          docker push spublic.ecr.aws/opsterio/opensearch-operator:latest
