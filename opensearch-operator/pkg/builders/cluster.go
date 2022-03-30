@@ -24,7 +24,13 @@ const (
 )
 
 func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.StatefulSet {
-
+	//To make sure disksize is not passed as empty
+	var disksize string
+	if len(node.DiskSize) == 0 {
+		disksize = "30Gi"
+	} else {
+		disksize = node.DiskSize
+	}
 	availableRoles := []string{
 		"master",
 		"data",
@@ -60,7 +66,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 				}(),
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(node.DiskSize),
+						corev1.ResourceStorage: resource.MustParse(disksize),
 					},
 				},
 				StorageClassName: func() *string {
