@@ -1,0 +1,74 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+  namespace: default
+spec:
+  general:
+    httpPort: 9200
+    vendor: opensearch
+    version: latest
+    serviceName: my-cluster
+  dashboards:
+    enable: true
+    replicas: 2
+    resources:
+      requests:
+         memory: "1Gi"
+         cpu: "500m"
+      limits:
+         memory: "1Gi"
+         cpu: "500m"
+  confMgmt:
+    smartScaler: true
+  security:
+    config:
+      securityConfigSecret:
+##Pre create this secret with required roles and security configs
+       name: securityconfig-secret
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true
+  nodePools:
+    - component: masters
+      replicas: 1
+      diskSize: "30Gi"
+      NodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "master"
+        - "data"
+    - component: nodes
+      replicas: 1
+      diskSize: "100Gi"
+      NodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "data"
+    - component: coordinators
+      replicas: 1
+      diskSize: "100Gi"
+      NodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "ingest"

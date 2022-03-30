@@ -1043,8 +1043,7 @@ spec:
                     component:
                       type: string
                     diskSize:
-                      format: int32
-                      type: integer
+                      type: string
                     jvm:
                       type: string
                     nodeSelector:

@@ -45,7 +45,7 @@ type GeneralConfig struct {
 type NodePool struct {
 	Component    string                      `json:"component"`
 	Replicas     int32                       `json:"replicas"`
-	DiskSize     int32                       `json:"diskSize,omitempty"`
+	DiskSize     string                      `json:"diskSize,omitempty"`
 	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
 	Roles        []string                    `json:"roles"`

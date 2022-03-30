@@ -21,16 +21,10 @@ spec:
          cpu: "500m"
   confMgmt:
     smartScaler: true
-  security:
-    tls:
-      transport:
-        generate: true
-      http:
-        generate: true
   nodePools:
     - component: masters
-      replicas: 3
-      diskSize: 30
+      replicas: 1
+      diskSize: "30Gi"
       NodeSelector:
       resources:
          requests:
@@ -43,8 +37,8 @@ spec:
         - "master"
         - "data"
     - component: nodes
-      replicas: 3
-      diskSize: 100
+      replicas: 1
+      diskSize: "100Gi"
       NodeSelector:
       resources:
          requests:
@@ -56,8 +50,8 @@ spec:
       roles:
         - "data"
     - component: coordinators
-      replicas: 3
-      diskSize: 100
+      replicas: 1
+      diskSize: "100Gi"
       NodeSelector:
       resources:
          requests:

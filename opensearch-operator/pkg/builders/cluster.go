@@ -24,7 +24,6 @@ const (
 )
 
 func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.StatefulSet {
-	disk := fmt.Sprint(node.DiskSize)
 
 	availableRoles := []string{
 		"master",
@@ -61,7 +60,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 				}(),
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(disk + "Gi"),
+						corev1.ResourceStorage: resource.MustParse(node.DiskSize),
 					},
 				},
 				StorageClassName: func() *string {

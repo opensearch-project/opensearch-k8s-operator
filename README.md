@@ -27,20 +27,26 @@ The project is currently a work in progress and is not (yet) recommended for use
 # Getting Started
 ## Installing the Operator
 
-- Clone the repo
+- Clone the repo and go to `opensearch-operator`
 - Run `make build manifests` to build the controller binary and the manifests
 - Start a kubernetes cluster (e.g. with k3d or minikube) and make sure your `~/.kube/config` points to it
 - Run `make install` to create the CRD in the kubernetes cluster
 
 ## Deploying a new OpenSearch cluster
 
-Go to `opensearch-operator` and use `opensearch-cluster.yaml` as a starting point to define your cluster - note that the `clusterName` is also the namespace that the new cluster will reside in. Then run:
+Go to `opensearch-operator/examples` and use `opensearch-cluster.yaml` as a starting point to define your cluster - note that the `clusterName` is also the namespace that the new cluster will reside in. Then run:
 
 ```bash
 kubectl apply -f opensearch-cluster.yaml
 ```
 
 Note: the current installation deploys with the default demo certificate provided by OpenSearch.
+
+## Deploying a new OpenSearch clusterwith TLS and securityconfig setup
+
+Go to `opensearch-operator/examples` and install the secret `securityconfig-secret.yaml` and and use `opensearch-cluster-securityconfig.yaml` as a starting point to define your cluster - note that the `clusterName` is also the namespace that the new cluster will reside in. Then run:
+
+Note: the current installation deploys with the security config files passed in the `securityconfig-secret.yaml`, just refer `securityconfig-secret.yaml` as an example.
 
 ## Deleting an OpenSearch cluster
 
