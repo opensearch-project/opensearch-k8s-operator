@@ -42,9 +42,14 @@ kubectl apply -f opensearch-cluster.yaml
 
 Note: the current installation deploys with the default demo certificate provided by OpenSearch.
 
-## Deploying a new OpenSearch clusterwith TLS and securityconfig setup
+## Deploying a new OpenSearch cluster with TLS and securityconfig setup
 
 Go to `opensearch-operator/examples` and install the secret `securityconfig-secret.yaml` and and use `opensearch-cluster-securityconfig.yaml` as a starting point to define your cluster - note that the `clusterName` is also the namespace that the new cluster will reside in. Then run:
+
+```bash
+kubectl apply -f securityconfig-secret.yaml
+kubectl apply -f opensearch-cluster-securityconfig.yaml
+```
 
 Note: the current installation deploys with the security config files passed in the `securityconfig-secret.yaml`, just refer `securityconfig-secret.yaml` as an example.
 
