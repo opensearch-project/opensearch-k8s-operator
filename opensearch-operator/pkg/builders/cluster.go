@@ -209,7 +209,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 					},
 					InitContainers: []corev1.Container{{
 						Name:    "init",
-						Image:   "busybox",
+						Image:   "public.ecr.aws/opsterio/busybox:latest",
 						Command: []string{"sh", "-c"},
 						Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 						SecurityContext: &corev1.SecurityContext{
@@ -243,7 +243,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 	if cr.Spec.General.SetVMMaxMapCount {
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
 			Name:  "init-sysctl",
-			Image: "busybox:1.27.2",
+			Image: "public.ecr.aws/opsterio/busybox:1.27.2",
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -260,7 +260,7 @@ func NewSTSForNodePool(cr *opsterv1.OpenSearchCluster, node opsterv1.NodePool, v
 
 func DockerImageForCluster(cr *opsterv1.OpenSearchCluster) string {
 	// TODO: Determine version based on CR
-	return "opensearchproject/opensearch:1.2.3"
+	return "opensearchproject/opensearch:1.0.0"
 }
 
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
