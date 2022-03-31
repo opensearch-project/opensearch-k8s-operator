@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -10,6 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/opensearch-gateway/services"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -47,6 +49,11 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	if (r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0) && r.instance.Spec.General.ExtraConfig == "" {
 		return ctrl.Result{}, nil
 	}
+	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if len(r.reconcilerContext.OpenSearchConfig) > 0 {
 		// Add some default config for the security plugin
 		r.reconcilerContext.AddConfig("plugins.security.audit.type", "internal_opensearch")
@@ -54,7 +61,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.check_snapshot_restore_write_privileges", "true")
 		r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
-		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", `[".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]`)
+		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
 	}
 
 	cm := r.buildConfigMap()

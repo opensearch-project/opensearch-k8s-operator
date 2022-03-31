@@ -1,13 +1,21 @@
 package services
 
 import (
-	"encoding/json"
+	"strings"
+
 	"opensearch.opster.io/opensearch-gateway/responses"
 	"opensearch.opster.io/pkg/helpers"
-	"strings"
 )
 
 var ClusterSettingsExcludeBrokenPath = []string{"cluster", "routing", "allocation", "exclude", "_name"}
+
+type ClusterSettingsAllocation string
+
+const (
+	ClusterSettingsAllocationPrimaries ClusterSettingsAllocation = "primaries"
+	ClusterSettingsAllocationAll       ClusterSettingsAllocation = "all"
+	ClusterSettingsAllocationNone      ClusterSettingsAllocation = "none"
+)
 
 func HasIndicesWithNoReplica(service *OsClusterClient) (bool, error) {
 	response, err := service.CatIndices()
@@ -36,6 +44,25 @@ func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
 	return false, err
 }
 
+func HasSystemPrimariesOnNode(service *OsClusterClient, nodeName string) (bool, error) {
+	var headers []string
+	response, err := service.CatSystemShards(headers)
+	if err != nil {
+		return false, err
+	}
+	for _, shardsData := range response {
+		// If primary shards are still initializing consider the node not empty
+		if shardsData.PrimaryOrReplica == "p" && shardsData.State != "STARTED" {
+			return true, nil
+		}
+		// If there are system shards on the node consider it not empty
+		if shardsData.NodeName == nodeName && shardsData.PrimaryOrReplica == "p" {
+			return true, nil
+		}
+	}
+	return false, err
+}
+
 func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (bool, error) {
 	response, err := service.GetClusterSettings()
 	if err != nil {
@@ -44,12 +71,24 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
 	var valAsString = nodeNameToExclude
 	if ok && val != "" {
-		valAsString = val.(string) + "," + nodeNameToExclude
+		// Test whether name is already excluded
+		var found bool
+		valArr := strings.Split(val.(string), ",")
+		for _, name := range valArr {
+			if name == nodeNameToExclude {
+				found = true
+				break
+			}
+		}
+		if !found {
+			valArr = append(valArr, nodeNameToExclude)
+		}
+
+		valAsString = strings.Join(valArr, ",")
 	}
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
-	settingsAsJson, err := json.Marshal(settings)
 	if err == nil {
-		_, err = service.PutClusterSettings(string(settingsAsJson))
+		_, err = service.PutClusterSettings(settings)
 	}
 	return err == nil, err
 }
@@ -66,11 +105,16 @@ func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	valAsString := strings.ReplaceAll(val.(string), nodeNameToExclude, "")
 	valAsString = strings.ReplaceAll(valAsString, ",,", ",")
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
-	settingsAsJson, err := json.Marshal(settings)
 	if err == nil {
-		_, err = service.PutClusterSettings(string(settingsAsJson))
+		_, err = service.PutClusterSettings(settings)
 	}
 	return err == nil, err
+}
+
+func SetClusterShardAllocation(service *OsClusterClient, enableType ClusterSettingsAllocation) error {
+	settings := createClusterSettingsAllocationEnable(enableType)
+	_, err := service.PutClusterSettings(settings)
+	return err
 }
 
 func createClusterSettingsResponseWithExcludeName(exclude string) responses.ClusterSettingsResponse {
@@ -89,4 +133,79 @@ func createClusterSettingsResponseWithExcludeName(exclude string) responses.Clus
 			},
 		},
 	}}
+}
+
+func createClusterSettingsAllocationEnable(enable ClusterSettingsAllocation) responses.ClusterSettingsResponse {
+	return responses.ClusterSettingsResponse{Transient: map[string]interface{}{
+		"cluster": map[string]interface{}{
+			"routing": map[string]interface{}{
+				"allocation": map[string]interface{}{
+					"enable": enable,
+				},
+			},
+		},
+	}}
+}
+
+func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bool, error) {
+	health, err := service.GetHealth()
+	if err != nil {
+		return false, err
+	}
+
+	if health.Status == "green" {
+		return true, nil
+	}
+
+	if drainNodes {
+		return false, nil
+	}
+
+	flatSettings, err := service.GetFlatClusterSettings()
+	if err != nil {
+		return false, err
+	}
+
+	if flatSettings.Transient.ClusterRoutingAllocationEnable == string(ClusterSettingsAllocationAll) {
+		return false, nil
+	}
+
+	// Set shard routing to all
+	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationAll); err != nil {
+		return false, err
+	}
+
+	return false, nil
+}
+
+func PreparePodForDelete(service *OsClusterClient, podName string, drainNode bool, nodeCount int32) (bool, error) {
+	if drainNode {
+		// If we are draining nodes then drain the working node
+		_, err := AppendExcludeNodeHost(service, podName)
+		if err != nil {
+			return false, err
+		}
+
+		// If there are only 2 data nodes only check for system indics
+		if nodeCount == 2 {
+			systemIndices, err := HasSystemPrimariesOnNode(service, podName)
+			if err != nil {
+				return false, err
+			}
+			return !systemIndices, nil
+		}
+
+		// Check if there are any shards on the node
+		nodeNotEmpty, err := HasShardsOnNode(service, podName)
+		if err != nil {
+			return false, err
+		}
+		// If the node isn't empty requeue to wait for shards to drain
+		return !nodeNotEmpty, nil
+	}
+	// Update cluster routing before deleting appropriate ordinal pod
+	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationPrimaries); err != nil {
+		return false, err
+	}
+	return true, nil
 }
