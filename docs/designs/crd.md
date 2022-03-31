@@ -49,8 +49,8 @@ Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.opster.io` an
         <td>true</td>
       </tr></tbody>
 </table>
-<h3 id="postgresclusterspec">
-  PostgresCluster.spec
+<h3 id="OpensearchClusterSPec">
+  OpensearchCluster.spec
 </h3>
 
 
