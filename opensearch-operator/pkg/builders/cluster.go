@@ -437,16 +437,24 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 	return false
 }
 
-func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName string, namespace string, checksum string, adminCertName string) batchv1.Job {
+func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName string, namespace string, checksum string, adminCertName string, clusterName string) batchv1.Job {
 	dns := DnsOfService(instance)
 	adminCert := "/certs/tls.crt"
 	adminKey := "/certs/tls.key"
 	caCert := "/certs/ca.crt"
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
+	var securityconfigVolumeSecretName string
+
+	if instance.Spec.Security.Config == nil {
+		securityconfigVolumeSecretName = clusterName + "-default-securityconfig"
+	} else {
+		securityconfigVolumeSecretName = instance.Spec.Security.Config.SecurityconfigSecret.Name
+	}
+
 	volumes = append(volumes, corev1.Volume{
 		Name:         "securityconfig",
-		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: instance.Spec.Security.Config.SecurityconfigSecret.Name}},
+		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: securityconfigVolumeSecretName}},
 	})
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "securityconfig",

@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"io/ioutil"
 	"sort"
 	"time"
 
@@ -57,17 +58,55 @@ func NewSecurityconfigReconciler(
 }
 
 func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
-	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Config == nil || r.instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
+
+	if r.instance.Spec.Security == nil {
 		return ctrl.Result{}, nil
 	}
+
+	var configSecretName string
+	adminCertName := r.determineAdminSecret()
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
+	//Checking if Security Config values are empty and creates a default-securityconfig secret
+	if r.instance.Spec.Security.Config == nil {
+		r.logger.Info(clusterName + "-default-securityconfig is being created")
+		SecurityConfigSecretName := clusterName + "-default-securityconfig"
+		SecurityConfigSecret := corev1.Secret{}
+		//Basic SecurityConfigSecret secret with default settings
+		SecurityConfigSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: SecurityConfigSecretName, Namespace: namespace}, Type: corev1.SecretTypeOpaque, StringData: make(map[string]string)}
+		if err := r.Get(r.ctx, client.ObjectKey{Name: SecurityConfigSecretName, Namespace: namespace}, &SecurityConfigSecret); err == nil {
+			r.logger.Info(clusterName + "-default-securityconfig secret exists")
+		} else {
+			r.logger.Info("creating " + clusterName + "-default-securityconfig secret")
+			//Reads all securityconfig files and adds them to secret Stringdata
+			files, err := ioutil.ReadDir("./helperfiles/defaultsecurityconfigs/")
+			if err != nil {
+				r.logger.Info("Failed to read directory helperfiles/defaultsecurityconfigs")
+				//panic(err)
+			}
+			for _, f := range files {
+				fileBytes, err := ioutil.ReadFile("./helperfiles/defaultsecurityconfigs/" + f.Name())
+				if err != nil {
+					r.logger.Info("Failed to add " + f.Name() + clusterName + "-default-securityconfig secret")
+					//panic(err)
+				}
+				SecurityConfigSecret.StringData[f.Name()] = string(fileBytes)
+			}
+			if err := ctrl.SetControllerReference(r.instance, &SecurityConfigSecret, r.Client.Scheme()); err != nil {
+				return ctrl.Result{}, err
+			}
+			r.Create(r.ctx, &SecurityConfigSecret)
+		}
+		configSecretName = clusterName + "-default-securityconfig"
+	} else {
+		//Use a user passed value of SecurityconfigSecret name
+		configSecretName = r.instance.Spec.Security.Config.SecurityconfigSecret.Name
+	}
+
 	jobName := clusterName + "-securityconfig-update"
-	configSecretName := r.instance.Spec.Security.Config.SecurityconfigSecret.Name
-	adminCertName := r.determineAdminSecret()
 
 	if adminCertName == "" {
-		r.logger.Info("Cluster is running with demo certificates. Skipping securityconfig")
+		r.logger.Info("Cluster is running with demo certificates.")
 		return ctrl.Result{}, nil
 	}
 
@@ -109,7 +148,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	r.logger.Info("Starting securityconfig update job")
-	job = builders.NewSecurityconfigUpdateJob(r.instance, jobName, namespace, checksum, adminCertName)
+	job = builders.NewSecurityconfigUpdateJob(r.instance, jobName, namespace, checksum, adminCertName, clusterName)
 	if err := ctrl.SetControllerReference(r.instance, &job, r.Client.Scheme()); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -139,7 +178,7 @@ func checksum(data map[string][]byte) (string, error) {
 }
 
 func (r *SecurityconfigReconciler) determineAdminSecret() string {
-	if r.instance.Spec.Security.Config.AdminSecret.Name != "" {
+	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
 		return r.instance.Spec.Security.Config.AdminSecret.Name
 	} else if r.instance.Spec.Security.Tls.Transport.Generate {
 		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
