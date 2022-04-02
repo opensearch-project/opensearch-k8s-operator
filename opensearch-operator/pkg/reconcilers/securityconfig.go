@@ -71,9 +71,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Spec.Security.Config == nil {
 		r.logger.Info(clusterName + "-default-securityconfig is being created")
 		SecurityConfigSecretName := clusterName + "-default-securityconfig"
-		SecurityConfigSecret := corev1.Secret{}
 		//Basic SecurityConfigSecret secret with default settings
-		SecurityConfigSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: SecurityConfigSecretName, Namespace: namespace}, Type: corev1.SecretTypeOpaque, StringData: make(map[string]string)}
+		SecurityConfigSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: SecurityConfigSecretName, Namespace: namespace}, Type: corev1.SecretTypeOpaque, StringData: make(map[string]string)}
 		if err := r.Get(r.ctx, client.ObjectKey{Name: SecurityConfigSecretName, Namespace: namespace}, &SecurityConfigSecret); err == nil {
 			r.logger.Info(clusterName + "-default-securityconfig secret exists")
 		} else {
