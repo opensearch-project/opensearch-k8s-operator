@@ -24,7 +24,7 @@ spec:
   security:
     config:
       securityConfigSecret:
-##Pre create this secret with required roles and security configs
+##Pre create this secret with required roles and security configs, to override the default settings
        name: securityconfig-secret
     tls:
       transport:
