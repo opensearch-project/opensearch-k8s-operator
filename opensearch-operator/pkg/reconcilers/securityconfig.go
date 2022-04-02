@@ -95,7 +95,12 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			if err := ctrl.SetControllerReference(r.instance, &SecurityConfigSecret, r.Client.Scheme()); err != nil {
 				return ctrl.Result{}, err
 			}
-			r.Create(r.ctx, &SecurityConfigSecret)
+			//r.Create(r.ctx, &SecurityConfigSecret)
+			if err := r.Create(r.ctx, &SecurityConfigSecret); err != nil {
+				r.logger.Error(err, "Failed to create default"+clusterName+"-default-securityconfig secret")
+				return ctrl.Result{}, err
+			}
+
 		}
 		configSecretName = clusterName + "-default-securityconfig"
 	} else {
