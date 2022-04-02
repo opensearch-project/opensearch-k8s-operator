@@ -39,7 +39,9 @@ type GeneralConfig struct {
 	ServiceName      string `json:"serviceName"`
 	SetVMMaxMapCount bool   `json:"setVMMaxMapCount,omitempty"`
 	// Extra items to add to the opensearch.yml
-	ExtraConfig string `json:"extraConfig,omitempty"`
+	ExtraConfig string     `json:"extraConfig,omitempty"`
+	DefaultRepo *string    `json:"defaultRepo,omitempty"`
+	Image       *ImageSpec `json:",inline"`
 }
 
 type NodePool struct {
@@ -84,6 +86,7 @@ type DashboardsConfig struct {
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 	Replicas  int32                       `json:"replicas"`
 	Tls       *DashboardsTlsConfig        `json:"tls,omitempty"`
+	Version   string                      `json:"version"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
 	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 }
@@ -149,15 +152,26 @@ type SecurityConfig struct {
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
 }
 
+type UpgradeOptions struct {
+	DrainDataNodes bool `json:"drainDataNodes,omitempty"`
+}
+
+type ImageSpec struct {
+	Image            *string                       `json:"image,omitempty"`
+	ImagePullPolicy  *corev1.PullPolicy            `json:"imagePullPolicy,omitempty"`
+	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+}
+
 // ClusterSpec defines the desired state of OpenSearchCluster
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	General    GeneralConfig    `json:"general,omitempty"`
-	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
-	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
-	Security   *Security        `json:"security,omitempty"`
-	NodePools  []NodePool       `json:"nodePools"`
+	General        GeneralConfig    `json:"general,omitempty"`
+	ConfMgmt       ConfMgmt         `json:"confMgmt,omitempty"`
+	Dashboards     DashboardsConfig `json:"dashboards,omitempty"`
+	Security       *Security        `json:"security,omitempty"`
+	UpgradeOptions *UpgradeOptions  `json:"upgradeOptions,omitempty"`
+	NodePools      []NodePool       `json:"nodePools"`
 }
 
 // ClusterStatus defines the observed state of Es
@@ -166,6 +180,8 @@ type ClusterStatus struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	Phase            string            `json:"phase,omitempty"`
 	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
+	Version          string            `json:"version,omitempty"`
+	Initialized      bool              `json:"initialized,omitempty"`
 }
 
 //+kubebuilder:object:root=true
@@ -196,4 +212,22 @@ type OpenSearchClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(&OpenSearchCluster{}, &OpenSearchClusterList{})
+}
+
+func (s ImageSpec) GetImagePullPolicy() (_ corev1.PullPolicy) {
+	if p := s.ImagePullPolicy; p != nil {
+		return *p
+	}
+	return
+}
+
+func (s ImageSpec) GetImage() string {
+	if s.Image == nil {
+		return ""
+	}
+	return *s.Image
+}
+
+func (s *ClusterSpec) DrainDataNodes() bool {
+	return s.UpgradeOptions != nil && s.UpgradeOptions.DrainDataNodes
 }

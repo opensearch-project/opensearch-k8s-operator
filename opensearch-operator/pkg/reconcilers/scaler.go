@@ -84,7 +84,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		Description: nodePool.Component,
 	}
 	comp := r.instance.Status.ComponentsStatus
-	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, getByDescriptionAndGroup)
+	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
 	if !found {
 		if desireReplicaDiff > 0 {
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
@@ -145,7 +145,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if !smartDecrease {
 		return false, err
 	}
-	username, password, err := helpers.UsernameAndPassword(r.Client, r.ctx, r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
 	if err != nil {
 		return true, err
 	}
@@ -175,7 +175,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 
 func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
-	username, password, err := helpers.UsernameAndPassword(r.Client, r.ctx, r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
 	if err != nil {
 		return err
 	}
@@ -240,7 +240,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
 	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
-	username, password, err := helpers.UsernameAndPassword(r.Client, r.ctx, r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
 	if err != nil {
 		return err
 	}
@@ -284,13 +284,6 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 		return err
 	}
 	return err
-}
-
-func getByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
-	if left.Description == right.Description && left.Component == right.Component {
-		return left, true
-	}
-	return right, false
 }
 
 func (r *ScalerReconciler) CreateNodePortServiceIfNotExists() (corev1.Service, bool, error) {
@@ -352,7 +345,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 
 	// Gracefully remove nodes
 	lg := log.FromContext(r.ctx)
-	username, password, err := helpers.UsernameAndPassword(r.Client, r.ctx, r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
 	if err != nil {
 		return nil, err
 	}

@@ -98,7 +98,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			General: opsterv1.GeneralConfig{
 				HttpPort:    9200,
 				Vendor:      "opensearch",
-				Version:     "latest",
+				Version:     "1.0.0",
 				ServiceName: "es-svc",
 			},
 			ConfMgmt: opsterv1.ConfMgmt{

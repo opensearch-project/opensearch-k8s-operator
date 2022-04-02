@@ -126,13 +126,18 @@ spec:
                             type: string
                         type: object
                     type: object
+                  version:
+                    type: string
                 required:
                 - replicas
+                - version
                 type: object
               general:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code after modifying this file'
                 properties:
+                  defaultRepo:
+                    type: string
                   extraConfig:
                     description: Extra items to add to the opensearch.yml
                     type: string
@@ -140,6 +145,23 @@ spec:
                     default: 9200
                     format: int32
                     type: integer
+                  image:
+                    type: string
+                  imagePullPolicy:
+                    description: PullPolicy describes a policy for if/when to pull
+                      a container image
+                    type: string
+                  imagePullSecrets:
+                    items:
+                      description: LocalObjectReference contains enough information
+                        to let you locate the referenced object inside the same namespace.
+                      properties:
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            TODO: Add other useful fields. apiVersion, kind, uid?'
+                          type: string
+                      type: object
+                    type: array
                   serviceAccount:
                     type: string
                   serviceName:
@@ -1309,6 +1331,11 @@ spec:
                         type: object
                     type: object
                 type: object
+              upgradeOptions:
+                properties:
+                  drainDataNodes:
+                    type: boolean
+                type: object
             required:
             - nodePools
             type: object
@@ -1326,10 +1353,14 @@ spec:
                       type: string
                   type: object
                 type: array
+              initialized:
+                type: boolean
               phase:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
                   this file'
+                type: string
+              version:
                 type: string
             required:
             - componentsStatus
