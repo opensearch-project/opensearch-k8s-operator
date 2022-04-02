@@ -660,19 +660,17 @@ func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName st
 	caCert := "/certs/ca.crt"
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
-<<<<<<< HEAD
 	var securityconfigVolumeSecretName string
 
 	if instance.Spec.Security.Config == nil {
 		securityconfigVolumeSecretName = clusterName + "-default-securityconfig"
 	} else {
 		securityconfigVolumeSecretName = instance.Spec.Security.Config.SecurityconfigSecret.Name
-=======
+	}
 
 	// Dummy node spec required to resolve image
 	node := opsterv1.NodePool{
 		Component: "securityconfig",
->>>>>>> upstream/main
 	}
 
 	volumes = append(volumes, corev1.Volume{
