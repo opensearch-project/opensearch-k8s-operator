@@ -25,7 +25,14 @@ The project is currently a work in progress and is not (yet) recommended for use
 - [ ] Auto scaler based on usage, load, and resources.
 
 # Getting Started
-## Installing the Operator
+
+## Installing the Operator on your k8s cluster with Helm
+
+- Clone the repo
+- Run cd charts
+- Helm install -f values.yaml [RELEASE_NAME] ./
+
+## Installing the Operator locally
 
 - Clone the repo
 - Run `make build manifests` to build the controller binary and the manifests
