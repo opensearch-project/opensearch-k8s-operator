@@ -34,7 +34,7 @@ spec:
   nodePools:
     - component: masters
       replicas: 3
-      diskSize: 30
+      diskSize: "30Gi"
       NodeSelector:
       resources:
          requests:

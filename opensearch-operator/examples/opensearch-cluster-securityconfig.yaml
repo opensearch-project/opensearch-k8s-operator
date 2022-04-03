@@ -22,6 +22,10 @@ spec:
   confMgmt:
     smartScaler: true
   security:
+    config:
+      securityConfigSecret:
+##Pre create this secret with required security configs, to override the default settings
+       name: securityconfig-secret
     tls:
       transport:
         generate: true
@@ -30,7 +34,7 @@ spec:
   nodePools:
     - component: masters
       replicas: 3
-      diskSize: 30
+      diskSize: "30Gi"
       NodeSelector:
       resources:
          requests:
@@ -44,7 +48,7 @@ spec:
         - "data"
     - component: nodes
       replicas: 3
-      diskSize: 100
+      diskSize: "100Gi"
       NodeSelector:
       resources:
          requests:
@@ -57,7 +61,7 @@ spec:
         - "data"
     - component: coordinators
       replicas: 3
-      diskSize: 100
+      diskSize: "100Gi"
       NodeSelector:
       resources:
          requests:

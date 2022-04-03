@@ -33,7 +33,13 @@ func NewSTSForNodePool(
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) *appsv1.StatefulSet {
-	disk := fmt.Sprint(node.DiskSize)
+	//To make sure disksize is not passed as empty
+	var disksize string
+	if len(node.DiskSize) == 0 {
+		disksize = "30Gi"
+	} else {
+		disksize = node.DiskSize
+	}
 
 	availableRoles := []string{
 		"master",
@@ -70,7 +76,7 @@ func NewSTSForNodePool(
 				}(),
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(disk + "Gi"),
+						corev1.ResourceStorage: resource.MustParse(disksize),
 					},
 				},
 				StorageClassName: func() *string {
@@ -647,13 +653,20 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 	return false
 }
 
-func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName string, namespace string, checksum string, adminCertName string) batchv1.Job {
+func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName string, namespace string, checksum string, adminCertName string, clusterName string) batchv1.Job {
 	dns := DnsOfService(instance)
 	adminCert := "/certs/tls.crt"
 	adminKey := "/certs/tls.key"
 	caCert := "/certs/ca.crt"
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
+	var securityconfigVolumeSecretName string
+
+	if instance.Spec.Security.Config == nil {
+		securityconfigVolumeSecretName = clusterName + "-default-securityconfig"
+	} else {
+		securityconfigVolumeSecretName = instance.Spec.Security.Config.SecurityconfigSecret.Name
+	}
 
 	// Dummy node spec required to resolve image
 	node := opsterv1.NodePool{
@@ -662,7 +675,7 @@ func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName st
 
 	volumes = append(volumes, corev1.Volume{
 		Name:         "securityconfig",
-		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: instance.Spec.Security.Config.SecurityconfigSecret.Name}},
+		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: securityconfigVolumeSecretName}},
 	})
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "securityconfig",
