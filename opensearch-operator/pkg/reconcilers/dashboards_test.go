@@ -20,7 +20,7 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 func newDashboardsReconciler(spec *opsterv1.OpenSearchCluster) (ReconcilerContext, *DashboardsReconciler) {
-	reconcilerContext := NewReconcilerContext()
+	reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
 	underTest := NewDashboardsReconciler(
 		k8sClient,
 		context.Background(),
@@ -137,7 +137,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 
-			reconcilerContext := NewReconcilerContext()
+			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
 			underTest := NewDashboardsReconciler(
 				k8sClient,
 				context.Background(),

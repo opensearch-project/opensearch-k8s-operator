@@ -32,7 +32,6 @@ var _ = Describe("Cluster Reconciler", func() {
 	)
 	var (
 		OpensearchCluster      = ComposeOpensearchCrd(clusterName, namespace)
-		nodePool               = appsv1.StatefulSet{}
 		service                = corev1.Service{}
 		preUpgradeStatusLength int
 	)
@@ -63,6 +62,7 @@ var _ = Describe("Cluster Reconciler", func() {
 					return false
 				}
 				for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
+					nodePool := appsv1.StatefulSet{}
 					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: fmt.Sprintf("%s-%s", OpensearchCluster.Spec.General.ServiceName, nodePoolSpec.Component)}, &service); err != nil {
 						return false
 					}
@@ -74,11 +74,46 @@ var _ = Describe("Cluster Reconciler", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 
-		It("should apply the right cluster resources successfully", func() {
-			for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
-				Expect(nodePoolSpec.Resources.Limits.Cpu().String()).Should(Equal("500m"))
-				Expect(nodePoolSpec.Resources.Limits.Memory().String()).Should(Equal("2Gi"))
+		It("should configure statefulsets correctly", func() {
+			wg := sync.WaitGroup{}
+			for _, nodePool := range OpensearchCluster.Spec.NodePools {
+				wg.Add(1)
+				By(fmt.Sprintf("checking %s nodepool initial master", nodePool.Component))
+				go func(nodePool opsterv1.NodePool) {
+					defer GinkgoRecover()
+					defer wg.Done()
+					sts := &appsv1.StatefulSet{}
+					Eventually(func() []corev1.EnvVar {
+						if err := k8sClient.Get(context.Background(), types.NamespacedName{
+							Namespace: OpensearchCluster.Namespace,
+							Name:      clusterName + "-" + nodePool.Component,
+						}, sts); err != nil {
+							return []corev1.EnvVar{}
+						}
+						return sts.Spec.Template.Spec.Containers[0].Env
+					}, timeout, interval).Should(ContainElement(corev1.EnvVar{
+						Name:  "foo",
+						Value: "bar",
+					}))
+					Expect(sts.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().String()).To(Equal("500m"))
+					Expect(sts.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("2Gi"))
+				}(nodePool)
 			}
+			wg.Wait()
+		})
+
+		It("should set nodepool specific config", func() {
+			sts := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-client", OpensearchCluster.Name),
+					Namespace: OpensearchCluster.Namespace,
+				}, sts)
+			}, timeout, interval).Should(Succeed())
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "baz",
+				Value: "bat",
+			}))
 		})
 
 		It("should create a bootstrap pod", func() {

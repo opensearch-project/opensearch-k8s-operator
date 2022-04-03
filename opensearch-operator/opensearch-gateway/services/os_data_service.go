@@ -44,9 +44,9 @@ func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
 	return false, err
 }
 
-func HasSystemPrimariesOnNode(service *OsClusterClient, nodeName string) (bool, error) {
+func HasIndexPrimariesOnNode(service *OsClusterClient, nodeName string, indices []string) (bool, error) {
 	var headers []string
-	response, err := service.CatSystemShards(headers)
+	response, err := service.CatNamedIndicesShards(headers, indices)
 	if err != nil {
 		return false, err
 	}
@@ -188,11 +188,16 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 
 		// If there are only 2 data nodes only check for system indics
 		if nodeCount == 2 {
-			systemIndices, err := HasSystemPrimariesOnNode(service, podName)
+			systemIndices, err := GetExistingSystemIndices(service)
 			if err != nil {
 				return false, err
 			}
-			return !systemIndices, nil
+
+			systemPrimaries, err := HasIndexPrimariesOnNode(service, podName, systemIndices)
+			if err != nil {
+				return false, err
+			}
+			return !systemPrimaries, nil
 		}
 
 		// Check if there are any shards on the node
@@ -208,4 +213,25 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 		return false, err
 	}
 	return true, nil
+}
+
+func GetExistingSystemIndices(service *OsClusterClient) ([]string, error) {
+	var existing []string
+	systemIndices := []string{
+		".kibana_1",
+		".opendistro_security",
+	}
+	systemIndices = append(systemIndices, AdditionalSystemIndices...)
+
+	for _, systemIndex := range systemIndices {
+		exists, err := service.IndexExists(systemIndex)
+		if err != nil {
+			return existing, err
+		}
+		if exists {
+			existing = append(existing, systemIndex)
+		}
+	}
+
+	return existing, nil
 }

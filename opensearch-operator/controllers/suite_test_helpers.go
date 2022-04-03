@@ -100,6 +100,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Vendor:      "opensearch",
 				Version:     "1.0.0",
 				ServiceName: "es-svc",
+				AdditionalConfig: map[string]string{
+					"foo": "bar",
+				},
 			},
 			ConfMgmt: opsterv1.ConfMgmt{
 				AutoScaler:  false,
@@ -143,6 +146,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Roles: []string{
 					"data",
 					"ingest",
+				},
+				AdditionalConfig: map[string]string{
+					"baz": "bat",
 				},
 			}},
 		},

@@ -95,7 +95,25 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 }
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
-	sts := builders.NewSTSForNodePool(username, r.instance, nodePool, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
+	found, nodePoolConfig := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
+	// If config hasn't been set up for the node pool requeue
+	if !found {
+		return &ctrl.Result{
+			Requeue: true,
+		}, nil
+	}
+
+	extraConfig := helpers.MergeConfigs(r.instance.Spec.General.AdditionalConfig, nodePool.AdditionalConfig)
+
+	sts := builders.NewSTSForNodePool(
+		username,
+		r.instance,
+		nodePool,
+		nodePoolConfig.ConfigHash,
+		r.reconcilerContext.Volumes,
+		r.reconcilerContext.VolumeMounts,
+		extraConfig,
+	)
 	if err := ctrl.SetControllerReference(r.instance, sts, r.Client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
 	}
@@ -116,6 +134,14 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// Now set the desired replicas to be the existing replicas
 	// This will allow the scaler reconciler to function correctly
 	sts.Spec.Replicas = existing.Spec.Replicas
+
+	// Don't update env vars on non data nodes while an upgrade is in progress
+	// as we don't want uncontrolled restarts while we're doing an upgrade
+	if r.instance.Status.Version != "" &&
+		r.instance.Status.Version != r.instance.Spec.General.Version &&
+		!helpers.ContainsString(nodePool.Roles, "data") {
+		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
+	}
 
 	// Finally we enforce the desired state
 	return r.ReconcileResource(sts, reconciler.StatePresent)
