@@ -175,8 +175,8 @@ plugins.security.audit.type: internal_opensearch
 # Password strength rules for password complexity. 
 # If you want to set up password strength rules for internal users, you can use the below settings for it. 
 # Password validation rules can be configured through regex. In the below regex example, a user must need 
-# a password with minimum 8 characters length and must include minimum one uppercase, one lower case, one digit, and one special character. 
-# And a custom error message can be configured, in case if a password is not created according to the password strength rule.   
+# a password with minimum 8 characters length and must include minimum one uppercase, one lower case, one digit, and one special character. 
+# And a custom error message can be configured, in case if a password is not created according to the password strength rule.   
 # plugins.security.restapi.password_validation_regex: '(?=.*[A-Z])(?=.*[^a-zA-Z\d])(?=.*[0-9])(?=.*[a-z]).{8,}'
 # plugins.security.restapi.password_validation_error_message: "A password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, one digit, and one special character."
 
