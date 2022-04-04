@@ -512,7 +512,7 @@ func NewBootstrapPod(
 		MountPath: "/usr/share/opensearch/data",
 	})
 
-	return &corev1.Pod{
+	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      BootstrapPodName(cr),
 			Namespace: cr.Namespace,
@@ -571,27 +571,45 @@ func NewBootstrapPod(
 					VolumeMounts:  volumeMounts,
 				},
 			},
-			InitContainers: []corev1.Container{{
-				Name:    "init",
-				Image:   "busybox",
-				Command: []string{"sh", "-c"},
-				Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
-				SecurityContext: &corev1.SecurityContext{
-					RunAsUser: pointer.Int64(0),
-				},
-				VolumeMounts: []corev1.VolumeMount{
-					{
-						Name:      "data",
-						MountPath: "/usr/share/opensearch/data",
+			InitContainers: []corev1.Container{
+				{
+					Name:    "init",
+					Image:   "busybox",
+					Command: []string{"sh", "-c"},
+					Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+					SecurityContext: &corev1.SecurityContext{
+						RunAsUser: pointer.Int64(0),
+					},
+					VolumeMounts: []corev1.VolumeMount{
+						{
+							Name:      "data",
+							MountPath: "/usr/share/opensearch/data",
+						},
 					},
 				},
-			},
 			},
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			ImagePullSecrets:   image.ImagePullSecrets,
 		},
 	}
+
+	if cr.Spec.General.SetVMMaxMapCount {
+		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
+			Name:  "init-sysctl",
+			Image: "busybox:1.27.2",
+			Command: []string{
+				"sysctl",
+				"-w",
+				"vm.max_map_count=262144",
+			},
+			SecurityContext: &corev1.SecurityContext{
+				Privileged: pointer.Bool(true),
+			},
+		})
+	}
+
+	return pod
 }
 
 func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
@@ -653,13 +671,20 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 	return false
 }
 
-func NewSecurityconfigUpdateJob(instance *opsterv1.OpenSearchCluster, jobName string, namespace string, checksum string, adminCertName string, clusterName string) batchv1.Job {
+func NewSecurityconfigUpdateJob(
+	instance *opsterv1.OpenSearchCluster,
+	jobName string,
+	namespace string,
+	checksum string,
+	adminCertName string,
+	clusterName string,
+	volumes []corev1.Volume,
+	volumeMounts []corev1.VolumeMount,
+) batchv1.Job {
 	dns := DnsOfService(instance)
 	adminCert := "/certs/tls.crt"
 	adminKey := "/certs/tls.key"
 	caCert := "/certs/ca.crt"
-	var volumes []corev1.Volume
-	var volumeMounts []corev1.VolumeMount
 	var securityconfigVolumeSecretName string
 
 	if instance.Spec.Security.Config == nil {

@@ -152,7 +152,16 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	r.logger.Info("Starting securityconfig update job")
-	job = builders.NewSecurityconfigUpdateJob(r.instance, jobName, namespace, checksum, adminCertName, clusterName)
+	job = builders.NewSecurityconfigUpdateJob(
+		r.instance,
+		jobName,
+		namespace,
+		checksum,
+		adminCertName,
+		clusterName,
+		r.reconcilerContext.Volumes,
+		r.reconcilerContext.VolumeMounts,
+	)
 	if err := ctrl.SetControllerReference(r.instance, &job, r.Client.Scheme()); err != nil {
 		return ctrl.Result{}, err
 	}
