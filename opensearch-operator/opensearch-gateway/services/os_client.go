@@ -33,9 +33,8 @@ var (
 )
 
 type OsClusterClient struct {
-	client        *opensearch.Client
-	MainPage      responses.MainResponse
-	systemIndices []string
+	client   *opensearch.Client
+	MainPage responses.MainResponse
 }
 
 func NewOsClusterClient(clusterUrl string, username string, password string) (*OsClusterClient, error) {

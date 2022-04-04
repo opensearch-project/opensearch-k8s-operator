@@ -56,6 +56,7 @@ func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 	c.DashboardsConfig[key] = value
 }
 
+// fetchNodePoolHash gets the hash of the config for a specific node pool
 func (c *ReconcilerContext) fetchNodePoolHash(name string) (bool, NodePoolHash) {
 	for _, config := range c.NodePoolHashes {
 		if config.Component == name {
@@ -65,6 +66,7 @@ func (c *ReconcilerContext) fetchNodePoolHash(name string) (bool, NodePoolHash) 
 	return false, NodePoolHash{}
 }
 
+// replaceNodePoolHash updates the hash of the config for a specific node pool
 func (c *ReconcilerContext) replaceNodePoolHash(newConfig NodePoolHash) {
 	var configs []NodePoolHash
 	for _, config := range c.NodePoolHashes {
