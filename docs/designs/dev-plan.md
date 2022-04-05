@@ -13,11 +13,11 @@ Here are the steps arranged by priority:
 7. Security service - Done
 8. Cluster resources reconciler (CPU and Memory) - Done
 9. Release automations and process (ECR, operatorshub, github) - Done
-10. Rolling upgrade - In progress
-11. Documentation (internal design and user guides) - In progress
-12. Disk reconciler - TODO
-13. Cluster configuration reconciler (for opensearch.yaml configs) - TODO
-14. Rolling restarts - for user requests - TODO
+10. Rolling upgrade - Done
+11. Initial Documentation (internal design and user guides) - Done
+12. Rolling restarts - for user requests - Done
+13. Disk reconciler - TODO
+14. Cluster configuration reconciler (for opensearch.yaml configs) - TODO
 
 # Next Phases
 1. OpenSearch Operator CLI
