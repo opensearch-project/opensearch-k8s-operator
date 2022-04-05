@@ -17,9 +17,9 @@ The full roadmap is available here: [Development plan](https://github.com/Opster
 - [x] Change nodes' memory allocation and limits.
 - [x] Secured installation features.
 - [x] Certificate management.
+- [x] Rolling restarts - through API.
 - [ ] Scaling nodes' disks - increase/replace disks.
 - [ ] Cluster configurations and nodes' settings updates.
-- [ ] Rolling restarts - through API.
 - [ ] Auto scaler based on usage, load, and resources.
 - [ ] Operator Monitoring, with Prometheus and Grafana.
 - [ ] Control shard balancing and allocation: AZ/Rack awareness, Hot/Warm.
