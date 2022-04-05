@@ -27,7 +27,7 @@ The full roadmap is available here: [Development plan](https://github.com/Opster
 # Getting Started
 ## Installing the Operator
 
-- Clone the repo
+- Clone the repo and go to `opensearch-operator` folder.
 - Run `make build manifests` to build the controller binary and the manifests
 - Start a kubernetes cluster (e.g. with k3d or minikube) and make sure your `~/.kube/config` points to it
 - Run `make install` to create the CRD in the kubernetes cluster
