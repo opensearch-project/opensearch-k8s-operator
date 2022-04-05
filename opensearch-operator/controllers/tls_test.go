@@ -2,14 +2,18 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
@@ -31,7 +35,10 @@ var _ = Describe("TLS Reconciler", func() {
 		spec := opsterv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
 			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{ServiceName: clusterName},
+				General: opsterv1.GeneralConfig{
+					ServiceName: clusterName,
+					Version:     "1.0.0",
+				},
 				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: true,
@@ -89,6 +96,57 @@ var _ = Describe("TLS Reconciler", func() {
 
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-ca", Namespace: namespace}, &secret)).To(Succeed())
 			Expect(HasOwnerReference(&secret, &spec)).To(BeTrue())
+		})
+
+		It("should create certs for all pods in the cluster", func() {
+			// Check any bare pods that are part of the cluster
+			podList := &corev1.PodList{}
+			Expect(k8sClient.List(
+				context.Background(),
+				podList,
+				client.MatchingLabels{builders.ClusterLabel: spec.Name},
+				client.InNamespace(spec.Namespace),
+			)).To(Succeed())
+			Expect(len(podList.Items)).To(BeNumerically(">", 0))
+
+			secret := corev1.Secret{}
+			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-transport-cert", Namespace: namespace}, &secret)).To(Succeed())
+			for _, pod := range podList.Items {
+				Expect(func() bool {
+					_, ok := secret.Data[fmt.Sprintf("%s.crt", pod.Name)]
+					return ok
+				}()).To(BeTrue())
+			}
+			// Check the master node pool
+			i := 0
+			for i < 3 {
+				Expect(func() bool {
+					_, ok := secret.Data[fmt.Sprintf("%s-masters-%d.crt", spec.Name, i)]
+					return ok
+				}()).To(BeTrue())
+				i = i + 1
+			}
+		})
+
+		It("should create default security config", func() {
+			Eventually(func() error {
+				secret := &corev1.Secret{}
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-default-securityconfig", clusterName),
+					Namespace: namespace,
+				}, secret)
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should create a security config job", func() {
+			job := batchv1.Job{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: namespace}, &job)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+			Expect(len(job.Spec.Template.Spec.Containers[0].VolumeMounts)).Should(BeNumerically(">=", 2))
+			Expect(helpers.CheckVolumeExists(job.Spec.Template.Spec.Volumes, job.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(job.Spec.Template.Spec.Volumes, job.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-default-securityconfig", "securityconfig")).Should((BeTrue()))
 		})
 	})
 

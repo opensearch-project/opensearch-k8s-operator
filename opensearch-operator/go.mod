@@ -8,16 +8,14 @@ require (
 	github.com/banzaicloud/operator-tools v0.28.1
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-logr/logr v1.2.2
-	github.com/gordonklaus/ineffassign v0.0.0-20210914165742-4cc7213b9bc8 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/onsi/ginkgo v1.16.5
 	github.com/onsi/gomega v1.17.0
 	github.com/opensearch-project/opensearch-go v1.1.0
 	github.com/phayes/freeport v0.0.0-20180830031419-95f893ade6f2
 	github.com/spf13/cast v1.4.1 // indirect
-	golang.org/x/mod v0.6.0-dev.0.20220330205332-605edab4323b // indirect
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
 	golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f // indirect
-	golang.org/x/tools v0.1.10 // indirect
 	k8s.io/api v0.23.1
 	k8s.io/apimachinery v0.23.1
 	k8s.io/client-go v0.23.1

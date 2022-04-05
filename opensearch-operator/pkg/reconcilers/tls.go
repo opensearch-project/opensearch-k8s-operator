@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -223,6 +224,28 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	}
 	nodeSecret.Data[CaCertKey] = ca.CertData()
 
+	// Generate bootstrap pod cert
+	bootstrapPodName := builders.BootstrapPodName(r.instance)
+	dnsNames := []string{
+		bootstrapPodName,
+		clusterName,
+		builders.DiscoveryServiceName(r.instance),
+		fmt.Sprintf("%s.%s", bootstrapPodName, clusterName),
+		fmt.Sprintf("%s.%s", clusterName, namespace),
+		fmt.Sprintf("%s.%s.%s", bootstrapPodName, clusterName, namespace),
+		fmt.Sprintf("%s.%s.svc", clusterName, namespace),
+		fmt.Sprintf("%s.%s.%s.svc", bootstrapPodName, clusterName, namespace),
+		fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
+		fmt.Sprintf("%s.%s.%s.svc.cluster.local", bootstrapPodName, clusterName, namespace),
+	}
+	nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames)
+	if err != nil {
+		r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", bootstrapPodName)
+		return err
+	}
+	nodeSecret.Data[fmt.Sprintf("%s.crt", bootstrapPodName)] = nodeCert.CertData()
+	nodeSecret.Data[fmt.Sprintf("%s.key", bootstrapPodName)] = nodeCert.KeyData()
+
 	// Generate node cert and put it into secret
 	for _, nodePool := range r.instance.Spec.NodePools {
 		for i := 0; i < int(nodePool.Replicas); i++ {
@@ -237,6 +260,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			dnsNames := []string{
 				podName,
 				clusterName,
+				builders.DiscoveryServiceName(r.instance),
 				fmt.Sprintf("%s.%s", podName, clusterName),
 				fmt.Sprintf("%s.%s", clusterName, namespace),
 				fmt.Sprintf("%s.%s.%s", podName, clusterName, namespace),
@@ -346,6 +370,8 @@ func (r *TLSReconciler) handleHttp() error {
 			// Generate node cert and put it into secret
 			dnsNames := []string{
 				clusterName,
+				r.instance.Spec.General.ServiceName,
+				builders.DiscoveryServiceName(r.instance),
 				fmt.Sprintf("%s.%s", clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
