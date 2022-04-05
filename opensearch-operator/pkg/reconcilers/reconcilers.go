@@ -16,12 +16,28 @@ type ComponentReconciler func() (reconcile.Result, error)
 type ReconcilerContext struct {
 	Volumes          []corev1.Volume
 	VolumeMounts     []corev1.VolumeMount
-	OpenSearchConfig map[string]string
+	NodePoolHashes   []NodePoolHash
 	DashboardsConfig map[string]string
+	OpenSearchConfig map[string]string
 }
 
-func NewReconcilerContext() ReconcilerContext {
-	return ReconcilerContext{OpenSearchConfig: make(map[string]string), DashboardsConfig: make(map[string]string)}
+type NodePoolHash struct {
+	Component  string
+	ConfigHash string
+}
+
+func NewReconcilerContext(nodepools []opsterv1.NodePool) ReconcilerContext {
+	var nodePoolHashes []NodePoolHash
+	for _, nodepool := range nodepools {
+		nodePoolHashes = append(nodePoolHashes, NodePoolHash{
+			Component: nodepool.Component,
+		})
+	}
+	return ReconcilerContext{
+		NodePoolHashes:   nodePoolHashes,
+		OpenSearchConfig: make(map[string]string),
+		DashboardsConfig: make(map[string]string),
+	}
 }
 
 func (c *ReconcilerContext) AddConfig(key string, value string) {
@@ -38,6 +54,29 @@ func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
 	}
 	c.DashboardsConfig[key] = value
+}
+
+// fetchNodePoolHash gets the hash of the config for a specific node pool
+func (c *ReconcilerContext) fetchNodePoolHash(name string) (bool, NodePoolHash) {
+	for _, config := range c.NodePoolHashes {
+		if config.Component == name {
+			return true, config
+		}
+	}
+	return false, NodePoolHash{}
+}
+
+// replaceNodePoolHash updates the hash of the config for a specific node pool
+func (c *ReconcilerContext) replaceNodePoolHash(newConfig NodePoolHash) {
+	var configs []NodePoolHash
+	for _, config := range c.NodePoolHashes {
+		if config.Component == newConfig.Component {
+			configs = append(configs, newConfig)
+		} else {
+			configs = append(configs, config)
+		}
+	}
+	c.NodePoolHashes = configs
 }
 
 func UpdateOpensearchStatus(

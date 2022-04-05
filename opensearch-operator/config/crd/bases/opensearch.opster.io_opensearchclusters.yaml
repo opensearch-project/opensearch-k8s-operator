@@ -136,11 +136,17 @@ spec:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code after modifying this file'
                 properties:
+                  additionalConfig:
+                    additionalProperties:
+                      type: string
+                    description: Extra items to add to the opensearch.yml
+                    type: object
                   defaultRepo:
                     type: string
-                  extraConfig:
-                    description: Extra items to add to the opensearch.yml
-                    type: string
+                  drainDataNodes:
+                    description: Drain data nodes controls whether to drain data notes
+                      on rolling restart operations
+                    type: boolean
                   httpPort:
                     default: 9200
                     format: int32
@@ -184,6 +190,10 @@ spec:
               nodePools:
                 items:
                   properties:
+                    additionalConfig:
+                      additionalProperties:
+                        type: string
+                      type: object
                     affinity:
                       description: Affinity is a group of affinity scheduling rules.
                       properties:
@@ -1330,11 +1340,6 @@ spec:
                             type: object
                         type: object
                     type: object
-                type: object
-              upgradeOptions:
-                properties:
-                  drainDataNodes:
-                    type: boolean
                 type: object
             required:
             - nodePools

@@ -99,3 +99,13 @@ func GetByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.Comp
 	}
 	return right, false
 }
+
+func MergeConfigs(left map[string]string, right map[string]string) map[string]string {
+	if left == nil {
+		return right
+	}
+	for k, v := range right {
+		left[k] = v
+	}
+	return left
+}

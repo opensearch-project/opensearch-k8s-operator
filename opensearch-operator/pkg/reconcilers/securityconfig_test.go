@@ -30,7 +30,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
 
-			reconcilerContext := NewReconcilerContext()
+			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
 			underTest := NewSecurityconfigReconciler(
 				k8sClient,
 				context.Background(),
@@ -59,7 +59,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					},
 				}}
 
-			reconcilerContext := NewReconcilerContext()
+			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
 			underTest := NewSecurityconfigReconciler(
 				k8sClient,
 				context.Background(),
@@ -103,7 +103,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					},
 				}}
 
-			reconcilerContext := NewReconcilerContext()
+			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
 			underTest := NewSecurityconfigReconciler(
 				k8sClient,
 				context.Background(),

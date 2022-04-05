@@ -23,6 +23,7 @@ import (
 const (
 	ClusterLabel                     = "opster.io/opensearch-cluster"
 	NodePoolLabel                    = "opster.io/opensearch-nodepool"
+	ConfigurationChecksumAnnotation  = "opster.io/config"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
@@ -30,8 +31,10 @@ func NewSTSForNodePool(
 	username string,
 	cr *opsterv1.OpenSearchCluster,
 	node opsterv1.NodePool,
+	configChecksum string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
+	extraConfig map[string]string,
 ) *appsv1.StatefulSet {
 	//To make sure disksize is not passed as empty
 	var disksize string
@@ -117,6 +120,10 @@ func NewSTSForNodePool(
 		ClusterLabel:  cr.Name,
 		NodePoolLabel: node.Component,
 	}
+	annotations := map[string]string{
+		ConfigurationChecksumAnnotation: configChecksum,
+	}
+
 	if helpers.ContainsString(selectedRoles, "master") {
 		labels["opensearch.role"] = "master"
 	}
@@ -192,7 +199,7 @@ func NewSTSForNodePool(
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
-					Annotations: nil,
+					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -296,6 +303,14 @@ func NewSTSForNodePool(
 			}(),
 			ServiceName: cr.Spec.General.ServiceName,
 		},
+	}
+
+	// Append additional config to env vars
+	for k, v := range extraConfig {
+		sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
+			Name:  k,
+			Value: v,
+		})
 	}
 
 	if cr.Spec.General.SetVMMaxMapCount {

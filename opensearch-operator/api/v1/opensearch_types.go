@@ -33,28 +33,31 @@ type GeneralConfig struct {
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
-	Vendor           string `json:"vendor,omitempty"`
-	Version          string `json:"version,omitempty"`
-	ServiceAccount   string `json:"serviceAccount,omitempty"`
-	ServiceName      string `json:"serviceName"`
-	SetVMMaxMapCount bool   `json:"setVMMaxMapCount,omitempty"`
+	Vendor           string     `json:"vendor,omitempty"`
+	Version          string     `json:"version,omitempty"`
+	ServiceAccount   string     `json:"serviceAccount,omitempty"`
+	ServiceName      string     `json:"serviceName"`
+	SetVMMaxMapCount bool       `json:"setVMMaxMapCount,omitempty"`
+	DefaultRepo      *string    `json:"defaultRepo,omitempty"`
+	Image            *ImageSpec `json:",inline"`
 	// Extra items to add to the opensearch.yml
-	ExtraConfig string     `json:"extraConfig,omitempty"`
-	DefaultRepo *string    `json:"defaultRepo,omitempty"`
-	Image       *ImageSpec `json:",inline"`
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	// Drain data nodes controls whether to drain data notes on rolling restart operations
+	DrainDataNodes bool `json:"drainDataNodes,omitempty"`
 }
 
 type NodePool struct {
-	Component    string                      `json:"component"`
-	Replicas     int32                       `json:"replicas"`
-	DiskSize     string                      `json:"diskSize,omitempty"`
-	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
-	Jvm          string                      `json:"jvm,omitempty"`
-	Roles        []string                    `json:"roles"`
-	Tolerations  []corev1.Toleration         `json:"tolerations,omitempty"`
-	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
-	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
-	Persistence  *PersistenceConfig          `json:"persistence,omitempty"`
+	Component        string                      `json:"component"`
+	Replicas         int32                       `json:"replicas"`
+	DiskSize         string                      `json:"diskSize,omitempty"`
+	Resources        corev1.ResourceRequirements `json:"resources,omitempty"`
+	Jvm              string                      `json:"jvm,omitempty"`
+	Roles            []string                    `json:"roles"`
+	Tolerations      []corev1.Toleration         `json:"tolerations,omitempty"`
+	NodeSelector     map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity         *corev1.Affinity            `json:"affinity,omitempty"`
+	Persistence      *PersistenceConfig          `json:"persistence,omitempty"`
+	AdditionalConfig map[string]string           `json:"additionalConfig,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -152,10 +155,6 @@ type SecurityConfig struct {
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
 }
 
-type UpgradeOptions struct {
-	DrainDataNodes bool `json:"drainDataNodes,omitempty"`
-}
-
 type ImageSpec struct {
 	Image            *string                       `json:"image,omitempty"`
 	ImagePullPolicy  *corev1.PullPolicy            `json:"imagePullPolicy,omitempty"`
@@ -166,12 +165,11 @@ type ImageSpec struct {
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	General        GeneralConfig    `json:"general,omitempty"`
-	ConfMgmt       ConfMgmt         `json:"confMgmt,omitempty"`
-	Dashboards     DashboardsConfig `json:"dashboards,omitempty"`
-	Security       *Security        `json:"security,omitempty"`
-	UpgradeOptions *UpgradeOptions  `json:"upgradeOptions,omitempty"`
-	NodePools      []NodePool       `json:"nodePools"`
+	General    GeneralConfig    `json:"general,omitempty"`
+	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
+	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
+	Security   *Security        `json:"security,omitempty"`
+	NodePools  []NodePool       `json:"nodePools"`
 }
 
 // ClusterStatus defines the observed state of Es
@@ -226,8 +224,4 @@ func (s ImageSpec) GetImage() string {
 		return ""
 	}
 	return *s.Image
-}
-
-func (s *ClusterSpec) DrainDataNodes() bool {
-	return s.UpgradeOptions != nil && s.UpgradeOptions.DrainDataNodes
 }

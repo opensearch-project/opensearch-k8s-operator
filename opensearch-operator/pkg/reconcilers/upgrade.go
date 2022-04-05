@@ -50,7 +50,7 @@ func NewUpgradeReconciler(
 	return &UpgradeReconciler{
 		Client: client,
 		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "scaler")))...),
+			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "upgrade")))...),
 		ctx:               ctx,
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
@@ -287,7 +287,7 @@ func (r *UpgradeReconciler) findNextPool(pools []opsterv1.NodePool) (opsterv1.No
 
 func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 	// Fetch the STS
-	lg := log.FromContext(r.ctx).WithValues("reconciler", "scaler")
+	lg := log.FromContext(r.ctx).WithValues("reconciler", "upgrader")
 	stsName := builders.StsName(r.instance, &pool)
 	sts := &appsv1.StatefulSet{}
 	if err := r.Get(r.ctx, types.NamespacedName{
@@ -298,11 +298,11 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 	}
 
 	dataCount := builders.DataNodesCount(r.ctx, r.Client, r.instance)
-	if dataCount == 2 && r.instance.Spec.DrainDataNodes() {
+	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {
 		lg.Info("only 2 data nodes and drain is set, some shards may not drain")
 	}
 
-	ready, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.DrainDataNodes())
+	ready, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
 	if err != nil {
 		return err
 	}
@@ -335,7 +335,7 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 
 	workingPod := builders.WorkingPodForRollingRestart(sts)
 
-	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.DrainDataNodes(), dataCount)
+	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 	}
 
 	// If we are draining nodes remove the exclusion after the pod is deleted
-	if r.instance.Spec.DrainDataNodes() {
+	if r.instance.Spec.General.DrainDataNodes {
 		_, err = services.RemoveExcludeNodeHost(r.osClient, workingPod)
 		return err
 	}
