@@ -4,6 +4,7 @@ go 1.16
 
 require (
 	cloud.google.com/go v0.99.0 // indirect
+	github.com/Masterminds/semver v1.5.0
 	github.com/banzaicloud/operator-tools v0.28.1
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-logr/logr v1.2.2
@@ -13,6 +14,8 @@ require (
 	github.com/opensearch-project/opensearch-go v1.1.0
 	github.com/phayes/freeport v0.0.0-20180830031419-95f893ade6f2
 	github.com/spf13/cast v1.4.1 // indirect
+	golang.org/x/crypto v0.0.0-20210921155107-089bfa567519 // indirect
+	golang.org/x/sys v0.0.0-20220330033206-e17cdc41300f // indirect
 	k8s.io/api v0.23.1
 	k8s.io/apimachinery v0.23.1
 	k8s.io/client-go v0.23.1

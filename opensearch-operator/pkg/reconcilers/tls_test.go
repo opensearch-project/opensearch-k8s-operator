@@ -16,7 +16,7 @@ import (
 )
 
 func newTLSReconciler(spec *opsterv1.OpenSearchCluster) (*ReconcilerContext, *TLSReconciler) {
-	reconcilerContext := NewReconcilerContext()
+	reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
 	underTest := NewTLSReconciler(
 		k8sClient,
 		context.Background(),

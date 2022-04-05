@@ -126,20 +126,48 @@ spec:
                             type: string
                         type: object
                     type: object
+                  version:
+                    type: string
                 required:
                 - replicas
+                - version
                 type: object
               general:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code after modifying this file'
                 properties:
-                  extraConfig:
+                  additionalConfig:
+                    additionalProperties:
+                      type: string
                     description: Extra items to add to the opensearch.yml
+                    type: object
+                  defaultRepo:
                     type: string
+                  drainDataNodes:
+                    description: Drain data nodes controls whether to drain data notes
+                      on rolling restart operations
+                    type: boolean
                   httpPort:
                     default: 9200
                     format: int32
                     type: integer
+                  image:
+                    type: string
+                  imagePullPolicy:
+                    description: PullPolicy describes a policy for if/when to pull
+                      a container image
+                    type: string
+                  imagePullSecrets:
+                    items:
+                      description: LocalObjectReference contains enough information
+                        to let you locate the referenced object inside the same namespace.
+                      properties:
+                        name:
+                          description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            TODO: Add other useful fields. apiVersion, kind, uid?'
+                          type: string
+                      type: object
+                    type: array
                   serviceAccount:
                     type: string
                   serviceName:
@@ -162,6 +190,10 @@ spec:
               nodePools:
                 items:
                   properties:
+                    additionalConfig:
+                      additionalProperties:
+                        type: string
+                      type: object
                     affinity:
                       description: Affinity is a group of affinity scheduling rules.
                       properties:
@@ -1043,8 +1075,7 @@ spec:
                     component:
                       type: string
                     diskSize:
-                      format: int32
-                      type: integer
+                      type: string
                     jvm:
                       type: string
                     nodeSelector:
@@ -1327,10 +1358,14 @@ spec:
                       type: string
                   type: object
                 type: array
+              initialized:
+                type: boolean
               phase:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
                   this file'
+                type: string
+              version:
                 type: string
             required:
             - componentsStatus

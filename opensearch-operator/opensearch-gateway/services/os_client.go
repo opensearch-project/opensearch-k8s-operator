@@ -4,11 +4,32 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"net/http"
+	"strings"
+	"time"
+
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
-	"net/http"
+	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"k8s.io/utils/pointer"
 	"opensearch.opster.io/opensearch-gateway/responses"
-	"strings"
+)
+
+var (
+	AdditionalSystemIndices = []string{
+		".opendistro-alerting-config",
+		".opendistro-alerting-alert*",
+		".opendistro-anomaly-results*",
+		".opendistro-anomaly-detector*",
+		".opendistro-anomaly-checkpoints",
+		".opendistro-anomaly-detection-state",
+		".opendistro-reports-*",
+		".opendistro-notifications-*",
+		".opendistro-notebooks",
+		".opensearch-observability",
+		".opendistro-asynchronous-search-response*",
+		".replication-metadata-store",
+	}
 )
 
 type OsClusterClient struct {
@@ -56,8 +77,8 @@ func MainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	return response, err
 }
 
-func (client *OsClusterClient) CatHealth() (responses.CatHealthResponse, error) {
-	req := opensearchapi.CatHealthRequest{Format: "json"}
+func (client *OsClusterClient) GetHealth() (responses.CatHealthResponse, error) {
+	req := opensearchapi.ClusterHealthRequest{}
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.CatHealthResponse
 	if err == nil {
@@ -113,6 +134,22 @@ func (client *OsClusterClient) CatShards(headers []string) ([]responses.CatShard
 	return response, err
 }
 
+func (client *OsClusterClient) CatNamedIndicesShards(headers []string, indices []string) ([]responses.CatShardsResponse, error) {
+	req := opensearchapi.CatShardsRequest{
+		Index:  indices,
+		Format: "json",
+		H:      headers,
+	}
+	indicesRes, err := req.Do(context.Background(), client.client)
+	var response []responses.CatShardsResponse
+	if err != nil {
+		return response, err
+	}
+	defer indicesRes.Body.Close()
+	err = json.NewDecoder(indicesRes.Body).Decode(&response)
+	return response, err
+}
+
 func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsResponse, error) {
 	req := opensearchapi.ClusterGetSettingsRequest{Pretty: true}
 	settingsRes, err := req.Do(context.Background(), client.client)
@@ -125,8 +162,27 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 	return response, err
 }
 
-func (client *OsClusterClient) PutClusterSettings(settingsJson string) (responses.ClusterSettingsResponse, error) {
-	body := strings.NewReader(settingsJson)
+func (client *OsClusterClient) GetFlatClusterSettings() (responses.FlatClusterSettingsResponse, error) {
+	req := opensearchapi.ClusterGetSettingsRequest{
+		FlatSettings: pointer.BoolPtr(true),
+	}
+	settingsRes, err := req.Do(context.Background(), client.client)
+	var response responses.FlatClusterSettingsResponse
+	if err != nil {
+		return response, err
+	}
+	defer settingsRes.Body.Close()
+
+	if settingsRes.IsError() {
+		return response, ErrClusterHealthGetFailed(settingsRes.String())
+	}
+
+	err = json.NewDecoder(settingsRes.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) PutClusterSettings(settings responses.ClusterSettingsResponse) (responses.ClusterSettingsResponse, error) {
+	body := opensearchutil.NewJSONReader(settings)
 	req := opensearchapi.ClusterPutSettingsRequest{Body: body}
 	settingsRes, err := req.Do(context.Background(), client.client)
 	var response responses.ClusterSettingsResponse
@@ -149,4 +205,45 @@ func (client *OsClusterClient) ReRouteShard(rerouteJson string) (responses.Clust
 	defer settingsRes.Body.Close()
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
+}
+
+func (client *OsClusterClient) GetClusterHealth() (responses.ClusterHealthResponse, error) {
+	req := opensearchapi.ClusterHealthRequest{
+		Timeout: 10 * time.Second,
+	}
+
+	health := responses.ClusterHealthResponse{}
+	resp, err := req.Do(context.Background(), client.client)
+	if err != nil {
+		return health, err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return health, ErrClusterHealthGetFailed(resp.String())
+	}
+
+	err = json.NewDecoder(resp.Body).Decode(&health)
+	return health, err
+}
+
+func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
+	req := opensearchapi.CatIndicesRequest{
+		Format: "json",
+		Index: []string{
+			indexName,
+		},
+	}
+	indicesRes, err := req.Do(context.Background(), client.client)
+	if err != nil {
+		return false, err
+	}
+	defer indicesRes.Body.Close()
+	if indicesRes.StatusCode == 404 {
+		return false, nil
+	} else if indicesRes.IsError() {
+		return false, ErrCatIndicesFailed(indicesRes.String())
+	}
+
+	return true, nil
 }

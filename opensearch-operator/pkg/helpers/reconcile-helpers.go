@@ -3,30 +3,19 @@ package helpers
 import (
 	"context"
 	"fmt"
-	"strings"
+	"path"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/kube-openapi/pkg/validation/errors"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
-
-func CreateInitMasters(cr *opsterv1.OpenSearchCluster) string {
-	var masters []string
-	for _, nodePool := range cr.Spec.NodePools {
-		if ContainsString(nodePool.Roles, "master") {
-			for i := 0; int32(i) < nodePool.Replicas; i++ {
-				masters = append(masters, fmt.Sprintf("%s-%s-%d", cr.Name, nodePool.Component, i))
-			}
-		}
-	}
-	return strings.Join(masters, ",")
-}
 
 func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
 	field_env := GetField(from_env, text)
@@ -85,4 +74,87 @@ func ReadOrGenerateCaCert(pki tls.PKI, k8sClient client.Client, ctx context.Cont
 		ca = pki.CAFromSecret(caSecret.Data)
 	}
 	return ca, nil
+}
+
+func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (result opsterv1.ImageSpec) {
+	defaultRepo := "docker.io/opensearchproject"
+	defaultImage := "opensearch"
+
+	var version string
+
+	// Calculate version based on upgrading status
+	if nodePool == nil {
+		version = cr.Spec.General.Version
+	} else {
+		componentStatus := opsterv1.ComponentStatus{
+			Component:   "Upgrader",
+			Description: nodePool.Component,
+		}
+		_, found := FindFirstPartial(cr.Status.ComponentsStatus, componentStatus, GetByDescriptionAndGroup)
+
+		if cr.Status.Version == "" || cr.Status.Version == cr.Spec.General.Version {
+			version = cr.Spec.General.Version
+		} else {
+			if found {
+				version = cr.Spec.General.Version
+			} else {
+				version = cr.Status.Version
+			}
+		}
+	}
+
+	// If a custom image is specified, use it.
+	if cr.Spec.General.Image != nil {
+		if cr.Spec.General.Image.ImagePullPolicy != nil {
+			result.ImagePullPolicy = cr.Spec.General.Image.ImagePullPolicy
+		}
+		if len(cr.Spec.General.Image.ImagePullSecrets) > 0 {
+			result.ImagePullSecrets = cr.Spec.General.Image.ImagePullSecrets
+		}
+		if cr.Spec.General.Image.Image != nil {
+			// If image is set, nothing else needs to be done
+			result.Image = cr.Spec.General.Image.Image
+			return
+		}
+	}
+
+	// If a different image repo is requested, use that with the default image
+	// name and version tag.
+	if cr.Spec.General.DefaultRepo != nil {
+		defaultRepo = *cr.Spec.General.DefaultRepo
+	}
+
+	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+		path.Join(defaultRepo, defaultImage), version))
+	return
+}
+
+func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
+	defaultRepo := "docker.io/opensearchproject"
+	defaultImage := "opensearch-dashboards"
+
+	// If a custom image is specified, use it.
+	if cr.Spec.General.Image != nil {
+		if cr.Spec.General.Image.ImagePullPolicy != nil {
+			result.ImagePullPolicy = cr.Spec.General.Image.ImagePullPolicy
+		}
+		if len(cr.Spec.General.Image.ImagePullSecrets) > 0 {
+			result.ImagePullSecrets = cr.Spec.General.Image.ImagePullSecrets
+		}
+		if cr.Spec.General.Image.Image != nil {
+			// If image is set, nothing else needs to be done
+			result.Image = cr.Spec.General.Image.Image
+			return
+		}
+	}
+
+	// If a different image repo is requested, use that with the default image
+	// name and version tag.
+	if cr.Spec.General.DefaultRepo != nil {
+		defaultRepo = *cr.Spec.General.DefaultRepo
+	}
+
+	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+		path.Join(defaultRepo, defaultImage), cr.Spec.Dashboards.Version))
+	return
 }

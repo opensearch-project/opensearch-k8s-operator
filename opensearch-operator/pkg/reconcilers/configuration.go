@@ -2,14 +2,24 @@ package reconcilers
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -44,9 +54,14 @@ func NewConfigurationReconciler(
 }
 
 func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
-	if (r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0) && r.instance.Spec.General.ExtraConfig == "" {
+	if r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0 {
 		return ctrl.Result{}, nil
 	}
+	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	if len(r.reconcilerContext.OpenSearchConfig) > 0 {
 		// Add some default config for the security plugin
 		r.reconcilerContext.AddConfig("plugins.security.audit.type", "internal_opensearch")
@@ -54,16 +69,30 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.check_snapshot_restore_write_privileges", "true")
 		r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
-		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", `[".opendistro-alerting-config", ".opendistro-alerting-alert*", ".opendistro-anomaly-results*", ".opendistro-anomaly-detector*", ".opendistro-anomaly-checkpoints", ".opendistro-anomaly-detection-state", ".opendistro-reports-*", ".opendistro-notifications-*", ".opendistro-notebooks", ".opensearch-observability", ".opendistro-asynchronous-search-response*", ".replication-metadata-store"]`)
+		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
 	}
 
-	cm := r.buildConfigMap()
+	var sb strings.Builder
+	keys := make([]string, 0, len(r.reconcilerContext.OpenSearchConfig))
+	for key := range r.reconcilerContext.OpenSearchConfig {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
+	for _, key := range keys {
+		sb.WriteString(fmt.Sprintf("%s: %s\n", key, r.reconcilerContext.OpenSearchConfig[key]))
+	}
+	data := sb.String()
+
+	cm := r.buildConfigMap(data)
 	if err := ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()); err != nil {
 		return ctrl.Result{}, err
 	}
-	result, err := r.ReconcileResource(cm, reconciler.StatePresent)
-	if err != nil {
-		r.recorder.Event(r.instance, "Warning", "Cannot create Configmap ", "Requeue - Fix the problem you have on main Opensearch ConfigMap")
+
+	result := reconciler.CombinedResult{}
+	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
+	if result.Err != nil {
+		return result.Result, result.Err
 	}
 
 	volume := corev1.Volume{
@@ -85,23 +114,14 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	}
 	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 
-	if result != nil {
-		return *result, err
+	for _, nodePool := range r.instance.Spec.NodePools {
+		result.Combine(r.createHashForNodePool(nodePool, data))
 	}
-	return ctrl.Result{}, err
+
+	return result.Result, result.Err
 }
 
-func (r *ConfigurationReconciler) buildConfigMap() *corev1.ConfigMap {
-	var sb strings.Builder
-	for key, value := range r.reconcilerContext.OpenSearchConfig {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", key, value))
-	}
-	if r.instance.Spec.General.ExtraConfig != "" {
-		sb.WriteString(r.instance.Spec.General.ExtraConfig)
-		sb.WriteString("\n")
-	}
-	data := sb.String()
-
+func (r *ConfigurationReconciler) buildConfigMap(data string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-config", r.instance.Name),
@@ -113,6 +133,49 @@ func (r *ConfigurationReconciler) buildConfigMap() *corev1.ConfigMap {
 	}
 }
 
+func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePool, data string) (*ctrl.Result, error) {
+
+	found, nodePoolHash := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
+	// If we don't find the NodePoolConfig this indicates there's been an update to the CR
+	// since starting reconciliation so we requeue
+	if !found {
+		return &ctrl.Result{
+			Requeue: true,
+		}, nil
+	}
+
+	// If an upgrade is in process we want to wait to schedule non data nodes
+	// data nodes will be picked up by the rolling restarter, or the upgrade
+	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
+		if !helpers.ContainsString(nodePool.Roles, "data") {
+			sts := &appsv1.StatefulSet{}
+			err := r.Get(r.ctx, types.NamespacedName{
+				Name:      builders.StsName(r.instance, &nodePool),
+				Namespace: r.instance.Namespace,
+			}, sts)
+			if k8serrors.IsNotFound(err) {
+				nodePoolHash.ConfigHash = generateHash([]byte(data))
+			} else if err != nil {
+				return nil, err
+			} else {
+				nodePoolHash.ConfigHash = sts.Spec.Template.Annotations[builders.ConfigurationChecksumAnnotation]
+			}
+		}
+	} else {
+		nodePoolHash.ConfigHash = generateHash([]byte(data))
+	}
+
+	r.reconcilerContext.replaceNodePoolHash(nodePoolHash)
+
+	return nil, nil
+}
+
 func (r *ConfigurationReconciler) DeleteResources() (ctrl.Result, error) {
 	return ctrl.Result{}, nil
+}
+
+func generateHash(source []byte) string {
+	hash := sha1.New()
+	hash.Write(source)
+	return hex.EncodeToString(hash.Sum(nil))
 }

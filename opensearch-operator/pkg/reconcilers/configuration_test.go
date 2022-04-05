@@ -27,10 +27,26 @@ var _ = Describe("Configuration Controller", func() {
 	Context("When Reconciling the configuration controller with no configuration snippets", func() {
 		It("should not create a configmap ", func() {
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					NodePools: []opsterv1.NodePool{
+						{
+							Component: "test",
+							Roles: []string{
+								"master",
+								"data",
+							},
+						},
+					},
+				},
+			}
 
-			reconcilerContext := NewReconcilerContext()
+			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
 
 			underTest := NewConfigurationReconciler(
 				k8sClient,
@@ -43,7 +59,7 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			configMap := corev1.ConfigMap{}
-			err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
+			err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-test-config", Namespace: clusterName}, &configMap)
 			Expect(err).To(HaveOccurred())
 		})
 	})
@@ -53,10 +69,26 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					NodePools: []opsterv1.NodePool{
+						{
+							Component: "test",
+							Roles: []string{
+								"master",
+								"data",
+							},
+						},
+					},
+				},
+			}
 
-			reconcilerContext := NewReconcilerContext()
+			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
 
 			underTest := NewConfigurationReconciler(
 				k8sClient,
@@ -73,7 +105,7 @@ var _ = Describe("Configuration Controller", func() {
 
 			configMap := corev1.ConfigMap{}
 			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: spec.Namespace}, &configMap)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
@@ -83,46 +115,4 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(strings.Contains(data, "bar: baz\n")).To(BeTrue())
 		})
 	})
-
-	Context("When Reconciling the configuration controller with extra config", func() {
-		clusterName := "extra-config"
-		It("should create a configmap with these items", func() {
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.Background(), &ns)
-			Expect(err).ToNot(HaveOccurred())
-			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{
-					ExtraConfig: "foo: bar\nother.item.to.add: true",
-				}}}
-
-			reconcilerContext := NewReconcilerContext()
-
-			underTest := NewConfigurationReconciler(
-				k8sClient,
-				context.Background(),
-				&helpers.MockEventRecorder{},
-				&reconcilerContext,
-				&spec,
-			)
-			_, err = underTest.Reconcile()
-			Expect(err).ToNot(HaveOccurred())
-
-			configMap := corev1.ConfigMap{}
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-config", Namespace: clusterName}, &configMap)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
-
-			data, exists := configMap.Data["opensearch.yml"]
-			Expect(exists).To(BeTrue())
-			Expect(strings.Contains(data, "foo: bar\n")).To(BeTrue())
-			Expect(strings.Contains(data, "other.item.to.add: true\n")).To(BeTrue())
-		})
-	})
-
 })

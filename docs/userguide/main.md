@@ -34,7 +34,7 @@ spec:
   nodePools:
     - component: masters
       replicas: 3
-      diskSize: 30
+      diskSize: "30Gi"
       NodeSelector:
       resources:
          requests:
@@ -57,6 +57,54 @@ Or if you want to access the opensearch REST API run `kubectl port-forward svc/m
 To delete your cluster run `kubectl delete -f cluster.yaml`. The operator will then cleanup and delete any kubernetes resources created for the cluster. Note that this will also delete the persistent volumes for the cluster and therefore all data stored in opensearch.
 
 The minimal cluster you deployed in this section is only intended for demo purposes. Please see the next sections on how to configure the different aspects of your cluster.
+
+## Data persistence
+
+By default the operator will create Opensearch nodepools with persistent storage from the default [Storage Class](https://kubernetes.io/docs/concepts/storage/storage-classes/).  This behaviour can be changed per node pool.  You may supply an alternative storage class and access mode, or configure hostPath or emptyDir storage.  Please note that hostPath is strongly discouraged, if you do choose this you must also configure affinity for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host:
+```yaml
+nodePools:
+- component: masters
+  replicas: 3
+  diskSize: 30
+  NodeSelector:
+  resources:
+      requests:
+        memory: "2Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "500m"
+  roles:
+    - "data"
+    - "master"
+  persistence:
+    storageClass: mystorageclass
+    accessModes:
+    - ReadWriteOnce
+```
+or
+
+```yaml
+nodePools:
+- component: masters
+  replicas: 3
+  diskSize: 30
+  NodeSelector:
+  resources:
+      requests:
+        memory: "2Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "500m"
+  roles:
+    - "data"
+    - "master"
+  persistence:
+    emptyDir: {}
+```
+
+If you are using emptyDir it is recommended that you set `spec.general.drainDataNodes` to be `true`.  This will ensure that shards are drained from the pods before rolling upgrade or restart operations are performed.
 
 ## TLS
 
@@ -176,3 +224,15 @@ To apply the securityconfig to the opensearch cluster the operator uses a separa
 ## Nodepools and scaling
 
 TBD
+
+## Rolling Upgrades
+
+Opensearch upgrades are controlled by the `spec.general.version` field
+```yaml
+spec:
+  general:
+    version: 1.2.3
+    drainDataNodes: false
+```
+
+To perform a rolling upgrade on the cluster simply change this version and the operator will perform a rolling upgrade.  Downgrades and upgrades that span more than one major version are not supported as this will put the Opensearch cluster in an unsupported state.  If using emptyDir storage for data nodes it is recommended to set `general.drainDataNodes` to `true`

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"reflect"
 
-	sts "k8s.io/api/apps/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,7 +21,7 @@ func ContainsString(slice []string, s string) bool {
 
 }
 
-func GetField(v *sts.StatefulSetSpec, field string) interface{} {
+func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 
 	r := reflect.ValueOf(v)
 	f := reflect.Indirect(r).FieldByName(field).Interface()
@@ -42,7 +42,11 @@ func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSl
 	return fullSliced
 }
 
-func FindFirstPartial(arr []opsterv1.ComponentStatus, item opsterv1.ComponentStatus, predicator func(opsterv1.ComponentStatus, opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool)) (opsterv1.ComponentStatus, bool) {
+func FindFirstPartial(
+	arr []opsterv1.ComponentStatus,
+	item opsterv1.ComponentStatus,
+	predicator func(opsterv1.ComponentStatus, opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool),
+) (opsterv1.ComponentStatus, bool) {
 	for i := 0; i < len(arr); i++ {
 		itemInArr, found := predicator(arr[i], item)
 		if found {
@@ -70,7 +74,7 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	return val, ok
 }
 
-func UsernameAndPassword(k8sClient client.Client, ctx context.Context, cr *opsterv1.OpenSearchCluster) (string, string, error) {
+func UsernameAndPassword(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) (string, string, error) {
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
 		// Read credentials from secret
 		credentialsSecret := corev1.Secret{}
@@ -87,4 +91,21 @@ func UsernameAndPassword(k8sClient client.Client, ctx context.Context, cr *opste
 		// Use default demo credentials
 		return "admin", "admin", nil
 	}
+}
+
+func GetByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
+	if left.Description == right.Description && left.Component == right.Component {
+		return left, true
+	}
+	return right, false
+}
+
+func MergeConfigs(left map[string]string, right map[string]string) map[string]string {
+	if left == nil {
+		return right
+	}
+	for k, v := range right {
+		left[k] = v
+	}
+	return left
 }
