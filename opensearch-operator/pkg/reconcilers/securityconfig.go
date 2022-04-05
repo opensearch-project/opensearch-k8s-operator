@@ -129,6 +129,11 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
+	if err := r.calculateSecurityconfigSubpaths(&configSecret); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	job := batchv1.Job{}
 	if err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &job); err == nil {
 		value, exists := job.ObjectMeta.Annotations[checksumAnnotation]
@@ -203,4 +208,32 @@ func (r *SecurityconfigReconciler) determineAdminSecret() string {
 func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+func (r *SecurityconfigReconciler) calculateSecurityconfigSubpaths(secret *corev1.Secret) error {
+	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, corev1.Volume{
+		Name: "securityconfig",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{
+				SecretName: secret.Name,
+			},
+		},
+	})
+
+	keys := make([]string, 0, len(secret.Data))
+	for k := range secret.Data {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+	for _, k := range keys {
+		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, corev1.VolumeMount{
+			Name:      "securityconfig",
+			MountPath: fmt.Sprintf("/usr/share/opensearch/plugins/opensearch-security/securityconfig/%s", k),
+			SubPath:   k,
+			ReadOnly:  true,
+		})
+	}
+
+	return nil
 }

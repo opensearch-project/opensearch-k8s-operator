@@ -146,7 +146,6 @@ var _ = Describe("TLS Reconciler", func() {
 			}, timeout, interval).Should(BeTrue())
 			Expect(len(job.Spec.Template.Spec.Containers[0].VolumeMounts)).Should(BeNumerically(">=", 2))
 			Expect(helpers.CheckVolumeExists(job.Spec.Template.Spec.Volumes, job.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(job.Spec.Template.Spec.Volumes, job.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-default-securityconfig", "securityconfig")).Should((BeTrue()))
 		})
 	})
 
