@@ -25,7 +25,14 @@ The full roadmap is available here: [Development plan](https://github.com/Opster
 - [ ] Control shard balancing and allocation: AZ/Rack awareness, Hot/Warm.
 
 # Getting Started
-## Installing the Operator
+
+## Installing the Operator on your k8s cluster with Helm
+
+- Clone the repo
+- Run cd charts
+- Helm install -f values.yaml [RELEASE_NAME] ./
+
+## Installing the Operator locally
 
 - Clone the repo and go to `opensearch-operator` folder.
 - Run `make build manifests` to build the controller binary and the manifests
