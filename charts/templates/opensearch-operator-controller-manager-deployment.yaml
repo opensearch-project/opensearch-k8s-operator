@@ -33,6 +33,7 @@ spec:
         command:
         - /manager
         image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag }}"
+        name: operator-controller-manager
         resources:
           {{- toYaml .Values.manager.resources | nindent 12 }}
         securityContext:
