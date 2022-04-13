@@ -144,7 +144,7 @@ GeneralConfig defines global Opensearch cluster configuration
       </tr><tr>
         <td><b>SetVMMaxMapCount</b></td>
         <td>bool</td>
-        <td></td>
+        <td>will add VMmaxMapCount</td>
         <td>false</td>
         <td></td>
       </tr><tr>
@@ -156,4 +156,138 @@ GeneralConfig defines global Opensearch cluster configuration
 </table>
 
 
+<h3 id="GeneralConfig">
+  Dashboards
+</h3>
 
+Dashboards defines Opensearch-Dashboard configuration and deployment
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>enable</b></td>
+        <td>bool</td>
+        <td>if true, will deploy Opensearch-dashboards with the cluster</td>
+        <td>false</td>
+        <td>false</td>
+      </tr><tr>
+        <td><b>replicas</b></td>
+        <td>int</td>
+        <td>defines Opensearch-Dashboards deployment's replicas</td>
+        <td>true</td>
+        <td>1</td>
+      </tr><tr>
+        <td><b>resources</b></td>
+        <td>corev1.ResourceRequirements</td>
+        <td> Define Opensearch-Dashboard resources </td>
+        <td>false</td>
+        <td>Default Opensearch-dashboard resources</td>
+      </tr><tr>
+        <td><b>version</b></td>
+        <td>string</td>
+        <td>Opensearch-dashboards version</td>
+        <td>false</td>
+        <td>latest</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>Tls</b></td>
+        <td>DashboardsTlsConfig</td>
+        <td>defining Dashbaord TLS configuration</td>
+        <td>false</td>
+        <td>false</td>
+      </tr><tr>
+</table>
+
+
+<h3 id="GeneralConfig">
+  NodePools
+</h3>
+
+Every NodePool is defining different Opensearch Nodes StatefulSet 
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>component</b></td>
+        <td>string</td>
+        <td>statefulset name - will create $cluster-name-$component STS </td>
+        <td>true</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>replicas</b></td>
+        <td>int</td>
+        <td>defines NodePool deployment's replicas</td>
+        <td>true</td>
+        <td>1</td>
+      </tr><tr>
+        <td><b>diskSize</b></td>
+        <td>string</td>
+        <td> nodePool data disk size </td>
+        <td>true</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>NodeSelector</b></td>
+        <td>map[string]string</td>
+        <td>add NodeSelector to nodePool</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>Tls</b></td>
+        <td>DashboardsTlsConfig</td>
+        <td>defining Dashbaord TLS configuration</td>
+        <td>false</td>
+        <td>false</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>resources</b></td>
+        <td>corev1.ResourceRequirements</td>
+        <td> Define NodePool resources </td>
+        <td>false</td>
+        <td>Default Opensearch resources</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>roles</b></td>
+        <td>[]string </td>
+        <td> define Opensearch roles to the nodeGroup </td>
+        <td>true</td>
+        <td> - </td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>JVM</b></td>
+        <td>string</td>
+        <td> declare JVM</td>
+        <td>false</td>
+        <td> half of the STS requests  </td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>Affinity</b></td>
+        <td>corev1.Affinity</td>
+        <td>add affinity to nodePool</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>Tolerations</b></td>
+        <td>[]corev1.Toleration</td>
+        <td>add toleration to nodePool</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+</table>
