@@ -33,10 +33,13 @@ spec:
         command:
         - /manager
         image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag }}"
+        name: operator-controller-manager
         resources:
           {{- toYaml .Values.manager.resources | nindent 12 }}
         securityContext:
           allowPrivilegeEscalation: false
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
       securityContext:
         runAsNonRoot: true
       serviceAccountName: opensearch-operator-controller-manager
