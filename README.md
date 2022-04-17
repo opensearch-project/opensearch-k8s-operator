@@ -27,10 +27,15 @@ The full roadmap is available here: [Development plan](https://github.com/Opster
 # Getting Started
 
 ## Installing the Operator on your k8s cluster with Helm
+  ## Installing using the repo
+    - Clone the repo
+    - Run cd charts
+    - Helm install -f values.yaml [RELEASE_NAME] ./
+  
+  ## Installing using artifactHub.io
+    - helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator-chart/
+    - helm install my-opensearch-operator opensearch-operator/opensearch-operator --version 1.2.0
 
-- Clone the repo
-- Run cd charts
-- Helm install -f values.yaml [RELEASE_NAME] ./
 
 ## Installing the Operator locally
 
