@@ -6,7 +6,7 @@ Expand the name of the chart.
 {{- end }}
 
 {{- define ".Values.namespaceName" -}}
-{{- default "opensearch-operator-system" .Values.global.namespace }}
+{{- default "opensearch-operator-system"}}
 {{- end }}
 
 
