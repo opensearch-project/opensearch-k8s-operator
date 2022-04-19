@@ -20,11 +20,11 @@ Here are the steps arranged by priority:
 14. Cluster configuration reconciler (for opensearch.yaml configs) - TODO
 
 # Next Phases
-1. OpenSearch Operator CLI
-2. Advanced shards allocation strategies
-3. Automatic scaler
-4. Snapshot and restore
-5. Roles and users 
-6. Monitoring service, build-in prometheus exporter 
-7. Templates configs
-8. ILM configs
+1. Monitoring service, build-in prometheus exporter 
+2. Snapshot and restore
+3. Roles and users
+4. Templates configs
+5. ISM configs
+6. Automatic scaler
+7. OpenSearch Operator CLI
+8. Advanced shards allocation strategies
