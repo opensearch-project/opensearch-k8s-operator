@@ -115,6 +115,13 @@ func (in *DashboardsConfig) DeepCopyInto(out *DashboardsConfig) {
 		*out = new(DashboardsTlsConfig)
 		**out = **in
 	}
+	if in.AdditionalConfig != nil {
+		in, out := &in.AdditionalConfig, &out.AdditionalConfig
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	out.OpensearchCredentialsSecret = in.OpensearchCredentialsSecret
 }
 

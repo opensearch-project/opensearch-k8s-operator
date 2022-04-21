@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -156,6 +157,50 @@ var _ = Describe("Dashboards Reconciler", func() {
 			env := deployment.Spec.Template.Spec.Containers[0].Env
 			Expect(hasEnvWithSecretSource(env, "OPENSEARCH_USERNAME", credentialsSecret, "username")).To(BeTrue())
 			Expect(hasEnvWithSecretSource(env, "OPENSEARCH_PASSWORD", credentialsSecret, "password")).To(BeTrue())
+		})
+	})
+
+	Context("When running the dashboards reconciler with additionalConfig supplied", func() {
+		It("should populate the dashboard config with these values", func() {
+			clusterName := "dashboards-add-config"
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						AdditionalConfig: map[string]string{
+							"foo": "bar",
+						},
+					},
+				}}
+			ns := corev1.Namespace{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: clusterName,
+				},
+			}
+			err := k8sClient.Create(context.Background(), &ns)
+			Expect(err).ToNot(HaveOccurred())
+
+			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			underTest := NewDashboardsReconciler(
+				k8sClient,
+				context.Background(),
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			configMap := corev1.ConfigMap{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-dashboards-config", Namespace: clusterName}, &configMap)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			data, exists := configMap.Data["opensearch_dashboards.yml"]
+			Expect(exists).To(BeTrue())
+			Expect(strings.Contains(data, "foo: bar\n")).To(BeTrue())
 		})
 	})
 

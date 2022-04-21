@@ -53,6 +53,11 @@ spec:
                 type: object
               dashboards:
                 properties:
+                  additionalConfig:
+                    additionalProperties:
+                      type: string
+                    description: Additional properties for opensearch_dashboards.yaml
+                    type: object
                   enable:
                     type: boolean
                   opensearchCredentialsSecret:
