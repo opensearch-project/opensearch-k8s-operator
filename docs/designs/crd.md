@@ -260,7 +260,7 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>corev1.ResourceRequirements</td>
         <td> Define NodePool resources </td>
         <td>false</td>
-        <td>Default Opensearch resources</td>
+        <td></td>
       </tr><tr>
       </tr><tr>
         <td><b>roles</b></td>
