@@ -120,7 +120,7 @@ GeneralConfig defines global Opensearch cluster configuration
       </tr><tr>
         <td><b>vendor</b></td>
         <td>string</td>
-        <td>Vendor declaration (sts docker image is built for it)</td>
+        <td>Vendor distribution to use for the cluster, currently only opensearch is supported</td>
         <td>false</td>
         <td>opensearch</td>
       </tr><tr>
