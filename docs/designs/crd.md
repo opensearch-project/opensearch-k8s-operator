@@ -89,7 +89,7 @@ ClusterSpec defines the desired state of OpensearchCluster
       </tr><tr>
         <td><b>nodePools</b></td>
         <td>[]object</td>
-        <td>The nodePools object is build from nodePool objects and define different nodePools  in OpensearchCluster. Thats the main resource that responsible for deploying OpensearchCluster Statefulsets  </td>
+        <td>List of objects that define the different nodePools in an OpensearchCluster. Each nodePool represents a group of nodes with the same opensearch roles and resources. Each nodePool is deployed as a Kubernetes StatefulSet. Together they form the opensearch cluster.</td>
         <td>true</td>
 </table>
 
