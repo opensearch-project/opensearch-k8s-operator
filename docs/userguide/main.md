@@ -133,6 +133,27 @@ Using `spec.general.additionalConfig` you can add settings to all nodes, using `
 
 As of right now the settings cannot be changed after the initial installation of the cluster (that feature is planned for the next version). If you need to change any settings please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
 
+## Configuring opensearch_dashboards.yml
+
+You can customize the OpenSearch dashboard configuration file [`opensearch_dashboards.yml`](https://github.com/opensearch-project/OpenSearch-Dashboards/blob/main/config/opensearch_dashboards.yml) using the `additionalConfig` field in the dashboards section of the `OpenSearchCluster` custom resource:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  dashboards:
+    additionalConfig:
+      opensearch_security.auth.type: "proxy"
+      opensearch.requestHeadersWhitelist: |
+        ["securitytenant","Authorization","x-forwarded-for","x-auth-request-access-token", "x-auth-request-email", "x-auth-request-groups"]
+      opensearch_security.multitenancy.enabled: "true"
+```
+
+This allows one to set up any of the [backend](https://opensearch.org/docs/latest/security-plugin/configuration/configuration/) authentication types for the dashboard.
+
+*The configuration must be valid or the dashboard will fail to start.*
+
 ## TLS
 
 For security reasons communication with the opensearch cluster and between cluster nodes is only done encrypted. If you do not configure anything opensearch will use included demo TLS certificates that are not suited for real deployments.
@@ -159,7 +180,7 @@ spec:
           name:  # Name of the secret that contains the provided certificate
         caSecret:
           name:  # Name of the secret that contains a CA the operator should use
-        nodesDn: []  # List of certificate DNs allowed to connect 
+        nodesDn: []  # List of certificate DNs allowed to connect
         adminDn: []  # List of certificate DNs that should get admin access
 # ...
 ```
