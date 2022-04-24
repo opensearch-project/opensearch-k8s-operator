@@ -126,7 +126,7 @@ GeneralConfig defines global Opensearch cluster configuration
       </tr><tr>
         <td><b>version</b></td>
         <td>string</td>
-        <td> Opensearch applicative version  </td>
+        <td>Version of opensearch to deploy</td>
         <td>false</td>
         <td>latest</td>
       </tr><tr>
