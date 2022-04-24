@@ -79,7 +79,7 @@ ClusterSpec defines the desired state of OpensearchCluster
       </tr><tr>
         <td><b>confMgmt</b></td>
         <td>object</td>
-        <td>Responsible about enabling additional OpensaerchOperator components (reconcilers)  </td>
+        <td>Config object to enable additional OpensearchOperator features/components</td>
         <td>false</td>
       </tr><tr>
         <td><b>security</b></td>
