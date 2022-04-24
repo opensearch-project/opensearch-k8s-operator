@@ -148,7 +148,7 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>false</td>
         <td></td>
       </tr><tr>
-        <td><b>ExtraConfig</b></td>
+        <td><b>additionalConfig</b></td>
         <td>string</td>
         <td>Added extra items to opensearch.yml</td>
         <td>string</td>
