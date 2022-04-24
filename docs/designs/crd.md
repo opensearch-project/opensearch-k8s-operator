@@ -265,7 +265,7 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
       </tr><tr>
         <td><b>roles</b></td>
         <td>[]string </td>
-        <td> define Opensearch roles to the nodeGroup </td>
+        <td>List of OpenSearch roles to assign to the nodePool</td>
         <td>true</td>
         <td> - </td>
       </tr><tr>
