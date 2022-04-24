@@ -274,7 +274,7 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>string</td>
         <td>JVM args. Use this to define heap size (recommendation: Set to half of memory request)</td>
         <td>false</td>
-        <td> half of the STS requests  </td>
+        <td>-Xmx512M -Xms512M</td>
       </tr><tr>
       </tr><tr>
         <td><b>Affinity</b></td>
