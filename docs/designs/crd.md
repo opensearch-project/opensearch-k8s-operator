@@ -138,7 +138,7 @@ GeneralConfig defines global Opensearch cluster configuration
       </tr><tr>
         <td><b>ServiceName</b></td>
         <td>string</td>
-        <td>k8s service name</td>
+        <td>Name to use for the k8s service to expose the cluster internally</td>
         <td>false</td>
         <td>cluster name</td>
       </tr><tr>
