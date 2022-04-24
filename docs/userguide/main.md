@@ -4,7 +4,10 @@ This guide is intended for users of the Opensearch Operator. If you want to cont
 
 ## Installation
 
-TBD
+The operator can be easily installed using Helm:
+
+1. Add the helm repo: `helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator-chart/`
+2. Install the operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
 
 ## Quickstart
 
@@ -61,6 +64,7 @@ The minimal cluster you deployed in this section is only intended for demo purpo
 ## Data persistence
 
 By default the operator will create Opensearch nodepools with persistent storage from the default [Storage Class](https://kubernetes.io/docs/concepts/storage/storage-classes/).  This behaviour can be changed per node pool.  You may supply an alternative storage class and access mode, or configure hostPath or emptyDir storage.  Please note that hostPath is strongly discouraged, if you do choose this you must also configure affinity for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host:
+
 ```yaml
 nodePools:
 - component: masters
@@ -82,6 +86,7 @@ nodePools:
     accessModes:
     - ReadWriteOnce
 ```
+
 or
 
 ```yaml
@@ -105,6 +110,28 @@ nodePools:
 ```
 
 If you are using emptyDir it is recommended that you set `spec.general.drainDataNodes` to be `true`.  This will ensure that shards are drained from the pods before rolling upgrade or restart operations are performed.
+
+## Configuring opensearch.yml
+
+The operator automatically generates the main OpenSearch configuration file `opensearch.yml` based on the parameters you provide in the different sections (e.g. TLS configuration). If you need to add your own settings you can do that using the `additionalConfig` field in the custom resource:
+
+```yaml
+spec:
+  general:
+    # ...
+    additionalConfig:
+      some.config.option: somevalue
+  # ...
+nodePools:
+- component: masters
+  # ...
+  additionalConfig:
+    some.other.config: foobar
+```
+
+Using `spec.general.additionalConfig` you can add settings to all nodes, using `nodePools[].additionalConfig` you can add settings to only a pool of nodes. The settings must be provided as a map of strings, so use the flat form of any setting. The operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the operator and cannot be overwritten using `additionalConfig`.
+
+As of right now the settings cannot be changed after the initial installation of the cluster (that feature is planned for the next version). If you need to change any settings please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
 
 ## TLS
 
@@ -228,6 +255,7 @@ TBD
 ## Rolling Upgrades
 
 Opensearch upgrades are controlled by the `spec.general.version` field
+
 ```yaml
 spec:
   general:
@@ -235,4 +263,4 @@ spec:
     drainDataNodes: false
 ```
 
-To perform a rolling upgrade on the cluster simply change this version and the operator will perform a rolling upgrade.  Downgrades and upgrades that span more than one major version are not supported as this will put the Opensearch cluster in an unsupported state.  If using emptyDir storage for data nodes it is recommended to set `general.drainDataNodes` to `true`
+To perform a rolling upgrade on the cluster simply change this version and the operator will perform a rolling upgrade. Downgrades and upgrades that span more than one major version are not supported as this will put the Opensearch cluster in an unsupported state. If using emptyDir storage for data nodes it is recommended to set `general.drainDataNodes` to `true`, otherwise you might loose data.
