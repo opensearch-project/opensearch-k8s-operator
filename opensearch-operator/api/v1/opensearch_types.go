@@ -90,6 +90,8 @@ type DashboardsConfig struct {
 	Replicas  int32                       `json:"replicas"`
 	Tls       *DashboardsTlsConfig        `json:"tls,omitempty"`
 	Version   string                      `json:"version"`
+	// Additional properties for opensearch_dashboards.yaml
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
 	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 }

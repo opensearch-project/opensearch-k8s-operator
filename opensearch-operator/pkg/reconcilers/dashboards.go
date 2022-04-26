@@ -61,6 +61,11 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// add any aditional dashboard config to the reconciler context
+	for key, value := range r.instance.Spec.Dashboards.AdditionalConfig {
+		r.reconcilerContext.AddDashboardsConfig(key, value)
+	}
+
 	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Name), r.reconcilerContext.DashboardsConfig)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
