@@ -24,8 +24,10 @@ metadata:
 spec:
   general:
     serviceName: my-first-cluster
+    version: 1.3.1
   dashboards:
     enable: true
+    version: 1.3.1
     replicas: 1
     resources:
       requests:
@@ -37,7 +39,7 @@ spec:
   nodePools:
     - component: masters
       replicas: 3
-      diskSize: "30Gi"
+      diskSize: "5Gi"
       NodeSelector:
       resources:
          requests:
@@ -52,12 +54,12 @@ spec:
 
 ```
 
-Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`) you will see that after a few seconds the operator will create several pods: Three pods for the opensearch cluster (`my-first-cluster-masters-0/1/2`) and one pod for the dashboards instance. After the pods are showing ready (normally takes about 1-2 minutes) you can connect to your cluster using port-forwarding:
+Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`) you will see that after a few seconds the operator will create several pods: First a bootstrap pod (`my-first-cluster-bootstrap-0`) that helps with initial master discovery. Then three pods for the opensearch cluster (`my-first-cluster-masters-0/1/2`) and one pod for the dashboards instance. After the pods are showing ready (normally takes about 1-2 minutes) you can connect to your cluster using port-forwarding:
 
 Run `kubectl port-forward svc/my-first-cluster-dashboards 5601`, then open [http://localhost:5601](http://localhost:5601) in your browser and log in with the default demo credentials `admin / admin`.
 Or if you want to access the opensearch REST API run `kubectl port-forward svc/my-first-cluster 9200`, then open a second terminal and run `curl -k -u admin:admin https://localhost:9200/_cat/nodes?v`. You should see the three deployed pods listed.
 
-To delete your cluster run `kubectl delete -f cluster.yaml`. The operator will then cleanup and delete any kubernetes resources created for the cluster. Note that this will also delete the persistent volumes for the cluster and therefore all data stored in opensearch.
+To delete your cluster run `kubectl delete -f cluster.yaml`. The operator will then cleanup and delete any kubernetes resources created for the cluster. Note that this will normally not delete the persistent volumes for the cluster. For a complete cleanup run `kubectl delete pvc -l opster.io/opensearch-cluster=my-first-cluster` to also delete the PVCs.
 
 The minimal cluster you deployed in this section is only intended for demo purposes. Please see the next sections on how to configure the different aspects of your cluster.
 
