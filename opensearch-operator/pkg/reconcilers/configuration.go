@@ -54,7 +54,8 @@ func NewConfigurationReconciler(
 }
 
 func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
-	if r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0 {
+	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
+		(r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0) {
 		return ctrl.Result{}, nil
 	}
 	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
@@ -114,8 +115,23 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	}
 	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 
+	// Generate additional volumes
+	addVolumes, addVolumeMounts, addVolumeData, err := helpers.CreateAdditionalVolumes(
+		r.ctx,
+		r.Client,
+		r.instance.Namespace,
+		r.instance.Spec.General.AdditionalVolumes,
+	)
+	if err != nil {
+		result.CombineErr(err)
+		return result.Result, result.Err
+	}
+
+	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, addVolumes...)
+	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, addVolumeMounts...)
+
 	for _, nodePool := range r.instance.Spec.NodePools {
-		result.Combine(r.createHashForNodePool(nodePool, data))
+		result.Combine(r.createHashForNodePool(nodePool, data, addVolumeData))
 	}
 
 	return result.Result, result.Err
@@ -133,7 +149,8 @@ func (r *ConfigurationReconciler) buildConfigMap(data string) *corev1.ConfigMap 
 	}
 }
 
-func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePool, data string) (*ctrl.Result, error) {
+func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePool, data string, volumeData []byte) (*ctrl.Result, error) {
+	combinedData := append([]byte(data), volumeData...)
 
 	found, nodePoolHash := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
 	// If we don't find the NodePoolConfig this indicates there's been an update to the CR
@@ -154,7 +171,7 @@ func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePo
 				Namespace: r.instance.Namespace,
 			}, sts)
 			if k8serrors.IsNotFound(err) {
-				nodePoolHash.ConfigHash = generateHash([]byte(data))
+				nodePoolHash.ConfigHash = generateHash(combinedData)
 			} else if err != nil {
 				return nil, err
 			} else {
@@ -162,7 +179,7 @@ func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePo
 			}
 		}
 	} else {
-		nodePoolHash.ConfigHash = generateHash([]byte(data))
+		nodePoolHash.ConfigHash = generateHash(combinedData)
 	}
 
 	r.reconcilerContext.replaceNodePoolHash(nodePoolHash)
