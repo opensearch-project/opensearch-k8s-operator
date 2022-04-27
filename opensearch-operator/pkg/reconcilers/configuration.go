@@ -84,36 +84,38 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		sb.WriteString(fmt.Sprintf("%s: %s\n", key, r.reconcilerContext.OpenSearchConfig[key]))
 	}
 	data := sb.String()
-
-	cm := r.buildConfigMap(data)
-	if err := ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()); err != nil {
-		return ctrl.Result{}, err
-	}
-
 	result := reconciler.CombinedResult{}
-	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
-	if result.Err != nil {
-		return result.Result, result.Err
-	}
 
-	volume := corev1.Volume{
-		Name: "config",
-		VolumeSource: corev1.VolumeSource{
-			ConfigMap: &corev1.ConfigMapVolumeSource{
-				LocalObjectReference: corev1.LocalObjectReference{
-					Name: cm.Name,
+	if r.reconcilerContext.OpenSearchConfig != nil && len(r.reconcilerContext.OpenSearchConfig) != 0 {
+		cm := r.buildConfigMap(data)
+		if err := ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()); err != nil {
+			return ctrl.Result{}, err
+		}
+
+		result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
+		if result.Err != nil {
+			return result.Result, result.Err
+		}
+
+		volume := corev1.Volume{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: cm.Name,
+					},
 				},
 			},
-		},
-	}
-	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
+		}
+		r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
 
-	mount := corev1.VolumeMount{
-		Name:      "config",
-		MountPath: "/usr/share/opensearch/config/opensearch.yml",
-		SubPath:   "opensearch.yml",
+		mount := corev1.VolumeMount{
+			Name:      "config",
+			MountPath: "/usr/share/opensearch/config/opensearch.yml",
+			SubPath:   "opensearch.yml",
+		}
+		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 	}
-	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 
 	// Generate additional volumes
 	addVolumes, addVolumeMounts, addVolumeData, err := helpers.CreateAdditionalVolumes(

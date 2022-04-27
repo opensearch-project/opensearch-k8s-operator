@@ -222,7 +222,7 @@ func CreateAdditionalVolumes(
 				return
 			}
 			data := cm.Data
-			var keys []string
+			keys := make([]string, 0, len(data))
 			for key := range data {
 				keys = append(keys, key)
 			}
@@ -246,7 +246,7 @@ func CreateAdditionalVolumes(
 				return
 			}
 			data := secret.Data
-			var keys []string
+			keys := make([]string, 0, len(data))
 			for key := range data {
 				keys = append(keys, key)
 			}
