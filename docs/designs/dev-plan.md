@@ -16,7 +16,7 @@ Here are the steps arranged by priority:
 10. Rolling upgrade - Done
 11. Initial Documentation (internal design and user guides) - Done
 12. Rolling restarts - for user requests - Done
-13. Disk reconciler - TODO
+13. Disk reconciler - Done
 14. Cluster configuration reconciler (for opensearch.yaml configs) - TODO
 
 # Next Phases

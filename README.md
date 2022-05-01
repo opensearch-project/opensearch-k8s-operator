@@ -25,7 +25,7 @@ Currently planned features:
 - [x] Secured installation features.
 - [x] Certificate management.
 - [x] Rolling restarts - through API.
-- [ ] Scaling nodes' disks - increase/replace disks.
+- [x] Scaling nodes' disks - increase disk size.
 - [ ] Cluster configurations and nodes' settings updates.
 - [ ] Auto scaler based on usage, load, and resources.
 - [ ] Operator Monitoring, with Prometheus and Grafana.

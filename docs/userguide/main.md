@@ -271,9 +271,27 @@ If you provided your own certificate for node transport communication then you m
 
 To apply the securityconfig to the opensearch cluster the operator uses a separate kubernetes job (called `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the operator only checks for changes in a certain interval so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes please use kubectl to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
-## Nodepools and scaling
+## Nodepools and Scaling
 
 TBD
+
+## Volume Expansion
+
+To increase the disk volume size set  the`diskSize` to desired value and re-apply the cluster yaml. This operation is expected to have no downtime and the cluster should be operational.
+
+The following considerations should be taken into account in order to increase the PVC size.
+
+* Before considering the expansion of the the cluster disk, make sure the volumes/data is backed up in desired format, so that any failure can be tolerated by restoring from the backup.
+
+* Make sure the cluster storage class has `allowVolumeExpansion: true` before applying the new `diskSize`. For more details checkout the [kubernetes storage classes](https://kubernetes.io/docs/concepts/storage/storage-classes/) document.
+
+* Once the above step is done, the cluster yaml can be applied with new `diskSize` value, to all decalared nodepool components or to single component.
+
+* It is best recommended not to apply any new changes to the cluster along with volume expansion.
+
+* Make sure the declared size definitions are proper and consistent, example if the `diskSize` is in `G` or `Gi`, make sure the same size definitions are followed for expansion.
+
+Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure data is backed up and make sure the right conversion number is identified, so that the underlying volume has the same value and then re-apply the cluster yaml. This will make sure the statefulset is re-created with right value in VolueClaimTemplates, this operation is expected to have no downtime.
 
 ## Rolling Upgrades
 
