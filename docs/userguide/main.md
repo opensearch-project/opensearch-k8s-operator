@@ -272,8 +272,38 @@ If you provided your own certificate for node transport communication then you m
 To apply the securityconfig to the opensearch cluster the operator uses a separate kubernetes job (called `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the operator only checks for changes in a certain interval so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes please use kubectl to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
 ## Nodepools and scaling
-
-TBD
+Opensearch cluster can be composed of one or more node pools, with each representing a logical group or unified roles. Each node pool can have its own resources, and will have autonomic StatefulSets and services.
+```yaml
+spec:
+    nodePools:
+      - component: masters
+        replicas: 3
+        diskSize: "30Gi"
+        NodeSelector:
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+        roles:
+          - "master"
+          - "data"
+      - component: nodes
+        replicas: 3
+        diskSize: "10Gi"
+        NodeSelector:
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+        roles:
+          - "data"
+```
 
 ## Rolling Upgrades
 
