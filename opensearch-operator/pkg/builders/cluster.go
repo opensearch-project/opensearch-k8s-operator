@@ -508,6 +508,14 @@ func NewBootstrapPod(
 	labels := map[string]string{
 		ClusterLabel: cr.Name,
 	}
+	resources := cr.Spec.Bootstrap.Resources
+
+	var jvm string
+	if cr.Spec.Bootstrap.Jvm == "" {
+		jvm = "-Xmx512M -Xms512M"
+	} else {
+		jvm = cr.Spec.Bootstrap.Jvm
+	}
 
 	image := helpers.ResolveImage(cr, nil)
 
@@ -565,7 +573,7 @@ func NewBootstrapPod(
 						},
 						{
 							Name:  "OPENSEARCH_JAVA_OPTS",
-							Value: "-Xmx512M -Xms512M",
+							Value: jvm,
 						},
 						{
 							Name:  "node.roles",
@@ -576,6 +584,7 @@ func NewBootstrapPod(
 					Name:            "opensearch",
 					Image:           image.GetImage(),
 					ImagePullPolicy: image.GetImagePullPolicy(),
+					Resources:       resources,
 					Ports: []corev1.ContainerPort{
 						{
 							Name:          "http",
@@ -610,6 +619,9 @@ func NewBootstrapPod(
 			},
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
+			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,
+			Tolerations:        cr.Spec.Bootstrap.Tolerations,
+			Affinity:           cr.Spec.Bootstrap.Affinity,
 			ImagePullSecrets:   image.ImagePullSecrets,
 		},
 	}

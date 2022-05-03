@@ -86,6 +86,14 @@ type ConfMgmt struct {
 	SmartScaler bool `json:"smartScaler,omitempty"`
 }
 
+type BootstrapConfig struct {
+	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
+	Tolerations  []corev1.Toleration         `json:"tolerations,omitempty"`
+	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
+	Jvm          string                      `json:"jvm,omitempty"`
+}
+
 type DashboardsConfig struct {
 	Enable    bool                        `json:"enable,omitempty"`
 	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -171,6 +179,7 @@ type ClusterSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	General    GeneralConfig    `json:"general,omitempty"`
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
+	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
