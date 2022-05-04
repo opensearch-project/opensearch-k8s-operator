@@ -15,4 +15,4 @@ data:
 kind: ConfigMap
 metadata:
   name: opensearch-operator-manager-config
-  namespace: {{ include ".Values.namespaceName" . }}
+  namespace: {{ include "opensearch-operator.namespace" . }}

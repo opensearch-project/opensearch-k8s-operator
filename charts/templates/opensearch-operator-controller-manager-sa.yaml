@@ -2,4 +2,4 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: opensearch-operator-controller-manager
-  namespace: {{ include ".Values.namespaceName" . }}
+  namespace: {{ include "opensearch-operator.namespace" . }}

@@ -5,11 +5,13 @@ Expand the name of the chart.
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
-{{- define ".Values.namespaceName" -}}
-{{- default "opensearch-operator-system"}}
-{{- end }}
-
-
+{{- define "opensearch-operator.namespace" -}}
+{{- if .Values.namespaceName -}}
+{{ .Values.namespaceName -}}
+{{- else -}}
+{{ .Release.Namespace }}
+{{- end -}}
+{{- end -}}
 
 {{/*
 Create a default fully qualified app name.

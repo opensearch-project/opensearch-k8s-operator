@@ -4,7 +4,7 @@ metadata:
   labels:
     control-plane: controller-manager
   name: opensearch-operator-controller-manager-metrics-service
-  namespace: {{ include ".Values.namespaceName" . }}
+  namespace: {{ include "opensearch-operator.namespace" . }}
 spec:
   ports:
   - name: https
