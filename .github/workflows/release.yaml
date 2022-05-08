@@ -41,3 +41,5 @@ jobs:
           make docker-push
           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION public.ecr.aws/opsterio/opensearch-operator:latest
           docker push public.ecr.aws/opsterio/opensearch-operator:latest
+          docker build -f  Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION-ARM
+          docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION-ARM
