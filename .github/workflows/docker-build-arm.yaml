@@ -19,4 +19,4 @@ jobs:
           go env
           go get opensearch.opster.io/pkg/builders
           go get opensearch.opster.io/pkg/helpers
-          docker build
+          docker build --file Dockerfile-ARM ./
