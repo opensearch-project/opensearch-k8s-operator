@@ -3,4 +3,3 @@ kind: Namespace
 metadata:
   labels:
     control-plane: controller-manager
-  name: {{ include ".Values.namespaceName" . }}

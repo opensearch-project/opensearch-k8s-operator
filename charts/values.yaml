@@ -1,4 +1,3 @@
-namespaceName: opensearch-operator-system
 nodeSelector: {}
 manager:
   tolerations: []
