@@ -93,6 +93,49 @@ var _ = Describe("Scaler Reconciler", func() {
 		})
 	})
 
+	//// ------- Tests logic Check phase for scaling DiskSize -------
+
+	Context("When changing Opensearch NodePool DiskSize", func() {
+		It("should add a new status about the operation", func() {
+			By("Wait for cluster instance to be created")
+			Eventually(func() bool {
+				return k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &OpensearchCluster) == nil
+			}, time.Second*10, interval).Should(BeTrue())
+			By("Update diskSize")
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &OpensearchCluster); err != nil {
+					return err
+				}
+				OpensearchCluster.Spec.NodePools[0].DiskSize = "32Gi"
+
+				return k8sClient.Update(context.Background(), &OpensearchCluster)
+			})
+			Expect(err).ToNot(HaveOccurred())
+			status := len(OpensearchCluster.Status.ComponentsStatus)
+
+			By("Check ComponentsStatus")
+			Eventually(func() bool {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &cluster2); err != nil {
+					return false
+				}
+				return status != len(cluster2.Status.ComponentsStatus)
+			}, time.Second*60, 30*time.Millisecond).Should(BeFalse())
+		})
+	})
+
+	Context("When changing CRD nodepool DiskSize", func() {
+		It("should implement new DiskSize to the cluster", func() {
+			By("check diskSize")
+			Eventually(func() bool {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: clusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
+					return false
+				}
+				existingDisk := nodePool.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
+				return existingDisk == "32Gi"
+			}, timeout, interval).Should(BeTrue())
+		})
+	})
+
 	/// ------- Deletion Check phase -------
 
 	Context("When deleting OpenSearch CRD ", func() {
