@@ -28,14 +28,10 @@ jobs:
           ls charts/
           echo ${{ env.RELEASE_VERSION }}
           cat charts/Chart.yaml | sed 's/0.1.0/'${{ env.RELEASE_VERSION }}'/'
-      - name: Publish helm chart
+      - name: Publish Helm charts
         uses: stefanprodan/helm-gh-pages@master
         with:
-          target_dir: helm
-          charts_dir: helm
           token: ${{ secrets.GITHUB_TOKEN }}
-          repository: helm
-          branch: gh-pages
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
