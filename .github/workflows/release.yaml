@@ -32,7 +32,6 @@ jobs:
         uses: stefanprodan/helm-gh-pages@master
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          charts_dir: charts
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
