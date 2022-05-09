@@ -31,10 +31,10 @@ jobs:
       - name: Publish helm chart
         uses: stefanprodan/helm-gh-pages@master
         with:
-          target_dir: charts
-          charts_dir: charts
+          target_dir: helm
+          charts_dir: helm
           token: ${{ secrets.GITHUB_TOKEN }}
-          repository: charts
+          repository: helm
           branch: gh-pages
       - name: Create Release
         id: create_release
