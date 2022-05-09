@@ -23,8 +23,6 @@ jobs:
           ls
           go version
           go env
-          go get opensearch.opster.io/pkg/builders
-          go get opensearch.opster.io/pkg/helpers
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
           docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE./
           docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
