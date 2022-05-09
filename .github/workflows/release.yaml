@@ -24,9 +24,11 @@ jobs:
           echo ${{ env.RELEASE_VERSION }}
           echo "IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION" >> $GITHUB_ENV
       - name: Prepare helm chart
+        env:
+          GITHUB_REF: ${{ github.ref }}
         run: |
-          pwd
-          sed -i '' 's/0.1.0/'"${$RELEASE_VERSION}"'/' ../charts/Chart.yaml
+          VERSION=${GITHUB_REF//refs\/tags\/v}
+          sed -i 's/0.1.0/'"${VERSION}"'/' ../charts/Chart.yaml
       - name: Publish helm chart
         uses: stefanprodan/helm-gh-pages@master
         with:
