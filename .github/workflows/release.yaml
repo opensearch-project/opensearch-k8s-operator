@@ -26,8 +26,7 @@ jobs:
       - name: Prepare helm chart
         run: |
           VERSION=${GITHUB_REF//refs\/tags\/v}
-          sed -i 's/0.0.1/'"${$RELEASE_VERSION}"'/' charts/Chart.yaml
-          sed -i 's/dev/'"${$RELEASE_VERSION}"'/' charts/values.yaml
+          sed -i 's/0.1.0/'"${$RELEASE_VERSION}"'/' charts/Chart.yaml
       - name: Publish helm chart
         uses: stefanprodan/helm-gh-pages@master
         with:
