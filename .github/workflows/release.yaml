@@ -23,12 +23,12 @@ jobs:
         env:
           GITHUB_REF: ${{ github.ref }}
         run: |
+          pwd
           echo ${{ env.RELEASE_VERSION }}
           cat charts/Chart.yaml | sed 's/0.1.0/'${{ env.RELEASE_VERSION }}'/'
       - name: Publish helm chart
         uses: stefanprodan/helm-gh-pages@master
         with:
-          charts_dir: ../charts
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Create Release
         id: create_release
