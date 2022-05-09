@@ -24,7 +24,7 @@ jobs:
           go version
           go env
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
-          docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE./
+          docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE ./
           docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
           docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
