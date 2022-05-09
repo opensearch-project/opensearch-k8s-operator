@@ -26,7 +26,7 @@ jobs:
       - name: Prepare helm chart
         run: |
           pwd
-          sed -i 's/0.1.0/'"${$RELEASE_VERSION}"'/' charts/Chart.yaml
+          sed -i '' 's/0.1.0/'"${$RELEASE_VERSION}"'/' ../charts/Chart.yaml
       - name: Publish helm chart
         uses: stefanprodan/helm-gh-pages@master
         with:
