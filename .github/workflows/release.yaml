@@ -26,8 +26,8 @@ jobs:
           pwd
           ls
           echo ${{ env.RELEASE_VERSION }}
-          cat charts/Chart.yaml | sed 's/0.1.0/'${{ env.RELEASE_VERSION }}'/'
-      - name: Publish helm chart
+          cat helm/opensearch-operator/Chart.yaml | sed 's/0.1.0/'${{ env.RELEASE_VERSION }}'/'
+      - name: Publish Helm charts
         uses: stefanprodan/helm-gh-pages@master
         with:
           charts_dir: chart
@@ -65,13 +65,12 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
           RELEASE: ${{ env.RELEASE_VERSION }}-ARM
         run: |
-          cd opensearch-operator
+          pwd
+          ls
           go version
           go env
-          go get opensearch.opster.io/pkg/builders
-          go get opensearch.opster.io/pkg/helpers
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
-          docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION-ARM ./
+          docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE ./
           docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
           docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
