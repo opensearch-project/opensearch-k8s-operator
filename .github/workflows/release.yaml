@@ -64,6 +64,7 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          RELEASE: ${{ env.RELEASE_VERSION }}-ARM
         run: |
           cd opensearch-operator
           go version
@@ -72,7 +73,7 @@ jobs:
           go get opensearch.opster.io/pkg/helpers
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
           docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION-ARM ./
-          docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION-ARM
-          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION-ARM public.ecr.aws/opsterio/opensearch-operator:latest-ARM
+          docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
+          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
           docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
 
