@@ -33,7 +33,9 @@ jobs:
           pwd
           VERSION=${GITHUB_REF//refs\/tags\/v}
           echo $(which sed)
+          cat charts/Chart.yaml
           echo $VERSION
+          echo $RELEASE_VERSION
           cat charts/Chart.yaml | sed 's/0.1.0/'${VERSION}'/'
           #/usr/bin/sed 's/0.1.0/'${VERSION}'/' charts/Chart.yaml
       - name: Publish helm chart
