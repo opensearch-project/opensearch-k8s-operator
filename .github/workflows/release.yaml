@@ -66,6 +66,7 @@ jobs:
           AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
           RELEASE: ${{ env.RELEASE_VERSION }}-ARM
         run: |
+          cd opensearch-operator
           pwd
           ls
           go version
