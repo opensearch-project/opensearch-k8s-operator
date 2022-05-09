@@ -25,7 +25,6 @@ jobs:
         run: |
           pwd
           ls
-          ls charts/
           echo ${{ env.RELEASE_VERSION }}
           cat helm/opensearch-operator/Chart.yaml | sed 's/0.1.0/'${{ env.RELEASE_VERSION }}'/'
       - name: Publish Helm charts
