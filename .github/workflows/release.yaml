@@ -12,6 +12,13 @@ jobs:
       image: public.ecr.aws/opsterio/go.1.17:with-aws-cli
     name: Docker Build
     steps:
+      - name: Checkout
+        uses: actions/checkout@v2.3.4
+      - name: set Env
+        id: github-ver
+        run: |
+          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+          echo "LATE_IMG=public.ecr.aws/opsterio/opense arch-operator:latest" >> $GITHUB_ENV
       - name: Build and Push Release ARM64
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -28,13 +35,6 @@ jobs:
           docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
           docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
-      - name: Checkout
-        uses: actions/checkout@v2.3.4
-      - name: set Env
-        id: github-ver
-        run: |
-          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
-          echo "LATE_IMG=public.ecr.aws/opsterio/opense arch-operator:latest" >> $GITHUB_ENV
       - name: Prepare helm chart
         env:
           GITHUB_REF: ${{ github.ref }}
