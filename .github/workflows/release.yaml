@@ -33,7 +33,7 @@ jobs:
           pwd
           VERSION=${GITHUB_REF//refs\/tags\/v}
           echo $(which sed)
-          /usr/bin/sed -i '' 's/0.1.0/'"${VERSION}"'/' charts/Chart.yaml
+          /usr/bin/sed 's/0.1.0/'${VERSION}'/' charts/Chart.yaml
       - name: Publish helm chart
         uses: stefanprodan/helm-gh-pages@master
         with:
