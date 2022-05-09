@@ -24,6 +24,7 @@ jobs:
           GITHUB_REF: ${{ github.ref }}
         run: |
           pwd
+          ls
           echo ${{ env.RELEASE_VERSION }}
           cat charts/Chart.yaml | sed 's/0.1.0/'${{ env.RELEASE_VERSION }}'/'
       - name: Publish helm chart
