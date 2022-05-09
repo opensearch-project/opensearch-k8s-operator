@@ -53,6 +53,7 @@ jobs:
           go env
           go get opensearch.opster.io/pkg/builders
           go get opensearch.opster.io/pkg/helpers
+          export IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
           make docker-build
           make docker-push
