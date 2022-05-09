@@ -12,6 +12,23 @@ jobs:
       image: public.ecr.aws/opsterio/go.1.17:with-aws-cli
     name: Docker Build
     steps:
+      - name: Build and Push Release ARM64
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          RELEASE: ${{ env.RELEASE_VERSION }}-ARM
+        run: |
+          cd opensearch-operator
+          go version
+          go env
+          go get opensearch.opster.io/pkg/builders
+          go get opensearch.opster.io/pkg/helpers
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
+          docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE./
+          docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
+          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
+          docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
       - name: Checkout
         uses: actions/checkout@v2.3.4
       - name: set Env
@@ -58,21 +75,5 @@ jobs:
           make docker-push
           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION public.ecr.aws/opsterio/opensearch-operator:latest
           docker push public.ecr.aws/opsterio/opensearch-operator:latest
-      - name: Build and Push Release ARM64
-        env:
-          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
-          RELEASE: ${{ env.RELEASE_VERSION }}-ARM
-        run: |
-          cd opensearch-operator
-          go version
-          go env
-          go get opensearch.opster.io/pkg/builders
-          go get opensearch.opster.io/pkg/helpers
-          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
-          docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION-ARM ./
-          docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
-          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
-          docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
+
 
