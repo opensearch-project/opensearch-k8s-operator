@@ -27,6 +27,10 @@ jobs:
         env:
           GITHUB_REF: ${{ github.ref }}
         run: |
+          echo $pwd
+          echo $ls
+          ls -l
+          pwd
           VERSION=${GITHUB_REF//refs\/tags\/v}
           sed -i 's/0.1.0/'"${VERSION}"'/' ../charts/Chart.yaml
       - name: Publish helm chart
