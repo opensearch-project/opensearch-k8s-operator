@@ -199,31 +199,31 @@ If you provide the certificates yourself, you must also provide the list of cert
 
 Each OpenSearch cluster node exposes the REST API using HTTPS (by default port 9200).
 
-To configure http api security, the following fields in the `OpenSearchCluster` custom resource are available:
+To configure HTTP API security, the following fields in the `OpenSearchCluster` custom resource are available:
 
 ```yaml
 # ...
 spec:
   security:
     tls:  # Everything related to TLS configuration
-      http:  # Configuration of the http endpoint
-        generate: true  # Have the operator generate and sign certificates
+      http:  # Configuration of the HTTP endpoint
+        generate: true  # Have the Operator generate and sign certificates
         secret:
           name:  # Name of the secret that contains the provided certificate
         caSecret:
-          name:  # Name of the secret that contains a CA the operator should use
+          name:  # Name of the secret that contains a CA the Operator should use
 # ...
 ```
 
-Again, you have the option of either letting the Operator generate and sign the certificates or provide your own. The only difference is that per-node certificate are not possible here. For everything else it works the same as the node transport certificates.
+Again, you have the option of either letting the Operator generate and sign the certificates or providing your own. The only difference between node transport certificates and node HTTP/REST APIs is that per-node certificate are not possible here. In all other respects the two work the same way. 
 
-If you provide your own certificates please make sure the following names are added as SubjectAltNames (SAN): `<cluster-name>`, `<cluster-name>.<namespace>`, `<cluster-name>.<namespace>.svc`,`<cluster-name>.<namespace>.svc.cluster.local`.
+If you provide your own certificates, please make sure the following names are added as SubjectAltNames (SAN): `<cluster-name>`, `<cluster-name>.<namespace>`, `<cluster-name>.<namespace>.svc`,`<cluster-name>.<namespace>.svc.cluster.local`.
 
-Directly exposing the node http port outside the kubernetes cluster is not recommended. Instead you should configure an ingress. The ingress can then also present a certificate from an accredited CA (for example LetsEncrypt) and hide internally used self-signed certificates. That way the nodes must not be supplied externally with properly signed certificates.
+Directly exposing the node HTTP port outside the Kubernetes cluster is not recommended. Rather than doing so, you should configure an ingress. The ingress can then also present a certificate from an accredited CA (for example LetsEncrypt) and hide self-signed certificates that are being used internally. In this way, the nodes should be supplied internally with properly signed certificates.
 
 ### Dashboards HTTP
 
-Opensearch Dashboards itself can expose its API/UI via HTTP or HTTPS. By default it is unencrypted. To secure the connection you have the option of either letting the operator generate and sign a certificate or providing your own. The following fields in the `OpenSearchCluster` custom resource are available to configure it:
+OpenSearch Dashboards can expose its API/UI via HTTP or HTTPS. It is unencrypted by default. As mentioned above, to secure the connection you can either let the Operator generate and sign a certificate, or provide your own. The following fields in the `OpenSearchCluster` custom resource are available to configure it:
 
 ```yaml
 # ...
@@ -232,26 +232,26 @@ spec:
     enable: true  # Deploy Dashboards component
     tls:
       enable: true  # Configure TLS
-      generate: true  # Have the operator generate and sign a certificate
+      generate: true  # Have the Operator generate and sign a certificate
       secret:
         name:  # Name of the secret that contains the provided certificate
       caSecret:
-       name:  # Name of the secret that contains a CA the operator should use
+       name:  # Name of the secret that contains a CA the Operator should use
 # ...
 ```
 
-To let the operator generate the certificate just set `tls.enable: true` and `tls.generate: true` (the other fields under `tls` can be omited). Again as with the node certificates you can supply your own CA via `caSecret.name` for the operator to use.
-If instead you want to use your own certificate you need to provide it as a Kubernetes TLS secret (with fields `tls.key` and `tls.crt`) and provide the name as `secret.name`.
+To let the Operator generate the certificate, just set `tls.enable: true` and `tls.generate: true` (the other fields under `tls` can be ommitted). Again, as with the node certificates, you can supply your own CA via `caSecret.name` for the Operator to use.
+If you want to use your own certificate, you need to provide it as a Kubernetes TLS secret (with fields `tls.key` and `tls.crt`) and provide the name as `secret.name`.
 
-If you want to expose Dashboards outside of the cluster it is recommended to use operator-generated certificates internally and let an Ingress present a valid certificate from an accredited CA.
+If you want to expose Dashboards outside of the cluster, it is recommended to use Operator-generated certificates internally and let an Ingress present a valid certificate from an accredited CA.
 
 ## Securityconfig
 
-By default Opensearch clusters use the opensearch-security plugin to handle authentication and authorization. If nothing is specifically configured clusters deployed using the operator use the demo securityconfig provided by the opensearch project (see [internal_users.yml](https://github.com/opensearch-project/security/blob/main/securityconfig/internal_users.yml) for a list of users).
+By default, Opensearch clusters use the opensearch-security plugin to handle authentication and authorization. If nothing is specifically configured, clusters deployed using the Operator use the demo securityconfig provided by the OpenSearch project (see [internal_users.yml](https://github.com/opensearch-project/security/blob/main/securityconfig/internal_users.yml) for a list of users).
 
-You can provide your own securityconfig (see the entire [demo securityconfig](https://github.com/opensearch-project/security/blob/main/securityconfig) as an example and the [Access control documentation](https://opensearch.org/docs/latest/security-plugin/access-control/index/) of the opensearch project) with your own users and roles. To do that you must provide a secret with all the required securityconfig yaml files.
+You can provide your own securityconfig (see the entire [demo securityconfig](https://github.com/opensearch-project/security/blob/main/securityconfig) as an example and the [Access control documentation](https://opensearch.org/docs/latest/security-plugin/access-control/index/) of the OpenSearch project) with your own users and roles. To do that, you must provide a secret with all the required securityconfig yaml files.
 
-The operator can be controlled using the following fields in the `OpenSearchCluster` custom resource:
+The Operator can be controlled using the following fields in the `OpenSearchCluster` custom resource:
 
 ```yaml
 # ...
@@ -267,14 +267,14 @@ spec:
 # ...
 ```
 
-Provide the name of the secret that contains your securityconfig yaml files as `securityconfigSecret.name`. Note that it is not possible to only provide some of the files, all must be provided, there is no merge between the demo files and your provided ones. In addition you must provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the operator can use for communicating with opensearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations).
+Provide the name of the secret that contains your securityconfig yaml files as `securityconfigSecret.name`. Note that all files must be provided, you cannot provide only some of them, as the demo files and your provided ones cannot be merged. In addition, you must provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations).
 
-If you provided your own certificate for node transport communication then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.transport.adminDn`. Be advised that the `adminDn` and `nodesDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise opensearch will reject any authentication request using the admin certificate.
+If you provided your own certificate for node transport communication, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.transport.adminDn`. Be advised that the `adminDn` and `nodesDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
-To apply the securityconfig to the opensearch cluster the operator uses a separate kubernetes job (called `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the operator only checks for changes in a certain interval so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes please use kubectl to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
+To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (called `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
 ## Nodepools and Scaling
-Opensearch cluster can be composed of one or more node pools, with each representing a logical group or unified roles. Each node pool can have its own resources, and will have autonomic StatefulSets and services.
+OpenSearch clusters can be composed of one or more node pools, with each representing a logical group or unified roles. Each node pool can have its own resources, and will have autonomic StatefulSets and services.
 ```yaml
 spec:
     nodePools:
@@ -309,7 +309,7 @@ spec:
 
 ## Rolling Upgrades
 
-Opensearch upgrades are controlled by the `spec.general.version` field
+OpenSearch upgrades are controlled by the `spec.general.version` field:
 
 ```yaml
 spec:
@@ -318,4 +318,4 @@ spec:
     drainDataNodes: false
 ```
 
-To perform a rolling upgrade on the cluster simply change this version and the operator will perform a rolling upgrade. Downgrades and upgrades that span more than one major version are not supported as this will put the Opensearch cluster in an unsupported state. If using emptyDir storage for data nodes it is recommended to set `general.drainDataNodes` to `true`, otherwise you might loose data.
+To perform a rolling upgrade on the cluster, simply change this version and the Operator will perform a rolling upgrade. Downgrades and upgrades that span more than one major version are not supported, as this will put the OpenSearch cluster in an unsupported state. If you are using emptyDir storage for data nodes, it is recommended to set `general.drainDataNodes` to `true`, otherwise you might lose data.
