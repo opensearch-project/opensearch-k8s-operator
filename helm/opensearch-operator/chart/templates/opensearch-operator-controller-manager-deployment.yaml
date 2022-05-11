@@ -4,7 +4,6 @@ metadata:
   labels:
     control-plane: controller-manager
   name: opensearch-operator-controller-manager
-  namespace: {{ include ".Values.namespaceName" . }}
 spec:
   replicas: 1
   selector:
@@ -36,10 +35,6 @@ spec:
         name: operator-controller-manager
         resources:
           {{- toYaml .Values.manager.resources | nindent 12 }}
-        {{- with .Values.tolerations }}
-        tolerations:
-          {{- toYaml . | nindent 12 }}
-        {{- end }}
         securityContext:
           allowPrivilegeEscalation: false
       nodeSelector:

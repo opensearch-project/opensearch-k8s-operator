@@ -1,7 +1,5 @@
-namespaceName: opensearch-operator-system
 nodeSelector: {}
 manager:
-  tolerations: []
   resources:
     limits:
       cpu: 2

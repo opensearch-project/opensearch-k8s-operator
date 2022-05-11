@@ -2,7 +2,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: opensearch-operator-leader-election-rolebinding
-  namespace: {{ include ".Values.namespaceName" . }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: Role
@@ -10,4 +9,3 @@ roleRef:
 subjects:
 - kind: ServiceAccount
   name: opensearch-operator-controller-manager
-  namespace: {{ include ".Values.namespaceName" . }}
