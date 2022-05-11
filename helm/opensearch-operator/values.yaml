@@ -1,14 +1,13 @@
-namespaceName: opensearch-operator-system
 nodeSelector: {}
 manager:
   tolerations: []
   resources:
     limits:
-      cpu: 2
-      memory: 1Gi
+      cpu: 100m
+      memory: 128Mi
     requests:
-      cpu: 2
-      memory: 1Gi
+      cpu: 100m
+      memory: 128Mi
   image:
     repository: public.ecr.aws/opsterio/opensearch-operator
     tag: latest
