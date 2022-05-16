@@ -56,7 +56,7 @@ kubectl delete -f opensearch-cluster.yaml
 ```
 ## Installation Tutorial and Demo
 
-[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Open-Source-1000-×-563-px.png)](https://player.vimeo.com/video/708641527)
+[![Watch the video](https://opster.com/wp-content/uploads/2022/05/operator-with-play.png)](https://player.vimeo.com/video/708641527)
 
 ## Contributions
 
