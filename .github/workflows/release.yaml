@@ -1,7 +1,8 @@
 name: "Publish Release"
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - '*'
 jobs:
   docker-build:
     runs-on: ubuntu-latest
@@ -14,14 +15,33 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2.3.4
       - name: set Env
+        id: github-ver
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
           echo "LATE_IMG=public.ecr.aws/opsterio/opense arch-operator:latest" >> $GITHUB_ENV
-      - name: Test env
+      - name: Prepare helm chart
+        env:
+          GITHUB_REF: ${{ github.ref }}
         run: |
-          echo $RELEASE_VERSION
+          pwd
+          ls
           echo ${{ env.RELEASE_VERSION }}
-          echo "IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION" >> $GITHUB_ENV
+          cat helm/opensearch-operator/Chart.yaml | sed 's/0.1.0/'${{ env.RELEASE_VERSION }}'/'
+      - name: Publish Helm charts
+        uses: stefanprodan/helm-gh-pages@master
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          charts_dir: helm
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: true
+          prerelease: true
       - name: Build and Push Release
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
@@ -33,11 +53,27 @@ jobs:
           go env
           go get opensearch.opster.io/pkg/builders
           go get opensearch.opster.io/pkg/helpers
-          echo $AWS_ACCESS_KEY_ID
-          echo $AWS_REGION
-          echo $AWS_SECRET_ACCESS_KEY
+          export IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
           make docker-build
           make docker-push
           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION public.ecr.aws/opsterio/opensearch-operator:latest
           docker push public.ecr.aws/opsterio/opensearch-operator:latest
+      - name: Build and Push Release ARM64
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          RELEASE: ${{ env.RELEASE_VERSION }}-ARM
+        run: |
+          cd opensearch-operator
+          pwd
+          ls
+          go version
+          go env
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
+          docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE ./
+          docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
+          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
+          docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
+

@@ -275,6 +275,7 @@ To apply the securityconfig to the OpenSearch cluster, the Operator uses a separ
 
 ## Nodepools and Scaling
 OpenSearch clusters can be composed of one or more node pools, with each representing a logical group or unified roles. Each node pool can have its own resources, and will have autonomic StatefulSets and services.
+
 ```yaml
 spec:
     nodePools:
@@ -306,6 +307,24 @@ spec:
         roles:
           - "data"
 ```
+
+## Volume Expansion
+
+To increase the disk volume size set  the`diskSize` to desired value and re-apply the cluster yaml. This operation is expected to have no downtime and the cluster should be operational.
+
+The following considerations should be taken into account in order to increase the PVC size.
+
+* Before considering the expansion of the the cluster disk, make sure the volumes/data is backed up in desired format, so that any failure can be tolerated by restoring from the backup.
+
+* Make sure the cluster storage class has `allowVolumeExpansion: true` before applying the new `diskSize`. For more details checkout the [kubernetes storage classes](https://kubernetes.io/docs/concepts/storage/storage-classes/) document.
+
+* Once the above step is done, the cluster yaml can be applied with new `diskSize` value, to all decalared nodepool components or to single component.
+
+* It is best recommended not to apply any new changes to the cluster along with volume expansion.
+
+* Make sure the declared size definitions are proper and consistent, example if the `diskSize` is in `G` or `Gi`, make sure the same size definitions are followed for expansion.
+
+Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure data is backed up and make sure the right conversion number is identified, so that the underlying volume has the same value and then re-apply the cluster yaml. This will make sure the statefulset is re-created with right value in VolueClaimTemplates, this operation is expected to have no downtime.
 
 ## Rolling Upgrades
 
