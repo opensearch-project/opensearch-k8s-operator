@@ -9,6 +9,10 @@ The operator can be easily installed using Helm:
 1. Add the helm repo: `helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator-chart/`
 2. Install the operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
 
+Follow the instructions in this video to install the Operator:
+
+[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://vimeo.com/manage/videos/708641527)
+
 ## Quickstart
 
 After you have successfully installed the operator you can deploy your first opensearch cluster. This is done by creating an `OpenSearchCluster` custom object in Kubernetes.
