@@ -11,7 +11,7 @@ The operator can be easily installed using Helm:
 
 Follow the instructions in this video to install the Operator:
 
-[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://vimeo.com/manage/videos/708641527)
+[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://player.vimeo.com/video/708641527)
 
 ## Quickstart
 
