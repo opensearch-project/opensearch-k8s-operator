@@ -54,6 +54,9 @@ In order to delete the cluster, you just delete your OpenSearch cluster resource
 ```bash
 kubectl delete -f opensearch-cluster.yaml
 ```
+## Installation Tutorial and Demo
+
+[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://player.vimeo.com/video/708641527)
 
 ## Contributions
 
