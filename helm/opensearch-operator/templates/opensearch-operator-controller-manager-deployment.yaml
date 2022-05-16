@@ -36,14 +36,12 @@ spec:
         name: operator-controller-manager
         resources:
           {{- toYaml .Values.manager.resources | nindent 12 }}
-        {{- with .Values.tolerations }}
-        tolerations:
-          {{- toYaml . | nindent 12 }}
-        {{- end }}
         securityContext:
           allowPrivilegeEscalation: false
       nodeSelector:
         {{- toYaml .Values.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
       securityContext:
         runAsNonRoot: true
       serviceAccountName: opensearch-operator-controller-manager
