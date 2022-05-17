@@ -4,10 +4,10 @@ This guide is intended for users of the Opensearch Operator. If you want to cont
 
 ## Installation
 
-The operator can be easily installed using Helm:
+The Operator can be easily installed using Helm:
 
 1. Add the helm repo: `helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator-chart/`
-2. Install the operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
+2. Install the Operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
 
 Follow the instructions in this video to install the Operator:
 
