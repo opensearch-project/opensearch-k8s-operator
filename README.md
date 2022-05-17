@@ -6,11 +6,11 @@ The Kubernetes OpenSearch Operator is used for automating the deployment, provis
 
 ## Getting started
 
-The operator can be installed easily using helm on any CNCF-certified kubernetes cluster. Please refer to the [User Guide](./docs/userguide/main.md) for installation instructions.
+The Operator can be easily installed using helm on any CNCF-certified Kubernetes cluster. Please refer to the [User Guide](./docs/userguide/main.md) for installation instructions.
 
 ## Roadmap
 
-The full roadmap is available in the [Development plan](./docs/designs/dev-plan.md)
+The full roadmap is available in the [Development plan](./docs/designs/dev-plan.md).
 
 Currently planned features:
 
@@ -37,11 +37,11 @@ Currently planned features:
 
 - Clone the repo and go to the `opensearch-operator` folder.
 - Run `make build manifests` to build the controller binary and the manifests
-- Start a kubernetes cluster (e.g. with k3d or minikube) and make sure your `~/.kube/config` points to it
+- Start a Kubernetes cluster (e.g. with k3d or minikube) and make sure your `~/.kube/config` points to it
 - Run `make install` to create the CRD in the kubernetes cluster
-- Start the operator by running `make run`
+- Start the Operator by running `make run`
 
-Now you can deploy an opensearch cluster.
+Now you can deploy an Opensearch cluster.
 
 Go to `opensearch-operator` and use `opensearch-cluster.yaml` as a starting point to define your cluster. Then run:
 
@@ -49,7 +49,7 @@ Go to `opensearch-operator` and use `opensearch-cluster.yaml` as a starting poin
 kubectl apply -f opensearch-cluster.yaml
 ```
 
-In order to delete the cluster, you just delete your OpenSearch cluster resource. This will delete the cluster and all its resources.
+In order to delete the cluster, you just delete your OpenSearch cluster resource. This will delete the cluster and all of its resources.
 
 ```bash
 kubectl delete -f opensearch-cluster.yaml
