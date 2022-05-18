@@ -2,7 +2,6 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: opensearch-operator-leader-election-role
-  namespace: {{ include ".Values.namespaceName" . }}
 rules:
 - apiGroups:
   - ""
