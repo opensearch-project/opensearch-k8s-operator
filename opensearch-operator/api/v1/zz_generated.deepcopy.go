@@ -115,6 +115,11 @@ func (in *DashboardsConfig) DeepCopyInto(out *DashboardsConfig) {
 		*out = new(DashboardsTlsConfig)
 		**out = **in
 	}
+	if in.Image != nil {
+		in, out := &in.Image, &out.Image
+		*out = new(ImageSpec)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.AdditionalConfig != nil {
 		in, out := &in.AdditionalConfig, &out.AdditionalConfig
 		*out = make(map[string]string, len(*in))

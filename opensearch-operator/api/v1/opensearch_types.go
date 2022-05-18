@@ -39,7 +39,7 @@ type GeneralConfig struct {
 	ServiceName      string     `json:"serviceName"`
 	SetVMMaxMapCount bool       `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string    `json:"defaultRepo,omitempty"`
-	Image            *ImageSpec `json:",inline"`
+	Image            *ImageSpec `json:"imageSpec,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
@@ -90,6 +90,7 @@ type DashboardsConfig struct {
 	Replicas  int32                       `json:"replicas"`
 	Tls       *DashboardsTlsConfig        `json:"tls,omitempty"`
 	Version   string                      `json:"version"`
+	Image     *ImageSpec                  `json:"imageSpec,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
