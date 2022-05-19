@@ -19,21 +19,21 @@ rules:
 - apiGroups:
   - apps
   resources:
-  - persistentvolumeclaims
+  - statefulsets
   verbs:
   - create
+  - delete
   - get
   - list
   - patch
   - update
   - watch
 - apiGroups:
-  - apps
+  - ""
   resources:
-  - statefulsets
+  - persistentvolumeclaims
   verbs:
   - create
-  - delete
   - get
   - list
   - patch
@@ -134,3 +134,4 @@ rules:
   - get
   - patch
   - update
+
