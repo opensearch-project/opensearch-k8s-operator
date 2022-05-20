@@ -153,6 +153,18 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>Added extra items to opensearch.yml</td>
         <td>string</td>
         <td></td>
+      </tr><tr>
+        <td><b>labels</b></td>
+        <td>map[string]string</td>
+        <td>add user defined labels to nodePool</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>env</b></td>
+        <td>[]corev1.Env</td>
+        <td>add user defined environment variables to nodePool</td>
+        <td>false</td>
+        <td> - </td>
 </table>
 
 

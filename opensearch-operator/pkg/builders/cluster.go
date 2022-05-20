@@ -127,6 +127,11 @@ func NewSTSForNodePool(
 	if helpers.ContainsString(selectedRoles, "master") {
 		labels["opensearch.role"] = "master"
 	}
+
+	// cr.Spec.NodePool.labels
+	for k, v := range node.Labels {
+		labels[k] = v
+	}
 	runas := int64(0)
 
 	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
@@ -250,7 +255,6 @@ func NewSTSForNodePool(
 									},
 								},
 							},
-
 							Name:            "opensearch",
 							Image:           image.GetImage(),
 							ImagePullPolicy: image.GetImagePullPolicy(),
@@ -312,6 +316,8 @@ func NewSTSForNodePool(
 			Value: v,
 		})
 	}
+	// Append additional env vars from cr.Spec.NodePool.env
+	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
 	if cr.Spec.General.SetVMMaxMapCount {
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
