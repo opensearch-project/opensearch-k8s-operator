@@ -68,7 +68,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
 	//Checking if Security Config values are empty and creates a default-securityconfig secret
-	if r.instance.Spec.Security.Config == nil {
+	if r.instance.Spec.Security.Config == nil || r.instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
 		r.logger.Info(clusterName + "-default-securityconfig is being created")
 		SecurityConfigSecretName := clusterName + "-default-securityconfig"
 		//Basic SecurityConfigSecret secret with default settings

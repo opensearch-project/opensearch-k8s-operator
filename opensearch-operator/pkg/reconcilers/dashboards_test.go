@@ -54,9 +54,9 @@ var _ = Describe("Dashboards Reconciler", func() {
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						Tls: &opsterv1.DashboardsTlsConfig{
-							Enable:            true,
-							Generate:          false,
-							CertificateConfig: opsterv1.TlsCertificateConfig{Secret: corev1.LocalObjectReference{Name: secretName}},
+							Enable:               true,
+							Generate:             false,
+							TlsCertificateConfig: opsterv1.TlsCertificateConfig{Secret: corev1.LocalObjectReference{Name: secretName}},
 						},
 					},
 				}}

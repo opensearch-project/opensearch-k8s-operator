@@ -104,16 +104,16 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 	}
 
 	// If a custom image is specified, use it.
-	if cr.Spec.General.Image != nil {
-		if cr.Spec.General.Image.ImagePullPolicy != nil {
-			result.ImagePullPolicy = cr.Spec.General.Image.ImagePullPolicy
+	if cr.Spec.General.ImageSpec != nil {
+		if cr.Spec.General.ImageSpec.ImagePullPolicy != nil {
+			result.ImagePullPolicy = cr.Spec.General.ImageSpec.ImagePullPolicy
 		}
-		if len(cr.Spec.General.Image.ImagePullSecrets) > 0 {
-			result.ImagePullSecrets = cr.Spec.General.Image.ImagePullSecrets
+		if len(cr.Spec.General.ImageSpec.ImagePullSecrets) > 0 {
+			result.ImagePullSecrets = cr.Spec.General.ImageSpec.ImagePullSecrets
 		}
-		if cr.Spec.General.Image.Image != nil {
+		if cr.Spec.General.ImageSpec.Image != nil {
 			// If image is set, nothing else needs to be done
-			result.Image = cr.Spec.General.Image.Image
+			result.Image = cr.Spec.General.ImageSpec.Image
 			return
 		}
 	}
@@ -134,16 +134,16 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 	defaultImage := "opensearch-dashboards"
 
 	// If a custom image is specified, use it.
-	if cr.Spec.General.Image != nil {
-		if cr.Spec.General.Image.ImagePullPolicy != nil {
-			result.ImagePullPolicy = cr.Spec.General.Image.ImagePullPolicy
+	if cr.Spec.General.ImageSpec != nil {
+		if cr.Spec.General.ImageSpec.ImagePullPolicy != nil {
+			result.ImagePullPolicy = cr.Spec.General.ImageSpec.ImagePullPolicy
 		}
-		if len(cr.Spec.General.Image.ImagePullSecrets) > 0 {
-			result.ImagePullSecrets = cr.Spec.General.Image.ImagePullSecrets
+		if len(cr.Spec.General.ImageSpec.ImagePullSecrets) > 0 {
+			result.ImagePullSecrets = cr.Spec.General.ImageSpec.ImagePullSecrets
 		}
-		if cr.Spec.General.Image.Image != nil {
+		if cr.Spec.General.ImageSpec.Image != nil {
 			// If image is set, nothing else needs to be done
-			result.Image = cr.Spec.General.Image.Image
+			result.Image = cr.Spec.General.ImageSpec.Image
 			return
 		}
 	}

@@ -33,13 +33,13 @@ type GeneralConfig struct {
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
-	Vendor           string     `json:"vendor,omitempty"`
-	Version          string     `json:"version,omitempty"`
-	ServiceAccount   string     `json:"serviceAccount,omitempty"`
-	ServiceName      string     `json:"serviceName"`
-	SetVMMaxMapCount bool       `json:"setVMMaxMapCount,omitempty"`
-	DefaultRepo      *string    `json:"defaultRepo,omitempty"`
-	Image            *ImageSpec `json:",inline"`
+	Vendor           string  `json:"vendor,omitempty"`
+	Version          string  `json:"version,omitempty"`
+	ServiceAccount   string  `json:"serviceAccount,omitempty"`
+	ServiceName      string  `json:"serviceName"`
+	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
+	DefaultRepo      *string `json:"defaultRepo,omitempty"`
+	*ImageSpec       `json:",omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
@@ -62,7 +62,7 @@ type NodePool struct {
 
 // PersistencConfig defines options for data persistence
 type PersistenceConfig struct {
-	PersistenceSource `json:",inline"`
+	PersistenceSource `json:","`
 }
 
 type PersistenceSource struct {
@@ -102,7 +102,7 @@ type DashboardsTlsConfig struct {
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
 	// foobar
-	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+	TlsCertificateConfig `json:",omitempty"`
 }
 
 // Security defines options for managing the opensearch-security plugin
@@ -121,8 +121,8 @@ type TlsConfigTransport struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
-	PerNode           bool                 `json:"perNode,omitempty"`
-	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+	PerNode              bool `json:"perNode,omitempty"`
+	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
 	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
@@ -131,8 +131,8 @@ type TlsConfigTransport struct {
 
 type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
-	Generate          bool                 `json:"generate,omitempty"`
-	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+	Generate             bool `json:"generate,omitempty"`
+	TlsCertificateConfig `json:",omitempty"`
 }
 
 type TlsCertificateConfig struct {

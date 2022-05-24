@@ -701,7 +701,7 @@ func NewSecurityconfigUpdateJob(
 	caCert := "/certs/ca.crt"
 	var securityconfigVolumeSecretName string
 
-	if instance.Spec.Security.Config == nil {
+	if instance.Spec.Security.Config == nil || instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
 		securityconfigVolumeSecretName = clusterName + "-default-securityconfig"
 	} else {
 		securityconfigVolumeSecretName = instance.Spec.Security.Config.SecurityconfigSecret.Name
