@@ -97,8 +97,8 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		// Take CA from TLS reconciler or generate new one
 		var ca tls.Cert
 		var err error
-		if tlsConfig.CertificateConfig.CaSecret.Name != "" {
-			ca, err = r.providedCaCert(tlsConfig.CertificateConfig.CaSecret.Name, namespace)
+		if tlsConfig.TlsCertificateConfig.CaSecret.Name != "" {
+			ca, err = r.providedCaCert(tlsConfig.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
 			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
@@ -137,7 +137,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		volumeMounts = append(volumeMounts, mount)
 	} else {
 		r.logger.Info("Using externally provided certificates")
-		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.CertificateConfig.Secret.Name}}}
+		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.TlsCertificateConfig.Secret.Name}}}
 		volumes = append(volumes, volume)
 		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}
 		volumeMounts = append(volumeMounts, mount)

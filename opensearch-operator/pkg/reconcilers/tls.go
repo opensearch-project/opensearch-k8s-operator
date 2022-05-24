@@ -106,8 +106,8 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 		// Generate admin client certificate
 		var ca tls.Cert
 		var err error
-		if r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
-			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
+		if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
+			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
 			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
@@ -150,8 +150,8 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 	var ca tls.Cert
 	var err error
-	if r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
-		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
+	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
+		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 	} else {
 		ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 	}
@@ -206,8 +206,8 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 
 	var ca tls.Cert
 	var err error
-	if r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name != "" {
-		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.CertificateConfig.CaSecret.Name, namespace)
+	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
+		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 	} else {
 		ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 	}
@@ -315,28 +315,28 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 func (r *TLSReconciler) handleTransportExistingCerts() error {
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
 	if tlsConfig.PerNode {
-		if tlsConfig.CertificateConfig.Secret.Name == "" {
+		if tlsConfig.TlsCertificateConfig.Secret.Name == "" {
 			err := errors.New("perNode=true but secret not set")
 			r.logger.Error(err, "Secret not provided")
 			return err
 		}
-		mountFolder("transport", "certs", tlsConfig.CertificateConfig.Secret.Name, r.reconcilerContext)
+		mountFolder("transport", "certs", tlsConfig.TlsCertificateConfig.Secret.Name, r.reconcilerContext)
 		// Extend opensearch.yml
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", "tls-transport/${HOSTNAME}.crt")
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", "tls-transport/${HOSTNAME}.key")
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "true")
 	} else {
-		if tlsConfig.CertificateConfig.Secret.Name == "" {
+		if tlsConfig.TlsCertificateConfig.Secret.Name == "" {
 			err := errors.New("missing secret in spec")
 			r.logger.Error(err, "Not all secrets for transport provided")
 			return err
 		}
-		if tlsConfig.CertificateConfig.CaSecret.Name == "" {
-			mountFolder("transport", "certs", tlsConfig.CertificateConfig.Secret.Name, r.reconcilerContext)
+		if tlsConfig.TlsCertificateConfig.CaSecret.Name == "" {
+			mountFolder("transport", "certs", tlsConfig.TlsCertificateConfig.Secret.Name, r.reconcilerContext)
 		} else {
-			mount("transport", "ca", CaCertKey, tlsConfig.CertificateConfig.CaSecret.Name, r.reconcilerContext)
-			mount("transport", "key", corev1.TLSPrivateKeyKey, tlsConfig.CertificateConfig.Secret.Name, r.reconcilerContext)
-			mount("transport", "cert", corev1.TLSCertKey, tlsConfig.CertificateConfig.Secret.Name, r.reconcilerContext)
+			mount("transport", "ca", CaCertKey, tlsConfig.TlsCertificateConfig.CaSecret.Name, r.reconcilerContext)
+			mount("transport", "key", corev1.TLSPrivateKeyKey, tlsConfig.TlsCertificateConfig.Secret.Name, r.reconcilerContext)
+			mount("transport", "cert", corev1.TLSCertKey, tlsConfig.TlsCertificateConfig.Secret.Name, r.reconcilerContext)
 		}
 		// Extend opensearch.yml
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSCertKey))
@@ -360,8 +360,8 @@ func (r *TLSReconciler) handleHttp() error {
 
 		var ca tls.Cert
 		var err error
-		if r.instance.Spec.Security.Tls.Http.CertificateConfig.CaSecret.Name != "" {
-			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Http.CertificateConfig.CaSecret.Name, namespace)
+		if r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name != "" {
+			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
 			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
@@ -401,17 +401,17 @@ func (r *TLSReconciler) handleHttp() error {
 		mount := corev1.VolumeMount{Name: "http-cert", MountPath: "/usr/share/opensearch/config/tls-" + "http"}
 		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 	} else {
-		if tlsConfig.CertificateConfig.Secret.Name == "" {
+		if tlsConfig.TlsCertificateConfig.Secret.Name == "" {
 			err := errors.New("missing secret in spec")
 			r.logger.Error(err, "Not all secrets for http provided")
 			return err
 		}
-		if tlsConfig.CertificateConfig.CaSecret.Name == "" {
-			mountFolder("http", "certs", tlsConfig.CertificateConfig.Secret.Name, r.reconcilerContext)
+		if tlsConfig.TlsCertificateConfig.CaSecret.Name == "" {
+			mountFolder("http", "certs", tlsConfig.TlsCertificateConfig.Secret.Name, r.reconcilerContext)
 		} else {
-			mount("http", "ca", CaCertKey, tlsConfig.CertificateConfig.CaSecret.Name, r.reconcilerContext)
-			mount("http", "key", corev1.TLSPrivateKeyKey, tlsConfig.CertificateConfig.Secret.Name, r.reconcilerContext)
-			mount("http", "cert", corev1.TLSCertKey, tlsConfig.CertificateConfig.Secret.Name, r.reconcilerContext)
+			mount("http", "ca", CaCertKey, tlsConfig.TlsCertificateConfig.CaSecret.Name, r.reconcilerContext)
+			mount("http", "key", corev1.TLSPrivateKeyKey, tlsConfig.TlsCertificateConfig.Secret.Name, r.reconcilerContext)
+			mount("http", "cert", corev1.TLSCertKey, tlsConfig.TlsCertificateConfig.Secret.Name, r.reconcilerContext)
 		}
 	}
 	// Extend opensearch.yml
