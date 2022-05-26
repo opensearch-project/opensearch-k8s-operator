@@ -19,19 +19,6 @@ jobs:
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
           echo "LATE_IMG=public.ecr.aws/opsterio/opense arch-operator:latest" >> $GITHUB_ENV
-      - name: Prepare helm chart
-        env:
-          GITHUB_REF: ${{ github.ref }}
-        run: |
-          pwd
-          ls
-          echo ${{ env.RELEASE_VERSION }}
-          cat helm/opensearch-operator/Chart.yaml | sed 's/0.1.0/'${{ env.RELEASE_VERSION }}'/'
-      - name: Publish Helm charts
-        uses: stefanprodan/helm-gh-pages@master
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          charts_dir: helm
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1

@@ -1,0 +1,2 @@
+target-branch: main
+helm-extra-args: --timeout 800s
