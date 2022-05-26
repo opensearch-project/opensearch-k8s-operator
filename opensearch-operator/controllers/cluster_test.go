@@ -116,6 +116,37 @@ var _ = Describe("Cluster Reconciler", func() {
 			}))
 		})
 
+		It("should set nodepool additional user defined env vars", func() {
+			sts := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-client", OpensearchCluster.Name),
+					Namespace: OpensearchCluster.Namespace,
+				}, sts)
+			}, timeout, interval).Should(Succeed())
+			// Based on key/value
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "qux",
+				Value: "qut",
+			}))
+			// Based on key/fieldRef of user defined label
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:      "quuxe",
+				ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.labels['quux']"}},
+			}))
+		})
+
+		It("should set nodepool additional user defined labels", func() {
+			sts := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-client", OpensearchCluster.Name),
+					Namespace: OpensearchCluster.Namespace,
+				}, sts)
+			}, timeout, interval).Should(Succeed())
+			Expect(sts.ObjectMeta.Labels).To(HaveKeyWithValue("quux", "quut"))
+		})
+
 		It("should create a bootstrap pod", func() {
 			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
 			Eventually(func() error {

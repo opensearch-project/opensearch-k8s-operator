@@ -150,6 +150,13 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				AdditionalConfig: map[string]string{
 					"baz": "bat",
 				},
+				Labels: map[string]string{
+					"quux": "quut",
+				},
+				Env: []corev1.EnvVar{
+					{Name: "qux", Value: "qut"},
+					{Name: "quuxe", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.labels['quux']"}}},
+				},
 			}},
 		},
 		Status: opsterv1.ClusterStatus{

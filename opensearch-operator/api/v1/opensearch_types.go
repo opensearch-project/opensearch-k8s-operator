@@ -58,6 +58,8 @@ type NodePool struct {
 	Affinity         *corev1.Affinity            `json:"affinity,omitempty"`
 	Persistence      *PersistenceConfig          `json:"persistence,omitempty"`
 	AdditionalConfig map[string]string           `json:"additionalConfig,omitempty"`
+	Labels           map[string]string           `json:"labels,omitempty"`
+	Env              []corev1.EnvVar             `json:"env,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
