@@ -1,5 +1,3 @@
-![build](https://github.com/opster/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opster/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opster/opensearch-k8s-operator)
-
 # OpenSearch-k8s-operator
 
 The Kubernetes [OpenSearch Operator](https://github.com/Opster/opensearch-k8s-operator) is used for automating the deployment, provisioning, management, and orchestration of OpenSearch clusters and OpenSearch dashboards.
