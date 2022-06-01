@@ -96,6 +96,7 @@ type DashboardsConfig struct {
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
 	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
+	Env                         []corev1.EnvVar             `json:"env,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
