@@ -56,25 +56,25 @@ In order to delete the cluster, you just delete your OpenSearch cluster resource
 ```bash
 kubectl delete -f opensearch-cluster.yaml
 ```
-## Installation Using Helm
+### Installation Using Helm
 
-# Get Repo Info
+#### Get Repo Info
 ```
 helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator/
 helm repo update
 ```
 
-# Install Chart
+#### Install Chart
 ```
 helm install [RELEASE_NAME] opensearch-operator/opensearch-operator
 ```
 
-# Uninstall Chart
+#### Uninstall Chart
 ```
 helm uninstall [RELEASE_NAME]
 ```
 
-# Upgrade Chart
+#### Upgrade Chart
 ```
 helm upgrade [RELEASE_NAME] opensearch-operator/opensearch-operator
 ```
