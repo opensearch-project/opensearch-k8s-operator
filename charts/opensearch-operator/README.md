@@ -2,7 +2,7 @@
 
 # OpenSearch-k8s-operator
 
-The Kubernetes OpenSearch Operator is used for automating the deployment, provisioning, management, and orchestration of OpenSearch clusters and OpenSearch dashboards.
+The Kubernetes [OpenSearch Operator](https://github.com/Opster/opensearch-k8s-operator) is used for automating the deployment, provisioning, management, and orchestration of OpenSearch clusters and OpenSearch dashboards.
 
 ## Getting started
 
