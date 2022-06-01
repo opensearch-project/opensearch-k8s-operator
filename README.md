@@ -41,6 +41,8 @@ Currently planned features:
 - Run `make install` to create the CRD in the kubernetes cluster
 - Start the Operator by running `make run`
 
+**Note: use GO 1.17 version** 
+
 Now you can deploy an Opensearch cluster.
 
 Go to `opensearch-operator` and use `opensearch-cluster.yaml` as a starting point to define your cluster. Then run:
