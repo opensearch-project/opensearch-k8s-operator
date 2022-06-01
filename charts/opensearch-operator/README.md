@@ -63,17 +63,14 @@ kubectl delete -f opensearch-cluster.yaml
 helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator/
 helm repo update
 ```
-
 #### Install Chart
 ```
 helm install [RELEASE_NAME] opensearch-operator/opensearch-operator
 ```
-
 #### Uninstall Chart
 ```
 helm uninstall [RELEASE_NAME]
 ```
-
 #### Upgrade Chart
 ```
 helm upgrade [RELEASE_NAME] opensearch-operator/opensearch-operator
