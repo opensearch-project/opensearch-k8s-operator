@@ -179,6 +179,24 @@ var _ = Describe("Cluster Reconciler", func() {
 			}
 			wg.Wait()
 		})
+		It("should configure bootstrap pod correctly", func() {
+			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
+			pod := &corev1.Pod{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      bootstrapName,
+					Namespace: OpensearchCluster.Namespace,
+				}, pod)
+			}, timeout, interval).Should(Succeed())
+			Expect(pod.Spec.Containers[0].Resources.Limits.Cpu().String()).To(Equal("125m"))
+			Expect(pod.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("1Gi"))
+			Expect(pod.Spec.Tolerations).To(ContainElement(corev1.Toleration{
+				Effect:   "NoSchedule",
+				Key:      "foo",
+				Operator: "Equal",
+				Value:    "bar",
+			}))
+		})
 		It("should create a discovery service", func() {
 			discoveryName := fmt.Sprintf("%s-discovery", OpensearchCluster.Name)
 			Eventually(func() error {
