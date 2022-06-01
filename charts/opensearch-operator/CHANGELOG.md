@@ -12,6 +12,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 ### Fixed
 ### Security
+
+---
+## [1.0.2]
+### Added
+### Changed
+- Added README.md file to charts/ folder.
+### Deprecated
+### Removed
+### Fixed
+### Security
+
 ---
 ## [1.0.1]
 ### Added
@@ -22,4 +33,5 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.1...HEAD
+[Unreleased]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.2...HEAD
+[1.0.2]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.1...1.0.2
