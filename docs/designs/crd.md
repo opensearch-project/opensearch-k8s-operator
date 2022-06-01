@@ -72,6 +72,11 @@ ClusterSpec defines the desired state of OpensearchCluster
         <td>Opensearch general configuration</td>
         <td>true</td>
       </tr><tr>
+        <td><b>Bootstrap</b></td>
+        <td>object</td>
+        <td>Bootstrap pod configuration</td>
+        <td>false</td>
+      </tr><tr>
         <td><b>Dashboards</b></td>
         <td>object</td>
         <td>Opensearch-dashboards configuration</td>
@@ -167,6 +172,54 @@ GeneralConfig defines global Opensearch cluster configuration
         <td> - </td>
 </table>
 
+<h3 id="GeneralConfig">
+  Bootstrap
+</h3>
+
+Bootstrap defines Opensearch bootstrap pod configuration
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>resources</b></td>
+        <td>corev1.ResourceRequirements</td>
+        <td>Define Opensearch bootstrap pod resources</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>tolerations</b></td>
+        <td>[]corev1.Toleration</td>
+        <td>add toleration to bootstrap pod</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>nodeSelector</b></td>
+        <td>map[string]string</td>
+        <td> Define Opensearch-Dashboard resources </td>
+        <td>false</td>
+        <td>Default Opensearch-dashboard resources</td>
+      </tr><tr>
+        <td><b>affinity</b></td>
+        <td>corev1.Affinity</td>
+        <td>add affinity to bootstrap pod</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>jvm</b></td>
+        <td>string</td>
+        <td>JVM args. Use this to define heap size</td>
+        <td>false</td>
+        <td>-Xmx512M -Xms512M<td>
+      </tr><tr>
+</table>
 
 <h3 id="GeneralConfig">
   Dashboards
@@ -208,7 +261,6 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>Opensearch-dashboards version</td>
         <td>false</td>
         <td>latest</td>
-      </tr><tr>
       </tr><tr>
         <td><b>Tls</b></td>
         <td>DashboardsTlsConfig</td>
