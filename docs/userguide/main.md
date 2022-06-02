@@ -88,9 +88,10 @@ nodePools:
     - "data"
     - "master"
   persistence:
-    storageClass: mystorageclass
-    accessModes:
-    - ReadWriteOnce
+    pvc:
+      storageClass: mystorageclass
+      accessModes:
+      - ReadWriteOnce
 ```
 
 or
