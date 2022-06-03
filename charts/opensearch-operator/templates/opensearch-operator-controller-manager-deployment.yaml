@@ -29,6 +29,9 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
+        {{- if .Values.manager.watchNamespace }}
+        - --watch-namespace={{ .Values.manager.watchNamespace }}
+        {{- end }}
         command:
         - /manager
         image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag }}"
