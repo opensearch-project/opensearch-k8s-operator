@@ -82,6 +82,13 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 
 	var version string
 
+	// If a general custom image is specified, use it.
+	if cr.Spec.General.ImageSpec != nil {
+		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
+			return
+		}
+	}
+
 	// Calculate version based on upgrading status
 	if nodePool == nil {
 		version = cr.Spec.General.Version
@@ -103,21 +110,6 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 		}
 	}
 
-	// If a custom image is specified, use it.
-	if cr.Spec.General.ImageSpec != nil {
-		if cr.Spec.General.ImageSpec.ImagePullPolicy != nil {
-			result.ImagePullPolicy = cr.Spec.General.ImageSpec.ImagePullPolicy
-		}
-		if len(cr.Spec.General.ImageSpec.ImagePullSecrets) > 0 {
-			result.ImagePullSecrets = cr.Spec.General.ImageSpec.ImagePullSecrets
-		}
-		if cr.Spec.General.ImageSpec.Image != nil {
-			// If image is set, nothing else needs to be done
-			result.Image = cr.Spec.General.ImageSpec.Image
-			return
-		}
-	}
-
 	// If a different image repo is requested, use that with the default image
 	// name and version tag.
 	if cr.Spec.General.DefaultRepo != nil {
@@ -133,17 +125,16 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch-dashboards"
 
-	// If a custom image is specified, use it.
+	// If a custom dashboard image is specified, use it.
+	if cr.Spec.Dashboards.ImageSpec != nil {
+		if useCustomImage(cr.Spec.Dashboards.ImageSpec, &result) {
+			return
+		}
+	}
+
+	// If a general custom image is specified, use it.
 	if cr.Spec.General.ImageSpec != nil {
-		if cr.Spec.General.ImageSpec.ImagePullPolicy != nil {
-			result.ImagePullPolicy = cr.Spec.General.ImageSpec.ImagePullPolicy
-		}
-		if len(cr.Spec.General.ImageSpec.ImagePullSecrets) > 0 {
-			result.ImagePullSecrets = cr.Spec.General.ImageSpec.ImagePullSecrets
-		}
-		if cr.Spec.General.ImageSpec.Image != nil {
-			// If image is set, nothing else needs to be done
-			result.Image = cr.Spec.General.ImageSpec.Image
+		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
 			return
 		}
 	}
@@ -157,4 +148,21 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 	result.Image = pointer.String(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), cr.Spec.Dashboards.Version))
 	return
+}
+
+func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageSpec) bool {
+	if customImageSpec != nil {
+		if customImageSpec.ImagePullPolicy != nil {
+			result.ImagePullPolicy = customImageSpec.ImagePullPolicy
+		}
+		if len(customImageSpec.ImagePullSecrets) > 0 {
+			result.ImagePullSecrets = customImageSpec.ImagePullSecrets
+		}
+		if customImageSpec.Image != nil {
+			// If custom image is specified, use it.
+			result.Image = customImageSpec.Image
+			return true
+		}
+	}
+	return false
 }
