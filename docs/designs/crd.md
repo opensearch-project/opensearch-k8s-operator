@@ -216,6 +216,13 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>false</td>
       </tr><tr>
+      </tr><tr>
+        <td><b>env</b></td>
+        <td>[]corev1.Env</td>
+        <td>add user defined environment variables to dashboard app</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
 </table>
 
 
