@@ -360,8 +360,8 @@ func (r *TLSReconciler) handleHttp() error {
 
 		var ca tls.Cert
 		var err error
-		if r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name != "" {
-			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name, namespace)
+		if tlsConfig.TlsCertificateConfig.CaSecret.Name != "" {
+			ca, err = r.providedCaCert(tlsConfig.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
 			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}

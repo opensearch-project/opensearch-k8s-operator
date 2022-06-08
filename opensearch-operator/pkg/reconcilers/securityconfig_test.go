@@ -76,6 +76,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 
 	Context("When Reconciling the securityconfig reconciler with securityconfig secret configured and available", func() {
 		It("should start an update job", func() {
+			var clusterName = "securityconfig"
 			// Create namespace and secrets first
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 			configSecret := corev1.Secret{
@@ -119,6 +120,46 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
+
+		})
+	})
+
+	Context("When Reconciling the securityconfig reconciler with securityconfig secret but no adminSecret configured", func() {
+		It("should not start an update job", func() {
+			var clusterName = "securityconfig-noadminsecret"
+			// Create namespace and secret first
+			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+			configSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig", Namespace: clusterName},
+				StringData: map[string]string{"config.yml": "foobar"},
+			}
+			err := k8sClient.Create(context.Background(), &configSecret)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					Security: &opsterv1.Security{
+						Config: &opsterv1.SecurityConfig{
+							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig"},
+						},
+					},
+				}}
+
+			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			underTest := NewSecurityconfigReconciler(
+				k8sClient,
+				context.Background(),
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err = underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			job := batchv1.Job{}
+			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)).To(HaveOccurred())
 
 		})
 	})
