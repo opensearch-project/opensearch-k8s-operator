@@ -808,3 +808,4 @@ func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.O
 	}
 	return count
 }
+
