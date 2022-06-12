@@ -216,6 +216,34 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>false</td>
       </tr><tr>
+      </tr><tr>
+        <td><b>env</b></td>
+        <td>[]corev1.Env</td>
+        <td>add user defined environment variables to dashboard app</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>image</b></td>
+        <td>string</td>
+        <td>Define Opensearch-dashboards image</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>imagePullPolicy</b></td>
+        <td>corev1.PullPolicy</td>
+        <td>Define Opensearch-dashboards image pull policy</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>imagePullSecrets</b></td>
+        <td>corev1.LocalObjectReference</td>
+        <td>Define Opensearch-dashboards image pull secrets</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
 </table>
 
 

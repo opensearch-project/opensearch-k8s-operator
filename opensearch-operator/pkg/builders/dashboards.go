@@ -47,6 +47,10 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		},
 	}
 
+	if len(cr.Spec.Dashboards.Env) != 0 {
+		env = append(env, cr.Spec.Dashboards.Env...)
+	}
+
 	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
 		// Custom credentials supplied
 		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "username"}}})

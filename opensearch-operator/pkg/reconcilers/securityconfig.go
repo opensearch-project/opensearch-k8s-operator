@@ -193,7 +193,7 @@ func checksum(data map[string][]byte) (string, error) {
 func (r *SecurityconfigReconciler) determineAdminSecret() string {
 	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
 		return r.instance.Spec.Security.Config.AdminSecret.Name
-	} else if r.instance.Spec.Security.Tls.Transport.Generate {
+	} else if r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Transport != nil && r.instance.Spec.Security.Tls.Transport.Generate {
 		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
 	} else {
 		return ""
