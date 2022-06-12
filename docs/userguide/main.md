@@ -88,7 +88,7 @@ nodePools:
       - ReadWriteOnce
 ```
 ### EmptyDir
-Persistent source as emptyDir.
+Persistent source as `emptyDir`.
 
 ```yaml
 nodePools:
@@ -104,7 +104,7 @@ nodePools:
 If you are using emptyDir, it is recommended that you set `spec.general.drainDataNodes` to be `true`. This will ensure that shards are drained from the pods before rolling upgrades or restart operations are performed.
 
 ### HostPath
-Persistent source as hostPath.
+Persistent source as `hostPath`.
 
 ```yaml
 nodePools:
