@@ -106,7 +106,9 @@ var _ = Describe("Scaler Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &OpensearchCluster); err != nil {
 					return err
 				}
-				OpensearchCluster.Spec.NodePools[0].DiskSize = "32Gi"
+				if OpensearchCluster.Spec.NodePools[0].Persistence == nil || OpensearchCluster.Spec.NodePools[0].Persistence.PersistenceSource.PVC != nil {
+					OpensearchCluster.Spec.NodePools[0].DiskSize = "32Gi"
+				}
 
 				return k8sClient.Update(context.Background(), &OpensearchCluster)
 			})
@@ -130,8 +132,11 @@ var _ = Describe("Scaler Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: clusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
 					return false
 				}
-				existingDisk := nodePool.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
-				return existingDisk == "32Gi"
+				if OpensearchCluster.Spec.NodePools[0].Persistence == nil || OpensearchCluster.Spec.NodePools[0].Persistence.PersistenceSource.PVC != nil {
+					existingDisk := nodePool.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
+					return existingDisk == "32Gi"
+				}
+				return true
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
