@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ---
+## [1.0.3]
+### Added
+### Changed
+- Added missing spec `dashboards.additionalConfig`
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+---
 ## [1.0.2]
 ### Added
 ### Changed
@@ -33,5 +43,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.2...HEAD
-[1.0.2]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.1...1.0.2
+[Unreleased]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.3...HEAD
+[1.0.3]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.2...opensearch-operator-1.0.3
+[1.0.2]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.1...opensearch-operator-1.0.2
