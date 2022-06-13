@@ -71,19 +71,13 @@ The minimal cluster you deployed in this section is only intended for demo purpo
 
 By default, the Operator will create OpenSearch node pools with persistent storage from the default [Storage Class](https://kubernetes.io/docs/concepts/storage/storage-classes/).  This behaviour can be changed per node pool. You may supply an alternative storage class and access mode, or configure hostPath or emptyDir storage. Please note that hostPath is strongly discouraged, and if you do choose this option, then you must also configure affinity for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host:
 
+### PVC
+Default option is persistent storage, to explicitly add pvc to custom `storageClass`.
 ```yaml
 nodePools:
 - component: masters
   replicas: 3
   diskSize: 30
-  NodeSelector:
-  resources:
-      requests:
-        memory: "2Gi"
-        cpu: "500m"
-      limits:
-        memory: "2Gi"
-        cpu: "500m"
   roles:
     - "data"
     - "master"
@@ -93,30 +87,37 @@ nodePools:
       accessModes:
       - ReadWriteOnce
 ```
-
-or
+### EmptyDir
+Persistent source as `emptyDir`.
 
 ```yaml
 nodePools:
 - component: masters
   replicas: 3
   diskSize: 30
-  NodeSelector:
-  resources:
-      requests:
-        memory: "2Gi"
-        cpu: "500m"
-      limits:
-        memory: "2Gi"
-        cpu: "500m"
   roles:
     - "data"
     - "master"
   persistence:
     emptyDir: {}
 ```
-
 If you are using emptyDir, it is recommended that you set `spec.general.drainDataNodes` to be `true`. This will ensure that shards are drained from the pods before rolling upgrades or restart operations are performed.
+
+### HostPath
+Persistent source as `hostPath`.
+
+```yaml
+nodePools:
+- component: masters
+  replicas: 3
+  diskSize: 30
+  roles:
+    - "data"
+    - "master"
+  persistence:
+    hostPath:
+      path: "/var/opensearch"
+```
 
 ## Configuring opensearch.yml
 

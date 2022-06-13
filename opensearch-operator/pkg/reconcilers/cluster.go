@@ -140,52 +140,54 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	if err != nil {
 		return result, err
 	}
-
 	//Checking for existing statefulset disksize
-	existingDisk := existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
-	r.logger.Info("The existing statefulset VolumeClaimTemplate disk size is: " + existingDisk)
-	r.logger.Info("The cluster definition nodePool disk size is: " + nodePool.DiskSize)
-	if existingDisk == nodePool.DiskSize {
-		r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
-	} else {
-		//Removing statefulset while allowing pods to run
-		r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
-		opts := client.DeleteOptions{}
-		client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
-		if err := r.Delete(r.ctx, existing, &opts); err != nil {
-			r.logger.Info("failed to delete statefulset" + existing.Name)
-			return result, err
+
+	//Default is PVC, or explicit check for PersistenceSource as PVC
+	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
+		existingDisk := existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
+		r.logger.Info("The existing statefulset VolumeClaimTemplate disk size is: " + existingDisk)
+		r.logger.Info("The cluster definition nodePool disk size is: " + nodePool.DiskSize)
+		if existingDisk == nodePool.DiskSize {
+			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
+		} else {
+			//Removing statefulset while allowing pods to run
+			r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
+			opts := client.DeleteOptions{}
+			client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
+			if err := r.Delete(r.ctx, existing, &opts); err != nil {
+				r.logger.Info("failed to delete statefulset" + existing.Name)
+				return result, err
+			}
+			//Identifying the PVC per statefulset pod and patching the new size
+			for i := 0; i < int(*existing.Spec.Replicas); i++ {
+				clusterName := r.instance.Name
+				claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
+				r.logger.Info("The claimName identified as " + claimName)
+				var pvc corev1.PersistentVolumeClaim
+				nsn := types.NamespacedName{
+					Namespace: existing.Namespace,
+					Name:      claimName,
+				}
+				if err := r.Get(r.ctx, nsn, &pvc); err != nil {
+					r.logger.Info("failed to get pvc" + pvc.Name)
+					return result, err
+				}
+				newDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
+				if err != nil {
+					r.logger.Info("failed to parse size " + nodePool.DiskSize)
+					return result, err
+				}
+
+				pvc.Spec.Resources.Requests["storage"] = newDiskSize
+
+				if err := r.Update(r.ctx, &pvc); err != nil {
+					r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
+					return result, err
+				}
+			}
+
 		}
-		//Identifying the PVC per statefulset pod and patching the new size
-		for i := 0; i < int(*existing.Spec.Replicas); i++ {
-			clusterName := r.instance.Name
-			claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
-			r.logger.Info("The claimName identified as " + claimName)
-			var pvc corev1.PersistentVolumeClaim
-			nsn := types.NamespacedName{
-				Namespace: existing.Namespace,
-				Name:      claimName,
-			}
-			if err := r.Get(r.ctx, nsn, &pvc); err != nil {
-				r.logger.Info("failed to get pvc" + pvc.Name)
-				return result, err
-			}
-			newDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
-			if err != nil {
-				r.logger.Info("failed to parse size " + nodePool.DiskSize)
-				return result, err
-			}
-
-			pvc.Spec.Resources.Requests["storage"] = newDiskSize
-
-			if err := r.Update(r.ctx, &pvc); err != nil {
-				r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
-				return result, err
-			}
-		}
-
 	}
-
 	// Now set the desired replicas to be the existing replicas
 	// This will allow the scaler reconciler to function correctly
 	sts.Spec.Replicas = existing.Spec.Replicas
