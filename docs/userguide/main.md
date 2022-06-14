@@ -355,7 +355,7 @@ spec:
       - component: nodes
         replicas: 3
         diskSize: "10Gi"
-        JVM: -Xmx1024M -Xms1024M
+        jvm: -Xmx1024M -Xms1024M
         NodeSelector:
         resources:
           requests:
