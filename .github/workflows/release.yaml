@@ -66,15 +66,14 @@ jobs:
       - name: Copy-crd-to-chart-dir
         run: |
           cd opensearch-operator
-          make manifests
-          cp ./config/crd/bases/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/
-          mv ../charts/opensearch-operator/templates/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
+          cp and mv can be done in one call:
+          cp ./config/crd/bases/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
           sed -i '' -e 's/^version.*/version: $RELEASE_VERSION/' charts/opensearch-operator/Chart.yaml
           git config user.name "GitHub Actions Bot"
           git config user.email "<>"
           git add ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
           git add ../charts/opensearch-operator/Chart.yaml
-          git commit -m "update CRD on chart dir for new relases + change "
+          git commit -m "Update helm chart for new operator release ${RELEASE_VERSION}"
           git push
 ###### After build and push the images we can now prepper the chart release - just after the chart release will create a new helm-release workflow will run.
 ###### that's a problem because we need to marge the version change commit first so the chart will be created with the new version.
