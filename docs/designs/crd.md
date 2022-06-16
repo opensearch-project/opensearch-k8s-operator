@@ -205,7 +205,7 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>map[string]string</td>
         <td> Define Opensearch-Dashboard resources </td>
         <td>false</td>
-        <td>Default Opensearch-dashboard resources</td>
+        <td>-</td>
       </tr><tr>
         <td><b>affinity</b></td>
         <td>corev1.Affinity</td>
