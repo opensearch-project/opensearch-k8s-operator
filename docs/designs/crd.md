@@ -203,7 +203,7 @@ Bootstrap defines Opensearch bootstrap pod configuration
       </tr><tr>
         <td><b>nodeSelector</b></td>
         <td>map[string]string</td>
-        <td> Define Opensearch-Dashboard resources </td>
+        <td>Add NodeSelector to bootstrap pod</td>
         <td>false</td>
         <td>-</td>
       </tr><tr>
