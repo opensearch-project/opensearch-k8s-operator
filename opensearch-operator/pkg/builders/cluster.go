@@ -171,7 +171,7 @@ func NewSTSForNodePool(
 				Command: []string{
 					"/bin/bash",
 					"-c",
-					"curl -k -u ${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD} --silent --fail https://localhost:9200",
+					"curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" --silent --fail https://localhost:9200",
 				},
 			},
 		},
