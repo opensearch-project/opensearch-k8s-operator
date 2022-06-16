@@ -24,8 +24,12 @@ jobs:
       - name: Update chart version
         run: |
           VERSION=${GITHUB_REF//refs\/tags\/helm-}
-          sed -i -e 's/^appVersion.*/appVersion: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
-          sed -i -e 's/tag.*/tag: '$RELEASE_VERSION'/' charts/opensearch-operator/values.yaml
+          sed -i '' -e 's/^version.*/version: $RELEASE_VERSION/' charts/opensearch-operator/Chart.yaml
+          git config user.name "GitHub Actions Bot"
+          git config user.email "<>"
+          git add ../charts/opensearch-operator/Chart.yaml
+          git commit -m "Update helm chart for new operator's version release ${RELEASE_VERSION}"
+          git push
       # See https://github.com/helm/chart-releaser
       # See https://github.com/helm/chart-releaser-action
       - name: Run chart-releaser
