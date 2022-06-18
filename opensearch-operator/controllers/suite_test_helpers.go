@@ -110,6 +110,19 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				VerUpdate:   false,
 				SmartScaler: false,
 			},
+			Bootstrap: opsterv1.BootstrapConfig{
+				Resources: corev1.ResourceRequirements{
+					Limits: v1.ResourceList{
+						v1.ResourceCPU:    resource.MustParse("125m"),
+						v1.ResourceMemory: resource.MustParse("1Gi"),
+					}},
+				Tolerations: []corev1.Toleration{{
+					Effect:   "NoSchedule",
+					Key:      "foo",
+					Operator: "Equal",
+					Value:    "bar",
+				}},
+			},
 			Dashboards: opsterv1.DashboardsConfig{Enable: true},
 			NodePools: []opsterv1.NodePool{{
 				Component: "master",
