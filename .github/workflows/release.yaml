@@ -66,10 +66,9 @@ jobs:
       - name: Copy-crd-to-chart-dir
         run: |
           cd opensearch-operator
-          cp and mv can be done in one call:
           cp ./config/crd/bases/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
-          sed -i -e 's/^appVersion.*/appVersion: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
-          sed -i -e 's/tag.*/tag: '$RELEASE_VERSION'/' charts/opensearch-operator/values.yaml
+          sed -i -e 's/^appVersion.*/appVersion: '$RELEASE_VERSION'/' ../charts/opensearch-operator/Chart.yaml
+          sed -i -e 's/tag.*/tag: '$RELEASE_VERSION'/' ../charts/opensearch-operator/values.yaml
           git config user.name "GitHub Actions Bot"
           git config user.email "<>"
           git add ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
