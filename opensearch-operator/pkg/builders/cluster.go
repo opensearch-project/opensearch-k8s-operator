@@ -603,7 +603,7 @@ func NewBootstrapPod(
 			InitContainers: []corev1.Container{
 				{
 					Name:    "init",
-					Image:   "public.ecr.aws/opsterio/busybox:latest",
+					Image:   "public.ecr.aws/opsterio/busybox:1.27.2",
 					Command: []string{"sh", "-c"},
 					Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 					SecurityContext: &corev1.SecurityContext{
