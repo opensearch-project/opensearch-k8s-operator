@@ -14,6 +14,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ---
+## [1.0.4]
+### Added
+### Changed
+- Change busybox image repo cause of 'rate pull limit'
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+
+---
 ## [1.0.3]
 ### Added
 ### Changed
@@ -43,6 +54,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.3...HEAD
+[Unreleased]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.4...HEAD
+[1.0.4]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.3...opensearch-operator-1.0.4
 [1.0.3]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.2...opensearch-operator-1.0.3
 [1.0.2]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.1...opensearch-operator-1.0.2
