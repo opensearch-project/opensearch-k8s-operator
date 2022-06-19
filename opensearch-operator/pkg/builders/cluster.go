@@ -629,7 +629,7 @@ func NewBootstrapPod(
 	if cr.Spec.General.SetVMMaxMapCount {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 			Name:  "init-sysctl",
-			Image: "busybox:1.27.2",
+			Image: "public.ecr.aws/opsterio/busybox:1.27.2",
 			Command: []string{
 				"sysctl",
 				"-w",
