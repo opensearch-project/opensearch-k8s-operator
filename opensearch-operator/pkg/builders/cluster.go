@@ -603,7 +603,7 @@ func NewBootstrapPod(
 			InitContainers: []corev1.Container{
 				{
 					Name:    "init",
-					Image:   "busybox",
+					Image:   "public.ecr.aws/opsterio/busybox:latest",
 					Command: []string{"sh", "-c"},
 					Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 					SecurityContext: &corev1.SecurityContext{
@@ -629,7 +629,7 @@ func NewBootstrapPod(
 	if cr.Spec.General.SetVMMaxMapCount {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 			Name:  "init-sysctl",
-			Image: "busybox:1.27.2",
+			Image: "public.ecr.aws/opsterio/busybox:1.27.2",
 			Command: []string{
 				"sysctl",
 				"-w",
