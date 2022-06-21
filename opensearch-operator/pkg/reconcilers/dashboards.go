@@ -94,6 +94,8 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 
 	if tlsConfig.Generate {
 		r.logger.Info("Generating certificates")
+		r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Generating certificates for cluster"))
+
 		// Take CA from TLS reconciler or generate new one
 		var ca tls.Cert
 		var err error
@@ -119,6 +121,8 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName+"-dashboards", clusterName, dnsNames)
 			if err != nil {
 				r.logger.Error(err, "Failed to create tls certificate")
+				r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Failed to create tls certificate"))
+
 				return volumes, volumeMounts, err
 			}
 			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
@@ -127,6 +131,8 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 			}
 			if err := r.Create(r.ctx, &tlsSecret); err != nil {
 				r.logger.Error(err, "Failed to store tls certificate in secret")
+				r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Failed to store tls certificate"))
+
 				return volumes, volumeMounts, err
 			}
 		}
@@ -137,6 +143,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		volumeMounts = append(volumeMounts, mount)
 	} else {
 		r.logger.Info("Using externally provided certificates")
+		r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Using externally provided certificates"))
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.TlsCertificateConfig.Secret.Name}}}
 		volumes = append(volumes, volume)
 		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}

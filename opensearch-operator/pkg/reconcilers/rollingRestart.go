@@ -56,6 +56,8 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	// but put a defensive check in
 	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
 		lg.V(1).Info("Upgrade in progress, skipping rolling restart")
+		r.recorder.Event(r.instance, "Normal", "RollingRestart", fmt.Sprintf("Upgrade in progress"))
+
 		return ctrl.Result{}, nil
 	}
 

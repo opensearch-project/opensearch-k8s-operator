@@ -77,6 +77,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			r.logger.Info(clusterName + "-default-securityconfig secret exists")
 		} else {
 			r.logger.Info("creating " + clusterName + "-default-securityconfig secret")
+			r.recorder.Event(r.instance, "Normal", "Security", fmt.Sprintf("Creating securityconfig secret to %s/%s", r.instance.Namespace, r.instance.Name))
 			//Reads all securityconfig files and adds them to secret Stringdata
 			files, err := ioutil.ReadDir("./helperfiles/defaultsecurityconfigs/")
 			if err != nil {
@@ -87,6 +88,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 				fileBytes, err := ioutil.ReadFile("./helperfiles/defaultsecurityconfigs/" + f.Name())
 				if err != nil {
 					r.logger.Info("Failed to add " + f.Name() + clusterName + "-default-securityconfig secret")
+					r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Failed to add %s %s default-securityconfig secret", f.Name(), clusterName))
 					//panic(err)
 				}
 				SecurityConfigSecret.StringData[f.Name()] = string(fileBytes)
@@ -97,6 +99,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			//r.Create(r.ctx, &SecurityConfigSecret)
 			if err := r.Create(r.ctx, &SecurityConfigSecret); err != nil {
 				r.logger.Error(err, "Failed to create default"+clusterName+"-default-securityconfig secret")
+				r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Failed to create default %s default-securityconfig secret", clusterName))
 				return ctrl.Result{}, err
 			}
 
@@ -111,6 +114,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	if adminCertName == "" {
 		r.logger.Info("Cluster is running with demo certificates.")
+		r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Cluster is running with demo certificates"))
 		return ctrl.Result{}, nil
 	}
 
@@ -119,6 +123,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
+			r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
 			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
 		}
 		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
@@ -138,6 +143,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 		// Delete old job
 		r.logger.Info("Deleting old update job")
+
 		opts := client.DeleteOptions{}
 		// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
 		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
@@ -152,6 +158,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	r.logger.Info("Starting securityconfig update job")
+	r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Starting securityconfig update job"))
+
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,
 		jobName,

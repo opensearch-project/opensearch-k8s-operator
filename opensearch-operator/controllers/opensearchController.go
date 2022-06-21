@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -113,7 +114,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 				// so that it can be retried
 				return result, err
 			}
-
+			r.Recorder.Event(r.Instance, "Normal", "Cluster", fmt.Sprintf("Deleting cluster %s/%s", r.Instance.Namespace, r.Instance.Name))
 			// remove our finalizer from the list and update it.
 			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				if err := r.Get(ctx, req.NamespacedName, r.Instance); err != nil {
@@ -330,5 +331,6 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 	}
 
 	// -------- all resources has been created -----------
+	r.Recorder.Event(r.Instance, "Normal", "Operator", fmt.Sprintf("Finished reconcile - all resources has been created"))
 	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 }

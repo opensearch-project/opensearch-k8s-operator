@@ -69,6 +69,8 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	// If version validation fails log a warning and do nothing
 	if err := r.validateUpgrade(); err != nil {
 		lg.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
+		r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("version validation failed, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version))
+
 		return ctrl.Result{}, err
 	}
 

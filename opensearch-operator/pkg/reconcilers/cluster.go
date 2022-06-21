@@ -3,7 +3,6 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -150,13 +149,15 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		if existingDisk == nodePool.DiskSize {
 			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
 		} else {
+			r.recorder.Event(r.instance, "Normal", "PVC", fmt.Sprintf("Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize))
 			//Removing statefulset while allowing pods to run
 			r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
 			opts := client.DeleteOptions{}
 			client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
 			if err := r.Delete(r.ctx, existing, &opts); err != nil {
 				r.logger.Info("failed to delete statefulset" + existing.Name)
-				return result, err
+				r.recorder.Event(r.instance, "Warning", "PVC", fmt.Sprintf("Failed to delete statefulset for PVC resizing "))
+
 			}
 			//Identifying the PVC per statefulset pod and patching the new size
 			for i := 0; i < int(*existing.Spec.Replicas); i++ {
@@ -182,9 +183,11 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 				if err := r.Update(r.ctx, &pvc); err != nil {
 					r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
+					r.recorder.Event(r.instance, "Warning", "PVC", fmt.Sprintf("Failed to Resize %s/%s", existing.Namespace, existing.Name))
 					return result, err
 				}
 			}
+			r.recorder.Event(r.instance, "Normal", "PVC", fmt.Sprintf("Resized successfully %s/%s", existing.Namespace, existing.Name))
 
 		}
 	}

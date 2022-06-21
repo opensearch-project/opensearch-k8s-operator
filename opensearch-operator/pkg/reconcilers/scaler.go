@@ -101,10 +101,12 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		}
 	}
 	if currentStatus.Status == "Excluded" {
+		r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Start to Exclude %s/%s", r.instance.Namespace, r.instance.Name))
 		err := r.drainNode(currentStatus, currentSts, nodePool.Component)
 		return true, err
 	}
 	if currentStatus.Status == "Drained" {
+		r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Start to Drain %s/%s", r.instance.Namespace, r.instance.Name))
 		requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
 		return requeue, err
 	}
@@ -115,12 +117,15 @@ func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePo
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas++
 	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
+	r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Start increaseing node %s on %s ", lastReplicaNodeName, nodePoolGroupName))
 	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
-		r.recorder.Event(r.instance, "Normal", "failed to add node ", fmt.Sprintf("Group name-%s . Failed to add node %s", currentSts.Name, lastReplicaNodeName))
+		r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("failed to add node %s/%s", r.instance.Namespace, r.instance.Name))
 		return true, err
 	}
 	lg.Info(fmt.Sprintf("Group-%s . added node %s", nodePoolGroupName, lastReplicaNodeName))
+	r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Added new node %s", lastReplicaNodeName))
+
 	return false, nil
 }
 
@@ -128,9 +133,10 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas--
 	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
+	r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Start decreaseing node %s on %s ", lastReplicaNodeName, nodePoolGroupName))
 	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
-		r.recorder.Event(r.instance, "Normal", "failed to remove node ", fmt.Sprintf("Group-%s . Failed to remove node %s", nodePoolGroupName, lastReplicaNodeName))
+		r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Failed to remove node - Group-%s . Failed to remove node %s", nodePoolGroupName, lastReplicaNodeName))
 		lg.Error(err, fmt.Sprintf("failed to remove node %s", lastReplicaNodeName))
 		return true, err
 	}
@@ -156,7 +162,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
-		r.recorder.Event(r.instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+		r.recorder.Event(r.instance, "WARN", "Scaler", fmt.Sprintf("Failed to create os client for scaling"))
 		if created {
 			r.DeleteNodePortService(service)
 		}
@@ -165,7 +171,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if !success || err != nil {
 		lg.Error(err, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
-		r.recorder.Event(r.instance, "WARN", "failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+		r.recorder.Event(r.instance, "WARN", "Scaler", fmt.Sprintf("Failed to remove node exclude - Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
 	}
 	if created {
 		r.DeleteNodePortService(service)
@@ -194,7 +200,8 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
-		return err
+		r.recorder.Event(r.instance, "WARN", "Scaler", fmt.Sprintf("Failed to create os client for scaling"))
+		//	return err
 	}
 	// -----  Now start remove node ------
 	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
@@ -210,11 +217,16 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 			Status:      "Excluded",
 			Description: nodePoolGroupName,
 		}
+		r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Finished to Exclude %s/%s", r.instance.Namespace, r.instance.Name))
+
 		lg.Info(fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
 		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
 		err = r.Status().Update(r.ctx, r.instance)
 		if err != nil {
+			r.recorder.Event(r.instance, "WARN", "Failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+
 			lg.Error(err, "failed to update status")
+			r.recorder.Event(r.instance, "Warning", "Operator", fmt.Sprintf("Failed to update operator status"))
 			return err
 		}
 
@@ -226,6 +238,8 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		Status:      "Running",
 		Description: nodePoolGroupName,
 	}
+
+	//r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Start sacle %s/%s from %s to %s", r.instance.Namespace, r.instance.Name, *currentSts.Spec.Replicas, *currentSts.Spec.Replicas-1))
 	lg.Info(fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
 	err = r.Status().Update(r.ctx, r.instance)
@@ -276,11 +290,13 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 		Status:      "Drained",
 		Description: nodePoolGroupName,
 	}
+
 	lg.Info(fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
 	r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
 	err = r.Status().Update(r.ctx, r.instance)
 	if err != nil {
 		lg.Error(err, "failed to update status")
+		r.recorder.Event(r.instance, "Warning", "Operator", fmt.Sprintf("Failed to update operator status"))
 		return err
 	}
 	return err
@@ -353,6 +369,8 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Name), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
+		r.recorder.Event(r.instance, "Warning", "Scale", fmt.Sprintf("Failed to create os client"))
+
 		return nil, err
 	}
 
@@ -367,6 +385,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, "failed to check shards on node")
+		r.recorder.Event(r.instance, "Warning", "Scale", fmt.Sprintf("Failed to check shards on node"))
 		return nil, err
 	}
 
