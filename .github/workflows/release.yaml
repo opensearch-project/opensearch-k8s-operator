@@ -73,7 +73,7 @@ jobs:
           git config user.email "<>"
           git add ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
           git add ../charts/opensearch-operator/Chart.yaml
-          git add ../charts/values.yaml
+          git add ../charts/opensearch-operator/values.yaml
           git commit -m "Update release appVersion on Chart ${RELEASE_VERSION}"
           git push
 ###### After build and push the images we can now prepper the chart release - just after the chart release will create a new helm-release workflow will run.
