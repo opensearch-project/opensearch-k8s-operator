@@ -162,7 +162,8 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
-		r.recorder.Event(r.instance, "WARN", "Scaler", fmt.Sprintf("Failed to create os client for scaling"))
+		r.recorder.Event(r.instance, "Warning", "Scaler", "Failed to create os client for scaling")
+
 		if created {
 			r.DeleteNodePortService(service)
 		}
@@ -171,7 +172,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if !success || err != nil {
 		lg.Error(err, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
-		r.recorder.Event(r.instance, "WARN", "Scaler", fmt.Sprintf("Failed to remove node exclude - Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+		r.recorder.Event(r.instance, "Warning", "Scaler", fmt.Sprintf("Failed to remove node exclude - Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
 	}
 	if created {
 		r.DeleteNodePortService(service)
@@ -200,7 +201,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
-		r.recorder.Event(r.instance, "WARN", "Scaler", fmt.Sprintf("Failed to create os client for scaling"))
+		r.recorder.Event(r.instance, "Warning", "Scaler", "Failed to create os client for scaling")
 		//	return err
 	}
 	// -----  Now start remove node ------
@@ -223,10 +224,10 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
 		err = r.Status().Update(r.ctx, r.instance)
 		if err != nil {
-			r.recorder.Event(r.instance, "WARN", "Failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
+			r.recorder.Event(r.instance, "Warning", "Failed to remove node exclude", fmt.Sprintf("Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName))
 
 			lg.Error(err, "failed to update status")
-			r.recorder.Event(r.instance, "Warning", "Operator", fmt.Sprintf("Failed to update operator status"))
+			r.recorder.Event(r.instance, "Warning", "Operator", "Failed to update operator status")
 			return err
 		}
 
@@ -296,7 +297,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	err = r.Status().Update(r.ctx, r.instance)
 	if err != nil {
 		lg.Error(err, "failed to update status")
-		r.recorder.Event(r.instance, "Warning", "Operator", fmt.Sprintf("Failed to update operator status"))
+		r.recorder.Event(r.instance, "Warning", "Operator", "Failed to update operator status")
 		return err
 	}
 	return err
@@ -369,7 +370,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Name), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
-		r.recorder.Event(r.instance, "Warning", "Scale", fmt.Sprintf("Failed to create os client"))
+		r.recorder.Event(r.instance, "Warning", "Scale", "Failed to create os client")
 
 		return nil, err
 	}
@@ -385,7 +386,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, "failed to check shards on node")
-		r.recorder.Event(r.instance, "Warning", "Scale", fmt.Sprintf("Failed to check shards on node"))
+		r.recorder.Event(r.instance, "Warning", "Scale", "Failed to check shards on node")
 		return nil, err
 	}
 

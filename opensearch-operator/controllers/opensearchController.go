@@ -331,6 +331,6 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 	}
 
 	// -------- all resources has been created -----------
-	r.Recorder.Event(r.Instance, "Normal", "Operator", fmt.Sprintf("Finished reconcile - all resources has been created"))
+	r.Recorder.Event(r.Instance, "Normal", "Operator", "Finished reconcile - all resources has been created")
 	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 }

@@ -114,7 +114,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	if adminCertName == "" {
 		r.logger.Info("Cluster is running with demo certificates.")
-		r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Cluster is running with demo certificates"))
+		r.recorder.Event(r.instance, "Warning", "Security", "Cluster is running with demo certificates")
 		return ctrl.Result{}, nil
 	}
 
@@ -158,7 +158,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	r.logger.Info("Starting securityconfig update job")
-	r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Starting securityconfig update job"))
+	r.recorder.Event(r.instance, "Normal", "Security", "Starting securityconfig update job")
 
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,
