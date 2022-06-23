@@ -157,7 +157,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			if err := r.Delete(r.ctx, existing, &opts); err != nil {
 				r.logger.Info("failed to delete statefulset" + existing.Name)
 				r.recorder.Event(r.instance, "Warning", "PVC", "Failed to delete statefulset for PVC resizing ")
-
+				return result, err
 			}
 			//Identifying the PVC per statefulset pod and patching the new size
 			for i := 0; i < int(*existing.Spec.Replicas); i++ {
