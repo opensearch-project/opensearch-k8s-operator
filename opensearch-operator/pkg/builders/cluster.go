@@ -164,7 +164,7 @@ func NewSTSForNodePool(
 
 	// Because the http endpoint requires auth we need to do it as a curl script
 	httpPort := PortForCluster(cr)
-	curlCmd := "curl -k -u ${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD} --silent --fail https://localhost:" + fmt.Sprint(httpPort)
+	curlCmd := "curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: 30,
 		PeriodSeconds:       30,
