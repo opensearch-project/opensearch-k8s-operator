@@ -78,7 +78,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Namespace), username, password)
+	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.instance.Spec.General.ServiceName, r.instance.Namespace, r.instance.Spec.General.HttpPort), username, password)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

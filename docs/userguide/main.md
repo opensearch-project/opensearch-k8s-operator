@@ -344,3 +344,28 @@ spec:
 ```
 
 To perform a rolling upgrade on the cluster, simply change this version and the Operator will perform a rolling upgrade. Downgrades and upgrades that span more than one major version are not supported, as this will put the OpenSearch cluster in an unsupported state. If you are using emptyDir storage for data nodes, it is recommended to set `general.drainDataNodes` to `true`, otherwise you might lose data.
+
+## Set Java heap size
+
+To configure the amount of memory allocated to the OpenSearch nodes, configure the heap size using the JVM args. This operation is expected to have no downtime and the cluster should be operational.
+
+Recommendation: Set to half of memory request
+
+```yaml
+spec:
+    nodePools:
+      - component: nodes
+        replicas: 3
+        diskSize: "10Gi"
+        jvm: -Xmx1024M -Xms1024M
+        NodeSelector:
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "500m"
+        roles:
+          - "data"
+```

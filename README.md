@@ -1,4 +1,4 @@
-![build](https://github.com/opster/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opster/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opster/opensearch-k8s-operator)
+![build](https://github.com/opster/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opster/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opster/opensearch-k8s-operator) [![Golang Lint](https://github.com/Opster/opensearch-k8s-operator/actions/workflows/linting.yaml/badge.svg)](https://github.com/Opster/opensearch-k8s-operator/actions/workflows/linting.yaml)
 
 # OpenSearch-k8s-operator
 

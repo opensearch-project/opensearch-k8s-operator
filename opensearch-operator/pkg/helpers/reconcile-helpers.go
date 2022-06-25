@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path"
 
+	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -165,4 +166,24 @@ func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageS
 		}
 	}
 	return false
+}
+
+//Function to help identify httpPort and securityconfigPath for 1.x and 2.x OpenSearch Operator.
+func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, string) {
+	var httpPort int32
+	var securityconfigPath string
+	versionPassed, _ := version.NewVersion(instance.Spec.General.Version)
+	constraints, _ := version.NewConstraint(">= 2.0")
+	if constraints.Check(versionPassed) {
+		if instance.Spec.General.HttpPort > 0 {
+			httpPort = instance.Spec.General.HttpPort
+		} else {
+			httpPort = 9200
+		}
+		securityconfigPath = "/usr/share/opensearch/config/opensearch-security"
+	} else {
+		httpPort = 9300
+		securityconfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
+	}
+	return httpPort, securityconfigPath
 }
