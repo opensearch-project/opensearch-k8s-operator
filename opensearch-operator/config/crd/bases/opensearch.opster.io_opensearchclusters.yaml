@@ -1240,6 +1240,10 @@ spec:
                           type: string
                       type: object
                     type: array
+                  pluginsList:
+                    items:
+                      type: string
+                    type: array
                   serviceAccount:
                     type: string
                   serviceName:
