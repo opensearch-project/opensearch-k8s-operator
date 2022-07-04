@@ -156,7 +156,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
 			if err := r.Delete(r.ctx, existing, &opts); err != nil {
 				r.logger.Info("failed to delete statefulset" + existing.Name)
-				r.recorder.Event(r.instance, "Warning", "PVC", "Failed to delete statefulset for PVC resizing ")
+				r.recorder.Event(r.instance, "Warning", "PVC", "Failed to delete statefulset for PVC resizing")
 				return result, err
 			}
 			//Identifying the PVC per statefulset pod and patching the new size
@@ -187,7 +187,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 					return result, err
 				}
 			}
-			r.recorder.Event(r.instance, "Normal", "PVC", fmt.Sprintf("Resized successfully %s/%s", existing.Namespace, existing.Name))
+			r.recorder.Event(r.instance, "Normal", "PVC", fmt.Sprintf("Finished to resize PVC successfully %s/%s", existing.Namespace, existing.Name))
 
 		}
 	}

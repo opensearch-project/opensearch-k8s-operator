@@ -56,7 +56,6 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	// but put a defensive check in
 	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
 		lg.V(1).Info("Upgrade in progress, skipping rolling restart")
-		r.recorder.Event(r.instance, "Normal", "RollingRestart", "Upgrade in progress")
 
 		return ctrl.Result{}, nil
 	}
@@ -91,7 +90,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		lg.V(1).Info("No pods pending restart")
 		return ctrl.Result{}, nil
 	}
-
+	r.recorder.Event(r.instance, "Normal", "RollingRestart", fmt.Sprintf("Starting to rolling restart"))
 	// If there is work to do create an Opensearch Client
 	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
 	if err != nil {

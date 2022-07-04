@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/tools/record"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/util/retry"
@@ -19,6 +20,8 @@ type ReconcilerContext struct {
 	NodePoolHashes   []NodePoolHash
 	DashboardsConfig map[string]string
 	OpenSearchConfig map[string]string
+	recorder         record.EventRecorder
+	instance         *opsterv1.OpenSearchCluster
 }
 
 type NodePoolHash struct {
@@ -44,7 +47,10 @@ func (c *ReconcilerContext) AddConfig(key string, value string) {
 	_, exists := c.OpenSearchConfig[key]
 	if exists {
 		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
+		c.recorder.Event(c.instance, "Warning", "Config", fmt.Sprintf("Notice - Config key '%s' already exists. Will be overwrittenn\", key)", key))
+
 	}
+	c.recorder.Event(c.instance, "Normal", "Config", fmt.Sprintf("Strating to add '%s' config", key))
 	c.OpenSearchConfig[key] = value
 }
 
@@ -52,7 +58,10 @@ func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 	_, exists := c.DashboardsConfig[key]
 	if exists {
 		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
+		c.recorder.Event(c.instance, "Warning", "Config", fmt.Sprintf("Notice - Config key '%s' already exists in dashboard config. Will be overwrittenn\", key)", key))
 	}
+	c.recorder.Event(c.instance, "Normal", "Config", fmt.Sprintf("Strating to add '%s' dashboard config", key))
+
 	c.DashboardsConfig[key] = value
 }
 

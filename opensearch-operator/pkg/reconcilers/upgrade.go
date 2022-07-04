@@ -69,10 +69,11 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	// If version validation fails log a warning and do nothing
 	if err := r.validateUpgrade(); err != nil {
 		lg.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
-		r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("version validation failed, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version))
+		r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("Failed to  validation version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version))
 
 		return ctrl.Result{}, err
 	}
+	r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("Start to upgrade, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version))
 
 	// If there is work to do create an Opensearch Client
 	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
@@ -101,7 +102,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			r.instance.Status.ComponentsStatus = append(r.instance.Status.ComponentsStatus, currentStatus)
 			return r.Status().Update(r.ctx, r.instance)
 		})
-		r.recorder.Eventf(r.instance, "Normal", "upgrading", "beginning upgrade of data node pool %s", currentStatus.Component)
+		r.recorder.Eventf(r.instance, "Normal", "Upgrade", "Start to upgrade of data node pool %s", currentStatus.Component)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
@@ -116,7 +117,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			r.instance.Status.ComponentsStatus = append(r.instance.Status.ComponentsStatus, currentStatus)
 			return r.Status().Update(r.ctx, r.instance)
 		})
-		r.recorder.Eventf(r.instance, "Normal", "upgrading", "beginning rollout of non data node pool %s", currentStatus.Component)
+		r.recorder.Eventf(r.instance, "Normal", "Upgrade", "Start to rollout of non data node pool %s", currentStatus.Component)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
@@ -146,7 +147,8 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			}
 			return r.Status().Update(r.ctx, r.instance)
 		})
-		r.recorder.Event(r.instance, "Normal", "upgrading", "cluster upgrade completed")
+		r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("Finished to upgrade - NewVersion: %s", r.instance.Status.Version))
+
 		return ctrl.Result{}, err
 	default:
 		// We should never get here so return an error
@@ -182,7 +184,7 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 	}
 
 	if !upgradeConstraint.Check(new) {
-		r.recorder.Event(r.instance, "Warning", "invalid version", "specified version is more than 1 major version greater than existing")
+		r.recorder.Event(r.instance, "Warning", "Upgrade", " Notice - invalid version - specified version is more than 1 major version greater than existing")
 		return ErrMajorVersionJump
 	}
 
@@ -253,6 +255,7 @@ func (r *UpgradeReconciler) findWorkingNodePool() (opsterv1.NodePool, opsterv1.C
 	}
 
 	// If we get here all nodes should be upgraded
+	r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("Finished to upgrade - NewVersion: %s", r.instance.Status.Version))
 	return opsterv1.NodePool{}, opsterv1.ComponentStatus{
 		Component: "Upgrade",
 		Status:    "Finished",
@@ -330,7 +333,7 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 				Description: pool.Component,
 			}
 			r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-			r.recorder.Eventf(r.instance, "Normal", "upgrading", "completed upgrade of data node pool %s", currentStatus.Component)
+			r.recorder.Eventf(r.instance, "Normal", "Upgrade", "Finished to upgrade data node pool %s", currentStatus.Component)
 			return r.Status().Update(r.ctx, r.instance)
 		})
 	}

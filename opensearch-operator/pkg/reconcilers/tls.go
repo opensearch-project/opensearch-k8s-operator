@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/client-go/tools/record"
 	"strings"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
@@ -23,6 +24,7 @@ type TLSReconciler struct {
 	reconciler.ResourceReconciler
 	client.Client
 	ctx               context.Context
+	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
@@ -121,6 +123,8 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 			adminCert, err := ca.CreateAndSignCertificate("admin", clusterName, nil)
 			if err != nil {
 				r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
+				r.recorder.Event(r.instance, "Warning", "Security", "Failed to create admin certificate")
+
 				return err
 			}
 			adminSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: adminSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: adminCert.SecretData(ca)}
@@ -148,6 +152,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	nodeSecretName := clusterName + "-transport-cert"
 
 	r.logger.Info("Generating certificates", "interface", "transport")
+	r.recorder.Event(r.instance, "Normal", "Security", "Starting to generating certificates")
 
 	var ca tls.Cert
 	var err error
@@ -200,6 +205,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	r.logger.Info("Generating certificates", "interface", "transport")
+	r.recorder.Event(r.instance, "Normal", "Security", "Start to generating certificates")
 
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
@@ -276,10 +282,13 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 				fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, clusterName, namespace),
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(podName, clusterName, dnsNames)
+
 			if err != nil {
 				r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", podName)
 				return err
 			}
+			r.recorder.Event(r.instance, "Normal", "Security", "Created transport certificates")
+
 			nodeSecret.Data[certName] = nodeCert.CertData()
 			nodeSecret.Data[keyName] = nodeCert.KeyData()
 		}
@@ -319,6 +328,7 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 		if tlsConfig.TlsCertificateConfig.Secret.Name == "" {
 			err := errors.New("perNode=true but secret not set")
 			r.logger.Error(err, "Secret not provided")
+			r.recorder.Event(r.instance, "Warning", "Security", "Notice - perNode=true but secret not set but Secret not provided")
 			return err
 		}
 		mountFolder("transport", "certs", tlsConfig.TlsCertificateConfig.Secret.Name, r.reconcilerContext)
@@ -330,6 +340,8 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 		if tlsConfig.TlsCertificateConfig.Secret.Name == "" {
 			err := errors.New("missing secret in spec")
 			r.logger.Error(err, "Not all secrets for transport provided")
+			r.recorder.Event(r.instance, "Warning", "Security", "Notice -Not all secrets for transport provided")
+
 			return err
 		}
 		if tlsConfig.TlsCertificateConfig.CaSecret.Name == "" {
@@ -385,6 +397,8 @@ func (r *TLSReconciler) handleHttp() error {
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
 			if err != nil {
 				r.logger.Error(err, "Failed to create node certificate", "interface", "http")
+				r.recorder.Event(r.instance, "Warning", "Security", "Failed to create node http certifice")
+
 				return err
 			}
 			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
@@ -393,6 +407,8 @@ func (r *TLSReconciler) handleHttp() error {
 			}
 			if err := r.Create(r.ctx, &nodeSecret); err != nil {
 				r.logger.Error(err, "Failed to store node certificate in secret", "interface", "http")
+				r.recorder.Event(r.instance, "Warning", "Security", "Failed to store node http certificate in secret")
+
 				return err
 			}
 		}
@@ -405,6 +421,8 @@ func (r *TLSReconciler) handleHttp() error {
 		if tlsConfig.TlsCertificateConfig.Secret.Name == "" {
 			err := errors.New("missing secret in spec")
 			r.logger.Error(err, "Not all secrets for http provided")
+			r.recorder.Event(r.instance, "Warning", "Security", "Notice - Not all secrets for http provided")
+
 			return err
 		}
 		if tlsConfig.TlsCertificateConfig.CaSecret.Name == "" {

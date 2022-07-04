@@ -77,7 +77,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			r.logger.Info(clusterName + "-default-securityconfig secret exists")
 		} else {
 			r.logger.Info("creating " + clusterName + "-default-securityconfig secret")
-			r.recorder.Event(r.instance, "Normal", "Security", fmt.Sprintf("Creating securityconfig secret to %s/%s", r.instance.Namespace, r.instance.Name))
+			r.recorder.Event(r.instance, "Normal", "Security", fmt.Sprintf("Startng to Create securityconfig secret to %s/%s", r.instance.Namespace, r.instance.Name))
 			//Reads all securityconfig files and adds them to secret Stringdata
 			files, err := ioutil.ReadDir("./helperfiles/defaultsecurityconfigs/")
 			if err != nil {
@@ -114,7 +114,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	if adminCertName == "" {
 		r.logger.Info("Cluster is running with demo certificates.")
-		r.recorder.Event(r.instance, "Warning", "Security", "Cluster is running with demo certificates")
+		r.recorder.Event(r.instance, "Warning", "Security", "Notice - Cluster is running with demo certificates")
 		return ctrl.Result{}, nil
 	}
 
@@ -123,7 +123,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
 		if apierrors.IsNotFound(err) {
 			r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
-			r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
+			r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
 			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
 		}
 		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
@@ -158,7 +158,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	r.logger.Info("Starting securityconfig update job")
-	r.recorder.Event(r.instance, "Normal", "Security", "Starting securityconfig update job")
+	r.recorder.Event(r.instance, "Normal", "Security", "Starting to securityconfig update job")
 
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,

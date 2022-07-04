@@ -56,6 +56,7 @@ type NodePool struct {
 	Tolerations      []corev1.Toleration         `json:"tolerations,omitempty"`
 	NodeSelector     map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity         *corev1.Affinity            `json:"affinity,omitempty"`
+	PodAntiAffinity  *corev1.PodAntiAffinity     `json:"affinity,omitempty"`
 	Persistence      *PersistenceConfig          `json:"persistence,omitempty"`
 	AdditionalConfig map[string]string           `json:"additionalConfig,omitempty"`
 	Labels           map[string]string           `json:"labels,omitempty"`
