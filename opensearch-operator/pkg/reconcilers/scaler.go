@@ -87,11 +87,11 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
 	if !found {
 		if desireReplicaDiff > 0 {
-			r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Start to scaling"))
+			r.recorder.Event(r.instance, "Normal", "Scaler", "Start to scaling")
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
 				requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
-				r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Notice - your SmartScaler isnt enable"))
-				r.recorder.Event(r.instance, "Normal", "Scaler", fmt.Sprintf("Start to decrease node"))
+				r.recorder.Event(r.instance, "Normal", "Scaler", "Notice - your SmartScaler isnt enable")
+				r.recorder.Event(r.instance, "Normal", "Scaler", "Start to decrease node")
 				return requeue, err
 			}
 			err := r.excludeNode(currentStatus, currentSts, nodePool.Component)
