@@ -710,6 +710,8 @@ func NewSecurityconfigUpdateJob(
 	checksum string,
 	adminCertName string,
 	clusterName string,
+	includeDefault bool,
+	overriddenKeys []string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
@@ -717,27 +719,12 @@ func NewSecurityconfigUpdateJob(
 	adminCert := "/certs/tls.crt"
 	adminKey := "/certs/tls.key"
 	caCert := "/certs/ca.crt"
-	var securityconfigVolumeSecretName string
-
-	if instance.Spec.Security.Config == nil || instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
-		securityconfigVolumeSecretName = clusterName + "-default-securityconfig"
-	} else {
-		securityconfigVolumeSecretName = instance.Spec.Security.Config.SecurityconfigSecret.Name
-	}
 
 	// Dummy node spec required to resolve image
 	node := opsterv1.NodePool{
 		Component: "securityconfig",
 	}
 
-	volumes = append(volumes, corev1.Volume{
-		Name:         "securityconfig",
-		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: securityconfigVolumeSecretName}},
-	})
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{
-		Name:      "securityconfig",
-		MountPath: "/securityconfig",
-	})
 	volumes = append(volumes, corev1.Volume{
 		Name:         "admin-cert",
 		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: adminCertName}},
@@ -750,7 +737,7 @@ func NewSecurityconfigUpdateJob(
 	arg := "ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;" +
 		"chmod +x $ADMIN;" +
 		"count=0;" +
-		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd /securityconfig/ -icl -nhnv -h %s.svc.cluster.local -p 9300 || (( count++ >= 20 )); do", caCert, adminCert, adminKey, dns) +
+		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd /usr/share/opensearch/plugins/opensearch-security/securityconfig -icl -nhnv -h %s.svc.cluster.local -p 9300 || (( count++ >= 20 )); do", caCert, adminCert, adminKey, dns) +
 		"  sleep 20; " +
 		"done"
 	annotations := map[string]string{

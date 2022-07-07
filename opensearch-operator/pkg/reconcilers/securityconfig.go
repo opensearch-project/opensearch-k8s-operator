@@ -5,7 +5,6 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
-	"io/ioutil"
 	"sort"
 	"time"
 
@@ -15,9 +14,12 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/config"
+	"opensearch.opster.io/pkg/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -25,6 +27,8 @@ import (
 
 const (
 	checksumAnnotation = "securityconfig/checksum"
+	defaultVolumeName  = "defaultsecurityconfig"
+	providedVolumeName = "securityconfig"
 )
 
 type SecurityconfigReconciler struct {
@@ -63,51 +67,76 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	var configSecretName string
 	adminCertName := r.determineAdminSecret()
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
-	//Checking if Security Config values are empty and creates a default-securityconfig secret
-	if r.instance.Spec.Security.Config == nil || r.instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
-		r.logger.Info(clusterName + "-default-securityconfig is being created")
-		SecurityConfigSecretName := clusterName + "-default-securityconfig"
-		//Basic SecurityConfigSecret secret with default settings
-		SecurityConfigSecret := corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: SecurityConfigSecretName, Namespace: namespace}, Type: corev1.SecretTypeOpaque, StringData: make(map[string]string)}
-		if err := r.Get(r.ctx, client.ObjectKey{Name: SecurityConfigSecretName, Namespace: namespace}, &SecurityConfigSecret); err == nil {
-			r.logger.Info(clusterName + "-default-securityconfig secret exists")
-		} else {
-			r.logger.Info("creating " + clusterName + "-default-securityconfig secret")
-			r.recorder.Event(r.instance, "Normal", "Security", fmt.Sprintf("Startng to Create securityconfig secret to %s/%s", r.instance.Namespace, r.instance.Name))
-			//Reads all securityconfig files and adds them to secret Stringdata
-			files, err := ioutil.ReadDir("./helperfiles/defaultsecurityconfigs/")
-			if err != nil {
-				r.logger.Info("Failed to read directory helperfiles/defaultsecurityconfigs")
-				//panic(err)
-			}
-			for _, f := range files {
-				fileBytes, err := ioutil.ReadFile("./helperfiles/defaultsecurityconfigs/" + f.Name())
-				if err != nil {
-					r.logger.Info("Failed to add " + f.Name() + clusterName + "-default-securityconfig secret")
-					r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Failed to add %s %s default-securityconfig secret", f.Name(), clusterName))
-					//panic(err)
-				}
-				SecurityConfigSecret.StringData[f.Name()] = string(fileBytes)
-			}
-			if err := ctrl.SetControllerReference(r.instance, &SecurityConfigSecret, r.Client.Scheme()); err != nil {
-				return ctrl.Result{}, err
-			}
-			//r.Create(r.ctx, &SecurityConfigSecret)
-			if err := r.Create(r.ctx, &SecurityConfigSecret); err != nil {
-				r.logger.Error(err, "Failed to create default"+clusterName+"-default-securityconfig secret")
-				r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Failed to create default %s default-securityconfig secret", clusterName))
-				return ctrl.Result{}, err
-			}
+	var overriddenKeys []string
+	var providedSecret *corev1.Secret
 
+	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.SecurityconfigSecret.Name != "" {
+		providedSecret = &corev1.Secret{}
+		if err := r.Get(r.ctx, types.NamespacedName{
+			Name:      r.instance.Spec.Security.Config.SecurityconfigSecret.Name,
+			Namespace: namespace,
+		}, providedSecret); err != nil {
+			if apierrors.IsNotFound(err) {
+				r.logger.Info(fmt.Sprintf("%s not found ", r.instance.Spec.Security.Config.SecurityconfigSecret.Name))
+				r.recorder.Event(r.instance, "Normal", "SecretNotFound", "configured security config secret not found")
+				return ctrl.Result{
+					Requeue:      true,
+					RequeueAfter: time.Second * 10,
+				}, nil
+			}
+			return ctrl.Result{}, err
 		}
-		configSecretName = clusterName + "-default-securityconfig"
-	} else {
-		//Use a user passed value of SecurityconfigSecret name
-		configSecretName = r.instance.Spec.Security.Config.SecurityconfigSecret.Name
+		for key := range providedSecret.Data {
+			overriddenKeys = append(overriddenKeys, key)
+		}
+
+		r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, corev1.Volume{
+			Name: providedVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: providedSecret.Name,
+				},
+			},
+		})
+
+		r.calculateSecurityconfigSubpaths(providedVolumeName, providedSecret)
+	}
+
+	defaultSecurityConfigSecretName := clusterName + "-default-securityconfig"
+	defaultSecurityConfigSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      defaultSecurityConfigSecretName,
+			Namespace: namespace,
+		},
+		Data: map[string][]byte{},
+	}
+
+	for key, value := range config.DefaultSecurityConfig {
+		if !helpers.ContainsString(overriddenKeys, key) {
+			defaultSecurityConfigSecret.Data[key] = *value
+		}
+	}
+
+	if len(defaultSecurityConfigSecret.Data) > 0 {
+		if err := r.Create(r.ctx, defaultSecurityConfigSecret); err != nil {
+			r.logger.Error(err, fmt.Sprintf("failed to create %s secret", defaultSecurityConfigSecret.Name))
+			r.recorder.Event(r.instance, "Warning", "Security", fmt.Sprintf("Failed to create default %s default-securityconfig secret", clusterName))
+			return ctrl.Result{}, err
+		}
+
+		r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, corev1.Volume{
+			Name: defaultVolumeName,
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{
+					SecretName: defaultSecurityConfigSecretName,
+				},
+			},
+		})
+
+		r.calculateSecurityconfigSubpaths(defaultVolumeName, defaultSecurityConfigSecret)
 	}
 
 	jobName := clusterName + "-securityconfig-update"
@@ -118,26 +147,42 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	// Wait for secret to be available
-	configSecret := corev1.Secret{}
-	if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
-		if apierrors.IsNotFound(err) {
-			r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
-			r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
-			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
+	// Wait for secrets
+	if len(defaultSecurityConfigSecret.Data) > 0 {
+		if err := r.Get(r.ctx, types.NamespacedName{
+			Name:      defaultSecurityConfigSecretName,
+			Namespace: namespace,
+		}, &corev1.Secret{}); err != nil {
+			if apierrors.IsNotFound(err) {
+				r.logger.Info(fmt.Sprintf("%s not found ", defaultSecurityConfigSecretName))
+				r.recorder.Event(r.instance, "Normal", "SecretNotFound", "default security config secret not found")
+				return ctrl.Result{
+					Requeue:      true,
+					RequeueAfter: time.Second * 10,
+				}, nil
+			}
+			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
 	}
 
 	// Calculate checksum and check for changes
-	checksum, err := checksum(configSecret.Data)
+	secretData := []map[string][]byte{
+		defaultSecurityConfigSecret.Data,
+	}
+
+	if providedSecret != nil {
+		secretData = append(secretData, providedSecret.Data)
+	}
+
+	checksumValue, err := checksum(secretData...)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+
 	job := batchv1.Job{}
 	if err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &job); err == nil {
 		value, exists := job.ObjectMeta.Annotations[checksumAnnotation]
-		if exists && value == checksum {
+		if exists && value == checksumValue {
 			// Nothing to do, current securityconfig already applied
 			return ctrl.Result{}, nil
 		}
@@ -162,9 +207,11 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.instance,
 		jobName,
 		namespace,
-		checksum,
+		checksumValue,
 		adminCertName,
 		clusterName,
+		len(defaultSecurityConfigSecret.Data) > 0,
+		overriddenKeys,
 		r.reconcilerContext.Volumes,
 		r.reconcilerContext.VolumeMounts,
 	)
@@ -175,10 +222,17 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	return ctrl.Result{}, err
 }
 
-func checksum(data map[string][]byte) (string, error) {
+func checksum(data ...map[string][]byte) (string, error) {
+	combined := map[string][]byte{}
+	for _, input := range data {
+		for k, v := range input {
+			combined[k] = v
+		}
+	}
+
 	hash := sha1.New()
 	keys := make([]string, 0, len(data))
-	for k := range data {
+	for k := range combined {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
@@ -187,7 +241,7 @@ func checksum(data map[string][]byte) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		value := data[key]
+		value := combined[key]
 		_, err = hash.Write(value)
 		if err != nil {
 			return "", err
@@ -203,6 +257,23 @@ func (r *SecurityconfigReconciler) determineAdminSecret() string {
 		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
 	} else {
 		return ""
+	}
+}
+
+func (r *SecurityconfigReconciler) calculateSecurityconfigSubpaths(volumeName string, secret *corev1.Secret) {
+	keys := make([]string, 0, len(secret.Data))
+	for k := range secret.Data {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+	for _, k := range keys {
+		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, corev1.VolumeMount{
+			Name:      volumeName,
+			MountPath: fmt.Sprintf("/usr/share/opensearch/plugins/opensearch-security/securityconfig/%s", k),
+			SubPath:   k,
+			ReadOnly:  true,
+		})
 	}
 }
 
