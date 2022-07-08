@@ -70,7 +70,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	clusterName := r.instance.Name
 	jobName := clusterName + "-securityconfig-update"
 	if adminCertName == "" {
-		r.logger.Info("Cluster is running with demo certificates.")
+		r.recorder.Event(r.instance, "Warning", "Security", "Notice - Cluster is running with demo certificates")
 		return ctrl.Result{}, nil
 	}
 	//Checking if Security Config values are empty and creates a default-securityconfig secret
@@ -84,6 +84,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
 			if apierrors.IsNotFound(err) {
 				r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
+				r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
 				return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
 			}
 			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
@@ -123,6 +124,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	r.logger.Info("Starting securityconfig update job")
+	r.recorder.Event(r.instance, "Normal", "Security", "Starting to securityconfig update job")
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,
 		jobName,
