@@ -96,7 +96,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		if checksumerr != nil {
 			return ctrl.Result{}, checksumerr
 		}
-		if err := r.SecurityconfigSubpaths(r.instance, &configSecret); err != nil {
+		if err := r.securityconfigSubpaths(r.instance, &configSecret); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -177,7 +177,7 @@ func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
 }
-func (r *SecurityconfigReconciler) SecurityconfigSubpaths(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret) error {
+func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret) error {
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, corev1.Volume{
 		Name: "securityconfig",
 		VolumeSource: corev1.VolumeSource{

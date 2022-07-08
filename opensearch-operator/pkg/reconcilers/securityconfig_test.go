@@ -24,7 +24,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		interval    = time.Second * 1
 	)
 
-	Context("When Reconciling the securityconfig reconciler with no securityconfig provided", func() {
+	When("When Reconciling the securityconfig reconciler with no securityconfig provided", func() {
 		It("should not do anything ", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -45,7 +45,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		})
 	})
 
-	Context("When Reconciling the securityconfig reconciler with securityconfig secret configured but not available", func() {
+	When("When Reconciling the securityconfig reconciler with securityconfig secret configured but not available", func() {
 		It("should trigger a requeue", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -74,7 +74,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		})
 	})
 
-	Context("When Reconciling the securityconfig reconciler with admin secret configured and available", func() {
+	When("When Reconciling the securityconfig reconciler with admin secret configured and available", func() {
 		It("should start an update job", func() {
 			var clusterName = "securityconfig-withadminsecret"
 			// Create namespace and secrets first
@@ -117,7 +117,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		})
 	})
 
-	Context("When Reconciling the securityconfig reconciler with securityconfig secret but no adminSecret configured", func() {
+	When("When Reconciling the securityconfig reconciler with securityconfig secret but no adminSecret configured", func() {
 		It("should not start an update job", func() {
 			var clusterName = "securityconfig-noadminsecret"
 			// Create namespace and secret first
