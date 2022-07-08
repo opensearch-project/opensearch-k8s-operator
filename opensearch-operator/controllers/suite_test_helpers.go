@@ -5,7 +5,6 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -103,6 +102,26 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				AdditionalConfig: map[string]string{
 					"foo": "bar",
 				},
+				AdditionalVolumes: []opsterv1.AdditionalVolume{
+					{
+						Name: "test-secret",
+						Path: "/opt/test-secret",
+						Secret: &corev1.SecretVolumeSource{
+							SecretName: "test-secret",
+						},
+						RestartPods: false,
+					},
+					{
+						Name: "test-cm",
+						Path: "/opt/test-cm",
+						ConfigMap: &corev1.ConfigMapVolumeSource{
+							LocalObjectReference: corev1.LocalObjectReference{
+								Name: "test-cm",
+							},
+						},
+						RestartPods: true,
+					},
+				},
 			},
 			ConfMgmt: opsterv1.ConfMgmt{
 				AutoScaler:  false,
@@ -112,9 +131,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			},
 			Bootstrap: opsterv1.BootstrapConfig{
 				Resources: corev1.ResourceRequirements{
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse("125m"),
-						v1.ResourceMemory: resource.MustParse("1Gi"),
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("125m"),
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
 					}},
 				Tolerations: []corev1.Toleration{{
 					Effect:   "NoSchedule",
@@ -129,9 +148,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Replicas:  3,
 				DiskSize:  "32Gi",
 				Resources: corev1.ResourceRequirements{
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse("500m"),
-						v1.ResourceMemory: resource.MustParse("2Gi"),
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("2Gi"),
 					}},
 				Roles: []string{
 					"master",
@@ -141,9 +160,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Replicas:  3,
 				DiskSize:  "32Gi",
 				Resources: corev1.ResourceRequirements{
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse("500m"),
-						v1.ResourceMemory: resource.MustParse("2Gi"),
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("2Gi"),
 					}},
 				Roles: []string{
 					"data",
@@ -152,9 +171,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Replicas:  3,
 				DiskSize:  "32Gi",
 				Resources: corev1.ResourceRequirements{
-					Limits: v1.ResourceList{
-						v1.ResourceCPU:    resource.MustParse("500m"),
-						v1.ResourceMemory: resource.MustParse("2Gi"),
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("2Gi"),
 					}},
 				Roles: []string{
 					"data",
@@ -168,7 +187,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				},
 				Env: []corev1.EnvVar{
 					{Name: "qux", Value: "qut"},
-					{Name: "quuxe", ValueFrom: &v1.EnvVarSource{FieldRef: &v1.ObjectFieldSelector{FieldPath: "metadata.labels['quux']"}}},
+					{Name: "quuxe", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.labels['quux']"}}},
 				},
 			}},
 		},

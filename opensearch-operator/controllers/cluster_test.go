@@ -6,10 +6,13 @@ import (
 	"sync"
 	"time"
 
+	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
@@ -46,6 +49,37 @@ var _ = Describe("Cluster Reconciler", func() {
 				return IsNsCreated(k8sClient, namespace)
 			}, timeout, interval).Should(BeTrue())
 		})
+		It("should create the secret for volumes", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-secret",
+					Namespace: OpensearchCluster.Namespace,
+				},
+				StringData: map[string]string{
+					"test.yml": "foobar",
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), secret)).To(Succeed())
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), client.ObjectKeyFromObject(secret), &corev1.Secret{})
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should create the configmap for volumes", func() {
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cm",
+					Namespace: OpensearchCluster.Namespace,
+				},
+				Data: map[string]string{
+					"test.yml": "foobar",
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), cm)).To(Succeed())
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cm), &corev1.ConfigMap{})
+			}, timeout, interval).Should(Succeed())
+		})
 
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
@@ -78,25 +112,37 @@ var _ = Describe("Cluster Reconciler", func() {
 			wg := sync.WaitGroup{}
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
-				By(fmt.Sprintf("checking %s nodepool initial master", nodePool.Component))
+				By(fmt.Sprintf("checking %s nodepool", nodePool.Component))
 				go func(nodePool opsterv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
-					sts := &appsv1.StatefulSet{}
-					Eventually(func() []corev1.EnvVar {
-						if err := k8sClient.Get(context.Background(), types.NamespacedName{
-							Namespace: OpensearchCluster.Namespace,
+					Eventually(Object(&appsv1.StatefulSet{
+						ObjectMeta: metav1.ObjectMeta{
 							Name:      clusterName + "-" + nodePool.Component,
-						}, sts); err != nil {
-							return []corev1.EnvVar{}
-						}
-						return sts.Spec.Template.Spec.Containers[0].Env
-					}, timeout, interval).Should(ContainElement(corev1.EnvVar{
-						Name:  "foo",
-						Value: "bar",
-					}))
-					Expect(sts.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().String()).To(Equal("500m"))
-					Expect(sts.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("2Gi"))
+							Namespace: OpensearchCluster.Namespace,
+						},
+					}, k8sClient), timeout, interval).Should(ExistAnd(
+						HaveMatchingContainer(And(
+							HaveImage("docker.io/opensearchproject/opensearch:1.0.0"),
+							HaveLimits(corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("2Gi"),
+							}),
+							HaveEnv("foo", "bar"),
+							HaveVolumeMounts(
+								"test-secret",
+								"test-cm",
+							),
+						)),
+						HaveMatchingVolume(And(
+							HaveName("test-secret"),
+							HaveVolumeSource("Secret"),
+						)),
+						HaveMatchingVolume(And(
+							HaveName("test-cm"),
+							HaveVolumeSource("ConfigMap"),
+						)),
+					))
 				}(nodePool)
 			}
 			wg.Wait()
