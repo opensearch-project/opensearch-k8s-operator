@@ -70,6 +70,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	clusterName := r.instance.Name
 	jobName := clusterName + "-securityconfig-update"
 	if adminCertName == "" {
+		r.logger.Info("Cluster is running with demo certificates.")
 		r.recorder.Event(r.instance, "Warning", "Security", "Notice - Cluster is running with demo certificates")
 		return ctrl.Result{}, nil
 	}
