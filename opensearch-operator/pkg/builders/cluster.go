@@ -186,8 +186,9 @@ func NewSTSForNodePool(
 		mainCommand = append(mainCommand, "/bin/bash", "-c")
 		for index, plugin := range cr.Spec.General.PluginsList {
 			fmt.Println(index, plugin)
-			com = com + " " + plugin
+			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
 		}
+
 		com = com + " ; ./opensearch-docker-entrypoint.sh"
 		mainCommand = append(mainCommand, com)
 	} else {
