@@ -75,9 +75,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 	//Checking if Security Config values are empty and creates a default-securityconfig secret
-	if r.instance.Spec.Security.Config == nil || r.instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
-		r.logger.Info("No user passed SecurityconfigSecret")
-	} else {
+	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.SecurityconfigSecret.Name != "" {
 		//Use a user passed value of SecurityconfigSecret name
 		configSecretName = r.instance.Spec.Security.Config.SecurityconfigSecret.Name
 		// Wait for secret to be available
@@ -100,6 +98,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		if err := r.securityconfigSubpaths(r.instance, &configSecret); err != nil {
 			return ctrl.Result{}, err
 		}
+	} else {
+		r.logger.Info("Not passed any SecurityconfigSecret")
 	}
 
 	job := batchv1.Job{}

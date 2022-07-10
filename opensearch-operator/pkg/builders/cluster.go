@@ -747,7 +747,7 @@ func NewSecurityconfigUpdateJob(
 	arg := "ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;" +
 		"chmod +x $ADMIN;" +
 		fmt.Sprintf("until curl -k --silent https://%s.svc.cluster.local:%v; do", dns, instance.Spec.General.HttpPort) +
-		" echo 'Waiting to connect to the cluster'; sleep 60; " +
+		" echo 'Waiting to connect to the cluster'; sleep 120; " +
 		"done; " +
 		"count=0;" +
 		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s.svc.cluster.local -p %v || (( count++ >= 20 )); do", caCert, adminCert, adminKey, securityconfigPath, dns, httpPort) +
