@@ -34,8 +34,9 @@ spec:
         {{- end }}
         command:
         - /manager
-        image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag }}"
+        image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
         name: operator-controller-manager
+        imagePullPolicy: "{{ .Values.manager.image.pullPolicy }}"
         resources:
           {{- toYaml .Values.manager.resources | nindent 12 }}
         securityContext:

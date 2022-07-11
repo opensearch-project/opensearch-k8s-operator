@@ -11,7 +11,6 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
@@ -128,16 +127,6 @@ var _ = Describe("TLS Reconciler", func() {
 			}
 		})
 
-		It("should create default security config", func() {
-			Eventually(func() error {
-				secret := &corev1.Secret{}
-				return k8sClient.Get(context.Background(), types.NamespacedName{
-					Name:      fmt.Sprintf("%s-default-securityconfig", clusterName),
-					Namespace: namespace,
-				}, secret)
-			}, timeout, interval).Should(Succeed())
-		})
-
 		It("should create a security config job", func() {
 			job := batchv1.Job{}
 			Eventually(func() bool {
@@ -146,7 +135,6 @@ var _ = Describe("TLS Reconciler", func() {
 			}, timeout, interval).Should(BeTrue())
 			Expect(len(job.Spec.Template.Spec.Containers[0].VolumeMounts)).Should(BeNumerically(">=", 2))
 			Expect(helpers.CheckVolumeExists(job.Spec.Template.Spec.Volumes, job.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-transport-cert", "transport-cert")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(job.Spec.Template.Spec.Volumes, job.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-default-securityconfig", "securityconfig")).Should((BeTrue()))
 		})
 	})
 

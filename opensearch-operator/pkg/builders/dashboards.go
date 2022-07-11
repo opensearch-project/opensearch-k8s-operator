@@ -75,7 +75,14 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		FailureThreshold:    10,
 		SuccessThreshold:    1,
 		InitialDelaySeconds: 10,
-		ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/status", Port: intstr.IntOrString{IntVal: port}, Scheme: probeScheme}},
+
+		/// changed from /api/status to /api/reporting/stats
+		// to use /api/status add
+		/*httpHeaders:
+		  - name: Authorization
+		    value: Basic YWRtaW46YWRtaW4=*/
+
+		ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/reporting/stats", Port: intstr.IntOrString{IntVal: port}, Scheme: probeScheme}},
 	}
 
 	return &appsv1.Deployment{
