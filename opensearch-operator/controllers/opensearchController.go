@@ -20,8 +20,6 @@ import (
 	"context"
 	"time"
 
-	"github.com/banzaicloud/k8s-objectmatcher/patch"
-	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
@@ -192,7 +190,6 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		r.Recorder,
 		&reconcilerContext,
 		r.Instance,
-		reconciler.WithPatchCalculateOptions(patch.IgnoreVolumeClaimTemplateTypeMetaAndStatus()),
 	)
 	dashboards := reconcilers.NewDashboardsReconciler(
 		r.Client,
