@@ -47,15 +47,16 @@ func NewSTSForNodePool(
 	availableRoles := []string{
 		"master",
 		"data",
-		//"data_content",
-		//"data_hot",
-		//"data_warm",:
-		//"data_cold",
-		//"data_frozen",
+		"data_content",
+		"data_hot",
+		"data_warm",
+		"data_cold",
+		"data_frozen",
 		"ingest",
-		//"ml",
-		//"remote_cluster_client",
-		//"transform",
+		"ml",
+		"remote_cluster_client",
+		"transform",
+		"cluster_manager",
 	}
 	var selectedRoles []string
 	for _, role := range node.Roles {
