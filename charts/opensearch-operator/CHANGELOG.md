@@ -14,6 +14,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Security
 
 ---
+## [1.0.4]
+### Added
+### Changed
+- Added missing spec for `bootstrap` container
+### Deprecated
+### Removed
+### Fixed
+### Security
+
+---
 ## [1.0.3]
 ### Added
 ### Changed
