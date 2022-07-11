@@ -9,7 +9,7 @@ require (
 	github.com/banzaicloud/operator-tools v0.28.5
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-logr/logr v1.2.2
-	github.com/hashicorp/go-version v1.5.0 // indirect
+	github.com/hashicorp/go-version v1.5.0
 	github.com/kralicky/kmatch v0.0.0-20220710233303-ed73989bbe4a
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/onsi/ginkgo v1.16.5
