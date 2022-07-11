@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -318,10 +319,15 @@ func NewSTSForNodePool(
 	}
 
 	// Append additional config to env vars
-	for k, v := range extraConfig {
+	keys := make([]string, 0, len(extraConfig))
+	for key := range extraConfig {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
 		sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
 			Name:  k,
-			Value: v,
+			Value: extraConfig[k],
 		})
 	}
 	// Append additional env vars from cr.Spec.NodePool.env
