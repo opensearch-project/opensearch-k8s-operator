@@ -75,7 +75,10 @@ jobs:
           git add ../charts/opensearch-operator/Chart.yaml
           git add ../charts/opensearch-operator/values.yaml
           git commit -m "Update release appVersion on Chart ${RELEASE_VERSION}"
-          git push origin HEAD:main
+          git checkout -b ${RELEASE_VERSION}-release
+          git push origin ${RELEASE_VERSION}-release
+          git request-pull ${RELEASE_VERSION}-release https://github.com/Opster/opensearch-k8s-operator.git main
+
 ###### After build and push the images we can now prepper the chart release - just after the chart release will create a new helm-release workflow will run.
 ###### that's a problem because we need to marge the version change commit first so the chart will be created with the new version.
 #      - name: Create-Helm-Release
