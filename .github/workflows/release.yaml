@@ -65,6 +65,7 @@ jobs:
 #           docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
       - name: Copy-crd-to-chart-dir
         run: |
+          git checkout -b ${RELEASE_VERSION}-release
           cd opensearch-operator
           cp ./config/crd/bases/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
           sed -i -e 's/^appVersion.*/appVersion: '$RELEASE_VERSION'/' ../charts/opensearch-operator/Chart.yaml
@@ -75,8 +76,6 @@ jobs:
           git add ../charts/opensearch-operator/Chart.yaml
           git add ../charts/opensearch-operator/values.yaml
           git commit -m "Update release appVersion on Chart ${RELEASE_VERSION}"
-          git checkout -b ${RELEASE_VERSION}-release
-          git pull
           git push --set-upstream origin ${RELEASE_VERSION}-release
 
 #          git request-pull ${RELEASE_VERSION}-release https://github.com/Opster/opensearch-k8s-operator.git main
