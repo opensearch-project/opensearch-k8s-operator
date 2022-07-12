@@ -14,70 +14,70 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2.3.4
-#       - name: Make-manifest
-#         run: |
-#           cd opensearch-operator
-#           make manifests
+      - name: Make-manifest
+        run: |
+          cd opensearch-operator
+          make manifests
       - name: set Env
         id: github-ver
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
           echo "LATE_IMG=public.ecr.aws/opsterio/opense arch-operator:latest" >> $GITHUB_ENV
-#       - name: Create Release
-#         id: create_release
-#         uses: actions/create-release@v1
-#         env:
-#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-#         with:
-#           tag_name: ${{ github.ref }}
-#           release_name: ${{ github.ref }}
-#           draft: false
-#           prerelease: false
-#       - name: Build and Push Release
-#         env:
-#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#           AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
-#         run: |
-#           cd opensearch-operator
-#           go version
-#           go env
-#           go get opensearch.opster.io/pkg/builders
-#           go get opensearch.opster.io/pkg/helpers
-#           export IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION
-#           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
-#           make docker-build
-#           make docker-push
-#           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION public.ecr.aws/opsterio/opensearch-operator:latest
-#           docker push public.ecr.aws/opsterio/opensearch-operator:latest
-#       - name: Build and Push Release ARM64
-#         env:
-#           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-#           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-#           AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
-#           RELEASE: ${{ env.RELEASE_VERSION }}-ARM
-#         run: |
-#           cd opensearch-operator
-#           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
-#           docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE ./
-#           docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
-#           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
-#           docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
-      - name: Copy-crd-to-chart-dir
+      - name: Create Release
+        id: create_release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+      - name: Build and Push Release
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
         run: |
-          git checkout -b ${RELEASE_VERSION}-release
           cd opensearch-operator
-          cp ./config/crd/bases/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
-          sed -i -e 's/^appVersion.*/appVersion: '$RELEASE_VERSION'/' ../charts/opensearch-operator/Chart.yaml
-          sed -i -e 's/tag.*/tag: '$RELEASE_VERSION'/' ../charts/opensearch-operator/values.yaml
-          git config user.name "GitHub Actions Bot"
-          git config user.email "<>"
-          git add ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
-          git add ../charts/opensearch-operator/Chart.yaml
-          git add ../charts/opensearch-operator/values.yaml
-          git commit -m "Update release appVersion on Chart ${RELEASE_VERSION}"
-          git pull main:${RELEASE_VERSION}-release
-          git push --set-upstream origin ${RELEASE_VERSION}-release
+          go version
+          go env
+          go get opensearch.opster.io/pkg/builders
+          go get opensearch.opster.io/pkg/helpers
+          export IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
+          make docker-build
+          make docker-push
+          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION public.ecr.aws/opsterio/opensearch-operator:latest
+          docker push public.ecr.aws/opsterio/opensearch-operator:latest
+      - name: Build and Push Release ARM64
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+          RELEASE: ${{ env.RELEASE_VERSION }}-ARM
+        run: |
+          cd opensearch-operator
+          aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
+          docker build -f Dockerfile-ARM -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE ./
+          docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
+          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
+          docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
+#       - name: Copy-crd-to-chart-dir
+#         run: |
+#           git checkout -b ${RELEASE_VERSION}-release
+#           cd opensearch-operator
+#           cp ./config/crd/bases/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
+#           sed -i -e 's/^appVersion.*/appVersion: '$RELEASE_VERSION'/' ../charts/opensearch-operator/Chart.yaml
+#           sed -i -e 's/tag.*/tag: '$RELEASE_VERSION'/' ../charts/opensearch-operator/values.yaml
+#           git config user.name "GitHub Actions Bot"
+#           git config user.email "<>"
+#           git add ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
+#           git add ../charts/opensearch-operator/Chart.yaml
+#           git add ../charts/opensearch-operator/values.yaml
+#           git commit -m "Update release appVersion on Chart ${RELEASE_VERSION}"
+#           git pull main:${RELEASE_VERSION}-release
+#           git push --set-upstream origin ${RELEASE_VERSION}-release
 
 #          git request-pull ${RELEASE_VERSION}-release https://github.com/Opster/opensearch-k8s-operator.git main
 
