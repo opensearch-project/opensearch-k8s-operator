@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -69,6 +70,7 @@ func NewSTSForNodePool(
 	dataVolume := corev1.Volume{}
 
 	if node.Persistence == nil || node.Persistence.PersistenceSource.PVC != nil {
+		mode := corev1.PersistentVolumeFilesystem
 		pvc = corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: "data"},
 			Spec: corev1.PersistentVolumeClaimSpec{
@@ -89,6 +91,7 @@ func NewSTSForNodePool(
 					}
 					return &node.Persistence.PVC.StorageClassName
 				}(),
+				VolumeMode: &mode,
 			},
 		}
 	}
@@ -100,15 +103,15 @@ func NewSTSForNodePool(
 			dataVolume.VolumeSource = corev1.VolumeSource{
 				HostPath: node.Persistence.PersistenceSource.HostPath,
 			}
+			volumes = append(volumes, dataVolume)
 		}
 
 		if node.Persistence.PersistenceSource.EmptyDir != nil {
 			dataVolume.VolumeSource = corev1.VolumeSource{
 				EmptyDir: node.Persistence.PersistenceSource.EmptyDir,
 			}
+			volumes = append(volumes, dataVolume)
 		}
-
-		volumes = append(volumes, dataVolume)
 	}
 
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
@@ -317,10 +320,15 @@ func NewSTSForNodePool(
 	}
 
 	// Append additional config to env vars
-	for k, v := range extraConfig {
+	keys := make([]string, 0, len(extraConfig))
+	for key := range extraConfig {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
 		sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
 			Name:  k,
-			Value: v,
+			Value: extraConfig[k],
 		})
 	}
 	// Append additional env vars from cr.Spec.NodePool.env

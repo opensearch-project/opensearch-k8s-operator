@@ -2,6 +2,7 @@ package builders
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -135,9 +136,16 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	config["server.name"] = cr.Name + "-dashboards"
 	config["opensearch.ssl.verificationMode"] = "none"
 
+	keys := make([]string, 0, len(config))
+
+	for key := range config {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
 	var sb strings.Builder
-	for key, value := range config {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", key, value))
+	for _, key := range keys {
+		sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
 	}
 	data := sb.String()
 

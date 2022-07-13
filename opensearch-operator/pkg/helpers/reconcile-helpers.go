@@ -4,11 +4,14 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"sort"
 
 	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -148,6 +151,104 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 
 	result.Image = pointer.String(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), cr.Spec.Dashboards.Version))
+	return
+}
+
+func CreateAdditionalVolumes(
+	ctx context.Context,
+	k8sClient client.Client,
+	namespace string,
+	volumeConfigs []opsterv1.AdditionalVolume,
+) (
+	retVolumes []corev1.Volume,
+	retVolumeMounts []corev1.VolumeMount,
+	retData []byte,
+	returnErr error,
+) {
+	lg := log.FromContext(ctx)
+	var names []string
+	namesIndex := map[string]int{}
+
+	for i, volumeConfig := range volumeConfigs {
+		if volumeConfig.ConfigMap != nil {
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: volumeConfig.ConfigMap,
+				},
+			})
+		}
+		if volumeConfig.Secret != nil {
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					Secret: volumeConfig.Secret,
+				},
+			})
+		}
+		if volumeConfig.RestartPods {
+			namesIndex[volumeConfig.Name] = i
+			names = append(names, volumeConfig.Name)
+		}
+		retVolumeMounts = append(retVolumeMounts, corev1.VolumeMount{
+			Name:      volumeConfig.Name,
+			ReadOnly:  true,
+			MountPath: volumeConfig.Path,
+		})
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		volumeConfig := volumeConfigs[namesIndex[name]]
+		if volumeConfig.ConfigMap != nil {
+			cm := &corev1.ConfigMap{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      volumeConfig.ConfigMap.Name,
+				Namespace: namespace,
+			}, cm); err != nil {
+				if k8serrors.IsNotFound(err) {
+					lg.V(1).Error(err, "failed to find configMap for additional volume")
+					continue
+				}
+				returnErr = err
+				return
+			}
+			data := cm.Data
+			keys := make([]string, 0, len(data))
+			for key := range data {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				retData = append(retData, []byte(data[key])...)
+			}
+		}
+
+		if volumeConfig.Secret != nil {
+			secret := &corev1.Secret{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      volumeConfig.Secret.SecretName,
+				Namespace: namespace,
+			}, secret); err != nil {
+				if k8serrors.IsNotFound(err) {
+					lg.V(1).Error(err, "failed to find secret for additional volume")
+					continue
+				}
+				returnErr = err
+				return
+			}
+			data := secret.Data
+			keys := make([]string, 0, len(data))
+			for key := range data {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				retData = append(retData, data[key]...)
+			}
+		}
+	}
+
 	return
 }
 

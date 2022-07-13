@@ -66,6 +66,20 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddDashboardsConfig(key, value)
 	}
 
+	// Generate additional volumes
+	addVolumes, addVolumeMounts, _, err := helpers.CreateAdditionalVolumes(
+		r.ctx,
+		r.Client,
+		r.instance.Namespace,
+		r.instance.Spec.Dashboards.AdditionalVolumes,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	volumes = append(volumes, addVolumes...)
+	volumeMounts = append(volumeMounts, addVolumeMounts...)
+
 	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Name), r.reconcilerContext.DashboardsConfig)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
