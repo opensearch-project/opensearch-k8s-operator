@@ -279,6 +279,37 @@ If you provided your own certificate for node transport communication, then you 
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (called `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
+
+## Add plugins 
+In order to use some OpenSearch features (snapshot,monitoring,etc...) you will have to install OpenSearch plugins.
+To install those plugins, all you have to do is to declaer them under PluginsList in general section:
+For example you can install official OpenSearch plugins :
+opensearch-alerting                  
+opensearch-anomaly-detection         
+opensearch-asynchronous-search       
+opensearch-cross-cluster-replication
+opensearch-index-management          
+opensearch-job-scheduler             
+opensearch-knn                      
+opensearch-ml                        
+opensearch-notifications             
+opensearch-observability             
+opensearch-performance-analyzer     
+opensearch-reports-scheduler         
+opensearch-security                  
+opensearch-sql
+
+Or custom ones.
+
+```yaml
+  general:
+    version: 1.3.0
+    httpPort: 9200
+    vendor: opensearch
+    serviceName: my-cluster
+    pluginsList: ["repository-s3"," https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
+```
+
 ## Nodepools and Scaling
 OpenSearch clusters can be composed of one or more node pools, with each representing a logical group or unified roles. Each node pool can have its own resources, and will have autonomic StatefulSets and services.
 
