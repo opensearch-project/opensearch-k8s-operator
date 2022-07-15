@@ -3,17 +3,20 @@
 # It should be run by config/default
 resources:
 - bases/opensearch.opster.io_opensearchclusters.yaml
+- bases/opster.opensearch.opster.io_opensearchusers.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
 #- patches/webhook_in_opensearch.yaml
+#- patches/webhook_in_opensearchusers.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
 # [CERTMANAGER] To enable webhook, uncomment all the sections with [CERTMANAGER] prefix.
 # patches here are for enabling the CA injection for each CRD
 #- patches/cainjection_in_opensearch.yaml
+#- patches/cainjection_in_opensearchusers.yaml
 #+kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 # the following config is for teaching kustomize how to do kustomization for CRDs.

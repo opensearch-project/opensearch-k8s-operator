@@ -143,3 +143,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - opensearchusers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - opensearchusers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - opensearchusers/status
+  verbs:
+  - get
+  - patch
+  - update
