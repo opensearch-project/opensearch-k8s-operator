@@ -6,20 +6,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.4.1
   creationTimestamp: null
-  name: opensearchusers.opensearch.opster.io
+  name: opensearchroles.opensearch.opster.io
 spec:
   group: opensearch.opster.io
   names:
-    kind: OpensearchUser
-    listKind: OpensearchUserList
-    plural: opensearchusers
-    singular: opensearchuser
+    kind: OpensearchRole
+    listKind: OpensearchRoleList
+    plural: opensearchroles
+    singular: opensearchrole
   scope: Cluster
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchUser is the Schema for the opensearchusers API
+        description: OpensearchRole is the Schema for the opensearchroles API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -34,19 +34,30 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchUserSpec defines the desired state of OpensearchUser
+            description: OpensearchRoleSpec defines the desired state of OpensearchRole
             properties:
-              attributes:
-                additionalProperties:
-                  type: string
-                type: object
-              backendRoles:
+              clusterPermissions:
                 items:
                   type: string
                 type: array
-              opendistroSecurityRoles:
+              indexPermissions:
                 items:
-                  type: string
+                  properties:
+                    allowedActions:
+                      items:
+                        type: string
+                      type: array
+                    dls:
+                      type: string
+                    fls:
+                      items:
+                        type: string
+                      type: array
+                    indexPatterns:
+                      items:
+                        type: string
+                      type: array
+                  type: object
                 type: array
               opensearch:
                 properties:
@@ -55,31 +66,27 @@ spec:
                   namespace:
                     type: string
                 type: object
-              passwordFrom:
-                properties:
-                  key:
-                    description: The key of the secret to select from.  Must be a
-                      valid secret key.
-                    type: string
-                  name:
-                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                      TODO: Add other useful fields. apiVersion, kind, uid?'
-                    type: string
-                  namespace:
-                    type: string
-                  optional:
-                    description: Specify whether the Secret or its key must be defined
-                    type: boolean
-                required:
-                - key
-                type: object
+              tenantPermissions:
+                items:
+                  properties:
+                    allowedActions:
+                      items:
+                        type: string
+                      type: array
+                    tenantPatterns:
+                      items:
+                        type: string
+                      type: array
+                  type: object
+                type: array
             required:
             - opensearch
-            - passwordFrom
             type: object
           status:
-            description: OpensearchUserStatus defines the observed state of OpensearchUser
+            description: OpensearchRoleStatus defines the observed state of OpensearchRole
             properties:
+              existingRole:
+                type: boolean
               managedCluster:
                 properties:
                   name:

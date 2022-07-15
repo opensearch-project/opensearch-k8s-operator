@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+
 	"k8s.io/client-go/tools/record"
 
 	corev1 "k8s.io/api/core/v1"
@@ -10,6 +11,15 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+)
+
+const (
+	opensearchPendingReason = "OpensearchPending"
+	opensearchErrorReason   = "OpensearchError"
+	opensearchAPIError      = "OpensearchAPIError"
+	opensearchRefMismatch   = "OpensearchRefMismatch"
+	passwordErrorReason     = "PasswordError"
+	statusError             = "StatusUpdateError"
 )
 
 type ComponentReconciler func() (reconcile.Result, error)

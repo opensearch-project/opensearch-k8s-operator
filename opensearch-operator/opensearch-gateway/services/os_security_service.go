@@ -129,3 +129,82 @@ func DeleteUser(ctx context.Context, service *OsClusterClient, username string) 
 	}
 	return nil
 }
+
+func RoleExists(ctx context.Context, service *OsClusterClient, rolename string) (bool, error) {
+	resp, err := service.GetRole(ctx, rolename)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return false, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return true, nil
+}
+
+func ShouldUpdateRole(
+	ctx context.Context,
+	service *OsClusterClient,
+	rolename string,
+	role requests.Role,
+) (bool, error) {
+	resp, err := service.GetRole(ctx, rolename)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return true, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+
+	roleResponse := responses.GetRoleResponse{}
+
+	err = json.NewDecoder(resp.Body).Decode(&roleResponse)
+	if err != nil {
+		return false, err
+	}
+
+	if reflect.DeepEqual(role, roleResponse[rolename]) {
+		return false, nil
+	}
+
+	lg := log.FromContext(ctx).WithValues("os_service", "security")
+	lg.Info("role requires update")
+	return true, nil
+}
+
+func CreateOrUpdateRole(
+	ctx context.Context,
+	service *OsClusterClient,
+	rolename string,
+	role requests.Role,
+) error {
+	resp, err := service.PutUser(ctx, rolename, opensearchutil.NewJSONReader(role))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.IsError() {
+		return fmt.Errorf("failed to create role: %s", resp.String())
+	}
+	return nil
+}
+
+func DeleteRole(ctx context.Context, service *OsClusterClient, rolename string) error {
+	resp, err := service.DeleteRole(ctx, rolename)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return nil
+}
