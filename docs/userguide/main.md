@@ -284,22 +284,23 @@ To apply the securityconfig to the OpenSearch cluster, the Operator uses a separ
 In order to use some OpenSearch features (snapshot,monitoring,etc...) you will have to install OpenSearch plugins.
 To install those plugins, all you have to do is to declaer them under PluginsList in general section:
 For example you can install official OpenSearch plugins :
-opensearch-alerting                  
-opensearch-anomaly-detection         
-opensearch-asynchronous-search       
-opensearch-cross-cluster-replication
-opensearch-index-management          
-opensearch-job-scheduler             
-opensearch-knn                      
-opensearch-ml                        
-opensearch-notifications             
-opensearch-observability             
-opensearch-performance-analyzer     
-opensearch-reports-scheduler         
-opensearch-security                  
-opensearch-sql
+* ֻopensearch-alerting                  
+* opensearch-anomaly-detection         
+* opensearch-asynchronous-search       
+* opensearch-cross-cluster-replication
+* opensearch-index-management          
+* opensearch-job-scheduler             
+* opensearch-knn                      
+* opensearch-ml                        
+* opensearch-notifications             
+* opensearch-observability             
+* opensearch-performance-analyzer     
+* opensearch-reports-scheduler         
+* opensearch-security                  
+* opensearch-sql
 
-Or custom ones.
+Or custom ones, for example that Aiven plugin for prometheus-exporter:
+* https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip
 
 ```yaml
   general:
@@ -307,7 +308,7 @@ Or custom ones.
     httpPort: 9200
     vendor: opensearch
     serviceName: my-cluster
-    pluginsList: ["repository-s3"," https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
+    pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
 ```
 
 ## Nodepools and Scaling
