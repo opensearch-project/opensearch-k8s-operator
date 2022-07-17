@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -47,15 +48,16 @@ func NewSTSForNodePool(
 	availableRoles := []string{
 		"master",
 		"data",
-		//"data_content",
-		//"data_hot",
-		//"data_warm",:
-		//"data_cold",
-		//"data_frozen",
+		"data_content",
+		"data_hot",
+		"data_warm",
+		"data_cold",
+		"data_frozen",
 		"ingest",
-		//"ml",
-		//"remote_cluster_client",
-		//"transform",
+		"ml",
+		"remote_cluster_client",
+		"transform",
+		"cluster_manager",
 	}
 	var selectedRoles []string
 	for _, role := range node.Roles {
@@ -68,6 +70,7 @@ func NewSTSForNodePool(
 	dataVolume := corev1.Volume{}
 
 	if node.Persistence == nil || node.Persistence.PersistenceSource.PVC != nil {
+		mode := corev1.PersistentVolumeFilesystem
 		pvc = corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: "data"},
 			Spec: corev1.PersistentVolumeClaimSpec{
@@ -88,6 +91,7 @@ func NewSTSForNodePool(
 					}
 					return &node.Persistence.PVC.StorageClassName
 				}(),
+				VolumeMode: &mode,
 			},
 		}
 	}
@@ -99,15 +103,15 @@ func NewSTSForNodePool(
 			dataVolume.VolumeSource = corev1.VolumeSource{
 				HostPath: node.Persistence.PersistenceSource.HostPath,
 			}
+			volumes = append(volumes, dataVolume)
 		}
 
 		if node.Persistence.PersistenceSource.EmptyDir != nil {
 			dataVolume.VolumeSource = corev1.VolumeSource{
 				EmptyDir: node.Persistence.PersistenceSource.EmptyDir,
 			}
+			volumes = append(volumes, dataVolume)
 		}
-
-		volumes = append(volumes, dataVolume)
 	}
 
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
@@ -163,6 +167,8 @@ func NewSTSForNodePool(
 	}
 
 	// Because the http endpoint requires auth we need to do it as a curl script
+	httpPort := PortForCluster(cr)
+	curlCmd := "curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: 30,
 		PeriodSeconds:       30,
@@ -171,7 +177,7 @@ func NewSTSForNodePool(
 				Command: []string{
 					"/bin/bash",
 					"-c",
-					"curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" --silent --fail https://localhost:9200",
+					curlCmd,
 				},
 			},
 		},
@@ -256,6 +262,10 @@ func NewSTSForNodePool(
 									Value: strings.Join(selectedRoles, ","),
 								},
 								{
+									Name:  "http.port",
+									Value: fmt.Sprint(cr.Spec.General.HttpPort),
+								},
+								{
 									Name:  "OPENSEARCH_USER",
 									Value: username,
 								},
@@ -327,10 +337,15 @@ func NewSTSForNodePool(
 	}
 
 	// Append additional config to env vars
-	for k, v := range extraConfig {
+	keys := make([]string, 0, len(extraConfig))
+	for key := range extraConfig {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
 		sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
 			Name:  k,
-			Value: v,
+			Value: extraConfig[k],
 		})
 	}
 	// Append additional env vars from cr.Spec.NodePool.env
@@ -596,6 +611,10 @@ func NewBootstrapPod(
 							Name:  "node.roles",
 							Value: "master",
 						},
+						{
+							Name:  "http.port",
+							Value: fmt.Sprint(cr.Spec.General.HttpPort),
+						},
 					},
 
 					Name:            "opensearch",
@@ -734,27 +753,12 @@ func NewSecurityconfigUpdateJob(
 	adminCert := "/certs/tls.crt"
 	adminKey := "/certs/tls.key"
 	caCert := "/certs/ca.crt"
-	var securityconfigVolumeSecretName string
-
-	if instance.Spec.Security.Config == nil || instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
-		securityconfigVolumeSecretName = clusterName + "-default-securityconfig"
-	} else {
-		securityconfigVolumeSecretName = instance.Spec.Security.Config.SecurityconfigSecret.Name
-	}
 
 	// Dummy node spec required to resolve image
 	node := opsterv1.NodePool{
 		Component: "securityconfig",
 	}
 
-	volumes = append(volumes, corev1.Volume{
-		Name:         "securityconfig",
-		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: securityconfigVolumeSecretName}},
-	})
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{
-		Name:      "securityconfig",
-		MountPath: "/securityconfig",
-	})
 	volumes = append(volumes, corev1.Volume{
 		Name:         "admin-cert",
 		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: adminCertName}},
@@ -763,11 +767,16 @@ func NewSecurityconfigUpdateJob(
 		Name:      "admin-cert",
 		MountPath: "/certs",
 	})
-
+	//Following httpPort, securityconfigPath are used for executing securityadmin.sh
+	httpPort, securityconfigPath := helpers.VersionCheck(instance)
+	// The following curl command is added to make sure cluster is full connected before .opendistro_security is created.
 	arg := "ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;" +
 		"chmod +x $ADMIN;" +
+		fmt.Sprintf("until curl -k --silent https://%s.svc.cluster.local:%v; do", dns, instance.Spec.General.HttpPort) +
+		" echo 'Waiting to connect to the cluster'; sleep 120; " +
+		"done; " +
 		"count=0;" +
-		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd /securityconfig/ -icl -nhnv -h %s.svc.cluster.local -p 9300 || (( count++ >= 20 )); do", caCert, adminCert, adminKey, dns) +
+		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s.svc.cluster.local -p %v || (( count++ >= 20 )); do", caCert, adminCert, adminKey, securityconfigPath, dns, httpPort) +
 		"  sleep 20; " +
 		"done"
 	annotations := map[string]string{

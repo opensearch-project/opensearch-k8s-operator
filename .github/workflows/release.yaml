@@ -63,19 +63,24 @@ jobs:
           docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE
           docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE public.ecr.aws/opsterio/opensearch-operator:latest-ARM
           docker push public.ecr.aws/opsterio/opensearch-operator:latest-ARM
-      - name: Copy-crd-to-chart-dir
-        run: |
-          cd opensearch-operator
-          cp ./config/crd/bases/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
-          sed -i -e 's/^appVersion.*/appVersion: '$RELEASE_VERSION'/' ../charts/opensearch-operator/Chart.yaml
-          sed -i -e 's/tag.*/tag: '$RELEASE_VERSION'/' ../charts/opensearch-operator/values.yaml
-          git config user.name "GitHub Actions Bot"
-          git config user.email "<>"
-          git add ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
-          git add ../charts/opensearch-operator/Chart.yaml
-          git add ../charts/opensearch-operator/values.yaml
-          git commit -m "Update release appVersion on Chart ${RELEASE_VERSION}"
-          git push
+#       - name: Copy-crd-to-chart-dir
+#         run: |
+#           git checkout -b ${RELEASE_VERSION}-release
+#           cd opensearch-operator
+#           cp ./config/crd/bases/opensearch.opster.io_opensearchclusters.yaml ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
+#           sed -i -e 's/^appVersion.*/appVersion: '$RELEASE_VERSION'/' ../charts/opensearch-operator/Chart.yaml
+#           sed -i -e 's/tag.*/tag: '$RELEASE_VERSION'/' ../charts/opensearch-operator/values.yaml
+#           git config user.name "GitHub Actions Bot"
+#           git config user.email "<>"
+#           git add ../charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
+#           git add ../charts/opensearch-operator/Chart.yaml
+#           git add ../charts/opensearch-operator/values.yaml
+#           git commit -m "Update release appVersion on Chart ${RELEASE_VERSION}"
+#           git pull main:${RELEASE_VERSION}-release
+#           git push --set-upstream origin ${RELEASE_VERSION}-release
+
+#          git request-pull ${RELEASE_VERSION}-release https://github.com/Opster/opensearch-k8s-operator.git main
+
 ###### After build and push the images we can now prepper the chart release - just after the chart release will create a new helm-release workflow will run.
 ###### that's a problem because we need to marge the version change commit first so the chart will be created with the new version.
 #      - name: Create-Helm-Release

@@ -24,7 +24,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		interval    = time.Second * 1
 	)
 
-	Context("When Reconciling the securityconfig reconciler with no securityconfig provided", func() {
+	When("When Reconciling the securityconfig reconciler with no securityconfig provided", func() {
 		It("should not do anything ", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -45,7 +45,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		})
 	})
 
-	Context("When Reconciling the securityconfig reconciler with securityconfig secret configured but not available", func() {
+	When("When Reconciling the securityconfig reconciler with securityconfig secret configured but not available", func() {
 		It("should trigger a requeue", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -74,22 +74,18 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		})
 	})
 
-	Context("When Reconciling the securityconfig reconciler with securityconfig secret configured and available", func() {
+	When("When Reconciling the securityconfig reconciler with admin secret configured and available", func() {
 		It("should start an update job", func() {
-			var clusterName = "securityconfig"
+			var clusterName = "securityconfig-withadminsecret"
 			// Create namespace and secrets first
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
-			configSecret := corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig", Namespace: clusterName},
-				StringData: map[string]string{"config.yml": "foobar"},
-			}
-			err := k8sClient.Create(context.Background(), &configSecret)
-			Expect(err).ToNot(HaveOccurred())
-			adminCertSecret := corev1.Secret{
+
+			adminCertSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: "admin-cert", Namespace: clusterName},
-				StringData: map[string]string{"tls.crt": "foobar"},
+				Type:       corev1.SecretType("Opaque"),
+				Data:       map[string][]byte{},
 			}
-			err = k8sClient.Create(context.Background(), &adminCertSecret)
+			err := k8sClient.Create(context.Background(), adminCertSecret)
 			Expect(err).ToNot(HaveOccurred())
 
 			spec := opsterv1.OpenSearchCluster{
@@ -98,7 +94,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					General: opsterv1.GeneralConfig{},
 					Security: &opsterv1.Security{
 						Config: &opsterv1.SecurityConfig{
-							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig"},
+							SecurityconfigSecret: corev1.LocalObjectReference{Name: "foobar"},
 							AdminSecret:          corev1.LocalObjectReference{Name: "admin-cert"},
 						},
 					},
@@ -116,15 +112,12 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			Expect(err).ToNot(HaveOccurred())
 
 			job := batchv1.Job{}
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
+			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)).To(HaveOccurred())
 
 		})
 	})
 
-	Context("When Reconciling the securityconfig reconciler with securityconfig secret but no adminSecret configured", func() {
+	When("When Reconciling the securityconfig reconciler with securityconfig secret but no adminSecret configured", func() {
 		It("should not start an update job", func() {
 			var clusterName = "securityconfig-noadminsecret"
 			// Create namespace and secret first

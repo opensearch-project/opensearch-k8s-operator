@@ -30,6 +30,7 @@ const (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type GeneralConfig struct {
+	*ImageSpec `json:",inline,omitempty"`
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
@@ -39,12 +40,13 @@ type GeneralConfig struct {
 	ServiceName      string  `json:"serviceName"`
 	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
-	*ImageSpec       `json:",omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
+	// Additional volumes to mount to all pods in the cluster
+	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 }
 
 type NodePool struct {
@@ -96,17 +98,18 @@ type BootstrapConfig struct {
 }
 
 type DashboardsConfig struct {
+	*ImageSpec `json:",inline,omitempty"`
 	Enable     bool                        `json:"enable,omitempty"`
 	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
 	Replicas   int32                       `json:"replicas"`
 	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
 	Version    string                      `json:"version"`
-	*ImageSpec `json:",omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
 	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 	Env                         []corev1.EnvVar             `json:"env,omitempty"`
+	AdditionalVolumes           []AdditionalVolume          `json:"additionalVolumes,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -174,6 +177,19 @@ type ImageSpec struct {
 	Image            *string                       `json:"image,omitempty"`
 	ImagePullPolicy  *corev1.PullPolicy            `json:"imagePullPolicy,omitempty"`
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
+}
+
+type AdditionalVolume struct {
+	// Name to use for the volume. Required.
+	Name string `json:"name"`
+	// Path in the container to mount the volume at. Required.
+	Path string `json:"path"`
+	// Secret to use populate the volume
+	Secret *corev1.SecretVolumeSource `json:"secret,omitempty"`
+	// ConfigMap to use to populate the volume
+	ConfigMap *corev1.ConfigMapVolumeSource `json:"configMap,omitempty"`
+	// Whether to restart the pods on content change
+	RestartPods bool `json:"restartPods,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster

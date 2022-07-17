@@ -6,6 +6,8 @@ import (
 	"time"
 
 	sts "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
@@ -42,6 +44,44 @@ var _ = Describe("Dashboards Reconciler", func() {
 			Eventually(func() bool {
 				return IsNsCreated(k8sClient, namespace)
 			}, timeout, interval).Should(BeTrue())
+		})
+
+		It("should create the secret for volumes", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-secret",
+					Namespace: OpensearchCluster.Namespace,
+				},
+				StringData: map[string]string{
+					"test.yml": "foobar",
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), secret)).To(Succeed())
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      secret.Name,
+					Namespace: secret.Namespace,
+				}, &corev1.Secret{})
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should create the configmap for volumes", func() {
+			cm := &corev1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cm",
+					Namespace: OpensearchCluster.Namespace,
+				},
+				Data: map[string]string{
+					"test.yml": "foobar",
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), cm)).To(Succeed())
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      cm.Name,
+					Namespace: cm.Namespace,
+				}, &corev1.ConfigMap{})
+			}, timeout, interval).Should(Succeed())
 		})
 
 		It("should apply the cluster instance successfully", func() {
