@@ -400,3 +400,24 @@ spec:
         roles:
           - "data"
 ```
+
+## Additional Volumes
+
+Sometimes it is neccessary to mount ConfigMaps or Secrets into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource.  This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes.  The format is as follows:
+
+```yaml
+spec:
+  general:
+    additionalVolumes:
+    - name: example-configmap
+      path: /path/to/mount/volume
+      configMap:
+        name: config-map-name
+      restartPods: true #set this to true to restart the pods when the content of the configMap changes
+  dashboards:
+    additionalVolumes:
+    - name: example-secret
+      path: /path/to/mount/volume
+      secret:
+        secretName: secret-name
+```
