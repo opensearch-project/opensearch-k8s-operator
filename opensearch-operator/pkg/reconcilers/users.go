@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
@@ -55,6 +56,10 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	var reason string
 
 	defer func() {
+		// Skip status updates when option is set
+		if !pointer.BoolDeref(r.updateStatus, true) {
+			return
+		}
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -106,17 +111,19 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			return
 		}
 	} else {
-		retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
+		if pointer.BoolDeref(r.updateStatus, true) {
+			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+					return err
+				}
+				r.instance.Status.ManagedCluster = &r.instance.Spec.OpensearchRef
+				return r.Status().Update(r.ctx, r.instance)
+			})
+			if retErr != nil {
+				reason = fmt.Sprintf("failed to update status: %s", retErr)
+				r.recorder.Event(r.instance, "Warning", statusError, reason)
+				return
 			}
-			r.instance.Status.ManagedCluster = &r.instance.Spec.OpensearchRef
-			return r.Status().Update(r.ctx, r.instance)
-		})
-		if retErr != nil {
-			reason = fmt.Sprintf("failed to update status: %s", retErr)
-			r.recorder.Event(r.instance, "Warning", statusError, reason)
-			return
 		}
 	}
 
@@ -152,7 +159,14 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		Attributes:              r.instance.Spec.Attributes,
 	}
 
-	user.Attributes[services.K8sAttributeField] = string(r.instance.GetUID())
+	// Instantiate the map first
+	if user.Attributes == nil {
+		user.Attributes = map[string]string{
+			services.K8sAttributeField: string(r.instance.GetUID()),
+		}
+	} else {
+		user.Attributes[services.K8sAttributeField] = string(r.instance.GetUID())
+	}
 
 	update, retErr := services.ShouldUpdateUser(r.ctx, r.osClient, r.instance.Name, user)
 	if retErr != nil {
@@ -162,7 +176,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		return
 	}
 	if !update {
-		r.logger.V(1).Info("user %s is in sync", r.instance.Name)
+		r.logger.V(1).Info(fmt.Sprintf("user %s is in sync", r.instance.Name))
 		return
 	}
 
@@ -173,6 +187,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 	}
 
+	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "user updated in opensearch")
 	return
 }
 

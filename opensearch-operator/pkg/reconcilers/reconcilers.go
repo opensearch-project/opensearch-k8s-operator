@@ -19,6 +19,7 @@ const (
 	opensearchErrorReason   = "OpensearchError"
 	opensearchAPIError      = "OpensearchAPIError"
 	opensearchRefMismatch   = "OpensearchRefMismatch"
+	opensearchAPIUpdated    = "OpensearchAPIUpdated"
 	passwordErrorReason     = "PasswordError"
 	statusError             = "StatusUpdateError"
 )
@@ -26,7 +27,8 @@ const (
 type ComponentReconciler func() (reconcile.Result, error)
 
 type ReconcilerOptions struct {
-	osClientTransport *http.Transport
+	osClientTransport http.RoundTripper
+	updateStatus      *bool
 }
 
 type ReconcilerOption func(*ReconcilerOptions)
@@ -37,9 +39,15 @@ func (o *ReconcilerOptions) apply(opts ...ReconcilerOption) {
 	}
 }
 
-func WithOSClientTransport(transport *http.Transport) ReconcilerOption {
+func WithOSClientTransport(transport http.RoundTripper) ReconcilerOption {
 	return func(o *ReconcilerOptions) {
 		o.osClientTransport = transport
+	}
+}
+
+func WithUpdateStatus(update bool) ReconcilerOption {
+	return func(o *ReconcilerOptions) {
+		o.updateStatus = &update
 	}
 }
 

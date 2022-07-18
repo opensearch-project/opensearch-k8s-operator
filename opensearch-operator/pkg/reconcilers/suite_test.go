@@ -132,3 +132,7 @@ func CreateNamespace(k8sClient client.Client, name string) error {
 	ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: name}}
 	return k8sClient.Create(context.Background(), &ns)
 }
+
+func failMessage(mesg ...interface{}) {
+	Fail(fmt.Sprintln(mesg...))
+}

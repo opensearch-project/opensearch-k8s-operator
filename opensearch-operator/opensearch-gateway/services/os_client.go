@@ -46,7 +46,7 @@ type OsClusterClient struct {
 }
 
 type OsClusterClientOptions struct {
-	transport *http.Transport
+	transport http.RoundTripper
 }
 
 type OsClusterClientOption func(*OsClusterClientOptions)
@@ -57,7 +57,7 @@ func (o *OsClusterClientOptions) apply(opts ...OsClusterClientOption) {
 	}
 }
 
-func WithTransport(transport *http.Transport) OsClusterClientOption {
+func WithTransport(transport http.RoundTripper) OsClusterClientOption {
 	return func(o *OsClusterClientOptions) {
 		o.transport = transport
 	}
@@ -68,7 +68,7 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 	options.apply(opts...)
 
 	config := opensearch.Config{
-		Transport: func() *http.Transport {
+		Transport: func() http.RoundTripper {
 			if options.transport != nil {
 				return options.transport
 			}
