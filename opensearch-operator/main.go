@@ -108,6 +108,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchRole")
 		os.Exit(1)
 	}
+	if err = (&controllers.OpensearchUserRoleBindingReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("userrolebinding-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchUserRoleBinding")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

@@ -208,3 +208,76 @@ func DeleteRole(ctx context.Context, service *OsClusterClient, rolename string) 
 	}
 	return nil
 }
+
+func RoleMappingExists(
+	ctx context.Context,
+	service *OsClusterClient,
+	rolename string,
+) (bool, error) {
+	resp, err := service.GetRolesMapping(ctx, rolename)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return false, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return true, nil
+}
+
+func FetchExistingRoleMapping(
+	ctx context.Context,
+	service *OsClusterClient,
+	rolename string,
+) (requests.RoleMapping, error) {
+	resp, err := service.GetRolesMapping(ctx, rolename)
+	if err != nil {
+		return requests.RoleMapping{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return requests.RoleMapping{}, fmt.Errorf("response from API is %s", resp.Status())
+	}
+
+	mappingResp := responses.GetRoleMappingReponse{}
+	err = json.NewDecoder(resp.Body).Decode(&mappingResp)
+	if err != nil {
+		return requests.RoleMapping{}, err
+	}
+
+	return mappingResp[rolename], nil
+}
+
+func CreateOrUpdateRoleMapping(
+	ctx context.Context,
+	service *OsClusterClient,
+	rolename string,
+	mapping requests.RoleMapping,
+) error {
+	resp, err := service.PutRolesMapping(ctx, rolename, opensearchutil.NewJSONReader(mapping))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.IsError() {
+		return fmt.Errorf("failed to create role mapping: %s", resp.String())
+	}
+	return nil
+}
+
+func DeleteRoleMapping(ctx context.Context, service *OsClusterClient, rolename string) error {
+	resp, err := service.DeleteRolesMapping(ctx, rolename)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return nil
+}

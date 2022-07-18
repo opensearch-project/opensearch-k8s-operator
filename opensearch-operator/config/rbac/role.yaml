@@ -172,6 +172,32 @@ rules:
 - apiGroups:
   - opster.opensearch.opster.io
   resources:
+  - opensearchuserrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - opensearchuserrolebindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - opensearchuserrolebindings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
   - opensearchusers
   verbs:
   - create
