@@ -40,20 +40,54 @@ var (
 )
 
 type OsClusterClient struct {
+	OsClusterClientOptions
 	client   *opensearch.Client
 	MainPage responses.MainResponse
 }
 
-func NewOsClusterClient(clusterUrl string, username string, password string) (*OsClusterClient, error) {
+type OsClusterClientOptions struct {
+	transport *http.Transport
+}
+
+type OsClusterClientOption func(*OsClusterClientOptions)
+
+func (o *OsClusterClientOptions) apply(opts ...OsClusterClientOption) {
+	for _, op := range opts {
+		op(o)
+	}
+}
+
+func WithTransport(transport *http.Transport) OsClusterClientOption {
+	return func(o *OsClusterClientOptions) {
+		o.transport = transport
+	}
+}
+
+func NewOsClusterClient(clusterUrl string, username string, password string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
+	options := OsClusterClientOptions{}
+	options.apply(opts...)
+
 	config := opensearch.Config{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+		Transport: func() *http.Transport {
+			if options.transport != nil {
+				return options.transport
+			}
+			return &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+		}(),
 		Addresses: []string{clusterUrl},
 		Username:  username,
 		Password:  password,
 	}
-	return NewOsClusterClientFromConfig(config)
+
+	client, err := NewOsClusterClientFromConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	client.OsClusterClientOptions = options
+	return client, nil
 }
 
 func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, error) {

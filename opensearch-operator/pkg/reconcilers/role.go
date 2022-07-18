@@ -21,6 +21,7 @@ import (
 
 type RoleReconciler struct {
 	client.Client
+	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
@@ -34,13 +35,17 @@ func NewRoleReconciler(
 	client client.Client,
 	recorder record.EventRecorder,
 	instance *opsterv1.OpensearchRole,
+	opts ...ReconcilerOption,
 ) *RoleReconciler {
+	options := ReconcilerOptions{}
+	options.apply(opts...)
 	return &RoleReconciler{
-		Client:   client,
-		ctx:      ctx,
-		recorder: recorder,
-		instance: instance,
-		logger:   log.FromContext(ctx).WithValues("reconciler", "role"),
+		Client:            client,
+		ReconcilerOptions: options,
+		ctx:               ctx,
+		recorder:          recorder,
+		instance:          instance,
+		logger:            log.FromContext(ctx).WithValues("reconciler", "role"),
 	}
 }
 
@@ -252,11 +257,20 @@ func (r *RoleReconciler) createOpensearchClient() error {
 		return err
 	}
 
-	r.osClient, err = services.NewOsClusterClient(
-		fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.cluster.Spec.General.ServiceName, r.cluster.Namespace, r.cluster.Spec.General.HttpPort),
-		username,
-		password,
-	)
+	if r.osClientTransport == nil {
+		r.osClient, err = services.NewOsClusterClient(
+			fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.cluster.Spec.General.ServiceName, r.cluster.Namespace, r.cluster.Spec.General.HttpPort),
+			username,
+			password,
+		)
+	} else {
+		r.osClient, err = services.NewOsClusterClient(
+			fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.cluster.Spec.General.ServiceName, r.cluster.Namespace, r.cluster.Spec.General.HttpPort),
+			username,
+			password,
+			services.WithTransport(r.osClientTransport),
+		)
+	}
 	if err != nil {
 		r.logger.Error(err, "failed to create client")
 	}

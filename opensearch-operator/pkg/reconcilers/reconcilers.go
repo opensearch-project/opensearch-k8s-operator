@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"k8s.io/client-go/tools/record"
 
@@ -23,6 +24,24 @@ const (
 )
 
 type ComponentReconciler func() (reconcile.Result, error)
+
+type ReconcilerOptions struct {
+	osClientTransport *http.Transport
+}
+
+type ReconcilerOption func(*ReconcilerOptions)
+
+func (o *ReconcilerOptions) apply(opts ...ReconcilerOption) {
+	for _, op := range opts {
+		op(o)
+	}
+}
+
+func WithOSClientTransport(transport *http.Transport) ReconcilerOption {
+	return func(o *ReconcilerOptions) {
+		o.osClientTransport = transport
+	}
+}
 
 type ReconcilerContext struct {
 	Volumes          []corev1.Volume
