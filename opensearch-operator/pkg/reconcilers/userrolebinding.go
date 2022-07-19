@@ -10,6 +10,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
@@ -53,6 +54,10 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 	var reason string
 
 	defer func() {
+		// Skip status updates when option is set
+		if !pointer.BoolDeref(r.updateStatus, true) {
+			return
+		}
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -98,23 +103,25 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 	// Check cluster ref has not changed
 	if r.instance.Status.ManagedCluster != nil {
 		if !reflect.DeepEqual(*r.instance.Status.ManagedCluster, r.instance.Spec.OpensearchRef) {
-			reason = "cannot change the cluster a user refers to"
+			reason = "cannot change the cluster a userrolebinding refers to"
 			retErr = fmt.Errorf("%s", reason)
 			r.recorder.Event(r.instance, "Warning", opensearchRefMismatch, reason)
 			return
 		}
 	} else {
-		retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
+		if pointer.BoolDeref(r.updateStatus, true) {
+			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+					return err
+				}
+				r.instance.Status.ManagedCluster = &r.instance.Spec.OpensearchRef
+				return r.Status().Update(r.ctx, r.instance)
+			})
+			if retErr != nil {
+				reason = fmt.Sprintf("failed to update status: %s", retErr)
+				r.recorder.Event(r.instance, "Warning", statusError, reason)
+				return
 			}
-			r.instance.Status.ManagedCluster = &r.instance.Spec.OpensearchRef
-			return r.Status().Update(r.ctx, r.instance)
-		})
-		if retErr != nil {
-			reason = fmt.Sprintf("failed to update status: %s", retErr)
-			r.recorder.Event(r.instance, "Warning", statusError, reason)
-			return
 		}
 	}
 
@@ -252,10 +259,16 @@ func (r *UserRoleBindingReconciler) reconcileExistingMapping(rolename string) er
 		return err
 	}
 
+	newUser := false
 	for _, user := range r.instance.Spec.Users {
 		if !helpers.ContainsString(mapping.Users, user) {
 			mapping.Users = append(mapping.Users, user)
+			newUser = true
 		}
+	}
+
+	if !newUser {
+		return nil
 	}
 
 	return services.CreateOrUpdateRoleMapping(r.ctx, r.osClient, rolename, mapping)
