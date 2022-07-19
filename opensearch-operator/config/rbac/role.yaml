@@ -144,7 +144,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchroles
   verbs:
@@ -156,13 +156,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchroles/finalizers
   verbs:
   - update
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchroles/status
   verbs:
@@ -170,7 +170,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchuserrolebindings
   verbs:
@@ -182,13 +182,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchuserrolebindings/finalizers
   verbs:
   - update
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchuserrolebindings/status
   verbs:
@@ -196,7 +196,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchusers
   verbs:
@@ -208,13 +208,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchusers/finalizers
   verbs:
   - update
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.opster.io
   resources:
   - opensearchusers/status
   verbs:

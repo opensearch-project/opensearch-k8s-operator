@@ -13,8 +13,10 @@ spec:
     kind: OpensearchUserRoleBinding
     listKind: OpensearchUserRoleBindingList
     plural: opensearchuserrolebindings
+    shortNames:
+    - opensearchuserrolebinding
     singular: opensearchuserrolebinding
-  scope: Cluster
+  scope: Namespaced
   versions:
   - name: v1
     schema:

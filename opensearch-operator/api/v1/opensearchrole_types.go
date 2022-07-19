@@ -58,6 +58,7 @@ type OpensearchRoleStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:shortName=opensearchrole
 //+kubebuilder:subresource:status
 
 // OpensearchRole is the Schema for the opensearchroles API

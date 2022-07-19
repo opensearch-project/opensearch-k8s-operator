@@ -44,6 +44,7 @@ type OpensearchUserRoleBindingStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:shortName=opensearchuserrolebinding
 //+kubebuilder:subresource:status
 
 // OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings API

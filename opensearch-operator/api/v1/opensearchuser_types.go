@@ -52,6 +52,7 @@ type OpensearchUserStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:resource:scope=Cluster
+//+kubebuilder:resource:shortName=opensearchuser
 //+kubebuilder:subresource:status
 
 // OpensearchUser is the Schema for the opensearchusers API

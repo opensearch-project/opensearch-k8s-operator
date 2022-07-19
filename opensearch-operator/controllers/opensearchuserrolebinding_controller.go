@@ -40,9 +40,9 @@ type OpensearchUserRoleBindingReconciler struct {
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opster.opensearch.opster.io,resources=opensearchuserrolebindings,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opster.opensearch.opster.io,resources=opensearchuserrolebindings/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opster.opensearch.opster.io,resources=opensearchuserrolebindings/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

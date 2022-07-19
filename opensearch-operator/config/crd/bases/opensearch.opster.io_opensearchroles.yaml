@@ -13,8 +13,10 @@ spec:
     kind: OpensearchRole
     listKind: OpensearchRoleList
     plural: opensearchroles
+    shortNames:
+    - opensearchrole
     singular: opensearchrole
-  scope: Cluster
+  scope: Namespaced
   versions:
   - name: v1
     schema:

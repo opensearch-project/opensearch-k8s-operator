@@ -13,8 +13,10 @@ spec:
     kind: OpensearchUser
     listKind: OpensearchUserList
     plural: opensearchusers
+    shortNames:
+    - opensearchuser
     singular: opensearchuser
-  scope: Cluster
+  scope: Namespaced
   versions:
   - name: v1
     schema:

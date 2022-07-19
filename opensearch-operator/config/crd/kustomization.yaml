@@ -3,9 +3,9 @@
 # It should be run by config/default
 resources:
 - bases/opensearch.opster.io_opensearchclusters.yaml
-- bases/opster.opensearch.opster.io_opensearchusers.yaml
-- bases/opster.opensearch.opster.io_opensearchroles.yaml
-- bases/opster.opensearch.opster.io_opensearchuserrolebindings.yaml
+- bases/opensearch.opster.io_opensearchusers.yaml
+- bases/opensearch.opster.io_opensearchroles.yaml
+- bases/opensearch.opster.io_opensearchuserrolebindings.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patchesStrategicMerge:
