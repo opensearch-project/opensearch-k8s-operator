@@ -10,6 +10,7 @@ import (
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
@@ -53,6 +54,9 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	var reason string
 
 	defer func() {
+		if !pointer.BoolDeref(r.updateStatus, true) {
+			return
+		}
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -104,17 +108,19 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			return
 		}
 	} else {
-		retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
+		if pointer.BoolDeref(r.updateStatus, true) {
+			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+					return err
+				}
+				r.instance.Status.ManagedCluster = &r.instance.Spec.OpensearchRef
+				return r.Status().Update(r.ctx, r.instance)
+			})
+			if retErr != nil {
+				reason = fmt.Sprintf("failed to update status: %s", retErr)
+				r.recorder.Event(r.instance, "Warning", statusError, reason)
+				return
 			}
-			r.instance.Status.ManagedCluster = &r.instance.Spec.OpensearchRef
-			return r.Status().Update(r.ctx, r.instance)
-		})
-		if retErr != nil {
-			reason = fmt.Sprintf("failed to update status: %s", retErr)
-			r.recorder.Event(r.instance, "Warning", statusError, reason)
-			return
 		}
 	}
 
@@ -147,35 +153,47 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 			return
 		}
-
-		retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
+		if pointer.BoolDeref(r.updateStatus, true) {
+			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+					return err
+				}
+				r.instance.Status.ExistingRole = &exists
+				return r.Status().Update(r.ctx, r.instance)
+			})
+			if retErr != nil {
+				reason = fmt.Sprintf("failed to update status: %s", retErr)
+				r.recorder.Event(r.instance, "Warning", statusError, reason)
+				return
 			}
-			r.instance.Status.ExistingRole = &exists
-			return r.Status().Update(r.ctx, r.instance)
-		})
-		if retErr != nil {
-			reason = fmt.Sprintf("failed to update status: %s", retErr)
-			r.recorder.Event(r.instance, "Warning", statusError, reason)
+		} else {
+			// Emit an event for unit testing assertion
+			r.recorder.Event(r.instance, "Normal", "UnitTest", fmt.Sprintf("exists is %t", exists))
 			return
 		}
 	}
 
-	indexPermisisons := make([]requests.IndexPermissionSpec, 0, len(r.instance.Spec.IndexPermissions))
-	for _, permission := range r.instance.Spec.IndexPermissions {
-		indexPermisisons = append(indexPermisisons, requests.IndexPermissionSpec(permission))
-	}
-
-	tenantPermisisons := make([]requests.TenantPermissionsSpec, 0, len(r.instance.Spec.TenantPermissions))
-	for _, permission := range r.instance.Spec.TenantPermissions {
-		tenantPermisisons = append(tenantPermisisons, requests.TenantPermissionsSpec(permission))
+	// If role is existing do nothing
+	if *r.instance.Status.ExistingRole {
+		return
 	}
 
 	role := requests.Role{
 		ClusterPermissions: r.instance.Spec.ClusterPermissions,
-		IndexPermissions:   indexPermisisons,
-		TenantPermissions:  tenantPermisisons,
+	}
+
+	if len(r.instance.Spec.IndexPermissions) > 0 {
+		role.IndexPermissions = make([]requests.IndexPermissionSpec, 0, len(r.instance.Spec.IndexPermissions))
+		for _, permission := range r.instance.Spec.IndexPermissions {
+			role.IndexPermissions = append(role.IndexPermissions, requests.IndexPermissionSpec(permission))
+		}
+	}
+
+	if len(r.instance.Spec.TenantPermissions) > 0 {
+		role.TenantPermissions = make([]requests.TenantPermissionsSpec, 0, len(r.instance.Spec.TenantPermissions))
+		for _, permission := range r.instance.Spec.TenantPermissions {
+			role.TenantPermissions = append(role.TenantPermissions, requests.TenantPermissionsSpec(permission))
+		}
 	}
 
 	shouldUpdate, retErr := services.ShouldUpdateRole(r.ctx, r.osClient, r.instance.Name, role)
@@ -187,7 +205,8 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	}
 
 	if !shouldUpdate {
-		r.logger.V(1).Info("role %s is in sync", r.instance.Name)
+		r.logger.V(1).Info(fmt.Sprintf("role %s is in sync", r.instance.Name))
+		return
 	}
 
 	retErr = services.CreateOrUpdateRole(r.ctx, r.osClient, r.instance.Name, role)
@@ -197,12 +216,19 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 	}
 
+	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "role updated in opensearch")
+
 	return
 }
 
 func (r *RoleReconciler) Delete() error {
 	// If we have never successfully reconciled we can just exit
 	if r.instance.Status.ExistingRole == nil {
+		return nil
+	}
+
+	if *r.instance.Status.ExistingRole {
+		r.logger.Info("role was pre-existing; not deleting")
 		return nil
 	}
 
@@ -227,11 +253,6 @@ func (r *RoleReconciler) Delete() error {
 	}
 	if !exist {
 		r.logger.V(1).Info("role already deleted from opensearch")
-		return nil
-	}
-
-	if *r.instance.Status.ExistingRole {
-		r.logger.Info("role was pre-existing; not deleting")
 		return nil
 	}
 

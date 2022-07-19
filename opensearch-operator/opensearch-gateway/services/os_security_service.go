@@ -175,6 +175,8 @@ func ShouldUpdateRole(
 	}
 
 	lg := log.FromContext(ctx).WithValues("os_service", "security")
+	lg.V(1).Info(fmt.Sprintf("exsiting role: %+v", roleResponse[rolename]))
+	lg.V(1).Info(fmt.Sprintf("new role: %+v", role))
 	lg.Info("role requires update")
 	return true, nil
 }
@@ -185,7 +187,7 @@ func CreateOrUpdateRole(
 	rolename string,
 	role requests.Role,
 ) error {
-	resp, err := service.PutUser(ctx, rolename, opensearchutil.NewJSONReader(role))
+	resp, err := service.PutRole(ctx, rolename, opensearchutil.NewJSONReader(role))
 	if err != nil {
 		return err
 	}
