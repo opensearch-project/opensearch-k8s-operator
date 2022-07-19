@@ -390,3 +390,69 @@ spec:
       secret:
         secretName: secret-name
 ```
+
+## Opensearch Users
+
+It is possible to manage Opensearch users in Kubernetes with the operator.  The operator will not modify users that already exist.  You can create an example user as follows:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchUser
+metadata:
+  name: sample-user
+spec:
+  opensearch:
+    name: my-first-cluster
+    namespace: default
+  passwordFrom:
+    name: sample-user-password
+    key: password
+    namespace: default
+  backendRoles:
+  - kibanauser
+```
+
+Note that a secret called `sample-user-password` will need to exist in the `default` namespace with the base64 encoded password in the `password` key.
+
+## Opensearch Roles
+
+It is possible to manage Opensearch roles in Kubernetes with the operator.  The operator will not modify roles that already exist.  You can create an example role as follows:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchRole
+metadata:
+  name: sample-role
+spec:
+  opensearch:
+    name: my-first-cluster
+    namespace: default
+  clusterPermissions:
+  - cluster_composite_ops
+  - cluster_monitor
+  indexPermissions:
+  - indexPatterns:
+    - logs*
+    allowedActions:
+    - index
+    - read
+```
+
+## Linking Opensearch Users and Roles
+
+The operator allows you link any number of roles and users with a OpensearchUserRoleBinding.  Each user in the binding will be granted each role.  E.g:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchUserRoleBinding
+metadata:
+  name: sample-urb
+spec:
+  opensearch:
+    name: my-first-cluster
+    namespace: default
+  users:
+  - sample-user
+  roles:
+  - sample-role
+```
