@@ -72,6 +72,8 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 				r.instance.Status.State = opsterv1.OpensearchUserRoleBindingPending
 			}
 			if retErr == nil && !retResult.Requeue {
+				r.instance.Status.ProvisionedRoles = r.instance.Spec.Roles
+				r.instance.Status.ProvisionedUsers = r.instance.Spec.Users
 				r.instance.Status.State = opsterv1.OpensearchUserRoleBindingStateCreated
 			}
 			return r.Status().Update(r.ctx, r.instance)
@@ -144,6 +146,28 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		return
 	}
 
+	// Reconcile any roles that have been removed
+	rolesRemoved := r.calculateRemovedRoles()
+	for _, removed := range rolesRemoved {
+		var exists bool
+		exists, retErr = services.RoleMappingExists(r.ctx, r.osClient, removed)
+		if retErr != nil {
+			reason = "failed to get role mapping status from Opensearch API"
+			r.logger.Error(retErr, reason)
+			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
+			return
+		}
+		if exists {
+			retErr = r.removeUsersFromMapping(removed, r.instance.Status.ProvisionedUsers)
+			if retErr != nil {
+				reason = "failed to update existing role mapping"
+				r.logger.Error(retErr, reason)
+				r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
+				return
+			}
+		}
+	}
+
 	for _, role := range r.instance.Spec.Roles {
 		var exists bool
 		exists, retErr = services.RoleMappingExists(r.ctx, r.osClient, role)
@@ -155,6 +179,18 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 
 		if exists {
+			// First remove any users that are no longer in the spec
+			removedUsers := r.calculateRemovedUsers()
+			if len(removedUsers) > 0 {
+				retErr = r.removeUsersFromMapping(role, removedUsers)
+				if retErr != nil {
+					reason = "failed to update existing role mapping"
+					r.logger.Error(retErr, reason)
+					r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
+					return
+				}
+			}
+			// Then add new users
 			retErr = r.reconcileExistingMapping(role)
 			if retErr != nil {
 				reason = "failed to update existing role mapping"
@@ -196,7 +232,7 @@ func (r *UserRoleBindingReconciler) Delete() error {
 		return err
 	}
 
-	for _, role := range r.instance.Spec.Roles {
+	for _, role := range r.instance.Status.ProvisionedRoles {
 		exist, err = services.RoleMappingExists(r.ctx, r.osClient, role)
 		if err != nil {
 			return err
@@ -205,7 +241,7 @@ func (r *UserRoleBindingReconciler) Delete() error {
 			r.logger.V(1).Info("role mapping already deleted from opensearch")
 			continue
 		}
-		err = r.removeUsersFromMapping(role)
+		err = r.removeUsersFromMapping(role, r.instance.Status.ProvisionedUsers)
 		if err != nil {
 			return err
 		}
@@ -274,7 +310,7 @@ func (r *UserRoleBindingReconciler) reconcileExistingMapping(rolename string) er
 	return services.CreateOrUpdateRoleMapping(r.ctx, r.osClient, rolename, mapping)
 }
 
-func (r *UserRoleBindingReconciler) removeUsersFromMapping(rolename string) error {
+func (r *UserRoleBindingReconciler) removeUsersFromMapping(rolename string, usersToRemove []string) error {
 	users := []string{}
 	mapping, err := services.FetchExistingRoleMapping(r.ctx, r.osClient, rolename)
 	if err != nil {
@@ -282,15 +318,42 @@ func (r *UserRoleBindingReconciler) removeUsersFromMapping(rolename string) erro
 	}
 
 	for _, user := range mapping.Users {
-		if !helpers.ContainsString(r.instance.Spec.Users, user) {
+		if !helpers.ContainsString(usersToRemove, user) {
 			users = append(users, user)
 		}
 	}
 
-	if len(users) > 0 {
-		mapping.Users = users
+	if len(users) == len(mapping.Users) && len(users) > 0 {
+		return nil
+	}
+
+	mapping.Users = users
+
+	if len(mapping.Users) > 0 || len(mapping.Hosts) > 0 || len(mapping.BackendRoles) > 0 {
 		return services.CreateOrUpdateRoleMapping(r.ctx, r.osClient, rolename, mapping)
 	}
 
 	return services.DeleteRoleMapping(r.ctx, r.osClient, rolename)
+}
+
+func (r *UserRoleBindingReconciler) calculateRemovedRoles() []string {
+	var rolesRemoved []string
+	for _, role := range r.instance.Status.ProvisionedRoles {
+		if !helpers.ContainsString(r.instance.Spec.Roles, role) {
+			rolesRemoved = append(rolesRemoved, role)
+		}
+	}
+
+	return rolesRemoved
+}
+
+func (r *UserRoleBindingReconciler) calculateRemovedUsers() []string {
+	var usersRemoved []string
+	for _, user := range r.instance.Status.ProvisionedUsers {
+		if !helpers.ContainsString(r.instance.Spec.Users, user) {
+			usersRemoved = append(usersRemoved, user)
+		}
+	}
+
+	return usersRemoved
 }

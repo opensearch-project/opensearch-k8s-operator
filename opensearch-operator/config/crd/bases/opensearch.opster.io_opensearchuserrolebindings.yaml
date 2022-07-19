@@ -71,6 +71,14 @@ spec:
                   namespace:
                     type: string
                 type: object
+              provisionedRoles:
+                items:
+                  type: string
+                type: array
+              provisionedUsers:
+                items:
+                  type: string
+                type: array
               reason:
                 type: string
               state:

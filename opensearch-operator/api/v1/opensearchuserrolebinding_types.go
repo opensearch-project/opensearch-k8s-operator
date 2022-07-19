@@ -31,15 +31,17 @@ const (
 // OpensearchUserRoleBindingSpec defines the desired state of OpensearchUserRoleBinding
 type OpensearchUserRoleBindingSpec struct {
 	OpensearchRef OpensearchClusterSelector `json:"opensearch"`
-	Roles         []string                  `json:"users"`
-	Users         []string                  `json:"roles"`
+	Roles         []string                  `json:"roles"`
+	Users         []string                  `json:"users"`
 }
 
 // OpensearchUserRoleBindingStatus defines the observed state of OpensearchUserRoleBinding
 type OpensearchUserRoleBindingStatus struct {
-	State          OpensearchUserRoleBindingState `json:"state,omitempty"`
-	Reason         string                         `json:"reason,omitempty"`
-	ManagedCluster *OpensearchClusterSelector     `json:"managedCluster,omitempty"`
+	State            OpensearchUserRoleBindingState `json:"state,omitempty"`
+	Reason           string                         `json:"reason,omitempty"`
+	ManagedCluster   *OpensearchClusterSelector     `json:"managedCluster,omitempty"`
+	ProvisionedRoles []string                       `json:"provisionedRoles,omitempty"`
+	ProvisionedUsers []string                       `json:"provisionedUsers,omitempty"`
 }
 
 //+kubebuilder:object:root=true

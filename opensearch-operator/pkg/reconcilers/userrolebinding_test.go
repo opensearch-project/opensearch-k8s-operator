@@ -319,6 +319,129 @@ var _ = Describe("userrolebinding reconciler", func() {
 				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
 			})
 		})
+		When("user has been removed from the binding", func() {
+			var users []string
+
+			BeforeEach(func() {
+				instance.Status.ProvisionedRoles = []string{
+					"test-role",
+				}
+				instance.Status.ProvisionedUsers = []string{
+					"someother-user",
+					"test-user",
+				}
+				roleMappingRequest := requests.RoleMapping{
+					Users: []string{
+						"someother-user",
+						"test-user",
+						"another-user",
+					},
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"test-role": roleMappingRequest,
+					}).Times(3, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodPut,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						return httpmock.NewStringResponse(200, ""), nil
+					},
+				)
+			})
+
+			It("should remove the user from the role", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(ContainElements("test-user", "another-user"))
+				Expect(users).NotTo(ContainElement("someother-user"))
+				// Confirm all responders have been called
+				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 2))
+			})
+		})
+
+		When("a role has been removed from the binding", func() {
+			var users []string
+
+			BeforeEach(func() {
+				instance.Status.ProvisionedRoles = []string{
+					"test-role",
+					"another-role",
+				}
+				instance.Status.ProvisionedUsers = []string{
+					"test-user",
+				}
+				roleMappingRequest := requests.RoleMapping{
+					Users: []string{
+						"someother-user",
+						"test-user",
+					},
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"test-role": roleMappingRequest,
+					}).Times(2, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/another-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"another-role": roleMappingRequest,
+					}).Times(2, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodPut,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/another-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						return httpmock.NewStringResponse(200, ""), nil
+					},
+				)
+			})
+
+			It("should remove the user from the removed role", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(ContainElement("someother-user"))
+				Expect(users).NotTo(ContainElement("test-user"))
+				// Confirm all responders have been called
+				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 2))
+			})
+		})
 	})
 
 	Context("deletions", func() {
@@ -355,6 +478,9 @@ var _ = Describe("userrolebinding reconciler", func() {
 
 			When("role mapping does not exist", func() {
 				BeforeEach(func() {
+					instance.Status.ProvisionedRoles = []string{
+						"test-role",
+					}
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(
@@ -373,6 +499,12 @@ var _ = Describe("userrolebinding reconciler", func() {
 
 			When("user is only user in role mapping", func() {
 				BeforeEach(func() {
+					instance.Status.ProvisionedUsers = []string{
+						"test-user",
+					}
+					instance.Status.ProvisionedRoles = []string{
+						"test-role",
+					}
 					roleMappingRequest := requests.RoleMapping{
 						Users: []string{
 							"test-user",
@@ -409,6 +541,12 @@ var _ = Describe("userrolebinding reconciler", func() {
 				var users []string
 
 				BeforeEach(func() {
+					instance.Status.ProvisionedRoles = []string{
+						"test-role",
+					}
+					instance.Status.ProvisionedUsers = []string{
+						"test-user",
+					}
 					roleMappingRequest := requests.RoleMapping{
 						Users: []string{
 							"someother-user",
