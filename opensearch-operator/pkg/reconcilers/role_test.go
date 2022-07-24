@@ -141,7 +141,7 @@ var _ = Describe("roles reconciler", func() {
 				events = append(events, msg)
 			}
 			Expect(len(events)).To(Equal(1))
-			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster to exist", opensearchPendingReason)))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster to exist", opensearchPending)))
 		})
 	})
 
@@ -186,7 +186,7 @@ var _ = Describe("roles reconciler", func() {
 				events = append(events, msg)
 			}
 			Expect(len(events)).To(Equal(1))
-			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster status to be running", opensearchPendingReason)))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster status to be running", opensearchPending)))
 		})
 	})
 
@@ -232,7 +232,8 @@ var _ = Describe("roles reconciler", func() {
 			})
 
 			It("should do nothing", func() {
-
+				_, err := reconciler.Reconcile()
+				Expect(err).ToNot(HaveOccurred())
 			})
 		})
 

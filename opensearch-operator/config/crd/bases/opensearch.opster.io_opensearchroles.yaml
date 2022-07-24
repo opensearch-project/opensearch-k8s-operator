@@ -61,7 +61,7 @@ spec:
                       type: array
                   type: object
                 type: array
-              opensearch:
+              opensearchCluster:
                 properties:
                   name:
                     type: string
@@ -82,7 +82,7 @@ spec:
                   type: object
                 type: array
             required:
-            - opensearch
+            - opensearchCluster
             type: object
           status:
             description: OpensearchRoleStatus defines the observed state of OpensearchRole

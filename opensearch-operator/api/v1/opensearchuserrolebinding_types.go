@@ -30,7 +30,7 @@ const (
 
 // OpensearchUserRoleBindingSpec defines the desired state of OpensearchUserRoleBinding
 type OpensearchUserRoleBindingSpec struct {
-	OpensearchRef OpensearchClusterSelector `json:"opensearch"`
+	OpensearchRef OpensearchClusterSelector `json:"opensearchCluster"`
 	Roles         []string                  `json:"roles"`
 	Users         []string                  `json:"users"`
 }
@@ -45,7 +45,6 @@ type OpensearchUserRoleBindingStatus struct {
 }
 
 //+kubebuilder:object:root=true
-//+kubebuilder:resource:scope=Cluster
 //+kubebuilder:resource:shortName=opensearchuserrolebinding
 //+kubebuilder:subresource:status
 

@@ -26,11 +26,12 @@ const (
 	OpensearchRoleStatePending OpensearchRoleState = "PENDING"
 	OpensearchRoleStateCreated OpensearchRoleState = "CREATED"
 	OpensearchRoleStateError   OpensearchRoleState = "ERROR"
+	OpensearchRoleIgnored      OpensearchRoleState = "IGNORED"
 )
 
 // OpensearchRoleSpec defines the desired state of OpensearchRole
 type OpensearchRoleSpec struct {
-	OpensearchRef      OpensearchClusterSelector `json:"opensearch"`
+	OpensearchRef      OpensearchClusterSelector `json:"opensearchCluster"`
 	ClusterPermissions []string                  `json:"clusterPermissions,omitempty"`
 	IndexPermissions   []IndexPermissionSpec     `json:"indexPermissions,omitempty"`
 	TenantPermissions  []TenantPermissionsSpec   `json:"tenantPermissions,omitempty"`
@@ -57,7 +58,6 @@ type OpensearchRoleStatus struct {
 }
 
 //+kubebuilder:object:root=true
-//+kubebuilder:resource:scope=Cluster
 //+kubebuilder:resource:shortName=opensearchrole
 //+kubebuilder:subresource:status
 

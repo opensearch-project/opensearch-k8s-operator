@@ -15,13 +15,13 @@ import (
 )
 
 const (
-	opensearchPendingReason = "OpensearchPending"
-	opensearchErrorReason   = "OpensearchError"
-	opensearchAPIError      = "OpensearchAPIError"
-	opensearchRefMismatch   = "OpensearchRefMismatch"
-	opensearchAPIUpdated    = "OpensearchAPIUpdated"
-	passwordErrorReason     = "PasswordError"
-	statusError             = "StatusUpdateError"
+	opensearchPending     = "OpensearchPending"
+	opensearchError       = "OpensearchError"
+	opensearchAPIError    = "OpensearchAPIError"
+	opensearchRefMismatch = "OpensearchRefMismatch"
+	opensearchAPIUpdated  = "OpensearchAPIUpdated"
+	passwordError         = "PasswordError"
+	statusError           = "StatusUpdateError"
 )
 
 type ComponentReconciler func() (reconcile.Result, error)

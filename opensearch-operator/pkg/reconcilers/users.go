@@ -8,7 +8,6 @@ import (
 
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
@@ -16,7 +15,7 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
-	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -84,17 +83,17 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 	}()
 
-	exist, retErr := r.fetchOpensearchCluster()
+	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, r.instance.Spec.OpensearchRef)
 	if retErr != nil {
 		reason = "error fetching opensearch cluster"
 		r.logger.Error(retErr, "failed to fetch opensearch cluster")
-		r.recorder.Event(r.instance, "Warning", opensearchErrorReason, reason)
+		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
 		return
 	}
-	if !exist {
+	if r.cluster == nil {
 		r.logger.Info("opensearch cluster does not exist, requeueing")
 		reason = "waiting for opensearch cluster to exist"
-		r.recorder.Event(r.instance, "Normal", opensearchPendingReason, reason)
+		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
 		retResult = ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 10 * time.Second,
@@ -131,7 +130,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	if r.cluster.Status.Phase != opsterv1.PhaseRunning {
 		r.logger.Info("opensearch cluster is not running, requeueing")
 		reason = "waiting for opensearch cluster status to be running"
-		r.recorder.Event(r.instance, "Normal", opensearchPendingReason, reason)
+		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
 		retResult = ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 10 * time.Second,
@@ -139,10 +138,10 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		return
 	}
 
-	retErr = r.createOpensearchClient()
+	r.osClient, retErr = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
 	if retErr != nil {
 		reason = "error creating opensearch client"
-		r.recorder.Event(r.instance, "Warning", opensearchErrorReason, reason)
+		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
 		return
 	}
 
@@ -192,22 +191,23 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 }
 
 func (r *UserReconciler) Delete() error {
-	exist, err := r.fetchOpensearchCluster()
+	var err error
+	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, r.instance.Spec.OpensearchRef)
 	if err != nil {
 		return err
 	}
 
-	if !exist || !r.cluster.DeletionTimestamp.IsZero() {
+	if r.cluster == nil || !r.cluster.DeletionTimestamp.IsZero() {
 		// If the opensearch cluster doesn't exist, we don't need to delete anything
 		return nil
 	}
 
-	err = r.createOpensearchClient()
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}
 
-	exist, err = services.UserExists(r.ctx, r.osClient, r.instance.Name)
+	exist, err := services.UserExists(r.ctx, r.osClient, r.instance.Name)
 	if err != nil {
 		return err
 	}
@@ -235,11 +235,11 @@ func (r *UserReconciler) fetchPasswordSecret() (string, error) {
 	secret := &corev1.Secret{}
 	err := r.Get(r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.PasswordFrom.Name,
-		Namespace: r.instance.Spec.PasswordFrom.Namespace,
+		Namespace: r.instance.Namespace,
 	}, secret)
 	if err != nil {
 		r.logger.V(1).Error(err, "failed to fetch password secret")
-		r.recorder.Event(r.instance, "Warning", passwordErrorReason, "error fetching password secret")
+		r.recorder.Event(r.instance, "Warning", passwordError, "error fetching password secret")
 		return "", err
 	}
 
@@ -247,49 +247,9 @@ func (r *UserReconciler) fetchPasswordSecret() (string, error) {
 	if !ok {
 		err = fmt.Errorf("key %s does not exist in secret", r.instance.Spec.PasswordFrom.Key)
 		r.logger.V(1).Error(err, "failed to get password from secret")
-		r.recorder.Event(r.instance, "Warning", passwordErrorReason, fmt.Sprintf("key %s does not exist in secret", r.instance.Spec.PasswordFrom.Key))
+		r.recorder.Event(r.instance, "Warning", passwordError, fmt.Sprintf("key %s does not exist in secret", r.instance.Spec.PasswordFrom.Key))
 		return "", err
 	}
 
 	return string(userPassword), nil
-}
-
-func (r *UserReconciler) fetchOpensearchCluster() (bool, error) {
-	r.cluster = &opsterv1.OpenSearchCluster{}
-	err := r.Get(r.ctx, r.instance.Spec.OpensearchRef.ObjectKey(), r.cluster)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *UserReconciler) createOpensearchClient() error {
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.cluster)
-	if err != nil {
-		r.logger.Error(err, "failed to fetch opensearch credentials")
-		return err
-	}
-
-	if r.osClientTransport == nil {
-		r.osClient, err = services.NewOsClusterClient(
-			fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.cluster.Spec.General.ServiceName, r.cluster.Namespace, r.cluster.Spec.General.HttpPort),
-			username,
-			password,
-		)
-	} else {
-		r.osClient, err = services.NewOsClusterClient(
-			fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.cluster.Spec.General.ServiceName, r.cluster.Namespace, r.cluster.Spec.General.HttpPort),
-			username,
-			password,
-			services.WithTransport(r.osClientTransport),
-		)
-	}
-	if err != nil {
-		r.logger.Error(err, "failed to create client")
-	}
-
-	return err
 }

@@ -50,7 +50,7 @@ spec:
                 items:
                   type: string
                 type: array
-              opensearch:
+              opensearchCluster:
                 properties:
                   name:
                     type: string
@@ -58,6 +58,7 @@ spec:
                     type: string
                 type: object
               passwordFrom:
+                description: SecretKeySelector selects a key of a Secret.
                 properties:
                   key:
                     description: The key of the secret to select from.  Must be a
@@ -67,8 +68,6 @@ spec:
                     description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
                       TODO: Add other useful fields. apiVersion, kind, uid?'
                     type: string
-                  namespace:
-                    type: string
                   optional:
                     description: Specify whether the Secret or its key must be defined
                     type: boolean
@@ -76,7 +75,7 @@ spec:
                 - key
                 type: object
             required:
-            - opensearch
+            - opensearchCluster
             - passwordFrom
             type: object
           status:

@@ -39,21 +39,19 @@ var _ = Describe("users reconciler", func() {
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		instance = &opsterv1.OpensearchUser{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-user",
-				UID:  types.UID("testuid"),
+				Name:      "test-user",
+				Namespace: "test-user",
+				UID:       types.UID("testuid"),
 			},
 			Spec: opsterv1.OpensearchUserSpec{
 				OpensearchRef: opsterv1.OpensearchClusterSelector{
 					Name:      "test-cluster",
 					Namespace: "test-user",
 				},
-				PasswordFrom: opsterv1.UserPasswordSpec{
-					Namespace: "test-user",
-					SecretKeySelector: corev1.SecretKeySelector{
-						Key: "password",
-						LocalObjectReference: corev1.LocalObjectReference{
-							Name: "test-password",
-						},
+				PasswordFrom: corev1.SecretKeySelector{
+					Key: "password",
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "test-password",
 					},
 				},
 			},
@@ -157,7 +155,7 @@ var _ = Describe("users reconciler", func() {
 				events = append(events, msg)
 			}
 			Expect(len(events)).To(Equal(1))
-			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster to exist", opensearchPendingReason)))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster to exist", opensearchPending)))
 		})
 	})
 	When("cluster is not ready", func() {
@@ -177,7 +175,7 @@ var _ = Describe("users reconciler", func() {
 				events = append(events, msg)
 			}
 			Expect(len(events)).To(Equal(1))
-			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster status to be running", opensearchPendingReason)))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster status to be running", opensearchPending)))
 		})
 	})
 	Context("cluster is ready", func() {
@@ -234,7 +232,7 @@ var _ = Describe("users reconciler", func() {
 						events = append(events, msg)
 					}
 					Expect(len(events)).To(Equal(1))
-					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s key badkey does not exist in secret", passwordErrorReason)))
+					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s key badkey does not exist in secret", passwordError)))
 				})
 			})
 			Context("secret does not exist", func() {
@@ -254,7 +252,7 @@ var _ = Describe("users reconciler", func() {
 						events = append(events, msg)
 					}
 					Expect(len(events)).To(Equal(1))
-					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s error fetching password secret", passwordErrorReason)))
+					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s error fetching password secret", passwordError)))
 				})
 			})
 		})

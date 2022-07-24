@@ -1,5 +1,5 @@
 # Opensearch Roles, Users, and Role Mappings reconciliation
-Opensearch Roles, Users, and Role Mappings can be managed in a Kubernetes Native fashion by reconciling custom resources against the Opensearch API.  The resources are Cluster scoped, as Kubernetes namespacing doesn't make much sense when it's not reconciling other things in the k8s cluster.  Each resource needs to contain a reference to an OpenSearchCluster resource to reconcile against.
+Opensearch Roles, Users, and Role Mappings can be managed in a Kubernetes native fashion by reconciling custom resources against the Opensearch API.  Each resource needs to contain a reference to an OpenSearchCluster resource to reconcile against.
 
 The reconciliation loop will need mechanisms to prevent overwriting or deleting Opensearch API objects that are not managed by k8s.  The Opensearch cluster reference should also not be changed as this can lead to orphaned objects or unexpected behaviour.  This is enforced by adding the Opensearch cluster reference to the status field when the object is first reconciled.  On subsequent operations if this does not match the reconciler will raise an error.
 

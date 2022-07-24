@@ -31,16 +31,11 @@ const (
 
 // OpensearchUserSpec defines the desired state of OpensearchUser
 type OpensearchUserSpec struct {
-	OpensearchRef           OpensearchClusterSelector `json:"opensearch"`
-	PasswordFrom            UserPasswordSpec          `json:"passwordFrom"`
+	OpensearchRef           OpensearchClusterSelector `json:"opensearchCluster"`
+	PasswordFrom            corev1.SecretKeySelector  `json:"passwordFrom"`
 	OpendistroSecurityRoles []string                  `json:"opendistroSecurityRoles,omitempty"`
 	BackendRoles            []string                  `json:"backendRoles,omitempty"`
 	Attributes              map[string]string         `json:"attributes,omitempty"`
-}
-
-type UserPasswordSpec struct {
-	corev1.SecretKeySelector `json:",inline"`
-	Namespace                string `json:"namespace,omitempty"`
 }
 
 // OpensearchUserStatus defines the observed state of OpensearchUser
@@ -51,7 +46,6 @@ type OpensearchUserStatus struct {
 }
 
 //+kubebuilder:object:root=true
-//+kubebuilder:resource:scope=Cluster
 //+kubebuilder:resource:shortName=opensearchuser
 //+kubebuilder:subresource:status
 

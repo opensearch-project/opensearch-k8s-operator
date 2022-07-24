@@ -401,7 +401,7 @@ kind: OpensearchUser
 metadata:
   name: sample-user
 spec:
-  opensearch:
+  opensearchCluster:
     name: my-first-cluster
     namespace: default
   passwordFrom:
@@ -424,7 +424,7 @@ kind: OpensearchRole
 metadata:
   name: sample-role
 spec:
-  opensearch:
+  opensearchCluster:
     name: my-first-cluster
     namespace: default
   clusterPermissions:
@@ -448,7 +448,7 @@ kind: OpensearchUserRoleBinding
 metadata:
   name: sample-urb
 spec:
-  opensearch:
+  opensearchCluster:
     name: my-first-cluster
     namespace: default
   users:

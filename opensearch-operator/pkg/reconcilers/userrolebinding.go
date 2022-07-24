@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
@@ -15,6 +14,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -84,17 +84,17 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 	}()
 
-	exist, retErr := r.fetchOpensearchCluster()
+	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, r.instance.Spec.OpensearchRef)
 	if retErr != nil {
 		reason = "error fetching opensearch cluster"
 		r.logger.Error(retErr, "failed to fetch opensearch cluster")
-		r.recorder.Event(r.instance, "Warning", opensearchErrorReason, reason)
+		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
 		return
 	}
-	if !exist {
+	if r.cluster == nil {
 		r.logger.Info("opensearch cluster does not exist, requeueing")
 		reason = "waiting for opensearch cluster to exist"
-		r.recorder.Event(r.instance, "Normal", opensearchPendingReason, reason)
+		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
 		retResult = ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 10 * time.Second,
@@ -131,7 +131,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 	if r.cluster.Status.Phase != opsterv1.PhaseRunning {
 		r.logger.Info("opensearch cluster is not running, requeueing")
 		reason = "waiting for opensearch cluster status to be running"
-		r.recorder.Event(r.instance, "Normal", opensearchPendingReason, reason)
+		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
 		retResult = ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 10 * time.Second,
@@ -139,10 +139,10 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		return
 	}
 
-	retErr = r.createOpensearchClient()
+	r.osClient, retErr = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
 	if retErr != nil {
 		reason = "error creating opensearch client"
-		r.recorder.Event(r.instance, "Warning", opensearchErrorReason, reason)
+		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
 		return
 	}
 
@@ -217,23 +217,24 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 }
 
 func (r *UserRoleBindingReconciler) Delete() error {
-	exist, err := r.fetchOpensearchCluster()
+	var err error
+	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, r.instance.Spec.OpensearchRef)
 	if err != nil {
 		return err
 	}
 
-	if !exist || !r.cluster.DeletionTimestamp.IsZero() {
+	if r.cluster == nil || !r.cluster.DeletionTimestamp.IsZero() {
 		// If the opensearch cluster doesn't exist, we don't need to delete anything
 		return nil
 	}
 
-	err = r.createOpensearchClient()
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}
 
 	for _, role := range r.instance.Status.ProvisionedRoles {
-		exist, err = services.RoleMappingExists(r.ctx, r.osClient, role)
+		exist, err := services.RoleMappingExists(r.ctx, r.osClient, role)
 		if err != nil {
 			return err
 		}
@@ -247,46 +248,6 @@ func (r *UserRoleBindingReconciler) Delete() error {
 		}
 	}
 	return nil
-}
-
-func (r *UserRoleBindingReconciler) fetchOpensearchCluster() (bool, error) {
-	r.cluster = &opsterv1.OpenSearchCluster{}
-	err := r.Get(r.ctx, r.instance.Spec.OpensearchRef.ObjectKey(), r.cluster)
-	if err != nil {
-		if k8serrors.IsNotFound(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
-}
-
-func (r *UserRoleBindingReconciler) createOpensearchClient() error {
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.cluster)
-	if err != nil {
-		r.logger.Error(err, "failed to fetch opensearch credentials")
-		return err
-	}
-
-	if r.osClientTransport == nil {
-		r.osClient, err = services.NewOsClusterClient(
-			fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.cluster.Spec.General.ServiceName, r.cluster.Namespace, r.cluster.Spec.General.HttpPort),
-			username,
-			password,
-		)
-	} else {
-		r.osClient, err = services.NewOsClusterClient(
-			fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.cluster.Spec.General.ServiceName, r.cluster.Namespace, r.cluster.Spec.General.HttpPort),
-			username,
-			password,
-			services.WithTransport(r.osClientTransport),
-		)
-	}
-	if err != nil {
-		r.logger.Error(err, "failed to create client")
-	}
-
-	return err
 }
 
 func (r *UserRoleBindingReconciler) reconcileExistingMapping(rolename string) error {

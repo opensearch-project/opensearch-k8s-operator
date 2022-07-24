@@ -38,8 +38,9 @@ var _ = Describe("userrolebinding reconciler", func() {
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		instance = &opsterv1.OpensearchUserRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-role",
-				UID:  types.UID("testuid"),
+				Name:      "test-role",
+				Namespace: "test-urb",
+				UID:       types.UID("testuid"),
 			},
 			Spec: opsterv1.OpensearchUserRoleBindingSpec{
 				OpensearchRef: opsterv1.OpensearchClusterSelector{
@@ -134,7 +135,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 				events = append(events, msg)
 			}
 			Expect(len(events)).To(Equal(1))
-			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster to exist", opensearchPendingReason)))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster to exist", opensearchPending)))
 		})
 	})
 
@@ -179,7 +180,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 				events = append(events, msg)
 			}
 			Expect(len(events)).To(Equal(1))
-			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster status to be running", opensearchPendingReason)))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s waiting for opensearch cluster status to be running", opensearchPending)))
 		})
 	})
 

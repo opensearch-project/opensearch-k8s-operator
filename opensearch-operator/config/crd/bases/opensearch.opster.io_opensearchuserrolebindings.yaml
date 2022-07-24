@@ -40,7 +40,7 @@ spec:
             description: OpensearchUserRoleBindingSpec defines the desired state of
               OpensearchUserRoleBinding
             properties:
-              opensearch:
+              opensearchCluster:
                 properties:
                   name:
                     type: string
@@ -56,7 +56,7 @@ spec:
                   type: string
                 type: array
             required:
-            - opensearch
+            - opensearchCluster
             - roles
             - users
             type: object
