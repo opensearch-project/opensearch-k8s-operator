@@ -1,12 +1,12 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: opensearch-operator-proxy-rolebinding
+  name: opensearch-operator-manager-rolebinding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: opensearch-operator-proxy-role
+  name: opensearch-operator-manager-role
 subjects:
 - kind: ServiceAccount
   name: opensearch-operator-controller-manager
-  namespace: {{ include ".Values.namespaceName" . }}
+  namespace: {{ .Release.Namespace }}

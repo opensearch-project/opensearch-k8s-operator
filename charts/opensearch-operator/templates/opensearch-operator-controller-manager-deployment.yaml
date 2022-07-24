@@ -4,7 +4,6 @@ metadata:
   labels:
     control-plane: controller-manager
   name: opensearch-operator-controller-manager
-  namespace: {{ include ".Values.namespaceName" . }}
 spec:
   replicas: 1
   selector:
@@ -30,13 +29,22 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
         - --leader-elect
+        {{- if .Values.manager.watchNamespace }}
+        - --watch-namespace={{ .Values.manager.watchNamespace }}
+        {{- end }}
         command:
         - /manager
-        image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag }}"
+        image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
+        name: operator-controller-manager
+        imagePullPolicy: "{{ .Values.manager.image.pullPolicy }}"
         resources:
           {{- toYaml .Values.manager.resources | nindent 12 }}
         securityContext:
           allowPrivilegeEscalation: false
+      nodeSelector:
+        {{- toYaml .Values.nodeSelector | nindent 8 }}
+      tolerations:
+        {{- toYaml .Values.tolerations | nindent 8 }}
       securityContext:
         runAsNonRoot: true
       serviceAccountName: opensearch-operator-controller-manager

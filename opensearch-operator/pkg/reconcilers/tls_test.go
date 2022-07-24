@@ -173,7 +173,7 @@ var _ = Describe("TLS Controller", func() {
 				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: false,
-						CertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 							Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
 							CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
 						},
@@ -182,7 +182,7 @@ var _ = Describe("TLS Controller", func() {
 					},
 					Http: &opsterv1.TlsConfigHttp{
 						Generate: false,
-						CertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 							Secret:   corev1.LocalObjectReference{Name: "cert-http"},
 							CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
 						},
@@ -221,14 +221,14 @@ var _ = Describe("TLS Controller", func() {
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: false,
 						PerNode:  true,
-						CertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 							Secret: corev1.LocalObjectReference{Name: "my-transport-certs"},
 						},
 						NodesDn: []string{"CN=mycn", "CN=othercn"},
 					},
 					Http: &opsterv1.TlsConfigHttp{
 						Generate: false,
-						CertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 							Secret: corev1.LocalObjectReference{Name: "my-http-certs"},
 						},
 					},
@@ -259,13 +259,13 @@ var _ = Describe("TLS Controller", func() {
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: true,
 						PerNode:  true,
-						CertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
 						},
 					},
 					Http: &opsterv1.TlsConfigHttp{
 						Generate: true,
-						CertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
 						},
 					},

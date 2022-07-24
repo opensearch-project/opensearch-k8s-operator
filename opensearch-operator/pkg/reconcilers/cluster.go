@@ -2,9 +2,16 @@ package reconcilers
 
 import (
 	"context"
+	"fmt"
 
+	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -22,6 +29,7 @@ type ClusterReconciler struct {
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
+	logger            logr.Logger
 }
 
 func NewClusterReconciler(
@@ -35,11 +43,16 @@ func NewClusterReconciler(
 	return &ClusterReconciler{
 		Client: client,
 		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "cluster")))...),
+			append(
+				opts,
+				reconciler.WithPatchCalculateOptions(patch.IgnoreVolumeClaimTemplateTypeMetaAndStatus(), patch.IgnoreStatusFields()),
+				reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "cluster")),
+			)...),
 		ctx:               ctx,
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
 		instance:          instance,
+		logger:            log.FromContext(ctx),
 	}
 }
 
@@ -96,6 +109,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
 	found, nodePoolConfig := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
+
 	// If config hasn't been set up for the node pool requeue
 	if !found {
 		return &ctrl.Result{
@@ -126,11 +140,61 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Next get the existing statefulset
 	existing := &appsv1.StatefulSet{}
+
 	err = r.Client.Get(r.ctx, client.ObjectKeyFromObject(sts), existing)
 	if err != nil {
 		return result, err
 	}
+	//Checking for existing statefulset disksize
 
+	//Default is PVC, or explicit check for PersistenceSource as PVC
+	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
+		existingDisk := existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
+		r.logger.Info("The existing statefulset VolumeClaimTemplate disk size is: " + existingDisk)
+		r.logger.Info("The cluster definition nodePool disk size is: " + nodePool.DiskSize)
+		if existingDisk == nodePool.DiskSize {
+			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
+		} else {
+			r.recorder.Event(r.instance, "Normal", "PVC", fmt.Sprintf("Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize))
+			//Removing statefulset while allowing pods to run
+			r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
+			opts := client.DeleteOptions{}
+			client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
+			if err := r.Delete(r.ctx, existing, &opts); err != nil {
+				r.logger.Info("failed to delete statefulset" + existing.Name)
+				return result, err
+			}
+			//Identifying the PVC per statefulset pod and patching the new size
+			for i := 0; i < int(*existing.Spec.Replicas); i++ {
+				clusterName := r.instance.Name
+				claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
+				r.logger.Info("The claimName identified as " + claimName)
+				var pvc corev1.PersistentVolumeClaim
+				nsn := types.NamespacedName{
+					Namespace: existing.Namespace,
+					Name:      claimName,
+				}
+				if err := r.Get(r.ctx, nsn, &pvc); err != nil {
+					r.logger.Info("failed to get pvc" + pvc.Name)
+					return result, err
+				}
+				newDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
+				if err != nil {
+					r.logger.Info("failed to parse size " + nodePool.DiskSize)
+					return result, err
+				}
+
+				pvc.Spec.Resources.Requests["storage"] = newDiskSize
+
+				if err := r.Update(r.ctx, &pvc); err != nil {
+					r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
+					r.recorder.Event(r.instance, "Warning", "PVC", fmt.Sprintf("Failed to Resize %s/%s", existing.Namespace, existing.Name))
+					return result, err
+				}
+			}
+
+		}
+	}
 	// Now set the desired replicas to be the existing replicas
 	// This will allow the scaler reconciler to function correctly
 	sts.Spec.Replicas = existing.Spec.Replicas

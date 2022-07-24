@@ -30,20 +30,22 @@ const (
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
 type GeneralConfig struct {
+	*ImageSpec `json:",inline,omitempty"`
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
-	Vendor           string     `json:"vendor,omitempty"`
-	Version          string     `json:"version,omitempty"`
-	ServiceAccount   string     `json:"serviceAccount,omitempty"`
-	ServiceName      string     `json:"serviceName"`
-	SetVMMaxMapCount bool       `json:"setVMMaxMapCount,omitempty"`
-	DefaultRepo      *string    `json:"defaultRepo,omitempty"`
-	Image            *ImageSpec `json:",inline"`
+	Vendor           string  `json:"vendor,omitempty"`
+	Version          string  `json:"version,omitempty"`
+	ServiceAccount   string  `json:"serviceAccount,omitempty"`
+	ServiceName      string  `json:"serviceName"`
+	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
+	DefaultRepo      *string `json:"defaultRepo,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
 	DrainDataNodes bool `json:"drainDataNodes,omitempty"`
+	// Additional volumes to mount to all pods in the cluster
+	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 }
 
 type NodePool struct {
@@ -58,11 +60,13 @@ type NodePool struct {
 	Affinity         *corev1.Affinity            `json:"affinity,omitempty"`
 	Persistence      *PersistenceConfig          `json:"persistence,omitempty"`
 	AdditionalConfig map[string]string           `json:"additionalConfig,omitempty"`
+	Labels           map[string]string           `json:"labels,omitempty"`
+	Env              []corev1.EnvVar             `json:"env,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
 type PersistenceConfig struct {
-	PersistenceSource `json:",inline"`
+	PersistenceSource `json:","`
 }
 
 type PersistenceSource struct {
@@ -84,14 +88,27 @@ type ConfMgmt struct {
 	SmartScaler bool `json:"smartScaler,omitempty"`
 }
 
+type BootstrapConfig struct {
+	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
+	Tolerations  []corev1.Toleration         `json:"tolerations,omitempty"`
+	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
+	Jvm          string                      `json:"jvm,omitempty"`
+}
+
 type DashboardsConfig struct {
-	Enable    bool                        `json:"enable,omitempty"`
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
-	Replicas  int32                       `json:"replicas"`
-	Tls       *DashboardsTlsConfig        `json:"tls,omitempty"`
-	Version   string                      `json:"version"`
+	*ImageSpec `json:",inline,omitempty"`
+	Enable     bool                        `json:"enable,omitempty"`
+	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
+	Replicas   int32                       `json:"replicas"`
+	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
+	Version    string                      `json:"version"`
+	// Additional properties for opensearch_dashboards.yaml
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
 	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
+	Env                         []corev1.EnvVar             `json:"env,omitempty"`
+	AdditionalVolumes           []AdditionalVolume          `json:"additionalVolumes,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -100,7 +117,7 @@ type DashboardsTlsConfig struct {
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
 	// foobar
-	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+	TlsCertificateConfig `json:",omitempty"`
 }
 
 // Security defines options for managing the opensearch-security plugin
@@ -119,8 +136,8 @@ type TlsConfigTransport struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
-	PerNode           bool                 `json:"perNode,omitempty"`
-	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+	PerNode              bool `json:"perNode,omitempty"`
+	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
 	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
@@ -129,8 +146,8 @@ type TlsConfigTransport struct {
 
 type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
-	Generate          bool                 `json:"generate,omitempty"`
-	CertificateConfig TlsCertificateConfig `json:",inline,omitempty"`
+	Generate             bool `json:"generate,omitempty"`
+	TlsCertificateConfig `json:",omitempty"`
 }
 
 type TlsCertificateConfig struct {
@@ -161,12 +178,26 @@ type ImageSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
+type AdditionalVolume struct {
+	// Name to use for the volume. Required.
+	Name string `json:"name"`
+	// Path in the container to mount the volume at. Required.
+	Path string `json:"path"`
+	// Secret to use populate the volume
+	Secret *corev1.SecretVolumeSource `json:"secret,omitempty"`
+	// ConfigMap to use to populate the volume
+	ConfigMap *corev1.ConfigMapVolumeSource `json:"configMap,omitempty"`
+	// Whether to restart the pods on content change
+	RestartPods bool `json:"restartPods,omitempty"`
+}
+
 // ClusterSpec defines the desired state of OpenSearchCluster
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	General    GeneralConfig    `json:"general,omitempty"`
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
+	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`

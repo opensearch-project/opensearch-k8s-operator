@@ -2,6 +2,7 @@ package builders
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -47,6 +48,10 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		},
 	}
 
+	if len(cr.Spec.Dashboards.Env) != 0 {
+		env = append(env, cr.Spec.Dashboards.Env...)
+	}
+
 	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
 		// Custom credentials supplied
 		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "username"}}})
@@ -71,7 +76,14 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		FailureThreshold:    10,
 		SuccessThreshold:    1,
 		InitialDelaySeconds: 10,
-		ProbeHandler:        corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/status", Port: intstr.IntOrString{IntVal: port}, Scheme: probeScheme}},
+
+		/// changed from /api/status to /api/reporting/stats
+		// to use /api/status add
+		/*httpHeaders:
+		  - name: Authorization
+		    value: Basic YWRtaW46YWRtaW4=*/
+
+		ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/reporting/stats", Port: intstr.IntOrString{IntVal: port}, Scheme: probeScheme}},
 	}
 
 	return &appsv1.Deployment{
@@ -124,9 +136,16 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	config["server.name"] = cr.Name + "-dashboards"
 	config["opensearch.ssl.verificationMode"] = "none"
 
+	keys := make([]string, 0, len(config))
+
+	for key := range config {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+
 	var sb strings.Builder
-	for key, value := range config {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", key, value))
+	for _, key := range keys {
+		sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
 	}
 	data := sb.String()
 

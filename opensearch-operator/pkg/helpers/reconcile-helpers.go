@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"path"
+	"sort"
 
+	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -82,6 +86,13 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 
 	var version string
 
+	// If a general custom image is specified, use it.
+	if cr.Spec.General.ImageSpec != nil {
+		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
+			return
+		}
+	}
+
 	// Calculate version based on upgrading status
 	if nodePool == nil {
 		version = cr.Spec.General.Version
@@ -103,21 +114,6 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 		}
 	}
 
-	// If a custom image is specified, use it.
-	if cr.Spec.General.Image != nil {
-		if cr.Spec.General.Image.ImagePullPolicy != nil {
-			result.ImagePullPolicy = cr.Spec.General.Image.ImagePullPolicy
-		}
-		if len(cr.Spec.General.Image.ImagePullSecrets) > 0 {
-			result.ImagePullSecrets = cr.Spec.General.Image.ImagePullSecrets
-		}
-		if cr.Spec.General.Image.Image != nil {
-			// If image is set, nothing else needs to be done
-			result.Image = cr.Spec.General.Image.Image
-			return
-		}
-	}
-
 	// If a different image repo is requested, use that with the default image
 	// name and version tag.
 	if cr.Spec.General.DefaultRepo != nil {
@@ -133,17 +129,16 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch-dashboards"
 
-	// If a custom image is specified, use it.
-	if cr.Spec.General.Image != nil {
-		if cr.Spec.General.Image.ImagePullPolicy != nil {
-			result.ImagePullPolicy = cr.Spec.General.Image.ImagePullPolicy
+	// If a custom dashboard image is specified, use it.
+	if cr.Spec.Dashboards.ImageSpec != nil {
+		if useCustomImage(cr.Spec.Dashboards.ImageSpec, &result) {
+			return
 		}
-		if len(cr.Spec.General.Image.ImagePullSecrets) > 0 {
-			result.ImagePullSecrets = cr.Spec.General.Image.ImagePullSecrets
-		}
-		if cr.Spec.General.Image.Image != nil {
-			// If image is set, nothing else needs to be done
-			result.Image = cr.Spec.General.Image.Image
+	}
+
+	// If a general custom image is specified, use it.
+	if cr.Spec.General.ImageSpec != nil {
+		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
 			return
 		}
 	}
@@ -157,4 +152,139 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 	result.Image = pointer.String(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), cr.Spec.Dashboards.Version))
 	return
+}
+
+func CreateAdditionalVolumes(
+	ctx context.Context,
+	k8sClient client.Client,
+	namespace string,
+	volumeConfigs []opsterv1.AdditionalVolume,
+) (
+	retVolumes []corev1.Volume,
+	retVolumeMounts []corev1.VolumeMount,
+	retData []byte,
+	returnErr error,
+) {
+	lg := log.FromContext(ctx)
+	var names []string
+	namesIndex := map[string]int{}
+
+	for i, volumeConfig := range volumeConfigs {
+		if volumeConfig.ConfigMap != nil {
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					ConfigMap: volumeConfig.ConfigMap,
+				},
+			})
+		}
+		if volumeConfig.Secret != nil {
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					Secret: volumeConfig.Secret,
+				},
+			})
+		}
+		if volumeConfig.RestartPods {
+			namesIndex[volumeConfig.Name] = i
+			names = append(names, volumeConfig.Name)
+		}
+		retVolumeMounts = append(retVolumeMounts, corev1.VolumeMount{
+			Name:      volumeConfig.Name,
+			ReadOnly:  true,
+			MountPath: volumeConfig.Path,
+		})
+	}
+	sort.Strings(names)
+
+	for _, name := range names {
+		volumeConfig := volumeConfigs[namesIndex[name]]
+		if volumeConfig.ConfigMap != nil {
+			cm := &corev1.ConfigMap{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      volumeConfig.ConfigMap.Name,
+				Namespace: namespace,
+			}, cm); err != nil {
+				if k8serrors.IsNotFound(err) {
+					lg.V(1).Error(err, "failed to find configMap for additional volume")
+					continue
+				}
+				returnErr = err
+				return
+			}
+			data := cm.Data
+			keys := make([]string, 0, len(data))
+			for key := range data {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				retData = append(retData, []byte(data[key])...)
+			}
+		}
+
+		if volumeConfig.Secret != nil {
+			secret := &corev1.Secret{}
+			if err := k8sClient.Get(ctx, types.NamespacedName{
+				Name:      volumeConfig.Secret.SecretName,
+				Namespace: namespace,
+			}, secret); err != nil {
+				if k8serrors.IsNotFound(err) {
+					lg.V(1).Error(err, "failed to find secret for additional volume")
+					continue
+				}
+				returnErr = err
+				return
+			}
+			data := secret.Data
+			keys := make([]string, 0, len(data))
+			for key := range data {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				retData = append(retData, data[key]...)
+			}
+		}
+	}
+
+	return
+}
+
+func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageSpec) bool {
+	if customImageSpec != nil {
+		if customImageSpec.ImagePullPolicy != nil {
+			result.ImagePullPolicy = customImageSpec.ImagePullPolicy
+		}
+		if len(customImageSpec.ImagePullSecrets) > 0 {
+			result.ImagePullSecrets = customImageSpec.ImagePullSecrets
+		}
+		if customImageSpec.Image != nil {
+			// If custom image is specified, use it.
+			result.Image = customImageSpec.Image
+			return true
+		}
+	}
+	return false
+}
+
+//Function to help identify httpPort and securityconfigPath for 1.x and 2.x OpenSearch Operator.
+func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, string) {
+	var httpPort int32
+	var securityconfigPath string
+	versionPassed, _ := version.NewVersion(instance.Spec.General.Version)
+	constraints, _ := version.NewConstraint(">= 2.0")
+	if constraints.Check(versionPassed) {
+		if instance.Spec.General.HttpPort > 0 {
+			httpPort = instance.Spec.General.HttpPort
+		} else {
+			httpPort = 9200
+		}
+		securityconfigPath = "/usr/share/opensearch/config/opensearch-security"
+	} else {
+		httpPort = 9300
+		securityconfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
+	}
+	return httpPort, securityconfigPath
 }
