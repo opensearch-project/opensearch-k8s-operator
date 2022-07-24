@@ -2,7 +2,6 @@ package reconcilers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
@@ -16,6 +15,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -97,7 +97,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Namespace), username, password)
+	clusterClient, err := services.NewOsClusterClient(util.OpensearchClusterURL(r.instance), username, password)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

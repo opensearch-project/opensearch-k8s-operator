@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"k8s.io/client-go/tools/record"
 	"strings"
+
+	"k8s.io/client-go/tools/record"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
@@ -13,7 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -111,7 +112,7 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 		if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+			ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
 		if err != nil {
 			return err
@@ -157,7 +158,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
 		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 	} else {
-		ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+		ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 	}
 	if err != nil {
 		return err
@@ -214,7 +215,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
 		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 	} else {
-		ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+		ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 	}
 	if err != nil {
 		return err
@@ -372,7 +373,7 @@ func (r *TLSReconciler) handleHttp() error {
 		if tlsConfig.TlsCertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(tlsConfig.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+			ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
 		if err != nil {
 			return err

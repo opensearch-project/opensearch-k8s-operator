@@ -18,6 +18,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -79,7 +80,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.instance.Spec.General.ServiceName, r.instance.Namespace, r.instance.Spec.General.HttpPort), username, password)
+	clusterClient, err := services.NewOsClusterClient(util.OpensearchClusterURL(r.instance), username, password)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
