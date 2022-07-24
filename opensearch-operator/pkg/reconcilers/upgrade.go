@@ -74,17 +74,12 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// If there is work to do create an Opensearch Client
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	var err error
 
-	clusterClient, err := services.NewOsClusterClient(util.OpensearchClusterURL(r.instance), username, password)
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.osClient = clusterClient
 
 	//Fetch the working nodepool
 	nodePool, currentStatus := r.findWorkingNodePool()
