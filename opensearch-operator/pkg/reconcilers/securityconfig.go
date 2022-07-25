@@ -62,7 +62,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Spec.Security == nil {
 		return ctrl.Result{}, nil
 	}
-
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	var configSecretName string
 	var checksumval string
 	adminCertName := r.determineAdminSecret()
@@ -71,7 +71,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	jobName := clusterName + "-securityconfig-update"
 	if adminCertName == "" {
 		r.logger.Info("Cluster is running with demo certificates.")
-		r.recorder.Event(r.instance, "Warning", "Security", "Notice - Cluster is running with demo certificates")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Notice - Cluster is running with demo certificates")
 		return ctrl.Result{}, nil
 	}
 	//Checking if Security Config values are empty and creates a default-securityconfig secret
@@ -83,7 +83,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
 			if apierrors.IsNotFound(err) {
 				r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
-				r.recorder.Event(r.instance, "Info", "Security", fmt.Sprintf("Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Info", "Security", "Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName)
 				return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
 			}
 			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
@@ -125,7 +125,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	r.logger.Info("Starting securityconfig update job")
-	r.recorder.Event(r.instance, "Normal", "Security", "Starting to securityconfig update job")
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting to securityconfig update job")
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,
 		jobName,
