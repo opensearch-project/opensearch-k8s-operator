@@ -116,6 +116,8 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			Requeue: true,
 		}, nil
 	}
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", "1", "2", "3", "4")
 
 	extraConfig := helpers.MergeConfigs(r.instance.Spec.General.AdditionalConfig, nodePool.AdditionalConfig)
 
