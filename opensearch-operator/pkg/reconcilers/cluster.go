@@ -155,9 +155,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		if existingDisk == nodePool.DiskSize {
 			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
 		} else {
-			annotations := map[string]string{
-				"cluster-name": r.instance.GetName(),
-			}
+			annotations := map[string]string{"cluster-name": r.instance.GetName()}
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize)
 			//Removing statefulset while allowing pods to run
 			r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
