@@ -122,7 +122,7 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 			adminCert, err := ca.CreateAndSignCertificate("admin", clusterName, nil)
 			if err != nil {
 				r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
-				r.recorder.Event(r.instance, "Warning", "Security", "Failed to create admin certificate")
+				r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "Security", "Failed to create admin certificate")
 				return err
 			}
 			adminSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: adminSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: adminCert.SecretData(ca)}

@@ -89,7 +89,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		lg.V(1).Info("No pods pending restart")
 		return ctrl.Result{}, nil
 	}
-	r.recorder.Event(r.instance, "Normal", "RollingRestart", "Starting to rolling restart")
+	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Normal", "RollingRestart", "Starting to rolling restart")
 
 	// If there is work to do create an Opensearch Client
 	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
