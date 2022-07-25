@@ -3,7 +3,6 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -83,7 +82,10 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, r.instance.Spec.OpensearchRef)
+	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+		Name:      r.instance.Spec.OpensearchRef.Name,
+		Namespace: r.instance.Namespace,
+	})
 	if retErr != nil {
 		reason = "error fetching opensearch cluster"
 		r.logger.Error(retErr, "failed to fetch opensearch cluster")
@@ -103,7 +105,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 	// Check cluster ref has not changed
 	if r.instance.Status.ManagedCluster != nil {
-		if !reflect.DeepEqual(*r.instance.Status.ManagedCluster, r.instance.Spec.OpensearchRef) {
+		if *r.instance.Status.ManagedCluster != r.cluster.UID {
 			reason = "cannot change the cluster a user refers to"
 			retErr = fmt.Errorf("%s", reason)
 			r.recorder.Event(r.instance, "Warning", opensearchRefMismatch, reason)
@@ -115,7 +117,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 					return err
 				}
-				r.instance.Status.ManagedCluster = &r.instance.Spec.OpensearchRef
+				r.instance.Status.ManagedCluster = &r.cluster.UID
 				return r.Status().Update(r.ctx, r.instance)
 			})
 			if retErr != nil {
@@ -192,7 +194,10 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 func (r *UserReconciler) Delete() error {
 	var err error
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, r.instance.Spec.OpensearchRef)
+	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+		Name:      r.instance.Spec.OpensearchRef.Name,
+		Namespace: r.instance.Namespace,
+	})
 	if err != nil {
 		return err
 	}

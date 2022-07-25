@@ -17,7 +17,9 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type OpensearchRoleState string
@@ -31,10 +33,10 @@ const (
 
 // OpensearchRoleSpec defines the desired state of OpensearchRole
 type OpensearchRoleSpec struct {
-	OpensearchRef      OpensearchClusterSelector `json:"opensearchCluster"`
-	ClusterPermissions []string                  `json:"clusterPermissions,omitempty"`
-	IndexPermissions   []IndexPermissionSpec     `json:"indexPermissions,omitempty"`
-	TenantPermissions  []TenantPermissionsSpec   `json:"tenantPermissions,omitempty"`
+	OpensearchRef      corev1.LocalObjectReference `json:"opensearchCluster"`
+	ClusterPermissions []string                    `json:"clusterPermissions,omitempty"`
+	IndexPermissions   []IndexPermissionSpec       `json:"indexPermissions,omitempty"`
+	TenantPermissions  []TenantPermissionsSpec     `json:"tenantPermissions,omitempty"`
 }
 
 type IndexPermissionSpec struct {
@@ -51,10 +53,10 @@ type TenantPermissionsSpec struct {
 
 // OpensearchRoleStatus defines the observed state of OpensearchRole
 type OpensearchRoleStatus struct {
-	State          OpensearchRoleState        `json:"state,omitempty"`
-	Reason         string                     `json:"reason,omitempty"`
-	ExistingRole   *bool                      `json:"existingRole,omitempty"`
-	ManagedCluster *OpensearchClusterSelector `json:"managedCluster,omitempty"`
+	State          OpensearchRoleState `json:"state,omitempty"`
+	Reason         string              `json:"reason,omitempty"`
+	ExistingRole   *bool               `json:"existingRole,omitempty"`
+	ManagedCluster *types.UID          `json:"managedCluster,omitempty"`
 }
 
 //+kubebuilder:object:root=true

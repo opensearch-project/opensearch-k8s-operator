@@ -43,9 +43,8 @@ var _ = Describe("userrolebinding reconciler", func() {
 				UID:       types.UID("testuid"),
 			},
 			Spec: opsterv1.OpensearchUserRoleBindingSpec{
-				OpensearchRef: opsterv1.OpensearchClusterSelector{
-					Name:      "test-cluster",
-					Namespace: "test-urb",
+				OpensearchRef: corev1.LocalObjectReference{
+					Name: "test-cluster",
 				},
 				Users: []string{
 					"test-user",
@@ -141,10 +140,8 @@ var _ = Describe("userrolebinding reconciler", func() {
 
 	When("cluster doesn't match status", func() {
 		BeforeEach(func() {
-			instance.Status.ManagedCluster = &opsterv1.OpensearchClusterSelector{
-				Name:      "somecluster",
-				Namespace: "somenamespace",
-			}
+			uid := types.UID("someuid")
+			instance.Status.ManagedCluster = &uid
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should error", func() {

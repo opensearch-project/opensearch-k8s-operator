@@ -17,7 +17,9 @@ limitations under the License.
 package v1
 
 import (
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type OpensearchUserRoleBindingState string
@@ -30,16 +32,16 @@ const (
 
 // OpensearchUserRoleBindingSpec defines the desired state of OpensearchUserRoleBinding
 type OpensearchUserRoleBindingSpec struct {
-	OpensearchRef OpensearchClusterSelector `json:"opensearchCluster"`
-	Roles         []string                  `json:"roles"`
-	Users         []string                  `json:"users"`
+	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
+	Roles         []string                    `json:"roles"`
+	Users         []string                    `json:"users"`
 }
 
 // OpensearchUserRoleBindingStatus defines the observed state of OpensearchUserRoleBinding
 type OpensearchUserRoleBindingStatus struct {
 	State            OpensearchUserRoleBindingState `json:"state,omitempty"`
 	Reason           string                         `json:"reason,omitempty"`
-	ManagedCluster   *OpensearchClusterSelector     `json:"managedCluster,omitempty"`
+	ManagedCluster   *types.UID                     `json:"managedCluster,omitempty"`
 	ProvisionedRoles []string                       `json:"provisionedRoles,omitempty"`
 	ProvisionedUsers []string                       `json:"provisionedUsers,omitempty"`
 }

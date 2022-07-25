@@ -41,10 +41,12 @@ spec:
               OpensearchUserRoleBinding
             properties:
               opensearchCluster:
+                description: LocalObjectReference contains enough information to let
+                  you locate the referenced object inside the same namespace.
                 properties:
                   name:
-                    type: string
-                  namespace:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
                     type: string
                 type: object
               roles:
@@ -65,12 +67,11 @@ spec:
               of OpensearchUserRoleBinding
             properties:
               managedCluster:
-                properties:
-                  name:
-                    type: string
-                  namespace:
-                    type: string
-                type: object
+                description: UID is a type that holds unique ID values, including
+                  UUIDs.  Because we don't ONLY use UUIDs, this is an alias to string.  Being
+                  a type captures intent and helps make sure that UIDs and names do
+                  not get conflated.
+                type: string
               provisionedRoles:
                 items:
                   type: string

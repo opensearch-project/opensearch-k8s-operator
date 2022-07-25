@@ -38,13 +38,13 @@ var _ = Describe("roles reconciler", func() {
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		instance = &opsterv1.OpensearchRole{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-role",
-				UID:  types.UID("testuid"),
+				Name:      "test-role",
+				Namespace: "test-role",
+				UID:       types.UID("testuid"),
 			},
 			Spec: opsterv1.OpensearchRoleSpec{
-				OpensearchRef: opsterv1.OpensearchClusterSelector{
-					Name:      "test-cluster",
-					Namespace: "test-role",
+				OpensearchRef: corev1.LocalObjectReference{
+					Name: "test-cluster",
 				},
 				ClusterPermissions: []string{
 					"test_cluster_permission",
@@ -147,10 +147,8 @@ var _ = Describe("roles reconciler", func() {
 
 	When("cluster doesn't match status", func() {
 		BeforeEach(func() {
-			instance.Status.ManagedCluster = &opsterv1.OpensearchClusterSelector{
-				Name:      "somecluster",
-				Namespace: "somenamespace",
-			}
+			uid := types.UID("someuid")
+			instance.Status.ManagedCluster = &uid
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should error", func() {

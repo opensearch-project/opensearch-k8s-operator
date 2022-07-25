@@ -19,6 +19,7 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 type OpensearchUserState string
@@ -31,18 +32,18 @@ const (
 
 // OpensearchUserSpec defines the desired state of OpensearchUser
 type OpensearchUserSpec struct {
-	OpensearchRef           OpensearchClusterSelector `json:"opensearchCluster"`
-	PasswordFrom            corev1.SecretKeySelector  `json:"passwordFrom"`
-	OpendistroSecurityRoles []string                  `json:"opendistroSecurityRoles,omitempty"`
-	BackendRoles            []string                  `json:"backendRoles,omitempty"`
-	Attributes              map[string]string         `json:"attributes,omitempty"`
+	OpensearchRef           corev1.LocalObjectReference `json:"opensearchCluster"`
+	PasswordFrom            corev1.SecretKeySelector    `json:"passwordFrom"`
+	OpendistroSecurityRoles []string                    `json:"opendistroSecurityRoles,omitempty"`
+	BackendRoles            []string                    `json:"backendRoles,omitempty"`
+	Attributes              map[string]string           `json:"attributes,omitempty"`
 }
 
 // OpensearchUserStatus defines the observed state of OpensearchUser
 type OpensearchUserStatus struct {
-	State          OpensearchUserState        `json:"state,omitempty"`
-	Reason         string                     `json:"reason,omitempty"`
-	ManagedCluster *OpensearchClusterSelector `json:"managedCluster,omitempty"`
+	State          OpensearchUserState `json:"state,omitempty"`
+	Reason         string              `json:"reason,omitempty"`
+	ManagedCluster *types.UID          `json:"managedCluster,omitempty"`
 }
 
 //+kubebuilder:object:root=true

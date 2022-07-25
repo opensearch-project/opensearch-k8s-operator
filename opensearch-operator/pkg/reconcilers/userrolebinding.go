@@ -3,10 +3,10 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
@@ -84,7 +84,10 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, r.instance.Spec.OpensearchRef)
+	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+		Name:      r.instance.Spec.OpensearchRef.Name,
+		Namespace: r.instance.Namespace,
+	})
 	if retErr != nil {
 		reason = "error fetching opensearch cluster"
 		r.logger.Error(retErr, "failed to fetch opensearch cluster")
@@ -104,7 +107,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 
 	// Check cluster ref has not changed
 	if r.instance.Status.ManagedCluster != nil {
-		if !reflect.DeepEqual(*r.instance.Status.ManagedCluster, r.instance.Spec.OpensearchRef) {
+		if *r.instance.Status.ManagedCluster != r.cluster.UID {
 			reason = "cannot change the cluster a userrolebinding refers to"
 			retErr = fmt.Errorf("%s", reason)
 			r.recorder.Event(r.instance, "Warning", opensearchRefMismatch, reason)
@@ -116,7 +119,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 					return err
 				}
-				r.instance.Status.ManagedCluster = &r.instance.Spec.OpensearchRef
+				r.instance.Status.ManagedCluster = &r.cluster.UID
 				return r.Status().Update(r.ctx, r.instance)
 			})
 			if retErr != nil {
@@ -218,7 +221,10 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 
 func (r *UserRoleBindingReconciler) Delete() error {
 	var err error
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, r.instance.Spec.OpensearchRef)
+	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+		Name:      r.instance.Spec.OpensearchRef.Name,
+		Namespace: r.instance.Namespace,
+	})
 	if err != nil {
 		return err
 	}

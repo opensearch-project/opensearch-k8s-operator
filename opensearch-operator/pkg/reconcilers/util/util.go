@@ -226,10 +226,10 @@ func CreateClientForCluster(
 func FetchOpensearchCluster(
 	ctx context.Context,
 	k8sClient client.Client,
-	ref opsterv1.OpensearchClusterSelector,
+	ref types.NamespacedName,
 ) (*opsterv1.OpenSearchCluster, error) {
 	cluster := &opsterv1.OpenSearchCluster{}
-	err := k8sClient.Get(ctx, ref.ObjectKey(), cluster)
+	err := k8sClient.Get(ctx, ref, cluster)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil, nil
