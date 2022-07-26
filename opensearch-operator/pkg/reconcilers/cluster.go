@@ -214,7 +214,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 
-	// Finally we enforce the desired state
+	//Finally we enforce the desired state
 	return r.ReconcileResource(sts, reconciler.StatePresent)
 }
 
