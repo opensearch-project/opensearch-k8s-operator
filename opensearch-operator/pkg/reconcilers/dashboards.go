@@ -60,7 +60,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// add any aditional dashboard config to the reconciler context
+	// add any additional dashboard config to the reconciler context
 	for key, value := range r.instance.Spec.Dashboards.AdditionalConfig {
 		r.reconcilerContext.AddDashboardsConfig(key, value)
 	}
