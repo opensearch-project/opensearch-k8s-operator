@@ -83,7 +83,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
 			if apierrors.IsNotFound(err) {
 				r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
-				r.recorder.AnnotatedEventf(r.instance, annotations, "Info", "Security", "Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName)
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName)
 				return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
 			}
 			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err

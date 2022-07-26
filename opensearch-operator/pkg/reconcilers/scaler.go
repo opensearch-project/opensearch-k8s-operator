@@ -168,7 +168,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
-		r.recorder.AnnotatedEventf(r.instance, annotations, "WARN", "failed to remove node exclude", "Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "failed to remove node exclude", "Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName)
 		if created {
 			r.DeleteNodePortService(service)
 		}

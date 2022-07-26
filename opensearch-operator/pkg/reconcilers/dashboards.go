@@ -3,7 +3,6 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -109,7 +108,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 
 	if tlsConfig.Generate {
 		r.logger.Info("Generating certificates")
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Info", "Security", "Starting to generating certificates for Dashboard Cluster")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting to generating certificates for Dashboard Cluster")
 		// Take CA from TLS reconciler or generate new one
 		var ca tls.Cert
 		var err error
@@ -155,7 +154,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		volumeMounts = append(volumeMounts, mount)
 	} else {
 		r.logger.Info("Using externally provided certificates")
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Info", "Security", "Notice - using externally provided certificates for Dashboard Cluster")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Notice - using externally provided certificates for Dashboard Cluster")
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.TlsCertificateConfig.Secret.Name}}}
 		volumes = append(volumes, volume)
 		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}

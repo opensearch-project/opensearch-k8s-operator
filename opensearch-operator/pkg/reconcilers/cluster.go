@@ -3,12 +3,12 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -133,13 +133,19 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// First ensure that the statefulset exists
+	existing := &appsv1.StatefulSet{}
+
+	err := validateStsIsStartedToOrFinishToCreate(nodePool, r, sts, existing)
+	if err != nil {
+		return &ctrl.Result{}, err
+	}
+
 	result, err := r.ReconcileResource(sts, reconciler.StateCreated)
 	if err != nil || result != nil {
 		return result, err
 	}
 
-	// Next get the existing statefulset
-	existing := &appsv1.StatefulSet{}
+	// Next get the existing statefulset - need in case sts just created in line above
 
 	err = r.Client.Get(r.ctx, client.ObjectKeyFromObject(sts), existing)
 	if err != nil {
@@ -210,6 +216,43 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Finally we enforce the desired state
 	return r.ReconcileResource(sts, reconciler.StatePresent)
+}
+
+func validateStsIsStartedToOrFinishToCreate(nodePool opsterv1.NodePool, r *ClusterReconciler, sts *appsv1.StatefulSet, existing *appsv1.StatefulSet) error {
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	componentStatus := opsterv1.ComponentStatus{
+		Component:   "cluster",
+		Description: nodePool.Component,
+	}
+
+	err := r.Client.Get(r.ctx, client.ObjectKeyFromObject(sts), existing)
+	if err != nil {
+		if statErr, ok := err.(*errors.StatusError); ok {
+			if statErr.ErrStatus.Code == 404 {
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "STS", "Started to create sts %s/%s", r.instance.Namespace, nodePool.Component)
+				componentStatus.Status = "Creating"
+				r.instance.Status.ComponentsStatus = helpers.Replace(componentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+				err = r.Status().Update(r.ctx, r.instance)
+				if err != nil {
+					r.logger.Error(err, "failed to update status")
+					return err
+				}
+			}
+		}
+	} else if *existing.Spec.Replicas == existing.Status.ReadyReplicas {
+		comp := r.instance.Status.ComponentsStatus
+		currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
+		if found {
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "STS", "Finished to create sts %s/%s", r.instance.Namespace, nodePool.Component)
+			r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
+			err = r.Status().Update(r.ctx, r.instance)
+			if err != nil {
+				r.logger.Error(err, "failed to update status")
+				return err
+			}
+		}
+	}
+	return err
 }
 
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
