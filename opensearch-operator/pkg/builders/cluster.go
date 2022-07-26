@@ -509,7 +509,6 @@ func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 					},
 				},
 			},
-			LoadBalancerIP: "localhost",
 			Selector:       labels,
 			Type:           "NodePort",
 		},
