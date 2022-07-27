@@ -31,6 +31,12 @@ Currently planned features:
 - [ ] Operator Monitoring, with Prometheus and Grafana.
 - [ ] Control shard balancing and allocation: AZ/Rack awareness, Hot/Warm.
 
+## Installation
+The Operator can be easily installed using Helm:
+
+1. Add the helm repo: `helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator/`
+2. Install the Operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
+
 ## Development
 
 ### Running the Operator locally
