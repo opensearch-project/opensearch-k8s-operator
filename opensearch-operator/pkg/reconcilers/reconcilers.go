@@ -57,7 +57,7 @@ func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 	_, exists := c.DashboardsConfig[key]
 	if exists {
 		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
-		c.recorder.AnnotatedEventf(c.instance, map[string]string{"cluster-name": c.instance.GetName()}, "Warning", "Config", "Notice - Config key '%s' already exists in dashboard config. Will be overwritten\", key)", key)
+		c.recorder.Eventf(c.instance, "Warning", "Config", "Notice - Config key '%s' already exists in dashboard config. Will be overwritten\", key)", key)
 	}
 	//c.recorder.Event(c.instance, "Normal", "Config", fmt.Sprintf("Strating to add '%s' dashboard config", key))
 	c.DashboardsConfig[key] = value
