@@ -161,8 +161,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		if existingDisk == nodePool.DiskSize {
 			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
 		} else {
-			annotations := map[string]string{"cluster-name": r.instance.GetName()}
-			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize)
+			r.recorder.Eventf(r.instance, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize)
 			//Removing statefulset while allowing pods to run
 			r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
 			opts := client.DeleteOptions{}
@@ -195,7 +194,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 				if err := r.Update(r.ctx, &pvc); err != nil {
 					r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
-					r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
+					r.recorder.Eventf(r.instance, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
 					return result, err
 				}
 			}
@@ -219,7 +218,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 }
 
 func validateStsIsStartedToOrFinishToCreate(nodePool opsterv1.NodePool, r *ClusterReconciler, sts *appsv1.StatefulSet, existing *appsv1.StatefulSet) error {
-	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+
 	componentStatus := opsterv1.ComponentStatus{
 		Component:   "cluster",
 		Description: nodePool.Component,
@@ -229,7 +228,7 @@ func validateStsIsStartedToOrFinishToCreate(nodePool opsterv1.NodePool, r *Clust
 	if err != nil {
 		if statErr, ok := err.(*errors.StatusError); ok {
 			if statErr.ErrStatus.Code == 404 {
-				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "STS", "Started to create sts %s/%s", r.instance.Namespace, nodePool.Component)
+				r.recorder.Eventf(r.instance, "Normal", "STS", "Started to create sts %s/%s", r.instance.Namespace, nodePool.Component)
 				componentStatus.Status = "Creating"
 				r.instance.Status.ComponentsStatus = helpers.Replace(componentStatus, componentStatus, r.instance.Status.ComponentsStatus)
 				err = r.Status().Update(r.ctx, r.instance)
@@ -243,7 +242,7 @@ func validateStsIsStartedToOrFinishToCreate(nodePool opsterv1.NodePool, r *Clust
 		comp := r.instance.Status.ComponentsStatus
 		currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
 		if found {
-			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "STS", "Finished to create sts %s/%s", r.instance.Namespace, nodePool.Component)
+			r.recorder.Eventf(r.instance, "Normal", "STS", "Finished to create sts %s/%s", r.instance.Namespace, nodePool.Component)
 			r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
 			err = r.Status().Update(r.ctx, r.instance)
 			if err != nil {
