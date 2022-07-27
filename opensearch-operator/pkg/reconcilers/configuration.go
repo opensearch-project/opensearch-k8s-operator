@@ -20,6 +20,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -119,7 +120,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// Generate additional volumes
-	addVolumes, addVolumeMounts, addVolumeData, err := helpers.CreateAdditionalVolumes(
+	addVolumes, addVolumeMounts, addVolumeData, err := util.CreateAdditionalVolumes(
 		r.ctx,
 		r.Client,
 		r.instance.Namespace,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,12 @@ import (
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"k8s.io/utils/pointer"
 	"opensearch.opster.io/opensearch-gateway/responses"
+)
+
+const (
+	headerContentType = "Content-Type"
+
+	jsonContentHeader = "application/json"
 )
 
 var (
@@ -33,20 +40,54 @@ var (
 )
 
 type OsClusterClient struct {
+	OsClusterClientOptions
 	client   *opensearch.Client
 	MainPage responses.MainResponse
 }
 
-func NewOsClusterClient(clusterUrl string, username string, password string) (*OsClusterClient, error) {
+type OsClusterClientOptions struct {
+	transport http.RoundTripper
+}
+
+type OsClusterClientOption func(*OsClusterClientOptions)
+
+func (o *OsClusterClientOptions) apply(opts ...OsClusterClientOption) {
+	for _, op := range opts {
+		op(o)
+	}
+}
+
+func WithTransport(transport http.RoundTripper) OsClusterClientOption {
+	return func(o *OsClusterClientOptions) {
+		o.transport = transport
+	}
+}
+
+func NewOsClusterClient(clusterUrl string, username string, password string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
+	options := OsClusterClientOptions{}
+	options.apply(opts...)
+
 	config := opensearch.Config{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+		Transport: func() http.RoundTripper {
+			if options.transport != nil {
+				return options.transport
+			}
+			return &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+		}(),
 		Addresses: []string{clusterUrl},
 		Username:  username,
 		Password:  password,
 	}
-	return NewOsClusterClientFromConfig(config)
+
+	client, err := NewOsClusterClientFromConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	client.OsClusterClientOptions = options
+	return client, nil
 }
 
 func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, error) {
@@ -246,4 +287,237 @@ func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+func (client *OsClusterClient) GetRole(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateRolesPath(name)
+
+	req, err := http.NewRequest(http.MethodGet, path.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func (client *OsClusterClient) PutRole(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateRolesPath(name)
+
+	req, err := http.NewRequest(http.MethodPut, path.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+	req.Header.Add(headerContentType, jsonContentHeader)
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func (client *OsClusterClient) DeleteRole(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateRolesPath(name)
+
+	req, err := http.NewRequest(http.MethodDelete, path.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func (client *OsClusterClient) GetUser(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateUserPath(name)
+
+	req, err := http.NewRequest(http.MethodGet, path.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func (client *OsClusterClient) PutUser(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateUserPath(name)
+
+	req, err := http.NewRequest(http.MethodPut, path.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+	req.Header.Add(headerContentType, jsonContentHeader)
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func (client *OsClusterClient) DeleteUser(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateUserPath(name)
+
+	req, err := http.NewRequest(http.MethodDelete, path.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func (client *OsClusterClient) GetRolesMapping(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateRolesMappingPath(name)
+
+	req, err := http.NewRequest(http.MethodGet, path.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func (client *OsClusterClient) PutRolesMapping(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	method := "PUT"
+	path := generateRolesMappingPath(name)
+
+	req, err := http.NewRequest(method, path.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+	req.Header.Add(headerContentType, jsonContentHeader)
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func (client *OsClusterClient) DeleteRolesMapping(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateRolesMappingPath(name)
+
+	req, err := http.NewRequest(http.MethodDelete, path.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	if ctx != nil {
+		req = req.WithContext(ctx)
+	}
+	req.Header.Add(headerContentType, jsonContentHeader)
+
+	res, err := client.client.Perform(req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+}
+
+func generateRolesPath(name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len("_security") + 1 + len("api") + 1 + len("roles") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString("_security")
+	path.WriteString("/")
+	path.WriteString("api")
+	path.WriteString("/")
+	path.WriteString("roles")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
+func generateUserPath(name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len("_security") + 1 + len("api") + 1 + len("internalusers") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString("_security")
+	path.WriteString("/")
+	path.WriteString("api")
+	path.WriteString("/")
+	path.WriteString("internalusers")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
+func generateRolesMappingPath(name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len("_security") + 1 + len("api") + 1 + len("rolesmapping") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString("_security")
+	path.WriteString("/")
+	path.WriteString("api")
+	path.WriteString("/")
+	path.WriteString("rolesmapping")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
 }

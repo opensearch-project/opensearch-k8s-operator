@@ -11,7 +11,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,7 +67,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// Generate additional volumes
-	addVolumes, addVolumeMounts, _, err := helpers.CreateAdditionalVolumes(
+	addVolumes, addVolumeMounts, _, err := util.CreateAdditionalVolumes(
 		r.ctx,
 		r.Client,
 		r.instance.Namespace,
@@ -116,7 +116,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		if tlsConfig.TlsCertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(tlsConfig.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+			ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
 		if err != nil {
 			return volumes, volumeMounts, err

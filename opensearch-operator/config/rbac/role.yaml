@@ -143,3 +143,81 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchroles/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchroles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchuserrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchuserrolebindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchuserrolebindings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchusers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchusers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchusers/status
+  verbs:
+  - get
+  - patch
+  - update

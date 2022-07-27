@@ -2,7 +2,6 @@ package reconcilers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
@@ -16,6 +15,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -92,16 +92,12 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Normal", "RollingRestart", "Starting to rolling restart")
 
 	// If there is work to do create an Opensearch Client
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	var err error
 
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Namespace), username, password)
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.osClient = clusterClient
 
 	// Restart statefulset pod.  Order is not important so we just pick the first we find
 	for _, nodePool := range r.instance.Spec.NodePools {
