@@ -38,7 +38,6 @@ var _ = Describe("Cluster Reconciler", func() {
 		service                = corev1.Service{}
 		preUpgradeStatusLength int
 	)
-
 	/// ------- Creation Check phase -------
 
 	When("Creating a OpenSearch CRD instance", func() {
