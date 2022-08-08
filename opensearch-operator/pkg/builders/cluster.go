@@ -185,6 +185,21 @@ func NewSTSForNodePool(
 
 	image := helpers.ResolveImage(cr, &node)
 
+	var mainCommand []string
+	com := "./bin/opensearch-plugin install --batch"
+	if len(cr.Spec.General.PluginsList) > 0 {
+		mainCommand = append(mainCommand, "/bin/bash", "-c")
+		for index, plugin := range cr.Spec.General.PluginsList {
+			fmt.Println(index, plugin)
+			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
+		}
+
+		com = com + " && ./opensearch-docker-entrypoint.sh"
+		mainCommand = append(mainCommand, com)
+	} else {
+		mainCommand = []string{"/bin/bash", "-c", "./opensearch-docker-entrypoint.sh"}
+	}
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-" + node.Component,
@@ -266,6 +281,7 @@ func NewSTSForNodePool(
 								},
 							},
 							Name:            "opensearch",
+							Command:         mainCommand,
 							Image:           image.GetImage(),
 							ImagePullPolicy: image.GetImagePullPolicy(),
 							Resources:       node.Resources,
@@ -287,7 +303,7 @@ func NewSTSForNodePool(
 					},
 					InitContainers: []corev1.Container{{
 						Name:    "init",
-						Image:   "public.ecr.aws/opsterio/busybox:latest",
+						Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
 						Command: []string{"sh", "-c"},
 						Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 						SecurityContext: &corev1.SecurityContext{
@@ -337,7 +353,7 @@ func NewSTSForNodePool(
 	if cr.Spec.General.SetVMMaxMapCount {
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
 			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2",
+			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -622,7 +638,7 @@ func NewBootstrapPod(
 			InitContainers: []corev1.Container{
 				{
 					Name:    "init",
-					Image:   "public.ecr.aws/opsterio/busybox:1.27.2",
+					Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
 					Command: []string{"sh", "-c"},
 					Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 					SecurityContext: &corev1.SecurityContext{
@@ -648,7 +664,7 @@ func NewBootstrapPod(
 	if cr.Spec.General.SetVMMaxMapCount {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2",
+			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
 			Command: []string{
 				"sysctl",
 				"-w",

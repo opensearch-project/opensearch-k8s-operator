@@ -43,7 +43,8 @@ type GeneralConfig struct {
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
-	DrainDataNodes bool `json:"drainDataNodes,omitempty"`
+	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
+	PluginsList    []string `json:"pluginsList,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 }
