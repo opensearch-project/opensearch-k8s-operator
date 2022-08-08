@@ -282,7 +282,7 @@ To apply the securityconfig to the OpenSearch cluster, the Operator uses a separ
 
 ## Add plugins 
 In order to use some OpenSearch features (snapshot,monitoring,etc...) you will have to install OpenSearch plugins.
-To install those plugins, all you have to do is to declaer them under PluginsList in general section:
+To install those plugins, all you have to do is to declare them under pluginsList in general section:
 For example you can install official OpenSearch plugins :
 * ֻopensearch-alerting                  
 * opensearch-anomaly-detection         

@@ -186,8 +186,7 @@ func NewSTSForNodePool(
 	image := helpers.ResolveImage(cr, &node)
 
 	var mainCommand []string
-	var com string
-	com = "yes | ./bin/opensearch-plugin install"
+	com := "./bin/opensearch-plugin install --batch"
 	if len(cr.Spec.General.PluginsList) > 0 {
 		mainCommand = append(mainCommand, "/bin/bash", "-c")
 		for index, plugin := range cr.Spec.General.PluginsList {
@@ -195,7 +194,7 @@ func NewSTSForNodePool(
 			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
 		}
 
-		com = com + " ; ./opensearch-docker-entrypoint.sh"
+		com = com + " && ./opensearch-docker-entrypoint.sh"
 		mainCommand = append(mainCommand, com)
 	} else {
 		mainCommand = []string{"/bin/bash", "-c", "./opensearch-docker-entrypoint.sh"}
@@ -304,7 +303,7 @@ func NewSTSForNodePool(
 					},
 					InitContainers: []corev1.Container{{
 						Name:    "init",
-						Image:   "public.ecr.aws/opsterio/busybox:latest",
+						Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
 						Command: []string{"sh", "-c"},
 						Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 						SecurityContext: &corev1.SecurityContext{
@@ -354,7 +353,7 @@ func NewSTSForNodePool(
 	if cr.Spec.General.SetVMMaxMapCount {
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
 			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2",
+			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -639,7 +638,7 @@ func NewBootstrapPod(
 			InitContainers: []corev1.Container{
 				{
 					Name:    "init",
-					Image:   "public.ecr.aws/opsterio/busybox:1.27.2",
+					Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
 					Command: []string{"sh", "-c"},
 					Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 					SecurityContext: &corev1.SecurityContext{
@@ -665,7 +664,7 @@ func NewBootstrapPod(
 	if cr.Spec.General.SetVMMaxMapCount {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2",
+			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
 			Command: []string{
 				"sysctl",
 				"-w",
