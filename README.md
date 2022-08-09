@@ -26,9 +26,9 @@ Currently planned features:
 - [x] Certificate management.
 - [x] Rolling restarts - through API.
 - [x] Scaling nodes' disks - increase disk size.
-- [ ] Cluster configurations and nodes' settings updates.
-- [ ] Auto scaler based on usage, load, and resources.
+- [x] Cluster configurations and nodes' settings updates.
 - [ ] Operator Monitoring, with Prometheus and Grafana.
+- [ ] Auto scaler based on usage, load, and resources.
 - [ ] Control shard balancing and allocation: AZ/Rack awareness, Hot/Warm.
 
 ## Installation
