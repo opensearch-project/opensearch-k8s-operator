@@ -17,12 +17,12 @@ Here are the steps arranged by priority:
 11. Initial Documentation (internal design and user guides) - Done
 12. Rolling restarts - for user requests - Done
 13. Disk reconciler - Done
-14. Cluster configuration reconciler (for opensearch.yaml configs) - TODO
+14. Cluster configuration reconciler (for opensearch.yaml configs) - Done
 
 # Next Phases
-1. Monitoring service, build-in prometheus exporter 
-2. Snapshot and restore
-3. Roles and users
+1. Monitoring service, build-in prometheus exporter - In progress
+2. Snapshot and restore - In progress
+3. Roles and users - Done
 4. Templates configs
 5. ISM configs
 6. Automatic scaler
