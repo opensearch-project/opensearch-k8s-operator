@@ -296,6 +296,24 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td> - </td>
       </tr><tr>
+      <td><b>tolerations</b></td>
+        <td>[]corev1.Toleration</td>
+        <td>Adds toleration to dashboard pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>nodeSelector</b></td>
+        <td>map[string]string</td>
+        <td>Adds NodeSelector to dashboard pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>affinity</b></td>
+        <td>corev1.Affinity</td>
+        <td>Adds affinity to dashboard pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
 </table>
 
 

@@ -110,6 +110,9 @@ type DashboardsConfig struct {
 	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 	Env                         []corev1.EnvVar             `json:"env,omitempty"`
 	AdditionalVolumes           []AdditionalVolume          `json:"additionalVolumes,omitempty"`
+	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
+	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
