@@ -142,7 +142,25 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					Value:    "bar",
 				}},
 			},
-			Dashboards: opsterv1.DashboardsConfig{Enable: true},
+			Dashboards: opsterv1.DashboardsConfig{
+				Enable:   true,
+				Replicas: 3,
+				Resources: corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
+					}},
+				Tolerations: []corev1.Toleration{{
+					Effect:   "NoSchedule",
+					Key:      "foo",
+					Operator: "Equal",
+					Value:    "bar",
+				}},
+				NodeSelector: map[string]string{
+					"foo": "bar",
+				},
+				Affinity: &corev1.Affinity{},
+			},
 			NodePools: []opsterv1.NodePool{{
 				Component: "master",
 				Replicas:  3,

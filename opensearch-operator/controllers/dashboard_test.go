@@ -119,5 +119,30 @@ var _ = Describe("Dashboards Reconciler", func() {
 			Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
 			Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
 		})
+		It("should create and configure dashboard deployment correctly", func() {
+			if OpensearchCluster.Spec.Dashboards.Enable {
+				dashboardDeployName := fmt.Sprintf("%s-dashboards", OpensearchCluster.Name)
+				deployment := &sts.Deployment{}
+				Eventually(func() error {
+					return k8sClient.Get(context.Background(), types.NamespacedName{
+						Name:      dashboardDeployName,
+						Namespace: OpensearchCluster.Namespace,
+					}, deployment)
+				}, timeout, interval).Should(Succeed())
+				Expect(deployment.Spec.Replicas).To(Equal(2))
+				Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().String()).To(Equal("500m"))
+				Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("1Gi"))
+				Expect(deployment.Spec.Template.Spec.Tolerations).To(ContainElement(corev1.Toleration{
+					Effect:   "NoSchedule",
+					Key:      "foo",
+					Operator: "Equal",
+					Value:    "bar",
+				}))
+				Expect(deployment.Spec.Template.Spec.NodeSelector).To(ContainElement(map[string]string{
+					"foo": "bar",
+				}))
+				Expect(deployment.Spec.Template.Spec.Affinity).To(ContainElement(corev1.Affinity{}))
+			}
+		})
 	})
 })
