@@ -41,22 +41,20 @@ jobs:
           go get opensearch.opster.io/pkg/helpers
           make test
           export IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION
-          echo "--------------------------------------------------"
           echo $IMG
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
-          docker buildx build -t public.ecr.aws/opsterio/opensearch-operator:releae --platform="linux/amd64,linux/arm,linux/arm64" . -f Dockerfile --push
-          docker images 
+          docker buildx build -t $IMG --platform="linux/amd64,linux/arm,linux/arm64" . -f Dockerfile --push
 #          docker push public.ecr.aws/opsterio/opensearch-operator:release
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
-          draft: false
-          prerelease: false
+#       - name: Create Release
+#         id: create_release
+#         uses: actions/create-release@v1
+#         env:
+#           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#         with:
+#           tag_name: ${{ github.ref }}
+#           release_name: ${{ github.ref }}
+#           draft: false
+#           prerelease: false
 #       - name: Copy-crd-to-chart-dir
 #         run: |
 #           git checkout -b ${RELEASE_VERSION}-release
