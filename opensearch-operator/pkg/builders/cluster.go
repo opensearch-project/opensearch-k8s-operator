@@ -132,6 +132,10 @@ func NewSTSForNodePool(
 		labels["opensearch.role"] = "master"
 	}
 
+	if helpers.ContainsString(selectedRoles, "cluster_manager") {
+		labels["opensearch.role"] = "cluster_manager"
+	}
+
 	// cr.Spec.NodePool.labels
 	for k, v := range node.Labels {
 		labels[k] = v
@@ -549,6 +553,7 @@ func NewBootstrapPod(
 	}
 
 	image := helpers.ResolveImage(cr, nil)
+	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
 
 	probe := corev1.Probe{
 		PeriodSeconds:       20,
@@ -608,7 +613,7 @@ func NewBootstrapPod(
 						},
 						{
 							Name:  "node.roles",
-							Value: "master",
+							Value: masterRole,
 						},
 						{
 							Name:  "http.port",
@@ -813,7 +818,8 @@ func NewSecurityconfigUpdateJob(
 
 func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) bool {
 	for _, nodePool := range cr.Spec.NodePools {
-		if helpers.ContainsString(nodePool.Roles, "master") {
+		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
+		if helpers.ContainsString(nodePool.Roles, masterRole) {
 			sts := &appsv1.StatefulSet{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name:      StsName(cr, &nodePool),
