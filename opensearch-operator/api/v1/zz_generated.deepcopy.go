@@ -252,6 +252,11 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 			(*out)[key] = val
 		}
 	}
+	if in.PluginsList != nil {
+		in, out := &in.PluginsList, &out.PluginsList
+		*out = make([]string, len(*in))
+		copy(*out, *in)
+	}
 	if in.AdditionalVolumes != nil {
 		in, out := &in.AdditionalVolumes, &out.AdditionalVolumes
 		*out = make([]AdditionalVolume, len(*in))
