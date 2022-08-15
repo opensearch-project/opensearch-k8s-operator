@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 
+	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -108,4 +109,15 @@ func MergeConfigs(left map[string]string, right map[string]string) map[string]st
 		left[k] = v
 	}
 	return left
+}
+
+func ResolveClusterManagerRole(ver string) string {
+	masterRole := "master"
+	osVer, err := version.NewVersion(ver)
+
+	clusterManagerVer, _ := version.NewVersion("2.0.0")
+	if err == nil && osVer.GreaterThanOrEqual(clusterManagerVer) {
+		masterRole = "cluster_manager"
+	}
+	return masterRole
 }
