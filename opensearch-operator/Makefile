@@ -70,7 +70,12 @@ run: manifests generate fmt vet ## Run a controller from your host.
 docker-build: test ## Build docker image with the manager.
 	go get opensearch.opster.io/pkg/builders
 	go get opensearch.opster.io/pkg/helpers
-	docker build -t ${IMG} .
+	DOCKER_BUILDKIT=1 docker build -t ${IMG} .
+
+docker-build-multiarch: ## Build docker image with the manager for all supported architectures
+	go get opensearch.opster.io/pkg/builders
+	go get opensearch.opster.io/pkg/helpers
+	DOCKER_BUILDKIT=1 docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
