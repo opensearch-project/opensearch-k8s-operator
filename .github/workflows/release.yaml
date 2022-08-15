@@ -37,7 +37,9 @@ jobs:
           make test
           export IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
-          docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" . -f Dockerfile -t $IMG --push
+          docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" . -f Dockerfile -t $IMG 
+          docker push $IMG
+          docker tag public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION public.ecr.aws/opsterio/opensearch-operator:latest
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
