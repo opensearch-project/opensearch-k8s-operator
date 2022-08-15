@@ -44,8 +44,9 @@ jobs:
           echo "--------------------------------------------------"
           echo $IMG
           aws ecr-public get-login-password --region us-east-1 | docker login --username AWS --password-stdin public.ecr.aws/opsterio
-          docker buildx build -t public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION --platform="linux/amd64,linux/arm,linux/arm64" . -f Dockerfile  
-          docker push public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION
+          docker buildx build -t public.ecr.aws/opsterio/opensearch-operator:releae --platform="linux/amd64,linux/arm,linux/arm64" . -f Dockerfile
+          docker images 
+          docker push public.ecr.aws/opsterio/opensearch-operator:release
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
