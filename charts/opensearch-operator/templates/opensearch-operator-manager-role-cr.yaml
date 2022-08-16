@@ -137,7 +137,5 @@ rules:
   - get
   - patch
   - update
- - apiGroups:
-    -
 
 
