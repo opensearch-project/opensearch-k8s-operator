@@ -112,6 +112,9 @@ rules:
   - opensearch.opster.io
   resources:
   - opensearchclusters
+  - opensearchuserrolebindings
+  - opensearchusers
+  - opensearchroles
   verbs:
   - create
   - delete
@@ -134,4 +137,5 @@ rules:
   - get
   - patch
   - update
+
 
