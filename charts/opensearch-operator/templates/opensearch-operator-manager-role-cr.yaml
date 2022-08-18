@@ -133,9 +133,10 @@ rules:
   - opensearch.opster.io
   resources:
   - opensearchclusters/status
+  - opensearchuserrolebindings/status
+  - opensearchusers/status
+  - opensearchroles/status
   verbs:
   - get
   - patch
   - update
-
-
