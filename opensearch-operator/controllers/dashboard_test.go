@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/ginkgo"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
 )
@@ -118,6 +119,31 @@ var _ = Describe("Dashboards Reconciler", func() {
 			Expect(HasOwnerReference(&deploy, &OpensearchCluster)).To(BeTrue())
 			Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
 			Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
+		})
+		It("should create and configure dashboard deployment correctly", func() {
+			if OpensearchCluster.Spec.Dashboards.Enable {
+				dashboardDeployName := fmt.Sprintf("%s-dashboards", OpensearchCluster.Name)
+				deployment := &sts.Deployment{}
+				Eventually(func() error {
+					return k8sClient.Get(context.Background(), types.NamespacedName{
+						Name:      dashboardDeployName,
+						Namespace: OpensearchCluster.Namespace,
+					}, deployment)
+				}, timeout, interval).Should(Succeed())
+				Expect(deployment.Spec.Replicas).To(Equal(pointer.Int32(3)))
+				Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().String()).To(Equal("500m"))
+				Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("1Gi"))
+				Expect(deployment.Spec.Template.Spec.Tolerations).To(ContainElement(corev1.Toleration{
+					Effect:   "NoSchedule",
+					Key:      "foo",
+					Operator: "Equal",
+					Value:    "bar",
+				}))
+				Expect(deployment.Spec.Template.Spec.NodeSelector).Should(Equal(map[string]string{
+					"foo": "bar",
+				}))
+				Expect(*deployment.Spec.Template.Spec.Affinity).To(Equal(corev1.Affinity{}))
+			}
 		})
 	})
 })
