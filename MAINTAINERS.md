@@ -17,18 +17,18 @@ This guide will explain the new version release process in Opensearch-k8s-Operat
 
 ## Logic
 
-Under the relases process we can find two main actions
-* ####Operator release
-  Responsible to build and publish new Opensearch-k8s-operator images, builds from the 'release.yaml' workflow that triggers from new tag creation with 'v' prefix.
-* ####Helm release
-  Respoinsable for Helm chart repo update, new release and update the index in the `gh-pages` branch, will also publish version to Artifacthub. 
+Under the releases process we can find two main actions
+#### Operator release
+Responsible to build and publish new Opensearch-k8s-operator images, builds from the 'release.yaml' workflow that triggers from new tag creation with 'v' prefix.
+#### Helm release
+Responsible for Helm chart repo update, new release and update the index in the `gh-pages` branch, will also publish version to Artifacthub. 
 
-###Steps
+### Steps
 So for a release we need the following manual steps:
 1. Create a new tag "vXY..Z"
 2. Wait until pipeline is finished
 3. in case of CRDs and manifest change
-   1. run 'make manifest' && 'make generate' 
+   1. run 'make manifest' && 'make generate'
    2. run kustomize build > output.yaml
    3. separate the yamls and add each resource as a yaml file to charts/opensearch-operator/templates folder (that phase will improve to be part of release process)
 4. Edit 'version' under charts/opensearch-operator/Chart.yaml (edit also 'appVersion' in case that a new applicative version has released )
