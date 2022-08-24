@@ -174,8 +174,10 @@ func NewSTSForNodePool(
 	httpPort := PortForCluster(cr)
 	curlCmd := "curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
-		InitialDelaySeconds: 30,
+		InitialDelaySeconds: 60,
 		PeriodSeconds:       30,
+		FailureThreshold:    5,
+		TimeoutSeconds:      30,
 		ProbeHandler: corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{
