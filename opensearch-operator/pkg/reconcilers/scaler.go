@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/utils/pointer"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
@@ -161,27 +159,19 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if err != nil {
 		return true, err
 	}
-	service, created, err := r.CreateNodePortServiceIfNotExists()
-	if err != nil {
-		return true, err
-	}
 	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "WARN", "failed to remove node exclude", "Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName)
-		if created {
-			r.DeleteNodePortService(service)
-		}
 		return true, err
 	}
+
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if !success || err != nil {
 		lg.Error(err, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to remove node exclude - Group-%s , node  %s", nodePoolGroupName, lastReplicaNodeName)
 	}
-	if created {
-		r.DeleteNodePortService(service)
-	}
+
 	return false, err
 }
 
@@ -192,19 +182,8 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	if err != nil {
 		return err
 	}
-	service, created, err := r.CreateNodePortServiceIfNotExists()
-	if err != nil {
-		return err
-	}
 
-	// Clean up created service at the end of the function
-	defer func() {
-		if created {
-			r.DeleteNodePortService(service)
-		}
-	}()
-
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client for scaling")
@@ -263,19 +242,8 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	if err != nil {
 		return err
 	}
-	service, created, err := r.CreateNodePortServiceIfNotExists()
-	if err != nil {
-		return err
-	}
 
-	// Clean up created service at the end of the function
-	defer func() {
-		if created {
-			r.DeleteNodePortService(service)
-		}
-	}()
-
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		return err
 	}
@@ -304,39 +272,6 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 		return err
 	}
 	return err
-}
-
-func (r *ScalerReconciler) CreateNodePortServiceIfNotExists() (corev1.Service, bool, error) {
-	lg := log.FromContext(r.ctx)
-	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	namespace := r.instance.Namespace
-	targetService := builders.NewNodePortService(r.instance)
-	existingService := corev1.Service{}
-	if err := r.Get(r.ctx, client.ObjectKey{Name: targetService.Name, Namespace: namespace}, &existingService); err != nil {
-		if err := ctrl.SetControllerReference(r.instance, targetService, r.Client.Scheme()); err != nil {
-			return *targetService, false, err
-		}
-		err = r.Create(r.ctx, targetService)
-		if err != nil {
-			if !errors.IsAlreadyExists(err) {
-				lg.Error(err, "Cannot create service")
-				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Cannot create Headless service -  Requeue - Fix the problem you have on main Opensearch Headless Service ")
-				return *targetService, false, err
-			}
-		}
-		lg.Info("service created successfully")
-		return *targetService, true, nil
-	}
-	return existingService, false, nil
-}
-
-func (r *ScalerReconciler) DeleteNodePortService(service corev1.Service) {
-	lg := log.FromContext(r.ctx)
-	err := r.Delete(r.ctx, &service)
-	if err != nil {
-		lg.Error(err, "Cannot delete service")
-		r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "Scaler", "Cannot delete service - Requeue - Fix the problem you have on main Opensearch Headless Service ")
-	}
 }
 
 func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult) {
@@ -371,7 +306,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 		return nil, err
 	}
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s:9200", r.instance.Spec.General.ServiceName, r.instance.Name), username, password)
+	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client")
