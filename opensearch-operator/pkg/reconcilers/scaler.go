@@ -161,7 +161,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if err != nil {
 		return true, err
 	}
-	service, created, err := r.CreateNodePortServiceIfNotExists()
+	//service, created, err := r.CreateNodePortServiceIfNotExists()
 	if err != nil {
 		return true, err
 	}
@@ -169,9 +169,9 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "WARN", "failed to remove node exclude", "Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName)
-		if created {
-			r.DeleteNodePortService(service)
-		}
+		//if created {
+		//	r.DeleteNodePortService(service)
+		//}
 		return true, err
 	}
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
@@ -179,9 +179,9 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 		lg.Error(err, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to remove node exclude - Group-%s , node  %s", nodePoolGroupName, lastReplicaNodeName)
 	}
-	if created {
-		r.DeleteNodePortService(service)
-	}
+	//if created {
+	//	r.DeleteNodePortService(service)
+	//}
 	return false, err
 }
 
@@ -192,19 +192,19 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	if err != nil {
 		return err
 	}
-	service, created, err := r.CreateNodePortServiceIfNotExists()
-	if err != nil {
-		return err
-	}
-
-	// Clean up created service at the end of the function
-	defer func() {
-		if created {
-			r.DeleteNodePortService(service)
+	/*	service, created, err := r.CreateNodePortServiceIfNotExists()
+		if err != nil {
+			return err
 		}
-	}()
 
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+		// Clean up created service at the end of the function
+		defer func() {
+			if created {
+				r.DeleteNodePortService(service)
+			}
+		}()*/
+
+	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client for scaling")
@@ -263,19 +263,19 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	if err != nil {
 		return err
 	}
-	service, created, err := r.CreateNodePortServiceIfNotExists()
-	if err != nil {
-		return err
-	}
-
-	// Clean up created service at the end of the function
-	defer func() {
-		if created {
-			r.DeleteNodePortService(service)
+	/*	service, created, err := r.CreateNodePortServiceIfNotExists()
+		if err != nil {
+			return err
 		}
-	}()
 
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://localhost:%d", service.Spec.Ports[0].NodePort), username, password)
+		// Clean up created service at the end of the function
+		defer func() {
+			if created {
+				r.DeleteNodePortService(service)
+			}
+		}()*/
+
+	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
 	if err != nil {
 		return err
 	}
