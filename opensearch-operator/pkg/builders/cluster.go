@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"github.com/banzaicloud/operator-tools/pkg/prometheus"
 	"sort"
 	"strings"
 
@@ -193,6 +194,12 @@ func NewSTSForNodePool(
 
 	var mainCommand []string
 	com := "./bin/opensearch-plugin install --batch"
+	if cr.Spec.General.Monitoring == true {
+		cluster_version := cr.Spec.General.Version
+		url := "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/" + cluster_version + ".0/prometheus-exporter" + cluster_version + ".0.zip"
+		cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
+	}
+
 	if len(cr.Spec.General.PluginsList) > 0 {
 		mainCommand = append(mainCommand, "/bin/bash", "-c")
 		for index, plugin := range cr.Spec.General.PluginsList {
@@ -851,4 +858,57 @@ func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.O
 		}
 	}
 	return count
+}
+
+func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonitor {
+
+	labels := map[string]string{
+		ClusterLabel: cr.Name,
+	}
+	selector := metav1.LabelSelector{
+		MatchLabels: labels,
+	}
+
+	namespaceSelector := prometheus.NamespaceSelector{
+		Any:        false,
+		MatchNames: []string{cr.Namespace},
+	}
+	return &prometheus.ServiceMonitor{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.ClusterName + "-monitor",
+			Namespace: cr.Namespace,
+			Labels:    labels,
+		},
+		Spec: prometheus.ServiceMonitorSpec{
+			JobLabel: cr.ClusterName + "-monitor",
+			TargetLabels: []string{
+				cr.ClusterName,
+			},
+			PodTargetLabels: []string{
+				cr.ClusterName,
+			},
+			Endpoints: []prometheus.Endpoint{
+				{Port: "9200",
+					TargetPort:      nil,
+					Path:            "/_prometheus/metrics",
+					Interval:        "10s",
+					TLSConfig:       nil,
+					BearerTokenFile: "",
+					HonorLabels:     false,
+					BasicAuth: &prometheus.BasicAuth{
+						Username: corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: cr.ClusterName + "-admin-password "},
+							Key:                  "admin",
+						},
+						Password: corev1.SecretKeySelector{
+							LocalObjectReference: corev1.LocalObjectReference{Name: cr.ClusterName + "-admin-password "},
+							Key:                  "password",
+						},
+					},
+				},
+			},
+			Selector:          selector,
+			NamespaceSelector: namespaceSelector,
+		},
+	}
 }
