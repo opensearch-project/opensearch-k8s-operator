@@ -108,7 +108,9 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	} else {
 		if helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
 			// our finalizer is present, so lets handle any external dependency
-			if result, err := r.deleteExternalResources(ctx); err != nil {
+			result, err := r.deleteExternalResources(ctx)
+
+			if err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return result, err
@@ -125,6 +127,8 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+
+			return result, nil
 		}
 		return ctrl.Result{}, nil
 	}
@@ -213,7 +217,7 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		}
 	}
 	r.Logger.Info("Finished deleting resources")
-	return ctrl.Result{}, nil
+	return ctrl.Result{Requeue: true, RequeueAfter: 20 * time.Second}, nil
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context) (ctrl.Result, error) {

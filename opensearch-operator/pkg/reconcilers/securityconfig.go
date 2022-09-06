@@ -89,6 +89,16 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
 		}
 
+		// Check config secret OwnerReferrences
+		if configSecret.OwnerReferences == nil {
+			if err := ctrl.SetControllerReference(r.instance, &configSecret, r.Client.Scheme()); err != nil {
+				return ctrl.Result{}, err
+			}
+			if err := r.Update(r.ctx, &configSecret); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
 		// Calculate checksum and check for changes
 		var checksumerr error
 		checksumval, checksumerr = checksum(configSecret.Data)

@@ -3,15 +3,19 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
+	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
+	"strings"
+	"time"
 
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -55,6 +59,8 @@ func NewClusterReconciler(
 		logger:            log.FromContext(ctx),
 	}
 }
+
+const waitLimit = 2 * 60 * 60
 
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	//lg := log.FromContext(r.ctx)
@@ -155,45 +161,9 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		if existingDisk == nodePool.DiskSize {
 			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
 		} else {
-			annotations := map[string]string{"cluster-name": r.instance.GetName()}
-			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize)
-			//Removing statefulset while allowing pods to run
-			r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
-			opts := client.DeleteOptions{}
-			client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
-			if err := r.Delete(r.ctx, existing, &opts); err != nil {
-				r.logger.Info("failed to delete statefulset" + existing.Name)
+			if err := r.dealWithExpandingPvc(existing, nodePool, existingDisk); err != nil {
 				return result, err
 			}
-			//Identifying the PVC per statefulset pod and patching the new size
-			for i := 0; i < int(*existing.Spec.Replicas); i++ {
-				clusterName := r.instance.Name
-				claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
-				r.logger.Info("The claimName identified as " + claimName)
-				var pvc corev1.PersistentVolumeClaim
-				nsn := types.NamespacedName{
-					Namespace: existing.Namespace,
-					Name:      claimName,
-				}
-				if err := r.Get(r.ctx, nsn, &pvc); err != nil {
-					r.logger.Info("failed to get pvc" + pvc.Name)
-					return result, err
-				}
-				newDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
-				if err != nil {
-					r.logger.Info("failed to parse size " + nodePool.DiskSize)
-					return result, err
-				}
-
-				pvc.Spec.Resources.Requests["storage"] = newDiskSize
-
-				if err := r.Update(r.ctx, &pvc); err != nil {
-					r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
-					r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
-					return result, err
-				}
-			}
-
 		}
 	}
 	// Now set the desired replicas to be the existing replicas
@@ -212,7 +182,231 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	return r.ReconcileResource(sts, reconciler.StatePresent)
 }
 
+func (r *ClusterReconciler) dealWithExpandingPvc(existing *appsv1.StatefulSet, nodePool opsterv1.NodePool, existingDisk string) error {
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize)
+
+	//1. Removing statefulset while reserving Pods
+	r.logger.Info("deleting statefulset while not orphaning pods " + existing.Name)
+	opts := client.DeleteOptions{}
+	client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
+	if err := r.Delete(r.ctx, existing, &opts); err != nil {
+		r.logger.Info("failed to delete statefulset" + existing.Name)
+		return err
+	}
+
+	//2. Getting pods
+	pods := corev1.PodList{}
+	if err := r.Client.List(r.ctx,
+		&pods,
+		&client.ListOptions{
+			Namespace:     r.instance.Namespace,
+			LabelSelector: labels.SelectorFromSet(existing.Labels),
+		},
+	); err != nil {
+		return err
+	}
+
+	for _, item := range pods.Items {
+		//2.1 Getting pvc
+		r.logger.Info("start to get pvc")
+		pvc, err1 := r.getPVC(item, nodePool, existing)
+		if err1 != nil {
+			r.logger.Info("failed to get pvc, pod name:" + item.Name)
+			return err1
+		}
+
+		//2.2 Deleting pod
+		r.logger.Info("start to delete pod: " + item.Name)
+		err2 := r.Delete(r.ctx, &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      item.Name,
+				Namespace: item.Namespace,
+			},
+		})
+		if err2 != nil {
+			r.logger.Info("failed to delete pod: " + item.Name)
+			return err2
+		}
+
+		//2.3 Expanding pvc
+		r.logger.Info("start to expand pvc: " + pvc.Name)
+		err3 := r.doExpandPVC(pvc, nodePool, existing, annotations)
+		if err3 != nil {
+			r.logger.Info("failed to expand pvc: " + pvc.Name)
+			return err3
+		}
+
+		//2.4 Recreating pod
+		r.logger.Info("start to recreate pod: " + item.Name)
+		err := r.doRebuildPod(item)
+		if err != nil {
+			r.logger.Info("failed to rereating pod: " + item.Name)
+			r.logger.Info("err : " + err.Error())
+		}
+	}
+	return nil
+}
+
+func (r *ClusterReconciler) doRebuildPod(pod corev1.Pod) error {
+	newPod := pod
+	newPod.Annotations = nil
+	newPod.ResourceVersion = ""
+	newPod.UID = ""
+	newPod.DeletionTimestamp = nil
+	newPod.OwnerReferences = nil
+	newPod.Status = corev1.PodStatus{}
+
+	err1 := r.Create(r.ctx, &newPod)
+	if err1 != nil {
+		r.logger.Info(newPod.Name+"create failed ", err1)
+		return err1
+	}
+
+	err2 := Retry(time.Second*2, time.Duration(waitLimit)*time.Second, func() (bool, error) {
+		var currentPod corev1.Pod
+		if err3 := r.Get(r.ctx, client.ObjectKeyFromObject(&pod), &currentPod); err3 != nil {
+			return false, err3
+		}
+		if currentPod.Status.Phase != "Running" {
+			r.logger.Info(currentPod.Name + " is not running yet")
+			return false, nil
+		}
+		for _, c := range currentPod.Status.ContainerStatuses {
+			if !c.Ready {
+				r.logger.Info(currentPod.Name + "|" + c.Image + " is not ready yet")
+				return false, nil
+			}
+		}
+		return true, nil
+	})
+	return err2
+}
+
+func (r *ClusterReconciler) getPVC(pod corev1.Pod, nodePool opsterv1.NodePool, existing *appsv1.StatefulSet) (corev1.PersistentVolumeClaim, error) {
+	split := strings.Split(pod.Name, "-")
+	pvcName := fmt.Sprintf("data-%s-%s-%s", r.instance.Name, nodePool.Component, split[len(split)-1])
+
+	r.logger.Info("The pvc identified as " + pvcName)
+	var pvc corev1.PersistentVolumeClaim
+	nsn := types.NamespacedName{
+		Namespace: existing.Namespace,
+		Name:      pvcName,
+	}
+	if err := r.Get(r.ctx, nsn, &pvc); err != nil {
+		return pvc, err
+	}
+	return pvc, nil
+}
+
+func (r *ClusterReconciler) doExpandPVC(pvc corev1.PersistentVolumeClaim, nodePool opsterv1.NodePool, existing *appsv1.StatefulSet, annotations map[string]string) error {
+	newDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
+	if err != nil {
+		r.logger.Info("failed to parse size " + nodePool.DiskSize)
+		return err
+	}
+
+	pvc.Spec.Resources.Requests["storage"] = newDiskSize
+
+	if err := r.Update(r.ctx, &pvc); err != nil {
+		r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
+		return err
+	}
+
+	if err := Retry(time.Second*2, time.Duration(waitLimit)*time.Second, func() (bool, error) {
+		// Check the pvc status.
+		var currentPVC corev1.PersistentVolumeClaim
+		if err2 := r.Get(r.ctx, client.ObjectKeyFromObject(&pvc), &currentPVC); err2 != nil {
+			return true, err2
+		}
+		var conditons = currentPVC.Status.Conditions
+		capacity := currentPVC.Status.Capacity
+		// Notice: When expanding not start, or been completed, conditons is nil
+		if conditons == nil {
+			// If change storage request when replicas are creating, should check the currentPVC.Status.Capacity.
+			// for example:
+			// Pod0 has created successful,but Pod1 is creating. then change PVC from 20Gi to 30Gi .
+			// Pod0's PVC need to expand, but Pod1's PVC has created as 30Gi, so need to skip it.
+
+			if equality.Semantic.DeepEqual(capacity, pvc.Spec.Resources.Requests) {
+				r.logger.Info("Executing expand PVC【", pvc.Name, "】 completed")
+				return true, nil
+			}
+			r.logger.Info("Executing expand PVC【", pvc.Name, "】 not start")
+			return false, nil
+		}
+		status := conditons[0].Type
+		storage := capacity.Storage()
+		r.logger.Info("Executing expand PVC【" + pvc.Name + "】, current【" + storage.String() + "】, target【" + newDiskSize.String() + "】, status【" + string(status) + "】")
+		if status == "FileSystemResizePending" {
+			return true, nil
+		}
+		return false, nil
+	}); err != nil {
+		return err
+	}
+	return nil
+}
+
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
-	result := reconciler.CombinedResult{}
-	return result.Result, result.Err
+	// deleting pvc
+	pvcLabels := map[string]string{
+		builders.ClusterLabel: r.instance.Name,
+	}
+
+	pvcs := corev1.PersistentVolumeClaimList{}
+	if err := r.Client.List(r.ctx,
+		&pvcs,
+		&client.ListOptions{
+			Namespace:     r.instance.Namespace,
+			LabelSelector: labels.SelectorFromSet(pvcLabels),
+		},
+	); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.logger.Info("start to delete pvcs.")
+	for i := range pvcs.Items {
+		pvc := pvcs.Items[i]
+		r.logger.Info("deleting " + pvc.Name)
+		if err := r.Delete(r.ctx, &pvc); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+	r.logger.Info("finished deleting pvcs.")
+	return ctrl.Result{}, nil
+}
+
+// retry runs func "f" every "in" time until "limit" is reached.
+// it also doesn't have an extra tail wait after the limit is reached
+// and f func runs first time instantly
+func Retry(in, limit time.Duration, f func() (bool, error)) error {
+	fdone, err := f()
+	if err != nil {
+		return err
+	}
+	if fdone {
+		return nil
+	}
+
+	done := time.NewTimer(limit)
+	defer done.Stop()
+	tk := time.NewTicker(in)
+	defer tk.Stop()
+
+	for {
+		select {
+		case <-done.C:
+			return fmt.Errorf("reach pod wait limit")
+		case <-tk.C:
+			fdone, err := f()
+			if err != nil {
+				return err
+			}
+			if fdone {
+				return nil
+			}
+		}
+	}
 }
