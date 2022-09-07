@@ -194,9 +194,9 @@ func NewSTSForNodePool(
 
 	var mainCommand []string
 	com := "./bin/opensearch-plugin install --batch"
-	if cr.Spec.General.Monitoring == true {
-		cluster_version := cr.Spec.General.Version
-		url := "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/" + cluster_version + ".0/prometheus-exporter" + cluster_version + ".0.zip"
+	if cr.Spec.General.Monitoring {
+		clusterVersion := cr.Spec.General.Version
+		url := "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/" + clusterVersion + ".0/prometheus-exporter" + clusterVersion + ".0.zip"
 		cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
 	}
 
