@@ -696,7 +696,6 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
 	return fmt.Sprintf("https://%s.svc.cluster.local:%d", DnsOfService(cr), httpPort)
-	//return fmt.Sprintf("https://localhost:9212")
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, password string) *corev1.Secret {
