@@ -3616,6 +3616,76 @@ spec:
                             type: string
                         type: object
                       type: array
+                    topologySpreadConstraints:
+                      items:
+                        description: TopologySpreadConstraint specifies how to spread matching
+                          pods among the given topology.
+                        properties:
+                          labelSelector:
+                            description: LabelSelector is used to find matching pods. Pods that
+                              match this label selector are counted to determine the number of
+                              pods in their corresponding topology domain.
+                            properties:
+                              matchExpressions:
+                                description: matchExpressions is a list of label selector
+                                  requirements. The requirements are ANDed.
+                                items:
+                                  description: A label selector requirement
+                                    is a selector that contains values, a key,
+                                    and an operator that relates the key and
+                                    values.
+                                  properties:
+                                    key:
+                                      description: key is the label key that
+                                        the selector applies to.
+                                      type: string
+                                    operator:
+                                      description: operator represents a key's
+                                        relationship to a set of values. Valid
+                                        operators are In, NotIn, Exists and
+                                        DoesNotExist.
+                                      type: string
+                                    values:
+                                      description: values is an array of string
+                                        values. If the operator is In or NotIn,
+                                        the values array must be non-empty.
+                                        If the operator is Exists or DoesNotExist,
+                                        the values array must be empty. This
+                                        array is replaced during a strategic
+                                        merge patch.
+                                      items:
+                                        type: string
+                                      type: array
+                                  required:
+                                  - key
+                                  - operator
+                                  type: object
+                                type: array
+                              matchLabels:
+                                additionalProperties:
+                                  type: string
+                                description: matchLabels is a map of {key,value}
+                                  pairs. A single {key,value} in the matchLabels
+                                  map is equivalent to an element of matchExpressions,
+                                  whose key field is "key", the operator is
+                                  "In", and the values array contains only "value".
+                                  The requirements are ANDed.
+                                type: object
+                            type: object
+                          maxSkew:
+                            description: MaxSkew describes the degree to which pods may be
+                              unevenly distributed.
+                            type: integer
+                          minDomains:
+                            description: MinDomains indicates a minimum number of eligible domains
+                            type: integer
+                          topologyKey:
+                            description: TopologyKey is the key of node labels.
+                            type: string
+                          whenUnsatisfiable:
+                            description: WhenUnsatisfiable indicates how to deal with a pod if it
+                              doesn't satisfy the spread constraint.
+                            type: string
                   required:
                   - component
                   - replicas

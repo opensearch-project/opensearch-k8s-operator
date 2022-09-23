@@ -383,6 +383,13 @@ func (in *NodePool) DeepCopyInto(out *NodePool) {
 		*out = new(corev1.Affinity)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.TopologySpreadConstraints != nil {
+		in, out := &in.TopologySpreadConstraints, &out.TopologySpreadConstraints
+		*out = make([]corev1.TopologySpreadConstraint, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Persistence != nil {
 		in, out := &in.Persistence, &out.Persistence
 		*out = new(PersistenceConfig)

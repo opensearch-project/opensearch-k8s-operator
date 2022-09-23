@@ -170,6 +170,19 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("2Gi"),
 					}},
+				Labels: map[string]string{
+					"role": "master",
+				},
+				TopologySpreadConstraints: []corev1.TopologySpreadConstraint{{
+					MaxSkew:           1,
+					TopologyKey:       "zone",
+					WhenUnsatisfiable: "DoNotSchedule",
+					LabelSelector: &metav1.LabelSelector{
+						MatchLabels: map[string]string{
+							"role": "master",
+						},
+					},
+				}},
 				Roles: []string{
 					"master",
 					"data",

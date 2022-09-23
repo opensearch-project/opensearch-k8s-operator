@@ -193,6 +193,17 @@ var _ = Describe("Cluster Reconciler", func() {
 			Expect(sts.ObjectMeta.Labels).To(HaveKeyWithValue("quux", "quut"))
 		})
 
+		It("should set nodepool topologySpreadConstraints", func() {
+			sts := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-master", OpensearchCluster.Name),
+					Namespace: OpensearchCluster.Namespace,
+				}, sts)
+			}, timeout, interval).Should(Succeed())
+			Expect(sts.Spec.Template.Spec.TopologySpreadConstraints[0].TopologyKey).To(Equal("zone"))
+		})
+
 		It("should create a bootstrap pod", func() {
 			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
 			Eventually(func() error {
