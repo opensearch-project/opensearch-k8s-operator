@@ -62,6 +62,7 @@ func NewSTSForNodePool(
 	var selectedRoles []string
 	for _, role := range node.Roles {
 		if helpers.ContainsString(availableRoles, role) {
+			role = helpers.MapClusterRole(role, cr.Spec.General.Version)
 			selectedRoles = append(selectedRoles, role)
 		}
 	}
