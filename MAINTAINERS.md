@@ -1,4 +1,4 @@
-## Maintainers
+# Maintainers
 
 | Maintainer | GitHub ID | Affiliation |
 | --------------- | --------- | ----------- |
@@ -8,28 +8,21 @@
 | Sebastian Woehrl | [swoehrl-mw](https://github.com/swoehrl-mw) | MaibornWolff |
 | Prudhvi Godithi | [prudhvigodithi](https://github.com/prudhvigodithi) | Amazon |
 
-[This document](https://github.com/Opster/opensearch-k8s-operator/.github/blob/main/MAINTAINERS.md) explains what maintainers do in this repo, and how they should be doing it. If you're interested in contributing, see [CONTRIBUTING](CONTRIBUTING.md).
+The following sections explain what maintainers do in this repo, and how they should be doing it. If you're interested in contributing, see [CONTRIBUTING](CONTRIBUTING.md).
 
+## Release process
 
-# Opensearch Operator New version release guide
+To release a new version of the operator open Github in the browser, navigate to "Actions", select the workflow `Prepare and publish release`, select "Run workflow", then enter the version of the release (semver, x.y.z) and click "Run workflow". After a few seconds a new workflow run will start. It will do the following:
 
-This guide will explain the new version release process in Opensearch-k8s-Operator
+* Run the test suite to make sure the version is functional
+* Update the helm chart with the newest CRD YAMLs
+* Update `version` and `appVersion` in the chart
+* Commit and push the chart changes
+* Tag the commit
+* Build and push the docker image
+* Create a new helm chart release using github pages
+* Create a new release on github in draft mode
 
-## Logic
+After the workflow has completed, navigate to releases and edit the new release. Generate a changelog, add any other needed information (upgrade instructions, warnings, incompatibilities, etc.) and then publish the release.
 
-Under the releases process we can find two main actions
-#### Operator release
-Responsible to build and publish new Opensearch-k8s-operator images, builds from the 'release.yaml' workflow that triggers from new tag creation with 'v' prefix.
-#### Helm release
-Responsible for Helm chart repo update, new release and update the index in the `gh-pages` branch, will also publish version to Artifacthub. 
-
-### Steps
-So for a release we need the following manual steps:
-1. Create a new tag "vXY..Z"
-2. Wait until pipeline is finished
-3. in case of CRDs and manifest change
-   1. run 'make manifest' && 'make generate'
-   2. run kustomize build > output.yaml
-   3. separate the yamls and add each resource as a yaml file to charts/opensearch-operator/templates folder (that phase will improve to be part of release process)
-4. Edit 'version' under charts/opensearch-operator/Chart.yaml (edit also 'appVersion' in case that a new applicative version has released )
-   1. after editing a new release will upload to artifactHub
+In case it is needed you can also manually tag a commit for release, this will trigger a workflow that stars with the "Build and push the docker image" step. Make sure CRDs are up-to-date in the helm chart.
