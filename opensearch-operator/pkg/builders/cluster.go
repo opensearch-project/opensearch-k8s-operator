@@ -63,6 +63,7 @@ func NewSTSForNodePool(
 	var selectedRoles []string
 	for _, role := range node.Roles {
 		if helpers.ContainsString(availableRoles, role) {
+			role = helpers.MapClusterRole(role, cr.Spec.General.Version)
 			selectedRoles = append(selectedRoles, role)
 		}
 	}
@@ -335,12 +336,13 @@ func NewSTSForNodePool(
 						},
 					},
 					},
-					Volumes:            volumes,
-					ServiceAccountName: cr.Spec.General.ServiceAccount,
-					NodeSelector:       node.NodeSelector,
-					Tolerations:        node.Tolerations,
-					Affinity:           node.Affinity,
-					ImagePullSecrets:   image.ImagePullSecrets,
+					Volumes:                   volumes,
+					ServiceAccountName:        cr.Spec.General.ServiceAccount,
+					NodeSelector:              node.NodeSelector,
+					Tolerations:               node.Tolerations,
+					Affinity:                  node.Affinity,
+					TopologySpreadConstraints: node.TopologySpreadConstraints,
+					ImagePullSecrets:          image.ImagePullSecrets,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -708,7 +710,6 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
 	return fmt.Sprintf("https://%s.svc.cluster.local:%d", DnsOfService(cr), httpPort)
-	//return fmt.Sprintf("https://localhost:9212")
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, password string) *corev1.Secret {

@@ -405,6 +405,13 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td> - </td>
       </tr><tr>
+      </tr><tr>
+        <td><b>topologySpreadConstraints</b></td>
+        <td>[]corev1.TopologySpreadConstraint</td>
+        <td>add topology spread contraints to nodePool</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
 </table>
 
 

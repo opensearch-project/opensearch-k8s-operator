@@ -123,7 +123,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 					return err
 				}
-				r.instance.Status.ManagedCluster = &r.instance.UID
+				r.instance.Status.ManagedCluster = &r.cluster.UID
 				return r.Status().Update(r.ctx, r.instance)
 			})
 			if retErr != nil {

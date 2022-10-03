@@ -121,3 +121,20 @@ func ResolveClusterManagerRole(ver string) string {
 	}
 	return masterRole
 }
+
+// Map any cluster roles that have changed between major OpenSearch versions
+func MapClusterRole(role string, ver string) string {
+	osVer, err := version.NewVersion(ver)
+	if err != nil {
+		return role
+	}
+	clusterManagerVer, _ := version.NewVersion("2.0.0")
+	is2XVersion := osVer.GreaterThanOrEqual(clusterManagerVer)
+	if role == "master" && is2XVersion {
+		return "cluster_manager"
+	} else if role == "cluster_manager" && !is2XVersion {
+		return "master"
+	} else {
+		return role
+	}
+}
