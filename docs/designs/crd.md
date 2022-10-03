@@ -96,6 +96,11 @@ ClusterSpec defines the desired state of OpensearchCluster
         <td>[]object</td>
         <td>List of objects that define the different nodePools in an OpensearchCluster. Each nodePool represents a group of nodes with the same opensearch roles and resources. Each nodePool is deployed as a Kubernetes StatefulSet. Together they form the opensearch cluster.</td>
         <td>true</td>
+      </tr><tr>
+        <td><b>monitoring</b></td>
+        <td>object</td>
+        <td>object that define the monitoring stuck in an OpensearchCluster</td>
+        <td>false</td>
 </table>
 
 
@@ -399,5 +404,50 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>add toleration to nodePool</td>
         <td>false</td>
         <td> - </td>
+      </tr><tr>
+</table>
+
+
+<h3 id="GeneralConfig">
+  Monitoring
+</h3>
+
+Monitoring defines Opensearch monitoring stuck
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>enable</b></td>
+        <td>bool</td>
+        <td>Define if to ernable monitoring for that cluster</td>
+        <td>true</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>monitoringUser</b></td>
+        <td>[]string</td>
+        <td>Define from which user the monitor will run (the user should be created earlier).</td>
+        <td>false</td>
+        <td>admin</td>
+      </tr><tr>
+        <td><b>interval</b></td>
+        <td>string</td>
+        <td>Define interval for scarping</td>
+        <td>false</td>
+        <td>30s</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>offlinePlugin</b></td>
+        <td>string</td>
+        <td>Define offline link to Aiven Plugin</td>
+        <td>false</td>
+        <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch</td>
       </tr><tr>
 </table>

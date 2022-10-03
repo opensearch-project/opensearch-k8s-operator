@@ -488,3 +488,26 @@ spec:
   roles:
   - sample-role
 ```
+
+
+## Adding Opensearch Monitoring to your cluster
+
+The operator allows you to install the Aiven monitoring for OpenSearch on your cluster as a build in feature (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch)
+That feature is needed Online connectivity to download the plugin. if you are working at offline ENV, please download and store where you have access that zip (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip).
+after that please insert the new URL under offlinePlugin key.
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchUserRoleBinding
+metadata:
+  name: sample-urb
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+    namespace: default
+  general:
+    monitoring:
+      enable: true
+      internval: 10s
+      monitoringUser: appUser
+      offlinePlugin: https://opster-s3-bucket/prometheus-exporter-plugin-for-opensearch
+```

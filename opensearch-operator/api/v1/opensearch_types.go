@@ -47,7 +47,7 @@ type GeneralConfig struct {
 	PluginsList    []string `json:"pluginsList,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
-	Monitoring        bool               `json:"monitoring,omitempty"`
+	Monitoring        MonitoringStuck    `json:"monitoring,omitempty"`
 }
 
 type NodePool struct {
@@ -85,9 +85,15 @@ type PVCSource struct {
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
 	AutoScaler  bool `json:"autoScaler,omitempty"`
-	Monitoring  bool `json:"monitoring,omitempty"`
 	VerUpdate   bool `json:"VerUpdate,omitempty"`
 	SmartScaler bool `json:"smartScaler,omitempty"`
+}
+
+type MonitoringStuck struct {
+	Enable         bool   `json:"enable,omitempty"`
+	MonitoringUser string `json:"monitoringUser,omitempty"`
+	Interval       string `json:"interval,omitempty"`
+	OfflinePlugin  string `json:"offlinePlugin,omitempty"`
 }
 
 type BootstrapConfig struct {

@@ -194,10 +194,15 @@ func NewSTSForNodePool(
 
 	var mainCommand []string
 	com := "./bin/opensearch-plugin install --batch"
-	if cr.Spec.General.Monitoring {
-		clusterVersion := cr.Spec.General.Version
-		url := "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/" + clusterVersion + ".0/prometheus-exporter" + clusterVersion + ".0.zip"
-		cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
+	if cr.Spec.General.Monitoring.Enable {
+		if cr.Spec.General.Monitoring.OfflinePlugin == "" {
+			url := cr.Spec.General.Monitoring.OfflinePlugin
+			cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
+		} else {
+			clusterVersion := cr.Spec.General.Version
+			url := "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/" + clusterVersion + ".0/prometheus-exporter" + clusterVersion + ".0.zip"
+			cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
+		}
 	}
 
 	if len(cr.Spec.General.PluginsList) > 0 {
@@ -873,6 +878,17 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 		Any:        false,
 		MatchNames: []string{cr.Namespace},
 	}
+
+	scrapInterval := cr.Spec.General.Monitoring.Interval
+	if scrapInterval == "" {
+		scrapInterval = "30s"
+	}
+
+	monitorUser := cr.Spec.General.Monitoring.MonitoringUser
+	if monitorUser == "" {
+		monitorUser = "admin"
+	}
+
 	return &prometheus.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.ClusterName + "-monitor",
@@ -891,17 +907,17 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 				{Port: "9200",
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
-					Interval:        "10s",
+					Interval:        scrapInterval,
 					TLSConfig:       nil,
 					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth: &prometheus.BasicAuth{
 						Username: corev1.SecretKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{Name: cr.ClusterName + "-admin-password "},
-							Key:                  "admin",
+							LocalObjectReference: corev1.LocalObjectReference{Name: cr.ClusterName + monitorUser + "-password"},
+							Key:                  monitorUser,
 						},
 						Password: corev1.SecretKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{Name: cr.ClusterName + "-admin-password "},
+							LocalObjectReference: corev1.LocalObjectReference{Name: cr.ClusterName + monitorUser + "-password"},
 							Key:                  "password",
 						},
 					},

@@ -125,7 +125,6 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			},
 			ConfMgmt: opsterv1.ConfMgmt{
 				AutoScaler:  false,
-				Monitoring:  false,
 				VerUpdate:   false,
 				SmartScaler: false,
 			},
