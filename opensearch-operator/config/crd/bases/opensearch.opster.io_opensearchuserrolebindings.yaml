@@ -40,6 +40,10 @@ spec:
             description: OpensearchUserRoleBindingSpec defines the desired state of
               OpensearchUserRoleBinding
             properties:
+              backendRoles:
+                items:
+                  type: string
+                type: array
               opensearchCluster:
                 description: LocalObjectReference contains enough information to let
                   you locate the referenced object inside the same namespace.
@@ -60,7 +64,6 @@ spec:
             required:
             - opensearchCluster
             - roles
-            - users
             type: object
           status:
             description: OpensearchUserRoleBindingStatus defines the observed state
@@ -72,6 +75,10 @@ spec:
                   a type captures intent and helps make sure that UIDs and names do
                   not get conflated.
                 type: string
+              provisionedBackendRoles:
+                items:
+                  type: string
+                type: array
               provisionedRoles:
                 items:
                   type: string

@@ -163,7 +163,7 @@ var _ = Describe("roles reconciler", func() {
 				events = append(events, msg)
 			}
 			Expect(len(events)).To(Equal(1))
-			Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s cannot change the cluster a user refers to", opensearchRefMismatch)))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s cannot change the cluster a role refers to", opensearchRefMismatch)))
 		})
 	})
 

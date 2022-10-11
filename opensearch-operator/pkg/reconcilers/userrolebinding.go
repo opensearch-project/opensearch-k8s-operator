@@ -73,6 +73,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 			}
 			if retErr == nil && !retResult.Requeue {
 				r.instance.Status.ProvisionedRoles = r.instance.Spec.Roles
+				r.instance.Status.ProvisionedBackendRoles = r.instance.Spec.BackendRoles
 				r.instance.Status.ProvisionedUsers = r.instance.Spec.Users
 				r.instance.Status.State = opsterv1.OpensearchUserRoleBindingStateCreated
 			}
@@ -161,7 +162,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 			return
 		}
 		if exists {
-			retErr = r.removeUsersFromMapping(removed, r.instance.Status.ProvisionedUsers)
+			retErr = r.removeObjectsFromMapping(removed, r.instance.Status.ProvisionedUsers, r.instance.Status.ProvisionedBackendRoles)
 			if retErr != nil {
 				reason = "failed to update existing role mapping"
 				r.logger.Error(retErr, reason)
@@ -171,6 +172,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 	}
 
+	// Reconcile roles
 	for _, role := range r.instance.Spec.Roles {
 		var exists bool
 		exists, retErr = services.RoleMappingExists(r.ctx, r.osClient, role)
@@ -182,19 +184,10 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 
 		if exists {
-			// First remove any users that are no longer in the spec
-			removedUsers := r.calculateRemovedUsers()
-			if len(removedUsers) > 0 {
-				retErr = r.removeUsersFromMapping(role, removedUsers)
-				if retErr != nil {
-					reason = "failed to update existing role mapping"
-					r.logger.Error(retErr, reason)
-					r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
-					return
-				}
-			}
-			// Then add new users
-			retErr = r.reconcileExistingMapping(role)
+			// Replace existing mapping with new one
+			removedUsers := helpers.DiffSlice(r.instance.Status.ProvisionedUsers, r.instance.Spec.Users)
+			removedBackendRoles := helpers.DiffSlice(r.instance.Status.ProvisionedBackendRoles, r.instance.Spec.BackendRoles)
+			retErr = r.reconcileExistingMapping(role, removedUsers, removedBackendRoles)
 			if retErr != nil {
 				reason = "failed to update existing role mapping"
 				r.logger.Error(retErr, reason)
@@ -205,7 +198,8 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 
 		mapping := requests.RoleMapping{
-			Users: r.instance.Spec.Users,
+			Users:        r.instance.Spec.Users,
+			BackendRoles: r.instance.Spec.BackendRoles,
 		}
 		retErr = services.CreateOrUpdateRoleMapping(r.ctx, r.osClient, role, mapping)
 		if retErr != nil {
@@ -248,7 +242,7 @@ func (r *UserRoleBindingReconciler) Delete() error {
 			r.logger.V(1).Info("role mapping already deleted from opensearch")
 			continue
 		}
-		err = r.removeUsersFromMapping(role, r.instance.Status.ProvisionedUsers)
+		err = r.removeObjectsFromMapping(role, r.instance.Status.ProvisionedUsers, r.instance.Status.ProvisionedBackendRoles)
 		if err != nil {
 			return err
 		}
@@ -256,45 +250,46 @@ func (r *UserRoleBindingReconciler) Delete() error {
 	return nil
 }
 
-func (r *UserRoleBindingReconciler) reconcileExistingMapping(rolename string) error {
+func (r *UserRoleBindingReconciler) reconcileExistingMapping(rolename string, usersToRemove, backendRolesToRemove []string) error {
 	mapping, err := services.FetchExistingRoleMapping(r.ctx, r.osClient, rolename)
 	if err != nil {
 		return err
 	}
 
-	newUser := false
-	for _, user := range r.instance.Spec.Users {
-		if !helpers.ContainsString(mapping.Users, user) {
-			mapping.Users = append(mapping.Users, user)
-			newUser = true
-		}
-	}
+	usersToSave := helpers.DiffSlice(mapping.Users, usersToRemove)
+	backendRolesToSave := helpers.DiffSlice(mapping.BackendRoles, backendRolesToRemove)
+	newUsers := helpers.DiffSlice(r.instance.Spec.Users, mapping.Users)
+	newBackendRoles := helpers.DiffSlice(r.instance.Spec.BackendRoles, mapping.BackendRoles)
 
-	if !newUser {
+	if newUsers == nil && newBackendRoles == nil && len(usersToSave) == len(mapping.Users) && len(backendRolesToSave) == len(mapping.BackendRoles) {
 		return nil
 	}
+	mapping.Users = append(usersToSave, newUsers...)
+	mapping.BackendRoles = append(backendRolesToSave, newBackendRoles...)
 
-	return services.CreateOrUpdateRoleMapping(r.ctx, r.osClient, rolename, mapping)
+	if len(mapping.Users) > 0 || len(mapping.Hosts) > 0 || len(mapping.BackendRoles) > 0 {
+		return services.CreateOrUpdateRoleMapping(r.ctx, r.osClient, rolename, mapping)
+	}
+	return services.DeleteRoleMapping(r.ctx, r.osClient, rolename)
+
 }
 
-func (r *UserRoleBindingReconciler) removeUsersFromMapping(rolename string, usersToRemove []string) error {
-	users := []string{}
+func (r *UserRoleBindingReconciler) removeObjectsFromMapping(rolename string, usersToRemove, backendRolesToRemove []string) error {
+
 	mapping, err := services.FetchExistingRoleMapping(r.ctx, r.osClient, rolename)
 	if err != nil {
 		return err
 	}
 
-	for _, user := range mapping.Users {
-		if !helpers.ContainsString(usersToRemove, user) {
-			users = append(users, user)
-		}
-	}
+	usersToSave := helpers.DiffSlice(mapping.Users, usersToRemove)
+	backendRolesToSave := helpers.DiffSlice(mapping.BackendRoles, backendRolesToRemove)
 
-	if len(users) == len(mapping.Users) && len(users) > 0 {
+	if len(usersToSave) == len(mapping.Users) && len(usersToSave) > 0 && len(backendRolesToSave) == len(mapping.BackendRoles) && len(backendRolesToSave) > 0 {
 		return nil
 	}
 
-	mapping.Users = users
+	mapping.Users = usersToSave
+	mapping.BackendRoles = backendRolesToSave
 
 	if len(mapping.Users) > 0 || len(mapping.Hosts) > 0 || len(mapping.BackendRoles) > 0 {
 		return services.CreateOrUpdateRoleMapping(r.ctx, r.osClient, rolename, mapping)
@@ -312,15 +307,4 @@ func (r *UserRoleBindingReconciler) calculateRemovedRoles() []string {
 	}
 
 	return rolesRemoved
-}
-
-func (r *UserRoleBindingReconciler) calculateRemovedUsers() []string {
-	var usersRemoved []string
-	for _, user := range r.instance.Status.ProvisionedUsers {
-		if !helpers.ContainsString(r.instance.Spec.Users, user) {
-			usersRemoved = append(usersRemoved, user)
-		}
-	}
-
-	return usersRemoved
 }
