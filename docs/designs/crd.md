@@ -170,6 +170,13 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>add user defined environment variables to nodePool</td>
         <td>false</td>
         <td> - </td>
+      </tr><tr>
+        <td><b>keystore</b></td>
+        <td>[]opsterv1.KeystoreValue</td>
+        <td>List of objects that define secret values that will populate the opensearch keystore.</td>
+        <td>false</td>
+        <td> - </td>
+      </tr>
 </table>
 
 <h3 id="GeneralConfig">
@@ -407,4 +414,37 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td> - </td>
       </tr><tr>
+</table>
+
+<h3 id="GeneralConfig">
+  Keystore
+</h3>
+
+Every Keystore Value defines a secret to pull secrets from. 
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><b>secret</b></td>
+        <td>corev1.LocalObjectReference</td>
+        <td>Define secret that contains key value pairs</td>
+        <td>true</td>
+        <td>-</td>
+      </tr>
+      <tr>
+        <td><b>keyMappings</b></td>
+        <td>map</td>
+        <td>Define key mappings from secret to keystore entry. Example: "old: new" creates a keystore entry "new" with the value from the secret entry "old". When a map is provided, only the specified keys are loaded from the secret, so use "key: key" to load a key that should not be renamed.</td>
+        <td>false</td>
+        <td>-</td>
+      </tr>
 </table>

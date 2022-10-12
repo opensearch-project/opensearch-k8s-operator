@@ -17,15 +17,16 @@ func ClusterDescWithversion(version string) opsterv1.OpenSearchCluster {
 	}
 }
 
-func ClusterDescWithKeystoreSecret(secretName string) opsterv1.OpenSearchCluster {
+func ClusterDescWithKeystoreSecret(secretName string, keyMappings map[string]string) opsterv1.OpenSearchCluster {
 	return opsterv1.OpenSearchCluster{
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
-				KeystoreValues: []opsterv1.KeystoreValue{
+				Keystore: []opsterv1.KeystoreValue{
 					{
 						Secret: corev1.LocalObjectReference{
 							Name: secretName,
 						},
+						KeyMappings: keyMappings,
 					},
 				},
 			},
@@ -77,12 +78,13 @@ var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool with Keystore Values", func() {
 		It("should create a proper initContainer", func() {
 			mockSecretName := "some-secret"
-			var clusterObject = ClusterDescWithKeystoreSecret(mockSecretName)
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithKeystoreSecret(mockSecretName, nil)
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[1].VolumeMounts).To(ContainElements([]corev1.VolumeMount{
 				{
 					Name:      "keystore",
@@ -97,16 +99,37 @@ var _ = Describe("Builders", func() {
 
 		It("should mount the prefilled keystore into the opensearch container", func() {
 			mockSecretName := "some-secret"
-			var clusterObject = ClusterDescWithKeystoreSecret(mockSecretName)
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithKeystoreSecret(mockSecretName, nil)
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(corev1.VolumeMount{
 				Name:      "keystore",
 				MountPath: "/usr/share/opensearch/config/opensearch.keystore",
 				SubPath:   "opensearch.keystore",
+			}))
+		})
+
+		It("should properly rename secret keys when key mappings are given", func() {
+			mockSecretName := "some-secret"
+			oldKey := "old-key"
+			newKey := "new-key"
+
+			keyMappings := map[string]string{
+				oldKey: newKey,
+			}
+			clusterObject := ClusterDescWithKeystoreSecret(mockSecretName, keyMappings)
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "foobar", "ingest"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.InitContainers[1].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+				Name:      "keystore-" + mockSecretName,
+				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
+				SubPath:   oldKey,
 			}))
 		})
 	})

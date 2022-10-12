@@ -2450,10 +2450,15 @@ spec:
                           type: string
                       type: object
                     type: array
-                  keystoreValues:
+                  keystore:
                     description: Populate opensearch keystore before startup
                     items:
                       properties:
+                        keyMappings:
+                          additionalProperties:
+                            type: string
+                          description: Key mappings from secret to keystore keys
+                          type: object
                         secret:
                           description: Secret containing key value pairs
                           properties:
