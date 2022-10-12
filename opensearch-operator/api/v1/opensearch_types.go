@@ -47,6 +47,8 @@ type GeneralConfig struct {
 	PluginsList    []string `json:"pluginsList,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
+	// Populate opensearch keystore before startup
+	KeystoreValues []KeystoreValue `json:"keystoreValues,omitempty"`
 }
 
 type NodePool struct {
@@ -196,6 +198,13 @@ type AdditionalVolume struct {
 	RestartPods bool `json:"restartPods,omitempty"`
 }
 
+type KeystoreValue struct {
+	// Secret containing key value pairs
+	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
+	// TODO: Key mappings from secret to keystore keys
+	// KeyMappings map[string]string `json:"keyMappings,omitempty"`
+}
+
 // ClusterSpec defines the desired state of OpenSearchCluster
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -218,9 +227,9 @@ type ClusterStatus struct {
 	Initialized      bool              `json:"initialized,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:resource:shortName=os;opensearch
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=os;opensearch
 // Es is the Schema for the es API
 type OpenSearchCluster struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -236,7 +245,7 @@ type ComponentStatus struct {
 	Description string `json:"description,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 // EsList contains a list of Es
 type OpenSearchClusterList struct {
 	metav1.TypeMeta `json:",inline"`

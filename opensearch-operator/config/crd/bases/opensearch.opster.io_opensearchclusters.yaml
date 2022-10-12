@@ -2450,6 +2450,20 @@ spec:
                           type: string
                       type: object
                     type: array
+                  keystoreValues:
+                    description: Populate opensearch keystore before startup
+                    items:
+                      properties:
+                        secret:
+                          description: Secret containing key value pairs
+                          properties:
+                            name:
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                TODO: Add other useful fields. apiVersion, kind, uid?'
+                              type: string
+                          type: object
+                      type: object
+                    type: array
                   pluginsList:
                     items:
                       type: string
