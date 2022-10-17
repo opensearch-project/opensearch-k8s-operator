@@ -12,6 +12,8 @@ jobs:
   release:
     name: Prepare and publish release
     runs-on: ubuntu-latest
+    environment:
+      name: k8s-operator
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
