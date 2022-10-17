@@ -15,7 +15,7 @@ import (
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
-func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.Deployment {
+func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, annotations map[string]string) *appsv1.Deployment {
 	var replicas int32 = cr.Spec.Dashboards.Replicas
 	var port int32 = 5601
 	var mode int32 = 420
@@ -103,7 +103,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
-					Annotations: nil,
+					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
 					Volumes: volumes,
@@ -158,7 +158,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 			Namespace: cr.Namespace,
 		},
 		Data: map[string]string{
-			"opensearch_dashboards.yml": data,
+			helpers.DashboardConfigName: data,
 		},
 	}
 }

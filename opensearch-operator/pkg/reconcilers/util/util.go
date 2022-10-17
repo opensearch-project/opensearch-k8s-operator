@@ -2,6 +2,8 @@ package util
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"sort"
@@ -237,4 +239,18 @@ func FetchOpensearchCluster(
 		return nil, err
 	}
 	return cluster, nil
+}
+
+// Generates a checksum of string data using SHA1.
+func GetSha1Sum(data string) (string, error) {
+	content := fmt.Sprint(data)
+
+	hasher := sha1.New()
+	_, err := hasher.Write([]byte(content))
+
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }

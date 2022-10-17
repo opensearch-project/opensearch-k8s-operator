@@ -221,9 +221,20 @@ var _ = Describe("Dashboards Reconciler", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			data, exists := configMap.Data["opensearch_dashboards.yml"]
+			data, exists := configMap.Data[helpers.DashboardConfigName]
 			Expect(exists).To(BeTrue())
 			Expect(strings.Contains(data, "foo: bar\n")).To(BeTrue())
+
+			deployment := appsv1.Deployment{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{
+					Name:      clusterName + "-dashboards",
+					Namespace: clusterName,
+				}, &deployment)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			Expect(deployment.Spec.Template.ObjectMeta.Annotations[helpers.DashboardConfigName], Equal("acbddbad2c491aab236e1025ad5b9ace129ea5667"))
 		})
 	})
 
