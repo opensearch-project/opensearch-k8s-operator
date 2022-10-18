@@ -88,7 +88,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	annotations := make(map[string]string)
 
 	if cmData, ok := cm.Data[helpers.DashboardConfigName]; ok {
-		sha1sum, err := util.GetSha1Sum(cmData)
+		sha1sum, err := util.GetSha1Sum([]byte(cmData))
 		if err != nil {
 			return ctrl.Result{}, err
 		}

@@ -241,12 +241,10 @@ func FetchOpensearchCluster(
 	return cluster, nil
 }
 
-// Generates a checksum of string data using SHA1.
-func GetSha1Sum(data string) (string, error) {
-	content := fmt.Sprint(data)
-
+// Generates a checksum of binary data using the SHA1 algorithm.
+func GetSha1Sum(data []byte) (string, error) {
 	hasher := sha1.New()
-	_, err := hasher.Write([]byte(content))
+	_, err := hasher.Write(data)
 
 	if err != nil {
 		return "", err
