@@ -126,7 +126,7 @@ func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageS
 	return false
 }
 
-//Function to help identify httpPort and securityconfigPath for 1.x and 2.x OpenSearch Operator.
+// Function to help identify httpPort and securityconfigPath for 1.x and 2.x OpenSearch Operator.
 func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, string) {
 	var httpPort int32
 	var securityconfigPath string

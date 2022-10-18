@@ -26,9 +26,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/onsi/gomega/gexec"
 	"github.com/phayes/freeport"
 	opsterv1 "opensearch.opster.io/api/v1"
 
@@ -39,6 +37,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
@@ -56,10 +55,10 @@ import (
 Now, let's go through the code generated.
 */
 
-var (
-	k8sClient client.Client // You'll be using this client in your tests.
-	testEnv   *envtest.Environment
-)
+var cfg *rest.Config
+var k8sClient client.Client
+var testEnv *envtest.Environment
+var cancel context.CancelFunc
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -72,27 +71,22 @@ func TestAPIs(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 
-	//OpensearchCluster := ComposeOpensearchCrd("cluster-test", "default")
-
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	ports, err := freeport.GetFreePorts(2)
 	Expect(err).NotTo(HaveOccurred())
-	//logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
 
-	ctx := context.Background()
+	var ctx context.Context
+	ctx, cancel = context.WithCancel(context.TODO())
+
 	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 
-	cfg, err := testEnv.Start()
+	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
-	fmt.Println(err)
 	Expect(cfg).NotTo(BeNil())
-	if err != nil {
-		fmt.Println(err)
-	}
 
 	err = scheme.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -123,9 +117,9 @@ var _ = BeforeSuite(func() {
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	gexec.KillAndWait(5 * time.Second)
+	cancel()
 	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 })
 
 func CreateNamespace(k8sClient client.Client, name string) error {
