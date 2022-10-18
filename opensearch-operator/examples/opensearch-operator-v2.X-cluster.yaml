@@ -17,14 +17,14 @@ spec:
   general:
     httpPort: 9400
     serviceName: my-first-cluster
-    version: 2.2.1
+    version: 2.3.0
     pluginsList: ["repository-s3"]
     drainDataNodes: true
   dashboards:
     tls:
       enable: true
       generate: true
-    version: 2.2.1
+    version: 2.3.0
     enable: true
     replicas: 1
     resources:
