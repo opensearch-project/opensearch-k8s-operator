@@ -145,6 +145,18 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	if err != nil {
 		return result, err
 	}
+
+	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
+	if _, exists := existing.Spec.Selector.MatchLabels["opensearch.role"]; exists {
+		r.logger.Info("deleting statefulset while orphaning pods to fix labels " + existing.Name)
+		opts := client.DeleteOptions{}
+		client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
+		if err := r.Delete(r.ctx, existing, &opts); err != nil {
+			r.logger.Info("failed to delete statefulset" + existing.Name)
+			return result, err
+		}
+	}
+
 	//Checking for existing statefulset disksize
 
 	//Default is PVC, or explicit check for PersistenceSource as PVC
