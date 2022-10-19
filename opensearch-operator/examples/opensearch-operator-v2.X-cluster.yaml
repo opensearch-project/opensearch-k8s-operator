@@ -15,7 +15,7 @@ spec:
          generate: true
          perNode: true
   general:
-    httpPort: 9400
+    httpPort: 9200
     serviceName: my-first-cluster
     version: 2.3.0
     pluginsList: ["repository-s3"]
