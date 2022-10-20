@@ -191,6 +191,7 @@ func NewSTSForNodePool(
 	}
 
 	image := helpers.ResolveImage(cr, &node)
+	busyBoxImage := helpers.ResolveBusyBoxImage(cr)
 
 	var mainCommand []string
 	com := "./bin/opensearch-plugin install --batch"
@@ -309,10 +310,11 @@ func NewSTSForNodePool(
 						},
 					},
 					InitContainers: []corev1.Container{{
-						Name:    "init",
-						Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
-						Command: []string{"sh", "-c"},
-						Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+						Name:            "init",
+						Image:           busyBoxImage.GetImage(),
+						ImagePullPolicy: busyBoxImage.GetImagePullPolicy(),
+						Command:         []string{"sh", "-c"},
+						Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 						SecurityContext: &corev1.SecurityContext{
 							RunAsUser: &runas,
 						},
@@ -359,9 +361,12 @@ func NewSTSForNodePool(
 	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
 	if cr.Spec.General.SetVMMaxMapCount {
+		busyBoxImage := helpers.ResolveBusyBoxImage(cr)
+
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
-			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
+			Name:            "init-sysctl",
+			Image:           busyBoxImage.GetImage(),
+			ImagePullPolicy: busyBoxImage.GetImagePullPolicy(),
 			Command: []string{
 				"sysctl",
 				"-w",

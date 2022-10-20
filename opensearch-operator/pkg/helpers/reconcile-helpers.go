@@ -9,6 +9,32 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 )
 
+func ResolveBusyBoxImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
+	defaultRepo := "public.ecr.aws/opsterio"
+	defaultImage := "busybox"
+	defaultVersion := "1.27.2-buildx"
+
+	// If a custom BusyBox image is specified, use it.
+	if cr.Spec.BusyBox.ImageSpec != nil {
+		if useCustomImage(cr.Spec.BusyBox.ImageSpec, &result) {
+			return
+		}
+	}
+
+	// If a different image repo is requested, use that with the default image name and version tag.
+	if cr.Spec.General.DefaultRepo != nil {
+		defaultRepo = *cr.Spec.General.DefaultRepo
+	}
+
+	if cr.Spec.BusyBox.Version != nil {
+		defaultVersion = *cr.Spec.BusyBox.Version
+	}
+
+	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+		path.Join(defaultRepo, defaultImage), defaultVersion))
+	return
+}
+
 func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (result opsterv1.ImageSpec) {
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch"
