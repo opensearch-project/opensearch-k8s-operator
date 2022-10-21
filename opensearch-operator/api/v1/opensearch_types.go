@@ -49,7 +49,7 @@ type GeneralConfig struct {
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 }
 
-type BusyBoxConfig struct {
+type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Version    *string `json:"version,omitempty"`
 }
@@ -211,7 +211,7 @@ type ClusterSpec struct {
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
-	BusyBox    BusyBoxConfig    `json:"busyBox,omitempty"`
+	InitHelper InitHelperConfig `json:"initHelper,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Es

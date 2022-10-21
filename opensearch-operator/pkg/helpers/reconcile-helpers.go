@@ -9,14 +9,14 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 )
 
-func ResolveBusyBoxImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
+func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
 	defaultRepo := "public.ecr.aws/opsterio"
 	defaultImage := "busybox"
 	defaultVersion := "1.27.2-buildx"
 
-	// If a custom BusyBox image is specified, use it.
-	if cr.Spec.BusyBox.ImageSpec != nil {
-		if useCustomImage(cr.Spec.BusyBox.ImageSpec, &result) {
+	// If a custom InitHelper image is specified, use it.
+	if cr.Spec.InitHelper.ImageSpec != nil {
+		if useCustomImage(cr.Spec.InitHelper.ImageSpec, &result) {
 			return
 		}
 	}
@@ -26,8 +26,8 @@ func ResolveBusyBoxImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageS
 		defaultRepo = *cr.Spec.General.DefaultRepo
 	}
 
-	if cr.Spec.BusyBox.Version != nil {
-		defaultVersion = *cr.Spec.BusyBox.Version
+	if cr.Spec.InitHelper.Version != nil {
+		defaultVersion = *cr.Spec.InitHelper.Version
 	}
 
 	result.Image = pointer.String(fmt.Sprintf("%s:%s",

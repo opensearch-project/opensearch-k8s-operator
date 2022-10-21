@@ -311,6 +311,27 @@ Or custom ones, for example that Aiven plugin for prometheus-exporter:
     pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
 ```
 
+## Custom image repository
+A custom image repository can be configured as needed (for example an air gapped environment). Globally used image repository is set using the `DefaultRepo` option:
+
+```yaml
+  spec:
+    general:
+      defaultRepo: "mycustomrepo.cr"
+```
+
+Alternatively, a custom image can be specified for each image separately. For example, the initHelper image is configured as follows:
+
+```yaml
+  spec:     
+    initHelper:
+      # specify version
+      version: "1.27.2-buildcustom"
+      # or specify a totally different image
+      image: "mycustomrepo.cr/mycustombusybox:myversion"
+```
+
+
 ## Nodepools and Scaling
 OpenSearch clusters can be composed of one or more node pools, with each representing a logical group or unified roles. Each node pool can have its own resources, and will have autonomic StatefulSets and services.
 

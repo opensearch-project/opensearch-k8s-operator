@@ -56,5 +56,38 @@ var _ = Describe("Builders", func() {
 				Value: "master",
 			}))
 		})
+		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
+			var clusterObject = ClusterDescWithversion("2.2.1")
+			customRepository := "mycustomrepo.cr"
+			clusterObject.Spec.General.DefaultRepo = &customRepository
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
+		})
+		It("should use InitHelper.Image as InitHelper image if configured", func() {
+			var clusterObject = ClusterDescWithversion("2.2.1")
+			customImage := "mycustomrepo.cr/custombusybox:1.2.3"
+			clusterObject.Spec.InitHelper = opsterv1.InitHelperConfig{
+				ImageSpec: &opsterv1.ImageSpec{
+					Image: &customImage,
+				},
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/custombusybox:1.2.3"))
+		})
+		It("should use defaults when no custom image is configured for InitHelper image", func() {
+			var clusterObject = ClusterDescWithversion("2.2.1")
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("public.ecr.aws/opsterio/busybox:1.27.2-buildx"))
+		})
+	})
+
+	When("Constructing a bootstrap pod", func() {
+		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
+			var clusterObject = ClusterDescWithversion("2.2.1")
+			customRepository := "mycustomrepo.cr"
+			clusterObject.Spec.General.DefaultRepo = &customRepository
+			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(result.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
+		})
 	})
 })
