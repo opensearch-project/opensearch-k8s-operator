@@ -2459,6 +2459,25 @@ spec:
                       scrapInterval:
                         type: string
                     type: object
+                  keystore:
+                    description: Populate opensearch keystore before startup
+                    items:
+                      properties:
+                        keyMappings:
+                          additionalProperties:
+                            type: string
+                          description: Key mappings from secret to keystore keys
+                          type: object
+                        secret:
+                          description: Secret containing key value pairs
+                          properties:
+                            name:
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                TODO: Add other useful fields. apiVersion, kind, uid?'
+                              type: string
+                          type: object
+                      type: object
+                    type: array
                   pluginsList:
                     items:
                       type: string
