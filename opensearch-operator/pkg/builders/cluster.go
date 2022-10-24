@@ -880,7 +880,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 		MatchNames: []string{cr.Namespace},
 	}
 
-	scrapInterval := cr.Spec.General.Monitoring.Interval
+	scrapeInterval := cr.Spec.General.Monitoring.Interval
 	if scrapInterval == "" {
 		scrapInterval = "30s"
 	}
