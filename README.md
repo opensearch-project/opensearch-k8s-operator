@@ -48,7 +48,7 @@ The Operator can be easily installed using Helm:
 - Run `make install` to create the CRD in the kubernetes cluster
 - Start the Operator by running `make run`
 
-**Note: use GO 1.17 version** 
+# **Note: use GO 1.19 version** 
 
 Now you can deploy an Opensearch cluster.
 
