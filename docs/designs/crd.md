@@ -419,7 +419,7 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
   Monitoring
 </h3>
 
-Monitoring defines Opensearch monitoring stuck
+Monitoring defines Opensearch monitoring configuration
 
 <table>
     <thead>
