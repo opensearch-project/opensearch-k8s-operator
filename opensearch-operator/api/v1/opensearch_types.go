@@ -93,7 +93,7 @@ type ConfMgmt struct {
 type MonitoringStuck struct {
 	Enable         bool   `json:"enable,omitempty"`
 	MonitoringUser string `json:"monitoringUser,omitempty"`
-	Interval       string `json:"interval,omitempty"`
+	ScrapInterval  string `json:"scrapInterval,omitempty"`
 	OfflinePlugin  string `json:"offlinePlugin,omitempty"`
 }
 

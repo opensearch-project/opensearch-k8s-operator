@@ -987,8 +987,6 @@ spec:
                     type: boolean
                   autoScaler:
                     type: boolean
-                  monitoring:
-                    type: boolean
                   smartScaler:
                     type: boolean
                 type: object
@@ -2450,6 +2448,17 @@ spec:
                           type: string
                       type: object
                     type: array
+                  monitoring:
+                    properties:
+                      enable:
+                        type: boolean
+                      monitoringUser:
+                        type: string
+                      offlinePlugin:
+                        type: string
+                      scrapInterval:
+                        type: string
+                    type: object
                   pluginsList:
                     items:
                       type: string
