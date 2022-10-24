@@ -311,8 +311,8 @@ Or custom ones, for example that Aiven plugin for prometheus-exporter:
     pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
 ```
 
-## Custom image repository
-A custom image repository can be configured as needed (for example an air gapped environment). Globally used image repository is set using the `DefaultRepo` option:
+## Custom init helper
+The initHelper is an image used during cluster setup. By default, this is configured a busybox image, but a custom one can be used as needed (for example an air gapped environment). Globally used image repository is set using the `DefaultRepo` option:
 
 ```yaml
   spec:
@@ -320,7 +320,7 @@ A custom image repository can be configured as needed (for example an air gapped
       defaultRepo: "mycustomrepo.cr"
 ```
 
-Alternatively, a custom image can be specified for each image separately. For example, the initHelper image is configured as follows:
+Alternatively, a custom image for just the initHelper (busybox used during cluster setup) is configured as follows:
 
 ```yaml
   spec:     
