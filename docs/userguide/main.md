@@ -332,6 +332,39 @@ Alternatively, a custom image for just the initHelper (busybox used during clust
 ```
 
 
+## Add secrets to keystore
+
+Since some OpenSearch features (e.g. plugins) need secrets in the OpenSearch Keystore, you can populate the keystore using Kubernetes secrets.
+
+```yaml
+  general:
+    # ...
+    keystore:
+    - secret:
+        name: credentials
+    - secret:
+        name: some-other-secret
+```
+
+If you only want to load some keys from a secret or rename the existing keys, add key mappings as a map. Note: only provided keys will be loaded from the secret!
+
+```yaml
+  general:
+    # ...
+    keystore:
+    - secret:
+        name: many-secret-values
+      keyMappings:
+        # Only read "sensitive-value" from the secret, keep its name.
+        sensitive-value: sensitive-value
+    - secret:
+        name: credentials
+      keyMappings:
+        # Renames key accessKey in secret to s3.client.default.access_key in keystore
+        accessKey: s3.client.default.access_key
+        password: s3.client.default.secret_key
+```
+
 ## Nodepools and Scaling
 OpenSearch clusters can be composed of one or more node pools, with each representing a logical group or unified roles. Each node pool can have its own resources, and will have autonomic StatefulSets and services.
 
