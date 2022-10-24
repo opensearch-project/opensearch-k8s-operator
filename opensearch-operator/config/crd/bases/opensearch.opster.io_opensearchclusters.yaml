@@ -2448,17 +2448,6 @@ spec:
                           type: string
                       type: object
                     type: array
-                  monitoring:
-                    properties:
-                      enable:
-                        type: boolean
-                      monitoringUser:
-                        type: string
-                      offlinePlugin:
-                        type: string
-                      scrapInterval:
-                        type: string
-                    type: object
                   keystore:
                     description: Populate opensearch keystore before startup
                     items:
@@ -2478,6 +2467,17 @@ spec:
                           type: object
                       type: object
                     type: array
+                  monitoring:
+                    properties:
+                      enable:
+                        type: boolean
+                      monitoringUser:
+                        type: string
+                      offlinePlugin:
+                        type: string
+                      scrapInterval:
+                        type: string
+                    type: object
                   pluginsList:
                     items:
                       type: string
