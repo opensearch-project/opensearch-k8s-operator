@@ -507,7 +507,7 @@ spec:
   general:
     monitoring:
       enable: true
-      internval: 10s
+      interval: 30s
       monitoringUser: appUser
       offlinePlugin: https://opster-s3-bucket/prometheus-exporter-plugin-for-opensearch
 ```
