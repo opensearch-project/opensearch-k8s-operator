@@ -96,6 +96,12 @@ ClusterSpec defines the desired state of OpensearchCluster
         <td>[]object</td>
         <td>List of objects that define the different nodePools in an OpensearchCluster. Each nodePool represents a group of nodes with the same opensearch roles and resources. Each nodePool is deployed as a Kubernetes StatefulSet. Together they form the opensearch cluster.</td>
         <td>true</td>
+      </tr><tr>
+        <td><b>initHelper</b></td>
+        <td>object</td>
+        <td>InitHelper image configuration</td>
+        <td>false</td>
+      </tr>
 </table>
 
 
@@ -171,6 +177,10 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>false</td>
         <td> - </td>
       </tr><tr>
+        <td><b>DefaultRepo</b></td>
+        <td>string</td>
+        <td>Default image repository to use</td>
+      </tr><tr>
         <td><b>keystore</b></td>
         <td>[]opsterv1.KeystoreValue</td>
         <td>List of objects that define secret values that will populate the opensearch keystore.</td>
@@ -225,7 +235,7 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>JVM args. Use this to define heap size</td>
         <td>false</td>
         <td>-Xmx512M -Xms512M<td>
-      </tr><tr>
+      </tr>
 </table>
 
 <h3 id="GeneralConfig">
@@ -320,7 +330,7 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>Adds affinity to dashboard pods</td>
         <td>false</td>
         <td>-</td>
-      </tr><tr>
+      </tr>
 </table>
 
 
@@ -413,7 +423,45 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>add topology spread contraints to nodePool</td>
         <td>false</td>
         <td> - </td>
+      </tr>
+</table>
+
+<h3 id="InitHelperConfig">
+  InitHelperConfig
+</h3>
+
+InitHelperConfig defines global Opensearch InitHelper image configuration
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>image</b></td>
+        <td>string</td>
+        <td>Define InitHelper image</td>
+        <td>false</td>
+        <td>public.ecr.aws/opsterio/busybox</td>
       </tr><tr>
+      </tr><tr>
+        <td><b>imagePullPolicy</b></td>
+        <td>corev1.PullPolicy</td>
+        <td>Define InitHelper image pull policy</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>version</b></td>
+        <td>string</td>
+        <td>Version of InitHelper (busybox) image to deploy</td>
+        <td>false</td>
+        <td>1.27.2-buildx</td>
+       </tr>
 </table>
 
 <h3 id="GeneralConfig">

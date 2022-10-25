@@ -191,6 +191,7 @@ func NewSTSForNodePool(
 	}
 
 	image := helpers.ResolveImage(cr, &node)
+	initHelperImage := helpers.ResolveInitHelperImage(cr)
 
 	var mainCommand []string
 	com := "./bin/opensearch-plugin install --batch"
@@ -209,10 +210,11 @@ func NewSTSForNodePool(
 
 	initContainers := []corev1.Container{
 		{
-			Name:    "init",
-			Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
-			Command: []string{"sh", "-c"},
-			Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			Name:            "init",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Command:         []string{"sh", "-c"},
+			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: &runas,
 			},
@@ -449,9 +451,12 @@ func NewSTSForNodePool(
 	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
 	if cr.Spec.General.SetVMMaxMapCount {
+		initHelperImage := helpers.ResolveInitHelperImage(cr)
+
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
-			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
+			Name:            "init-sysctl",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -647,6 +652,7 @@ func NewBootstrapPod(
 	}
 
 	image := helpers.ResolveImage(cr, nil)
+	initHelperImage := helpers.ResolveInitHelperImage(cr)
 	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
 
 	probe := corev1.Probe{
@@ -736,10 +742,11 @@ func NewBootstrapPod(
 			},
 			InitContainers: []corev1.Container{
 				{
-					Name:    "init",
-					Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
-					Command: []string{"sh", "-c"},
-					Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+					Name:            "init",
+					Image:           initHelperImage.GetImage(),
+					ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+					Command:         []string{"sh", "-c"},
+					Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 					SecurityContext: &corev1.SecurityContext{
 						RunAsUser: pointer.Int64(0),
 					},
@@ -762,8 +769,9 @@ func NewBootstrapPod(
 
 	if cr.Spec.General.SetVMMaxMapCount {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
-			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
+			Name:            "init-sysctl",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Command: []string{
 				"sysctl",
 				"-w",

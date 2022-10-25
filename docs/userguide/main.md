@@ -311,6 +311,27 @@ Or custom ones, for example that Aiven plugin for prometheus-exporter:
     pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
 ```
 
+## Custom init helper
+The initHelper is an image used during cluster setup. By default OpensearchOperator creates an init container with that image (_public.ecr.aws/opsterio/busybox:1.27.2-buildx_), according to change that behaviour and use a custom image, follow the instructions. Globally used image repository is set using the `DefaultRepo` option:
+
+```yaml
+  spec:
+    general:
+      defaultRepo: "mycustomrepo.cr"
+```
+
+Alternatively, a custom image for just the initHelper (busybox used during cluster setup) is configured as follows:
+
+```yaml
+  spec:     
+    initHelper:
+      # specify version
+      version: "1.27.2-buildcustom"
+      # or specify a totally different image
+      image: "mycustomrepo.cr/mycustombusybox:myversion"
+```
+
+
 ## Add secrets to keystore
 
 Since some OpenSearch features (e.g. plugins) need secrets in the OpenSearch Keystore, you can populate the keystore using Kubernetes secrets.

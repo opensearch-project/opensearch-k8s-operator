@@ -68,13 +68,13 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go
 
 docker-build: test ## Build docker image with the manager.
-	go install opensearch.opster.io/pkg/builders
-	go install opensearch.opster.io/pkg/helpers
+	go get opensearch.opster.io/pkg/builders
+	go get opensearch.opster.io/pkg/helpers
 	DOCKER_BUILDKIT=1 docker build -t ${IMG} .
 
 docker-build-multiarch: ## Build docker image with the manager for all supported architectures
-	go install opensearch.opster.io/pkg/builders
-	go install opensearch.opster.io/pkg/helpers
+	go get opensearch.opster.io/pkg/builders
+	go get opensearch.opster.io/pkg/helpers
 	DOCKER_BUILDKIT=1 docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
@@ -98,22 +98,22 @@ undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/confi
 
 CONTROLLER_GEN = $(shell pwd)/bin/controller-gen
 controller-gen: ## Download controller-gen locally if necessary.
-	$(call go-install-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1)
+	$(call go-get-tool,$(CONTROLLER_GEN),sigs.k8s.io/controller-tools/cmd/controller-gen@v0.4.1)
 
 KUSTOMIZE = $(shell pwd)/bin/kustomize
 kustomize: ## Download kustomize locally if necessary.
-$(call go-install-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v4@v4.5.7)
+	$(call go-get-tool,$(KUSTOMIZE),sigs.k8s.io/kustomize/kustomize/v3@v3.8.7)
 
-# go-install-tool will 'go install' any package $2 and install it to $1.
+# go-get-tool will 'go get' any package $2 and install it to $1.
 PROJECT_DIR := $(shell dirname $(abspath $(lastword $(MAKEFILE_LIST))))
-define go-install-tool
+define go-get-tool
 @[ -f $(1) ] || { \
 set -e ;\
 TMP_DIR=$$(mktemp -d) ;\
 cd $$TMP_DIR ;\
 go mod init tmp ;\
 echo "Downloading $(2)" ;\
-GOBIN=$(PROJECT_DIR)/bin go install $(2) ;\
+GOBIN=$(PROJECT_DIR)/bin go get $(2) ;\
 rm -rf $$TMP_DIR ;\
 }
 endef

@@ -51,6 +51,11 @@ type GeneralConfig struct {
 	Keystore []KeystoreValue `json:"keystore,omitempty"`
 }
 
+type InitHelperConfig struct {
+	*ImageSpec `json:",inline,omitempty"`
+	Version    *string `json:"version,omitempty"`
+}
+
 type NodePool struct {
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
@@ -215,6 +220,7 @@ type ClusterSpec struct {
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
+	InitHelper InitHelperConfig `json:"initHelper,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Es
