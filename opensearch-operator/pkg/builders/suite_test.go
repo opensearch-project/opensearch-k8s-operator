@@ -24,9 +24,8 @@ package builders
 import (
 	"testing"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -42,8 +41,5 @@ Now, let's go through the code generated.
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Builders Suite",
-		[]Reporter{printer.NewlineReporter{}})
-
+	RunSpecs(t, "Builders Suite")
 }

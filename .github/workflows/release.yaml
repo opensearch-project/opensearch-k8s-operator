@@ -8,8 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: k8s-operator
-    container:
-      image: public.ecr.aws/opsterio/go.1.17:with-aws-cli
     name: Release
     steps:
       - name: Checkout

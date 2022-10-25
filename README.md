@@ -48,7 +48,7 @@ The Operator can be easily installed using Helm:
 - Run `make install` to create the CRD in the kubernetes cluster
 - Start the Operator by running `make run`
 
-**Note: use GO 1.17 version** 
+**Note**: You need Go version 1.19.
 
 Now you can deploy an Opensearch cluster.
 
@@ -63,6 +63,7 @@ In order to delete the cluster, you just delete your OpenSearch cluster resource
 ```bash
 kubectl delete -f opensearch-cluster.yaml
 ```
+
 ## Installation Tutorial and Demo
 
 [![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://player.vimeo.com/video/708641527)
