@@ -120,13 +120,16 @@ func NewSTSForNodePool(
 		MountPath: "/usr/share/opensearch/data",
 	})
 
-	//var vendor string
 	labels := map[string]string{
 		ClusterLabel:  cr.Name,
 		NodePoolLabel: node.Component,
 	}
 	annotations := map[string]string{
 		ConfigurationChecksumAnnotation: configChecksum,
+	}
+	matchLabels := map[string]string{
+		ClusterLabel:  cr.Name,
+		NodePoolLabel: node.Component,
 	}
 
 	if helpers.ContainsString(selectedRoles, "master") {
@@ -323,7 +326,7 @@ func NewSTSForNodePool(
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &node.Replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: matchLabels,
 			},
 			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
 			UpdateStrategy: func() appsv1.StatefulSetUpdateStrategy {
