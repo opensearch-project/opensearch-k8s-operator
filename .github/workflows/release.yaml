@@ -8,8 +8,6 @@ jobs:
     runs-on: ubuntu-latest
     environment:
       name: k8s-operator
-    container:
-      image: public.ecr.aws/opsterio/go.1.17:with-aws-cli
     name: Release
     steps:
       - name: Checkout
@@ -17,7 +15,7 @@ jobs:
       - name: Setup go
         uses: actions/setup-go@v3
         with:
-          go-version: '1.17'
+          go-version: '1.19'
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       - name: set Env
@@ -33,9 +31,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           cd opensearch-operator
-          go version
-          go get opensearch.opster.io/pkg/builders
-          go get opensearch.opster.io/pkg/helpers
           make test
           export IMG=public.ecr.aws/opsterio/opensearch-operator:$RELEASE_VERSION
           echo $IMG

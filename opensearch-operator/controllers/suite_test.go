@@ -23,23 +23,20 @@ package controllers
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
-	"github.com/onsi/gomega/gexec"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
-	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 	//+kubebuilder:scaffold:imports
@@ -54,40 +51,35 @@ import (
 Now, let's go through the code generated.
 */
 
-var (
-	k8sClient client.Client // You'll be using this client in your tests.
-	testEnv   *envtest.Environment
-)
+var cfg *rest.Config
+var k8sClient client.Client
+var testEnv *envtest.Environment
+var cancel context.CancelFunc
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecsWithDefaultAndCustomReporters(t,
-		"Controller Suite",
-		[]Reporter{printer.NewlineReporter{}})
+	RunSpecs(t, "Controller Suite")
 
 }
 
 var _ = BeforeSuite(func() {
-	//OpensearchCluster := ComposeOpensearchCrd("cluster-test", "default")
 
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
-	//logf.SetLogger(zap.LoggerTo(GinkgoWriter, true))
 
-	ctx := context.Background()
-	By("bootstrappifng test environment")
+	var ctx context.Context
+	ctx, cancel = context.WithCancel(context.TODO())
+
+	By("bootstrapping test environment")
 	testEnv = &envtest.Environment{
 		CRDDirectoryPaths:     []string{filepath.Join("..", "config", "crd", "bases")},
 		ErrorIfCRDPathMissing: true,
 	}
 
-	cfg, err := testEnv.Start()
+	var err error
+	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
-	fmt.Println(err)
 	Expect(cfg).NotTo(BeNil())
-	if err != nil {
-		fmt.Println(err)
-	}
 
 	err = scheme.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -120,11 +112,11 @@ var _ = BeforeSuite(func() {
 	k8sClient = k8sManager.GetClient()
 	Expect(k8sClient).ToNot(BeNil())
 
-}, 60)
+})
 
 var _ = AfterSuite(func() {
 	By("tearing down the test environment")
-	gexec.KillAndWait(5 * time.Second)
+	cancel()
 	err := testEnv.Stop()
-	Expect(err).ToNot(HaveOccurred())
+	Expect(err).NotTo(HaveOccurred())
 })
