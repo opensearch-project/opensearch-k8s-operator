@@ -526,7 +526,7 @@ spec:
 
 ## Linking Opensearch Users and Roles
 
-The operator allows you link any number of roles and users with a OpensearchUserRoleBinding.  Each user in the binding will be granted each role.  E.g:
+The operator allows you link any number of users, backend roles and roles with a OpensearchUserRoleBinding.  Each user in the binding will be granted each role.  E.g:
 
 ```yaml
 apiVersion: opensearch.opster.io/v1
@@ -539,6 +539,8 @@ spec:
     namespace: default
   users:
   - sample-user
+  backendRoles:
+  - sample-backend-role
   roles:
   - sample-role
 ```

@@ -15,6 +15,6 @@ When an OpensearchRole is first reconciled the API is checked to see if the Role
 
 
 ## Role Mappings
-The operator uses OpensearchUserRoleBinding object that links users and roles together in a many <-> many relationship.  For each role the custom resource the operator will make sure there is a matching Role Mapping in the Opensearch API, that contains all of the users that are in the resource.
+The operator uses OpensearchUserRoleBinding object that links users, backend roles and roles together in a many <-> many relationship.  For each role the custom resource the operator will make sure there is a matching Role Mapping in the Opensearch API, that contains all of the users and backend roles that are in the resource.
 
 Due to the many <-> many nature of the binding, and the simplicity of Role Mappings there are not the same protections against CRUD operations.

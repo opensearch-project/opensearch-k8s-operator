@@ -112,7 +112,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	// Check cluster ref has not changed
 	if r.instance.Status.ManagedCluster != nil {
 		if *r.instance.Status.ManagedCluster != r.cluster.UID {
-			reason = "cannot change the cluster a user refers to"
+			reason = "cannot change the cluster a role refers to"
 			retErr = fmt.Errorf("%s", reason)
 			r.recorder.Event(r.instance, "Warning", opensearchRefMismatch, reason)
 			return
