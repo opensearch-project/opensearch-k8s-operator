@@ -9,6 +9,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
@@ -186,6 +187,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 	When("running the dashboards reconciler with additionalConfig supplied", func() {
 		It("should populate the dashboard config with these values", func() {
 			clusterName := "dashboards-add-config"
+			testConfig := "some-config-here"
+
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -193,7 +196,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						AdditionalConfig: map[string]string{
-							"foo": "bar",
+							"some-key": testConfig,
 						},
 					},
 				}}
@@ -221,9 +224,21 @@ var _ = Describe("Dashboards Reconciler", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			data, exists := configMap.Data["opensearch_dashboards.yml"]
+			data, exists := configMap.Data[helpers.DashboardConfigName]
 			Expect(exists).To(BeTrue())
-			Expect(strings.Contains(data, "foo: bar\n")).To(BeTrue())
+			Expect(strings.Contains(data, testConfig)).To(BeTrue())
+
+			deployment := appsv1.Deployment{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{
+					Name:      clusterName + "-dashboards",
+					Namespace: clusterName,
+				}, &deployment)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			expectedChecksum, _ := util.GetSha1Sum([]byte(data))
+			Expect(deployment.Spec.Template.ObjectMeta.Annotations[helpers.DashboardChecksumName]).To(Equal(expectedChecksum))
 		})
 	})
 
