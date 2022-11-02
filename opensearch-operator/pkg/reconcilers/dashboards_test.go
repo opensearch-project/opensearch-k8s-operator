@@ -196,7 +196,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						AdditionalConfig: map[string]string{
-							helpers.DashboardConfigName: testConfig,
+							"some-key": testConfig,
 						},
 					},
 				}}
