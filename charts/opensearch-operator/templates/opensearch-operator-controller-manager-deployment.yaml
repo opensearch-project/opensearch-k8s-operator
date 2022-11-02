@@ -22,6 +22,12 @@ spec:
         - --v=10
         image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
         name: kube-rbac-proxy
+        resources:
+{{- toYaml .Values.kubeRbacProxy.resources | nindent 10 }}
+        readinessProbe:
+{{- toYaml .Values.kubeRbacProxy.readinessProbe | nindent 10 }}
+        livenessProbe:
+{{- toYaml .Values.kubeRbacProxy.livenessProbe | nindent 10 }}
         ports:
         - containerPort: 8443
           name: https
@@ -38,13 +44,17 @@ spec:
         name: operator-controller-manager
         imagePullPolicy: "{{ .Values.manager.image.pullPolicy }}"
         resources:
-          {{- toYaml .Values.manager.resources | nindent 12 }}
+{{- toYaml .Values.manager.resources | nindent 10 }}
+        readinessProbe:
+{{- toYaml .Values.manager.readinessProbe | nindent 10 }}
+        livenessProbe:
+{{- toYaml .Values.manager.livenessProbe | nindent 10 }}
         securityContext:
           allowPrivilegeEscalation: false
       nodeSelector:
-        {{- toYaml .Values.nodeSelector | nindent 8 }}
+{{- toYaml .Values.nodeSelector | nindent 8 }}
       tolerations:
-        {{- toYaml .Values.tolerations | nindent 8 }}
+{{- toYaml .Values.tolerations | nindent 8 }}
       securityContext:
         runAsNonRoot: true
       serviceAccountName: opensearch-operator-controller-manager
