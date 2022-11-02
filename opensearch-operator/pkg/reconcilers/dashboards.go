@@ -93,7 +93,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 
-		annotations["checksum/sha1"] = sha1sum
+		annotations[helpers.DashboardChecksumName] = sha1sum
 	}
 
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations)
