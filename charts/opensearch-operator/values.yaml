@@ -64,3 +64,7 @@ kubeRbacProxy:
     successThreshold: 1
     timeoutSeconds: 3
     initialDelaySeconds: 10
+
+  image: 
+    repository: "gcr.io/kubebuilder/kube-rbac-proxy"
+    tag: "v0.8.0"
