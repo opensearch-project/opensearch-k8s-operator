@@ -15,7 +15,7 @@ jobs:
         with:
           version: v1.22
           k3d-name: opensearch-operator-tests
-          k3d-args: --agents 2 -p "30000-30005:30000-30005@agent:0"
+          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Run tests
         run: |
