@@ -477,6 +477,55 @@ spec:
         secretName: secret-name
 ```
 
+
+## Custom Admin User
+
+In order to create your cluster with other than default `admin:admin` user you will have to add walk through those steps: 
+First you will have to create an `admin-credentials-secret` secret with your admin user configuration:
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admin-credentials-secret
+type: Opaque
+data:
+  # admin
+  username: YWRtaW4=
+  # admin123
+  password: YWRtaW4xMjM=
+```
+
+Second you will have to create your own `securityconfig-secret` secret (take a look about the at opensearch-operator/examples/securityconfig-secret.yaml for an example).
+Notice that inside `securityconfig-secret` You must edit the `hash` of the admin user before creating the secret. In order to hash your password you can use that online bcrypt (https://bcrypt.online/?plain_text=admin123&cost_factor=12).
+```yaml
+      internal_users.yml: |-
+        _meta:
+          type: "internalusers"
+          config_version: 2
+        admin:
+          hash: "$2y$12$lJsHWchewGVcGlYgE3js/O4bkTZynETyXChAITarCHLz8cuaueIyq"   <------- change that hash to your new password hash
+          reserved: true
+          backend_roles:
+          - "admin"
+          description: "Demo admin user"
+  ```
+
+The last thing that you have to do is to add that security configuration to your opensearch-cluster.yaml:
+```yaml
+  security:
+    config:
+      adminCredentialsSecret:
+        name: admin-credentials-secret
+      securityConfigSecret:
+       name: securityconfig-secret
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true
+```
+  
+
 ## Opensearch Users
 
 It is possible to manage Opensearch users in Kubernetes with the operator.  The operator will not modify users that already exist.  You can create an example user as follows:
