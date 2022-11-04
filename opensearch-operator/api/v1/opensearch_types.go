@@ -121,6 +121,7 @@ type DashboardsConfig struct {
 	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
 	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
+	Service                     corev1.ServiceSpec          `json:"service,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
