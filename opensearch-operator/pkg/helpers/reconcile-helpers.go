@@ -91,13 +91,6 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 		}
 	}
 
-	// If a general custom image is specified, use it.
-	if cr.Spec.General.ImageSpec != nil {
-		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
-			return
-		}
-	}
-
 	// If a different image repo is requested, use that with the default image
 	// name and version tag.
 	if cr.Spec.General.DefaultRepo != nil {
