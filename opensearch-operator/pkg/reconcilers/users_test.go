@@ -18,6 +18,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/responses"
 	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -367,6 +368,32 @@ var _ = Describe("users reconciler", func() {
 				}
 				Expect(len(events)).To(Equal(1))
 				Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s user updated in opensearch", opensearchAPIUpdated)))
+			})
+			It("should update the secret with opensearch annotations", func() {
+				go func() {
+					defer GinkgoRecover()
+					defer close(recorder.Events)
+					_, err := reconciler.Reconcile()
+					Expect(err).ToNot(HaveOccurred())
+				}()
+
+				Eventually(func() bool {
+					secret := &corev1.Secret{}
+
+					err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(password), secret)
+					Expect(err).ToNot(HaveOccurred())
+					Expect(secret).ToNot(BeNil())
+
+					annotations := secret.GetAnnotations()
+
+					actualName := annotations[helpers.OsUserNameAnnotation]
+					actualNamespace := annotations[helpers.OsUserNamespaceAnnotation]
+
+					expectedName := "test-user"
+					expectedNamespace := "test-user"
+
+					return actualName == expectedName && actualNamespace == expectedNamespace
+				}).Should(BeTrue())
 			})
 		})
 		When("user does not exist", func() {
