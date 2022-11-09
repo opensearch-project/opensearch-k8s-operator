@@ -2200,6 +2200,20 @@ spec:
                           to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
                         type: object
                     type: object
+                  service:
+                    properties:
+                      loadBalancerSourceRanges:
+                        items:
+                          type: string
+                        type: array
+                      type:
+                        default: ClusterIP
+                        enum:
+                        - ClusterIP
+                        - NodePort
+                        - LoadBalancer
+                        type: string
+                    type: object
                   tls:
                     properties:
                       caSecret:

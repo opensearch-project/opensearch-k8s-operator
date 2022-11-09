@@ -105,10 +105,13 @@ type BootstrapConfig struct {
 	Jvm          string                      `json:"jvm,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer
+type ServiceType string
+
 type ServiceSpec struct {
-	// +kubebuilder:default ClusterIP
-	Type                     corev1.ServiceType `json:"type,omitempty"`
-	LoadBalancerSourceRanges []string           `json:"loadBalancerSourceRanges,omitempty"`
+	// +kubebuilder:default=ClusterIP
+	Type                     ServiceType `json:"type,omitempty"`
+	LoadBalancerSourceRanges []string    `json:"loadBalancerSourceRanges,omitempty"`
 }
 
 type DashboardsConfig struct {
