@@ -495,7 +495,7 @@ data:
   password: YWRtaW4xMjM=
 ```
 
-Second you will have to create your own `securityconfig-secret` secret (take a look about the at opensearch-operator/examples/securityconfig-secret.yaml for an example).
+Second you will have to create your own `securityconfig-secret` secret (take a look at `opensearch-operator/examples/securityconfig-secret.yaml` for an example).
 Notice that inside `securityconfig-secret` You must edit the `hash` of the admin user before creating the secret. In order to hash your password you can use that online bcrypt (https://bcrypt.online/?plain_text=admin123&cost_factor=12).
 ```yaml
       internal_users.yml: |-
