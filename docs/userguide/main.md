@@ -480,7 +480,7 @@ spec:
 
 ## Custom Admin User
 
-In order to create your cluster with other than default `admin:admin` user you will have to add walk through those steps: 
+In order to create your cluster with an adminuser different from the default `admin:admin` you will have to walk through the following steps: 
 First you will have to create an `admin-credentials-secret` secret with your admin user configuration:
 ```yaml
 apiVersion: v1
