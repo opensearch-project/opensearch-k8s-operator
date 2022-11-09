@@ -139,7 +139,7 @@ func MapClusterRole(role string, ver string) string {
 	}
 }
 
-//Get leftSlice strings not in rightSlice
+// Get leftSlice strings not in rightSlice
 func DiffSlice(leftSlice, rightSlice []string) []string {
 	//diff := []string{}
 	var diff []string

@@ -40,6 +40,12 @@ spec:
             properties:
               bootstrap:
                 properties:
+                  additionalConfig:
+                    additionalProperties:
+                      type: string
+                    description: Extra items to add to the opensearch.yml, defaults
+                      to General.AdditionalConfig
+                    type: object
                   affinity:
                     description: Affinity is a group of affinity scheduling rules.
                     properties:

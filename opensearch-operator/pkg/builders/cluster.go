@@ -679,6 +679,60 @@ func NewBootstrapPod(
 		MountPath: "/usr/share/opensearch/data",
 	})
 
+	env := []corev1.EnvVar{
+		{
+			Name:  "cluster.initial_master_nodes",
+			Value: BootstrapPodName(cr),
+		},
+		{
+			Name:  "discovery.seed_hosts",
+			Value: DiscoveryServiceName(cr),
+		},
+		{
+			Name:  "cluster.name",
+			Value: cr.Name,
+		},
+		{
+			Name:  "network.bind_host",
+			Value: "0.0.0.0",
+		},
+		{
+			// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
+			Name:      "network.publish_host",
+			ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
+		},
+		{
+			Name:  "OPENSEARCH_JAVA_OPTS",
+			Value: jvm,
+		},
+		{
+			Name:  "node.roles",
+			Value: masterRole,
+		},
+		{
+			Name:  "http.port",
+			Value: fmt.Sprint(cr.Spec.General.HttpPort),
+		},
+	}
+
+	// Append additional config to env vars, use General.AdditionalConfig by default, overwrite with Bootstrap.AdditionalConfig
+	extraConfig := cr.Spec.General.AdditionalConfig
+	if cr.Spec.Bootstrap.AdditionalConfig != nil {
+		extraConfig = cr.Spec.Bootstrap.AdditionalConfig
+	}
+
+	keys := make([]string, 0, len(extraConfig))
+	for key := range extraConfig {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		env = append(env, corev1.EnvVar{
+			Name:  k,
+			Value: extraConfig[k],
+		})
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      BootstrapPodName(cr),
@@ -688,42 +742,7 @@ func NewBootstrapPod(
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Env: []corev1.EnvVar{
-						{
-							Name:  "cluster.initial_master_nodes",
-							Value: BootstrapPodName(cr),
-						},
-						{
-							Name:  "discovery.seed_hosts",
-							Value: DiscoveryServiceName(cr),
-						},
-						{
-							Name:  "cluster.name",
-							Value: cr.Name,
-						},
-						{
-							Name:  "network.bind_host",
-							Value: "0.0.0.0",
-						},
-						{
-							// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-							Name:      "network.publish_host",
-							ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
-						},
-						{
-							Name:  "OPENSEARCH_JAVA_OPTS",
-							Value: jvm,
-						},
-						{
-							Name:  "node.roles",
-							Value: masterRole,
-						},
-						{
-							Name:  "http.port",
-							Value: fmt.Sprint(cr.Spec.General.HttpPort),
-						},
-					},
-
+					Env:             env,
 					Name:            "opensearch",
 					Image:           image.GetImage(),
 					ImagePullPolicy: image.GetImagePullPolicy(),
