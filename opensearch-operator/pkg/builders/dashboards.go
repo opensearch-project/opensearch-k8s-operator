@@ -182,8 +182,8 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
-			// type will default to ClusterIP
-			Type: cr.Spec.Dashboards.Service.Type,
+			Type:                     cr.Spec.Dashboards.Service.Type,
+			LoadBalancerSourceRanges: cr.Spec.Dashboards.Service.LoadBalancerSourceRanges,
 			Ports: []corev1.ServicePort{{
 				Name:     "http",
 				Protocol: "TCP",
