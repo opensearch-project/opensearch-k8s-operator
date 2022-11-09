@@ -1,6 +1,8 @@
 package builders
 
 import (
+	"context"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -164,6 +166,71 @@ var _ = Describe("Builders", func() {
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
 			}))
+		})
+	})
+
+	When("Checking for AllMastersReady", func() {
+		It("should map all roles based on version", func() {
+			namespaceName := "rolemapping"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			var clusterObject = ClusterDescWithversion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Spec.General.ServiceName = "foobar"
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts.Status.ReadyReplicas = 2
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should handle a mapped master role", func() {
+			namespaceName := "rolemapping-v1v2"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			var clusterObject = ClusterDescWithversion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar-v1v2"
+			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"master", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts.Status.ReadyReplicas = 2
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should handle a v1 master role", func() {
+			namespaceName := "rolemapping-v1"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			var clusterObject = ClusterDescWithversion("1.3.0")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar-v1"
+			clusterObject.Spec.General.ServiceName = "foobar-v1"
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"master", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts.Status.ReadyReplicas = 2
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
+			Expect(result).To(BeFalse())
 		})
 	})
 })

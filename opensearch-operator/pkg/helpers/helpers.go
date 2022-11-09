@@ -139,7 +139,15 @@ func MapClusterRole(role string, ver string) string {
 	}
 }
 
-//Get leftSlice strings not in rightSlice
+func MapClusterRoles(roles []string, version string) []string {
+	mapped_roles := []string{}
+	for _, role := range roles {
+		mapped_roles = append(mapped_roles, MapClusterRole(role, version))
+	}
+	return mapped_roles
+}
+
+// Get leftSlice strings not in rightSlice
 func DiffSlice(leftSlice, rightSlice []string) []string {
 	//diff := []string{}
 	var diff []string
