@@ -235,6 +235,12 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>JVM args. Use this to define heap size</td>
         <td>false</td>
         <td>-Xmx512M -Xms512M<td>
+      </tr><tr>
+        <td><b>additionalConfig</b></td>
+        <td>string</td>
+        <td>Added extra items to opensearch.yml in the bootstrap pod</td>
+        <td>map[string]string</td>
+        <td>general.additionalConfig</td>
       </tr>
 </table>
 

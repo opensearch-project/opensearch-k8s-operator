@@ -103,6 +103,8 @@ type BootstrapConfig struct {
 	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
+	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 }
 
 type DashboardsConfig struct {
