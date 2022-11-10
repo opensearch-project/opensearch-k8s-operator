@@ -142,7 +142,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 				fmt.Sprintf("%s-dashboards", clusterName),
 				fmt.Sprintf("%s-dashboards.%s", clusterName, namespace),
 				fmt.Sprintf("%s-dashboards.%s.svc", clusterName, namespace),
-				fmt.Sprintf("%s-dashboards.%s.svc.cluster.local", clusterName, namespace),
+				fmt.Sprintf("%s-dashboards.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName+"-dashboards", clusterName, dnsNames)
 			if err != nil {
