@@ -312,15 +312,8 @@ Or custom ones, for example that Aiven plugin for prometheus-exporter:
 ```
 
 ## Custom init helper
-The initHelper is an image used during cluster setup. By default OpensearchOperator creates an init container with that image (_public.ecr.aws/opsterio/busybox:1.27.2-buildx_), according to change that behaviour and use a custom image, follow the instructions. Globally used image repository is set using the `DefaultRepo` option:
-
-```yaml
-  spec:
-    general:
-      defaultRepo: "mycustomrepo.cr"
-```
-
-Alternatively, a custom image for just the initHelper (busybox used during cluster setup) is configured as follows:
+The initHelper is an image used during cluster setup. By default OpensearchOperator creates an init container with that image (_public.ecr.aws/opsterio/busybox:1.27.2-buildx_), according to change that behaviour and use a custom image, follow the instructions:
+a custom image for just the initHelper (busybox used during cluster setup) is configured as follows:
 
 ```yaml
   spec:     
