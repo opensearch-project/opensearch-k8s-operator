@@ -23,8 +23,7 @@ func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 
 	// If a different image repo is requested, use that with the default image name and version tag.
 	if cr.Spec.InitHelper.Image != nil {
-		result.Image = pointer.String(fmt.Sprintf("%s:%s",
-			path.Join(defaultImage)))
+		result.Image = pointer.String(path.Join(defaultImage))
 		return
 	}
 
