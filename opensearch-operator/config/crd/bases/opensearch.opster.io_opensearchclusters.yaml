@@ -2028,6 +2028,10 @@ spec:
                             type: array
                         type: object
                     type: object
+                  basePath:
+                    description: Base Path for Opensearch Clusters running behind
+                      a reverse proxy
+                    type: string
                   enable:
                     type: boolean
                   env:
