@@ -72,7 +72,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.Scheme()))
 	result.Combine(r.ReconcileResource(discoveryService, reconciler.StatePresent))
 
-	passwordSecret := builders.PasswordSecret(r.instance, password)
+	passwordSecret := builders.PasswordSecret(r.instance, username, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.Scheme()))
 	result.Combine(r.ReconcileResource(passwordSecret, reconciler.StatePresent))
 

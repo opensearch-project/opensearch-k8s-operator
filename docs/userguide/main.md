@@ -137,7 +137,7 @@ nodePools:
     some.other.config: foobar
 ```
 
-Using `spec.general.additionalConfig` you can add settings to all nodes, using `nodePools[].additionalConfig` you can add settings to only a pool of nodes. The settings must be provided as a map of strings, so use the flat form of any setting. The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`.
+Using `spec.general.additionalConfig` you can add settings to all nodes, using `nodePools[].additionalConfig` you can add settings to only a pool of nodes. The settings must be provided as a map of strings, so use the flat form of any setting. The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`. The value of `spec.general.additionalConfig` is also used for configuring the bootstrap pod. To overwrite the values of the bootstrap pod, set the field `spec.bootstrap.additionalConfig`.
 
 As of right now, the settings cannot be changed after the initial installation of the cluster (that feature is planned for the next version). If you need to change any settings please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
 
@@ -476,6 +476,55 @@ spec:
       secret:
         secretName: secret-name
 ```
+
+
+## Custom Admin User
+
+In order to create your cluster with an adminuser different from the default `admin:admin` you will have to walk through the following steps: 
+First you will have to create an `admin-credentials-secret` secret with your admin user configuration:
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: admin-credentials-secret
+type: Opaque
+data:
+  # admin
+  username: YWRtaW4=
+  # admin123
+  password: YWRtaW4xMjM=
+```
+
+Second you will have to create your own `securityconfig-secret` secret (take a look at `opensearch-operator/examples/securityconfig-secret.yaml` for an example).
+Notice that inside `securityconfig-secret` You must edit the `hash` of the admin user before creating the secret. In order to hash your password you can use that online bcrypt (https://bcrypt.online/?plain_text=admin123&cost_factor=12).
+```yaml
+      internal_users.yml: |-
+        _meta:
+          type: "internalusers"
+          config_version: 2
+        admin:
+          hash: "$2y$12$lJsHWchewGVcGlYgE3js/O4bkTZynETyXChAITarCHLz8cuaueIyq"   <------- change that hash to your new password hash
+          reserved: true
+          backend_roles:
+          - "admin"
+          description: "Demo admin user"
+  ```
+
+The last thing that you have to do is to add that security configuration to your opensearch-cluster.yaml:
+```yaml
+  security:
+    config:
+      adminCredentialsSecret:
+        name: admin-credentials-secret
+      securityConfigSecret:
+       name: securityconfig-secret
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true
+```
+  
 
 ## Opensearch Users
 

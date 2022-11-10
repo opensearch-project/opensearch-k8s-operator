@@ -9,7 +9,7 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 )
 
-func ClusterDescWithversion(version string) opsterv1.OpenSearchCluster {
+func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
 	return opsterv1.OpenSearchCluster{
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
@@ -36,11 +36,24 @@ func ClusterDescWithKeystoreSecret(secretName string, keyMappings map[string]str
 	}
 }
 
+func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, bootstrapAdditionalConfig map[string]string) opsterv1.OpenSearchCluster {
+	return opsterv1.OpenSearchCluster{
+		Spec: opsterv1.ClusterSpec{
+			General: opsterv1.GeneralConfig{
+				AdditionalConfig: addtitionalConfig,
+			},
+			Bootstrap: opsterv1.BootstrapConfig{
+				AdditionalConfig: bootstrapAdditionalConfig,
+			},
+		},
+	}
+}
+
 var _ = Describe("Builders", func() {
 
 	When("Constructing a STS for a NodePool", func() {
 		It("should only use valid roles", func() {
-			var clusterObject = ClusterDescWithversion("2.2.1")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var nodePool = opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
@@ -52,7 +65,7 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 		It("should convert the master role", func() {
-			var clusterObject = ClusterDescWithversion("2.2.1")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var nodePool = opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"master"},
@@ -64,7 +77,7 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 		It("should convert the cluster_manager role", func() {
-			var clusterObject = ClusterDescWithversion("1.3.0")
+			var clusterObject = ClusterDescWithVersion("1.3.0")
 			var nodePool = opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
@@ -76,14 +89,14 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
-			var clusterObject = ClusterDescWithversion("2.2.1")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
 			clusterObject.Spec.General.DefaultRepo = &customRepository
 			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
 		})
 		It("should use InitHelper.Image as InitHelper image if configured", func() {
-			var clusterObject = ClusterDescWithversion("2.2.1")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
 			customImage := "mycustomrepo.cr/custombusybox:1.2.3"
 			clusterObject.Spec.InitHelper = opsterv1.InitHelperConfig{
 				ImageSpec: &opsterv1.ImageSpec{
@@ -94,7 +107,7 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/custombusybox:1.2.3"))
 		})
 		It("should use defaults when no custom image is configured for InitHelper image", func() {
-			var clusterObject = ClusterDescWithversion("2.2.1")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("public.ecr.aws/opsterio/busybox:1.27.2-buildx"))
 		})
@@ -102,11 +115,66 @@ var _ = Describe("Builders", func() {
 
 	When("Constructing a bootstrap pod", func() {
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
-			var clusterObject = ClusterDescWithversion("2.2.1")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
 			clusterObject.Spec.General.DefaultRepo = &customRepository
 			var result = NewBootstrapPod(&clusterObject, nil, nil)
 			Expect(result.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
+		})
+
+		It("should apply the BootstrapNodeConfig to the env variables", func() {
+			mockKey := "server.basePath"
+
+			mockConfig := map[string]string{
+				mockKey: "/opensearch-operated",
+			}
+			clusterObject := ClusterDescWithAdditionalConfigs(nil, mockConfig)
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  mockKey,
+				Value: mockConfig[mockKey],
+			}))
+		})
+
+		It("should apply the General.AdditionalConfig to the env variables if not overwritten", func() {
+			mockKey := "server.basePath"
+
+			mockConfig := map[string]string{
+				mockKey: "/opensearch-operated",
+			}
+			clusterObject := ClusterDescWithAdditionalConfigs(mockConfig, nil)
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  mockKey,
+				Value: mockConfig[mockKey],
+			}))
+		})
+
+		It("should overwrite the General.AdditionalConfig with Bootstrap.AdditionalConfig when set", func() {
+			mockKey1 := "server.basePath"
+			mockKey2 := "server.rewriteBasePath"
+
+			mockGeneralConfig := map[string]string{
+				mockKey1: "/opensearch-operated",
+			}
+			mockBootstrapConfig := map[string]string{
+				mockKey2: "false",
+			}
+
+			clusterObject := ClusterDescWithAdditionalConfigs(mockGeneralConfig, mockBootstrapConfig)
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.Spec.Containers[0].Env).NotTo(ContainElement(corev1.EnvVar{
+				Name:  mockKey1,
+				Value: mockGeneralConfig[mockKey2],
+			}))
+
+			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  mockKey2,
+				Value: mockBootstrapConfig[mockKey2],
+			}))
 		})
 	})
 
