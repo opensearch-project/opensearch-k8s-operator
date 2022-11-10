@@ -176,7 +176,8 @@ func NewSTSForNodePool(
 
 	// Because the http endpoint requires auth we need to do it as a curl script
 	httpPort := PortForCluster(cr)
-	curlCmd := "curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
+
+	curlCmd := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: 60,
 		PeriodSeconds:       30,
@@ -192,6 +193,17 @@ func NewSTSForNodePool(
 			},
 		},
 	}
+
+	volumes = append(volumes, corev1.Volume{
+		Name: "admin-credentials",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{SecretName: fmt.Sprintf("%s-admin-password", cr.Name)},
+		},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "admin-credentials",
+		MountPath: "/mnt/admin-credentials",
+	})
 
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
@@ -380,21 +392,6 @@ func NewSTSForNodePool(
 								{
 									Name:  "http.port",
 									Value: fmt.Sprint(cr.Spec.General.HttpPort),
-								},
-								{
-									Name:  "OPENSEARCH_USER",
-									Value: username,
-								},
-								{
-									Name: "OPENSEARCH_PASSWORD",
-									ValueFrom: &corev1.EnvVarSource{
-										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: fmt.Sprintf("%s-admin-password", cr.Name),
-											},
-											Key: "password",
-										},
-									},
 								},
 							},
 							Name:            "opensearch",
@@ -820,13 +817,14 @@ func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf("https://%s.svc.cluster.local:%d", DnsOfService(cr), httpPort)
 }
 
-func PasswordSecret(cr *opsterv1.OpenSearchCluster, password string) *corev1.Secret {
+func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-admin-password", cr.Name),
 			Namespace: cr.Namespace,
 		},
 		StringData: map[string]string{
+			"username": username,
 			"password": password,
 		},
 	}
