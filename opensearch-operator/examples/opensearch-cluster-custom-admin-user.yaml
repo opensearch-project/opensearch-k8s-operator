@@ -1,4 +1,4 @@
-## Use that example in case you do not want to deploy your cluster with an admin:admin (username:passowrd) Admin Opensearch user.
+## Use this example in case you want to deploy your cluster with an admin user with a custom password instead of the default (admin).
 
 apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
