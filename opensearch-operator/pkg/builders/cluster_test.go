@@ -241,7 +241,7 @@ var _ = Describe("Builders", func() {
 		It("should map all roles based on version", func() {
 			namespaceName := "rolemapping"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
-			var clusterObject = ClusterDescWithversion("2.2.1")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
 			clusterObject.ObjectMeta.Namespace = namespaceName
 			clusterObject.ObjectMeta.Name = "foobar"
 			clusterObject.Spec.General.ServiceName = "foobar"
@@ -262,7 +262,7 @@ var _ = Describe("Builders", func() {
 		It("should handle a mapped master role", func() {
 			namespaceName := "rolemapping-v1v2"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
-			var clusterObject = ClusterDescWithversion("2.2.1")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
 			clusterObject.ObjectMeta.Namespace = namespaceName
 			clusterObject.ObjectMeta.Name = "foobar-v1v2"
 			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
@@ -283,7 +283,7 @@ var _ = Describe("Builders", func() {
 		It("should handle a v1 master role", func() {
 			namespaceName := "rolemapping-v1"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
-			var clusterObject = ClusterDescWithversion("1.3.0")
+			var clusterObject = ClusterDescWithVersion("1.3.0")
 			clusterObject.ObjectMeta.Namespace = namespaceName
 			clusterObject.ObjectMeta.Name = "foobar-v1"
 			clusterObject.Spec.General.ServiceName = "foobar-v1"
