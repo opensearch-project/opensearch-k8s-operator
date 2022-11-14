@@ -106,9 +106,9 @@ type BootstrapConfig struct {
 }
 
 // +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer
-type ServiceType string
+type ServiceType = corev1.ServiceType
 
-type ServiceSpec struct {
+type DashboardsServiceSpec struct {
 	// +kubebuilder:default=ClusterIP
 	Type                     ServiceType `json:"type,omitempty"`
 	LoadBalancerSourceRanges []string    `json:"loadBalancerSourceRanges,omitempty"`
@@ -130,7 +130,7 @@ type DashboardsConfig struct {
 	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
 	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
-	Service                     ServiceSpec                 `json:"service,omitempty"`
+	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
