@@ -103,8 +103,27 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		})
 		result.CombineErr(err)
 	}
-
+	if r.instance.Spec.General.Snapshot != nil && len(r.instance.Spec.General.Snapshot) > 0 {
+		r.reconcileSnapshotConfig(username)
+	}
 	return result.Result, result.Err
+}
+
+func (r *ClusterReconciler) reconcileSnapshotConfig(username string) (*ctrl.Result, error) {
+
+	r.logger.Info("Creating snapshotconfig-update job")
+	clusterName := r.instance.Name
+	jobName := clusterName + "-snapshotconfig-update"
+	snapshotSetting := builders.NewSnapshotconfigUpdateJob(
+		r.instance,
+		username,
+		jobName,
+		r.instance.Namespace,
+	)
+	if err := ctrl.SetControllerReference(r.instance, &snapshotSetting, r.Client.Scheme()); err != nil {
+		return &ctrl.Result{}, err
+	}
+	return r.ReconcileResource(&snapshotSetting, reconciler.StatePresent)
 }
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {

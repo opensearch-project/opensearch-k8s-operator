@@ -48,7 +48,8 @@ type GeneralConfig struct {
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 	// Populate opensearch keystore before startup
-	Keystore []KeystoreValue `json:"keystore,omitempty"`
+	Keystore []KeystoreValue  `json:"keystore,omitempty"`
+	Snapshot []SnapshotConfig `json:"snapshot,omitempty"`
 }
 
 type InitHelperConfig struct {
@@ -210,6 +211,12 @@ type KeystoreValue struct {
 	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
 	// Key mappings from secret to keystore keys
 	KeyMappings map[string]string `json:"keyMappings,omitempty"`
+}
+
+type SnapshotConfig struct {
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`
+	Settings map[string]string `json:"settings,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster
