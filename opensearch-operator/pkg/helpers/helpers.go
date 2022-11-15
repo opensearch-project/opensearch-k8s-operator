@@ -3,11 +3,16 @@ package helpers
 import (
 	"context"
 	"errors"
+	"fmt"
 	"reflect"
+	"time"
 
 	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/selection"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -158,4 +163,71 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 		}
 	}
 	return diff
+}
+
+// Count the number of PVCs created for the given NodePool
+func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
+	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
+	if err != nil {
+		return 0, err
+	}
+	componentReq, err := labels.NewRequirement(NodePoolLabel, selection.Equals, []string{nodePool.Component})
+	if err != nil {
+		return 0, err
+	}
+	selector := labels.NewSelector()
+	selector = selector.Add(*clusterReq, *componentReq)
+	list := corev1.PersistentVolumeClaimList{}
+	if err := k8sClient.List(ctx, &list, &client.ListOptions{LabelSelector: selector}); err != nil {
+		return 0, err
+	}
+	return len(list.Items), nil
+}
+
+// Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
+func WaitForSTSDelete(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet) error {
+	opts := client.DeleteOptions{}
+	client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
+	if err := k8sClient.Delete(ctx, obj, &opts); err != nil {
+		return err
+	}
+	for i := 1; i <= 10; i++ {
+		existing := appsv1.StatefulSet{}
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
+		if err != nil {
+			return nil
+		}
+		time.Sleep(time.Second * 2)
+	}
+	return fmt.Errorf("failed to delete STS")
+}
+
+// Wait for max 30s until a STS has at least the given number of replicas
+func WaitForSTSReplicas(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet, replicas int32) error {
+	for i := 1; i <= 10; i++ {
+		existing := appsv1.StatefulSet{}
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
+		if err == nil {
+			if existing.Status.Replicas >= replicas {
+				return nil
+			}
+		}
+		time.Sleep(time.Second * 3)
+	}
+	return fmt.Errorf("failed to wait for replicas")
+}
+
+// Wait for max 30s until a STS has a normal status (CurrentRevision != "")
+func WaitForSTSStatus(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
+	for i := 1; i <= 10; i++ {
+		existing := appsv1.StatefulSet{}
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
+		if err == nil {
+			if existing.Status.CurrentRevision != "" {
+				return &existing, nil
+			}
+		}
+		time.Sleep(time.Second * 3)
+	}
+	return nil, fmt.Errorf("failed to wait for STS")
 }
