@@ -22,8 +22,6 @@ import (
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
 const (
-	ClusterLabel                     = "opster.io/opensearch-cluster"
-	NodePoolLabel                    = "opster.io/opensearch-nodepool"
 	ConfigurationChecksumAnnotation  = "opster.io/config"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
@@ -121,15 +119,15 @@ func NewSTSForNodePool(
 	})
 
 	labels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: node.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: node.Component,
 	}
 	annotations := map[string]string{
 		ConfigurationChecksumAnnotation: configChecksum,
 	}
 	matchLabels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: node.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: node.Component,
 	}
 
 	if helpers.ContainsString(selectedRoles, "master") {
@@ -472,8 +470,8 @@ func NewSTSForNodePool(
 }
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: nodePool.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: nodePool.Component,
 	}
 
 	return &corev1.Service{
@@ -515,7 +513,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -574,7 +572,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -604,7 +602,7 @@ func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -640,7 +638,7 @@ func NewBootstrapPod(
 	volumeMounts []corev1.VolumeMount,
 ) *corev1.Pod {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 	resources := cr.Spec.Bootstrap.Resources
 
@@ -857,7 +855,7 @@ func WorkingPodForRollingRestart(sts *appsv1.StatefulSet) string {
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
 	for _, nodepool := range nodepools {
-		if sts.Labels[NodePoolLabel] == nodepool.Component {
+		if sts.Labels[helpers.NodePoolLabel] == nodepool.Component {
 			return true
 		}
 	}

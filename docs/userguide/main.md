@@ -524,7 +524,10 @@ The last thing that you have to do is to add that security configuration to your
       http:
         generate: true
 ```
-  
+
+## Cluster recovery
+
+This operator automatically handles common failure scenarios and restarts crashed pods, normally this is done in a one-by-one fashion to maintain quorum and cluster stability. In case the operator detects several crashed or missing pods (for a nodepool) at the same time it will switch into a special recovery mode and start all pods at once and allow the cluster to form a new quorum.
 
 ## Opensearch Users
 
