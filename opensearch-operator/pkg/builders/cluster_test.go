@@ -233,5 +233,17 @@ var _ = Describe("Builders", func() {
 				SubPath:   oldKey,
 			}))
 		})
+
+		/*It("should create a snapshotconfig batch job", func() {
+			var clusterName = "snapshotconfig"
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{Snapshot: []opsterv1.SnapshotConfig{
+						{Name: "my_s3_repository", Type: "s3", Settings: map[string]string{"bucket": "opensearch-s3-snapshot"}}}},
+				}}
+			result := NewSnapshotconfigUpdateJob(&spec, "snapshotconfig", "foobar", "checksum", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Args).To(ContainElement(corev1.Container{Name: "snapshotconfig"}))
+		})*/
 	})
 })

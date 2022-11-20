@@ -26,6 +26,7 @@ const (
 	NodePoolLabel                    = "opster.io/opensearch-nodepool"
 	ConfigurationChecksumAnnotation  = "opster.io/config"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
+	snapshotconfigChecksumAnnotation = "snapshotconfig/checksum"
 )
 
 func NewSTSForNodePool(
@@ -328,30 +329,6 @@ func NewSTSForNodePool(
 
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
-
-	// If Snapshot Setting are set in OpenSearchCluster manifest
-	/*if cr.Spec.General.Snapshot != nil && len(cr.Spec.General.Snapshot) > 0 {
-		snapshotCmd := ""
-		for _, repository := range cr.Spec.General.Snapshot {
-			snapshotSettings := ""
-			for settingsKey, settingsValue := range repository.Settings {
-				snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, settingsValue)
-			}
-			snapshotSettings = strings.TrimRight(snapshotSettings, " ,")
-			snapshotCmd += fmt.Sprintf("curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" -X PUT https://localhost:%v/_snapshot/%s?pretty -H 'Content-Type: application/json' -d {\"type\": \"%s\", \"settings\": {%s}}; ", fmt.Sprint(httpPort), repository.Name, repository.Type, snapshotSettings)
-		}
-		snapshotInitContainer := corev1.Container{
-			Name:            "snapshotconfig",
-			Image:           image.GetImage(),
-			ImagePullPolicy: image.GetImagePullPolicy(),
-			Command: []string{
-				"/bin/bash",
-				"-c",
-				snapshotCmd,
-			},
-		}
-		initContainers = append(initContainers, snapshotInitContainer)
-	}*/
 
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
@@ -890,31 +867,46 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 
 func NewSnapshotconfigUpdateJob(
 	instance *opsterv1.OpenSearchCluster,
-	username string,
 	jobName string,
 	namespace string,
+	checksum string,
+	volumes []corev1.Volume,
+	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
 	httpPort, _ := helpers.VersionCheck(instance)
-	var snapshotCmd string
 	dns := DnsOfService(instance)
+	var snapshotCmd string
 	for _, repository := range instance.Spec.General.Snapshot {
 		var snapshotSettings string
 		for settingsKey, settingsValue := range repository.Settings {
 			snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, settingsValue)
 		}
 		snapshotSettings = strings.TrimRight(snapshotSettings, " ,")
-		snapshotCmd += fmt.Sprintf("curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" -X PUT https://%s.svc.cluster.local:%v/_snapshot/%s?pretty -H \"Content-Type: application/json\" -d %c{\"type\": \"%s\", \"settings\": {%s}}%c; ", dns, fmt.Sprint(httpPort), repository.Name, '\'', repository.Type, snapshotSettings, '\'')
+		snapshotCmd += fmt.Sprintf("curl -s --fail --show-error -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://%s.svc.cluster.local:%v/_snapshot/%s?pretty -H \"Content-Type: application/json\" -d %c{\"type\": \"%s\", \"settings\": {%s}}%c; ", dns, fmt.Sprint(httpPort), repository.Name, '\'', repository.Type, snapshotSettings, '\'')
 	}
 	terminationGracePeriodSeconds := int64(5)
 	backoffLimit := int32(0)
 
 	node := opsterv1.NodePool{
-		Component: "securityconfig",
+		Component: "snapshotconfig",
+	}
+	annotations := map[string]string{
+		snapshotconfigChecksumAnnotation: checksum,
 	}
 	image := helpers.ResolveImage(instance, &node)
 
+	volumes = append(volumes, corev1.Volume{
+		Name: "admin-credentials",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{SecretName: fmt.Sprintf("%s-admin-password", instance.Name)},
+		},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "admin-credentials",
+		MountPath: "/mnt/admin-credentials",
+	})
 	return batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace},
+		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
@@ -922,30 +914,15 @@ func NewSnapshotconfigUpdateJob(
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 					Containers: []corev1.Container{{
-						Env: []corev1.EnvVar{
-							{
-								Name:  "OPENSEARCH_USER",
-								Value: username,
-							},
-							{
-								Name: "OPENSEARCH_PASSWORD",
-								ValueFrom: &corev1.EnvVarSource{
-									SecretKeyRef: &corev1.SecretKeySelector{
-										LocalObjectReference: corev1.LocalObjectReference{
-											Name: fmt.Sprintf("%s-admin-password", instance.Name),
-										},
-										Key: "password",
-									},
-								},
-							},
-						},
 						Name:            "snapshotconfig",
 						Image:           image.GetImage(),
 						ImagePullPolicy: image.GetImagePullPolicy(),
 						Command:         []string{"/bin/bash", "-c"},
 						Args:            []string{snapshotCmd},
+						VolumeMounts:    volumeMounts,
 					}},
 					RestartPolicy: corev1.RestartPolicyNever,
+					Volumes:       volumes,
 				},
 			},
 		},
