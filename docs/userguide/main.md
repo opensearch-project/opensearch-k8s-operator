@@ -162,6 +162,21 @@ This allows one to set up any of the [backend](https://opensearch.org/docs/lates
 
 *The configuration must be valid or the dashboard will fail to start.*
 
+## Configuring a basePath
+
+When using OpenSearch behind a reverse proxy you have to configure a base path. This can be achieved by setting the base path field in the configuraiton of OpenSearch Dashboards. Behind the scenes the according configuration fields are set automatically in the opensearch.yml file.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  dashboards:
+    enable: true
+    basePath: "/logs"
+```
+
+
 ## TLS
 
 For security reasons, encryption is required for communication with the OpenSearch cluster and between cluster nodes. If you do not configure any encryption, OpenSearch will use the included demo TLS certificates, which are not ideal for most active deployments.

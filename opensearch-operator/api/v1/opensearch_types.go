@@ -114,6 +114,8 @@ type DashboardsConfig struct {
 	Replicas   int32                       `json:"replicas"`
 	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
 	Version    string                      `json:"version"`
+	// Base Path for Opensearch Clusters running behind a reverse proxy
+	BasePath string `json:"basePath,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided

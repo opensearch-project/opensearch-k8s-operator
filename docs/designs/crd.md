@@ -273,6 +273,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>true</td>
         <td>1</td>
       </tr><tr>
+        <td><b>basePath</b></td>
+        <td>string</td>
+        <td>Defines the base path of opensearch dashboards (e.g. when using a reverse proxy)</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
         <td><b>resources</b></td>
         <td>corev1.ResourceRequirements</td>
         <td> Define Opensearch-Dashboard resources </td>
