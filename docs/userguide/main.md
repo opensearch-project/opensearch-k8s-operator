@@ -492,6 +492,15 @@ spec:
         secretName: secret-name
 ```
 
+## Custom cluster domain name
+
+If your cluster is configured with a custom domain name (default is `cluster.local`) you need to configure the operator accordingly in order for internal routing to work properly. This can be achieved by setting `manager.dnsBase` in the helm chart.
+
+```yaml
+manager:
+  # ...
+  dnsBase: custom.domain
+```
 
 ## Custom Admin User
 
