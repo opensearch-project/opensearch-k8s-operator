@@ -812,6 +812,7 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 	}
 	return httpPort
 }
+
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
 	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)

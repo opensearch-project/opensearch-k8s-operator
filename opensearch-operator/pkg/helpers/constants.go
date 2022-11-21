@@ -7,12 +7,13 @@ const (
 	DashboardChecksumName     = "checksum/dashboards.yml"
 	OsUserNameAnnotation      = "opensearchuser/name"
 	OsUserNamespaceAnnotation = "opensearchuser/namespace"
+	DnsBaseEnvVariable        = "DNS_BASE"
 )
 
 func ClusterDnsBase() string {
-	env, found := os.LookupEnv("DNS_BASE")
+	env, found := os.LookupEnv(DnsBaseEnvVariable)
 
-	if !found {
+	if !found || len(env) == 0 {
 		env = "cluster.local"
 	}
 

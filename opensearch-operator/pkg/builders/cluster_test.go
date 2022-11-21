@@ -2,11 +2,14 @@ package builders
 
 import (
 	"context"
+	"fmt"
+	"os"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -110,6 +113,24 @@ var _ = Describe("Builders", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("public.ecr.aws/opsterio/busybox:1.27.2-buildx"))
+		})
+		It("should use a custom dns name when env variable is set as cluster url", func() {
+			customDns := "custom.domain"
+			serviceName := "opensearch"
+			namespace := "search"
+			port := int32(9200)
+
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.ServiceName = serviceName
+			clusterObject.Namespace = namespace
+			clusterObject.Spec.General.HttpPort = port
+
+			os.Setenv(helpers.DnsBaseEnvVariable, customDns)
+
+			actualUrl := URLForCluster(&clusterObject)
+			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
+
+			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 	})
 
