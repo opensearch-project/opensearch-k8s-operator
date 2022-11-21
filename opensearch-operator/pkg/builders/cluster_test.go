@@ -88,13 +88,13 @@ var _ = Describe("Builders", func() {
 				Value: "master",
 			}))
 		})
-		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			customRepository := "mycustomrepo.cr"
-			clusterObject.Spec.General.DefaultRepo = &customRepository
-			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
-		})
+		//It("should use General.DefaultRepo for the InitHelper image if configured", func() {
+		//	var clusterObject = ClusterDescWithVersion("2.2.1")
+		//	customRepository := "mycustomrepo.cr"
+		//	clusterObject.Spec.General.DefaultRepo = &customRepository
+		//	var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+		//	Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
+		//})
 		It("should use InitHelper.Image as InitHelper image if configured", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			customImage := "mycustomrepo.cr/custombusybox:1.2.3"
@@ -114,13 +114,6 @@ var _ = Describe("Builders", func() {
 	})
 
 	When("Constructing a bootstrap pod", func() {
-		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			customRepository := "mycustomrepo.cr"
-			clusterObject.Spec.General.DefaultRepo = &customRepository
-			var result = NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
-		})
 
 		It("should apply the BootstrapNodeConfig to the env variables", func() {
 			mockKey := "server.basePath"
