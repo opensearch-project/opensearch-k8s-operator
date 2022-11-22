@@ -331,6 +331,13 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>-</td>
       </tr>
+      </tr><tr>
+            <td><b>service</b></td>
+            <td>opsterv1.DashboardsService</td>
+            <td>Customize dashboard service</td>
+            <td>false</td>
+            <td>-</td>
+      </tr>
 </table>
 
 
