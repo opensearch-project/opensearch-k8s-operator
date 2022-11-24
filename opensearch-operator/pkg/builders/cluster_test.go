@@ -91,6 +91,20 @@ var _ = Describe("Builders", func() {
 				Value: "master",
 			}))
 		})
+		It("should have annotations added to node", func() {
+			var clusterObject = ClusterDescWithVersion("1.3.0")
+			var nodePool = opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager"},
+				Annotations: map[string]string{
+					"testAnnotationKey": "testAnnotationValue",
+				},
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
+				"testAnnotationKey": "testAnnotationValue",
+			}))
+		})
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
