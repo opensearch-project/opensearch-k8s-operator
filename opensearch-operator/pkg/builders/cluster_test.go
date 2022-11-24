@@ -105,6 +105,16 @@ var _ = Describe("Builders", func() {
 				"testAnnotationKey": "testAnnotationValue",
 			}))
 		})
+		It("should have a priority class name added to the node", func() {
+			var clusterObject = ClusterDescWithVersion("1.3.0")
+			var nodePool = opsterv1.NodePool{
+				Component:         "masters",
+				Roles:             []string{"cluster_manager"},
+				PriorityClassName: "default",
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.PriorityClassName).To(Equal("default"))
+		})
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"

@@ -72,6 +72,7 @@ type NodePool struct {
 	Labels                    map[string]string                 `json:"labels,omitempty"`
 	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
+	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence

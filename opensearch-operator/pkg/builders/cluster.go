@@ -429,6 +429,7 @@ func NewSTSForNodePool(
 					Affinity:                  node.Affinity,
 					TopologySpreadConstraints: node.TopologySpreadConstraints,
 					ImagePullSecrets:          image.ImagePullSecrets,
+					PriorityClassName:         node.PriorityClassName,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
