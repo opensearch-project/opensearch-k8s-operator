@@ -354,62 +354,6 @@ var _ = Describe("Dashboards Reconciler", func() {
 		})
 	})
 
-	When("running the dashboards reconciler with annotations supplied", func() {
-		It("should populate the dashboard pod spec with annotations", func() {
-			clusterName := "dashboards-add-annotations"
-			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opsterv1.DashboardsConfig{
-						Enable: true,
-						Labels: map[string]string{
-							"testAnnotationKey":  "testValue",
-							"testAnnotationKey2": "testValue2",
-						},
-					},
-				}}
-			ns := corev1.Namespace{
-				ObjectMeta: metav1.ObjectMeta{
-					Name: clusterName,
-				},
-			}
-			err := k8sClient.Create(context.Background(), &ns)
-			Expect(err).ToNot(HaveOccurred())
-
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
-			underTest := NewDashboardsReconciler(
-				k8sClient,
-				context.Background(),
-				&helpers.MockEventRecorder{},
-				&reconcilerContext,
-				&spec,
-			)
-			_, err = underTest.Reconcile()
-			Expect(err).ToNot(HaveOccurred())
-			deployment := appsv1.Deployment{}
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-dashboards", Namespace: clusterName}, &deployment)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
-			Eventually(Object(&appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName + "-dashboards",
-					Namespace: clusterName,
-				},
-			}, k8sClient), timeout, interval).Should(ExistAnd(
-				HaveMatchingContainer(
-					HaveLabels(
-						"testAnnotationKey",
-						"testValue",
-						"testAnotationKey2",
-						"testValue2",
-					),
-				),
-			))
-		})
-	})
-
 	When("running the dashboards reconciler with optional image spec supplied", func() {
 		It("should populate the dashboard image specification with these values", func() {
 			clusterName := "dashboards-add-image-spec"
