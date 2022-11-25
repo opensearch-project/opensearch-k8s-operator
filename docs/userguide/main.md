@@ -415,6 +415,53 @@ spec:
           - "data"
 ```
 
+## Labels or Annotations on OpenSearch nodes
+You can add additional labels or annotations on the nodepool configuration.  This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint.
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "5Gi"
+      labels:
+        someLabelKey: someLabelValue
+      annotations:
+        someAnnotationKey: someAnnotationValue
+      NodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "data"
+        - "master"
+```
+
+## Priority class on OpenSearch nodes
+You can configure OpenSearch nodes to use a `PriorityClass` using the name of the priority class.  This is useful to prevent unwanted evictions of your OpenSearch nodes.
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "5Gi"
+      priorityClassName: somePriorityClassName
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "master"
+```
+
 ## Volume Expansion
 
 To increase the disk volume size set  the`diskSize` to desired value and re-apply the cluster yaml. This operation is expected to have no downtime and the cluster should be operational.
@@ -500,6 +547,21 @@ If your cluster is configured with a custom domain name (default is `cluster.loc
 manager:
   # ...
   dnsBase: custom.domain
+```
+
+## Add Labels or Annotations to the Dashboard Deployment
+You can add labels or annotations to the dashboard pod specification.  This is helpful if you want the dashboard to be part of a service mesh or integrate with other applications that rely on labels or annotations.
+
+```yaml
+spec:
+  dashboards:
+    enable: true
+    version: 1.3.1
+    replicas: 1
+    labels:
+      someLabelKey: someLabelValue
+    annotations:
+      someAnnotationKey: someAnnotationValue
 ```
 
 ## Custom Admin User
