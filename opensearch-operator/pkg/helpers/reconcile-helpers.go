@@ -9,6 +9,32 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 )
 
+func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
+	defaultRepo := "public.ecr.aws/opsterio"
+	defaultImage := "busybox"
+	defaultVersion := "1.27.2-buildx"
+
+	// If a custom InitHelper image is specified, use it.
+	if cr.Spec.InitHelper.ImageSpec != nil {
+		if useCustomImage(cr.Spec.InitHelper.ImageSpec, &result) {
+			return
+		}
+	}
+
+	// If a different image repo is requested, use that with the default image name and version tag.
+	if cr.Spec.General.DefaultRepo != nil {
+		defaultRepo = *cr.Spec.General.DefaultRepo
+	}
+
+	if cr.Spec.InitHelper.Version != nil {
+		defaultVersion = *cr.Spec.InitHelper.Version
+	}
+
+	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+		path.Join(defaultRepo, defaultImage), defaultVersion))
+	return
+}
+
 func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (result opsterv1.ImageSpec) {
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch"
@@ -61,13 +87,6 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 	// If a custom dashboard image is specified, use it.
 	if cr.Spec.Dashboards.ImageSpec != nil {
 		if useCustomImage(cr.Spec.Dashboards.ImageSpec, &result) {
-			return
-		}
-	}
-
-	// If a general custom image is specified, use it.
-	if cr.Spec.General.ImageSpec != nil {
-		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
 			return
 		}
 	}

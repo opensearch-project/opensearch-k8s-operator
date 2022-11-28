@@ -11,6 +11,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -84,7 +85,18 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
 
-	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts)
+	annotations := make(map[string]string)
+
+	if cmData, ok := cm.Data[helpers.DashboardConfigName]; ok {
+		sha1sum, err := util.GetSha1Sum([]byte(cmData))
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		annotations[helpers.DashboardChecksumName] = sha1sum
+	}
+
+	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(deployment, reconciler.StatePresent))
 
@@ -130,7 +142,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 				fmt.Sprintf("%s-dashboards", clusterName),
 				fmt.Sprintf("%s-dashboards.%s", clusterName, namespace),
 				fmt.Sprintf("%s-dashboards.%s.svc", clusterName, namespace),
-				fmt.Sprintf("%s-dashboards.%s.svc.cluster.local", clusterName, namespace),
+				fmt.Sprintf("%s-dashboards.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName+"-dashboards", clusterName, dnsNames)
 			if err != nil {

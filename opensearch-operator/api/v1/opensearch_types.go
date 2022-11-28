@@ -52,6 +52,11 @@ type GeneralConfig struct {
 	Keystore []KeystoreValue `json:"keystore,omitempty"`
 }
 
+type InitHelperConfig struct {
+	*ImageSpec `json:",inline,omitempty"`
+	Version    *string `json:"version,omitempty"`
+}
+
 type NodePool struct {
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
@@ -105,6 +110,8 @@ type BootstrapConfig struct {
 	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
+	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 }
 
 type DashboardsConfig struct {
@@ -114,6 +121,8 @@ type DashboardsConfig struct {
 	Replicas   int32                       `json:"replicas"`
 	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
 	Version    string                      `json:"version"`
+	// Base Path for Opensearch Clusters running behind a reverse proxy
+	BasePath string `json:"basePath,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
@@ -222,6 +231,7 @@ type ClusterSpec struct {
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
+	InitHelper InitHelperConfig `json:"initHelper,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Es

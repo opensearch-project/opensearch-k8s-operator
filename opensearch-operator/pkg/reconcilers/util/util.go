@@ -2,6 +2,8 @@ package util
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"sort"
@@ -180,9 +182,10 @@ func CreateAdditionalVolumes(
 
 func OpensearchClusterURL(cluster *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf(
-		"https://%s.%s.svc.cluster.local:%v",
+		"https://%s.%s.svc.%s:%v",
 		cluster.Spec.General.ServiceName,
 		cluster.Namespace,
+		helpers.ClusterDnsBase(),
 		cluster.Spec.General.HttpPort,
 	)
 }
@@ -237,4 +240,16 @@ func FetchOpensearchCluster(
 		return nil, err
 	}
 	return cluster, nil
+}
+
+// Generates a checksum of binary data using the SHA1 algorithm.
+func GetSha1Sum(data []byte) (string, error) {
+	hasher := sha1.New()
+	_, err := hasher.Write(data)
+
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(hasher.Sum(nil)), nil
 }

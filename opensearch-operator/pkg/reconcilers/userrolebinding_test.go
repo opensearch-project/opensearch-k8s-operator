@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/jarcoal/httpmock"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -51,6 +51,9 @@ var _ = Describe("userrolebinding reconciler", func() {
 				},
 				Roles: []string{
 					"test-role",
+				},
+				BackendRoles: []string{
+					"test-backend-role",
 				},
 			},
 		}
@@ -218,6 +221,8 @@ var _ = Describe("userrolebinding reconciler", func() {
 		})
 
 		When("role mapping does not exist", func() {
+			var users []string
+			var backendRoles []string
 			BeforeEach(func() {
 				transport.RegisterResponder(
 					http.MethodGet,
@@ -235,22 +240,36 @@ var _ = Describe("userrolebinding reconciler", func() {
 						cluster.Spec.General.ServiceName,
 						cluster.Namespace,
 					),
-					httpmock.NewStringResponder(200, "OK").Once(failMessage),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						backendRoles = mapping.BackendRoles
+						return httpmock.NewStringResponse(200, ""), nil
+					},
 				)
 			})
 			It("should create the role mapping", func() {
 				_, err := reconciler.Reconcile()
 				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(ContainElement("test-user"))
+				Expect(backendRoles).To(ContainElement("test-backend-role"))
 				// Confirm all responders have been called
 				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
 			})
 		})
-		When("role mapping exists, and user is in the list", func() {
+		When("role mapping exists, user and backend role are in the list", func() {
 			BeforeEach(func() {
 				roleMappingRequest := requests.RoleMapping{
 					Users: []string{
 						"someother-user",
 						"test-user",
+					},
+					BackendRoles: []string{
+						"test-backend-role",
+						"someother-backend-role",
 					},
 				}
 				transport.RegisterResponder(
@@ -272,12 +291,16 @@ var _ = Describe("userrolebinding reconciler", func() {
 				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
 			})
 		})
-		When("role mapping exists, and user is not in the list", func() {
+		When("role mapping exists, user and backendRole is not in the list", func() {
 			var users []string
+			var backendRoles []string
 			BeforeEach(func() {
 				roleMappingRequest := requests.RoleMapping{
 					Users: []string{
 						"someother-user",
+					},
+					BackendRoles: []string{
+						"someother-backend-role",
 					},
 				}
 				transport.RegisterResponder(
@@ -304,6 +327,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 							return httpmock.NewStringResponse(501, ""), nil
 						}
 						users = mapping.Users
+						backendRoles = mapping.BackendRoles
 						return httpmock.NewStringResponse(200, ""), nil
 					},
 				)
@@ -311,15 +335,120 @@ var _ = Describe("userrolebinding reconciler", func() {
 			It("should update the mapping", func() {
 				_, err := reconciler.Reconcile()
 				Expect(err).NotTo(HaveOccurred())
-				Expect(users).To(ContainElement("test-user"))
-				Expect(users).To(ContainElement("someother-user"))
+				Expect(users).To(ContainElements("test-user", "someother-user"))
+				Expect(backendRoles).To(ContainElements("test-backend-role", "someother-backend-role"))
 				// Confirm all responders have been called
 				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
 			})
 		})
-		When("user has been removed from the binding", func() {
-			var users []string
 
+		When("role mapping exists, and user only is not in the list", func() {
+			var users []string
+			var backendRoles []string
+			BeforeEach(func() {
+				roleMappingRequest := requests.RoleMapping{
+					Users: []string{
+						"someother-user",
+					},
+					BackendRoles: []string{
+						"test-backend-role",
+						"someother-backend-role",
+					},
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"test-role": roleMappingRequest,
+					}).Times(2, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodPut,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						backendRoles = mapping.BackendRoles
+						return httpmock.NewStringResponse(200, ""), nil
+					},
+				)
+			})
+			It("should update the mapping", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(ContainElements("test-user", "someother-user"))
+				Expect(backendRoles).To(ContainElements("test-backend-role", "someother-backend-role"))
+				// Confirm all responders have been called
+				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+			})
+		})
+
+		When("role mapping exists, and backendRole only is not in the list", func() {
+			var users []string
+			var backendRoles []string
+			BeforeEach(func() {
+				roleMappingRequest := requests.RoleMapping{
+					Users: []string{
+						"test-user",
+						"someother-user",
+					},
+					BackendRoles: []string{
+						"someother-backend-role",
+					},
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"test-role": roleMappingRequest,
+					}).Times(2, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodPut,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						backendRoles = mapping.BackendRoles
+						return httpmock.NewStringResponse(200, ""), nil
+					},
+				)
+			})
+			It("should update the mapping", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(ContainElements("test-user", "someother-user"))
+				Expect(backendRoles).To(ContainElements("test-backend-role", "someother-backend-role"))
+				// Confirm all responders have been called
+				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+			})
+		})
+
+		When("user and backendRole has been removed from the binding", func() {
+			var users []string
+			var backendRoles []string
 			BeforeEach(func() {
 				instance.Status.ProvisionedRoles = []string{
 					"test-role",
@@ -328,11 +457,20 @@ var _ = Describe("userrolebinding reconciler", func() {
 					"someother-user",
 					"test-user",
 				}
+				instance.Status.ProvisionedBackendRoles = []string{
+					"test-backend-role",
+					"someother-backend-role",
+				}
 				roleMappingRequest := requests.RoleMapping{
 					Users: []string{
 						"someother-user",
 						"test-user",
 						"another-user",
+					},
+					BackendRoles: []string{
+						"someother-backend-role",
+						"test-backend-role",
+						"another-backend-role",
 					},
 				}
 				transport.RegisterResponder(
@@ -359,25 +497,246 @@ var _ = Describe("userrolebinding reconciler", func() {
 							return httpmock.NewStringResponse(501, ""), nil
 						}
 						users = mapping.Users
+						backendRoles = mapping.BackendRoles
 						return httpmock.NewStringResponse(200, ""), nil
 					},
 				)
 			})
+			It("should remove the user and the backendRole from the role", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(ContainElements("test-user", "another-user"))
+				Expect(users).NotTo(ContainElement("someother-user"))
+				Expect(backendRoles).To(ContainElements("test-backend-role", "another-backend-role"))
+				Expect(backendRoles).NotTo(ContainElement("someother-backend-role"))
+				// Confirm all responders have been called
+				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+			})
+		})
 
+		When("user only has been removed from the binding", func() {
+			var users []string
+			var backendRoles []string
+			BeforeEach(func() {
+				instance.Spec.BackendRoles = []string{
+					"test-backend-role",
+					"someother-backend-role",
+				}
+				instance.Status.ProvisionedRoles = []string{
+					"test-role",
+				}
+				instance.Status.ProvisionedUsers = []string{
+					"someother-user",
+					"test-user",
+				}
+				instance.Status.ProvisionedBackendRoles = []string{
+					"test-backend-role",
+					"someother-backend-role",
+				}
+				roleMappingRequest := requests.RoleMapping{
+					Users: []string{
+						"someother-user",
+						"test-user",
+						"another-user",
+					},
+					BackendRoles: []string{
+						"someother-backend-role",
+						"test-backend-role",
+						"another-backend-role",
+					},
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"test-role": roleMappingRequest,
+					}).Times(3, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodPut,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						backendRoles = mapping.BackendRoles
+						return httpmock.NewStringResponse(200, ""), nil
+					},
+				)
+			})
 			It("should remove the user from the role", func() {
 				_, err := reconciler.Reconcile()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(users).To(ContainElements("test-user", "another-user"))
 				Expect(users).NotTo(ContainElement("someother-user"))
+				Expect(backendRoles).To(ContainElements("test-backend-role", "another-backend-role", "someother-backend-role"))
+				// Confirm all responders have been called
+				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+			})
+		})
+
+		When("backendRole only has been removed from the binding", func() {
+			var users []string
+			var backendRoles []string
+			BeforeEach(func() {
+				instance.Spec.Users = []string{
+					"someother-user",
+					"test-user",
+				}
+				instance.Status.ProvisionedRoles = []string{
+					"test-role",
+				}
+				instance.Status.ProvisionedUsers = []string{
+					"someother-user",
+					"test-user",
+				}
+				instance.Status.ProvisionedBackendRoles = []string{
+					"test-backend-role",
+					"someother-backend-role",
+				}
+				roleMappingRequest := requests.RoleMapping{
+					Users: []string{
+						"someother-user",
+						"test-user",
+						"another-user",
+					},
+					BackendRoles: []string{
+						"someother-backend-role",
+						"test-backend-role",
+						"another-backend-role",
+					},
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"test-role": roleMappingRequest,
+					}).Times(3, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodPut,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						backendRoles = mapping.BackendRoles
+						return httpmock.NewStringResponse(200, ""), nil
+					},
+				)
+			})
+			It("should remove the backendRole from the role", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(ContainElements("test-user", "another-user", "someother-user"))
+				Expect(backendRoles).To(ContainElements("test-backend-role", "another-backend-role"))
+				Expect(backendRoles).NotTo(ContainElement("someother-backend-role"))
+				// Confirm all responders have been called
+				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+			})
+		})
+
+		When("A role has been removed from the binding. Binding has user and backendRole", func() {
+			var users []string
+			var backendRoles []string
+			BeforeEach(func() {
+				instance.Status.ProvisionedRoles = []string{
+					"test-role",
+					"another-role",
+				}
+				instance.Status.ProvisionedUsers = []string{
+					"test-user",
+				}
+				instance.Status.ProvisionedBackendRoles = []string{
+					"test-backend-role",
+				}
+				roleMappingRequest := requests.RoleMapping{
+					Users: []string{
+						"someother-user",
+						"test-user",
+					},
+					BackendRoles: []string{
+						"someother-backend-role",
+						"test-backend-role",
+					},
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"test-role": roleMappingRequest,
+					}).Times(2, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/another-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"another-role": roleMappingRequest,
+					}).Times(2, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodPut,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/another-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						backendRoles = mapping.BackendRoles
+						return httpmock.NewStringResponse(200, ""), nil
+					},
+				)
+			})
+			It("should remove the user and the backendRole from the removed role", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(ContainElement("someother-user"))
+				Expect(users).NotTo(ContainElement("test-user"))
+				Expect(backendRoles).To(ContainElement("someother-backend-role"))
+				Expect(backendRoles).NotTo(ContainElement("test-backend-role"))
 				// Confirm all responders have been called
 				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 2))
 			})
 		})
 
-		When("a role has been removed from the binding", func() {
+		When("A role has been removed from the binding. Binding has user only", func() {
 			var users []string
-
+			var backendRoles []string
 			BeforeEach(func() {
+				instance.Spec.BackendRoles = []string{}
 				instance.Status.ProvisionedRoles = []string{
 					"test-role",
 					"another-role",
@@ -426,16 +785,86 @@ var _ = Describe("userrolebinding reconciler", func() {
 							return httpmock.NewStringResponse(501, ""), nil
 						}
 						users = mapping.Users
+						backendRoles = mapping.BackendRoles
 						return httpmock.NewStringResponse(200, ""), nil
 					},
 				)
 			})
-
 			It("should remove the user from the removed role", func() {
 				_, err := reconciler.Reconcile()
 				Expect(err).NotTo(HaveOccurred())
 				Expect(users).To(ContainElement("someother-user"))
 				Expect(users).NotTo(ContainElement("test-user"))
+				Expect(backendRoles).To(BeEmpty())
+				// Confirm all responders have been called
+				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 2))
+			})
+		})
+
+		When("A role has been removed from the binding. Binding has backendRole only", func() {
+			var users []string
+			var backendRoles []string
+			BeforeEach(func() {
+				instance.Spec.Users = []string{}
+				instance.Status.ProvisionedRoles = []string{
+					"test-role",
+					"another-role",
+				}
+				instance.Status.ProvisionedBackendRoles = []string{
+					"test-backend-role",
+				}
+				roleMappingRequest := requests.RoleMapping{
+					BackendRoles: []string{
+						"someother-backend-role",
+						"test-backend-role",
+					},
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"test-role": roleMappingRequest,
+					}).Times(2, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/another-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+						"another-role": roleMappingRequest,
+					}).Times(2, failMessage),
+				)
+				transport.RegisterResponder(
+					http.MethodPut,
+					fmt.Sprintf(
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/another-role",
+						cluster.Spec.General.ServiceName,
+						cluster.Namespace,
+					),
+					func(req *http.Request) (*http.Response, error) {
+						mapping := &requests.RoleMapping{}
+						if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+							return httpmock.NewStringResponse(501, ""), nil
+						}
+						users = mapping.Users
+						backendRoles = mapping.BackendRoles
+						return httpmock.NewStringResponse(200, ""), nil
+					},
+				)
+			})
+			It("should remove the backendRole from the removed role", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(users).To(BeEmpty())
+				Expect(backendRoles).To(ContainElement("someother-backend-role"))
+				Expect(backendRoles).NotTo(ContainElement("test-backend-role"))
 				// Confirm all responders have been called
 				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 2))
 			})
@@ -495,13 +924,58 @@ var _ = Describe("userrolebinding reconciler", func() {
 				})
 			})
 
-			When("user is only user in role mapping", func() {
+			When("user is only user and backendRole is only backendRole in role mapping", func() {
 				BeforeEach(func() {
+					instance.Status.ProvisionedRoles = []string{
+						"test-role",
+					}
 					instance.Status.ProvisionedUsers = []string{
 						"test-user",
 					}
+					instance.Status.ProvisionedBackendRoles = []string{
+						"test-backend-role",
+					}
+					roleMappingRequest := requests.RoleMapping{
+						Users: []string{
+							"test-user",
+						},
+						BackendRoles: []string{
+							"test-backend-role",
+						},
+					}
+					transport.RegisterResponder(
+						http.MethodGet,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+							"test-role": roleMappingRequest,
+						}).Times(2, failMessage),
+					)
+					transport.RegisterResponder(
+						http.MethodDelete,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						httpmock.NewStringResponder(200, "OK").Once(failMessage),
+					)
+				})
+				It("should delete the role mapping", func() {
+					Expect(reconciler.Delete()).To(Succeed())
+					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+				})
+			})
+			When("user is only user in role mapping", func() {
+				BeforeEach(func() {
 					instance.Status.ProvisionedRoles = []string{
 						"test-role",
+					}
+					instance.Status.ProvisionedUsers = []string{
+						"test-user",
 					}
 					roleMappingRequest := requests.RoleMapping{
 						Users: []string{
@@ -534,10 +1008,109 @@ var _ = Describe("userrolebinding reconciler", func() {
 					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
 				})
 			})
-
+			When("backendRole is only backendRole in role mapping", func() {
+				BeforeEach(func() {
+					instance.Status.ProvisionedRoles = []string{
+						"test-role",
+					}
+					instance.Status.ProvisionedBackendRoles = []string{
+						"test-backend-role",
+					}
+					roleMappingRequest := requests.RoleMapping{
+						BackendRoles: []string{
+							"test-backend-role",
+						},
+					}
+					transport.RegisterResponder(
+						http.MethodGet,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+							"test-role": roleMappingRequest,
+						}).Times(2, failMessage),
+					)
+					transport.RegisterResponder(
+						http.MethodDelete,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						httpmock.NewStringResponder(200, "OK").Once(failMessage),
+					)
+				})
+				It("should delete the role mapping", func() {
+					Expect(reconciler.Delete()).To(Succeed())
+					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+				})
+			})
+			When("user and backendRole are one of the users and backendRoles in the mapping", func() {
+				var users []string
+				var backendRoles []string
+				BeforeEach(func() {
+					instance.Status.ProvisionedRoles = []string{
+						"test-role",
+					}
+					instance.Status.ProvisionedUsers = []string{
+						"test-user",
+					}
+					instance.Status.ProvisionedBackendRoles = []string{
+						"test-backend-role",
+					}
+					roleMappingRequest := requests.RoleMapping{
+						Users: []string{
+							"someother-user",
+							"test-user",
+						},
+						BackendRoles: []string{
+							"someother-backend-role",
+							"test-backend-role",
+						},
+					}
+					transport.RegisterResponder(
+						http.MethodGet,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+							"test-role": roleMappingRequest,
+						}).Times(2, failMessage),
+					)
+					transport.RegisterResponder(
+						http.MethodPut,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						func(req *http.Request) (*http.Response, error) {
+							mapping := &requests.RoleMapping{}
+							if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+								return httpmock.NewStringResponse(501, ""), nil
+							}
+							users = mapping.Users
+							backendRoles = mapping.BackendRoles
+							return httpmock.NewStringResponse(200, ""), nil
+						},
+					)
+				})
+				It("should remove the user and the backendRole and update the mapping", func() {
+					Expect(reconciler.Delete()).To(Succeed())
+					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+					Expect(users).To(ContainElement("someother-user"))
+					Expect(users).NotTo(ContainElement("test-user"))
+					Expect(backendRoles).To(ContainElement("someother-backend-role"))
+					Expect(backendRoles).NotTo(ContainElement("test-backend-role"))
+				})
+			})
 			When("user is one of the users in the mapping", func() {
 				var users []string
-
+				var backendRoles []string
 				BeforeEach(func() {
 					instance.Status.ProvisionedRoles = []string{
 						"test-role",
@@ -575,6 +1148,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 								return httpmock.NewStringResponse(501, ""), nil
 							}
 							users = mapping.Users
+							backendRoles = mapping.BackendRoles
 							return httpmock.NewStringResponse(200, ""), nil
 						},
 					)
@@ -584,6 +1158,60 @@ var _ = Describe("userrolebinding reconciler", func() {
 					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
 					Expect(users).To(ContainElement("someother-user"))
 					Expect(users).NotTo(ContainElement("test-user"))
+					Expect(backendRoles).To(BeEmpty())
+				})
+			})
+			When("backendRole is one of the backendRole in the mapping", func() {
+				var users []string
+				var backendRoles []string
+				BeforeEach(func() {
+					instance.Status.ProvisionedRoles = []string{
+						"test-role",
+					}
+					instance.Status.ProvisionedBackendRoles = []string{
+						"test-backend-role",
+					}
+					roleMappingRequest := requests.RoleMapping{
+						BackendRoles: []string{
+							"someother-backend-role",
+							"test-backend-role",
+						},
+					}
+					transport.RegisterResponder(
+						http.MethodGet,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						httpmock.NewJsonResponderOrPanic(200, responses.GetRoleMappingReponse{
+							"test-role": roleMappingRequest,
+						}).Times(2, failMessage),
+					)
+					transport.RegisterResponder(
+						http.MethodPut,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/rolesmapping/test-role",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						func(req *http.Request) (*http.Response, error) {
+							mapping := &requests.RoleMapping{}
+							if err := json.NewDecoder(req.Body).Decode(&mapping); err != nil {
+								return httpmock.NewStringResponse(501, ""), nil
+							}
+							users = mapping.Users
+							backendRoles = mapping.BackendRoles
+							return httpmock.NewStringResponse(200, ""), nil
+						},
+					)
+				})
+				It("should remove the user and update the mapping", func() {
+					Expect(reconciler.Delete()).To(Succeed())
+					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls + 1))
+					Expect(backendRoles).To(ContainElement("someother-backend-role"))
+					Expect(backendRoles).NotTo(ContainElement("test-backend-role"))
+					Expect(users).To(BeEmpty())
 				})
 			})
 		})

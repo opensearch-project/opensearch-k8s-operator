@@ -193,7 +193,7 @@ func (r *UpgradeReconciler) findWorkingNodePool() (opsterv1.NodePool, opsterv1.C
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	for _, nodePool := range r.instance.Spec.NodePools {
 		if helpers.ContainsString(nodePool.Roles, "data") {
-			if helpers.ContainsString(nodePool.Roles, "master") {
+			if helpers.ContainsString(nodePool.Roles, "master") || helpers.ContainsString(nodePool.Roles, "cluster_manager") {
 				dataAndMasterNodes = append(dataAndMasterNodes, nodePool)
 			} else {
 				dataNodes = append(dataNodes, nodePool)

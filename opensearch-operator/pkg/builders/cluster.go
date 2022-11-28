@@ -121,13 +121,16 @@ func NewSTSForNodePool(
 		MountPath: "/usr/share/opensearch/data",
 	})
 
-	//var vendor string
 	labels := map[string]string{
 		ClusterLabel:  cr.Name,
 		NodePoolLabel: node.Component,
 	}
 	annotations := map[string]string{
 		ConfigurationChecksumAnnotation: configChecksum,
+	}
+	matchLabels := map[string]string{
+		ClusterLabel:  cr.Name,
+		NodePoolLabel: node.Component,
 	}
 
 	if helpers.ContainsString(selectedRoles, "master") {
@@ -174,7 +177,8 @@ func NewSTSForNodePool(
 
 	// Because the http endpoint requires auth we need to do it as a curl script
 	httpPort := PortForCluster(cr)
-	curlCmd := "curl -k -u \"${OPENSEARCH_USER}:${OPENSEARCH_PASSWORD}\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
+
+	curlCmd := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: 60,
 		PeriodSeconds:       30,
@@ -191,7 +195,19 @@ func NewSTSForNodePool(
 		},
 	}
 
+	volumes = append(volumes, corev1.Volume{
+		Name: "admin-credentials",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{SecretName: fmt.Sprintf("%s-admin-password", cr.Name)},
+		},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "admin-credentials",
+		MountPath: "/mnt/admin-credentials",
+	})
+
 	image := helpers.ResolveImage(cr, &node)
+	initHelperImage := helpers.ResolveInitHelperImage(cr)
 
 	var mainCommand []string
 	com := "./bin/opensearch-plugin install --batch"
@@ -221,10 +237,11 @@ func NewSTSForNodePool(
 
 	initContainers := []corev1.Container{
 		{
-			Name:    "init",
-			Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
-			Command: []string{"sh", "-c"},
-			Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			Name:            "init",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Command:         []string{"sh", "-c"},
+			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: &runas,
 			},
@@ -333,7 +350,7 @@ func NewSTSForNodePool(
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &node.Replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: matchLabels,
 			},
 			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
 			UpdateStrategy: func() appsv1.StatefulSetUpdateStrategy {
@@ -387,21 +404,6 @@ func NewSTSForNodePool(
 								{
 									Name:  "http.port",
 									Value: fmt.Sprint(cr.Spec.General.HttpPort),
-								},
-								{
-									Name:  "OPENSEARCH_USER",
-									Value: username,
-								},
-								{
-									Name: "OPENSEARCH_PASSWORD",
-									ValueFrom: &corev1.EnvVarSource{
-										SecretKeyRef: &corev1.SecretKeySelector{
-											LocalObjectReference: corev1.LocalObjectReference{
-												Name: fmt.Sprintf("%s-admin-password", cr.Name),
-											},
-											Key: "password",
-										},
-									},
 								},
 							},
 							Name:            "opensearch",
@@ -461,9 +463,12 @@ func NewSTSForNodePool(
 	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
 	if cr.Spec.General.SetVMMaxMapCount {
+		initHelperImage := helpers.ResolveInitHelperImage(cr)
+
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
-			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
+			Name:            "init-sysctl",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -659,6 +664,7 @@ func NewBootstrapPod(
 	}
 
 	image := helpers.ResolveImage(cr, nil)
+	initHelperImage := helpers.ResolveInitHelperImage(cr)
 	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
 
 	probe := corev1.Probe{
@@ -682,6 +688,60 @@ func NewBootstrapPod(
 		MountPath: "/usr/share/opensearch/data",
 	})
 
+	env := []corev1.EnvVar{
+		{
+			Name:  "cluster.initial_master_nodes",
+			Value: BootstrapPodName(cr),
+		},
+		{
+			Name:  "discovery.seed_hosts",
+			Value: DiscoveryServiceName(cr),
+		},
+		{
+			Name:  "cluster.name",
+			Value: cr.Name,
+		},
+		{
+			Name:  "network.bind_host",
+			Value: "0.0.0.0",
+		},
+		{
+			// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
+			Name:      "network.publish_host",
+			ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
+		},
+		{
+			Name:  "OPENSEARCH_JAVA_OPTS",
+			Value: jvm,
+		},
+		{
+			Name:  "node.roles",
+			Value: masterRole,
+		},
+		{
+			Name:  "http.port",
+			Value: fmt.Sprint(cr.Spec.General.HttpPort),
+		},
+	}
+
+	// Append additional config to env vars, use General.AdditionalConfig by default, overwrite with Bootstrap.AdditionalConfig
+	extraConfig := cr.Spec.General.AdditionalConfig
+	if cr.Spec.Bootstrap.AdditionalConfig != nil {
+		extraConfig = cr.Spec.Bootstrap.AdditionalConfig
+	}
+
+	keys := make([]string, 0, len(extraConfig))
+	for key := range extraConfig {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		env = append(env, corev1.EnvVar{
+			Name:  k,
+			Value: extraConfig[k],
+		})
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      BootstrapPodName(cr),
@@ -691,42 +751,7 @@ func NewBootstrapPod(
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
 				{
-					Env: []corev1.EnvVar{
-						{
-							Name:  "cluster.initial_master_nodes",
-							Value: BootstrapPodName(cr),
-						},
-						{
-							Name:  "discovery.seed_hosts",
-							Value: DiscoveryServiceName(cr),
-						},
-						{
-							Name:  "cluster.name",
-							Value: cr.Name,
-						},
-						{
-							Name:  "network.bind_host",
-							Value: "0.0.0.0",
-						},
-						{
-							// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-							Name:      "network.publish_host",
-							ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
-						},
-						{
-							Name:  "OPENSEARCH_JAVA_OPTS",
-							Value: jvm,
-						},
-						{
-							Name:  "node.roles",
-							Value: masterRole,
-						},
-						{
-							Name:  "http.port",
-							Value: fmt.Sprint(cr.Spec.General.HttpPort),
-						},
-					},
-
+					Env:             env,
 					Name:            "opensearch",
 					Image:           image.GetImage(),
 					ImagePullPolicy: image.GetImagePullPolicy(),
@@ -748,10 +773,11 @@ func NewBootstrapPod(
 			},
 			InitContainers: []corev1.Container{
 				{
-					Name:    "init",
-					Image:   "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
-					Command: []string{"sh", "-c"},
-					Args:    []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+					Name:            "init",
+					Image:           initHelperImage.GetImage(),
+					ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+					Command:         []string{"sh", "-c"},
+					Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 					SecurityContext: &corev1.SecurityContext{
 						RunAsUser: pointer.Int64(0),
 					},
@@ -774,8 +800,9 @@ func NewBootstrapPod(
 
 	if cr.Spec.General.SetVMMaxMapCount {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
-			Name:  "init-sysctl",
-			Image: "public.ecr.aws/opsterio/busybox:1.27.2-buildx",
+			Name:            "init-sysctl",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -797,18 +824,20 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 	}
 	return httpPort
 }
+
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
-	return fmt.Sprintf("https://%s.svc.cluster.local:%d", DnsOfService(cr), httpPort)
+	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
 }
 
-func PasswordSecret(cr *opsterv1.OpenSearchCluster, password string) *corev1.Secret {
+func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-admin-password", cr.Name),
 			Namespace: cr.Namespace,
 		},
 		StringData: map[string]string{
+			"username": username,
 			"password": password,
 		},
 	}
@@ -881,11 +910,11 @@ func NewSecurityconfigUpdateJob(
 	// The following curl command is added to make sure cluster is full connected before .opendistro_security is created.
 	arg := "ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;" +
 		"chmod +x $ADMIN;" +
-		fmt.Sprintf("until curl -k --silent https://%s.svc.cluster.local:%v; do", dns, instance.Spec.General.HttpPort) +
+		fmt.Sprintf("until curl -k --silent https://%s.svc.%s:%v; do", dns, helpers.ClusterDnsBase(), instance.Spec.General.HttpPort) +
 		" echo 'Waiting to connect to the cluster'; sleep 120; " +
 		"done; " +
 		"count=0;" +
-		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s.svc.cluster.local -p %v || (( count++ >= 20 )); do", caCert, adminCert, adminKey, securityconfigPath, dns, httpPort) +
+		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s.svc.%s -p %v || (( count++ >= 20 )); do", caCert, adminCert, adminKey, securityconfigPath, dns, helpers.ClusterDnsBase(), httpPort) +
 		"  sleep 20; " +
 		"done"
 	annotations := map[string]string{
@@ -924,7 +953,7 @@ func NewSecurityconfigUpdateJob(
 func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) bool {
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
-		if helpers.ContainsString(nodePool.Roles, masterRole) {
+		if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
 			sts := &appsv1.StatefulSet{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name:      StsName(cr, &nodePool),

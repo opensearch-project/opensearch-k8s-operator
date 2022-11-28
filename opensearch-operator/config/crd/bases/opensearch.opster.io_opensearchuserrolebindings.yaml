@@ -1,10 +1,9 @@
-
 ---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.4.1
+    controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
   name: opensearchuserrolebindings.opensearch.opster.io
 spec:
@@ -40,6 +39,10 @@ spec:
             description: OpensearchUserRoleBindingSpec defines the desired state of
               OpensearchUserRoleBinding
             properties:
+              backendRoles:
+                items:
+                  type: string
+                type: array
               opensearchCluster:
                 description: LocalObjectReference contains enough information to let
                   you locate the referenced object inside the same namespace.
@@ -49,6 +52,7 @@ spec:
                       TODO: Add other useful fields. apiVersion, kind, uid?'
                     type: string
                 type: object
+                x-kubernetes-map-type: atomic
               roles:
                 items:
                   type: string
@@ -60,7 +64,6 @@ spec:
             required:
             - opensearchCluster
             - roles
-            - users
             type: object
           status:
             description: OpensearchUserRoleBindingStatus defines the observed state
@@ -72,6 +75,10 @@ spec:
                   a type captures intent and helps make sure that UIDs and names do
                   not get conflated.
                 type: string
+              provisionedBackendRoles:
+                items:
+                  type: string
+                type: array
               provisionedRoles:
                 items:
                   type: string
@@ -90,9 +97,3 @@ spec:
     storage: true
     subresources:
       status: {}
-status:
-  acceptedNames:
-    kind: ""
-    plural: ""
-  conditions: []
-  storedVersions: []

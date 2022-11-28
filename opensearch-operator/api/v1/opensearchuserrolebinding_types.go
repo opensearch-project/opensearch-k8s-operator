@@ -34,16 +34,18 @@ const (
 type OpensearchUserRoleBindingSpec struct {
 	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
 	Roles         []string                    `json:"roles"`
-	Users         []string                    `json:"users"`
+	Users         []string                    `json:"users,omitempty"`
+	BackendRoles  []string                    `json:"backendRoles,omitempty"`
 }
 
 // OpensearchUserRoleBindingStatus defines the observed state of OpensearchUserRoleBinding
 type OpensearchUserRoleBindingStatus struct {
-	State            OpensearchUserRoleBindingState `json:"state,omitempty"`
-	Reason           string                         `json:"reason,omitempty"`
-	ManagedCluster   *types.UID                     `json:"managedCluster,omitempty"`
-	ProvisionedRoles []string                       `json:"provisionedRoles,omitempty"`
-	ProvisionedUsers []string                       `json:"provisionedUsers,omitempty"`
+	State                   OpensearchUserRoleBindingState `json:"state,omitempty"`
+	Reason                  string                         `json:"reason,omitempty"`
+	ManagedCluster          *types.UID                     `json:"managedCluster,omitempty"`
+	ProvisionedRoles        []string                       `json:"provisionedRoles,omitempty"`
+	ProvisionedUsers        []string                       `json:"provisionedUsers,omitempty"`
+	ProvisionedBackendRoles []string                       `json:"provisionedBackendRoles,omitempty"`
 }
 
 //+kubebuilder:object:root=true

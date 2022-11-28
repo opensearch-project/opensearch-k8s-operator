@@ -15,7 +15,7 @@ import (
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
-func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount) *appsv1.Deployment {
+func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, annotations map[string]string) *appsv1.Deployment {
 	var replicas int32 = cr.Spec.Dashboards.Replicas
 	var port int32 = 5601
 	var mode int32 = 420
@@ -70,6 +70,14 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		probeScheme = "HTTPS"
 	}
 
+	healthcheckPath := "/api/reporting/stats"
+
+	// Figure out if the opensearch cluster runs with a base path configured
+	if cr.Spec.Dashboards.BasePath != "" {
+		// If basePath is correctly setup, prefix healthcheck path
+		healthcheckPath = fmt.Sprintf("%s%s", cr.Spec.Dashboards.BasePath, healthcheckPath)
+	}
+
 	probe := corev1.Probe{
 		PeriodSeconds:       20,
 		TimeoutSeconds:      5,
@@ -83,7 +91,13 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		  - name: Authorization
 		    value: Basic YWRtaW46YWRtaW4=*/
 
-		ProbeHandler: corev1.ProbeHandler{HTTPGet: &corev1.HTTPGetAction{Path: "/api/reporting/stats", Port: intstr.IntOrString{IntVal: port}, Scheme: probeScheme}},
+		ProbeHandler: corev1.ProbeHandler{
+			HTTPGet: &corev1.HTTPGetAction{
+				Path:   healthcheckPath,
+				Port:   intstr.IntOrString{IntVal: port},
+				Scheme: probeScheme,
+			},
+		},
 	}
 
 	return &appsv1.Deployment{
@@ -98,12 +112,12 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 				MatchLabels: labels,
 			},
 			Strategy: appsv1.DeploymentStrategy{
-				Type: appsv1.RecreateDeploymentStrategyType,
+				Type: appsv1.RollingUpdateDeploymentStrategyType,
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
-					Annotations: nil,
+					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
 					Volumes: volumes,
@@ -139,6 +153,11 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	config["server.name"] = cr.Name + "-dashboards"
 	config["opensearch.ssl.verificationMode"] = "none"
 
+	if cr.Spec.Dashboards.BasePath != "" {
+		config["server.basePath"] = cr.Spec.Dashboards.BasePath
+		config["server.rewriteBasePath"] = "true"
+	}
+
 	keys := make([]string, 0, len(config))
 
 	for key := range config {
@@ -158,7 +177,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 			Namespace: cr.Namespace,
 		},
 		Data: map[string]string{
-			"opensearch_dashboards.yml": data,
+			helpers.DashboardConfigName: data,
 		},
 	}
 }
