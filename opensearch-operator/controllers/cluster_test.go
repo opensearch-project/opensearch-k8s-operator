@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"github.com/banzaicloud/operator-tools/pkg/prometheus"
 	"sync"
 	"time"
 
@@ -79,6 +80,22 @@ var _ = Describe("Cluster Reconciler", func() {
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cm), &corev1.ConfigMap{})
 			}, timeout, interval).Should(Succeed())
+		})
+
+		It("should create a cluster and add ServiceMonitor ", func() {
+			m := prometheus.ServiceMonitor{
+				TypeMeta: metav1.TypeMeta{},
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      OpensearchCluster.Name + "-monitor",
+					Namespace: OpensearchCluster.Namespace,
+				},
+				Spec: prometheus.ServiceMonitorSpec{},
+			}
+			Expect(k8sClient.Create(context.Background(), &m)).Should(Succeed())
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&m), &prometheus.ServiceMonitor{})
+			}, timeout, interval).Should(Succeed())
+
 		})
 
 		It("should apply the cluster instance successfully", func() {
@@ -362,6 +379,7 @@ var _ = Describe("Cluster Reconciler", func() {
 			wg.Wait()
 		})
 	})
+
 	When("A node pool is upgrading", func() {
 		Specify("updating the status should succeed", func() {
 			status := opsterv1.ComponentStatus{

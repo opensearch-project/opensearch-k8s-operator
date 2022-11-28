@@ -95,6 +95,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 		},
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
+				Monitoring:  opsterv1.MonitoringStuck{Enable: true},
 				HttpPort:    9200,
 				Vendor:      "opensearch",
 				Version:     "1.0.0",
