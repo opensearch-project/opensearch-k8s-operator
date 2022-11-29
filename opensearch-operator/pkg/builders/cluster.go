@@ -1011,17 +1011,17 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 
 	return &prometheus.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.ClusterName + "-monitor",
+			Name:      cr.Name + "-monitor",
 			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
 		Spec: prometheus.ServiceMonitorSpec{
-			JobLabel: cr.ClusterName + "-monitor",
+			JobLabel: cr.Name + "-monitor",
 			TargetLabels: []string{
-				cr.ClusterName,
+				cr.Name,
 			},
 			PodTargetLabels: []string{
-				cr.ClusterName,
+				cr.Name,
 			},
 			Endpoints: []prometheus.Endpoint{
 				{Port: "9200",
@@ -1033,11 +1033,11 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 					HonorLabels:     false,
 					BasicAuth: &prometheus.BasicAuth{
 						Username: corev1.SecretKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{Name: cr.ClusterName + monitorUser + "-password"},
+							LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
 							Key:                  monitorUser,
 						},
 						Password: corev1.SecretKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{Name: cr.ClusterName + monitorUser + "-password"},
+							LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
 							Key:                  "password",
 						},
 					},
