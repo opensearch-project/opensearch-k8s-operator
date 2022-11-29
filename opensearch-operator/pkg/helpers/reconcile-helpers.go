@@ -20,12 +20,7 @@ func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 			return
 		}
 	}
-
-	// If a different image repo is requested, use that with the default image name and version tag.
-	//if cr.Spec.General.DefaultRepo != nil {
-	//	defaultRepo = *cr.Spec.General.DefaultRepo
-	//}
-
+	git
 	if cr.Spec.InitHelper.Version != nil {
 		defaultVersion = *cr.Spec.InitHelper.Version
 	}
