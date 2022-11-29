@@ -221,6 +221,20 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					{Name: "quuxe", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.labels['quux']"}}},
 				},
 			}},
+			Security: opsterv1.NodePool{
+				JobConfig: opsterv1.HelperConfig {
+					Tolerations: []corev1.Toleration{{
+						Effect:   "NoSchedule",
+						Key:      "foo",
+						Operator: "Equal",
+						Value:    "bar",
+					}},
+					NodeSelector: map[string]string{
+						"foo": "bar",
+					},
+					Affinity: &corev1.Affinity{},
+				},
+			},
 		},
 		Status: opsterv1.ClusterStatus{
 			ComponentsStatus: []opsterv1.ComponentStatus{{

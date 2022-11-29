@@ -136,10 +136,17 @@ type DashboardsTlsConfig struct {
 	TlsCertificateConfig `json:",omitempty"`
 }
 
+type HelperConfig struct {
+	Tolerations               []corev1.Toleration               `json:"tolerations,omitempty"`
+	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
+}
+
 // Security defines options for managing the opensearch-security plugin
 type Security struct {
 	Tls    *TlsConfig      `json:"tls,omitempty"`
 	Config *SecurityConfig `json:"config,omitempty"`
+	JobConfig *HelperConfig `json:"jobConfig,omitempty"`
 }
 
 // Configure tls usage for transport and http interface

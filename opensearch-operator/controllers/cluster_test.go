@@ -254,6 +254,32 @@ var _ = Describe("Cluster Reconciler", func() {
 				Value:    "bar",
 			}))
 		})
+		It("should create a securityconfig pod", func() {
+			securityConfigPodName := fmt.Sprintf("%s-securityconfig-update", OpenSearchCluster.Name)
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      securityConfigPodName,
+					Namespace: OpensearchCluster.Namespace,
+				}, &corev1.Pod{})
+			}, timeout, interval).Should(Succeed())
+		})
+		It("should configure securityconfig pod correctly", func() {
+			securityConfigPodName := fmt.Sprintf("%s-securityconfig-update", OpenSearchCluster.Name)
+			pod := &corev1.Pod{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      securityConfigPodName,
+					Namespace: OpensearchCluster.Namespace,
+				}, pod)
+			}, timeout, interval).Should(Succeed())
+			Expect(pod.Spec.Tolerations).To(ContainElement(corev1.Toleration{
+				Effect:   "NoSchedule",
+				Key:      "foo",
+				Operator: "Equal",
+				Value:    "bar",
+			}))
+			Expect(pod.Spec.NodeSelector).To(HaveKeyWithValue("foo", "bar"))
+		})
 		It("should create a discovery service", func() {
 			discoveryName := fmt.Sprintf("%s-discovery", OpensearchCluster.Name)
 			Eventually(func() error {
