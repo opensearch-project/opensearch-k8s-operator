@@ -23,18 +23,21 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"testing"
 
-	"k8s.io/client-go/rest"
-	"k8s.io/client-go/tools/record"
+	"github.com/phayes/freeport"
 	opsterv1 "opensearch.opster.io/api/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/banzaicloud/operator-tools/pkg/prometheus"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/rest"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -66,6 +69,8 @@ func TestAPIs(t *testing.T) {
 var _ = BeforeSuite(func() {
 
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
+	ports, err := freeport.GetFreePorts(2)
+	Expect(err).NotTo(HaveOccurred())
 
 	var ctx context.Context
 	ctx, cancel = context.WithCancel(context.TODO())
@@ -76,7 +81,6 @@ var _ = BeforeSuite(func() {
 		ErrorIfCRDPathMissing: true,
 	}
 
-	var err error
 	cfg, err = testEnv.Start()
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
@@ -85,13 +89,17 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = opsterv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
+	err = prometheus.AddToScheme(scheme.Scheme)
+	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
 
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme: scheme.Scheme,
+		Scheme:                 scheme.Scheme,
+		MetricsBindAddress:     fmt.Sprintf(":%d", ports[0]),
+		HealthProbeBindAddress: fmt.Sprintf(":%d", ports[1]),
 	})
 	Expect(err).ToNot(HaveOccurred())
 

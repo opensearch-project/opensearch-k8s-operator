@@ -3,9 +3,10 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"github.com/banzaicloud/operator-tools/pkg/prometheus"
 	"sync"
 	"time"
+
+	"github.com/banzaicloud/operator-tools/pkg/prometheus"
 
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
@@ -82,24 +83,14 @@ var _ = Describe("Cluster Reconciler", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 
-		It("should create a cluster and add ServiceMonitor ", func() {
-			m := prometheus.ServiceMonitor{
-				TypeMeta: metav1.TypeMeta{},
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      OpensearchCluster.Name + "-monitor",
-					Namespace: OpensearchCluster.Namespace,
-				},
-				Spec: prometheus.ServiceMonitorSpec{},
-			}
-			Expect(k8sClient.Create(context.Background(), &m)).Should(Succeed())
-			Eventually(func() error {
-				return k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&m), &prometheus.ServiceMonitor{})
-			}, timeout, interval).Should(Succeed())
-
-		})
-
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+		})
+
+		It("should create a ServiceMonitor for the cluster", func() {
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, &prometheus.ServiceMonitor{})
+			}, timeout, interval).Should(Succeed())
 		})
 
 	})

@@ -102,8 +102,7 @@ var _ = BeforeSuite(func() {
 		},
 	}
 
-	ctx := context.Background()
-
+	var ctx context.Context
 	ctx, cancel = context.WithCancel(context.TODO())
 
 	By("bootstrapping test environment")
