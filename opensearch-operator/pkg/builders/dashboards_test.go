@@ -9,7 +9,7 @@ import (
 
 var _ = Describe("Builders", func() {
 	When("building the dashboards deployment with annotations supplied", func() {
-		It("should populate the dashboard pod spec with annotations", func() {
+		It("should populate the dashboard pod spec with annotations provided", func() {
 			clusterName := "dashboards-add-annotations"
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
