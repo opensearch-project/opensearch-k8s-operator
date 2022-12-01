@@ -443,7 +443,14 @@ func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls
 	if err := r.Get(r.ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
 		return ca, err
 	}
-	ca = r.pki.CAFromSecret(caSecret.Data)
+	data := caSecret.Data
+	if _, ok := caSecret.Annotations["cert-manager.io/issuer-kind"]; ok {
+		data = map[string][]byte{
+			"ca.crt": caSecret.Data["tls.crt"],
+			"ca.key": caSecret.Data["tls.key"],
+		}
+	}
+	ca = r.pki.CAFromSecret(data)
 	return ca, nil
 }
 
