@@ -25,8 +25,30 @@ var _ = Describe("Builders", func() {
 				}}
 			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
-				"testAnnotationKey":  "testAnnotationValue",
+				"testAnnotationKey":  "testValue",
 				"testAnnotationKey2": "testValue2",
+			}))
+		})
+	})
+	When("building the dashboards deployment with labels supplied", func() {
+		It("should populate the dashboard pod spec with labels provided", func() {
+			clusterName := "dashboards-add-labels"
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Annotations: map[string]string{
+							"testLabelKey":  "testValue",
+							"testLabelKey2": "testValue2",
+						},
+					},
+				}}
+			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
+				"testLabelKey":  "testValue",
+				"testLabelKey2": "testValue2",
 			}))
 		})
 	})

@@ -102,6 +102,7 @@ var _ = Describe("Builders", func() {
 			}
 			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
+				ConfigurationChecksumAnnotation: "foobar",
 				"testAnnotationKey": "testAnnotationValue",
 			}))
 		})
