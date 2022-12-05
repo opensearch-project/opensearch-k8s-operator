@@ -39,14 +39,14 @@ var _ = Describe("Builders", func() {
 					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
-						Annotations: map[string]string{
+						Labels: map[string]string{
 							"testLabelKey":  "testValue",
 							"testLabelKey2": "testValue2",
 						},
 					},
 				}}
 			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
-			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
+			Expect(result.Spec.Template.Labels).To(Equal(map[string]string{
 				"testLabelKey":  "testValue",
 				"testLabelKey2": "testValue2",
 			}))
