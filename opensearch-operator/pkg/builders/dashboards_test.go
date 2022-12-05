@@ -47,8 +47,9 @@ var _ = Describe("Builders", func() {
 				}}
 			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Labels).To(Equal(map[string]string{
-				"testLabelKey":  "testValue",
-				"testLabelKey2": "testValue2",
+				"opensearch.cluster.dashboards": clusterName,
+				"testLabelKey":                  "testValue",
+				"testLabelKey2":                 "testValue2",
 			}))
 		})
 	})
