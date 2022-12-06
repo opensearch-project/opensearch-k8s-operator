@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"strings"
 
-	"k8s.io/client-go/tools/record"
-
+	"github.com/Masterminds/semver"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
@@ -102,48 +102,96 @@ func (r *TLSReconciler) handleTransport() error {
 
 func (r *TLSReconciler) handleAdminCertificate() error {
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
-	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
-	adminSecretName := clusterName + "-admin-cert"
 
 	if tlsConfig.Generate {
-		// Generate admin client certificate
-		var ca tls.Cert
-		var err error
-		if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
-			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
-		} else {
-			ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
-		}
+		ca, err := r.getCACert()
 		if err != nil {
 			return err
 		}
-
-		adminSecret := corev1.Secret{}
-		if err := r.Get(r.ctx, client.ObjectKey{Name: adminSecretName, Namespace: namespace}, &adminSecret); err != nil {
-			adminCert, err := ca.CreateAndSignCertificate("admin", clusterName, nil)
-			if err != nil {
-				r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
-				r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "Security", "Failed to create admin certificate")
-				return err
-			}
-			adminSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: adminSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: adminCert.SecretData(ca)}
-			if err := ctrl.SetControllerReference(r.instance, &adminSecret, r.Client.Scheme()); err != nil {
-				return err
-			}
-			if err := r.Create(r.ctx, &adminSecret); err != nil {
-				r.logger.Error(err, "Failed to store admin certificate in secret", "interface", "transport")
-				return err
-			}
+		err = r.createAdminSecret(ca)
+		if err != nil {
+			return err
 		}
-		// Add admin_dn to config
 		r.reconcilerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"CN=admin,OU=%s\"]", clusterName))
-	} else {
-		// Add provided admin_dn to config
-		adminDn := strings.Join(tlsConfig.AdminDn, "\",\"")
-		r.reconcilerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"%s\"]", adminDn))
+		return nil
 	}
+
+	adminDn := strings.Join(tlsConfig.AdminDn, "\",\"")
+	r.reconcilerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"%s\"]", adminDn))
 	return nil
+}
+
+func (r *TLSReconciler) securityChangeVersion() bool {
+	newVersionConstraint, err := semver.NewConstraint(">=2.0.0")
+	if err != nil {
+		panic(err)
+	}
+
+	version, err := semver.NewVersion(r.instance.Spec.General.Version)
+	if err != nil {
+		r.logger.Error(err, "unable to parse version, assuming >= 2.0.0")
+		return true
+	}
+	return newVersionConstraint.Check(version)
+}
+
+func (r *TLSReconciler) adminCAProvided() bool {
+	if r.securityChangeVersion() {
+		return r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name != ""
+	}
+	return r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != ""
+}
+
+func (r *TLSReconciler) providedCAForAdminCert() (tls.Cert, error) {
+	if r.securityChangeVersion() {
+		return r.providedCaCert(
+			r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name,
+			r.instance.Namespace,
+		)
+	}
+	return r.providedCaCert(
+		r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name,
+		r.instance.Namespace,
+	)
+}
+
+func (r *TLSReconciler) getCACert() (tls.Cert, error) {
+	if r.adminCAProvided() {
+		return r.providedCAForAdminCert()
+	}
+	return util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+}
+
+func (r *TLSReconciler) createAdminSecret(ca tls.Cert) error {
+	adminCert, err := ca.CreateAndSignCertificate("admin", r.instance.Name, nil)
+	if err != nil {
+		r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
+		r.recorder.AnnotatedEventf(
+			r.instance,
+			map[string]string{"cluster-name": r.instance.GetName()},
+			"Warning",
+			"Security",
+			"Failed to create admin certificate",
+		)
+		return err
+	}
+	adminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      r.adminSecretName(),
+			Namespace: r.instance.Namespace,
+		},
+		Type: corev1.SecretTypeTLS,
+		Data: adminCert.SecretData(ca),
+	}
+	if err := ctrl.SetControllerReference(r.instance, adminSecret, r.Client.Scheme()); err != nil {
+		return err
+	}
+	return client.IgnoreAlreadyExists(r.Create(r.ctx, adminSecret))
+}
+
+func (r *TLSReconciler) adminSecretName() string {
+	return r.instance.Name + "-admin-cert"
 }
 
 func (r *TLSReconciler) handleTransportGenerateGlobal() error {
