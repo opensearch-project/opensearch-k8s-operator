@@ -144,6 +144,12 @@ func NewSTSForNodePool(
 	for k, v := range node.Labels {
 		labels[k] = v
 	}
+
+	// cr.Spec.NodePool.annotations
+	for ak, vk := range node.Annotations {
+		annotations[ak] = vk
+	}
+
 	runas := int64(0)
 
 	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
@@ -423,6 +429,7 @@ func NewSTSForNodePool(
 					Affinity:                  node.Affinity,
 					TopologySpreadConstraints: node.TopologySpreadConstraints,
 					ImagePullSecrets:          image.ImagePullSecrets,
+					PriorityClassName:         node.PriorityClassName,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {

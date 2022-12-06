@@ -70,7 +70,9 @@ type NodePool struct {
 	Persistence               *PersistenceConfig                `json:"persistence,omitempty"`
 	AdditionalConfig          map[string]string                 `json:"additionalConfig,omitempty"`
 	Labels                    map[string]string                 `json:"labels,omitempty"`
+	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
+	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -125,6 +127,8 @@ type DashboardsConfig struct {
 	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
 	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
+	Labels                      map[string]string           `json:"labels,omitempty"`
+	Annotations                 map[string]string           `json:"annotations,omitempty"`
 }
 
 type DashboardsTlsConfig struct {

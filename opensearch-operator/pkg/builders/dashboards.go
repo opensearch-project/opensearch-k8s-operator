@@ -65,6 +65,22 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 	labels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
 	}
+
+	// cr.Spec.Dashboards.labels
+	for key, value := range cr.Spec.Dashboards.Labels {
+		labels[key] = value
+	}
+
+	// If annotations are not provided as a func parameter, such as during automated testing
+	if annotations == nil {
+		annotations = make(map[string]string)
+	}
+
+	// cr.Spec.Dashboards.annotations
+	for annotationsKey, annotationsVal := range cr.Spec.Dashboards.Annotations {
+		annotations[annotationsKey] = annotationsVal
+	}
+
 	var probeScheme corev1.URIScheme = "HTTP"
 	if cr.Spec.Dashboards.Tls != nil && cr.Spec.Dashboards.Tls.Enable {
 		probeScheme = "HTTPS"
