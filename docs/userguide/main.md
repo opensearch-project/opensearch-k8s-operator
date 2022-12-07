@@ -621,10 +621,10 @@ apiVersion: opensearch.opster.io/v1
 kind: OpensearchUser
 metadata:
   name: sample-user
+  namespace: defauklt
 spec:
   opensearchCluster:
     name: my-first-cluster
-    namespace: default
   passwordFrom:
     name: sample-user-password
     key: password
@@ -644,10 +644,10 @@ apiVersion: opensearch.opster.io/v1
 kind: OpensearchRole
 metadata:
   name: sample-role
+  namespace: default
 spec:
   opensearchCluster:
     name: my-first-cluster
-    namespace: default
   clusterPermissions:
   - cluster_composite_ops
   - cluster_monitor
@@ -668,10 +668,10 @@ apiVersion: opensearch.opster.io/v1
 kind: OpensearchUserRoleBinding
 metadata:
   name: sample-urb
+  namespace: default
 spec:
   opensearchCluster:
     name: my-first-cluster
-    namespace: default
   users:
   - sample-user
   backendRoles:
