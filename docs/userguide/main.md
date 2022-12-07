@@ -621,7 +621,7 @@ apiVersion: opensearch.opster.io/v1
 kind: OpensearchUser
 metadata:
   name: sample-user
-  namespace: defauklt
+  namespace: default
 spec:
   opensearchCluster:
     name: my-first-cluster
