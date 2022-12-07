@@ -628,7 +628,6 @@ spec:
   passwordFrom:
     name: sample-user-password
     key: password
-    namespace: default
   backendRoles:
   - kibanauser
 ```
