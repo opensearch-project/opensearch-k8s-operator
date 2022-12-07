@@ -672,7 +672,6 @@ metadata:
 spec:
   opensearchCluster:
     name: my-first-cluster
-    namespace: default
   users:
   - sample-user
   backendRoles:
