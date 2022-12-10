@@ -18,12 +18,12 @@ var _ = Describe("Dashboards", func() {
 		},
 	}
 
-	When("When enabling dashboards", func() {
+	When("enabling dashboards", func() {
 		It("it should create a service", func() {
 			Expect(cluster.Spec.Dashboards.Service).NotTo(Equal(nil))
 		})
 
-		It("updating the service type through the cluster spec should reflect the service", func() {
+		It("should reflect service type being changed", func() {
 			t := corev1.ServiceTypeLoadBalancer
 			cluster.Spec.Dashboards.Service.Type = t
 			Expect(cluster.Spec.Dashboards.Service.Type).To(Equal(t))
