@@ -109,6 +109,14 @@ type BootstrapConfig struct {
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 }
 
+type ServiceType = corev1.ServiceType
+
+type DashboardsServiceSpec struct {
+	// +kubebuilder:default=ClusterIP
+	Type                     ServiceType `json:"type,omitempty"`
+	LoadBalancerSourceRanges []string    `json:"loadBalancerSourceRanges,omitempty"`
+}
+
 type DashboardsConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Enable     bool                        `json:"enable,omitempty"`
@@ -129,6 +137,7 @@ type DashboardsConfig struct {
 	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
 	Labels                      map[string]string           `json:"labels,omitempty"`
 	Annotations                 map[string]string           `json:"annotations,omitempty"`
+	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
