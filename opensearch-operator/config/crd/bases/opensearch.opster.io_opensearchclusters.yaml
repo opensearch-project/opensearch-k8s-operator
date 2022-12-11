@@ -2228,6 +2228,10 @@ spec:
                         default: ClusterIP
                         description: Service Type string describes ingress methods
                           for a service
+                        enum:
+                        - ClusterIP
+                        - NodePort
+                        - LoadBalancer
                         type: string
                     type: object
                   tls:
