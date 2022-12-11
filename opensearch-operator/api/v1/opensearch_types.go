@@ -109,6 +109,7 @@ type BootstrapConfig struct {
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 }
 
+// +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer
 type ServiceType = corev1.ServiceType
 
 type DashboardsServiceSpec struct {
