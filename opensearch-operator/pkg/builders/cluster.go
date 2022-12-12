@@ -212,8 +212,8 @@ func NewSTSForNodePool(
 	var mainCommand []string
 	com := "./bin/opensearch-plugin install --batch"
 	if cr.Spec.General.Monitoring.Enable {
-		if cr.Spec.General.Monitoring.OfflinePlugin == "" {
-			url := cr.Spec.General.Monitoring.OfflinePlugin
+		if cr.Spec.General.Monitoring.PluginURL != "" {
+			url := cr.Spec.General.Monitoring.PluginURL
 			cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
 		} else {
 			clusterVersion := cr.Spec.General.Version

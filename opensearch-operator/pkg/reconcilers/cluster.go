@@ -3,7 +3,6 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
@@ -69,6 +68,12 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.CombineErr(ctrl.SetControllerReference(r.instance, serviceMonitor, r.Client.Scheme()))
 		result.Combine(r.ReconcileResource(serviceMonitor, reconciler.StatePresent))
 
+	} else {
+		serviceMonitor := builders.NewServiceMonitor(r.instance)
+		resultMo, err := r.ReconcileResource(serviceMonitor, reconciler.StateCreated)
+		if err != nil || resultMo != nil {
+			err = r.Delete(r.ctx, serviceMonitor)
+		}
 	}
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))

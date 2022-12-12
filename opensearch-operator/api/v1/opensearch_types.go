@@ -47,7 +47,7 @@ type GeneralConfig struct {
 	PluginsList    []string `json:"pluginsList,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
-	Monitoring        MonitoringStuck    `json:"monitoring,omitempty"`
+	Monitoring        MonitoringConfig   `json:"monitoring,omitempty"`
 	// Populate opensearch keystore before startup
 	Keystore []KeystoreValue `json:"keystore,omitempty"`
 }
@@ -97,11 +97,11 @@ type ConfMgmt struct {
 	SmartScaler bool `json:"smartScaler,omitempty"`
 }
 
-type MonitoringStuck struct {
+type MonitoringConfig struct {
 	Enable         bool   `json:"enable,omitempty"`
 	MonitoringUser string `json:"monitoringUser,omitempty"`
 	ScrapInterval  string `json:"scrapInterval,omitempty"`
-	OfflinePlugin  string `json:"offlinePlugin,omitempty"`
+	PluginURL      string `json:"pluginUrl,omitempty"`
 }
 
 type BootstrapConfig struct {
