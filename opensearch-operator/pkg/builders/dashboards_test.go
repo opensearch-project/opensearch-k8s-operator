@@ -58,6 +58,7 @@ var _ = Describe("Builders", func() {
 	When("building the dashboards deployment with a custom service type", func() {
 		It("should populate the service with the correct type and source ranges", func() {
 			clusterName := "dashboards-add-service-type-load-balancer"
+			sourceRanges := []string{"10.0.0.0/24"}
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -66,13 +67,13 @@ var _ = Describe("Builders", func() {
 						Enable: true,
 						Service: opsterv1.DashboardsServiceSpec{
 							Type:                     "LoadBalancer",
-							LoadBalancerSourceRanges: []string{"10.0.0.0/24"},
+							LoadBalancerSourceRanges: sourceRanges,
 						},
 					},
 				}}
 			var result = NewDashboardsSvcForCr(&spec)
 			Expect(result.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
-			Expect(result.Spec.LoadBalancerSourceRanges).To(Equal([]string{"10.0.0.0/24"}))
+			Expect(result.Spec.LoadBalancerSourceRanges).To(Equal(sourceRanges))
 		})
 	})
 })
