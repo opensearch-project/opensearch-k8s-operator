@@ -621,22 +621,22 @@ spec:
 
 ## Adding Opensearch Monitoring to your cluster
 
-The operator allows you to install the Aiven monitoring for OpenSearch on your cluster as a build in feature (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch)
-That feature is needed Online connectivity to download the plugin. if you are working at offline ENV, please download and store where you have access that zip (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip).
-after that please insert the new URL under offlinePlugin key.
+The operator allows you to install and enable the Aiven monitoring plugin for OpenSearch on your cluster as a built-in feature (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch)
+That feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config.
+after that please insert the new URL under pluginUrl key, notice that the Plugin that you are using will have to match the OpenSearch cluster version that you are running.
+By the default the Monitoring user will use admin OpenSearch user, in case you want to use another user, please provide it under the 'monitoringUser' filed.
 ```yaml
 apiVersion: opensearch.opster.io/v1
-kind: OpensearchUserRoleBinding
-metadata:
-  name: sample-urb
+kind: OpenSearchCluster
 spec:
   opensearchCluster:
     name: my-first-cluster
     namespace: default
   general:
+    version: 2.4.0
     monitoring:
       enable: true
       interval: 30s
       monitoringUser: appUser
-      offlinePlugin: https://opster-s3-bucket/prometheus-exporter-plugin-for-opensearch
+      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.4.0.0/prometheus-exporter-2.4.0.0.zip
 ```

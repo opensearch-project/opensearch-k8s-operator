@@ -2502,9 +2502,9 @@ spec:
                     properties:
                       enable:
                         type: boolean
-                      monitoringUser:
+                      monitoringUserSecret:
                         type: string
-                      offlinePlugin:
+                      pluginUrl:
                         type: string
                       scrapInterval:
                         type: string

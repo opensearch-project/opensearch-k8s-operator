@@ -99,7 +99,7 @@ ClusterSpec defines the desired state of OpensearchCluster
       </tr><tr>
         <td><b>monitoring</b></td>
         <td>object</td>
-        <td>object that define the monitoring stuck in an OpensearchCluster</td>
+        <td>monitoring configuration in an OpensearchCluster</td>
         <td>false</td>
       </tr><tr>
         <td><b>initHelper</b></td>
@@ -504,7 +504,7 @@ Every Keystore Value defines a secret to pull secrets from.
     <tbody><tr>
         <td><b>enable</b></td>
         <td>bool</td>
-        <td>Define if to ernable monitoring for that cluster</td>
+        <td>Define if to enable monitoring for that cluster</td>
         <td>true</td>
         <td>-</td>
       </tr><tr>
@@ -516,18 +516,19 @@ Every Keystore Value defines a secret to pull secrets from.
       </tr><tr>
         <td><b>interval</b></td>
         <td>string</td>
-        <td>Define interval for scarping</td>
+        <td>Define interval for scraping</td>
         <td>false</td>
         <td>30s</td>
       </tr><tr>
       </tr><tr>
-        <td><b>offlinePlugin</b></td>
+        <td><b>PluginURL</b></td>
         <td>string</td>
         <td>Define offline link to Aiven Plugin</td>
         <td>false</td>
         <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch</td>
       </tr><tr>
 </table>
+<table>
     <tbody>
       <tr>
         <td><b>secret</b></td>
@@ -543,4 +544,5 @@ Every Keystore Value defines a secret to pull secrets from.
         <td>false</td>
         <td>-</td>
       </tr>
+    </tbody>
 </table>

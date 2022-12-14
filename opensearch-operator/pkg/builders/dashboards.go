@@ -169,7 +169,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	for _, key := range keys {
 		sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
 	}
-	data := sb.String()
+	datas := sb.String()
 
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
@@ -177,7 +177,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 			Namespace: cr.Namespace,
 		},
 		Data: map[string]string{
-			helpers.DashboardConfigName: data,
+			helpers.DashboardConfigName: datas,
 		},
 	}
 }

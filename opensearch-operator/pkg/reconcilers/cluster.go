@@ -70,10 +70,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	} else {
 		serviceMonitor := builders.NewServiceMonitor(r.instance)
-		resultMo, err := r.ReconcileResource(serviceMonitor, reconciler.StateCreated)
-		if err != nil || resultMo != nil {
-			err = r.Delete(r.ctx, serviceMonitor)
-		}
+		result.Combine(r.ReconcileResource(serviceMonitor, reconciler.StateAbsent))
 	}
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))

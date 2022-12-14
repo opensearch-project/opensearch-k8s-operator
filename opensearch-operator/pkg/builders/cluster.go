@@ -1003,10 +1003,33 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 	if scrape == "" {
 		scrape = "30s"
 	}
+	user := &prometheus.BasicAuth{}
 
-	monitorUser := cr.Spec.General.Monitoring.MonitoringUser
+	monitorUser := cr.Spec.General.Monitoring.MonitoringUserSecret
 	if monitorUser == "" {
 		monitorUser = "admin"
+		user = &prometheus.BasicAuth{
+			Username: corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
+				Key:                  "username",
+			},
+			Password: corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
+				Key:                  "password",
+			},
+		}
+	} else {
+		user = &prometheus.BasicAuth{
+			Username: corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Spec.General.Monitoring.MonitoringUserSecret},
+				Key:                  "username",
+			},
+			Password: corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Spec.General.Monitoring.MonitoringUserSecret},
+				Key:                  "password",
+			},
+		}
+
 	}
 
 	return &prometheus.ServiceMonitor{
@@ -1031,16 +1054,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 					TLSConfig:       nil,
 					BearerTokenFile: "",
 					HonorLabels:     false,
-					BasicAuth: &prometheus.BasicAuth{
-						Username: corev1.SecretKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
-							Key:                  monitorUser,
-						},
-						Password: corev1.SecretKeySelector{
-							LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
-							Key:                  "password",
-						},
-					},
+					BasicAuth:       user,
 				},
 			},
 			Selector:          selector,
