@@ -2480,6 +2480,8 @@ spec:
                       - path
                       type: object
                     type: array
+                  command:
+                    type: string
                   defaultRepo:
                     type: string
                   drainDataNodes:
