@@ -176,6 +176,27 @@ spec:
     basePath: "/logs"
 ```
 
+## Configuring dashboards service type
+
+This allows you to set opensearch dashboards service type to a custom type.  This is useful when you want to expose 
+opensearch dashboards outside of the cluster using a cloud load balancer or node port.
+
+Supported Types
+
+  * NodePort
+  * LoadBalancer
+  * ClusterIP (default)
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  dashboards:
+    service:
+      type: LoadBalancer
+      LoadBalancerSourceRanges: "10.0.0.0/24"
+```
 
 ## TLS
 
