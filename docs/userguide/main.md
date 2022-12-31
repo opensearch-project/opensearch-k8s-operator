@@ -176,7 +176,7 @@ spec:
     basePath: "/logs"
 ```
 
-## Configuring dashboards service type
+## Configuring dashboards service
 
 This allows you to set opensearch dashboards service type.  This is useful when you want to expose 
 opensearch dashboards outside the cluster using a cloud load balancer or node port.
