@@ -178,14 +178,14 @@ spec:
 
 ## Configuring dashboards service
 
-This allows you to set opensearch dashboards service type.  This is useful when you want to expose 
-opensearch dashboards outside the cluster using a cloud load balancer or node port.
+This allows you to customize the dashboards kubernetes service
 
-Supported Types
-
+Supported Service Types
+  * ClusterIP (default)
   * NodePort
   * LoadBalancer
-  * ClusterIP (default)
+
+When using type LoadBalancer you can optionally set the load balancer source ranges
 
 ```yaml
 apiVersion: opensearch.opster.io/v1
@@ -195,7 +195,7 @@ spec:
   dashboards:
     service:
       type: LoadBalancer
-      LoadBalancerSourceRanges: "10.0.0.0/24"
+      LoadBalancerSourceRanges: "10.0.0.0/24, 192.168.0.0/24"
 ```
 
 ## TLS
