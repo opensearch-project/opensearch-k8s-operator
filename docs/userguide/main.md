@@ -178,8 +178,8 @@ spec:
 
 ## Configuring dashboards service type
 
-This allows you to set opensearch dashboards service type to a custom type.  This is useful when you want to expose 
-opensearch dashboards outside of the cluster using a cloud load balancer or node port.
+This allows you to set opensearch dashboards service type.  This is useful when you want to expose 
+opensearch dashboards outside the cluster using a cloud load balancer or node port.
 
 Supported Types
 
