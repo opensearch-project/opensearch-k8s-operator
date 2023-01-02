@@ -3,6 +3,7 @@ package helpers
 import (
 	"fmt"
 	"path"
+	"strings"
 
 	"github.com/hashicorp/go-version"
 	"k8s.io/utils/pointer"
@@ -137,4 +138,28 @@ func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, string) {
 		securityconfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
 	}
 	return httpPort, securityconfigPath
+}
+
+func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool) []string {
+	var mainCommand []string
+	com := installerBinary + " install"
+
+	if batchMode {
+		com = com + "  --batch"
+	}
+
+	if len(pluginsList) > 0 {
+		mainCommand = append(mainCommand, "/bin/bash", "-c")
+		for index, plugin := range pluginsList {
+			fmt.Println(index, plugin)
+			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
+		}
+
+		com = com + " && ./opensearch-docker-entrypoint.sh"
+		mainCommand = append(mainCommand, com)
+	} else {
+		mainCommand = []string{"/bin/bash", "-c", "./opensearch-docker-entrypoint.sh"}
+	}
+
+	return mainCommand
 }

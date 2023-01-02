@@ -116,6 +116,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		},
 	}
 
+	mainCommand := helpers.BuildMainCommand("./bin/opensearch-dashboards-plugin", cr.Spec.Dashboards.PluginsList, false)
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-dashboards",
@@ -153,6 +155,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 							LivenessProbe: &probe,
 							Env:           env,
 							VolumeMounts:  volumeMounts,
+							Command:       mainCommand,
 						},
 					},
 					ImagePullSecrets: image.ImagePullSecrets,

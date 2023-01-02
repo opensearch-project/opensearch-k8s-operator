@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Secret
+metadata:
+  name: sample-user-password
+type: Opaque
+stringData:
+   password: as!!!ss00#ss##dd!sfhdf!s!

@@ -137,6 +137,7 @@ type DashboardsConfig struct {
 	Labels                      map[string]string           `json:"labels,omitempty"`
 	Annotations                 map[string]string           `json:"annotations,omitempty"`
 	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
+	PluginsList                 []string                    `json:"pluginsList,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
