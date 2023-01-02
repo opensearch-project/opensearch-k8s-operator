@@ -214,7 +214,7 @@ func NewSTSForNodePool(
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
 
-	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true)
+	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, "./opensearch-docker-entrypoint.sh")
 
 	initContainers := []corev1.Container{
 		{

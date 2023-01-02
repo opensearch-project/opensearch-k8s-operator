@@ -140,7 +140,7 @@ func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, string) {
 	return httpPort, securityconfigPath
 }
 
-func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool) []string {
+func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool, entrypoint string) []string {
 	var mainCommand []string
 	com := installerBinary + " install"
 
@@ -155,10 +155,10 @@ func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bo
 			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
 		}
 
-		com = com + " && ./opensearch-docker-entrypoint.sh"
+		com = com + " && " + entrypoint
 		mainCommand = append(mainCommand, com)
 	} else {
-		mainCommand = []string{"/bin/bash", "-c", "./opensearch-docker-entrypoint.sh"}
+		mainCommand = []string{"/bin/bash", "-c", entrypoint}
 	}
 
 	return mainCommand

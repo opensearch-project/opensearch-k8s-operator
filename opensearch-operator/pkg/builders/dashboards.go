@@ -116,7 +116,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		},
 	}
 
-	mainCommand := helpers.BuildMainCommand("./bin/opensearch-dashboards-plugin", cr.Spec.Dashboards.PluginsList, false)
+	mainCommand := helpers.BuildMainCommand("./bin/opensearch-dashboards-plugin", cr.Spec.Dashboards.PluginsList, false, "./opensearch-dashboards-docker-entrypoint.sh")
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
