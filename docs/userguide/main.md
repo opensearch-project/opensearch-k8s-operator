@@ -137,64 +137,6 @@ Using `spec.general.additionalConfig` you can add settings to all nodes, using `
 
 Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If want to avoid that please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
 
-## Configuring opensearch_dashboards.yml
-
-You can customize the OpenSearch dashboard configuration file [`opensearch_dashboards.yml`](https://github.com/opensearch-project/OpenSearch-Dashboards/blob/main/config/opensearch_dashboards.yml) using the `additionalConfig` field in the dashboards section of the `OpenSearchCluster` custom resource:
-
-```yaml
-apiVersion: opensearch.opster.io/v1
-kind: OpenSearchCluster
-...
-spec:
-  dashboards:
-    additionalConfig:
-      opensearch_security.auth.type: "proxy"
-      opensearch.requestHeadersWhitelist: |
-        ["securitytenant","Authorization","x-forwarded-for","x-auth-request-access-token", "x-auth-request-email", "x-auth-request-groups"]
-      opensearch_security.multitenancy.enabled: "true"
-```
-
-This allows one to set up any of the [backend](https://opensearch.org/docs/latest/security-plugin/configuration/configuration/) authentication types for the dashboard.
-
-*The configuration must be valid or the dashboard will fail to start.*
-
-## Configuring a basePath
-
-When using OpenSearch behind a reverse proxy you have to configure a base path. This can be achieved by setting the base path field in the configuraiton of OpenSearch Dashboards. Behind the scenes the according configuration fields are set automatically in the opensearch.yml file.
-
-```yaml
-apiVersion: opensearch.opster.io/v1
-kind: OpenSearchCluster
-...
-spec:
-  dashboards:
-    enable: true
-    basePath: "/logs"
-```
-
-## Configuring dashboards service
-
-This allows you to customize the dashboards kubernetes service
-
-Supported Service Types
-  * ClusterIP (default)
-  * NodePort
-  * LoadBalancer
-
-When using type LoadBalancer you can optionally set the load balancer source ranges
-
-```yaml
-apiVersion: opensearch.opster.io/v1
-kind: OpenSearchCluster
-...
-spec:
-  dashboards:
-    service:
-      type: LoadBalancer
-      LoadBalancerSourceRanges: "10.0.0.0/24, 192.168.0.0/24"
-```
-
-
 ### TLS
 
 For security reasons, encryption is required for communication with the OpenSearch cluster and between cluster nodes. If you do not configure any encryption, OpenSearch will use the included demo TLS certificates, which are not ideal for most active deployments.
@@ -697,6 +639,29 @@ spec:
 ```
 
 Note: If you have enabled HTTPS for dashboards you need to instruct your ingress-controller to use a HTTPS connection internally. This is specific for the controller you are using (e.g. nginx-ingress, traefik, ...).
+
+### Configuring the Dashboards K8s Service
+
+You can customize the Kubernetes Service object that the operator generates for the Dashboards deployment.
+
+Supported Service Types
+
+* ClusterIP (default)
+* NodePort
+* LoadBalancer
+
+When using type LoadBalancer you can optionally set the load balancer source ranges.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  dashboards:
+    service:
+      type: LoadBalancer  # Set one of the supported types
+      LoadBalancerSourceRanges: "10.0.0.0/24, 192.168.0.0/24"  # Optional, add source ranges for a loadbalancer
+```
 
 ### Exposing the OpenSearch cluster REST API
 
