@@ -640,6 +640,29 @@ spec:
 
 Note: If you have enabled HTTPS for dashboards you need to instruct your ingress-controller to use a HTTPS connection internally. This is specific for the controller you are using (e.g. nginx-ingress, traefik, ...).
 
+### Configuring the Dashboards K8s Service
+
+You can customize the Kubernetes Service object that the operator generates for the Dashboards deployment.
+
+Supported Service Types
+
+* ClusterIP (default)
+* NodePort
+* LoadBalancer
+
+When using type LoadBalancer you can optionally set the load balancer source ranges.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  dashboards:
+    service:
+      type: LoadBalancer  # Set one of the supported types
+      loadBalancerSourceRanges: "10.0.0.0/24, 192.168.0.0/24"  # Optional, add source ranges for a loadbalancer
+```
+
 ### Exposing the OpenSearch cluster REST API
 
 If you want to expose the REST API of OpenSearch outside your Kubernetes cluster, the recommended way is to do this via ingress.
