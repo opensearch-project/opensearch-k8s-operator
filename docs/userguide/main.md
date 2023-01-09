@@ -660,7 +660,7 @@ spec:
   dashboards:
     service:
       type: LoadBalancer  # Set one of the supported types
-      LoadBalancerSourceRanges: "10.0.0.0/24, 192.168.0.0/24"  # Optional, add source ranges for a loadbalancer
+      loadBalancerSourceRanges: "10.0.0.0/24, 192.168.0.0/24"  # Optional, add source ranges for a loadbalancer
 ```
 
 ### Exposing the OpenSearch cluster REST API
