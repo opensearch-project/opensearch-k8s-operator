@@ -508,9 +508,9 @@ Every Keystore Value defines a secret to pull secrets from.
         <td>true</td>
         <td>-</td>
       </tr><tr>
-        <td><b>monitoringUser</b></td>
+        <td><b>monitoringUserSecret</b></td>
         <td>[]string</td>
-        <td>Define from which user the monitor will run (the user should be created earlier).</td>
+        <td>Define from which user the monitor will run (Getting Secret name, the secret should contain 'username':'password' fileds).</td>
         <td>false</td>
         <td>admin</td>
       </tr><tr>

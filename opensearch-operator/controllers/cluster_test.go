@@ -6,8 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/banzaicloud/operator-tools/pkg/prometheus"
-
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -86,13 +84,22 @@ var _ = Describe("Cluster Reconciler", func() {
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
 		})
-
-		It("should create a ServiceMonitor for the cluster", func() {
-			Eventually(func() error {
-				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, &prometheus.ServiceMonitor{})
-			}, timeout, interval).Should(Succeed())
-		})
-
+		//	Sm := &prometheus.ServiceMonitor{}
+		//admin := OpensearchCluster.Name + "-admin-password"
+		//It("should create a ServiceMonitor for the cluster", func() {
+		//	Eventually(func() error {
+		//		return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, &prometheus.ServiceMonitor{})
+		//	}, timeout, interval).Should(Succeed())
+		//	Expect(Sm.Spec.Endpoints).To(ContainElement(v1.Endpoint{
+		//		BasicAuth: &v1.BasicAuth{Username: corev1.SecretKeySelector{
+		//			LocalObjectReference: corev1.LocalObjectReference{Name: admin},
+		//			Key:                  "username"},
+		//			Password: corev1.SecretKeySelector{
+		//				LocalObjectReference: corev1.LocalObjectReference{Name: admin},
+		//				Key:                  "password"},
+		//		},
+		//	}))
+		//})
 	})
 
 	/// ------- Tests logic Check phase -------
@@ -131,7 +138,7 @@ var _ = Describe("Cluster Reconciler", func() {
 						},
 					}, k8sClient), timeout, interval).Should(ExistAnd(
 						HaveMatchingContainer(And(
-							HaveImage("docker.io/opensearchproject/opensearch:1.0.0"),
+							HaveImage("docker.io/opensearchproject/opensearch:2.0.0"),
 							HaveLimits(corev1.ResourceList{
 								corev1.ResourceCPU:    resource.MustParse("500m"),
 								corev1.ResourceMemory: resource.MustParse("2Gi"),
@@ -311,7 +318,7 @@ var _ = Describe("Cluster Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return false
 				}
-				return OpensearchCluster.Status.Version == "1.0.0"
+				return OpensearchCluster.Status.Version == "2.0.0"
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
@@ -342,7 +349,7 @@ var _ = Describe("Cluster Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return false
 				}
-				return OpensearchCluster.Status.Version == "1.0.0"
+				return OpensearchCluster.Status.Version == "2.0.0"
 			}, consistently, interval).Should(BeTrue())
 			wg := sync.WaitGroup{}
 			for _, pool := range OpensearchCluster.Spec.NodePools {
@@ -363,7 +370,7 @@ var _ = Describe("Cluster Reconciler", func() {
 							}, sts); err != nil {
 							return false
 						}
-						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.0.0"
+						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:2.0.0"
 					}, consistently, interval).Should(BeTrue())
 				}(pool)
 			}

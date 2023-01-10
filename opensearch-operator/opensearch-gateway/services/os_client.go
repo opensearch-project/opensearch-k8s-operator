@@ -205,7 +205,7 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 
 func (client *OsClusterClient) GetFlatClusterSettings() (responses.FlatClusterSettingsResponse, error) {
 	req := opensearchapi.ClusterGetSettingsRequest{
-		FlatSettings: pointer.BoolPtr(true),
+		FlatSettings: pointer.Bool(true),
 	}
 	settingsRes, err := req.Do(context.Background(), client.client)
 	var response responses.FlatClusterSettingsResponse

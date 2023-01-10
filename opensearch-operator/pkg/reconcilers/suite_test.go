@@ -93,7 +93,7 @@ var _ = BeforeSuite(func() {
 					Schema: &apiextensionsv1.CustomResourceValidation{
 						OpenAPIV3Schema: &apiextensionsv1.JSONSchemaProps{
 							Properties:             map[string]apiextensionsv1.JSONSchemaProps{},
-							XPreserveUnknownFields: pointer.BoolPtr(true),
+							XPreserveUnknownFields: pointer.Bool(true),
 							Type:                   "object",
 						},
 					},

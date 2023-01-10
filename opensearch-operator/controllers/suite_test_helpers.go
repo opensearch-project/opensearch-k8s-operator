@@ -98,7 +98,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Monitoring:  opsterv1.MonitoringConfig{Enable: true},
 				HttpPort:    9200,
 				Vendor:      "opensearch",
-				Version:     "1.0.0",
+				Version:     "2.0.0",
 				ServiceName: "es-svc",
 				AdditionalConfig: map[string]string{
 					"foo": "bar",
@@ -145,6 +145,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			Dashboards: opsterv1.DashboardsConfig{
 				Enable:   true,
 				Replicas: 3,
+				Version:  "2.0.0",
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),

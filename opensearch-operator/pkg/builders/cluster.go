@@ -3,7 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
-	"github.com/banzaicloud/operator-tools/pkg/prometheus"
+	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"sort"
 	"strings"
 
@@ -217,7 +217,7 @@ func NewSTSForNodePool(
 			cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
 		} else {
 			clusterVersion := cr.Spec.General.Version
-			url := "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/" + clusterVersion + ".0/prometheus-exporter" + clusterVersion + ".0.zip"
+			url := "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/" + clusterVersion + ".0/prometheus-exporter-" + clusterVersion + ".0.zip"
 			cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
 		}
 	}
@@ -985,7 +985,7 @@ func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.O
 	return count
 }
 
-func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonitor {
+func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *v1.ServiceMonitor {
 
 	labels := map[string]string{
 		ClusterLabel: cr.Name,
@@ -994,21 +994,20 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 		MatchLabels: labels,
 	}
 
-	namespaceSelector := prometheus.NamespaceSelector{
+	namespaceSelector := v1.NamespaceSelector{
 		Any:        false,
 		MatchNames: []string{cr.Namespace},
 	}
 
-	scrape := cr.Spec.General.Monitoring.ScrapInterval
-	if scrape == "" {
-		scrape = "30s"
+	if cr.Spec.General.Monitoring.ScrapInterval == "" {
+		cr.Spec.General.Monitoring.ScrapInterval = "30s"
 	}
-	user := &prometheus.BasicAuth{}
+	user := v1.BasicAuth{}
 
 	monitorUser := cr.Spec.General.Monitoring.MonitoringUserSecret
 	if monitorUser == "" {
 		monitorUser = "admin"
-		user = &prometheus.BasicAuth{
+		user = v1.BasicAuth{
 			Username: corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
 				Key:                  "username",
@@ -1019,7 +1018,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 			},
 		}
 	} else {
-		user = &prometheus.BasicAuth{
+		user = v1.BasicAuth{
 			Username: corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Spec.General.Monitoring.MonitoringUserSecret},
 				Key:                  "username",
@@ -1032,13 +1031,13 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 
 	}
 
-	return &prometheus.ServiceMonitor{
+	return &v1.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-monitor",
 			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
-		Spec: prometheus.ServiceMonitorSpec{
+		Spec: v1.ServiceMonitorSpec{
 			JobLabel: cr.Name + "-monitor",
 			TargetLabels: []string{
 				cr.Name,
@@ -1046,15 +1045,15 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *prometheus.ServiceMonito
 			PodTargetLabels: []string{
 				cr.Name,
 			},
-			Endpoints: []prometheus.Endpoint{
+			Endpoints: []v1.Endpoint{
 				{Port: "9200",
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
-					Interval:        scrape,
+					Interval:        v1.Duration(cr.Spec.General.Monitoring.ScrapInterval),
 					TLSConfig:       nil,
 					BearerTokenFile: "",
 					HonorLabels:     false,
-					BasicAuth:       user,
+					BasicAuth:       &user,
 				},
 			},
 			Selector:          selector,
