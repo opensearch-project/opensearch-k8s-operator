@@ -112,8 +112,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 	//		}, timeout, interval).Should(BeTrue())
 	//	})
 	//	It("should set correct owner references", func() {
-	//		Expect(HasOwnerReference(&deploy, &OpensearchCluster)).To(BeTrue())
-	//		Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
+	//		Expect(HasOwnerReference(&deploy, &OpensearchCluster)).To(BeTrue()) //		Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
 	//		Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
 	//	})
 	//	It("should create and configure dashboard deployment correctly", func() {
