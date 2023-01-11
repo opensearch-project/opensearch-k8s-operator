@@ -245,6 +245,7 @@ func (in *DashboardsConfig) DeepCopyInto(out *DashboardsConfig) {
 			(*out)[key] = val
 		}
 	}
+	in.Service.DeepCopyInto(&out.Service)
 	if in.PluginsList != nil {
 		in, out := &in.PluginsList, &out.PluginsList
 		*out = make([]string, len(*in))

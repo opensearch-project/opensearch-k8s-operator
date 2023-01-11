@@ -218,7 +218,7 @@ Directly exposing the node HTTP port outside the Kubernetes cluster is not recom
 
 You can extend the functionality of OpenSearch via [plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#available-plugins). Commonly used ones are snapshot repository plugins for external backups (e.g. to AWS S3 or Azure Blog Storage). The operator has support to automatically install such plugins during setup.
 
-To install a plugin add it to the list under `general.pluginsList`:
+To install a plugin for opensearch add it to the list under `general.pluginsList`:
 
 ```yaml
   general:
@@ -227,6 +227,16 @@ To install a plugin add it to the list under `general.pluginsList`:
     vendor: opensearch
     serviceName: my-cluster
     pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
+```
+
+To install a plugin for opensearch dashboards add it to the list under `dashboards.pluginsList`:
+
+```yaml
+  dashboards:
+    enable: true
+    version: 2.4.1
+    pluginsList:
+      - sample-plugin-name
 ```
 
 Please note:

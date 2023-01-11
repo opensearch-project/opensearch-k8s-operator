@@ -145,7 +145,7 @@ func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bo
 	com := installerBinary + " install"
 
 	if batchMode {
-		com = com + "  --batch"
+		com = com + " --batch"
 	}
 
 	if len(pluginsList) > 0 {

@@ -1,6 +1,8 @@
 package builders
 
 import (
+	"fmt"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
@@ -74,6 +76,39 @@ var _ = Describe("Builders", func() {
 			var result = NewDashboardsSvcForCr(&spec)
 			Expect(result.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
 			Expect(result.Spec.LoadBalancerSourceRanges).To(Equal(sourceRanges))
+		})
+	})
+
+	When("building the dashboards deployment with plugins that should be installed", func() {
+		It("should properly setup the main command when installing plugins", func() {
+			pluginA := "some-plugin"
+			pluginB := "another-plugin"
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable:      true,
+						PluginsList: []string{pluginA, pluginB},
+					},
+				},
+			}
+
+			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			installCmd := fmt.Sprintf(
+				"./bin/opensearch-dashboards-plugin install '%s' '%s' && ./opensearch-dashboards-docker-entrypoint.sh",
+				pluginA,
+				pluginB,
+			)
+			expected := []string{
+				"/bin/bash",
+				"-c",
+				installCmd,
+			}
+			actual := result.Spec.Template.Spec.Containers[0].Command
+
+			Expect(expected).To(Equal(actual))
 		})
 	})
 })
