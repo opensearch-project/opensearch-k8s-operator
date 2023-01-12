@@ -218,20 +218,14 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 
 func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context) (ctrl.Result, error) {
 	r.Logger.Info("start reconcile - Phase: PENDING")
-	componentStatus := opsterv1.ComponentStatus{
-		Component:   "",
-		Status:      "",
-		Description: "",
-	}
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 			return err
 		}
 		r.Instance.Status.Phase = opsterv1.PhaseRunning
-		r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, componentStatus)
+		r.Instance.Status.ComponentsStatus = make([]opsterv1.ComponentStatus, 0)
 		return r.Status().Update(ctx, r.Instance)
 	})
-	r.Instance.Status.ComponentsStatus = append(r.Instance.Status.ComponentsStatus, componentStatus)
 	if err != nil {
 		return ctrl.Result{}, err
 

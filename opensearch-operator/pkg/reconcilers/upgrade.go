@@ -315,6 +315,11 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 	// Work around for https://github.com/kubernetes/kubernetes/issues/73492
 	// If upgrade on this node pool is complete update status and return
 	if sts.Status.UpdatedReplicas == sts.Status.Replicas {
+		if err = services.ReactivateShardAllocation(r.osClient); err != nil {
+			return err
+		}
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished to upgrade data node pool %s", pool.Component)
+
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 				return err
@@ -330,7 +335,7 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 				Description: pool.Component,
 			}
 			r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished to upgrade data node pool %s", currentStatus.Component)
+
 			return r.Status().Update(r.ctx, r.instance)
 		})
 	}
