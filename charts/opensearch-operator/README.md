@@ -23,6 +23,7 @@ helm uninstall [RELEASE_NAME]
 ```
 #### Upgrade Chart
 ```
+helm repo update
 helm upgrade [RELEASE_NAME] opensearch-operator/opensearch-operator
 ```
 
