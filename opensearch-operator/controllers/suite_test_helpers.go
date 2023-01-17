@@ -222,6 +222,11 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				},
 			}},
 			Security: &opsterv1.Security{
+				Config: &opsterv1.SecurityConfig{
+					SecurityconfigSecret: corev1.LocalObjectReference{
+						Name: "dummy",
+					},
+				},
 				JobConfig: &opsterv1.HelperConfig{
 					Tolerations: []corev1.Toleration{{
 						Effect:   "NoSchedule",
