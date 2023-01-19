@@ -20,7 +20,7 @@ import (
 )
 
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
-// http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
+// http://onsi.github.io/ginkgo/ to learn more about Ginkgo..
 
 func newDashboardsReconciler(spec *opsterv1.OpenSearchCluster) (ReconcilerContext, *DashboardsReconciler) {
 	reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
