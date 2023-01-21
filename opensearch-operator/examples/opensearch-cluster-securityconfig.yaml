@@ -36,7 +36,7 @@ spec:
     - component: masters
       replicas: 3
       diskSize: "30Gi"
-      NodeSelector:
+      nodeSelector:
       resources:
          requests:
             memory: "2Gi"
@@ -50,7 +50,7 @@ spec:
     - component: nodes
       replicas: 3
       diskSize: "100Gi"
-      NodeSelector:
+      nodeSelector:
       resources:
          requests:
             memory: "2Gi"
@@ -63,7 +63,7 @@ spec:
     - component: coordinators
       replicas: 3
       diskSize: "100Gi"
-      NodeSelector:
+      nodeSelector:
       resources:
          requests:
             memory: "2Gi"

@@ -50,7 +50,7 @@ spec:
     - component: nodes
       replicas: 3
       diskSize: "5Gi"
-      NodeSelector:
+      nodeSelector:
       resources:
          requests:
             memory: "2Gi"
@@ -101,7 +101,7 @@ spec:
       - component: nodes
         replicas: 3
         diskSize: "10Gi"
-        NodeSelector:
+        nodeSelector:
         resources:
           requests:
             memory: "2Gi"
@@ -473,7 +473,7 @@ spec:
         someLabelKey: someLabelValue
       annotations:  # Add any extra annotations as key-value pairs here
         someAnnotationKey: someAnnotationValue
-      NodeSelector:
+      nodeSelector:
       resources:
          requests:
             memory: "2Gi"
