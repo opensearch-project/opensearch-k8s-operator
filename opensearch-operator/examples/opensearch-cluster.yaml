@@ -9,7 +9,7 @@ spec:
     httpPort: 9200
     vendor: opensearch
     serviceName: my-cluster
-    monitoring:›
+    monitoring:
      enable: true
 #    pluginsList: ["repository-s3"]
   dashboards:
