@@ -18,6 +18,11 @@ const (
 	interval = time.Second * 1
 )
 
+const (
+	timeout  = time.Second * 30
+	interval = time.Second * 1
+)
+
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
 	return opsterv1.OpenSearchCluster{
 		Spec: opsterv1.ClusterSpec{
