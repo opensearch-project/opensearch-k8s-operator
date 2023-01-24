@@ -404,12 +404,12 @@ var _ = Describe("Builders", func() {
 
 			actualSts := appsv1.StatefulSet{}
 			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "foobar", Namespace: namespaceName}, &actualSts)
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "foobar" + "-masters", Namespace: namespaceName}, &actualSts)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
 			actualCommand := actualSts.Spec.Template.Spec.Containers[0].Command
-			Expect(actualCommand).To(Equal(customCommand))
+			Expect(actualCommand[2]).To(Equal(customCommand))
 		})
 	})
 })
