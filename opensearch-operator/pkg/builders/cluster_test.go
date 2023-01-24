@@ -3,13 +3,21 @@ package builders
 import (
 	"context"
 	"fmt"
+	appsv1 "k8s.io/api/apps/v1"
 	"os"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+const (
+	timeout  = time.Second * 30
+	interval = time.Second * 1
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -370,6 +378,38 @@ var _ = Describe("Builders", func() {
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
 			Expect(result).To(BeFalse())
+		})
+	})
+
+	When("Using custom command for OpenSearch startup", func() {
+		It("it should use the specified startup command", func() {
+			namespaceName := "customcommand"
+			customCommand := "/myentrypoint.sh"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Spec.General.ServiceName = "foobar"
+			clusterObject.Spec.General.Command = customCommand
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts.Status.ReadyReplicas = 2
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+
+			actualSts := appsv1.StatefulSet{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "foobar", Namespace: namespaceName}, &actualSts)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
+
+			actualCommand := actualSts.Spec.Template.Spec.Containers[0].Command
+			Expect(actualCommand).To(Equal(customCommand))
 		})
 	})
 })
