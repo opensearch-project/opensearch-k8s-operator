@@ -1007,7 +1007,6 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 	monitorUser := cr.Spec.General.Monitoring.MonitoringUserSecret
 	if monitorUser == "" {
 		// Use admin credentials if no separate monitoring user was defined
-		monitorUser = "admin"
 		user = monitoring.BasicAuth{
 			Username: corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + "-admin-password"},
