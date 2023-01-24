@@ -348,6 +348,27 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>-</td>
       </tr>
+      </tr><tr>
+        <td><b>labels</b></td>
+        <td>map[string]string</td>
+        <td>Adds labels to dashboard pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>annotations</b></td>
+        <td>map[string]string</td>
+        <td>Adds annotations to dashboard pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>service</b></td>
+        <td>opsterv1.DashboardsService</td>
+        <td>Customize dashboard service</td>
+        <td>false</td>
+        <td>-</td>
+      </tr>
+    </tr><tr>
 </table>
 
 
@@ -441,6 +462,20 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td> - </td>
       </tr>
+      </tr><tr>
+        <td><b>annotations</b></td>
+        <td>map[string]string</td>
+        <td>Adds annotations to node pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>priorityClassName</b></td>
+        <td>string</td>
+        <td>Adds a priority class to nodes</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
 </table>
 
 <h3 id="InitHelperConfig">
