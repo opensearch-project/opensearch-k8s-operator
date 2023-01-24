@@ -24,6 +24,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"path/filepath"
 	"testing"
 
@@ -32,7 +33,6 @@ import (
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/banzaicloud/operator-tools/pkg/prometheus"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -89,12 +89,12 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = opsterv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = prometheus.AddToScheme(scheme.Scheme)
-	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
+
+	monitoring.AddToScheme(scheme.Scheme)
 
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
 		Scheme:                 scheme.Scheme,
@@ -102,7 +102,7 @@ var _ = BeforeSuite(func() {
 		HealthProbeBindAddress: fmt.Sprintf(":%d", ports[1]),
 	})
 	Expect(err).ToNot(HaveOccurred())
-
+	//scheme.AddToScheme()
 	err = (&OpenSearchClusterReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: scheme.Scheme,

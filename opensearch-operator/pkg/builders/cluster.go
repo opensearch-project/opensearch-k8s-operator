@@ -3,7 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
-	v1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"sort"
 	"strings"
 
@@ -985,7 +985,7 @@ func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.O
 	return count
 }
 
-func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *v1.ServiceMonitor {
+func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
 
 	labels := map[string]string{
 		ClusterLabel: cr.Name,
@@ -994,7 +994,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *v1.ServiceMonitor {
 		MatchLabels: labels,
 	}
 
-	namespaceSelector := v1.NamespaceSelector{
+	namespaceSelector := monitoring.NamespaceSelector{
 		Any:        false,
 		MatchNames: []string{cr.Namespace},
 	}
@@ -1002,23 +1002,24 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *v1.ServiceMonitor {
 	if cr.Spec.General.Monitoring.ScrapInterval == "" {
 		cr.Spec.General.Monitoring.ScrapInterval = "30s"
 	}
-	user := v1.BasicAuth{}
+	user := monitoring.BasicAuth{}
 
 	monitorUser := cr.Spec.General.Monitoring.MonitoringUserSecret
 	if monitorUser == "" {
+		// Use admin credentials if no separate monitoring user was defined
 		monitorUser = "admin"
-		user = v1.BasicAuth{
+		user = monitoring.BasicAuth{
 			Username: corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
+				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + "-admin-password"},
 				Key:                  "username",
 			},
 			Password: corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + monitorUser + "-password"},
+				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + "-admin-password"},
 				Key:                  "password",
 			},
 		}
 	} else {
-		user = v1.BasicAuth{
+		user = monitoring.BasicAuth{
 			Username: corev1.SecretKeySelector{
 				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Spec.General.Monitoring.MonitoringUserSecret},
 				Key:                  "username",
@@ -1031,13 +1032,13 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *v1.ServiceMonitor {
 
 	}
 
-	return &v1.ServiceMonitor{
+	return &monitoring.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-monitor",
 			Namespace: cr.Namespace,
 			Labels:    labels,
 		},
-		Spec: v1.ServiceMonitorSpec{
+		Spec: monitoring.ServiceMonitorSpec{
 			JobLabel: cr.Name + "-monitor",
 			TargetLabels: []string{
 				cr.Name,
@@ -1045,11 +1046,11 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *v1.ServiceMonitor {
 			PodTargetLabels: []string{
 				cr.Name,
 			},
-			Endpoints: []v1.Endpoint{
-				{Port: "9200",
+			Endpoints: []monitoring.Endpoint{
+				{Port: string(cr.Spec.General.HttpPort),
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
-					Interval:        v1.Duration(cr.Spec.General.Monitoring.ScrapInterval),
+					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapInterval),
 					TLSConfig:       nil,
 					BearerTokenFile: "",
 					HonorLabels:     false,

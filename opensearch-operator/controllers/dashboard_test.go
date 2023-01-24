@@ -2,14 +2,17 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	sts "k8s.io/api/apps/v1"
+	"k8s.io/utils/pointer"
 	"time"
-
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -92,7 +95,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 		It("should create all Opensearch-dashboard resources", func() {
 			//fmt.Println(OpensearchCluster)
 			fmt.Println("\n DAShBOARD - START")
-	
+
 			By("Opensearch Dashboard")
 			Eventually(func() bool {
 				fmt.Println("\n DAShBOARD - START - 2")
@@ -112,7 +115,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 		It("should set correct owner references", func() {
-			Expect(HasOwnerReference(&deploy, &OpensearchCluster)).To(BeTrue()) //		Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&deploy, &OpensearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
 			Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
 		})
 		It("should create and configure dashboard deployment correctly", func() {

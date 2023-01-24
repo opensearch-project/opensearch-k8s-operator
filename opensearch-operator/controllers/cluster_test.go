@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"sync"
 	"time"
 
@@ -84,22 +85,37 @@ var _ = Describe("Cluster Reconciler", func() {
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
 		})
-		//	Sm := &prometheus.ServiceMonitor{}
-		//admin := OpensearchCluster.Name + "-admin-password"
-		//It("should create a ServiceMonitor for the cluster", func() {
-		//	Eventually(func() error {
-		//		return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, &prometheus.ServiceMonitor{})
-		//	}, timeout, interval).Should(Succeed())
-		//	Expect(Sm.Spec.Endpoints).To(ContainElement(v1.Endpoint{
-		//		BasicAuth: &v1.BasicAuth{Username: corev1.SecretKeySelector{
-		//			LocalObjectReference: corev1.LocalObjectReference{Name: admin},
-		//			Key:                  "username"},
-		//			Password: corev1.SecretKeySelector{
-		//				LocalObjectReference: corev1.LocalObjectReference{Name: admin},
-		//				Key:                  "password"},
-		//		},
-		//	}))
-		//})
+		Sm := &monitoring.ServiceMonitor{}
+		secret := &corev1.Secret{}
+
+		It("should create a ServiceMonitor for the cluster", func() {
+			Eventually(func() error {
+				// check if the ServiceMonitor created
+				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, Sm)
+			}, timeout, interval).Should(Succeed())
+
+			// check if the Auth secret created
+
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-admin-password", Namespace: OpensearchCluster.Namespace}, secret)
+			}, timeout, interval).Should(Succeed())
+
+			// check if the ServiceMonitor is using the Admin secret for basicAuth
+
+			Expect(Sm.Spec.Endpoints[0].BasicAuth).Should(BeEquivalentTo(
+				&monitoring.BasicAuth{Username: corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: OpensearchCluster.Name + "-admin-password"},
+					Key:                  "username"},
+					Password: corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: OpensearchCluster.Name + "-admin-password"},
+						Key:                  "password"},
+				}))
+
+			// check if the ServiceMonitor is using the interval from the CRD declaration
+
+			Expect(Sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapInterval))
+
+		})
 	})
 
 	/// ------- Tests logic Check phase -------

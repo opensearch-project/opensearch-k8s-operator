@@ -525,7 +525,7 @@ Every Keystore Value defines a secret to pull secrets from.
         <td>string</td>
         <td>Define offline link to Aiven Plugin</td>
         <td>false</td>
-        <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch</td>
+        <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
       </tr><tr>
 </table>
 <table>
