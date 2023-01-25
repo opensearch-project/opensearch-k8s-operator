@@ -214,20 +214,7 @@ func NewSTSForNodePool(
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
 
-	var mainCommand []string
-	com := "./bin/opensearch-plugin install --batch"
-	if len(cr.Spec.General.PluginsList) > 0 {
-		mainCommand = append(mainCommand, "/bin/bash", "-c")
-		for index, plugin := range cr.Spec.General.PluginsList {
-			fmt.Println(index, plugin)
-			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
-		}
-
-		com = com + " && ./opensearch-docker-entrypoint.sh"
-		mainCommand = append(mainCommand, com)
-	} else {
-		mainCommand = []string{"/bin/bash", "-c", "./opensearch-docker-entrypoint.sh"}
-	}
+	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, "./opensearch-docker-entrypoint.sh")
 
 	initContainers := []corev1.Container{
 		{

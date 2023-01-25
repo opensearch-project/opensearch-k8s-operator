@@ -157,6 +157,31 @@ var _ = Describe("Builders", func() {
 
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
+
+		It("should properly setup the main command when installing plugins", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			pluginA := "some-plugin"
+			pluginB := "another-plugin"
+
+			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+			installCmd := fmt.Sprintf(
+				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
+				pluginA,
+				pluginB,
+			)
+
+			expected := []string{
+				"/bin/bash",
+				"-c",
+				installCmd,
+			}
+
+			actual := result.Spec.Template.Spec.Containers[0].Command
+
+			Expect(expected).To(Equal(actual))
+		})
 	})
 
 	When("Constructing a bootstrap pod", func() {

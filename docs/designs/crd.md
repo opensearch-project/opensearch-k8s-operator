@@ -186,6 +186,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>List of objects that define secret values that will populate the opensearch keystore.</td>
         <td>false</td>
         <td> - </td>
+      </tr><tr>
+        <td><b>pluginsList</b></td>
+        <td>[]string</td>
+        <td>List of plugins that should be installed for OpenSearch at startup.</td>
+        <td>false</td>
+        <td> [] </td>
       </tr>
 </table>
 
@@ -362,6 +368,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>Customize dashboard service</td>
         <td>false</td>
         <td>-</td>
+      </tr><tr>
+        <td><b>pluginsList</b></td>
+        <td>[]string</td>
+        <td>List of plugins that should be installed for OpenSearch Dashboards at startup.</td>
+        <td>false</td>
+        <td> [] </td>
       </tr>
     </tr><tr>
 </table>
