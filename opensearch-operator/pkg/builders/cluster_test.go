@@ -3,7 +3,6 @@ package builders
 import (
 	"context"
 	"fmt"
-	appsv1 "k8s.io/api/apps/v1"
 	"os"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
@@ -385,11 +383,9 @@ var _ = Describe("Builders", func() {
 		It("it should use the specified startup command", func() {
 			namespaceName := "customcommand"
 			customCommand := "/myentrypoint.sh"
-			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			clusterObject.ObjectMeta.Namespace = namespaceName
 			clusterObject.ObjectMeta.Name = "foobar"
-			clusterObject.Spec.General.ServiceName = "foobar"
 			clusterObject.Spec.General.Command = customCommand
 			var nodePool = opsterv1.NodePool{
 				Replicas:  3,
@@ -399,17 +395,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
 			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			sts.Status.ReadyReplicas = 2
-			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
-
-			actualSts := appsv1.StatefulSet{}
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "foobar" + "-masters", Namespace: namespaceName}, &actualSts)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
-
-			actualCommand := actualSts.Spec.Template.Spec.Containers[0].Command
-			Expect(actualCommand[2]).To(Equal(customCommand))
+			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
 		})
 	})
 })
