@@ -3,24 +3,12 @@ package builders
 import (
 	"context"
 	"fmt"
-	"os"
-	"time"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
-)
-
-const (
-	timeout  = time.Second * 30
-	interval = time.Second * 1
-)
-
-const (
-	timeout  = time.Second * 30
-	interval = time.Second * 1
+	"os"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
