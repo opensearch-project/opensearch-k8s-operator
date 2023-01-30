@@ -3,13 +3,12 @@ package builders
 import (
 	"context"
 	"fmt"
-	"os"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
+	"os"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -370,6 +369,26 @@ var _ = Describe("Builders", func() {
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
 			Expect(result).To(BeFalse())
+		})
+	})
+
+	When("Using custom command for OpenSearch startup", func() {
+		It("it should use the specified startup command", func() {
+			namespaceName := "customcommand"
+			customCommand := "/myentrypoint.sh"
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Spec.General.Command = customCommand
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
 		})
 	})
 })

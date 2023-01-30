@@ -135,6 +135,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>false</td>
         <td>opensearch</td>
       </tr><tr>
+        <td><b>command</b></td>
+        <td>string</td>
+        <td>Specify command in case you want to override the default command, useful if you have a custom image.</td>
+        <td>false</td>
+        <td>./opensearch-docker-entrypoint.sh</td>
+      </tr><tr>
         <td><b>version</b></td>
         <td>string</td>
         <td>Version of opensearch to deploy</td>
