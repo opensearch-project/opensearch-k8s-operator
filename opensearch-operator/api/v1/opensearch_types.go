@@ -45,6 +45,7 @@ type GeneralConfig struct {
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
+	Command        string   `json:"command,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 	// Populate opensearch keystore before startup
@@ -70,7 +71,9 @@ type NodePool struct {
 	Persistence               *PersistenceConfig                `json:"persistence,omitempty"`
 	AdditionalConfig          map[string]string                 `json:"additionalConfig,omitempty"`
 	Labels                    map[string]string                 `json:"labels,omitempty"`
+	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
+	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -107,6 +110,13 @@ type BootstrapConfig struct {
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 }
 
+type DashboardsServiceSpec struct {
+	// +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer
+	// +kubebuilder:default=ClusterIP
+	Type                     corev1.ServiceType `json:"type,omitempty"`
+	LoadBalancerSourceRanges []string           `json:"loadBalancerSourceRanges,omitempty"`
+}
+
 type DashboardsConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Enable     bool                        `json:"enable,omitempty"`
@@ -114,6 +124,8 @@ type DashboardsConfig struct {
 	Replicas   int32                       `json:"replicas"`
 	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
 	Version    string                      `json:"version"`
+	// Base Path for Opensearch Clusters running behind a reverse proxy
+	BasePath string `json:"basePath,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
@@ -123,6 +135,10 @@ type DashboardsConfig struct {
 	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
 	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
+	Labels                      map[string]string           `json:"labels,omitempty"`
+	Annotations                 map[string]string           `json:"annotations,omitempty"`
+	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
+	PluginsList                 []string                    `json:"pluginsList,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
