@@ -240,6 +240,7 @@ func NewSTSForNodePool(
 	} else {
 		mainCommand = []string{"/bin/bash", "-c", "./opensearch-docker-entrypoint.sh"}
 	}
+	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
 	initContainers := []corev1.Container{
 		{

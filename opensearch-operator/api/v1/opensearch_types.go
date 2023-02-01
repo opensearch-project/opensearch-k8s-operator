@@ -45,6 +45,7 @@ type GeneralConfig struct {
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
+	Command        string   `json:"command,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 	Monitoring        MonitoringConfig   `json:"monitoring,omitempty"`
@@ -144,6 +145,7 @@ type DashboardsConfig struct {
 	Labels                      map[string]string           `json:"labels,omitempty"`
 	Annotations                 map[string]string           `json:"annotations,omitempty"`
 	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
+	PluginsList                 []string                    `json:"pluginsList,omitempty"`
 }
 
 type DashboardsTlsConfig struct {

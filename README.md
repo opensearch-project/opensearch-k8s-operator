@@ -44,10 +44,13 @@ The opensearch k8s operator aims to be compatible to all supported opensearch ve
 
 | Operator Version | Min Supported Opensearch Version | Max supported Opensearch version | Comment |
 |------------------|----------------------------------|----------------------------------|---------|
+| 2.2              | 1.0                              | 2.4                              |         |
 | 2.1              | 1.0                              | 2.3                              |         |
 | 2.0              | 1.0                              | 2.3                              |         |
 | 1.x              | 1.0                              | 1.x                              |         |
 | 0.x              | 1.0                              | 1.x                              | Beta    |
+
+This table only lists versions that have been explicitly tested with the operator, the operator will not prevent you from using other versions. Newer minor versions (2.x) not listed here generally also work but you should proced with caution and test it our in a non-production environment first.
 
 ## Development
 

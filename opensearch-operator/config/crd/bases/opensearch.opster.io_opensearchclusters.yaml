@@ -2186,6 +2186,10 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  pluginsList:
+                    items:
+                      type: string
+                    type: array
                   replicas:
                     format: int32
                     type: integer
@@ -2474,6 +2478,8 @@ spec:
                       - path
                       type: object
                     type: array
+                  command:
+                    type: string
                   defaultRepo:
                     type: string
                   drainDataNodes:

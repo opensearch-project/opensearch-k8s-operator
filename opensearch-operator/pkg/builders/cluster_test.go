@@ -3,13 +3,12 @@ package builders
 import (
 	"context"
 	"fmt"
-	"os"
-
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
+	"os"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -156,6 +155,31 @@ var _ = Describe("Builders", func() {
 			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
 
 			Expect(actualUrl).To(Equal(expectedUrl))
+		})
+
+		It("should properly setup the main command when installing plugins", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			pluginA := "some-plugin"
+			pluginB := "another-plugin"
+
+			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+			installCmd := fmt.Sprintf(
+				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
+				pluginA,
+				pluginB,
+			)
+
+			expected := []string{
+				"/bin/bash",
+				"-c",
+				installCmd,
+			}
+
+			actual := result.Spec.Template.Spec.Containers[0].Command
+
+			Expect(expected).To(Equal(actual))
 		})
 	})
 
@@ -345,6 +369,26 @@ var _ = Describe("Builders", func() {
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
 			Expect(result).To(BeFalse())
+		})
+	})
+
+	When("Using custom command for OpenSearch startup", func() {
+		It("it should use the specified startup command", func() {
+			namespaceName := "customcommand"
+			customCommand := "/myentrypoint.sh"
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Spec.General.Command = customCommand
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
 		})
 	})
 })
