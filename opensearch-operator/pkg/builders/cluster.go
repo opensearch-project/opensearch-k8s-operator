@@ -215,30 +215,10 @@ func NewSTSForNodePool(
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
 
-	var mainCommand []string
-	com := "./bin/opensearch-plugin install --batch"
-	if cr.Spec.General.Monitoring.Enable {
-		if cr.Spec.General.Monitoring.PluginURL != "" {
-			url := cr.Spec.General.Monitoring.PluginURL
-			cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
-		} else {
-			clusterVersion := cr.Spec.General.Version
-			url := "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/" + clusterVersion + ".0/prometheus-exporter-" + clusterVersion + ".0.zip"
-			cr.Spec.General.PluginsList = append(cr.Spec.General.PluginsList, url)
-		}
-	}
-
-	if len(cr.Spec.General.PluginsList) > 0 {
-		mainCommand = append(mainCommand, "/bin/bash", "-c")
-		for index, plugin := range cr.Spec.General.PluginsList {
-			fmt.Println(index, plugin)
-			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
-		}
-
-		com = com + " && ./opensearch-docker-entrypoint.sh"
-		mainCommand = append(mainCommand, com)
-	} else {
-		mainCommand = []string{"/bin/bash", "-c", "./opensearch-docker-entrypoint.sh"}
+	startUpCommand := "./opensearch-docker-entrypoint.sh"
+	// If a custom command is specified, use it.
+	if len(cr.Spec.General.Command) > 0 {
+		startUpCommand = cr.Spec.General.Command
 	}
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
@@ -326,7 +306,6 @@ func NewSTSForNodePool(
 				set -euo pipefail
 	  
 				/usr/share/opensearch/bin/opensearch-keystore create
-
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
