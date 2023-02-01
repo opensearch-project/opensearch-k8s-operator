@@ -24,6 +24,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"path/filepath"
 	"testing"
 
@@ -120,7 +121,10 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = opsterv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = prometheus.AddToScheme(scheme.Scheme)
+	//err = prometheus.AddToScheme(scheme.Scheme)
+	//Expect(err).NotTo(HaveOccurred())
+
+	err = monitoring.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
