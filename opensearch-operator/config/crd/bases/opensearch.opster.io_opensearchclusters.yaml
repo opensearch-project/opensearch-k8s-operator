@@ -2573,6 +2573,10 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                     type: array
+                  skip:
+                    description: Skip the addition of the init helper. Useful on OpenShift
+                      and clusters where you cannot run pods as root (uid=0).
+                    type: boolean
                   version:
                     type: string
                 type: object

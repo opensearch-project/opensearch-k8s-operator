@@ -55,6 +55,9 @@ type GeneralConfig struct {
 type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Version    *string `json:"version,omitempty"`
+	// Skip the addition of the init helper. Useful on OpenShift
+	// and clusters where you cannot run pods as root (uid=0).
+	Skip bool `json:"skip,omitempty"`
 }
 
 type NodePool struct {

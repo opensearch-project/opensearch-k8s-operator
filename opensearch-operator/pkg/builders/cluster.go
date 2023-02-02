@@ -221,8 +221,9 @@ func NewSTSForNodePool(
 	}
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
-	initContainers := []corev1.Container{
-		{
+	var initContainers []corev1.Container
+	if !cr.Spec.InitHelper.Skip {
+		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
@@ -237,7 +238,7 @@ func NewSTSForNodePool(
 					MountPath: "/usr/share/opensearch/data",
 				},
 			},
-		},
+		})
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
@@ -729,6 +730,26 @@ func NewBootstrapPod(
 		})
 	}
 
+	var initContainers []corev1.Container
+	if !cr.Spec.InitHelper.Skip {
+		initContainers = append(initContainers, corev1.Container{
+			Name:            "init",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Command:         []string{"sh", "-c"},
+			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			SecurityContext: &corev1.SecurityContext{
+				RunAsUser: pointer.Int64(0),
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "data",
+					MountPath: "/usr/share/opensearch/data",
+				},
+			},
+		})
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      BootstrapPodName(cr),
@@ -758,24 +779,7 @@ func NewBootstrapPod(
 					VolumeMounts:  volumeMounts,
 				},
 			},
-			InitContainers: []corev1.Container{
-				{
-					Name:            "init",
-					Image:           initHelperImage.GetImage(),
-					ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
-					Command:         []string{"sh", "-c"},
-					Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser: pointer.Int64(0),
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "data",
-							MountPath: "/usr/share/opensearch/data",
-						},
-					},
-				},
-			},
+			InitContainers:     initContainers,
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,

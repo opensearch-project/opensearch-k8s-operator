@@ -54,6 +54,17 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 var _ = Describe("Builders", func() {
 
 	When("Constructing a STS for a NodePool", func() {
+		It("should include the init containers", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+		})
+		It("should skip the init containers", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.InitHelper.Skip = true
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
+		})
 		It("should only use valid roles", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var nodePool = opsterv1.NodePool{
