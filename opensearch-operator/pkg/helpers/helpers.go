@@ -17,6 +17,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	stsUpdateWaitTime = 30
+	updateStepTime    = 3
+)
+
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
@@ -191,20 +196,20 @@ func WaitForSTSDelete(ctx context.Context, k8sClient client.Client, obj *appsv1.
 	if err := k8sClient.Delete(ctx, obj, &opts); err != nil {
 		return err
 	}
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
 		existing := appsv1.StatefulSet{}
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
 		if err != nil {
 			return nil
 		}
-		time.Sleep(time.Second * 2)
+		time.Sleep(time.Second * updateStepTime)
 	}
 	return fmt.Errorf("failed to delete STS")
 }
 
 // Wait for max 30s until a STS has at least the given number of replicas
 func WaitForSTSReplicas(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet, replicas int32) error {
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
 		existing := appsv1.StatefulSet{}
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
 		if err == nil {
@@ -212,14 +217,14 @@ func WaitForSTSReplicas(ctx context.Context, k8sClient client.Client, obj *appsv
 				return nil
 			}
 		}
-		time.Sleep(time.Second * 3)
+		time.Sleep(time.Second * updateStepTime)
 	}
 	return fmt.Errorf("failed to wait for replicas")
 }
 
 // Wait for max 30s until a STS has a normal status (CurrentRevision != "")
 func WaitForSTSStatus(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
-	for i := 1; i <= 10; i++ {
+	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
 		existing := appsv1.StatefulSet{}
 		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
 		if err == nil {
@@ -227,7 +232,7 @@ func WaitForSTSStatus(ctx context.Context, k8sClient client.Client, obj *appsv1.
 				return &existing, nil
 			}
 		}
-		time.Sleep(time.Second * 3)
+		time.Sleep(time.Second * updateStepTime)
 	}
 	return nil, fmt.Errorf("failed to wait for STS")
 }
