@@ -3,11 +3,12 @@ package helpers
 import "os"
 
 const (
-	DashboardConfigName       = "opensearch_dashboards.yml"
-	DashboardChecksumName     = "checksum/dashboards.yml"
-	OsUserNameAnnotation      = "opensearchuser/name"
-	OsUserNamespaceAnnotation = "opensearchuser/namespace"
-	DnsBaseEnvVariable        = "DNS_BASE"
+	DashboardConfigName          = "opensearch_dashboards.yml"
+	DashboardChecksumName        = "checksum/dashboards.yml"
+	OsUserNameAnnotation         = "opensearchuser/name"
+	OsUserNamespaceAnnotation    = "opensearchuser/namespace"
+	DnsBaseEnvVariable           = "DNS_BASE"
+	SkipInitContainerEnvVariable = "SKIP_INIT_CONTAINER"
 )
 
 func ClusterDnsBase() string {

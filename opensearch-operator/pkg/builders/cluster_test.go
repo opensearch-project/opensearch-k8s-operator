@@ -60,10 +60,11 @@ var _ = Describe("Builders", func() {
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
 		})
 		It("should skip the init containers", func() {
+			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
 			var clusterObject = ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.InitHelper.Skip = true
 			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
+			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
 		It("should only use valid roles", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")

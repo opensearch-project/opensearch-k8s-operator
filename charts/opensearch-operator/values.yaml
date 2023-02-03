@@ -1,6 +1,7 @@
 nodeSelector: {}
 tolerations: []
 manager:
+  extraEnv: []
   resources:
     limits:
       cpu: 200m

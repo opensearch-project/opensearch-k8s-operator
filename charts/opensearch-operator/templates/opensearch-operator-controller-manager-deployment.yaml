@@ -52,6 +52,9 @@ spec:
         env:
         - name: DNS_BASE
           value: {{ .Values.manager.dnsBase }}
+        {{- if .Values.manager.extraEnv }}
+        {{- toYaml .Values.manager.extraEnv | nindent 8 }}
+        {{- end }}
         securityContext:
           allowPrivilegeEscalation: false
       nodeSelector:
