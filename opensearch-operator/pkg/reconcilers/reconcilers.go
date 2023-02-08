@@ -124,7 +124,7 @@ func (c *ReconcilerContext) replaceNodePoolHash(newConfig NodePoolHash) {
 	c.NodePoolHashes = configs
 }
 
-func UpdateOpensearchStatus(
+func UpdateComponentStatus(
 	ctx context.Context,
 	k8sClient client.Client,
 	instance *opsterv1.OpenSearchCluster,
