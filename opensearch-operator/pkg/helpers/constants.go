@@ -1,13 +1,19 @@
 package helpers
 
-import "os"
+import (
+	"os"
+	"strconv"
+)
 
 const (
 	DashboardConfigName       = "opensearch_dashboards.yml"
 	DashboardChecksumName     = "checksum/dashboards.yml"
+	ClusterLabel              = "opster.io/opensearch-cluster"
+	NodePoolLabel             = "opster.io/opensearch-nodepool"
 	OsUserNameAnnotation      = "opensearchuser/name"
 	OsUserNamespaceAnnotation = "opensearchuser/namespace"
 	DnsBaseEnvVariable        = "DNS_BASE"
+	ParallelRecoveryEnabled   = "PARALLEL_RECOVERY_ENABLED"
 )
 
 func ClusterDnsBase() string {
@@ -18,4 +24,18 @@ func ClusterDnsBase() string {
 	}
 
 	return env
+}
+
+func ParallelRecoveryMode() bool {
+	env, found := os.LookupEnv(ParallelRecoveryEnabled)
+
+	if !found || len(env) == 0 {
+		env = "true"
+	}
+
+	result, err := strconv.ParseBool(env)
+	if err != nil {
+		return true
+	}
+	return result
 }

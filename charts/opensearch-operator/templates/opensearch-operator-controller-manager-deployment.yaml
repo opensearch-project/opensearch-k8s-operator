@@ -52,6 +52,8 @@ spec:
         env:
         - name: DNS_BASE
           value: {{ .Values.manager.dnsBase }}
+        - name: PARALLEL_RECOVERY_ENABLED
+          value: "{{ .Values.manager.parallelRecoveryEnabled }}"
         securityContext:
           allowPrivilegeEscalation: false
       nodeSelector:
