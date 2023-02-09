@@ -3,7 +3,6 @@ package builders
 import (
 	"context"
 	"fmt"
-	"os"
 	"sort"
 	"strings"
 
@@ -221,7 +220,7 @@ func NewSTSForNodePool(
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
 	var initContainers []corev1.Container
-	if os.Getenv(helpers.SkipInitContainerEnvVariable) != "true" {
+	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
@@ -730,7 +729,7 @@ func NewBootstrapPod(
 	}
 
 	var initContainers []corev1.Container
-	if os.Getenv(helpers.SkipInitContainerEnvVariable) != "true" {
+	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),

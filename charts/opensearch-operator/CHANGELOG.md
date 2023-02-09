@@ -8,7 +8,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Added support for custom image used by `kubeRbacProxy`.
-- Added support for setting arbitrary environment variables on the operator-manager
 ### Changed
 ### Deprecated
 ### Removed
