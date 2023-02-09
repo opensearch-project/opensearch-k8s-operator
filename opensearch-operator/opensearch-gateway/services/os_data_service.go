@@ -178,6 +178,21 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 	return false, nil
 }
 
+func ReactivateShardAllocation(service *OsClusterClient) error {
+	flatSettings, err := service.GetFlatClusterSettings()
+	if err != nil {
+		return err
+	}
+	if flatSettings.Transient.ClusterRoutingAllocationEnable == string(ClusterSettingsAllocationAll) {
+		return nil
+	}
+
+	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationAll); err != nil {
+		return err
+	}
+	return nil
+}
+
 func PreparePodForDelete(service *OsClusterClient, podName string, drainNode bool, nodeCount int32) (bool, error) {
 	if drainNode {
 		// If we are draining nodes then drain the working node

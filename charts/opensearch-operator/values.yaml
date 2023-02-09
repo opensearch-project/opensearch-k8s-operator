@@ -30,6 +30,9 @@ manager:
     timeoutSeconds: 3
     initialDelaySeconds: 10
 
+  # Set this to false to disable the experimental parallel recovery in case you are experiencing problems
+  parallelRecoveryEnabled: true
+
   image:
     repository: public.ecr.aws/opsterio/opensearch-operator
     ## tag default uses appVersion from Chart.yaml, to override specify tag tag: "v1.1"
