@@ -567,7 +567,7 @@ Every Keystore Value defines a secret to pull secrets from.
         <td>false</td>
         <td>admin</td>
       </tr><tr>
-        <td><b>interval</b></td>
+        <td><b>ScrapeInterval</b></td>
         <td>string</td>
         <td>Define interval for scraping</td>
         <td>false</td>

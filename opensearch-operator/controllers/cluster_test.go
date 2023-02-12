@@ -113,7 +113,7 @@ var _ = Describe("Cluster Reconciler", func() {
 
 			// check if the ServiceMonitor is using the interval from the CRD declaration
 
-			Expect(Sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapInterval))
+			Expect(Sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapeInterval))
 
 		})
 	})

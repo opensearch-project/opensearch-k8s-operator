@@ -2536,7 +2536,7 @@ spec:
                         type: string
                       pluginUrl:
                         type: string
-                      scrapInterval:
+                      scrapeInterval:
                         type: string
                     type: object
                   pluginsList:

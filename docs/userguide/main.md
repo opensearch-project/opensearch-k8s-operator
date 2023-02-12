@@ -908,10 +908,10 @@ spec:
     name: my-first-cluster
     namespace: default
   general:
-    version: 2.4.0
+    version: <YOUR_CLUSTER_VERSION>
     monitoring:
       enable: true
       interval: 30s
       monitoringUserSecret: appUserSecret
-      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.4.0.0/prometheus-exporter-2.4.0.0.zip
+      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip
 ```

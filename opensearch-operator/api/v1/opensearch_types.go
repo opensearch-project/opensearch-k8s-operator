@@ -103,7 +103,7 @@ type ConfMgmt struct {
 type MonitoringConfig struct {
 	Enable               bool   `json:"enable,omitempty"`
 	MonitoringUserSecret string `json:"monitoringUserSecret,omitempty"`
-	ScrapInterval        string `json:"scrapInterval,omitempty"`
+	ScrapeInterval       string `json:"scrapeInterval,omitempty"`
 	PluginURL            string `json:"pluginUrl,omitempty"`
 }
 
