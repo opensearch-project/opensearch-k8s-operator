@@ -22,6 +22,7 @@ import (
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
+//const
 const (
 	ClusterLabel                     = "opster.io/opensearch-cluster"
 	NodePoolLabel                    = "opster.io/opensearch-nodepool"
