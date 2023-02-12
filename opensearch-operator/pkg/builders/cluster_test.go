@@ -1,10 +1,14 @@
 package builders
 
 import (
+	"context"
+	"fmt"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
+	"os"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -86,6 +90,31 @@ var _ = Describe("Builders", func() {
 				Value: "master",
 			}))
 		})
+		It("should have annotations added to node", func() {
+			var clusterObject = ClusterDescWithVersion("1.3.0")
+			var nodePool = opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager"},
+				Annotations: map[string]string{
+					"testAnnotationKey": "testAnnotationValue",
+				},
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
+				ConfigurationChecksumAnnotation: "foobar",
+				"testAnnotationKey":             "testAnnotationValue",
+			}))
+		})
+		It("should have a priority class name added to the node", func() {
+			var clusterObject = ClusterDescWithVersion("1.3.0")
+			var nodePool = opsterv1.NodePool{
+				Component:         "masters",
+				Roles:             []string{"cluster_manager"},
+				PriorityClassName: "default",
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.PriorityClassName).To(Equal("default"))
+		})
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
@@ -108,6 +137,49 @@ var _ = Describe("Builders", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("public.ecr.aws/opsterio/busybox:1.27.2-buildx"))
+		})
+		It("should use a custom dns name when env variable is set as cluster url", func() {
+			customDns := "custom.domain"
+			serviceName := "opensearch"
+			namespace := "search"
+			port := int32(9200)
+
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.ServiceName = serviceName
+			clusterObject.Namespace = namespace
+			clusterObject.Spec.General.HttpPort = port
+
+			os.Setenv(helpers.DnsBaseEnvVariable, customDns)
+
+			actualUrl := URLForCluster(&clusterObject)
+			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
+
+			Expect(actualUrl).To(Equal(expectedUrl))
+		})
+
+		It("should properly setup the main command when installing plugins", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			pluginA := "some-plugin"
+			pluginB := "another-plugin"
+
+			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+
+			installCmd := fmt.Sprintf(
+				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
+				pluginA,
+				pluginB,
+			)
+
+			expected := []string{
+				"/bin/bash",
+				"-c",
+				installCmd,
+			}
+
+			actual := result.Spec.Template.Spec.Containers[0].Command
+
+			Expect(expected).To(Equal(actual))
 		})
 	})
 
@@ -245,5 +317,90 @@ var _ = Describe("Builders", func() {
 			result := NewSnapshotconfigUpdateJob(&spec, "snapshotconfig", "foobar", "checksum", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Args).To(ContainElement(corev1.Container{Name: "snapshotconfig"}))
 		})*/
+	})
+
+	When("Checking for AllMastersReady", func() {
+		It("should map all roles based on version", func() {
+			namespaceName := "rolemapping"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Spec.General.ServiceName = "foobar"
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts.Status.ReadyReplicas = 2
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should handle a mapped master role", func() {
+			namespaceName := "rolemapping-v1v2"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar-v1v2"
+			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"master", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts.Status.ReadyReplicas = 2
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
+			Expect(result).To(BeFalse())
+		})
+
+		It("should handle a v1 master role", func() {
+			namespaceName := "rolemapping-v1"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			var clusterObject = ClusterDescWithVersion("1.3.0")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar-v1"
+			clusterObject.Spec.General.ServiceName = "foobar-v1"
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"master", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts.Status.ReadyReplicas = 2
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
+			Expect(result).To(BeFalse())
+		})
+	})
+
+	When("Using custom command for OpenSearch startup", func() {
+		It("it should use the specified startup command", func() {
+			namespaceName := "customcommand"
+			customCommand := "/myentrypoint.sh"
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = namespaceName
+			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Spec.General.Command = customCommand
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
+		})
 	})
 })

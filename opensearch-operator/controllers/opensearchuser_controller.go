@@ -20,14 +20,20 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/reconcile"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/reconcilers"
 )
 
@@ -84,10 +90,44 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
+func (r *OpensearchUserReconciler) handleSecretEvent(secret client.Object) []reconcile.Request {
+	reconcileRequests := []reconcile.Request{}
+
+	if secret == nil {
+		return reconcileRequests
+	}
+
+	// Only check secrets with Opensearch User Annotations
+	annotations := secret.GetAnnotations()
+
+	name, nameOk := annotations[helpers.OsUserNameAnnotation]
+	namespace, namespaceOk := annotations[helpers.OsUserNamespaceAnnotation]
+
+	if !nameOk || !namespaceOk {
+		return reconcileRequests
+	}
+
+	// Trigger reconcile for according OpenSearchUser
+	reconcileRequests = append(reconcileRequests, reconcile.Request{
+		NamespacedName: types.NamespacedName{
+			Name:      string(name),
+			Namespace: string(namespace),
+		},
+	})
+
+	return reconcileRequests
+}
+
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpensearchUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opsterv1.OpensearchUser{}).
-		Owns(&opsterv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
+		// Get notified when opensearch clusters change
+		Owns(&opsterv1.OpenSearchCluster{}).
+		// Get notified when password backing secret changes
+		Watches(
+			&source.Kind{Type: &corev1.Secret{}},
+			handler.EnqueueRequestsFromMapFunc(r.handleSecretEvent),
+		).
 		Complete(r)
 }

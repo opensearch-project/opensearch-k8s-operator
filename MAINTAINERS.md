@@ -26,3 +26,5 @@ To release a new version of the operator open Github in the browser, navigate to
 After the workflow has completed, navigate to releases and edit the new release. Generate a changelog, add any other needed information (upgrade instructions, warnings, incompatibilities, etc.) and then publish the release.
 
 In case it is needed you can also manually tag a commit for release, this will trigger a workflow that stars with the "Build and push the docker image" step. Make sure CRDs are up-to-date in the helm chart.
+
+After releasing a new version add it to the compatiblity matrix in the [README](README.md).

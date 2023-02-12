@@ -49,6 +49,11 @@ spec:
 {{- toYaml .Values.manager.readinessProbe | nindent 10 }}
         livenessProbe:
 {{- toYaml .Values.manager.livenessProbe | nindent 10 }}
+        env:
+        - name: DNS_BASE
+          value: {{ .Values.manager.dnsBase }}
+        - name: PARALLEL_RECOVERY_ENABLED
+          value: "{{ .Values.manager.parallelRecoveryEnabled }}"
         securityContext:
           allowPrivilegeEscalation: false
       nodeSelector:

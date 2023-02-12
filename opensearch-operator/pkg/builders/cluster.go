@@ -22,8 +22,6 @@ import (
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
 const (
-	ClusterLabel                     = "opster.io/opensearch-cluster"
-	NodePoolLabel                    = "opster.io/opensearch-nodepool"
 	ConfigurationChecksumAnnotation  = "opster.io/config"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 	snapshotconfigChecksumAnnotation = "snapshotconfig/checksum"
@@ -122,15 +120,15 @@ func NewSTSForNodePool(
 	})
 
 	labels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: node.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: node.Component,
 	}
 	annotations := map[string]string{
 		ConfigurationChecksumAnnotation: configChecksum,
 	}
 	matchLabels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: node.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: node.Component,
 	}
 
 	if helpers.ContainsString(selectedRoles, "master") {
@@ -145,6 +143,12 @@ func NewSTSForNodePool(
 	for k, v := range node.Labels {
 		labels[k] = v
 	}
+
+	// cr.Spec.NodePool.annotations
+	for ak, vk := range node.Annotations {
+		annotations[ak] = vk
+	}
+
 	runas := int64(0)
 
 	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
@@ -209,20 +213,12 @@ func NewSTSForNodePool(
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
 
-	var mainCommand []string
-	com := "./bin/opensearch-plugin install --batch"
-	if len(cr.Spec.General.PluginsList) > 0 {
-		mainCommand = append(mainCommand, "/bin/bash", "-c")
-		for index, plugin := range cr.Spec.General.PluginsList {
-			fmt.Println(index, plugin)
-			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
-		}
-
-		com = com + " && ./opensearch-docker-entrypoint.sh"
-		mainCommand = append(mainCommand, com)
-	} else {
-		mainCommand = []string{"/bin/bash", "-c", "./opensearch-docker-entrypoint.sh"}
+	startUpCommand := "./opensearch-docker-entrypoint.sh"
+	// If a custom command is specified, use it.
+	if len(cr.Spec.General.Command) > 0 {
+		startUpCommand = cr.Spec.General.Command
 	}
+	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
 	initContainers := []corev1.Container{
 		{
@@ -424,6 +420,7 @@ func NewSTSForNodePool(
 					Affinity:                  node.Affinity,
 					TopologySpreadConstraints: node.TopologySpreadConstraints,
 					ImagePullSecrets:          image.ImagePullSecrets,
+					PriorityClassName:         node.PriorityClassName,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -473,8 +470,8 @@ func NewSTSForNodePool(
 }
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: nodePool.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: nodePool.Component,
 	}
 
 	return &corev1.Service{
@@ -516,7 +513,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -575,7 +572,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -605,7 +602,7 @@ func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -641,7 +638,7 @@ func NewBootstrapPod(
 	volumeMounts []corev1.VolumeMount,
 ) *corev1.Pod {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 	resources := cr.Spec.Bootstrap.Resources
 
@@ -813,9 +810,10 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 	}
 	return httpPort
 }
+
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
-	return fmt.Sprintf("https://%s.svc.cluster.local:%d", DnsOfService(cr), httpPort)
+	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {
@@ -858,7 +856,7 @@ func WorkingPodForRollingRestart(sts *appsv1.StatefulSet) string {
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
 	for _, nodepool := range nodepools {
-		if sts.Labels[NodePoolLabel] == nodepool.Component {
+		if sts.Labels[helpers.NodePoolLabel] == nodepool.Component {
 			return true
 		}
 	}
@@ -962,11 +960,11 @@ func NewSecurityconfigUpdateJob(
 	// The following curl command is added to make sure cluster is full connected before .opendistro_security is created.
 	arg := "ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;" +
 		"chmod +x $ADMIN;" +
-		fmt.Sprintf("until curl -k --silent https://%s.svc.cluster.local:%v; do", dns, instance.Spec.General.HttpPort) +
+		fmt.Sprintf("until curl -k --silent https://%s.svc.%s:%v; do", dns, helpers.ClusterDnsBase(), instance.Spec.General.HttpPort) +
 		" echo 'Waiting to connect to the cluster'; sleep 120; " +
 		"done; " +
 		"count=0;" +
-		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s.svc.cluster.local -p %v || (( count++ >= 20 )); do", caCert, adminCert, adminKey, securityconfigPath, dns, httpPort) +
+		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s.svc.%s -p %v || (( count++ >= 20 )); do", caCert, adminCert, adminKey, securityconfigPath, dns, helpers.ClusterDnsBase(), httpPort) +
 		"  sleep 20; " +
 		"done"
 	annotations := map[string]string{
@@ -1005,7 +1003,7 @@ func NewSecurityconfigUpdateJob(
 func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) bool {
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
-		if helpers.ContainsString(nodePool.Roles, masterRole) {
+		if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
 			sts := &appsv1.StatefulSet{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name:      StsName(cr, &nodePool),
