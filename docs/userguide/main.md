@@ -619,7 +619,19 @@ During cluster initialization the operator uses init containers as helpers. For 
         - name: docker-pull-secret
 ```
 
-### Expsing OpenSearch Dashboards
+### Disabling the init helper
+
+In some cases, you may want to avoid the `chmod` init container (e.g. on OpenShift or if your cluster blocks containers running as `root`).
+It can be disabled by adding the following to your `values.yaml`:
+
+```yaml
+manager:
+  extraEnv:
+    - name: SKIP_INIT_CONTAINER
+      value: "true"
+```
+
+### Exposing OpenSearch Dashboards
 
 If you want to expose the Dashboards instance of your cluster for users/services outside of your Kubernetes cluster, the recommended way is to do this via ingress.
 

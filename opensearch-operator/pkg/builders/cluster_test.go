@@ -54,6 +54,30 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 var _ = Describe("Builders", func() {
 
 	When("Constructing a STS for a NodePool", func() {
+		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+		})
+		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
+			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
+			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
+		})
+		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(len(result.Spec.InitContainers)).To(Equal(1))
+		})
+		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
+			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(len(result.Spec.InitContainers)).To(Equal(0))
+			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
+		})
 		It("should only use valid roles", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var nodePool = opsterv1.NodePool{
