@@ -270,7 +270,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// as we don't want uncontrolled restarts while we're doing an upgrade
 	if r.instance.Status.Version != "" &&
 		r.instance.Status.Version != r.instance.Spec.General.Version &&
-		!helpers.ContainsString(nodePool.Roles, "data") {
+		!helpers.HasDataRole(&nodePool) {
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 

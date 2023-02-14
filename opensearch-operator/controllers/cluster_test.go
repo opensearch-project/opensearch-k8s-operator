@@ -27,11 +27,10 @@ var _ = Describe("Cluster Reconciler", func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		clusterName  = "cluster-test-cluster"
-		namespace    = clusterName
-		timeout      = time.Second * 30
-		interval     = time.Second * 1
-		consistently = time.Second * 10
+		clusterName = "cluster-test-cluster"
+		namespace   = clusterName
+		timeout     = time.Second * 30
+		interval    = time.Second * 1
 	)
 	var (
 		OpensearchCluster      = ComposeOpensearchCrd(clusterName, namespace)
@@ -329,37 +328,19 @@ var _ = Describe("Cluster Reconciler", func() {
 				return len(stsList.Items) == 2
 			})
 		})
-		It("should not update the node pool image version", func() {
-			Consistently(func() bool {
-				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
-					return false
-				}
-				return OpensearchCluster.Status.Version == "1.0.0"
-			}, consistently, interval).Should(BeTrue())
-			wg := sync.WaitGroup{}
+		It("should update the node pool image version", func() {
+
 			for _, pool := range OpensearchCluster.Spec.NodePools {
-				wg.Add(1)
-				By(fmt.Sprintf("checking %s node pool", pool.Component))
-				go func(pool opsterv1.NodePool) {
-					defer GinkgoRecover()
-					defer wg.Done()
-
+				Eventually(func() bool {
 					sts := &appsv1.StatefulSet{}
+					err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: clusterName + "-" + pool.Component}, sts)
+					if err != nil {
+						return false
+					}
 
-					Consistently(func() bool {
-						if err := k8sClient.Get(
-							context.Background(),
-							client.ObjectKey{
-								Namespace: OpensearchCluster.Namespace,
-								Name:      clusterName + "-" + pool.Component,
-							}, sts); err != nil {
-							return false
-						}
-						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.0.0"
-					}, consistently, interval).Should(BeTrue())
-				}(pool)
+					return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.1.0"
+				}).Should(BeTrue())
 			}
-			wg.Wait()
 		})
 	})
 	When("A node pool is upgrading", func() {
@@ -369,14 +350,14 @@ var _ = Describe("Cluster Reconciler", func() {
 				Description: "nodes",
 				Status:      "Upgrading",
 			}
-			Expect(func() error {
+			Eventually(func() error {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return err
 				}
 				preUpgradeStatusLength = len(OpensearchCluster.Status.ComponentsStatus)
 				OpensearchCluster.Status.ComponentsStatus = append(OpensearchCluster.Status.ComponentsStatus, status)
 				return k8sClient.Status().Update(context.Background(), &OpensearchCluster)
-			}()).To(Succeed())
+			}()).Should(Succeed())
 		})
 		It("should update the node pool image", func() {
 			Eventually(func() bool {

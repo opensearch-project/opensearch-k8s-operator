@@ -337,16 +337,9 @@ func NewSTSForNodePool(
 				MatchLabels: matchLabels,
 			},
 			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
-			UpdateStrategy: func() appsv1.StatefulSetUpdateStrategy {
-				if helpers.ContainsString(selectedRoles, "data") {
-					return appsv1.StatefulSetUpdateStrategy{
-						Type: appsv1.OnDeleteStatefulSetStrategyType,
-					}
-				}
-				return appsv1.StatefulSetUpdateStrategy{
-					Type: appsv1.RollingUpdateStatefulSetStrategyType,
-				}
-			}(),
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.OnDeleteStatefulSetStrategyType,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
@@ -957,7 +950,7 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) int32 {
 	count := int32(0)
 	for _, nodePool := range cr.Spec.NodePools {
-		if helpers.ContainsString(nodePool.Roles, "data") {
+		if helpers.HasDataRole(&nodePool) {
 			sts := &appsv1.StatefulSet{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name:      StsName(cr, &nodePool),
