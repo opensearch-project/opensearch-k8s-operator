@@ -18,3 +18,5 @@ testbin/
 *.bin
 
 .vscode
+
+opensearch-operator/functionaltests/kubeconfig

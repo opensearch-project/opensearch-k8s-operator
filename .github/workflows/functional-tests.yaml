@@ -1,0 +1,42 @@
+name: Functional tests
+on: [pull_request]
+
+jobs:
+  functional-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+      - name: Setup go
+        uses: actions/setup-go@v3
+        with:
+          go-version: '1.19'
+      - uses: nolar/setup-k3d-k3s@v1
+        with:
+          version: v1.22
+          k3d-name: opensearch-operator-tests
+          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run tests
+        run: |
+          set -e
+          export CLUSTER_NAME=opensearch-operator-tests
+          ## Check disk to avoid failed shard assignments due to watermarking
+          df -h
+          cd opensearch-operator
+          ## Prepare kubeconfig
+          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+          
+          ## Build controller docker image
+          make docker-build
+          
+          ## Import controller docker image
+          k3d image import -c $CLUSTER_NAME controller:latest
+          
+          ## Install helm chart
+          helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
+          cd functionaltests
+
+          ## Run tests
+          go test -timeout 30m
