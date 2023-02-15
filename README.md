@@ -1,6 +1,5 @@
 ![build](https://github.com/opster/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opster/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opster/opensearch-k8s-operator) [![Golang Lint](https://github.com/Opster/opensearch-k8s-operator/actions/workflows/linting.yaml/badge.svg)](https://github.com/Opster/opensearch-k8s-operator/actions/workflows/linting.yaml) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/opensearch-operator)](https://artifacthub.io/packages/search?repo=opensearch-operator)
 
-
 # OpenSearch-k8s-operator
 
 The Kubernetes OpenSearch Operator is used for automating the deployment, provisioning, management, and orchestration of OpenSearch clusters and OpenSearch dashboards.
@@ -33,36 +32,29 @@ Currently planned features:
 - [ ] Control shard balancing and allocation: AZ/Rack awareness, Hot/Warm.
 
 ## Installation
+
 The Operator can be easily installed using Helm:
 
 1. Add the helm repo: `helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator/`
 2. Install the Operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
 
+## Compatibility
+
+The opensearch k8s operator aims to be compatible to all supported opensearch versions. Please check the table below for details:
+
+| Operator Version | Min Supported Opensearch Version | Max supported Opensearch version | Comment |
+|------------------|----------------------------------|----------------------------------|---------|
+| 2.2              | 1.0                              | 2.4                              |         |
+| 2.1              | 1.0                              | 2.3                              |         |
+| 2.0              | 1.0                              | 2.3                              |         |
+| 1.x              | 1.0                              | 1.x                              |         |
+| 0.x              | 1.0                              | 1.x                              | Beta    |
+
+This table only lists versions that have been explicitly tested with the operator, the operator will not prevent you from using other versions. Newer minor versions (2.x) not listed here generally also work but you should proced with caution and test it our in a non-production environment first.
+
 ## Development
 
-### Running the Operator locally
-
-- Clone the repo and go to the `opensearch-operator` folder.
-- Run `make build manifests` to build the controller binary and the manifests
-- Start a Kubernetes cluster (e.g. with k3d or minikube) and make sure your `~/.kube/config` points to it
-- Run `make install` to create the CRD in the kubernetes cluster
-- Start the Operator by running `make run`
-
-**Note**: You need Go version 1.19.
-
-Now you can deploy an Opensearch cluster.
-
-Go to `opensearch-operator` and use `opensearch-cluster.yaml` as a starting point to define your cluster. Then run:
-
-```bash
-kubectl apply -f opensearch-cluster.yaml
-```
-
-In order to delete the cluster, you just delete your OpenSearch cluster resource. This will delete the cluster and all of its resources.
-
-```bash
-kubectl delete -f opensearch-cluster.yaml
-```
+If you want to develop the operator, please see the separate [developer docs](./docs/developing.md).
 
 ## Installation Tutorial and Demo
 

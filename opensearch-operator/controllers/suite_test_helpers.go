@@ -186,7 +186,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Roles: []string{
 					"master",
 					"data",
-				}}, {
+				},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			}, {
 				Component: "nodes",
 				Replicas:  3,
 				DiskSize:  "32Gi",
@@ -197,7 +199,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					}},
 				Roles: []string{
 					"data",
-				}}, {
+				},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+			}, {
 				Component: "client",
 				Replicas:  3,
 				DiskSize:  "32Gi",
@@ -220,6 +224,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					{Name: "qux", Value: "qut"},
 					{Name: "quuxe", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.labels['quux']"}}},
 				},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			}},
 		},
 		Status: opsterv1.ClusterStatus{

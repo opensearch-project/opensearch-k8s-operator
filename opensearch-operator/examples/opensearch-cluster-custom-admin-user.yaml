@@ -1,0 +1,53 @@
+## Use this example in case you want to deploy your cluster with an admin user with a custom password instead of the default (admin).
+
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+  namespace: default
+spec:
+  general:
+    version: "2.2.1"
+    httpPort: 9200
+    vendor: opensearch
+    serviceName: my-cluster
+  security:
+    config:
+    ## take a look at opensearch-k8s-operator/docs/userguide/main.md (Custom admin user)
+      adminCredentialsSecret:
+        name: admin-credentials-secret
+      securityConfigSecret:
+       name: securityconfig-secret
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true
+  dashboards:
+    version: "2.2.1"
+    enable: true
+    replicas: 2
+    resources:
+      requests:
+         memory: "1Gi"
+         cpu: "500m"
+      limits:
+         memory: "1Gi"
+         cpu: "500m"
+  confMgmt:
+    smartScaler: true
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      nodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "cluster_manager"
+        - "data"

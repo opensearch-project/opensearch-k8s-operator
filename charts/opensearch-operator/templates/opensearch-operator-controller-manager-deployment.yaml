@@ -20,7 +20,7 @@ spec:
         - --upstream=http://127.0.0.1:8080/
         - --logtostderr=true
         - --v=10
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
+        image: "{{ .Values.kubeRbacProxy.image.repository }}:{{ .Values.kubeRbacProxy.image.tag}}"
         name: kube-rbac-proxy
         resources:
 {{- toYaml .Values.kubeRbacProxy.resources | nindent 10 }}
@@ -49,6 +49,14 @@ spec:
 {{- toYaml .Values.manager.readinessProbe | nindent 10 }}
         livenessProbe:
 {{- toYaml .Values.manager.livenessProbe | nindent 10 }}
+        env:
+        - name: DNS_BASE
+          value: {{ .Values.manager.dnsBase }}
+        - name: PARALLEL_RECOVERY_ENABLED
+          value: "{{ .Values.manager.parallelRecoveryEnabled }}"
+        {{- if .Values.manager.extraEnv }}
+        {{- toYaml .Values.manager.extraEnv | nindent 8 }}
+        {{- end }}
         securityContext:
           allowPrivilegeEscalation: false
       nodeSelector:

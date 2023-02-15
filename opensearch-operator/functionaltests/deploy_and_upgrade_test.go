@@ -92,7 +92,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return deployment.Status.ReadyReplicas
 				}
 				return 0
-			}, time.Minute*2, time.Second*5).Should(Equal(int32(1)))
+			}, time.Minute*3, time.Second*5).Should(Equal(int32(1)))
 		})
 
 	})

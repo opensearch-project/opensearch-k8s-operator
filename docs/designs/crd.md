@@ -135,6 +135,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>false</td>
         <td>opensearch</td>
       </tr><tr>
+        <td><b>command</b></td>
+        <td>string</td>
+        <td>Specify command in case you want to override the default command, useful if you have a custom image.</td>
+        <td>false</td>
+        <td>./opensearch-docker-entrypoint.sh</td>
+      </tr><tr>
         <td><b>version</b></td>
         <td>string</td>
         <td>Version of opensearch to deploy</td>
@@ -186,6 +192,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>List of objects that define secret values that will populate the opensearch keystore.</td>
         <td>false</td>
         <td> - </td>
+      </tr><tr>
+        <td><b>pluginsList</b></td>
+        <td>[]string</td>
+        <td>List of plugins that should be installed for OpenSearch at startup.</td>
+        <td>false</td>
+        <td> [] </td>
       </tr>
 </table>
 
@@ -235,6 +247,12 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>JVM args. Use this to define heap size</td>
         <td>false</td>
         <td>-Xmx512M -Xms512M<td>
+      </tr><tr>
+        <td><b>additionalConfig</b></td>
+        <td>string</td>
+        <td>Added extra items to opensearch.yml in the bootstrap pod</td>
+        <td>map[string]string</td>
+        <td>general.additionalConfig</td>
       </tr>
 </table>
 
@@ -266,6 +284,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>defines Opensearch-Dashboards deployment's replicas</td>
         <td>true</td>
         <td>1</td>
+      </tr><tr>
+        <td><b>basePath</b></td>
+        <td>string</td>
+        <td>Defines the base path of opensearch dashboards (e.g. when using a reverse proxy)</td>
+        <td>false</td>
+        <td>-</td>
       </tr><tr>
         <td><b>resources</b></td>
         <td>corev1.ResourceRequirements</td>
@@ -331,6 +355,33 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>-</td>
       </tr>
+      </tr><tr>
+        <td><b>labels</b></td>
+        <td>map[string]string</td>
+        <td>Adds labels to dashboard pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>annotations</b></td>
+        <td>map[string]string</td>
+        <td>Adds annotations to dashboard pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>service</b></td>
+        <td>opsterv1.DashboardsService</td>
+        <td>Customize dashboard service</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>pluginsList</b></td>
+        <td>[]string</td>
+        <td>List of plugins that should be installed for OpenSearch Dashboards at startup.</td>
+        <td>false</td>
+        <td> [] </td>
+      </tr>
+    </tr><tr>
 </table>
 
 
@@ -424,6 +475,20 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td> - </td>
       </tr>
+      </tr><tr>
+        <td><b>annotations</b></td>
+        <td>map[string]string</td>
+        <td>Adds annotations to node pods</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>priorityClassName</b></td>
+        <td>string</td>
+        <td>Adds a priority class to nodes</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
 </table>
 
 <h3 id="InitHelperConfig">

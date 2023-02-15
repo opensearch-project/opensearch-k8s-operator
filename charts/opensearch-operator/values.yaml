@@ -1,6 +1,7 @@
 nodeSelector: {}
 tolerations: []
 manager:
+  extraEnv: []
   resources:
     limits:
       cpu: 200m
@@ -29,11 +30,17 @@ manager:
     timeoutSeconds: 3
     initialDelaySeconds: 10
 
+  # Set this to false to disable the experimental parallel recovery in case you are experiencing problems
+  parallelRecoveryEnabled: true
+
   image:
     repository: public.ecr.aws/opsterio/opensearch-operator
     ## tag default uses appVersion from Chart.yaml, to override specify tag tag: "v1.1"
     tag: ""
     pullPolicy: "Always"
+
+  dnsBase: cluster.local
+
   # If a watchNamespace is specified, the manager's cache will be restricted to
   # watch objects in the desired namespace. Defaults is to watch all namespaces.
   watchNamespace:
@@ -64,3 +71,7 @@ kubeRbacProxy:
     successThreshold: 1
     timeoutSeconds: 3
     initialDelaySeconds: 10
+
+  image: 
+    repository: "gcr.io/kubebuilder/kube-rbac-proxy"
+    tag: "v0.8.0"

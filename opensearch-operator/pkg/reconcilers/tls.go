@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -172,7 +173,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			clusterName,
 			fmt.Sprintf("%s.%s", clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-			fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
+			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 		}
 		nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
 		if err != nil {
@@ -245,8 +246,8 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			fmt.Sprintf("%s.%s.%s", bootstrapPodName, clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 			fmt.Sprintf("%s.%s.%s.svc", bootstrapPodName, clusterName, namespace),
-			fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
-			fmt.Sprintf("%s.%s.%s.svc.cluster.local", bootstrapPodName, clusterName, namespace),
+			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
+			fmt.Sprintf("%s.%s.%s.svc.%s", bootstrapPodName, clusterName, namespace, helpers.ClusterDnsBase()),
 		}
 		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames)
 		if err != nil {
@@ -279,8 +280,8 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 				fmt.Sprintf("%s.%s.%s", podName, clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 				fmt.Sprintf("%s.%s.%s.svc", podName, clusterName, namespace),
-				fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
-				fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, clusterName, namespace),
+				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
+				fmt.Sprintf("%s.%s.%s.svc.%s", podName, clusterName, namespace, helpers.ClusterDnsBase()),
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(podName, clusterName, dnsNames)
 			if err != nil {
@@ -389,7 +390,7 @@ func (r *TLSReconciler) handleHttp() error {
 				builders.DiscoveryServiceName(r.instance),
 				fmt.Sprintf("%s.%s", clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-				fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
+				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
 			if err != nil {

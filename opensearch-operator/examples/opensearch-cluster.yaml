@@ -9,7 +9,7 @@ spec:
     httpPort: 9200
     vendor: opensearch
     serviceName: my-cluster
-    pluginsList: ["repository-s3"," https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
+    pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
   dashboards:
     version: 1.3.0
     enable: true
@@ -27,7 +27,7 @@ spec:
     - component: masters
       replicas: 3
       diskSize: "30Gi"
-      NodeSelector:
+      nodeSelector:
       resources:
          requests:
             memory: "2Gi"
@@ -41,7 +41,7 @@ spec:
     - component: nodes
       replicas: 3
       diskSize: "30Gi"
-      NodeSelector:
+      nodeSelector:
       resources:
          requests:
             memory: "2Gi"
@@ -54,7 +54,7 @@ spec:
     - component: coordinators
       replicas: 3
       diskSize: "30Gi"
-      NodeSelector:
+      nodeSelector:
       resources:
          requests:
             memory: "2Gi"

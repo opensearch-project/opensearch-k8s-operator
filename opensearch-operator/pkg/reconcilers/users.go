@@ -14,6 +14,7 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -147,7 +148,8 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		return
 	}
 
-	userPassword, retErr := r.fetchPasswordSecret()
+	userPassword, retErr := r.managePasswordSecret(r.instance.Name, r.instance.Namespace)
+
 	if retErr != nil {
 		// Event and logging handled in fetch function
 		reason = "failed to get password from secret"
@@ -236,15 +238,30 @@ func (r *UserReconciler) Delete() error {
 	return services.DeleteUser(r.ctx, r.osClient, r.instance.Name)
 }
 
-func (r *UserReconciler) fetchPasswordSecret() (string, error) {
+func (r *UserReconciler) managePasswordSecret(username string, namespace string) (string, error) {
 	secret := &corev1.Secret{}
 	err := r.Get(r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.PasswordFrom.Name,
 		Namespace: r.instance.Namespace,
 	}, secret)
+
 	if err != nil {
 		r.logger.V(1).Error(err, "failed to fetch password secret")
 		r.recorder.Event(r.instance, "Warning", passwordError, "error fetching password secret")
+		return "", err
+	}
+
+	// Patch OpenSearch Annotations onto secret
+	if secret.Annotations == nil {
+		secret.Annotations = make(map[string]string)
+	}
+
+	secret.Annotations[helpers.OsUserNameAnnotation] = username
+	secret.Annotations[helpers.OsUserNamespaceAnnotation] = namespace
+
+	if err := r.Update(r.ctx, secret); err != nil {
+		r.logger.V(1).Error(err, "failed to patch opensearch username onto password secret")
+		r.recorder.Event(r.instance, "Warning", passwordError, "error patching opensearch username onto password secret")
 		return "", err
 	}
 
