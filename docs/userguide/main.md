@@ -903,10 +903,10 @@ By default the Opensearch admin user will be used to access the monitoring API. 
 ```yaml
 apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
+metadata:
+  name: my-first-cluster
+  namespace: default
 spec:
-  opensearchCluster:
-    name: my-first-cluster
-    namespace: default
   general:
     version: <YOUR_CLUSTER_VERSION>
     monitoring:
