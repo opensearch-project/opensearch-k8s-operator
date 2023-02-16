@@ -22,7 +22,7 @@ import (
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
-//const
+// const
 const (
 	ClusterLabel                     = "opster.io/opensearch-cluster"
 	NodePoolLabel                    = "opster.io/opensearch-nodepool"
@@ -514,6 +514,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 }
 
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+
 	labels := map[string]string{
 		ClusterLabel: cr.Name,
 	}
@@ -974,9 +975,10 @@ func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.O
 }
 
 func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
+	ClusterLabels := "opster.io/opensearch-cluster"
 
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		ClusterLabels: cr.Name,
 	}
 	selector := metav1.LabelSelector{
 		MatchLabels: labels,
