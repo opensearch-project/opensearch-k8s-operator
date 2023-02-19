@@ -619,7 +619,19 @@ During cluster initialization the operator uses init containers as helpers. For 
         - name: docker-pull-secret
 ```
 
-### Expsing OpenSearch Dashboards
+### Disabling the init helper
+
+In some cases, you may want to avoid the `chmod` init container (e.g. on OpenShift or if your cluster blocks containers running as `root`).
+It can be disabled by adding the following to your `values.yaml`:
+
+```yaml
+manager:
+  extraEnv:
+    - name: SKIP_INIT_CONTAINER
+      value: "true"
+```
+
+### Exposing OpenSearch Dashboards
 
 If you want to expose the Dashboards instance of your cluster for users/services outside of your Kubernetes cluster, the recommended way is to do this via ingress.
 
@@ -897,4 +909,74 @@ spec:
   dashboards:
     opensearchCredentialsSecret:
       name: dashboards-credentials  # This is the name of your secret that contains the credentials for Dashboards to use
+```
+
+### Configuring Snapshot Repo (BETA):
+
+This feature is Currently in BETA, you can configure the snapshot repo settings for the OpenSearch cluster through the operator. Using `snapshotRepositories` settings you can configure multiple snapshot repos. Once the snapshot repo is configured a user can create custom `_ism` policies through dashboard to backup the in indexes.
+
+```yaml
+spec:
+  general:
+    snapshotRepositories: 
+        - name: my_s3_repository_1
+          type: s3
+          settings:
+          bucket: opensearch-s3-snapshot
+          region: us-east-1
+          base_path: os-snapshot
+        - name: my_s3_repository_3
+          type: s3
+          settings:
+          bucket: opensearch-s3-snapshot
+          region: us-east-1
+          base_path: os-snapshot_1
+```
+#### Prerequisites for Configuring Snapshot Repo:
+
+Before applying the setting `snapshotRepositories` to the operator, please ensure the following prerequisites are met.
+
+1. The right cloud provider native plugins are installed.
+Example:
+```yaml
+spec:
+  general:
+    pluginsList: ["repository-s3"]
+```
+
+2. Ensure the cluster is fully healthy before applying the `snapshotRepositories` settings to the operator.
+
+3. The required roles/permissions for the backend cloud are pre-created.
+Example: Following is the AWS IAM role added for kubernetes nodes so that snapshots can be published to `opensearch-s3-snapshot` s3 bucket.
+```json
+{
+    "Statement": [
+        {
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation",
+                "s3:ListBucketMultipartUploads",
+                "s3:ListBucketVersions"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::opensearch-s3-snapshot"
+            ]
+        },
+        {
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:AbortMultipartUpload",
+                "s3:ListMultipartUploadParts"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::opensearch-s3-snapshot/*"
+            ]
+        }
+    ],
+    "Version": "2012-10-17"
+}
 ```

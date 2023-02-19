@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	batchv1 "k8s.io/api/batch/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
 
@@ -26,7 +27,7 @@ import (
 )
 
 const (
-	snapshotChecksumAnnotation = "snapshotconfig/checksum"
+	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
 )
 
 type ClusterReconciler struct {
@@ -110,28 +111,28 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		})
 		result.CombineErr(err)
 	}
-	if r.instance.Spec.General.Snapshot != nil && len(r.instance.Spec.General.Snapshot) > 0 {
+	if r.instance.Spec.General.SnapshotRepositories != nil && len(r.instance.Spec.General.SnapshotRepositories) > 0 {
 		// Calculate checksum and check for changes
-		result.Combine(r.ReconcileSnapshotConfig(username))
+		result.Combine(r.ReconcileSnapshotRepoConfig(username))
 	}
 	return result.Result, result.Err
 }
 
-func (r *ClusterReconciler) ReconcileSnapshotConfig(username string) (*ctrl.Result, error) {
+func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.Result, error) {
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	var checksumerr error
 	var checksumval string
-	snapshotSetting := batchv1.Job{}
-	snapshotdata, _ := json.Marshal(&r.instance.Spec.General.Snapshot)
-	checksumval, checksumerr = util.GetSha1Sum(snapshotdata)
+	snapshotRepoSetting := batchv1.Job{}
+	snapshotRepodata, _ := json.Marshal(&r.instance.Spec.General.SnapshotRepositories)
+	checksumval, checksumerr = util.GetSha1Sum(snapshotRepodata)
 	if checksumerr != nil {
 		return &ctrl.Result{}, checksumerr
 	}
 	clusterName := r.instance.Name
-	jobName := clusterName + "-snapshotconfig-update"
+	jobName := clusterName + "-snapshotrepoconfig-update"
 	job := batchv1.Job{}
 	if err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: r.instance.Namespace}, &job); err == nil {
-		value, exists := job.ObjectMeta.Annotations[snapshotChecksumAnnotation]
+		value, exists := job.ObjectMeta.Annotations[snapshotRepoConfigChecksumAnnotation]
 		if exists && value == checksumval {
 			// Nothing to do, current snapshotconfig already applied
 			return &ctrl.Result{}, nil
@@ -153,7 +154,7 @@ func (r *ClusterReconciler) ReconcileSnapshotConfig(username string) (*ctrl.Resu
 	}
 	r.logger.Info("Starting snapshotconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Snapshot", "Starting to snapshotconfig update job")
-	snapshotSetting = builders.NewSnapshotconfigUpdateJob(
+	snapshotRepoSetting = builders.NewSnapshotRepoconfigUpdateJob(
 		r.instance,
 		jobName,
 		r.instance.Namespace,
@@ -161,10 +162,10 @@ func (r *ClusterReconciler) ReconcileSnapshotConfig(username string) (*ctrl.Resu
 		r.reconcilerContext.Volumes,
 		r.reconcilerContext.VolumeMounts,
 	)
-	if err := ctrl.SetControllerReference(r.instance, &snapshotSetting, r.Client.Scheme()); err != nil {
+	if err := ctrl.SetControllerReference(r.instance, &snapshotRepoSetting, r.Client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
 	}
-	return r.ReconcileResource(&snapshotSetting, reconciler.StatePresent)
+	return r.ReconcileResource(&snapshotRepoSetting, reconciler.StatePresent)
 }
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {

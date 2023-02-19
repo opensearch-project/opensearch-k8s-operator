@@ -3,12 +3,13 @@ package builders
 import (
 	"context"
 	"fmt"
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
-	"os"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -54,6 +55,30 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 var _ = Describe("Builders", func() {
 
 	When("Constructing a STS for a NodePool", func() {
+		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+		})
+		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
+			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
+			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
+		})
+		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(len(result.Spec.InitContainers)).To(Equal(1))
+		})
+		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
+			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(len(result.Spec.InitContainers)).To(Equal(0))
+			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
+		})
 		It("should only use valid roles", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var nodePool = opsterv1.NodePool{
@@ -183,6 +208,22 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("When Reconciling the cluster reconciler", func() {
+		It("should create a snapshotconfig batch job", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+
+			var snapshotRepoSettings = map[string]string{"bucket": "opensearch-s3-snapshot", "region": "us-east-1", "base_path": "os-snapshot"}
+			snapshotConfig := opsterv1.SnapshotRepoConfig{
+				Name:     "os-snap",
+				Type:     "s3",
+				Settings: snapshotRepoSettings,
+			}
+			clusterObject.Spec.General.SnapshotRepositories = []opsterv1.SnapshotRepoConfig{snapshotConfig}
+			result := NewSnapshotRepoconfigUpdateJob(&clusterObject, "snapshotrepoconfig", "foobar", "snapshotrepoconfig/checksum", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Name).To(Equal("snapshotrepoconfig"))
+		})
+	})
+
 	When("Constructing a bootstrap pod", func() {
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
@@ -305,18 +346,6 @@ var _ = Describe("Builders", func() {
 				SubPath:   oldKey,
 			}))
 		})
-
-		/*It("should create a snapshotconfig batch job", func() {
-			var clusterName = "snapshotconfig"
-			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{Snapshot: []opsterv1.SnapshotConfig{
-						{Name: "my_s3_repository", Type: "s3", Settings: map[string]string{"bucket": "opensearch-s3-snapshot"}}}},
-				}}
-			result := NewSnapshotconfigUpdateJob(&spec, "snapshotconfig", "foobar", "checksum", nil, nil)
-			Expect(result.Spec.Template.Spec.Containers[0].Args).To(ContainElement(corev1.Container{Name: "snapshotconfig"}))
-		})*/
 	})
 
 	When("Checking for AllMastersReady", func() {

@@ -2540,7 +2540,7 @@ spec:
                     type: string
                   setVMMaxMapCount:
                     type: boolean
-                  snapshot:
+                  snapshotRepositories:
                     items:
                       properties:
                         name:

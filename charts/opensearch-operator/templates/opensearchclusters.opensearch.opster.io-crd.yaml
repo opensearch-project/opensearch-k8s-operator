@@ -2540,6 +2540,22 @@ spec:
                     type: string
                   setVMMaxMapCount:
                     type: boolean
+                  snapshotRepositories:
+                    items:
+                      properties:
+                        name:
+                          type: string
+                        settings:
+                          additionalProperties:
+                            type: string
+                          type: object
+                        type:
+                          type: string
+                      required:
+                      - name
+                      - type
+                      type: object
+                    type: array
                   vendor:
                     enum:
                     - Opensearch

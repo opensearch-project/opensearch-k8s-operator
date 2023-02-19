@@ -22,9 +22,9 @@ import (
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
 const (
-	ConfigurationChecksumAnnotation  = "opster.io/config"
-	securityconfigChecksumAnnotation = "securityconfig/checksum"
-	snapshotconfigChecksumAnnotation = "snapshotconfig/checksum"
+	ConfigurationChecksumAnnotation      = "opster.io/config"
+	securityconfigChecksumAnnotation     = "securityconfig/checksum"
+	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
 )
 
 func NewSTSForNodePool(
@@ -220,8 +220,9 @@ func NewSTSForNodePool(
 	}
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
-	initContainers := []corev1.Container{
-		{
+	var initContainers []corev1.Container
+	if !helpers.SkipInitContainer() {
+		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
@@ -236,7 +237,7 @@ func NewSTSForNodePool(
 					MountPath: "/usr/share/opensearch/data",
 				},
 			},
-		},
+		})
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
@@ -728,6 +729,26 @@ func NewBootstrapPod(
 		})
 	}
 
+	var initContainers []corev1.Container
+	if !helpers.SkipInitContainer() {
+		initContainers = append(initContainers, corev1.Container{
+			Name:            "init",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Command:         []string{"sh", "-c"},
+			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			SecurityContext: &corev1.SecurityContext{
+				RunAsUser: pointer.Int64(0),
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "data",
+					MountPath: "/usr/share/opensearch/data",
+				},
+			},
+		})
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      BootstrapPodName(cr),
@@ -757,24 +778,7 @@ func NewBootstrapPod(
 					VolumeMounts:  volumeMounts,
 				},
 			},
-			InitContainers: []corev1.Container{
-				{
-					Name:            "init",
-					Image:           initHelperImage.GetImage(),
-					ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
-					Command:         []string{"sh", "-c"},
-					Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser: pointer.Int64(0),
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "data",
-							MountPath: "/usr/share/opensearch/data",
-						},
-					},
-				},
-			},
+			InitContainers:     initContainers,
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,
@@ -863,7 +867,7 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 	return false
 }
 
-func NewSnapshotconfigUpdateJob(
+func NewSnapshotRepoconfigUpdateJob(
 	instance *opsterv1.OpenSearchCluster,
 	jobName string,
 	namespace string,
@@ -874,13 +878,13 @@ func NewSnapshotconfigUpdateJob(
 	httpPort, _ := helpers.VersionCheck(instance)
 	dns := DnsOfService(instance)
 	var snapshotCmd string
-	for _, repository := range instance.Spec.General.Snapshot {
+	for _, repository := range instance.Spec.General.SnapshotRepositories {
 		var snapshotSettings string
 		for settingsKey, settingsValue := range repository.Settings {
 			snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, settingsValue)
 		}
 		snapshotSettings = strings.TrimRight(snapshotSettings, " ,")
-		snapshotCmd += fmt.Sprintf("curl -s --fail --show-error -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://%s.svc.cluster.local:%v/_snapshot/%s?pretty -H \"Content-Type: application/json\" -d %c{\"type\": \"%s\", \"settings\": {%s}}%c; ", dns, fmt.Sprint(httpPort), repository.Name, '\'', repository.Type, snapshotSettings, '\'')
+		snapshotCmd += fmt.Sprintf("curl --fail-with-body -s -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://%s.svc.cluster.local:%v/_snapshot/%s?pretty -H \"Content-Type: application/json\" -d %c{\"type\": \"%s\", \"settings\": {%s}}%c; ", dns, fmt.Sprint(httpPort), repository.Name, '\'', repository.Type, snapshotSettings, '\'')
 	}
 	terminationGracePeriodSeconds := int64(5)
 	backoffLimit := int32(0)
@@ -889,7 +893,7 @@ func NewSnapshotconfigUpdateJob(
 		Component: "snapshotconfig",
 	}
 	annotations := map[string]string{
-		snapshotconfigChecksumAnnotation: checksum,
+		snapshotRepoConfigChecksumAnnotation: checksum,
 	}
 	image := helpers.ResolveImage(instance, &node)
 
@@ -912,7 +916,7 @@ func NewSnapshotconfigUpdateJob(
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 					Containers: []corev1.Container{{
-						Name:            "snapshotconfig",
+						Name:            "snapshotrepoconfig",
 						Image:           image.GetImage(),
 						ImagePullPolicy: image.GetImagePullPolicy(),
 						Command:         []string{"/bin/bash", "-c"},
