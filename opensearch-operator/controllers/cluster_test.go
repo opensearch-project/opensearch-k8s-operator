@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -254,32 +255,30 @@ var _ = Describe("Cluster Reconciler", func() {
 				Value:    "bar",
 			}))
 		})
-		It("should create a securityconfig pod", func() {
-			securityConfigPodName := fmt.Sprintf("%s-securityconfig-update", OpensearchCluster.Name)
-			pod := &corev1.Pod{}
-			Eventually(func() error {
-				return k8sClient.Get(context.Background(), types.NamespacedName{
-					Name:      securityConfigPodName,
-					Namespace: OpensearchCluster.Namespace,
-				}, pod)
-			}, timeout, interval).Should(Succeed())
+		It("should create a securityconfig job", func() {
+			securityConfigJobName := fmt.Sprintf("%s-securityconfig-update", OpensearchCluster.Name)
+			job := batchv1.Job{}
+			Eventually(func() bool {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: securityConfigJobName, Namespace: namespace}, &job)
+				return err == nil
+			}, timeout, interval).Should(BeTrue())
 		})
-		It("should configure securityconfig pod correctly", func() {
-			securityConfigPodName := fmt.Sprintf("%s-securityconfig-update", OpensearchCluster.Name)
-			pod := &corev1.Pod{}
+		It("should configure securityconfig job correctly", func() {
+			securityConfigJobName := fmt.Sprintf("%s-securityconfig-update", OpensearchCluster.Name)
+			job := batchv1.Job{}
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{
-					Name:      securityConfigPodName,
+					Name:      securityConfigJobName,
 					Namespace: OpensearchCluster.Namespace,
-				}, pod)
+				}, &job)
 			}, timeout, interval).Should(Succeed())
-			Expect(pod.Spec.Tolerations).To(ContainElement(corev1.Toleration{
+			Expect(job.Spec.Template.Spec.Tolerations).To(ContainElement(corev1.Toleration{
 				Effect:   "NoSchedule",
 				Key:      "foo",
 				Operator: "Equal",
 				Value:    "bar",
 			}))
-			Expect(pod.Spec.NodeSelector).To(HaveKeyWithValue("foo", "bar"))
+			Expect(job.Spec.Template.Spec.NodeSelector).To(HaveKeyWithValue("foo", "bar"))
 		})
 		It("should create a discovery service", func() {
 			discoveryName := fmt.Sprintf("%s-discovery", OpensearchCluster.Name)
