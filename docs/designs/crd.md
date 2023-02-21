@@ -527,21 +527,21 @@ Security defines configuration for running the `securityconfig` of opensearch cl
     </thead>
     <tbody><tr>
         <td><b>tls</b></td>
-        <td>string</td>
-        <td></td>
+        <td>object</td>
+        <td>Configuration related to encrypted communication with and between nodes of opensearch cluster. Includes both http and transport communication encryption. </td>
         <td>false</td>
         <td>-</td>
       </tr><tr>
       </tr><tr>
-        <td><b>securityConfig</b></td>
+        <td><b>config</b></td>
         <td>object</td>
-        <td></td>
+        <td>Configuration related to the security configuration files and the certificates/credentials to access the opensearch</td>
         <td>false</td>
         <td> - </td>
       </tr><tr>
         <td><b>jobConfig</b></td>
         <td>object</td>
-        <td></td>
+        <td>Pod placement configuration</td>
         <td>false</td>
         <td>-</td>
        </tr>
