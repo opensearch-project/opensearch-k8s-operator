@@ -85,13 +85,13 @@ var _ = Describe("Cluster Reconciler", func() {
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
 		})
-		Sm := &monitoring.ServiceMonitor{}
+		sm := &monitoring.ServiceMonitor{}
 		secret := &corev1.Secret{}
 
 		It("should create a ServiceMonitor for the cluster", func() {
 			Eventually(func() error {
 				// check if the ServiceMonitor created
-				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, Sm)
+				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, sm)
 			}, timeout, interval).Should(Succeed())
 
 			// check if the Auth secret created
@@ -102,7 +102,7 @@ var _ = Describe("Cluster Reconciler", func() {
 
 			// check if the ServiceMonitor is using the Admin secret for basicAuth
 
-			Expect(Sm.Spec.Endpoints[0].BasicAuth).Should(BeEquivalentTo(
+			Expect(sm.Spec.Endpoints[0].BasicAuth).Should(BeEquivalentTo(
 				&monitoring.BasicAuth{Username: corev1.SecretKeySelector{
 					LocalObjectReference: corev1.LocalObjectReference{Name: OpensearchCluster.Name + "-admin-password"},
 					Key:                  "username"},
@@ -113,7 +113,7 @@ var _ = Describe("Cluster Reconciler", func() {
 
 			// check if the ServiceMonitor is using the interval from the CRD declaration
 
-			Expect(Sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapeInterval))
+			Expect(sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapeInterval))
 
 		})
 	})
