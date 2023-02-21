@@ -508,3 +508,79 @@ Every Keystore Value defines a secret to pull secrets from.
         <td>-</td>
       </tr>
 </table>
+
+<h3 id="Security">
+  Security
+</h3>
+
+Security defines configuration for running the `securityconfig` of opensearch cluster
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>tls</b></td>
+        <td>string</td>
+        <td></td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>securityConfig</b></td>
+        <td>object</td>
+        <td></td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>jobConfig</b></td>
+        <td>object</td>
+        <td></td>
+        <td>false</td>
+        <td>-</td>
+       </tr>
+</table>
+
+<h3 id="JobConfig">
+  JobConfig
+</h3>
+
+JobConfig defines the security config job placement configuration
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>tolerations</b></td>
+        <td>[]corev1.Toleration</td>
+        <td>Add toleration to security config pod</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>nodeSelector</b></td>
+        <td>map[string]string</td>
+        <td>Add node selector to security config pod</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>affinity</b></td>
+        <td>corev1.Affinity</td>
+        <td>Add affinity to security config pod</td>
+        <td>false</td>
+        <td>-</td>
+       </tr>
+</table>
