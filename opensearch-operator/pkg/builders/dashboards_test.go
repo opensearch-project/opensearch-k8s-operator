@@ -97,7 +97,7 @@ var _ = Describe("Builders", func() {
 
 			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			installCmd := fmt.Sprintf(
-				"./bin/opensearch-dashboards-plugin install '%s' '%s' && ./opensearch-dashboards-docker-entrypoint.sh",
+				"./bin/opensearch-dashboards-plugin install '%s' && ./bin/opensearch-dashboards-plugin install '%s' && ./opensearch-dashboards-docker-entrypoint.sh",
 				pluginA,
 				pluginB,
 			)
