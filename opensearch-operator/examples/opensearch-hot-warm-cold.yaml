@@ -1,0 +1,88 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: opensearch-test
+  namespace: default
+spec:
+  security:
+    config:
+    tls:
+       http:
+         generate: true
+       transport:
+         generate: true
+         perNode: true
+  general:
+    httpPort: 9200
+    serviceName: opensearch-test
+    version: latest
+    drainDataNodes: true
+  dashboards:
+    tls:
+      enable: true
+      generate: true
+    version: latest
+    enable: true
+    replicas: 1
+    resources:
+      requests:
+         memory: "1Gi"
+         cpu: "1000m"
+      limits:
+         memory: "1Gi"
+         cpu: "1000m"
+  nodePools:
+    - component: managers
+      replicas: 3
+      diskSize: "10Gi"
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "1000m"
+         limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      roles:
+        - "cluster_manager"
+    - component: hot-nodes
+      replicas: 3
+      diskSize: "100Gi"
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "1000m"
+         limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      additionalConfig:
+        node.attr.temp: "hot"
+      roles:
+        - "data_hot"
+    - component: warm-nodes
+      replicas: 3
+      diskSize: "100Gi"
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "1000m"
+         limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      additionalConfig:
+        node.attr.temp: "warm"
+      roles:
+        - "data_warm"
+    - component: cold-nodes
+      replicas: 3
+      diskSize: "100Gi"
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "1000m"
+         limits:
+            memory: "2Gi"
+            cpu: "1000m"
+      additionalConfig:
+        node.attr.temp: "cold"
+      roles:
+        - "data_cold"
