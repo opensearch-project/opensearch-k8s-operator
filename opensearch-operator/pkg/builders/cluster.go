@@ -56,6 +56,7 @@ func NewSTSForNodePool(
 		"remote_cluster_client",
 		"transform",
 		"cluster_manager",
+		"search",
 	}
 	var selectedRoles []string
 	for _, role := range node.Roles {
