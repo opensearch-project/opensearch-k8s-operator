@@ -2192,132 +2192,8 @@ spec:
                     items:
                       type: string
                     type: array
-                  replicas:
-                    format: int32
-                    type: integer
-                  resources:
-                    description: ResourceRequirements describes the compute resource
-                      requirements.
-                    properties:
-                      limits:
-                        additionalProperties:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        description: 'Limits describes the maximum amount of compute
-                          resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
-                        type: object
-                      requests:
-                        additionalProperties:
-                          anyOf:
-                          - type: integer
-                          - type: string
-                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
-                          x-kubernetes-int-or-string: true
-                        description: 'Requests describes the minimum amount of compute
-                          resources required. If Requests is omitted for a container,
-                          it defaults to Limits if that is explicitly specified, otherwise
-                          to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
-                        type: object
-                    type: object
-                  service:
-                    properties:
-                      loadBalancerSourceRanges:
-                        items:
-                          type: string
-                        type: array
-                      type:
-                        default: ClusterIP
-                        description: Service Type string describes ingress methods
-                          for a service
-                        enum:
-                        - ClusterIP
-                        - NodePort
-                        - LoadBalancer
-                        type: string
-                    type: object
-                  tls:
-                    properties:
-                      caSecret:
-                        description: Optional, secret that contains the ca certificate
-                          as ca.crt. If this and generate=true is set the existing
-                          CA cert from that secret is used to generate the node certs.
-                          In this case must contain ca.crt and ca.key fields
-                        properties:
-                          name:
-                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                              TODO: Add other useful fields. apiVersion, kind, uid?'
-                            type: string
-                        type: object
-                        x-kubernetes-map-type: atomic
-                      enable:
-                        description: Enable HTTPS for Dashboards
-                        type: boolean
-                      generate:
-                        description: Generate certificate, if false secret must be
-                          provided
-                        type: boolean
-                      secret:
-                        description: Optional, name of a TLS secret that contains
-                          ca.crt, tls.key and tls.crt data. If ca.crt is in a different
-                          secret provide it via the caSecret field
-                        properties:
-                          name:
-                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                              TODO: Add other useful fields. apiVersion, kind, uid?'
-                            type: string
-                        type: object
-                        x-kubernetes-map-type: atomic
-                    type: object
-                  tolerations:
-                    items:
-                      description: The pod this Toleration is attached to tolerates
-                        any taint that matches the triple <key,value,effect> using
-                        the matching operator <operator>.
-                      properties:
-                        effect:
-                          description: Effect indicates the taint effect to match.
-                            Empty means match all taint effects. When specified, allowed
-                            values are NoSchedule, PreferNoSchedule and NoExecute.
-                          type: string
-                        key:
-                          description: Key is the taint key that the toleration applies
-                            to. Empty means match all taint keys. If the key is empty,
-                            operator must be Exists; this combination means to match
-                            all values and all keys.
-                          type: string
-                        operator:
-                          description: Operator represents a key's relationship to
-                            the value. Valid operators are Exists and Equal. Defaults
-                            to Equal. Exists is equivalent to wildcard for value,
-                            so that a pod can tolerate all taints of a particular
-                            category.
-                          type: string
-                        tolerationSeconds:
-                          description: TolerationSeconds represents the period of
-                            time the toleration (which must be of effect NoExecute,
-                            otherwise this field is ignored) tolerates the taint.
-                            By default, it is not set, which means tolerate the taint
-                            forever (do not evict). Zero and negative values will
-                            be treated as 0 (evict immediately) by the system.
-                          format: int64
-                          type: integer
-                        value:
-                          description: Value is the taint value the toleration matches
-                            to. If the operator is Exists, the value should be empty,
-                            otherwise just a regular string.
-                          type: string
-                      type: object
-                    type: array
-                  version:
-                    type: string
                   podSecurityContext:
-                    description: PodSecurityContext holds pod-level security attributes
-                      and common container settings. Some fields are also present
-                      in container.securityContext.  Field values of container.securityContext
-                      take precedence over field values of PodSecurityContext.
+                    description: Set security context for the dashboards pods
                     properties:
                       fsGroup:
                         description: "A special supplemental group that applies to
@@ -2415,7 +2291,7 @@ spec:
                               should be used. Unconfined - no profile should be applied."
                             type: string
                         required:
-                          - type
+                        - type
                         type: object
                       supplementalGroups:
                         description: A list of groups applied to the first process
@@ -2442,8 +2318,8 @@ spec:
                               description: Value of a property to set
                               type: string
                           required:
-                            - name
-                            - value
+                          - name
+                          - value
                           type: object
                         type: array
                       windowsOptions:
@@ -2464,6 +2340,18 @@ spec:
                             description: GMSACredentialSpecName is the name of the
                               GMSA credential spec to use.
                             type: string
+                          hostProcess:
+                            description: HostProcess determines if a container should
+                              be run as a 'Host Process' container. This field is
+                              alpha-level and will only be honored by components that
+                              enable the WindowsHostProcessContainers feature flag.
+                              Setting this field without the feature flag will result
+                              in errors when validating the Pod. All of a Pod's containers
+                              must have the same effective HostProcess value (it is
+                              not allowed to have a mix of HostProcess containers
+                              and non-HostProcess containers).  In addition, if HostProcess
+                              is true then HostNetwork must also be set to true.
+                            type: boolean
                           runAsUserName:
                             description: The UserName in Windows to run the entrypoint
                               of the container process. Defaults to the user specified
@@ -2474,11 +2362,38 @@ spec:
                             type: string
                         type: object
                     type: object
+                  replicas:
+                    format: int32
+                    type: integer
+                  resources:
+                    description: ResourceRequirements describes the compute resource
+                      requirements.
+                    properties:
+                      limits:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: 'Limits describes the maximum amount of compute
+                          resources allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                        type: object
+                      requests:
+                        additionalProperties:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                          x-kubernetes-int-or-string: true
+                        description: 'Requests describes the minimum amount of compute
+                          resources required. If Requests is omitted for a container,
+                          it defaults to Limits if that is explicitly specified, otherwise
+                          to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                        type: object
+                    type: object
                   securityContext:
-                    description: SecurityContext holds security configuration that
-                      will be applied to a container. Some fields are present in both
-                      SecurityContext and PodSecurityContext.  When both are set,
-                      the values in SecurityContext take precedence.
+                    description: Set security context for the dashboards pods' container
                     properties:
                       allowPrivilegeEscalation:
                         description: 'AllowPrivilegeEscalation controls whether a
@@ -2603,7 +2518,7 @@ spec:
                               should be used. Unconfined - no profile should be applied."
                             type: string
                         required:
-                          - type
+                        - type
                         type: object
                       windowsOptions:
                         description: The Windows specific settings applied to all
@@ -2623,6 +2538,18 @@ spec:
                             description: GMSACredentialSpecName is the name of the
                               GMSA credential spec to use.
                             type: string
+                          hostProcess:
+                            description: HostProcess determines if a container should
+                              be run as a 'Host Process' container. This field is
+                              alpha-level and will only be honored by components that
+                              enable the WindowsHostProcessContainers feature flag.
+                              Setting this field without the feature flag will result
+                              in errors when validating the Pod. All of a Pod's containers
+                              must have the same effective HostProcess value (it is
+                              not allowed to have a mix of HostProcess containers
+                              and non-HostProcess containers).  In addition, if HostProcess
+                              is true then HostNetwork must also be set to true.
+                            type: boolean
                           runAsUserName:
                             description: The UserName in Windows to run the entrypoint
                               of the container process. Defaults to the user specified
@@ -2633,6 +2560,97 @@ spec:
                             type: string
                         type: object
                     type: object
+                  service:
+                    properties:
+                      loadBalancerSourceRanges:
+                        items:
+                          type: string
+                        type: array
+                      type:
+                        default: ClusterIP
+                        description: Service Type string describes ingress methods
+                          for a service
+                        enum:
+                        - ClusterIP
+                        - NodePort
+                        - LoadBalancer
+                        type: string
+                    type: object
+                  tls:
+                    properties:
+                      caSecret:
+                        description: Optional, secret that contains the ca certificate
+                          as ca.crt. If this and generate=true is set the existing
+                          CA cert from that secret is used to generate the node certs.
+                          In this case must contain ca.crt and ca.key fields
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      enable:
+                        description: Enable HTTPS for Dashboards
+                        type: boolean
+                      generate:
+                        description: Generate certificate, if false secret must be
+                          provided
+                        type: boolean
+                      secret:
+                        description: Optional, name of a TLS secret that contains
+                          ca.crt, tls.key and tls.crt data. If ca.crt is in a different
+                          secret provide it via the caSecret field
+                        properties:
+                          name:
+                            description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?'
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                    type: object
+                  tolerations:
+                    items:
+                      description: The pod this Toleration is attached to tolerates
+                        any taint that matches the triple <key,value,effect> using
+                        the matching operator <operator>.
+                      properties:
+                        effect:
+                          description: Effect indicates the taint effect to match.
+                            Empty means match all taint effects. When specified, allowed
+                            values are NoSchedule, PreferNoSchedule and NoExecute.
+                          type: string
+                        key:
+                          description: Key is the taint key that the toleration applies
+                            to. Empty means match all taint keys. If the key is empty,
+                            operator must be Exists; this combination means to match
+                            all values and all keys.
+                          type: string
+                        operator:
+                          description: Operator represents a key's relationship to
+                            the value. Valid operators are Exists and Equal. Defaults
+                            to Equal. Exists is equivalent to wildcard for value,
+                            so that a pod can tolerate all taints of a particular
+                            category.
+                          type: string
+                        tolerationSeconds:
+                          description: TolerationSeconds represents the period of
+                            time the toleration (which must be of effect NoExecute,
+                            otherwise this field is ignored) tolerates the taint.
+                            By default, it is not set, which means tolerate the taint
+                            forever (do not evict). Zero and negative values will
+                            be treated as 0 (evict immediately) by the system.
+                          format: int64
+                          type: integer
+                        value:
+                          description: Value is the taint value the toleration matches
+                            to. If the operator is Exists, the value should be empty,
+                            otherwise just a regular string.
+                          type: string
+                      type: object
+                    type: array
+                  version:
+                    type: string
                 required:
                 - replicas
                 - version
@@ -2854,27 +2872,8 @@ spec:
                     items:
                       type: string
                     type: array
-                  serviceAccount:
-                    type: string
-                  serviceName:
-                    type: string
-                  setVMMaxMapCount:
-                    type: boolean
-                  vendor:
-                    enum:
-                    - Opensearch
-                    - Op
-                    - OP
-                    - os
-                    - opensearch
-                    type: string
-                  version:
-                    type: string
                   podSecurityContext:
-                    description: PodSecurityContext holds pod-level security attributes
-                      and common container settings. Some fields are also present
-                      in container.securityContext.  Field values of container.securityContext
-                      take precedence over field values of PodSecurityContext.
+                    description: Set security context for the cluster pods
                     properties:
                       fsGroup:
                         description: "A special supplemental group that applies to
@@ -2972,7 +2971,7 @@ spec:
                               should be used. Unconfined - no profile should be applied."
                             type: string
                         required:
-                          - type
+                        - type
                         type: object
                       supplementalGroups:
                         description: A list of groups applied to the first process
@@ -2999,8 +2998,8 @@ spec:
                               description: Value of a property to set
                               type: string
                           required:
-                            - name
-                            - value
+                          - name
+                          - value
                           type: object
                         type: array
                       windowsOptions:
@@ -3021,6 +3020,18 @@ spec:
                             description: GMSACredentialSpecName is the name of the
                               GMSA credential spec to use.
                             type: string
+                          hostProcess:
+                            description: HostProcess determines if a container should
+                              be run as a 'Host Process' container. This field is
+                              alpha-level and will only be honored by components that
+                              enable the WindowsHostProcessContainers feature flag.
+                              Setting this field without the feature flag will result
+                              in errors when validating the Pod. All of a Pod's containers
+                              must have the same effective HostProcess value (it is
+                              not allowed to have a mix of HostProcess containers
+                              and non-HostProcess containers).  In addition, if HostProcess
+                              is true then HostNetwork must also be set to true.
+                            type: boolean
                           runAsUserName:
                             description: The UserName in Windows to run the entrypoint
                               of the container process. Defaults to the user specified
@@ -3032,10 +3043,7 @@ spec:
                         type: object
                     type: object
                   securityContext:
-                    description: SecurityContext holds security configuration that
-                      will be applied to a container. Some fields are present in both
-                      SecurityContext and PodSecurityContext.  When both are set,
-                      the values in SecurityContext take precedence.
+                    description: Set security context for the cluster pods' container
                     properties:
                       allowPrivilegeEscalation:
                         description: 'AllowPrivilegeEscalation controls whether a
@@ -3160,7 +3168,7 @@ spec:
                               should be used. Unconfined - no profile should be applied."
                             type: string
                         required:
-                          - type
+                        - type
                         type: object
                       windowsOptions:
                         description: The Windows specific settings applied to all
@@ -3180,6 +3188,18 @@ spec:
                             description: GMSACredentialSpecName is the name of the
                               GMSA credential spec to use.
                             type: string
+                          hostProcess:
+                            description: HostProcess determines if a container should
+                              be run as a 'Host Process' container. This field is
+                              alpha-level and will only be honored by components that
+                              enable the WindowsHostProcessContainers feature flag.
+                              Setting this field without the feature flag will result
+                              in errors when validating the Pod. All of a Pod's containers
+                              must have the same effective HostProcess value (it is
+                              not allowed to have a mix of HostProcess containers
+                              and non-HostProcess containers).  In addition, if HostProcess
+                              is true then HostNetwork must also be set to true.
+                            type: boolean
                           runAsUserName:
                             description: The UserName in Windows to run the entrypoint
                               of the container process. Defaults to the user specified
@@ -3190,6 +3210,22 @@ spec:
                             type: string
                         type: object
                     type: object
+                  serviceAccount:
+                    type: string
+                  serviceName:
+                    type: string
+                  setVMMaxMapCount:
+                    type: boolean
+                  vendor:
+                    enum:
+                    - Opensearch
+                    - Op
+                    - OP
+                    - os
+                    - opensearch
+                    type: string
+                  version:
+                    type: string
                 required:
                 - serviceName
                 type: object
