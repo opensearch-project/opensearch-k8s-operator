@@ -3591,6 +3591,8 @@ spec:
                       type: array
                     jvm:
                       type: string
+                    javaopts:
+                      type: string
                     labels:
                       additionalProperties:
                         type: string
