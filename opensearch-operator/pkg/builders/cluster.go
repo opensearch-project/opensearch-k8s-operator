@@ -161,14 +161,20 @@ func NewSTSForNodePool(
 		//vendor ="elasticsearch"
 	}
 
-	var jvm string
+	var javaopts string
 	if node.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
+		javaopts = "-Xmx512M -Xms512M"
 	} else {
-		jvm = node.Jvm
+		javaopts = node.Jvm
 	}
-	// Supress repeated log messages about a deprecated format for the publish address
-	jvm += " -Dopensearch.transport.cname_in_publish_address=true"
+
+	if node.JavaOpts == "" {
+		// Supress repeated log messages about a deprecated format for the publish address
+		javaopts += " -Dopensearch.transport.cname_in_publish_address=true"
+	} else {
+		// Supress repeated log messages about a deprecated format for the publish address and add extra java options
+		javaopts += " -Dopensearch.transport.cname_in_publish_address=true " + node.JavaOpts
+	}
 
 	probe := corev1.Probe{
 		PeriodSeconds:       20,
@@ -381,7 +387,7 @@ func NewSTSForNodePool(
 								},
 								{
 									Name:  "OPENSEARCH_JAVA_OPTS",
-									Value: jvm,
+									Value: javaopts,
 								},
 								{
 									Name:  "node.roles",
@@ -643,11 +649,11 @@ func NewBootstrapPod(
 	}
 	resources := cr.Spec.Bootstrap.Resources
 
-	var jvm string
+	var javaopts string
 	if cr.Spec.Bootstrap.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
+		javaopts = "-Xmx512M -Xms512M"
 	} else {
-		jvm = cr.Spec.Bootstrap.Jvm
+		javaopts = cr.Spec.Bootstrap.Jvm
 	}
 
 	image := helpers.ResolveImage(cr, nil)
@@ -699,7 +705,7 @@ func NewBootstrapPod(
 		},
 		{
 			Name:  "OPENSEARCH_JAVA_OPTS",
-			Value: jvm,
+			Value: javaopts,
 		},
 		{
 			Name:  "node.roles",
