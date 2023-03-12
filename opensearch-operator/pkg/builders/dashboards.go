@@ -37,6 +37,9 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		SubPath:   "opensearch_dashboards.yml",
 	})
 
+	podSecurityContext := cr.Spec.Dashboards.PodSecurityContext
+	securityContext := cr.Spec.Dashboards.SecurityContext
+
 	env := []corev1.EnvVar{
 		{
 			Name:  "OPENSEARCH_HOSTS",
@@ -156,14 +159,14 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 							Env:             env,
 							VolumeMounts:    volumeMounts,
 							Command:         mainCommand,
-							SecurityContext: cr.Spec.Dashboards.SecurityContext,
+							SecurityContext: securityContext,
 						},
 					},
 					ImagePullSecrets: image.ImagePullSecrets,
 					NodeSelector:     cr.Spec.Dashboards.NodeSelector,
 					Tolerations:      cr.Spec.Dashboards.Tolerations,
 					Affinity:         cr.Spec.Dashboards.Affinity,
-					SecurityContext:  cr.Spec.Dashboards.PodSecurityContext,
+					SecurityContext:  podSecurityContext,
 				},
 			},
 		},
