@@ -168,7 +168,7 @@ func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePo
 	// If an upgrade is in process we want to wait to schedule non data nodes
 	// data nodes will be picked up by the rolling restarter, or the upgrade
 	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
-		if !helpers.ContainsString(nodePool.Roles, "data") {
+		if !helpers.HasDataRole(&nodePool) {
 			sts := &appsv1.StatefulSet{}
 			err := r.Get(r.ctx, types.NamespacedName{
 				Name:      builders.StsName(r.instance, &nodePool),
