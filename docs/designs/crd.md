@@ -455,13 +455,6 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>-Xmx512M -Xms512M</td>
       </tr><tr>
       </tr><tr>
-        <td><b>JAVAOPTS</b></td>
-        <td>string</td>
-        <td>OPENSEARCH_JAVA_OPTS: use this to pass through java options</td>
-        <td>false</td>
-        <td> - </td>
-      </tr><tr>
-      </tr><tr>
         <td><b>Affinity</b></td>
         <td>corev1.Affinity</td>
         <td>add affinity to nodePool</td>

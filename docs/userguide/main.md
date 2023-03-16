@@ -308,33 +308,6 @@ spec:
           - "data"
 ```
 
-### Set Extra Java Options
-
-To configure extra `OPENSEARCH_JAVA_OPTS`.
-
-Recommendation: Use this to allow experimental features and other java options. eg `"-Dopensearch.experimental.feature.searchable_snapshot.enabled=true"`
-
-***Note*** Do not set java heap size here, use the `jvm` option above
-
-```yaml
-spec:
-    nodePools:
-      - component: nodes
-        replicas: 3
-        diskSize: "10Gi"
-        jvm: -Xmx1024M -Xms1024M
-        javaopts: "-Dopensearch.experimental.feature.searchable_snapshot.enabled=true -Dopensearch.experimental.feature.replication_type.enabled=true"
-        resources:
-          requests:
-            memory: "2Gi"
-            cpu: "500m"
-          limits:
-            memory: "2Gi"
-            cpu: "500m"
-        roles:
-          - "data"
-```
-
 ## Configuring Dashboards
 
 The operator can automatically deploy and manage a OpenSearch Dashboards instance. To do so add the following section to your cluster spec:

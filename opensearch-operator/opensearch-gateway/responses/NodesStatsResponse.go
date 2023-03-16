@@ -25,7 +25,6 @@ type NodeStatResponse struct {
 	Os                map[string]interface{}               `json:"os"`
 	Process           map[string]interface{}               `json:"process"`
 	Jvm               map[string]interface{}               `json:"jvm"`
-	JavaOpts          map[string]interface{}               `json:"javaopts"`
 	ThreadPool        map[string]NodeStatThreadPool        `json:"thread_pool"`
 	Fs                map[string]interface{}               `json:"fs"`
 	Transport         map[string]interface{}               `json:"transport"`

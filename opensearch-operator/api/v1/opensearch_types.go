@@ -63,7 +63,6 @@ type NodePool struct {
 	DiskSize                  string                            `json:"diskSize,omitempty"`
 	Resources                 corev1.ResourceRequirements       `json:"resources,omitempty"`
 	Jvm                       string                            `json:"jvm,omitempty"`
-	JavaOpts                  string                            `json:"javaopts,omitempty"`
 	Roles                     []string                          `json:"roles"`
 	Tolerations               []corev1.Toleration               `json:"tolerations,omitempty"`
 	NodeSelector              map[string]string                 `json:"nodeSelector,omitempty"`
