@@ -219,6 +219,9 @@ func NewSTSForNodePool(
 	}
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
+	podSecurityContext := cr.Spec.General.PodSecurityContext
+	securityContext := cr.Spec.General.SecurityContext
+
 	var initContainers []corev1.Container
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
@@ -399,10 +402,11 @@ func NewSTSForNodePool(
 									ContainerPort: 9300,
 								},
 							},
-							StartupProbe:   &probe,
-							LivenessProbe:  &probe,
-							ReadinessProbe: &readinessProbe,
-							VolumeMounts:   volumeMounts,
+							StartupProbe:    &probe,
+							LivenessProbe:   &probe,
+							ReadinessProbe:  &readinessProbe,
+							VolumeMounts:    volumeMounts,
+							SecurityContext: securityContext,
 						},
 					},
 					InitContainers:            initContainers,
@@ -414,6 +418,7 @@ func NewSTSForNodePool(
 					TopologySpreadConstraints: node.TopologySpreadConstraints,
 					ImagePullSecrets:          image.ImagePullSecrets,
 					PriorityClassName:         node.PriorityClassName,
+					SecurityContext:           podSecurityContext,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -667,6 +672,9 @@ func NewBootstrapPod(
 		MountPath: "/usr/share/opensearch/data",
 	})
 
+	podSecurityContext := cr.Spec.General.PodSecurityContext
+	securityContext := cr.Spec.General.SecurityContext
+
 	env := []corev1.EnvVar{
 		{
 			Name:  "cluster.initial_master_nodes",
@@ -765,9 +773,10 @@ func NewBootstrapPod(
 							ContainerPort: 9300,
 						},
 					},
-					StartupProbe:  &probe,
-					LivenessProbe: &probe,
-					VolumeMounts:  volumeMounts,
+					StartupProbe:    &probe,
+					LivenessProbe:   &probe,
+					VolumeMounts:    volumeMounts,
+					SecurityContext: securityContext,
 				},
 			},
 			InitContainers:     initContainers,
@@ -777,6 +786,7 @@ func NewBootstrapPod(
 			Tolerations:        cr.Spec.Bootstrap.Tolerations,
 			Affinity:           cr.Spec.Bootstrap.Affinity,
 			ImagePullSecrets:   image.ImagePullSecrets,
+			SecurityContext:    podSecurityContext,
 		},
 	}
 
