@@ -37,6 +37,8 @@ manager:
 #    fsGroup: 2000
   # Set this to false to disable the experimental parallel recovery in case you are experiencing problems
   parallelRecoveryEnabled: true
+  allowPrivilegeEscalation: false
+
 
   image:
     repository: public.ecr.aws/opsterio/opensearch-operator
