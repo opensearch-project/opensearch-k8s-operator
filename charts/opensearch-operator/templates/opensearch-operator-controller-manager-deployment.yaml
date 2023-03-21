@@ -43,8 +43,6 @@ spec:
         image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
         name: operator-controller-manager
         imagePullPolicy: "{{ .Values.manager.image.pullPolicy }}"
-        securityContext:
-{{- toYaml .Values.manager.securityContext | nindent 10 }}
         resources:
 {{- toYaml .Values.manager.resources | nindent 10 }}
         readinessProbe:
@@ -60,7 +58,7 @@ spec:
         {{- toYaml .Values.manager.extraEnv | nindent 8 }}
         {{- end }}
         securityContext:
-          allowPrivilegeEscalation: false
+{{- toYaml .Values.manager.securityContext | nindent 10 }}
       nodeSelector:
 {{- toYaml .Values.nodeSelector | nindent 8 }}
       tolerations:
