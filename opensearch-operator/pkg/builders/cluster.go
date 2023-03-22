@@ -65,6 +65,19 @@ func NewSTSForNodePool(
 		}
 	}
 
+	for _, role := range selectedRoles {
+		found := false
+		for _, availRole := range availableRoles {
+			if role == availRole {
+				found = true
+				break
+			}
+		}
+		if !found {
+			fmt.Printf("NOTICE! -- %s is not an available role\n", role)
+		}
+	}
+
 	pvc := corev1.PersistentVolumeClaim{}
 	dataVolume := corev1.Volume{}
 
