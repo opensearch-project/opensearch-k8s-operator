@@ -23,6 +23,7 @@ import (
 
 const (
 	ConfigurationChecksumAnnotation  = "opster.io/config"
+	DefaultDiskSize                  = "30Gi"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
@@ -38,7 +39,7 @@ func NewSTSForNodePool(
 	//To make sure disksize is not passed as empty
 	var disksize string
 	if len(node.DiskSize) == 0 {
-		disksize = "30Gi"
+		disksize = DefaultDiskSize
 	} else {
 		disksize = node.DiskSize
 	}
