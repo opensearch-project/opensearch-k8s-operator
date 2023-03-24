@@ -90,6 +90,10 @@ func NewSTSForNodePool(
 					if node.Persistence == nil {
 						return nil
 					}
+					if node.Persistence.PVC.StorageClassName == "" {
+						return nil
+					}
+
 					return &node.Persistence.PVC.StorageClassName
 				}(),
 				VolumeMode: &mode,
