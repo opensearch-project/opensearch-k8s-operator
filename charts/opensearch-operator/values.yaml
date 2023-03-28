@@ -1,5 +1,9 @@
 nodeSelector: {}
 tolerations: []
+# Set securityContext for deployment
+securityContext:
+  runAsNonRoot: true
+
 manager:
   extraEnv: []
   resources:
