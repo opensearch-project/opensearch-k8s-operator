@@ -27,7 +27,7 @@ spec:
         readinessProbe:
 {{- toYaml .Values.kubeRbacProxy.readinessProbe | nindent 10 }}
         livenessProbe:
-{{- toYaml .Values.kubeRbacProxy.livenessProbe | nindent 10 }}
+{{- toYaml .Values.kubeRbacProxy.securityContext | nindent 10 }}
         ports:
         - containerPort: 8443
           name: https
@@ -41,6 +41,8 @@ spec:
         command:
         - /manager
         image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
+        securityContext:
+{{- toYaml .Values.kubeRbacProxy.livenessProbe | nindent 10 }}
         name: operator-controller-manager
         imagePullPolicy: "{{ .Values.manager.image.pullPolicy }}"
         resources:
