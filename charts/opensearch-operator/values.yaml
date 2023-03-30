@@ -34,9 +34,11 @@ manager:
     timeoutSeconds: 3
     initialDelaySeconds: 10
 
+
+  parallelRecoveryEnabled: true
+
 # Set securityContext for manager
   securityContext:
-    parallelRecoveryEnabled: true
     allowPrivilegeEscalation: false
 #    runAsUser: 1000
 #    runAsGroup: 3000
