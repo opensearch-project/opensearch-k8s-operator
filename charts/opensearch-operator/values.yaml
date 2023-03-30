@@ -73,5 +73,6 @@ kubeRbacProxy:
     initialDelaySeconds: 10
 
   image: 
-    repository: "quay.io/brancz/kube-rbac-proxy"
-    tag: "v0.8.0"
+    repository: "gcr.io/kubebuilder/kube-rbac-proxy"
+    tag: "v0.12.0"
+
