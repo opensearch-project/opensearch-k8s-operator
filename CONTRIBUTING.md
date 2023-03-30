@@ -6,6 +6,8 @@
     - [Contributing Code](#contributing-code)
   - [Developer Certificate of Origin](#developer-certificate-of-origin)
   - [Review Process](#review-process)
+  - [Writing tests](#writing-tests)
+    - [Functional tests](#functional-tests)
 
 # Contributing to the OpenSearch K8S Operator
 
@@ -98,3 +100,40 @@ During the PR process, expect that there will be some back-and-forth. Please try
 If we accept the PR, a [maintainer](MAINTAINERS.md) will merge your change and usually take care of backporting it to appropriate branches ourselves.
 
 If we reject the PR, we will close the pull request with a comment explaining why. This decision isn't always final: if you feel we have misunderstood your intended change or otherwise think that we should reconsider then please continue the conversation with a comment on the PR and we'll do our best to address any further points you raise.
+
+## Writing tests
+
+Testing our code is an essential part of development. It ensures the features we develop are working as intended and that we did not break an existing feature or logic with our changes (also called regression tests). This project uses the following types of tests:
+
+- Unit tests: These test a single function in isolation. They are implemented as normal go tests.
+- Integration tests: These test an entire component of the operator and its interaction with kubernetes. We use [envtest](https://book.kubebuilder.io/reference/envtest.html) to provide a minimal kubernetes api-server and verify the component under test creates/updates kubernetes objects as expected.
+- Functional tests: These test the operator as a whole and are used to verify interaction with a real kubernetes and opensearch cluster.
+
+As a base rule: Every change you make should be covered by a unit or integration test. Choose an integration test if your function/component interacts with kubernetes, otherwise a unit tests with optional mocks is the way to go. If the change you make does not really have logic, you should still implement a simple test to act as a regression test to make sure this feature is not later on inadvertently crippeled or that a bug is not reintroduced.
+
+### Functional tests
+
+Functional tests look at the operator as a whole. They are intended to test functionality that requires a complete kubernetes cluster (and not just an api-server)  Whereas the unit and integration tests are part of the operator code (as `*_test.go` files), the functional tests are implemented as a separate go module (in the `opensearch-operator/functionaltests` directory) but still use the normal go testing mechanisms (meaning they can be run with `go test`).
+
+The flow of the functional tests is as follows:
+
+1. Setup a k3d cluster
+2. Build the docker image for the current operator code
+3. Deploy the operator using helm
+4. Run `go test`. Each test follows the same structure:
+   1. Deploy an `OpenSearchCluster` object
+   2. Wait for and verify conditions in kubernetes and/or opensearch
+   3. Tear down the opensearch cluster
+
+The flow is implemented as a Github Actions Workflow that is run for each pull request automatically. In addition you can run them locally by using the script `execute_tests.sh` in the directory `opensearch-operator/functionaltests`. You will need k3d and helm installed on your system.
+
+For each functional test two files are needed: A go file with the test code (`<testname>_test.go`) and a yaml file with the needed kubernetes objects (`<testname>.yaml`).
+
+The functionaltests module has some helper functions:
+
+- `CreateKubernetesObjects(name string)`: Reads in a yaml file `<name>.yaml` and creates the kubernetes objects defined in it
+- `Cleanup(name string)`: Reads in a yaml file `<name>.yaml` and deletes the kubernetes objects defined in it
+- `ExposePodViaNodePort(selector map[string]string, namespace string, nodePort, targetPort int32)`: Creates a NodePort service to expose pods outside the k3d cluster (use a port in range `30000-30005`)
+- `CleanUpNodePort(namespace string, nodePort int32)`: Deletes a NodePort service
+
+When adding new tests plase try to follow the same structure as existing tests. Also keep in mind that functional tests take a lot longer to run than a unit test, as such only add them if needed.

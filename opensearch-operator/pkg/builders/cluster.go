@@ -23,8 +23,6 @@ import (
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
 const (
-	ClusterLabel                     = "opster.io/opensearch-cluster"
-	NodePoolLabel                    = "opster.io/opensearch-nodepool"
 	ConfigurationChecksumAnnotation  = "opster.io/config"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
@@ -122,15 +120,15 @@ func NewSTSForNodePool(
 	})
 
 	labels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: node.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: node.Component,
 	}
 	annotations := map[string]string{
 		ConfigurationChecksumAnnotation: configChecksum,
 	}
 	matchLabels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: node.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: node.Component,
 	}
 
 	if helpers.ContainsString(selectedRoles, "master") {
@@ -222,8 +220,12 @@ func NewSTSForNodePool(
 	}
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
-	initContainers := []corev1.Container{
-		{
+	podSecurityContext := cr.Spec.General.PodSecurityContext
+	securityContext := cr.Spec.General.SecurityContext
+
+	var initContainers []corev1.Container
+	if !helpers.SkipInitContainer() {
+		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
@@ -238,7 +240,7 @@ func NewSTSForNodePool(
 					MountPath: "/usr/share/opensearch/data",
 				},
 			},
-		},
+		})
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
@@ -339,16 +341,9 @@ func NewSTSForNodePool(
 				MatchLabels: matchLabels,
 			},
 			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
-			UpdateStrategy: func() appsv1.StatefulSetUpdateStrategy {
-				if helpers.ContainsString(selectedRoles, "data") {
-					return appsv1.StatefulSetUpdateStrategy{
-						Type: appsv1.OnDeleteStatefulSetStrategyType,
-					}
-				}
-				return appsv1.StatefulSetUpdateStrategy{
-					Type: appsv1.RollingUpdateStatefulSetStrategyType,
-				}
-			}(),
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.OnDeleteStatefulSetStrategyType,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
@@ -407,10 +402,11 @@ func NewSTSForNodePool(
 									ContainerPort: 9300,
 								},
 							},
-							StartupProbe:   &probe,
-							LivenessProbe:  &probe,
-							ReadinessProbe: &readinessProbe,
-							VolumeMounts:   volumeMounts,
+							StartupProbe:    &probe,
+							LivenessProbe:   &probe,
+							ReadinessProbe:  &readinessProbe,
+							VolumeMounts:    volumeMounts,
+							SecurityContext: securityContext,
 						},
 					},
 					InitContainers:            initContainers,
@@ -422,6 +418,7 @@ func NewSTSForNodePool(
 					TopologySpreadConstraints: node.TopologySpreadConstraints,
 					ImagePullSecrets:          image.ImagePullSecrets,
 					PriorityClassName:         node.PriorityClassName,
+					SecurityContext:           podSecurityContext,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -471,8 +468,8 @@ func NewSTSForNodePool(
 }
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: nodePool.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: nodePool.Component,
 	}
 
 	return &corev1.Service{
@@ -515,7 +512,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -574,7 +571,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -604,7 +601,7 @@ func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -640,7 +637,7 @@ func NewBootstrapPod(
 	volumeMounts []corev1.VolumeMount,
 ) *corev1.Pod {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 	resources := cr.Spec.Bootstrap.Resources
 
@@ -675,6 +672,9 @@ func NewBootstrapPod(
 		Name:      "data",
 		MountPath: "/usr/share/opensearch/data",
 	})
+
+	podSecurityContext := cr.Spec.General.PodSecurityContext
+	securityContext := cr.Spec.General.SecurityContext
 
 	env := []corev1.EnvVar{
 		{
@@ -730,6 +730,26 @@ func NewBootstrapPod(
 		})
 	}
 
+	var initContainers []corev1.Container
+	if !helpers.SkipInitContainer() {
+		initContainers = append(initContainers, corev1.Container{
+			Name:            "init",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Command:         []string{"sh", "-c"},
+			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			SecurityContext: &corev1.SecurityContext{
+				RunAsUser: pointer.Int64(0),
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "data",
+					MountPath: "/usr/share/opensearch/data",
+				},
+			},
+		})
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      BootstrapPodName(cr),
@@ -754,35 +774,20 @@ func NewBootstrapPod(
 							ContainerPort: 9300,
 						},
 					},
-					StartupProbe:  &probe,
-					LivenessProbe: &probe,
-					VolumeMounts:  volumeMounts,
+					StartupProbe:    &probe,
+					LivenessProbe:   &probe,
+					VolumeMounts:    volumeMounts,
+					SecurityContext: securityContext,
 				},
 			},
-			InitContainers: []corev1.Container{
-				{
-					Name:            "init",
-					Image:           initHelperImage.GetImage(),
-					ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
-					Command:         []string{"sh", "-c"},
-					Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser: pointer.Int64(0),
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "data",
-							MountPath: "/usr/share/opensearch/data",
-						},
-					},
-				},
-			},
+			InitContainers:     initContainers,
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,
 			Tolerations:        cr.Spec.Bootstrap.Tolerations,
 			Affinity:           cr.Spec.Bootstrap.Affinity,
 			ImagePullSecrets:   image.ImagePullSecrets,
+			SecurityContext:    podSecurityContext,
 		},
 	}
 
@@ -858,7 +863,7 @@ func WorkingPodForRollingRestart(sts *appsv1.StatefulSet) string {
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
 	for _, nodepool := range nodepools {
-		if sts.Labels[NodePoolLabel] == nodepool.Component {
+		if sts.Labels[helpers.NodePoolLabel] == nodepool.Component {
 			return true
 		}
 	}
@@ -960,7 +965,7 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) int32 {
 	count := int32(0)
 	for _, nodePool := range cr.Spec.NodePools {
-		if helpers.ContainsString(nodePool.Roles, "data") {
+		if helpers.HasDataRole(&nodePool) {
 			sts := &appsv1.StatefulSet{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name:      StsName(cr, &nodePool),

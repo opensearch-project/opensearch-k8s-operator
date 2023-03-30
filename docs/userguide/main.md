@@ -469,6 +469,33 @@ nodePools:
       path: "/var/opensearch"  # Define the path on the host here
 ```
 
+### Security Context for pods and containers
+
+You can set the security context for the Opensearch pods and the Dashboard pod. This is useful when you want to define privilege and access control settings for a Pod or Container. To specify security settings for Pods, include the `podSecurityContext` field and for Containers, include the `securityContext` field.
+
+The structure is the same for both Opensearch pods and the Dashboard pod:
+
+```yaml
+spec:
+  general:
+    podSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+    securityContext:
+      allowPrivilegeEscalation: false
+      privileged: false
+  dashboards:
+    podSecurityContext:
+      fsGroup: 1000
+      runAsNonRoot: true
+    securityContext:
+      capabilities:
+        drop:
+        - ALL
+      privileged: false
+```
+
 ### Labels or Annotations on OpenSearch nodes
 
 You can add additional labels or annotations on the nodepool configuration. This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint:
@@ -619,7 +646,19 @@ During cluster initialization the operator uses init containers as helpers. For 
         - name: docker-pull-secret
 ```
 
-### Expsing OpenSearch Dashboards
+### Disabling the init helper
+
+In some cases, you may want to avoid the `chmod` init container (e.g. on OpenShift or if your cluster blocks containers running as `root`).
+It can be disabled by adding the following to your `values.yaml`:
+
+```yaml
+manager:
+  extraEnv:
+    - name: SKIP_INIT_CONTAINER
+      value: "true"
+```
+
+### Exposing OpenSearch Dashboards
 
 If you want to expose the Dashboards instance of your cluster for users/services outside of your Kubernetes cluster, the recommended way is to do this via ingress.
 
@@ -681,6 +720,13 @@ Internally you should use self-signed certificates (you can let the operator gen
 ## Cluster operations
 
 The operator contains several features that automate management tasks that might be needed during the cluster lifecycle. The different available options are documented here.
+
+### Cluster recovery
+
+This operator automatically handles common failure scenarios and restarts crashed pods, normally this is done in a one-by-one fashion to maintain quorum and cluster stability.
+In case the operator detects several crashed or missing pods (for a nodepool) at the same time it will switch into a special recovery mode and start all pods at once and allow the cluster to form a new quorum. This parallel recovery mode is currently experimental and only works with PVC-backed storage as it uses the number of existing PVCs to determine the number of missing pods. The recovery is done by temporarily changing the statefulset underlying each nodepool and setting the `podManagementPolicy` to `Parallel`. If you encounter problems with it, you can disable it by redeploying the operator and adding `manager.parallelRecoveryEnabled: false` to your `values.yaml`. Please also report any problems by opening an issue in the operator github project.
+
+The recovery mode also kicks in if you deleted your cluster but kept the PVCs around and are then reinstalling the cluster.
 
 ### Rolling Upgrades
 

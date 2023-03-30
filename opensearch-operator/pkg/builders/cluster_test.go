@@ -6,6 +6,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 	"os"
@@ -54,6 +55,30 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 var _ = Describe("Builders", func() {
 
 	When("Constructing a STS for a NodePool", func() {
+		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
+		})
+		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
+			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
+			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
+		})
+		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(len(result.Spec.InitContainers)).To(Equal(1))
+		})
+		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
+			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(len(result.Spec.InitContainers)).To(Equal(0))
+			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
+		})
 		It("should only use valid roles", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var nodePool = opsterv1.NodePool{
@@ -180,6 +205,31 @@ var _ = Describe("Builders", func() {
 			actual := result.Spec.Template.Spec.Containers[0].Command
 
 			Expect(expected).To(Equal(actual))
+		})
+
+		It("should properly configure security contexts if set", func() {
+			user := int64(1000)
+			podSecurityContext := &corev1.PodSecurityContext{
+				RunAsUser:    &user,
+				RunAsGroup:   &user,
+				RunAsNonRoot: pointer.Bool(true),
+			}
+			securityContext := &corev1.SecurityContext{
+				Privileged:               pointer.Bool(false),
+				AllowPrivilegeEscalation: pointer.Bool(false),
+			}
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.PodSecurityContext = podSecurityContext
+			clusterObject.Spec.General.SecurityContext = securityContext
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
+			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
 	})
 
