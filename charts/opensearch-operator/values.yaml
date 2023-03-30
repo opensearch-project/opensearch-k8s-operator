@@ -84,10 +84,10 @@ kubeRbacProxy:
     timeoutSeconds: 3
     initialDelaySeconds: 10
 
-   securityContext:
-#    runAsUser: 1000
-#    runAsGroup: 3000
-#    fsGroup: 2000
+    securityContext:
+#     runAsUser: 1000
+#     runAsGroup: 3000
+#     fsGroup: 2000
   image: 
     repository: "gcr.io/kubebuilder/kube-rbac-proxy"
     tag: "v0.8.0"
