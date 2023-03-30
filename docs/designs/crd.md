@@ -198,6 +198,18 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>List of plugins that should be installed for OpenSearch at startup.</td>
         <td>false</td>
         <td> [] </td>
+      </tr><tr>
+        <td><b>podSecurityContext</b></td>
+        <td>*corev1.PodSecurityContext</td>
+        <td>Set the security context for the cluster pods.</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>securityContext</b></td>
+        <td>*corev1.SecurityContext</td>
+        <td>Set the security context for the cluster pods' containers.</td>
+        <td>false</td>
+        <td> - </td>
       </tr>
 </table>
 
@@ -380,6 +392,18 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>List of plugins that should be installed for OpenSearch Dashboards at startup.</td>
         <td>false</td>
         <td> [] </td>
+      </tr><tr>
+        <td><b>podSecurityContext</b></td>
+        <td>*corev1.PodSecurityContext</td>
+        <td>Set the security context for the dashboards pods.</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>securityContext</b></td>
+        <td>*corev1.SecurityContext</td>
+        <td>Set the security context for the dashboards pods' containers.</td>
+        <td>false</td>
+        <td> - </td>
       </tr>
     </tr><tr>
 </table>

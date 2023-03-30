@@ -469,6 +469,33 @@ nodePools:
       path: "/var/opensearch"  # Define the path on the host here
 ```
 
+### Security Context for pods and containers
+
+You can set the security context for the Opensearch pods and the Dashboard pod. This is useful when you want to define privilege and access control settings for a Pod or Container. To specify security settings for Pods, include the `podSecurityContext` field and for Containers, include the `securityContext` field.
+
+The structure is the same for both Opensearch pods and the Dashboard pod:
+
+```yaml
+spec:
+  general:
+    podSecurityContext:
+      runAsUser: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+    securityContext:
+      allowPrivilegeEscalation: false
+      privileged: false
+  dashboards:
+    podSecurityContext:
+      fsGroup: 1000
+      runAsNonRoot: true
+    securityContext:
+      capabilities:
+        drop:
+        - ALL
+      privileged: false
+```
+
 ### Labels or Annotations on OpenSearch nodes
 
 You can add additional labels or annotations on the nodepool configuration. This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint:

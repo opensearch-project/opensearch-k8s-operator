@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -82,6 +83,15 @@ func HasOwnerReference(object client.Object, owner *opsterv1.OpenSearchCluster) 
 	return false
 }
 
+func ArrayElementContains(array []string, content string) bool {
+	for _, element := range array {
+		if strings.Contains(element, content) {
+			return true
+		}
+	}
+	return false
+}
+
 func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSearchCluster {
 
 	OpensearchCluster := &opsterv1.OpenSearchCluster{
@@ -99,6 +109,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Vendor:      "opensearch",
 				Version:     "1.0.0",
 				ServiceName: "es-svc",
+				PluginsList: []string{"http://foo-plugin-1.0.0"},
 				AdditionalConfig: map[string]string{
 					"foo": "bar",
 				},
