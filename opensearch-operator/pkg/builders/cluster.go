@@ -56,6 +56,7 @@ func NewSTSForNodePool(
 		"remote_cluster_client",
 		"transform",
 		"cluster_manager",
+		"search",
 	}
 	var selectedRoles []string
 	for _, role := range node.Roles {
@@ -166,6 +167,12 @@ func NewSTSForNodePool(
 	} else {
 		jvm = node.Jvm
 	}
+
+	// If node role `search` defined add required experimental flag
+	if helpers.ContainsString(selectedRoles, "search") {
+		jvm += " -Dopensearch.experimental.feature.searchable_snapshot.enabled=true"
+	}
+
 	// Supress repeated log messages about a deprecated format for the publish address
 	jvm += " -Dopensearch.transport.cname_in_publish_address=true"
 
