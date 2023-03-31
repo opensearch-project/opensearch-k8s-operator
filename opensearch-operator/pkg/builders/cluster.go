@@ -1005,6 +1005,8 @@ func NewSecurityconfigUpdateJob(
 	backoffLimit := int32(0)
 
 	image := helpers.ResolveImage(instance, &node)
+	securityContext := instance.Spec.General.SecurityContext
+	podSecurityContext := instance.Spec.General.PodSecurityContext
 
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
@@ -1021,10 +1023,12 @@ func NewSecurityconfigUpdateJob(
 						Command:         []string{"/bin/bash", "-c"},
 						Args:            []string{arg},
 						VolumeMounts:    volumeMounts,
+						SecurityContext: securityContext,
 					}},
 					Volumes:          volumes,
 					RestartPolicy:    corev1.RestartPolicyNever,
 					ImagePullSecrets: image.ImagePullSecrets,
+					SecurityContext:  podSecurityContext,
 				},
 			},
 		},
