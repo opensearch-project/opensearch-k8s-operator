@@ -974,10 +974,9 @@ func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.O
 }
 
 func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
-	ClusterLabels := "opster.io/opensearch-cluster"
 
 	labels := map[string]string{
-		ClusterLabels: cr.Name,
+		helpers.ClusterLabels: cr.Name,
 	}
 	selector := metav1.LabelSelector{
 		MatchLabels: labels,
@@ -994,30 +993,23 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 	user := monitoring.BasicAuth{}
 
 	monitorUser := cr.Spec.General.Monitoring.MonitoringUserSecret
+	var basicAuthSecret string
 	if monitorUser == "" {
+		basicAuthSecret = cr.Name + "-admin-password"
 		// Use admin credentials if no separate monitoring user was defined
-		user = monitoring.BasicAuth{
-			Username: corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + "-admin-password"},
-				Key:                  "username",
-			},
-			Password: corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Name + "-admin-password"},
-				Key:                  "password",
-			},
-		}
 	} else {
-		user = monitoring.BasicAuth{
-			Username: corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Spec.General.Monitoring.MonitoringUserSecret},
-				Key:                  "username",
-			},
-			Password: corev1.SecretKeySelector{
-				LocalObjectReference: corev1.LocalObjectReference{Name: cr.Spec.General.Monitoring.MonitoringUserSecret},
-				Key:                  "password",
-			},
-		}
+		basicAuthSecret = cr.Spec.General.Monitoring.MonitoringUserSecret
+	}
 
+	user = monitoring.BasicAuth{
+		Username: corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: basicAuthSecret},
+			Key:                  "username",
+		},
+		Password: corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: basicAuthSecret},
+			Key:                  "password",
+		},
 	}
 
 	return &monitoring.ServiceMonitor{

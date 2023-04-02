@@ -84,11 +84,12 @@ var _ = Describe("Cluster Reconciler", func() {
 
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+
 		})
-		sm := &monitoring.ServiceMonitor{}
-		secret := &corev1.Secret{}
 
 		It("should create a ServiceMonitor for the cluster", func() {
+			sm := &monitoring.ServiceMonitor{}
+			secret := &corev1.Secret{}
 			Eventually(func() error {
 				// check if the ServiceMonitor created
 				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, sm)

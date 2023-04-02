@@ -8,6 +8,7 @@ const (
 	OsUserNameAnnotation      = "opensearchuser/name"
 	OsUserNamespaceAnnotation = "opensearchuser/namespace"
 	DnsBaseEnvVariable        = "DNS_BASE"
+	ClusterLabels             = "opster.io/opensearch-cluster"
 )
 
 func ClusterDnsBase() string {
