@@ -211,6 +211,7 @@ func NewSTSForNodePool(
 
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
+	resources := cr.Spec.InitHelper.Resources
 
 	startUpCommand := "./opensearch-docker-entrypoint.sh"
 	// If a custom command is specified, use it.
@@ -228,6 +229,7 @@ func NewSTSForNodePool(
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       resources,
 			Command:         []string{"sh", "-c"},
 			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 			SecurityContext: &corev1.SecurityContext{
