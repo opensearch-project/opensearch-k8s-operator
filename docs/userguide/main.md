@@ -645,6 +645,20 @@ During cluster initialization the operator uses init containers as helpers. For 
       imagePullSecrets:
         - name: docker-pull-secret
 ```
+### Edit init container resources
+Init container run without any resource constraints, but it's possible to specify resource requests and limits by adding a resources section to the YAML definition. This allows you to control the amount of CPU and memory allocated to the init container, it's helps to ensure that it doesn't starve other containers, by setting appropriate resource limits.
+```yaml
+  spec:
+    initHelper:
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "250m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+ ```
+          
 
 ### Disabling the init helper
 
