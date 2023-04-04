@@ -545,12 +545,18 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
         <td>false</td>
         <td> - </td>
       </tr><tr>
+        <td><b>resources</b></td>
+        <td>corev1.ResourceRequirements</td>
+        <td>Define initcontainer resorces</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
         <td><b>version</b></td>
         <td>string</td>
         <td>Version of InitHelper (busybox) image to deploy</td>
         <td>false</td>
-        <td>1.27.2-buildx</td>
-       </tr>
+        <td>1.27.2-buildx</td>       
+      </tr> 
 </table>
 
 <h3 id="GeneralConfig">

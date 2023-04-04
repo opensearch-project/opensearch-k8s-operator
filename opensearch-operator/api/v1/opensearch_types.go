@@ -58,7 +58,8 @@ type GeneralConfig struct {
 
 type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
-	Version    *string `json:"version,omitempty"`
+	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
+	Version    *string                     `json:"version,omitempty"`
 }
 
 type NodePool struct {
