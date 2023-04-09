@@ -279,6 +279,9 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		existingDisk := existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
 		r.logger.Info("The existing statefulset VolumeClaimTemplate disk size is: " + existingDisk)
 		r.logger.Info("The cluster definition nodePool disk size is: " + nodePool.DiskSize)
+		if nodePool.DiskSize == "" { // Default case
+			nodePool.DiskSize = builders.DefaultDiskSize
+		}
 		if existingDisk == nodePool.DiskSize {
 			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
 		} else {
@@ -331,7 +334,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// as we don't want uncontrolled restarts while we're doing an upgrade
 	if r.instance.Status.Version != "" &&
 		r.instance.Status.Version != r.instance.Spec.General.Version &&
-		!helpers.ContainsString(nodePool.Roles, "data") {
+		!helpers.HasDataRole(&nodePool) {
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 

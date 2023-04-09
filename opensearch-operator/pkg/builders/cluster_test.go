@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 )
@@ -205,6 +206,49 @@ var _ = Describe("Builders", func() {
 			actual := result.Spec.Template.Spec.Containers[0].Command
 
 			Expect(expected).To(Equal(actual))
+		})
+
+		It("should properly add the required when the node.roles contains search", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "node.roles",
+				Value: "search",
+			}))
+
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx512M -Xms512M -Dopensearch.experimental.feature.searchable_snapshot.enabled=true -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+
+		It("should properly configure security contexts if set", func() {
+			user := int64(1000)
+			podSecurityContext := &corev1.PodSecurityContext{
+				RunAsUser:    &user,
+				RunAsGroup:   &user,
+				RunAsNonRoot: pointer.Bool(true),
+			}
+			securityContext := &corev1.SecurityContext{
+				Privileged:               pointer.Bool(false),
+				AllowPrivilegeEscalation: pointer.Bool(false),
+			}
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.PodSecurityContext = podSecurityContext
+			clusterObject.Spec.General.SecurityContext = securityContext
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
+			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
 	})
 

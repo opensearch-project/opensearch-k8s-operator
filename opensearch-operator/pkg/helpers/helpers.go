@@ -236,3 +236,11 @@ func WaitForSTSStatus(ctx context.Context, k8sClient client.Client, obj *appsv1.
 	}
 	return nil, fmt.Errorf("failed to wait for STS")
 }
+
+func HasDataRole(nodePool *opsterv1.NodePool) bool {
+	return ContainsString(nodePool.Roles, "data")
+}
+
+func HasManagerRole(nodePool *opsterv1.NodePool) bool {
+	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
+}

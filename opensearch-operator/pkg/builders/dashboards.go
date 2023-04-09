@@ -37,6 +37,9 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		SubPath:   "opensearch_dashboards.yml",
 	})
 
+	podSecurityContext := cr.Spec.Dashboards.PodSecurityContext
+	securityContext := cr.Spec.Dashboards.SecurityContext
+
 	env := []corev1.EnvVar{
 		{
 			Name:  "OPENSEARCH_HOSTS",
@@ -116,7 +119,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		},
 	}
 
-	mainCommand := helpers.BuildMainCommand("./bin/opensearch-dashboards-plugin", cr.Spec.Dashboards.PluginsList, false, "./opensearch-dashboards-docker-entrypoint.sh")
+	mainCommand := helpers.BuildMainCommandOSD("./bin/opensearch-dashboards-plugin", cr.Spec.Dashboards.PluginsList, "./opensearch-dashboards-docker-entrypoint.sh")
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
@@ -151,17 +154,19 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 									ContainerPort: port,
 								},
 							},
-							StartupProbe:  &probe,
-							LivenessProbe: &probe,
-							Env:           env,
-							VolumeMounts:  volumeMounts,
-							Command:       mainCommand,
+							StartupProbe:    &probe,
+							LivenessProbe:   &probe,
+							Env:             env,
+							VolumeMounts:    volumeMounts,
+							Command:         mainCommand,
+							SecurityContext: securityContext,
 						},
 					},
 					ImagePullSecrets: image.ImagePullSecrets,
 					NodeSelector:     cr.Spec.Dashboards.NodeSelector,
 					Tolerations:      cr.Spec.Dashboards.Tolerations,
 					Affinity:         cr.Spec.Dashboards.Affinity,
+					SecurityContext:  podSecurityContext,
 				},
 			},
 		},

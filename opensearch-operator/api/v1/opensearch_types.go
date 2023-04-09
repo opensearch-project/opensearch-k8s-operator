@@ -51,11 +51,16 @@ type GeneralConfig struct {
 	// Populate opensearch keystore before startup
 	Keystore             []KeystoreValue      `json:"keystore,omitempty"`
 	SnapshotRepositories []SnapshotRepoConfig `json:"snapshotRepositories,omitempty"`
+	// Set security context for the cluster pods
+	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	// Set security context for the cluster pods' container
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
-	Version    *string `json:"version,omitempty"`
+	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
+	Version    *string                     `json:"version,omitempty"`
 }
 
 type NodePool struct {
@@ -140,6 +145,10 @@ type DashboardsConfig struct {
 	Annotations                 map[string]string           `json:"annotations,omitempty"`
 	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
 	PluginsList                 []string                    `json:"pluginsList,omitempty"`
+	// Set security context for the dashboards pods
+	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	// Set security context for the dashboards pods' container
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
