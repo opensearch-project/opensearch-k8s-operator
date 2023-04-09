@@ -167,28 +167,32 @@ func NewSTSForNodePool(
 
 	var jvm string
 	if node.Jvm == "" {
-		jvm := "-Xmx512M -Xms512M"
+		jvm = "-Xmx512M -Xms512M"
 
 		// Get the node memory limit
 		memoryLimit := node.Resources.Limits.Memory()
 		memString := memoryLimit.String()
-		memInt := memoryLimit.Value()
+		re := regexp.MustCompile("[0-9]+")
+		numberString := re.FindString(memString)
+		memInt, err := strconv.Atoi(numberString)
+		if err != nil {
+			panic(err)
+		}
 		// Define regular expressions to match the patterns "M" and "G"
-		reM := regexp.MustCompile(`M$`)
-		reG := regexp.MustCompile(`G$`)
+		reM := regexp.MustCompile(`M`)
+		reG := regexp.MustCompile(`G`)
 
 		// Check if the memory limit contains "M" or "G" and calculate the new memory limit
 		if reM.MatchString(memString) {
 			newMemory := int(math.Round(float64(memInt) / 2))
 			newMemoryStr := strconv.Itoa(newMemory) + "M"
-			jvm = reM.ReplaceAllString(jvm, "-Xmx"+newMemoryStr)
+			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
 		} else if reG.MatchString(memString) {
 			newMemory := int(math.Round(float64(memInt) / 2))
 			newMemoryStr := strconv.Itoa(newMemory) + "G"
-			jvm = reG.ReplaceAllString(jvm, "-Xmx"+newMemoryStr)
+			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
 		}
 		// Use the new memory limit in the JVM options
-		node.Jvm = jvm
 	} else {
 		jvm = node.Jvm
 	}
