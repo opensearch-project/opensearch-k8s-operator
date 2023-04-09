@@ -3,7 +3,10 @@ package builders
 import (
 	"context"
 	"fmt"
+	"math"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -164,7 +167,28 @@ func NewSTSForNodePool(
 
 	var jvm string
 	if node.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
+		jvm := "-Xmx512M -Xms512M"
+
+		// Get the node memory limit
+		memoryLimit := node.Resources.Limits.Memory()
+		memString := memoryLimit.String()
+		memInt := memoryLimit.Value()
+		// Define regular expressions to match the patterns "M" and "G"
+		reM := regexp.MustCompile(`M$`)
+		reG := regexp.MustCompile(`G$`)
+
+		// Check if the memory limit contains "M" or "G" and calculate the new memory limit
+		if reM.MatchString(memString) {
+			newMemory := int(math.Round(float64(memInt) / 2))
+			newMemoryStr := strconv.Itoa(newMemory) + "M"
+			jvm = reM.ReplaceAllString(jvm, "-Xmx"+newMemoryStr)
+		} else if reG.MatchString(memString) {
+			newMemory := int(math.Round(float64(memInt) / 2))
+			newMemoryStr := strconv.Itoa(newMemory) + "G"
+			jvm = reG.ReplaceAllString(jvm, "-Xmx"+newMemoryStr)
+		}
+		// Use the new memory limit in the JVM options
+		node.Jvm = jvm
 	} else {
 		jvm = node.Jvm
 	}
