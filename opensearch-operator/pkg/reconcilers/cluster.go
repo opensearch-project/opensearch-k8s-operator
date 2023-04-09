@@ -122,7 +122,6 @@ func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	var checksumerr error
 	var checksumval string
-	snapshotRepoSetting := batchv1.Job{}
 	snapshotRepodata, _ := json.Marshal(&r.instance.Spec.General.SnapshotRepositories)
 	checksumval, checksumerr = util.GetSha1Sum(snapshotRepodata)
 	if checksumerr != nil {
@@ -154,7 +153,7 @@ func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.
 	}
 	r.logger.Info("Starting snapshotconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Snapshot", "Starting to snapshotconfig update job")
-	snapshotRepoSetting = builders.NewSnapshotRepoconfigUpdateJob(
+	snapshotRepoJob := builders.NewSnapshotRepoconfigUpdateJob(
 		r.instance,
 		jobName,
 		r.instance.Namespace,
@@ -162,10 +161,10 @@ func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.
 		r.reconcilerContext.Volumes,
 		r.reconcilerContext.VolumeMounts,
 	)
-	if err := ctrl.SetControllerReference(r.instance, &snapshotRepoSetting, r.Client.Scheme()); err != nil {
+	if err := ctrl.SetControllerReference(r.instance, &snapshotRepoJob, r.Client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
 	}
-	return r.ReconcileResource(&snapshotRepoSetting, reconciler.StatePresent)
+	return r.ReconcileResource(&snapshotRepoJob, reconciler.StatePresent)
 }
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
