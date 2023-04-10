@@ -165,34 +165,52 @@ func NewSTSForNodePool(
 		//vendor ="elasticsearch"
 	}
 
+	var isdatanode bool
+	exRoles := []string{
+		"master",
+		"remote_cluster_client",
+		"transform",
+		"cluster_manager",
+	}
+
+	for _, role := range exRoles {
+		isdatanode = helpers.ContainsString(selectedRoles, role)
+	}
+
 	var jvm string
 	if node.Jvm == "" {
 		jvm = "-Xmx512M -Xms512M"
-
 		// Get the node memory limit
 		memoryLimit := node.Resources.Limits.Memory()
 		memString := memoryLimit.String()
 		re := regexp.MustCompile("[0-9]+")
 		numberString := re.FindString(memString)
-		memInt, err := strconv.Atoi(numberString)
-		if err != nil {
-			panic(err)
-		}
-		// Define regular expressions to match the patterns "M" and "G"
+		memInt, _ := strconv.Atoi(numberString)
+
+		// Define regular expressions to match the patterns "M" for Mb and "G" for Gb
 		reM := regexp.MustCompile(`M`)
 		reG := regexp.MustCompile(`G`)
 
-		// Check if the memory limit contains "M" or "G" and calculate the new memory limit
+		// Check if the memory limit contains "M" or "G"
+		var st string
 		if reM.MatchString(memString) {
-			newMemory := int(math.Round(float64(memInt) / 2))
-			newMemoryStr := strconv.Itoa(newMemory) + "M"
-			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
+			st = "M"
 		} else if reG.MatchString(memString) {
-			newMemory := int(math.Round(float64(memInt) / 2))
-			newMemoryStr := strconv.Itoa(newMemory) + "G"
-			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
+			st = "G"
 		}
-		// Use the new memory limit in the JVM options
+
+		if !isdatanode {
+			// Calculate jvm memory limit
+			newMemory := int(math.Round(float64(memInt) / 0.8))
+			newMemoryStr := strconv.Itoa(newMemory) + st
+			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
+		} else {
+			// Calculate jvm memory limit
+			newMemory := int(math.Round(float64(memInt) / 2))
+			newMemoryStr := strconv.Itoa(newMemory) + st
+			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
+
+		}
 	} else {
 		jvm = node.Jvm
 	}
