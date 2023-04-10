@@ -249,6 +249,23 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
+		It("should use default storageclass if not specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{PVC: &opsterv1.PVCSource{
+					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				},
+				}},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
 	})
 
 	When("Constructing a bootstrap pod", func() {
