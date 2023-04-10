@@ -34,11 +34,7 @@ manager:
     timeoutSeconds: 3
     initialDelaySeconds: 10
 
-<<<<<<< HEAD
-  # Set this to false to disable the experimental parallel recovery in case you are experiencing problems
-=======
->>>>>>> c9237c616237866b5fc11092f0a873af54d5a962
-
+# Set this to false to disable the experimental parallel recovery in case you are experiencing problems
   parallelRecoveryEnabled: true
 
 # Set securityContext for manager
@@ -47,11 +43,6 @@ manager:
 #    runAsUser: 1000
 #    runAsGroup: 3000
 #    fsGroup: 2000
-<<<<<<< HEAD
-=======
-  # Set this to false to disable the experimental parallel recovery in case you are experiencing problems
->>>>>>> c9237c616237866b5fc11092f0a873af54d5a962
-
 
 
   image:
