@@ -174,7 +174,10 @@ func NewSTSForNodePool(
 	}
 
 	for _, role := range exRoles {
-		isdatanode = helpers.ContainsString(selectedRoles, role)
+		isdatanode = !helpers.ContainsString(selectedRoles, role)
+		if isdatanode {
+			break
+		}
 	}
 
 	var jvm string
@@ -187,29 +190,23 @@ func NewSTSForNodePool(
 		numberString := re.FindString(memString)
 		memInt, _ := strconv.Atoi(numberString)
 
-		// Define regular expressions to match the patterns "M" for Mb and "G" for Gb
-		reM := regexp.MustCompile(`M`)
+		// Define regular expressions to check resource unit
 		reG := regexp.MustCompile(`G`)
 
-		// Check if the memory limit contains "M" or "G"
-		var st string
-		if reM.MatchString(memString) {
-			st = "M"
-		} else if reG.MatchString(memString) {
-			st = "G"
+		// Convert Gb to Mb
+		if reG.MatchString(memString) {
+			memInt = memInt * 1024
 		}
 
+		// Calculate jvm memory limit by cluster role
 		if !isdatanode {
-			// Calculate jvm memory limit
-			newMemory := int(math.Round(float64(memInt) / 0.8))
-			newMemoryStr := strconv.Itoa(newMemory) + st
+			newMemory := int(math.Round(float64(memInt) * 0.9))
+			newMemoryStr := strconv.Itoa(newMemory) + "M"
 			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
 		} else {
-			// Calculate jvm memory limit
-			newMemory := int(math.Round(float64(memInt) / 2))
-			newMemoryStr := strconv.Itoa(newMemory) + st
+			newMemory := int(math.Round(float64(memInt) * 0.5))
+			newMemoryStr := strconv.Itoa(newMemory) + "M"
 			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
-
 		}
 	} else {
 		jvm = node.Jvm
