@@ -2,7 +2,11 @@ package reconcilers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+
+	batchv1 "k8s.io/api/batch/v1"
+	"opensearch.opster.io/pkg/reconcilers/util"
 
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
@@ -20,6 +24,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+const (
+	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
 )
 
 type ClusterReconciler struct {
@@ -103,8 +111,60 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		})
 		result.CombineErr(err)
 	}
-
+	if r.instance.Spec.General.SnapshotRepositories != nil && len(r.instance.Spec.General.SnapshotRepositories) > 0 {
+		// Calculate checksum and check for changes
+		result.Combine(r.ReconcileSnapshotRepoConfig(username))
+	}
 	return result.Result, result.Err
+}
+
+func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.Result, error) {
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	var checksumerr error
+	var checksumval string
+	snapshotRepodata, _ := json.Marshal(&r.instance.Spec.General.SnapshotRepositories)
+	checksumval, checksumerr = util.GetSha1Sum(snapshotRepodata)
+	if checksumerr != nil {
+		return &ctrl.Result{}, checksumerr
+	}
+	clusterName := r.instance.Name
+	jobName := clusterName + "-snapshotrepoconfig-update"
+	job := batchv1.Job{}
+	if err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: r.instance.Namespace}, &job); err == nil {
+		value, exists := job.ObjectMeta.Annotations[snapshotRepoConfigChecksumAnnotation]
+		if exists && value == checksumval {
+			// Nothing to do, current snapshotconfig already applied
+			return &ctrl.Result{}, nil
+		}
+		// Delete old job
+		r.logger.Info("Deleting old snapshotconfig job")
+		opts := client.DeleteOptions{}
+		// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
+		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+		err = r.Delete(r.ctx, &job, &opts)
+		if err != nil {
+			return &ctrl.Result{}, err
+		}
+		// Make sure job is completely deleted (when r.Delete returns deletion sometimes is not yet complete)
+		_, err = r.ReconcileResource(&job, reconciler.StateAbsent)
+		if err != nil {
+			return &ctrl.Result{}, err
+		}
+	}
+	r.logger.Info("Starting snapshotconfig update job")
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Snapshot", "Starting to snapshotconfig update job")
+	snapshotRepoJob := builders.NewSnapshotRepoconfigUpdateJob(
+		r.instance,
+		jobName,
+		r.instance.Namespace,
+		checksumval,
+		r.reconcilerContext.Volumes,
+		r.reconcilerContext.VolumeMounts,
+	)
+	if err := ctrl.SetControllerReference(r.instance, &snapshotRepoJob, r.Client.Scheme()); err != nil {
+		return &ctrl.Result{}, err
+	}
+	return r.ReconcileResource(&snapshotRepoJob, reconciler.StatePresent)
 }
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {

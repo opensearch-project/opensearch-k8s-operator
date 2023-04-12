@@ -210,6 +210,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>Set the security context for the cluster pods' containers.</td>
         <td>false</td>
         <td> - </td>
+      </tr><tr>
+        <td><b>snapshotRepositories</b></td>
+        <td>[]SnapshotRepoConfig</td>
+        <td>Snapshot Repo settings</td>
+        <td>false</td>
+        <td> - </td>
       </tr>
 </table>
 

@@ -246,7 +246,7 @@ Please note:
 * Updating the list for an already installed cluster will lead to a rolling restart of all opensearch nodes to install the new plugin.
 * If your plugin requires additional configuration you must provide that either through `additionalConfig` (see section [Configuring opensearch.yml](#configuring-opensearchyml)) or as secrets in the opensearch keystore (see section [Add secrets to keystore](#add-secrets-to-keystore)).
 
-## Add secrets to keystore
+### Add secrets to keystore
 
 Some OpenSearch features (e.g. snapshot repository plugins) require sensitive configuration. This is handled via the opensearch keystore. The operator allows you to populate this keystore using Kubernetes secrets.
 To do so add the secrets under the `general.keystore` section:
@@ -307,7 +307,78 @@ spec:
         roles:
           - "data"
 ```
+### Configuring Snapshot Repo (BETA):
 
+This feature is Currently in BETA, you can configure the snapshot repo settings for the OpenSearch cluster through the operator. Using `snapshotRepositories` settings you can configure multiple snapshot repos. Once the snapshot repo is configured a user can create custom `_ism` policies through dashboard to backup the in indexes.
+
+Note: BETA flagged Features in a release are experimental. Therefore, we do not recommend the use of configuring snapshot repo in a production environment. For updates on the progress of snapshot/restore, or if you want leave feedback/contribute that could help improve the feature, please refer to the issue on [GitHub](https://github.com/Opster/opensearch-k8s-operator/issues/278).
+
+```yaml
+spec:
+  general:
+    snapshotRepositories: 
+        - name: my_s3_repository_1
+          type: s3
+          settings:
+            bucket: opensearch-s3-snapshot
+            region: us-east-1
+            base_path: os-snapshot
+        - name: my_s3_repository_3
+          type: s3
+          settings:
+            bucket: opensearch-s3-snapshot
+            region: us-east-1
+            base_path: os-snapshot_1
+```
+#### Prerequisites for Configuring Snapshot Repo:
+
+Before applying the setting `snapshotRepositories` to the operator, please ensure the following prerequisites are met.
+
+1. The right cloud provider native plugins are installed.
+Example:
+```yaml
+spec:
+  general:
+    pluginsList: ["repository-s3"]
+```
+
+2. Ensure the cluster is fully healthy before applying the `snapshotRepositories` settings to the custom resource. 
+Note: For the BETA you cannot add the settings if the cluster is not yet provisioned and healthy, otherwise the configuration of the repositories will fail.
+
+3. The required roles/permissions for the backend cloud are pre-created.
+Example: Following is the AWS IAM role added for kubernetes nodes so that snapshots can be published to `opensearch-s3-snapshot` s3 bucket.
+```json
+{
+    "Statement": [
+        {
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation",
+                "s3:ListBucketMultipartUploads",
+                "s3:ListBucketVersions"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::opensearch-s3-snapshot"
+            ]
+        },
+        {
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:AbortMultipartUpload",
+                "s3:ListMultipartUploadParts"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::opensearch-s3-snapshot/*"
+            ]
+        }
+    ],
+    "Version": "2012-10-17"
+}
+```
 ## Configuring Dashboards
 
 The operator can automatically deploy and manage a OpenSearch Dashboards instance. To do so add the following section to your cluster spec:

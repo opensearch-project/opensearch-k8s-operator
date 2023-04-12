@@ -3,13 +3,14 @@ package builders
 import (
 	"context"
 	"fmt"
+	"os"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
-	"os"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -265,6 +266,26 @@ var _ = Describe("Builders", func() {
 			var expected *string = nil
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
+		})
+	})
+
+	When("When Reconciling the snapshotRepoJob", func() {
+		It("should create a snapshotconfig batch job", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = "snapshot"
+			clusterObject.Spec.General.ServiceName = "snapshotservice"
+
+			var snapshotRepoSettings = map[string]string{"bucket": "opensearch-s3-snapshot", "region": "us-east-1", "base_path": "os-snapshot"}
+			snapshotConfig := opsterv1.SnapshotRepoConfig{
+				Name:     "os-snap",
+				Type:     "s3",
+				Settings: snapshotRepoSettings,
+			}
+			clusterObject.Spec.General.SnapshotRepositories = []opsterv1.SnapshotRepoConfig{snapshotConfig}
+			result := NewSnapshotRepoconfigUpdateJob(&clusterObject, "snapshotrepoconfig", "foobar", "snapshotrepoconfig/checksum", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Name).To(Equal("snapshotrepoconfig"))
+			snapshotCmd := "curl --fail-with-body -s -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://snapshotservice.snapshot.svc.cluster.local:9200/_snapshot/os-snap?pretty -H \"Content-Type: application/json\" -d '{\"type\": \"s3\", \"settings\": {\"bucket\": \"opensearch-s3-snapshot\" , \"region\": \"us-east-1\" , \"base_path\": \"os-snapshot\"}}'; "
+			Expect(result.Spec.Template.Spec.Containers[0].Args).To(ContainElement(snapshotCmd))
 		})
 	})
 
