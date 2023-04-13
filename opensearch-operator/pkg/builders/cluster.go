@@ -1021,10 +1021,10 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		Spec: monitoring.ServiceMonitorSpec{
 			JobLabel: cr.Name + "-monitor",
 			TargetLabels: []string{
-				cr.Name,
+				helpers.ClusterLabels,
 			},
 			PodTargetLabels: []string{
-				cr.Name,
+				helpers.ClusterLabels,
 			},
 			Endpoints: []monitoring.Endpoint{
 				{Port: string(cr.Spec.General.HttpPort),
