@@ -48,7 +48,7 @@ func NewActionGroupReconciler(
 		ctx:               ctx,
 		recorder:          recorder,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "user"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", "actiongroup"),
 	}
 }
 

@@ -50,7 +50,7 @@ type OpensearchActionGroup struct {
 type OpensearchActionGroupList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpensearchUser `json:"items"`
+	Items           []OpensearchActionGroup `json:"items"`
 }
 
 func init() {
