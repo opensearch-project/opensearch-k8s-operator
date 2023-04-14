@@ -289,16 +289,19 @@ func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
 	return true, nil
 }
 
+// GetSecurityResource performs an HTTP GET request to OS to fetch the security resource specified by name
 func (client *OsClusterClient) GetSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
 	return doHTTPGet(ctx, client.client, path)
 }
 
+// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
 func (client *OsClusterClient) PutSecurityResource(ctx context.Context, resource, name string, body io.Reader) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
 	return doHTTPPut(ctx, client.client, path, body)
 }
 
+// DeleteSecurityResource performs an HTTP DELETE request to OS to delete the security resource specified by name
 func (client *OsClusterClient) DeleteSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
 	return doHTTPDelete(ctx, client.client, path)

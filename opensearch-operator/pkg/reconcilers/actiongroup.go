@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	opensearchActionGroupExists = "action-group already exists in Opensearch; not modifying"
+	opensearchActionGroupExists = "actiongroup already exists in Opensearch; not modifying"
 )
 
 type ActionGroupReconciler struct {
