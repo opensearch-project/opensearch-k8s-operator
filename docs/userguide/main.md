@@ -885,9 +885,9 @@ If you provided your own certificate for node transport communication, then you 
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
-### Managing users and roles with kubernetes resources
+### Managing security configurations with kubernetes resources
 
-The operator provides custom kubernetes resources that allow you to manage users and roles as kubernetes objects.
+The operator provides custom kubernetes resources that allow you to create/update/manage security configuration resources such as users, roles, action groups etc. as kubernetes objects.
 
 #### Opensearch Users
 
@@ -956,6 +956,26 @@ spec:
   - sample-backend-role
   roles:
   - sample-role
+```
+
+#### Opensearch Action Groups
+
+It is possible to manage Opensearch action groups in Kubernetes with the operator. The operator will not modify action groups that already exist. You can create an example action group as follows:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchActionGroup
+metadata:
+  name: sample-action-group
+  namespace: default
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  allowedActions:
+    - indices:admin/aliases/get
+    - indices:admin/aliases/exists
+  type: index
+  description: Sample action group
 ```
 
 ### Custom Admin User

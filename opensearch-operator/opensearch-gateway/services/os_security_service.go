@@ -14,6 +14,11 @@ import (
 
 const (
 	K8sAttributeField = "k8s-uid"
+
+	ROLES         = "roles"
+	INTERNALUSERS = "internalusers"
+	ROLESMAPPING  = "rolesmapping"
+	ACTIONGROUPS  = "actiongroups"
 )
 
 func ShouldUpdateUser(
@@ -22,7 +27,7 @@ func ShouldUpdateUser(
 	username string,
 	user requests.User,
 ) (bool, error) {
-	resp, err := service.GetUser(ctx, username)
+	resp, err := service.GetSecurityResource(ctx, INTERNALUSERS, username)
 	if err != nil {
 		return false, err
 	}
@@ -63,7 +68,7 @@ func ShouldUpdateUser(
 }
 
 func UserExists(ctx context.Context, service *OsClusterClient, username string) (bool, error) {
-	resp, err := service.GetUser(ctx, username)
+	resp, err := service.GetSecurityResource(ctx, INTERNALUSERS, username)
 	if err != nil {
 		return false, err
 	}
@@ -78,7 +83,7 @@ func UserExists(ctx context.Context, service *OsClusterClient, username string) 
 }
 
 func UserUIDMatches(ctx context.Context, service *OsClusterClient, username string, uid string) (bool, error) {
-	resp, err := service.GetUser(ctx, username)
+	resp, err := service.GetSecurityResource(ctx, INTERNALUSERS, username)
 	if err != nil {
 		return false, err
 	}
@@ -106,7 +111,7 @@ func CreateOrUpdateUser(
 	username string,
 	user requests.User,
 ) error {
-	resp, err := service.PutUser(ctx, username, opensearchutil.NewJSONReader(user))
+	resp, err := service.PutSecurityResource(ctx, INTERNALUSERS, username, opensearchutil.NewJSONReader(user))
 	if err != nil {
 		return err
 	}
@@ -118,7 +123,7 @@ func CreateOrUpdateUser(
 }
 
 func DeleteUser(ctx context.Context, service *OsClusterClient, username string) error {
-	resp, err := service.DeleteUser(ctx, username)
+	resp, err := service.DeleteSecurityResource(ctx, INTERNALUSERS, username)
 	if err != nil {
 		return err
 	}
@@ -131,7 +136,7 @@ func DeleteUser(ctx context.Context, service *OsClusterClient, username string) 
 }
 
 func RoleExists(ctx context.Context, service *OsClusterClient, rolename string) (bool, error) {
-	resp, err := service.GetRole(ctx, rolename)
+	resp, err := service.GetSecurityResource(ctx, ROLES, rolename)
 	if err != nil {
 		return false, err
 	}
@@ -151,7 +156,7 @@ func ShouldUpdateRole(
 	rolename string,
 	role requests.Role,
 ) (bool, error) {
-	resp, err := service.GetRole(ctx, rolename)
+	resp, err := service.GetSecurityResource(ctx, ROLES, rolename)
 	if err != nil {
 		return false, err
 	}
@@ -187,7 +192,7 @@ func CreateOrUpdateRole(
 	rolename string,
 	role requests.Role,
 ) error {
-	resp, err := service.PutRole(ctx, rolename, opensearchutil.NewJSONReader(role))
+	resp, err := service.PutSecurityResource(ctx, ROLES, rolename, opensearchutil.NewJSONReader(role))
 	if err != nil {
 		return err
 	}
@@ -199,7 +204,7 @@ func CreateOrUpdateRole(
 }
 
 func DeleteRole(ctx context.Context, service *OsClusterClient, rolename string) error {
-	resp, err := service.DeleteRole(ctx, rolename)
+	resp, err := service.DeleteSecurityResource(ctx, ROLES, rolename)
 	if err != nil {
 		return err
 	}
@@ -216,7 +221,7 @@ func RoleMappingExists(
 	service *OsClusterClient,
 	rolename string,
 ) (bool, error) {
-	resp, err := service.GetRolesMapping(ctx, rolename)
+	resp, err := service.GetSecurityResource(ctx, ROLESMAPPING, rolename)
 	if err != nil {
 		return false, err
 	}
@@ -235,7 +240,7 @@ func FetchExistingRoleMapping(
 	service *OsClusterClient,
 	rolename string,
 ) (requests.RoleMapping, error) {
-	resp, err := service.GetRolesMapping(ctx, rolename)
+	resp, err := service.GetSecurityResource(ctx, ROLESMAPPING, rolename)
 	if err != nil {
 		return requests.RoleMapping{}, err
 	}
@@ -260,7 +265,7 @@ func CreateOrUpdateRoleMapping(
 	rolename string,
 	mapping requests.RoleMapping,
 ) error {
-	resp, err := service.PutRolesMapping(ctx, rolename, opensearchutil.NewJSONReader(mapping))
+	resp, err := service.PutSecurityResource(ctx, ROLESMAPPING, rolename, opensearchutil.NewJSONReader(mapping))
 	if err != nil {
 		return err
 	}
@@ -272,7 +277,92 @@ func CreateOrUpdateRoleMapping(
 }
 
 func DeleteRoleMapping(ctx context.Context, service *OsClusterClient, rolename string) error {
-	resp, err := service.DeleteRolesMapping(ctx, rolename)
+	resp, err := service.DeleteSecurityResource(ctx, ROLESMAPPING, rolename)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return nil
+}
+
+// ActionGroupExists checks if the passed actionGroup already exists or not
+func ActionGroupExists(ctx context.Context, service *OsClusterClient, actionGroupName string) (bool, error) {
+	resp, err := service.GetSecurityResource(ctx, ACTIONGROUPS, actionGroupName)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return false, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return true, nil
+}
+
+// ShouldUpdateActionGroup checks whether a previously created actiongroup needs an update or not
+func ShouldUpdateActionGroup(
+	ctx context.Context,
+	service *OsClusterClient,
+	actionGroupName string,
+	actionGroup requests.ActionGroup,
+) (bool, error) {
+	resp, err := service.GetSecurityResource(ctx, ACTIONGROUPS, actionGroupName)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return true, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+
+	actionGroupResponse := responses.GetActionGroupResponse{}
+
+	err = json.NewDecoder(resp.Body).Decode(&actionGroupResponse)
+	if err != nil {
+		return false, err
+	}
+
+	if reflect.DeepEqual(actionGroup, actionGroupResponse[actionGroupName]) {
+		return false, nil
+	}
+
+	lg := log.FromContext(ctx).WithValues("os_service", "security")
+	lg.V(1).Info(fmt.Sprintf("exsiting actiongroup: %+v", actionGroupResponse[actionGroupName]))
+	lg.V(1).Info(fmt.Sprintf("new actiongroup: %+v", actionGroup))
+	lg.Info("actiongroup requires update")
+	return true, nil
+}
+
+// CreateOrUpdateActionGroup creates a new action group or updates a previously created action group
+func CreateOrUpdateActionGroup(
+	ctx context.Context,
+	service *OsClusterClient,
+	actionGroupName string,
+	actionGroup requests.ActionGroup,
+) error {
+	resp, err := service.PutSecurityResource(ctx, ACTIONGROUPS, actionGroupName, opensearchutil.NewJSONReader(actionGroup))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.IsError() {
+		return fmt.Errorf("failed to create actiongroup: %s", resp.String())
+	}
+	return nil
+}
+
+// DeleteActionGroup deletes a previously created action group
+func DeleteActionGroup(ctx context.Context, service *OsClusterClient, actionGroupName string) error {
+	resp, err := service.DeleteSecurityResource(ctx, ACTIONGROUPS, actionGroupName)
 	if err != nil {
 		return err
 	}

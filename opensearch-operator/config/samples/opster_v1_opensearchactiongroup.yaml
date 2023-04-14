@@ -1,0 +1,13 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchActionGroup
+metadata:
+  name: sample-action-group
+  namespace: default
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  allowedActions:
+    - indices:admin/aliases/get
+    - indices:admin/aliases/exists
+  type: index
+  description: Sample action group

@@ -119,6 +119,7 @@ All PRs must conform to the following rules:
         cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchroles.yaml charts/opensearch-operator/templates/OpensearchRole-crd.yaml
         cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchuserrolebindings.yaml charts/opensearch-operator/templates/OpensearchUserRoleBinding-crd.yaml
         cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchusers.yaml charts/opensearch-operator/templates/OpensearchUser-crd.yaml
+        cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchactiongroups.yaml charts/opensearch-operator/templates/OpensearchActionGroup-crd.yaml
     ```
 
 * Changes to the CRD must be documented in the [CRD reference](./designs/crd.md)
