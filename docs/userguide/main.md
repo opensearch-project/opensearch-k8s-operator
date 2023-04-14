@@ -1041,7 +1041,7 @@ spec:
     version: <YOUR_CLUSTER_VERSION>
     monitoring:
       enable: true
-      interval: 30s
+      scrapeInterval: 30s
       monitoringUserSecret: appUserSecret
       pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip
 ```
