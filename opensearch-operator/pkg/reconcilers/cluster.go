@@ -2,7 +2,12 @@ package reconcilers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+
+	batchv1 "k8s.io/api/batch/v1"
+	"opensearch.opster.io/pkg/reconcilers/util"
+
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
@@ -19,6 +24,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+const (
+	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
 )
 
 type ClusterReconciler struct {
@@ -111,8 +120,60 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		})
 		result.CombineErr(err)
 	}
-
+	if r.instance.Spec.General.SnapshotRepositories != nil && len(r.instance.Spec.General.SnapshotRepositories) > 0 {
+		// Calculate checksum and check for changes
+		result.Combine(r.ReconcileSnapshotRepoConfig(username))
+	}
 	return result.Result, result.Err
+}
+
+func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.Result, error) {
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	var checksumerr error
+	var checksumval string
+	snapshotRepodata, _ := json.Marshal(&r.instance.Spec.General.SnapshotRepositories)
+	checksumval, checksumerr = util.GetSha1Sum(snapshotRepodata)
+	if checksumerr != nil {
+		return &ctrl.Result{}, checksumerr
+	}
+	clusterName := r.instance.Name
+	jobName := clusterName + "-snapshotrepoconfig-update"
+	job := batchv1.Job{}
+	if err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: r.instance.Namespace}, &job); err == nil {
+		value, exists := job.ObjectMeta.Annotations[snapshotRepoConfigChecksumAnnotation]
+		if exists && value == checksumval {
+			// Nothing to do, current snapshotconfig already applied
+			return &ctrl.Result{}, nil
+		}
+		// Delete old job
+		r.logger.Info("Deleting old snapshotconfig job")
+		opts := client.DeleteOptions{}
+		// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
+		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+		err = r.Delete(r.ctx, &job, &opts)
+		if err != nil {
+			return &ctrl.Result{}, err
+		}
+		// Make sure job is completely deleted (when r.Delete returns deletion sometimes is not yet complete)
+		_, err = r.ReconcileResource(&job, reconciler.StateAbsent)
+		if err != nil {
+			return &ctrl.Result{}, err
+		}
+	}
+	r.logger.Info("Starting snapshotconfig update job")
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Snapshot", "Starting to snapshotconfig update job")
+	snapshotRepoJob := builders.NewSnapshotRepoconfigUpdateJob(
+		r.instance,
+		jobName,
+		r.instance.Namespace,
+		checksumval,
+		r.reconcilerContext.Volumes,
+		r.reconcilerContext.VolumeMounts,
+	)
+	if err := ctrl.SetControllerReference(r.instance, &snapshotRepoJob, r.Client.Scheme()); err != nil {
+		return &ctrl.Result{}, err
+	}
+	return r.ReconcileResource(&snapshotRepoJob, reconciler.StatePresent)
 }
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
@@ -157,21 +218,78 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
 	if _, exists := existing.Spec.Selector.MatchLabels["opensearch.role"]; exists {
 		r.logger.Info("deleting statefulset while orphaning pods to fix labels " + existing.Name)
-		opts := client.DeleteOptions{}
-		client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
-		if err := r.Delete(r.ctx, existing, &opts); err != nil {
-			r.logger.Info("failed to delete statefulset" + existing.Name)
+		if err := helpers.WaitForSTSDelete(r.ctx, r.Client, existing); err != nil {
+			r.logger.Error(err, "Failed to delete Statefulset for nodePool "+nodePool.Component)
+			return result, err
+		}
+		result, err := r.ReconcileResource(sts, reconciler.StateCreated)
+		if err != nil || result != nil {
 			return result, err
 		}
 	}
 
-	//Checking for existing statefulset disksize
+	// Detect cluster failure and initiate parallel recovery
+	if helpers.ParallelRecoveryMode() && (nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
+		// This logic only works if the STS uses PVCs
+		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
+		if existing.Status.CurrentRevision == "" {
+			existing, err = helpers.WaitForSTSStatus(r.ctx, r.Client, existing)
+			if err != nil {
+				return &ctrl.Result{Requeue: true}, err
+			}
+		}
+		// Check number of PVCs for nodepool
+		pvcCount, err := helpers.CountPVCsForNodePool(r.ctx, r.Client, r.instance, &nodePool)
+		if err != nil {
+			r.logger.Error(err, "Failed to determine PVC count. Continuing on normally")
+		} else {
+			// A failure is assumed if n PVCs exist but less than n-1 pods (one missing pod is allowed for rolling restart purposes)
+			// We can assume the cluster is in a failure state and cannot recover on its own
+			if pvcCount >= int(nodePool.Replicas) && existing.Status.Replicas < nodePool.Replicas-1 {
+				r.logger.Info(fmt.Sprintf("Detected recovery situation for nodepool %s: PVC count: %d, replicas: %d. Recreating STS with parallel mode", nodePool.Component, pvcCount, existing.Status.Replicas))
+				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
+					// Switch to Parallel to jumpstart the cluster
+					// First delete existing STS
+					if err := helpers.WaitForSTSDelete(r.ctx, r.Client, existing); err != nil {
+						r.logger.Error(err, "Failed to delete STS")
+						return result, err
+					}
+					// Recreate with PodManagementPolicy=Parallel
+					sts.Spec.PodManagementPolicy = appsv1.ParallelPodManagement
+					sts.ObjectMeta.ResourceVersion = ""
+					sts.ObjectMeta.UID = ""
+					result, err = r.ReconcileResource(sts, reconciler.StatePresent)
+					if err != nil {
+						r.logger.Error(err, "Failed to create STS")
+						return result, err
+					}
+					// Wait for pods to appear
+					err := helpers.WaitForSTSReplicas(r.ctx, r.Client, existing, nodePool.Replicas)
+					// Abort normal logic and requeue
+					return &ctrl.Result{Requeue: true}, err
+				}
+			} else if existing.Spec.PodManagementPolicy == appsv1.ParallelPodManagement {
+				// We are in Parallel mode but appear to not have a failure situation any longer. Switch back to normal mode
+				r.logger.Info(fmt.Sprintf("Ending recovery mode for nodepool %s", nodePool.Component))
+				if err := helpers.WaitForSTSDelete(r.ctx, r.Client, existing); err != nil {
+					r.logger.Error(err, "Failed to delete STS")
+					return result, err
+				}
+				// STS will be recreated by the normal code below
+			}
+		}
+	}
+
+	// Handle PVC resizing
 
 	//Default is PVC, or explicit check for PersistenceSource as PVC
 	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
 		existingDisk := existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
 		r.logger.Info("The existing statefulset VolumeClaimTemplate disk size is: " + existingDisk)
 		r.logger.Info("The cluster definition nodePool disk size is: " + nodePool.DiskSize)
+		if nodePool.DiskSize == "" { // Default case
+			nodePool.DiskSize = builders.DefaultDiskSize
+		}
 		if existingDisk == nodePool.DiskSize {
 			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
 		} else {
@@ -224,7 +342,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// as we don't want uncontrolled restarts while we're doing an upgrade
 	if r.instance.Status.Version != "" &&
 		r.instance.Status.Version != r.instance.Spec.General.Version &&
-		!helpers.ContainsString(nodePool.Roles, "data") {
+		!helpers.HasDataRole(&nodePool) {
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 

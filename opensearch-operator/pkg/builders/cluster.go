@@ -3,9 +3,10 @@ package builders
 import (
 	"context"
 	"fmt"
-	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"sort"
 	"strings"
+
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
@@ -23,10 +24,10 @@ import (
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
 const (
-	ClusterLabel                     = "opster.io/opensearch-cluster"
-	NodePoolLabel                    = "opster.io/opensearch-nodepool"
-	ConfigurationChecksumAnnotation  = "opster.io/config"
-	securityconfigChecksumAnnotation = "securityconfig/checksum"
+	ConfigurationChecksumAnnotation      = "opster.io/config"
+	DefaultDiskSize                      = "30Gi"
+	securityconfigChecksumAnnotation     = "securityconfig/checksum"
+	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
 )
 
 func NewSTSForNodePool(
@@ -41,7 +42,7 @@ func NewSTSForNodePool(
 	//To make sure disksize is not passed as empty
 	var disksize string
 	if len(node.DiskSize) == 0 {
-		disksize = "30Gi"
+		disksize = DefaultDiskSize
 	} else {
 		disksize = node.DiskSize
 	}
@@ -59,6 +60,7 @@ func NewSTSForNodePool(
 		"remote_cluster_client",
 		"transform",
 		"cluster_manager",
+		"search",
 	}
 	var selectedRoles []string
 	for _, role := range node.Roles {
@@ -91,6 +93,10 @@ func NewSTSForNodePool(
 					if node.Persistence == nil {
 						return nil
 					}
+					if node.Persistence.PVC.StorageClassName == "" {
+						return nil
+					}
+
 					return &node.Persistence.PVC.StorageClassName
 				}(),
 				VolumeMode: &mode,
@@ -122,15 +128,15 @@ func NewSTSForNodePool(
 	})
 
 	labels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: node.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: node.Component,
 	}
 	annotations := map[string]string{
 		ConfigurationChecksumAnnotation: configChecksum,
 	}
 	matchLabels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: node.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: node.Component,
 	}
 
 	if helpers.ContainsString(selectedRoles, "master") {
@@ -169,6 +175,12 @@ func NewSTSForNodePool(
 	} else {
 		jvm = node.Jvm
 	}
+
+	// If node role `search` defined add required experimental flag
+	if helpers.ContainsString(selectedRoles, "search") {
+		jvm += " -Dopensearch.experimental.feature.searchable_snapshot.enabled=true"
+	}
+
 	// Supress repeated log messages about a deprecated format for the publish address
 	jvm += " -Dopensearch.transport.cname_in_publish_address=true"
 
@@ -214,6 +226,7 @@ func NewSTSForNodePool(
 
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
+	resources := cr.Spec.InitHelper.Resources
 
 	startUpCommand := "./opensearch-docker-entrypoint.sh"
 	// If a custom command is specified, use it.
@@ -222,11 +235,16 @@ func NewSTSForNodePool(
 	}
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
 
-	initContainers := []corev1.Container{
-		{
+	podSecurityContext := cr.Spec.General.PodSecurityContext
+	securityContext := cr.Spec.General.SecurityContext
+
+	var initContainers []corev1.Container
+	if !helpers.SkipInitContainer() {
+		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       resources,
 			Command:         []string{"sh", "-c"},
 			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 			SecurityContext: &corev1.SecurityContext{
@@ -238,7 +256,7 @@ func NewSTSForNodePool(
 					MountPath: "/usr/share/opensearch/data",
 				},
 			},
-		},
+		})
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
@@ -339,16 +357,9 @@ func NewSTSForNodePool(
 				MatchLabels: matchLabels,
 			},
 			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
-			UpdateStrategy: func() appsv1.StatefulSetUpdateStrategy {
-				if helpers.ContainsString(selectedRoles, "data") {
-					return appsv1.StatefulSetUpdateStrategy{
-						Type: appsv1.OnDeleteStatefulSetStrategyType,
-					}
-				}
-				return appsv1.StatefulSetUpdateStrategy{
-					Type: appsv1.RollingUpdateStatefulSetStrategyType,
-				}
-			}(),
+			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.OnDeleteStatefulSetStrategyType,
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
@@ -407,10 +418,11 @@ func NewSTSForNodePool(
 									ContainerPort: 9300,
 								},
 							},
-							StartupProbe:   &probe,
-							LivenessProbe:  &probe,
-							ReadinessProbe: &readinessProbe,
-							VolumeMounts:   volumeMounts,
+							StartupProbe:    &probe,
+							LivenessProbe:   &probe,
+							ReadinessProbe:  &readinessProbe,
+							VolumeMounts:    volumeMounts,
+							SecurityContext: securityContext,
 						},
 					},
 					InitContainers:            initContainers,
@@ -422,6 +434,7 @@ func NewSTSForNodePool(
 					TopologySpreadConstraints: node.TopologySpreadConstraints,
 					ImagePullSecrets:          image.ImagePullSecrets,
 					PriorityClassName:         node.PriorityClassName,
+					SecurityContext:           podSecurityContext,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -471,8 +484,8 @@ func NewSTSForNodePool(
 }
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: nodePool.Component,
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: nodePool.Component,
 	}
 
 	return &corev1.Service{
@@ -515,7 +528,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -574,7 +587,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -604,7 +617,7 @@ func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
 func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 
 	return &corev1.Service{
@@ -640,7 +653,7 @@ func NewBootstrapPod(
 	volumeMounts []corev1.VolumeMount,
 ) *corev1.Pod {
 	labels := map[string]string{
-		ClusterLabel: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 	resources := cr.Spec.Bootstrap.Resources
 
@@ -675,6 +688,9 @@ func NewBootstrapPod(
 		Name:      "data",
 		MountPath: "/usr/share/opensearch/data",
 	})
+
+	podSecurityContext := cr.Spec.General.PodSecurityContext
+	securityContext := cr.Spec.General.SecurityContext
 
 	env := []corev1.EnvVar{
 		{
@@ -730,6 +746,26 @@ func NewBootstrapPod(
 		})
 	}
 
+	var initContainers []corev1.Container
+	if !helpers.SkipInitContainer() {
+		initContainers = append(initContainers, corev1.Container{
+			Name:            "init",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Command:         []string{"sh", "-c"},
+			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			SecurityContext: &corev1.SecurityContext{
+				RunAsUser: pointer.Int64(0),
+			},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "data",
+					MountPath: "/usr/share/opensearch/data",
+				},
+			},
+		})
+	}
+
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      BootstrapPodName(cr),
@@ -754,35 +790,20 @@ func NewBootstrapPod(
 							ContainerPort: 9300,
 						},
 					},
-					StartupProbe:  &probe,
-					LivenessProbe: &probe,
-					VolumeMounts:  volumeMounts,
+					StartupProbe:    &probe,
+					LivenessProbe:   &probe,
+					VolumeMounts:    volumeMounts,
+					SecurityContext: securityContext,
 				},
 			},
-			InitContainers: []corev1.Container{
-				{
-					Name:            "init",
-					Image:           initHelperImage.GetImage(),
-					ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
-					Command:         []string{"sh", "-c"},
-					Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
-					SecurityContext: &corev1.SecurityContext{
-						RunAsUser: pointer.Int64(0),
-					},
-					VolumeMounts: []corev1.VolumeMount{
-						{
-							Name:      "data",
-							MountPath: "/usr/share/opensearch/data",
-						},
-					},
-				},
-			},
+			InitContainers:     initContainers,
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,
 			Tolerations:        cr.Spec.Bootstrap.Tolerations,
 			Affinity:           cr.Spec.Bootstrap.Affinity,
 			ImagePullSecrets:   image.ImagePullSecrets,
+			SecurityContext:    podSecurityContext,
 		},
 	}
 
@@ -858,11 +879,83 @@ func WorkingPodForRollingRestart(sts *appsv1.StatefulSet) string {
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
 	for _, nodepool := range nodepools {
-		if sts.Labels[NodePoolLabel] == nodepool.Component {
+		if sts.Labels[helpers.NodePoolLabel] == nodepool.Component {
 			return true
 		}
 	}
 	return false
+}
+
+func NewSnapshotRepoconfigUpdateJob(
+	instance *opsterv1.OpenSearchCluster,
+	jobName string,
+	namespace string,
+	checksum string,
+	volumes []corev1.Volume,
+	volumeMounts []corev1.VolumeMount,
+) batchv1.Job {
+	httpPort, _ := helpers.VersionCheck(instance)
+	dns := DnsOfService(instance)
+	var snapshotCmd string
+	for _, repository := range instance.Spec.General.SnapshotRepositories {
+		var snapshotSettings string
+
+		// Sort keys to have a stable order
+		keys := make([]string, 0, len(repository.Settings))
+		for key := range repository.Settings {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		for _, settingsKey := range keys {
+			snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, repository.Settings[settingsKey])
+		}
+		snapshotSettings = strings.TrimRight(snapshotSettings, " ,")
+		snapshotCmd += fmt.Sprintf("curl --fail-with-body -s -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://%s.svc.cluster.local:%v/_snapshot/%s?pretty -H \"Content-Type: application/json\" -d %c{\"type\": \"%s\", \"settings\": {%s}}%c; ", dns, fmt.Sprint(httpPort), repository.Name, '\'', repository.Type, snapshotSettings, '\'')
+	}
+	terminationGracePeriodSeconds := int64(5)
+	backoffLimit := int32(0)
+
+	node := opsterv1.NodePool{
+		Component: "snapshotconfig",
+	}
+	annotations := map[string]string{
+		snapshotRepoConfigChecksumAnnotation: checksum,
+	}
+	image := helpers.ResolveImage(instance, &node)
+
+	volumes = append(volumes, corev1.Volume{
+		Name: "admin-credentials",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{SecretName: fmt.Sprintf("%s-admin-password", instance.Name)},
+		},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "admin-credentials",
+		MountPath: "/mnt/admin-credentials",
+	})
+	return batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
+		Spec: batchv1.JobSpec{
+			BackoffLimit: &backoffLimit,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{Name: jobName},
+				Spec: corev1.PodSpec{
+					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+					Containers: []corev1.Container{{
+						Name:            "snapshotrepoconfig",
+						Image:           image.GetImage(),
+						ImagePullPolicy: image.GetImagePullPolicy(),
+						Command:         []string{"/bin/bash", "-c"},
+						Args:            []string{snapshotCmd},
+						VolumeMounts:    volumeMounts,
+					}},
+					RestartPolicy: corev1.RestartPolicyNever,
+					Volumes:       volumes,
+				},
+			},
+		},
+	}
 }
 
 func NewSecurityconfigUpdateJob(
@@ -960,7 +1053,7 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) int32 {
 	count := int32(0)
 	for _, nodePool := range cr.Spec.NodePools {
-		if helpers.ContainsString(nodePool.Roles, "data") {
+		if helpers.HasDataRole(&nodePool) {
 			sts := &appsv1.StatefulSet{}
 			if err := k8sClient.Get(ctx, types.NamespacedName{
 				Name:      StsName(cr, &nodePool),
@@ -976,7 +1069,7 @@ func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.O
 func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
 
 	labels := map[string]string{
-		helpers.ClusterLabels: cr.Name,
+		helpers.ClusterLabel: cr.Name,
 	}
 	selector := metav1.LabelSelector{
 		MatchLabels: labels,
@@ -1021,10 +1114,10 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		Spec: monitoring.ServiceMonitorSpec{
 			JobLabel: cr.Name + "-monitor",
 			TargetLabels: []string{
-				helpers.ClusterLabels,
+				helpers.ClusterLabel,
 			},
 			PodTargetLabels: []string{
-				helpers.ClusterLabels,
+				helpers.ClusterLabel,
 			},
 			Endpoints: []monitoring.Endpoint{
 				{Port: string(cr.Spec.General.HttpPort),

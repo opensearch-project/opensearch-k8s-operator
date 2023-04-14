@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/banzaicloud/k8s-objectmatcher v1.8.0
-	github.com/banzaicloud/operator-tools v0.28.8
+	github.com/banzaicloud/operator-tools v0.28.10
 	github.com/go-logr/logr v1.2.3
 	github.com/hashicorp/go-version v1.6.0
 	github.com/jarcoal/httpmock v1.2.0

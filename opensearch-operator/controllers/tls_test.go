@@ -12,7 +12,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
@@ -49,9 +48,10 @@ var _ = Describe("TLS Reconciler", func() {
 				}},
 				NodePools: []opsterv1.NodePool{
 					{
-						Component: "masters",
-						Replicas:  3,
-						Roles:     []string{"master", "data"},
+						Component:   "masters",
+						Replicas:    3,
+						Roles:       []string{"master", "data"},
+						Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 					},
 				},
 			}}
@@ -103,7 +103,7 @@ var _ = Describe("TLS Reconciler", func() {
 			Expect(k8sClient.List(
 				context.Background(),
 				podList,
-				client.MatchingLabels{builders.ClusterLabel: spec.Name},
+				client.MatchingLabels{helpers.ClusterLabel: spec.Name},
 				client.InNamespace(spec.Namespace),
 			)).To(Succeed())
 			Expect(len(podList.Items)).To(BeNumerically(">", 0))

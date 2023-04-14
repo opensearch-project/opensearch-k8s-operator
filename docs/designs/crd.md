@@ -203,6 +203,24 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>List of plugins that should be installed for OpenSearch at startup.</td>
         <td>false</td>
         <td> [] </td>
+      </tr><tr>
+        <td><b>podSecurityContext</b></td>
+        <td>*corev1.PodSecurityContext</td>
+        <td>Set the security context for the cluster pods.</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>securityContext</b></td>
+        <td>*corev1.SecurityContext</td>
+        <td>Set the security context for the cluster pods' containers.</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>snapshotRepositories</b></td>
+        <td>[]SnapshotRepoConfig</td>
+        <td>Snapshot Repo settings</td>
+        <td>false</td>
+        <td> - </td>
       </tr>
 </table>
 
@@ -385,6 +403,18 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>List of plugins that should be installed for OpenSearch Dashboards at startup.</td>
         <td>false</td>
         <td> [] </td>
+      </tr><tr>
+        <td><b>podSecurityContext</b></td>
+        <td>*corev1.PodSecurityContext</td>
+        <td>Set the security context for the dashboards pods.</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>securityContext</b></td>
+        <td>*corev1.SecurityContext</td>
+        <td>Set the security context for the dashboards pods' containers.</td>
+        <td>false</td>
+        <td> - </td>
       </tr>
     </tr><tr>
 </table>
@@ -526,12 +556,18 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
         <td>false</td>
         <td> - </td>
       </tr><tr>
+        <td><b>resources</b></td>
+        <td>corev1.ResourceRequirements</td>
+        <td>Define initcontainer resorces</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
         <td><b>version</b></td>
         <td>string</td>
         <td>Version of InitHelper (busybox) image to deploy</td>
         <td>false</td>
-        <td>1.27.2-buildx</td>
-       </tr>
+        <td>1.27.2-buildx</td>       
+      </tr> 
 </table>
 
 <h3 id="GeneralConfig">
@@ -539,7 +575,6 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
 </h3>
 
 Monitoring defines Opensearch monitoring configuration
-
 
 <table>
     <thead>
@@ -585,43 +620,6 @@ Monitoring defines Opensearch monitoring configuration
 </h3>
 
 Every Keystore Value defines a secret to pull secrets from. 
-<table>
-    <thead>
-        <tr>
-            <th>Name</th>
-            <th>Type</th>
-            <th>Description</th>
-            <th>Required</th>
-            <th>default</th>
-        </tr>
-    </thead>
-    <tbody><tr>
-        <td><b>enable</b></td>
-        <td>bool</td>
-        <td>Define if to enable monitoring for that cluster</td>
-        <td>true</td>
-        <td>-</td>
-      </tr><tr>
-        <td><b>monitoringUserSecret</b></td>
-        <td>[]string</td>
-        <td>Define from which user the monitor will run (Getting Secret name, the secret should contain 'username':'password' fileds).</td>
-        <td>false</td>
-        <td>admin</td>
-      </tr><tr>
-        <td><b>ScrapeInterval</b></td>
-        <td>string</td>
-        <td>Define interval for scraping</td>
-        <td>false</td>
-        <td>30s</td>
-      </tr><tr>
-      </tr><tr>
-        <td><b>PluginURL</b></td>
-        <td>string</td>
-        <td>Define offline link to Aiven Plugin</td>
-        <td>false</td>
-        <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
-      </tr><tr>
-</table>
 <table>
     <tbody>
       <tr>
