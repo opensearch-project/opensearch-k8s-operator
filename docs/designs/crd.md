@@ -97,6 +97,11 @@ ClusterSpec defines the desired state of OpensearchCluster
         <td>List of objects that define the different nodePools in an OpensearchCluster. Each nodePool represents a group of nodes with the same opensearch roles and resources. Each nodePool is deployed as a Kubernetes StatefulSet. Together they form the opensearch cluster.</td>
         <td>true</td>
       </tr><tr>
+        <td><b>monitoring</b></td>
+        <td>object</td>
+        <td>monitoring configuration in an OpensearchCluster</td>
+        <td>false</td>
+      </tr><tr>
         <td><b>initHelper</b></td>
         <td>object</td>
         <td>InitHelper image configuration</td>
@@ -566,10 +571,10 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
 </table>
 
 <h3 id="GeneralConfig">
-  Keystore
+  Monitoring
 </h3>
 
-Every Keystore Value defines a secret to pull secrets from. 
+Monitoring defines Opensearch monitoring configuration
 
 <table>
     <thead>
@@ -581,6 +586,41 @@ Every Keystore Value defines a secret to pull secrets from.
             <th>default</th>
         </tr>
     </thead>
+    <tbody><tr>
+        <td><b>enable</b></td>
+        <td>bool</td>
+        <td>Define if to enable monitoring for that cluster</td>
+        <td>true</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>monitoringUserSecret</b></td>
+        <td>[]string</td>
+        <td>Define from which user the monitor will run (Getting Secret name, the secret should contain 'username':'password' fileds).</td>
+        <td>false</td>
+        <td>admin</td>
+      </tr><tr>
+        <td><b>ScrapeInterval</b></td>
+        <td>string</td>
+        <td>Define interval for scraping</td>
+        <td>false</td>
+        <td>30s</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>PluginURL</b></td>
+        <td>string</td>
+        <td>Define offline link to Aiven Plugin</td>
+        <td>false</td>
+        <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
+      </tr><tr>
+</table>
+
+
+<h3 id="GeneralConfig">
+  Keystore
+</h3>
+
+Every Keystore Value defines a secret to pull secrets from. 
+<table>
     <tbody>
       <tr>
         <td><b>secret</b></td>
@@ -596,4 +636,5 @@ Every Keystore Value defines a secret to pull secrets from.
         <td>false</td>
         <td>-</td>
       </tr>
+    </tbody>
 </table>

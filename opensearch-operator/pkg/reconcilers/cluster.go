@@ -72,6 +72,15 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	if r.instance.Spec.General.Monitoring.Enable {
+		serviceMonitor := builders.NewServiceMonitor(r.instance)
+		result.CombineErr(ctrl.SetControllerReference(r.instance, serviceMonitor, r.Client.Scheme()))
+		result.Combine(r.ReconcileResource(serviceMonitor, reconciler.StatePresent))
+
+	} else {
+		serviceMonitor := builders.NewServiceMonitor(r.instance)
+		result.Combine(r.ReconcileResource(serviceMonitor, reconciler.StateAbsent))
+	}
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(clusterService, reconciler.StatePresent))

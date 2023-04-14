@@ -6,6 +6,8 @@ import (
 	"sort"
 	"strings"
 
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -322,7 +324,6 @@ func NewSTSForNodePool(
 				set -euo pipefail
 	  
 				/usr/share/opensearch/bin/opensearch-keystore create
-
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
@@ -525,6 +526,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 }
 
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -897,8 +899,16 @@ func NewSnapshotRepoconfigUpdateJob(
 	var snapshotCmd string
 	for _, repository := range instance.Spec.General.SnapshotRepositories {
 		var snapshotSettings string
-		for settingsKey, settingsValue := range repository.Settings {
-			snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, settingsValue)
+
+		// Sort keys to have a stable order
+		keys := make([]string, 0, len(repository.Settings))
+		for key := range repository.Settings {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+
+		for _, settingsKey := range keys {
+			snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, repository.Settings[settingsKey])
 		}
 		snapshotSettings = strings.TrimRight(snapshotSettings, " ,")
 		snapshotCmd += fmt.Sprintf("curl --fail-with-body -s -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://%s.svc.cluster.local:%v/_snapshot/%s?pretty -H \"Content-Type: application/json\" -d %c{\"type\": \"%s\", \"settings\": {%s}}%c; ", dns, fmt.Sprint(httpPort), repository.Name, '\'', repository.Type, snapshotSettings, '\'')
@@ -1054,4 +1064,74 @@ func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.O
 		}
 	}
 	return count
+}
+
+func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
+
+	labels := map[string]string{
+		helpers.ClusterLabel: cr.Name,
+	}
+	selector := metav1.LabelSelector{
+		MatchLabels: labels,
+	}
+
+	namespaceSelector := monitoring.NamespaceSelector{
+		Any:        false,
+		MatchNames: []string{cr.Namespace},
+	}
+
+	if cr.Spec.General.Monitoring.ScrapeInterval == "" {
+		cr.Spec.General.Monitoring.ScrapeInterval = "30s"
+	}
+	user := monitoring.BasicAuth{}
+
+	monitorUser := cr.Spec.General.Monitoring.MonitoringUserSecret
+	var basicAuthSecret string
+	if monitorUser == "" {
+		basicAuthSecret = cr.Name + "-admin-password"
+		// Use admin credentials if no separate monitoring user was defined
+	} else {
+		basicAuthSecret = cr.Spec.General.Monitoring.MonitoringUserSecret
+	}
+
+	user = monitoring.BasicAuth{
+		Username: corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: basicAuthSecret},
+			Key:                  "username",
+		},
+		Password: corev1.SecretKeySelector{
+			LocalObjectReference: corev1.LocalObjectReference{Name: basicAuthSecret},
+			Key:                  "password",
+		},
+	}
+
+	return &monitoring.ServiceMonitor{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name + "-monitor",
+			Namespace: cr.Namespace,
+			Labels:    labels,
+		},
+		Spec: monitoring.ServiceMonitorSpec{
+			JobLabel: cr.Name + "-monitor",
+			TargetLabels: []string{
+				helpers.ClusterLabel,
+			},
+			PodTargetLabels: []string{
+				helpers.ClusterLabel,
+			},
+			Endpoints: []monitoring.Endpoint{
+				{Port: string(cr.Spec.General.HttpPort),
+					TargetPort:      nil,
+					Path:            "/_prometheus/metrics",
+					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapeInterval),
+					TLSConfig:       nil,
+					BearerTokenFile: "",
+					HonorLabels:     false,
+					BasicAuth:       &user,
+				},
+			},
+			Selector:          selector,
+			NamespaceSelector: namespaceSelector,
+		},
+	}
 }

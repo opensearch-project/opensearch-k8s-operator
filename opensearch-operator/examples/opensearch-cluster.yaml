@@ -5,13 +5,15 @@ metadata:
   namespace: default
 spec:
   general:
-    version: 1.3.0
+    version: "1.3.0"
     httpPort: 9200
     vendor: opensearch
     serviceName: my-cluster
-    pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
+    monitoring:
+     enable: true
+    pluginsList: ["repository-s3"]
   dashboards:
-    version: 1.3.0
+    version: "1.3.0"
     enable: true
     replicas: 2
     resources:

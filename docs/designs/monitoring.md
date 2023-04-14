@@ -154,3 +154,16 @@ The [opensearch-prometheus-exporter](https://github.com/aparo/opensearch-prometh
 - [ ] Prometheus-operator integration
 - [ ] Grafana dashboards development
 - [ ] Grafana permissions testing
+
+
+## Progress 
+
+I choose to integrate with Aiven prometheus-exporter-plugin-for-opensearch (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch). 
+
+For working with that Operator monitoring feature the client must have Prometheus cluster already installed .
+
+I added new boolean filed in general section that called "monitoring", if that filed is set to true the Aiven exporter will be added to PluginList and will be installed on the cluster.
+Besides, a new ServiceMonitor will appear in the OS cluster namespace, that ServiceMonitor is configured to fetch metrics from the OS cluster by his selectors, by port 9200 from "/_prometheus/metrics" path. 
+Aivan also added the option to configure that plugin inside "config/opensearch.yml" file, an option to add those configurations with the operator will be added soon.
+
+* Please let me  know if you familiar with any OpenSearch Grafana dashboard, Aiven suppose to release a Grafana Dashboard in the future (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/issues/12).

@@ -48,6 +48,7 @@ type GeneralConfig struct {
 	Command        string   `json:"command,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
+	Monitoring        MonitoringConfig   `json:"monitoring,omitempty"`
 	// Populate opensearch keystore before startup
 	Keystore             []KeystoreValue      `json:"keystore,omitempty"`
 	SnapshotRepositories []SnapshotRepoConfig `json:"snapshotRepositories,omitempty"`
@@ -101,9 +102,15 @@ type PVCSource struct {
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
 	AutoScaler  bool `json:"autoScaler,omitempty"`
-	Monitoring  bool `json:"monitoring,omitempty"`
 	VerUpdate   bool `json:"VerUpdate,omitempty"`
 	SmartScaler bool `json:"smartScaler,omitempty"`
+}
+
+type MonitoringConfig struct {
+	Enable               bool   `json:"enable,omitempty"`
+	MonitoringUserSecret string `json:"monitoringUserSecret,omitempty"`
+	ScrapeInterval       string `json:"scrapeInterval,omitempty"`
+	PluginURL            string `json:"pluginUrl,omitempty"`
 }
 
 type BootstrapConfig struct {

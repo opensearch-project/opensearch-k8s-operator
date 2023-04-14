@@ -226,7 +226,7 @@ var _ = Describe("roles reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingRole = pointer.BoolPtr(true)
+				instance.Status.ExistingRole = pointer.Bool(true)
 			})
 
 			It("should do nothing", func() {
@@ -314,7 +314,7 @@ var _ = Describe("roles reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingRole = pointer.BoolPtr(true)
+				instance.Status.ExistingRole = pointer.Bool(true)
 			})
 			It("should do nothing", func() {
 				_, err := reconciler.Reconcile()
@@ -324,7 +324,7 @@ var _ = Describe("roles reconciler", func() {
 
 		When("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingRole = pointer.BoolPtr(false)
+				instance.Status.ExistingRole = pointer.Bool(false)
 			})
 
 			When("role exists in opensearch and is the same", func() {
@@ -476,7 +476,7 @@ var _ = Describe("roles reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingRole = pointer.BoolPtr(true)
+				instance.Status.ExistingRole = pointer.Bool(true)
 			})
 			It("should do nothing and exit", func() {
 				Expect(reconciler.Delete()).To(Succeed())
@@ -485,7 +485,7 @@ var _ = Describe("roles reconciler", func() {
 
 		Context("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingRole = pointer.BoolPtr(false)
+				instance.Status.ExistingRole = pointer.Bool(false)
 			})
 
 			When("cluster does not exist", func() {
