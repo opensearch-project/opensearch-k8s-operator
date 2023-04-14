@@ -344,7 +344,7 @@ var _ = Describe("actiongroup reconciler", func() {
 						AllowedActions: []string{
 							"test_cluster_permission",
 						},
-						Type:        "test",
+						Type:        "some other test",
 						Description: "test-description",
 					}
 					transport.RegisterResponder(
