@@ -995,8 +995,6 @@ spec:
                     type: boolean
                   autoScaler:
                     type: boolean
-                  monitoring:
-                    type: boolean
                   smartScaler:
                     type: boolean
                 type: object
@@ -2868,6 +2866,17 @@ spec:
                           x-kubernetes-map-type: atomic
                       type: object
                     type: array
+                  monitoring:
+                    properties:
+                      enable:
+                        type: boolean
+                      monitoringUserSecret:
+                        type: string
+                      pluginUrl:
+                        type: string
+                      scrapeInterval:
+                        type: string
+                    type: object
                   pluginsList:
                     items:
                       type: string
