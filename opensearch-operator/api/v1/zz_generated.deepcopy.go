@@ -675,7 +675,7 @@ func (in *OpensearchActionGroupList) DeepCopyInto(out *OpensearchActionGroupList
 	in.ListMeta.DeepCopyInto(&out.ListMeta)
 	if in.Items != nil {
 		in, out := &in.Items, &out.Items
-		*out = make([]OpensearchUser, len(*in))
+		*out = make([]OpensearchActionGroup, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
