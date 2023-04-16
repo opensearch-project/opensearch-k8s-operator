@@ -182,17 +182,15 @@ func NewSTSForNodePool(
 
 	var jvm string
 	if node.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
 		// Get the node memory limit
 		memoryLimit := node.Resources.Limits.Memory()
 		memString := memoryLimit.String()
-		re := regexp.MustCompile("[0-9]+")
+		re := regexp.MustCompile("[0-9]")
 		numberString := re.FindString(memString)
 		memInt, _ := strconv.Atoi(numberString)
 
 		// Define regular expressions to check resource unit
 		reG := regexp.MustCompile(`G`)
-
 		// Convert Gb to Mb
 		if reG.MatchString(memString) {
 			memInt = memInt * 1024
