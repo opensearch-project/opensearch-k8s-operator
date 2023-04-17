@@ -2884,8 +2884,6 @@ spec:
                             type: boolean
                           serverName:
                             type: string
-                        required:
-                        - insecureSkipVerify
                         type: object
                     type: object
                   pluginsList:
