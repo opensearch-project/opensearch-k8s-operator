@@ -1044,4 +1044,7 @@ spec:
       interval: 30s
       monitoringUserSecret: appUserSecret
       pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip
+      tlsConfig:
+        serverName: "testserver"
+        insecureSkipVerify: true
 ```

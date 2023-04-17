@@ -619,6 +619,13 @@ Monitoring defines Opensearch monitoring configuration
         <td>false</td>
         <td>https</td>
       </tr><tr>
+      </tr><tr>
+        <td><b>tlsConfig</b></td>
+        <td>map[string]string</td>
+        <td>Tls Configuration</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
 </table>
 
 
