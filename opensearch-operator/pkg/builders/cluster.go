@@ -43,7 +43,6 @@ func NewSTSForNodePool(
 	var disksize string
 	if len(node.DiskSize) == 0 {
 		disksize = DefaultDiskSize
-
 	} else {
 		disksize = node.DiskSize
 	}
