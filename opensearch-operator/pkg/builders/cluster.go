@@ -165,7 +165,7 @@ func NewSTSForNodePool(
 		//vendor ="elasticsearch"
 	}
 
-	isDataNode := helpers.CheckRoles(selectedRoles)
+	isDataNode := helpers.CheckDataRoles(selectedRoles)
 
 	var jvm string
 	if node.Jvm == "" {

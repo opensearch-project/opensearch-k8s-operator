@@ -245,16 +245,18 @@ func HasManagerRole(nodePool *opsterv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
 }
 
-func CheckRoles(selectedRoles []string) bool {
+func CheckDataRoles(selectedRoles []string) bool {
 	exRoles := []string{
-		"master",
-		"remote_cluster_client",
-		"transform",
-		"cluster_manager",
+		"data",
+		"data_content",
+		"data_hot",
+		"data_warm",
+		"data_cold",
+		"data_frozen",
 	}
 
 	for _, role := range exRoles {
-		if !ContainsString(selectedRoles, role) {
+		if ContainsString(selectedRoles, role) {
 			return true
 		}
 	}
