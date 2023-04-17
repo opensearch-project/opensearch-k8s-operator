@@ -233,7 +233,20 @@ func NewSTSForNodePool(
 	if len(cr.Spec.General.Command) > 0 {
 		startUpCommand = cr.Spec.General.Command
 	}
-	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
+
+	var pluginslist []string
+	if cr.Spec.General.Monitoring.Enable {
+		if cr.Spec.General.Monitoring.PluginURL == "" {
+			pluginslist = append(pluginslist, fmt.Sprintf("https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip", cr.Spec.General.Version, cr.Spec.General.Version))
+		}
+		if cr.Spec.General.Monitoring.PluginURL != "" {
+			pluginslist = append(pluginslist, cr.Spec.General.Monitoring.PluginURL)
+		}
+	}
+
+	pluginslist = helpers.RemoveDuplicateStrings(append(pluginslist, cr.Spec.General.PluginsList...))
+
+	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
 
 	podSecurityContext := cr.Spec.General.PodSecurityContext
 	securityContext := cr.Spec.General.SecurityContext
@@ -1105,6 +1118,19 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		},
 	}
 
+	if cr.Spec.General.Monitoring.Scheme == "" {
+		cr.Spec.General.Monitoring.Scheme = "https"
+	}
+
+	safetlsconfig := monitoring.SafeTLSConfig{
+		ServerName:         cr.Spec.General.Monitoring.TLSConfig.ServerName,
+		InsecureSkipVerify: cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify,
+	}
+
+	tlsconfig := monitoring.TLSConfig{
+		SafeTLSConfig: safetlsconfig,
+	}
+
 	return &monitoring.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-monitor",
@@ -1120,18 +1146,20 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 				helpers.ClusterLabel,
 			},
 			Endpoints: []monitoring.Endpoint{
-				{Port: string(cr.Spec.General.HttpPort),
+				{Port: "http",
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
 					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapeInterval),
-					TLSConfig:       nil,
+					TLSConfig:       &tlsconfig,
 					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth:       &user,
+					Scheme:          string(cr.Spec.General.Monitoring.Scheme),
 				},
 			},
 			Selector:          selector,
 			NamespaceSelector: namespaceSelector,
 		},
 	}
+
 }

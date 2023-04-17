@@ -107,10 +107,17 @@ type ConfMgmt struct {
 }
 
 type MonitoringConfig struct {
-	Enable               bool   `json:"enable,omitempty"`
-	MonitoringUserSecret string `json:"monitoringUserSecret,omitempty"`
-	ScrapeInterval       string `json:"scrapeInterval,omitempty"`
-	PluginURL            string `json:"pluginUrl,omitempty"`
+	Enable               bool                 `json:"enable,omitempty"`
+	MonitoringUserSecret string               `json:"monitoringUserSecret,omitempty"`
+	ScrapeInterval       string               `json:"scrapeInterval,omitempty"`
+	PluginURL            string               `json:"pluginUrl,omitempty"`
+	Scheme               string               `json:"scheme,omitempty"`
+	TLSConfig            *MonitoringConfigTLS `json:"tlsConfig,omitempty"`
+}
+
+type MonitoringConfigTLS struct {
+	ServerName         string `json:"serverName,omitempty"`
+	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
 }
 
 type BootstrapConfig struct {
