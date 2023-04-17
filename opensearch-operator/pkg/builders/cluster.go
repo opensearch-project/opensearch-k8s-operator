@@ -43,6 +43,7 @@ func NewSTSForNodePool(
 	var disksize string
 	if len(node.DiskSize) == 0 {
 		disksize = DefaultDiskSize
+
 	} else {
 		disksize = node.DiskSize
 	}
@@ -165,20 +166,7 @@ func NewSTSForNodePool(
 		//vendor ="elasticsearch"
 	}
 
-	var isdatanode bool
-	exRoles := []string{
-		"master",
-		"remote_cluster_client",
-		"transform",
-		"cluster_manager",
-	}
-
-	for _, role := range exRoles {
-		isdatanode = !helpers.ContainsString(selectedRoles, role)
-		if isdatanode {
-			break
-		}
-	}
+	isDataNode := helpers.CheckRoles(selectedRoles)
 
 	var jvm string
 	if node.Jvm == "" {
@@ -197,14 +185,17 @@ func NewSTSForNodePool(
 		}
 
 		// Calculate jvm memory limit by cluster role
-		if !isdatanode {
-			newMemory := int(math.Round(float64(memInt) * 0.9))
-			newMemoryStr := strconv.Itoa(newMemory) + "M"
-			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
-		} else {
+		if isDataNode {
 			newMemory := int(math.Round(float64(memInt) * 0.5))
 			newMemoryStr := strconv.Itoa(newMemory) + "M"
 			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
+		} else {
+			newMemory := int(math.Round(float64(memInt) * 0.9))
+			newMemoryStr := strconv.Itoa(newMemory) + "M"
+			jvm = "-Xmx" + newMemoryStr + " -Xms" + newMemoryStr
+		}
+		if memInt == 0 {
+			jvm = "-Xmx512M -Xms512M"
 		}
 	} else {
 		jvm = node.Jvm
