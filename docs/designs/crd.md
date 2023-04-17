@@ -621,11 +621,36 @@ Monitoring defines Opensearch monitoring configuration
       </tr><tr>
       </tr><tr>
         <td><b>tlsConfig</b></td>
-        <td>map[string]string</td>
+        <td>map[]</td>
         <td>Tls Configuration</td>
         <td>false</td>
         <td> - </td>
-      </tr><tr>
+        <table>
+          <thead>
+              <tr>
+                  <th>tlsConfig Settings</th>
+                  <th>Type</th>
+                  <th>Description</th>
+                  <th>Required</th>
+                  <th>default</th>
+              </tr>
+          </thead>
+          <tbody><tr>
+            <td><b>serverName</b></td>
+            <td>string</td>
+            <td>Used to verify the hostname for the targets</td>
+            <td>false</td>
+            <td></td>
+            </tr><tr>
+            <td><b>insecureSkipVerify</b></td>
+            <td>bool</td>
+            <td>Disable target certificate validation</td>
+            <td>false</td>
+            <td>false</td>
+            </tr><tr>
+          </tbody>
+        </table>
+     </tr><tr>
 </table>
 
 
