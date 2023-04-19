@@ -1,5 +1,5 @@
 package requests
 
 type Tenant struct {
-	Description string `json:"description,omitempty"`
+	Description string `json:"description"`
 }
