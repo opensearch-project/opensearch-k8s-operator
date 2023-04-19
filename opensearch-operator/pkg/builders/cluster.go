@@ -934,6 +934,10 @@ func NewSnapshotRepoconfigUpdateJob(
 		Name:      "admin-credentials",
 		MountPath: "/mnt/admin-credentials",
 	})
+
+	podSecurityContext := instance.Spec.General.PodSecurityContext
+	securityContext := instance.Spec.General.SecurityContext
+
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
 		Spec: batchv1.JobSpec{
@@ -949,9 +953,11 @@ func NewSnapshotRepoconfigUpdateJob(
 						Command:         []string{"/bin/bash", "-c"},
 						Args:            []string{snapshotCmd},
 						VolumeMounts:    volumeMounts,
+						SecurityContext: securityContext,
 					}},
-					RestartPolicy: corev1.RestartPolicyNever,
-					Volumes:       volumes,
+					RestartPolicy:   corev1.RestartPolicyNever,
+					Volumes:         volumes,
+					SecurityContext: podSecurityContext,
 				},
 			},
 		},
