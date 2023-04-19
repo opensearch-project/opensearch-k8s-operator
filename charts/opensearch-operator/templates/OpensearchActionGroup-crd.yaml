@@ -57,6 +57,7 @@ spec:
               type:
                 type: string
             required:
+            - allowedActions
             - opensearchCluster
             type: object
           status:
