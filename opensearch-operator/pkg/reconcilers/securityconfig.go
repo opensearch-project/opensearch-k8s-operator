@@ -25,7 +25,43 @@ import (
 
 const (
 	checksumAnnotation = "securityconfig/checksum"
+
+	adminCert = "/certs/tls.crt"
+	adminKey  = "/certs/tls.key"
+	caCert    = "/certs/ca.crt"
+
+	SecurityAdminBaseCmdTmpl = `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
+chmod +x $ADMIN;
+until curl -k --silent https://%s:%v;
+do
+echo 'Waiting to connect to the cluster'; sleep 120;
+done;`
+
+	ApplyAllYmlCmdTmpl = `count=0;
+until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s. -p %v || (( count++ >= 20 ));
+do
+sleep 20;
+done;`
+
+	ApplySingleYmlCmdTmpl = `count=0;
+until $ADMIN -cacert %s -cert %s -key %s -f %s -t %s -icl -nhnv -h %s -p %v || (( count++ >= 20 ));
+do
+sleep 20;
+done;`
 )
+
+var ymlToFileType = map[string]string{
+	"internal_users.yml": "internalusers",
+	"roles.yml":          "roles",
+	"roles_mapping.yml":  "rolesmapping",
+	"action_groups.yml":  "actiongroups",
+	"tenants.yml":        "tenants",
+	"nodes_dn.yml":       "nodesdn",
+	"whitelist.yml":      "whitelist",
+	"audit.yml":          "audit",
+	"allowlist.yml":      "allowlist",
+	"config.yml":         "config",
+}
 
 type SecurityconfigReconciler struct {
 	reconciler.ResourceReconciler
@@ -63,17 +99,22 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+
 	var configSecretName string
 	var checksumval string
+	var cmdArg string
+
 	adminCertName := r.determineAdminSecret()
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
 	jobName := clusterName + "-securityconfig-update"
+
 	if adminCertName == "" {
 		r.logger.Info("Cluster is running with demo certificates.")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Notice - Cluster is running with demo certificates")
 		return ctrl.Result{}, nil
 	}
+
 	//Checking if Security Config values are empty and creates a default-securityconfig secret
 	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.SecurityconfigSecret.Name != "" {
 		//Use a user passed value of SecurityconfigSecret name
@@ -98,6 +139,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		if err := r.securityconfigSubpaths(r.instance, &configSecret); err != nil {
 			return ctrl.Result{}, err
 		}
+		cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
 	} else {
 		r.logger.Info("Not passed any SecurityconfigSecret")
 	}
@@ -124,23 +166,57 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 	}
+
+	// If securityconfig secret was not passed, build the command to apply all yml files
+	if len(cmdArg) == 0 {
+		clusterHostName := BuildHostName(r.instance)
+		httpPort, securityconfigPath := helpers.VersionCheck(r.instance)
+		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort) +
+			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, httpPort)
+	}
+
 	r.logger.Info("Starting securityconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting to securityconfig update job")
+
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,
 		jobName,
 		namespace,
 		checksumval,
 		adminCertName,
-		clusterName,
+		cmdArg,
 		r.reconcilerContext.Volumes,
 		r.reconcilerContext.VolumeMounts,
 	)
+
 	if err := ctrl.SetControllerReference(r.instance, &job, r.Client.Scheme()); err != nil {
 		return ctrl.Result{}, err
 	}
 	_, err := r.ReconcileResource(&job, reconciler.StateCreated)
 	return ctrl.Result{}, err
+}
+
+// BuildCmdArg builds the command for the securityconfig-update job for each individual ymls present in the
+// securityconfig secret. yml files which are not present in the secret are not applied/updated
+func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, log logr.Logger) string {
+	clusterHostName := BuildHostName(instance)
+	httpPort, securityconfigPath := helpers.VersionCheck(instance)
+
+	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort)
+
+	for k := range secret.Data {
+		filePath := fmt.Sprintf("%s/%s", securityconfigPath, k)
+		fileType, ok := ymlToFileType[k]
+		if !ok {
+			// If the yml file is invalid, do not return the error
+			// Just log it and build the commands for valid yml files
+			log.Error(fmt.Errorf("invalid yml file %s in securityconfig secret", k), fmt.Sprintf("skipping %s", k))
+			continue
+		}
+		arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, httpPort)
+	}
+
+	return arg
 }
 
 func checksum(data map[string][]byte) (string, error) {
@@ -204,4 +280,9 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.Ope
 	}
 
 	return nil
+}
+
+// BuildHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}
+func BuildHostName(instance *opsterv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s.svc.%s", builders.DnsOfService(instance), helpers.ClusterDnsBase())
 }
