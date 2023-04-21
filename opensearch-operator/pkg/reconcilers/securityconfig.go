@@ -38,7 +38,7 @@ echo 'Waiting to connect to the cluster'; sleep 120;
 done;`
 
 	ApplyAllYmlCmdTmpl = `count=0;
-until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s. -p %v || (( count++ >= 20 ));
+until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s -p %v || (( count++ >= 20 ));
 do
 sleep 20;
 done;`
@@ -204,7 +204,16 @@ func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, lo
 
 	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort)
 
+	// Get the list of yml files and sort them
+	// This will ensure commands are always generated in the same order
+	// Needed for tests as well to compare actual and expected command
+	keys := make([]string, 0, len(secret.Data))
 	for k := range secret.Data {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, k := range keys {
 		filePath := fmt.Sprintf("%s/%s", securityconfigPath, k)
 		fileType, ok := ymlToFileType[k]
 		if !ok {
