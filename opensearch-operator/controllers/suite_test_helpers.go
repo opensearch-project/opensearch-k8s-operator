@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -82,6 +83,15 @@ func HasOwnerReference(object client.Object, owner *opsterv1.OpenSearchCluster) 
 	return false
 }
 
+func ArrayElementContains(array []string, content string) bool {
+	for _, element := range array {
+		if strings.Contains(element, content) {
+			return true
+		}
+	}
+	return false
+}
+
 func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSearchCluster {
 
 	OpensearchCluster := &opsterv1.OpenSearchCluster{
@@ -95,10 +105,12 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 		},
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
+				Monitoring:  opsterv1.MonitoringConfig{Enable: true, ScrapeInterval: "35s"},
 				HttpPort:    9200,
 				Vendor:      "opensearch",
-				Version:     "1.0.0",
+				Version:     "2.0.0",
 				ServiceName: "es-svc",
+				PluginsList: []string{"http://foo-plugin-1.0.0"},
 				AdditionalConfig: map[string]string{
 					"foo": "bar",
 				},
@@ -125,7 +137,6 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			},
 			ConfMgmt: opsterv1.ConfMgmt{
 				AutoScaler:  false,
-				Monitoring:  false,
 				VerUpdate:   false,
 				SmartScaler: false,
 			},
@@ -145,6 +156,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			Dashboards: opsterv1.DashboardsConfig{
 				Enable:   true,
 				Replicas: 3,
+				Version:  "2.0.0",
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),

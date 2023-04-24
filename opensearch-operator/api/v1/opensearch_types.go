@@ -48,13 +48,20 @@ type GeneralConfig struct {
 	Command        string   `json:"command,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
+	Monitoring        MonitoringConfig   `json:"monitoring,omitempty"`
 	// Populate opensearch keystore before startup
-	Keystore []KeystoreValue `json:"keystore,omitempty"`
+	Keystore             []KeystoreValue      `json:"keystore,omitempty"`
+	SnapshotRepositories []SnapshotRepoConfig `json:"snapshotRepositories,omitempty"`
+	// Set security context for the cluster pods
+	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	// Set security context for the cluster pods' container
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
-	Version    *string `json:"version,omitempty"`
+	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
+	Version    *string                     `json:"version,omitempty"`
 }
 
 type NodePool struct {
@@ -95,9 +102,15 @@ type PVCSource struct {
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
 	AutoScaler  bool `json:"autoScaler,omitempty"`
-	Monitoring  bool `json:"monitoring,omitempty"`
 	VerUpdate   bool `json:"VerUpdate,omitempty"`
 	SmartScaler bool `json:"smartScaler,omitempty"`
+}
+
+type MonitoringConfig struct {
+	Enable               bool   `json:"enable,omitempty"`
+	MonitoringUserSecret string `json:"monitoringUserSecret,omitempty"`
+	ScrapeInterval       string `json:"scrapeInterval,omitempty"`
+	PluginURL            string `json:"pluginUrl,omitempty"`
 }
 
 type BootstrapConfig struct {
@@ -139,6 +152,10 @@ type DashboardsConfig struct {
 	Annotations                 map[string]string           `json:"annotations,omitempty"`
 	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
 	PluginsList                 []string                    `json:"pluginsList,omitempty"`
+	// Set security context for the dashboards pods
+	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	// Set security context for the dashboards pods' container
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -226,6 +243,12 @@ type KeystoreValue struct {
 	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
 	// Key mappings from secret to keystore keys
 	KeyMappings map[string]string `json:"keyMappings,omitempty"`
+}
+
+type SnapshotRepoConfig struct {
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`
+	Settings map[string]string `json:"settings,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster

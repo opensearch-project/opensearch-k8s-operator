@@ -2,6 +2,7 @@ package builders
 
 import (
 	"fmt"
+	"k8s.io/utils/pointer"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -97,7 +98,7 @@ var _ = Describe("Builders", func() {
 
 			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			installCmd := fmt.Sprintf(
-				"./bin/opensearch-dashboards-plugin install '%s' '%s' && ./opensearch-dashboards-docker-entrypoint.sh",
+				"./bin/opensearch-dashboards-plugin install '%s' && ./bin/opensearch-dashboards-plugin install '%s' && ./opensearch-dashboards-docker-entrypoint.sh",
 				pluginA,
 				pluginB,
 			)
@@ -109,6 +110,35 @@ var _ = Describe("Builders", func() {
 			actual := result.Spec.Template.Spec.Containers[0].Command
 
 			Expect(expected).To(Equal(actual))
+		})
+	})
+
+	When("building the dashboards deployment with security contexts set", func() {
+		It("should populate the dashboard pod spec with security contexts provided", func() {
+			user := int64(1000)
+			podSecurityContext := &corev1.PodSecurityContext{
+				RunAsUser:    &user,
+				RunAsGroup:   &user,
+				RunAsNonRoot: pointer.Bool(true),
+			}
+			securityContext := &corev1.SecurityContext{
+				Privileged:               pointer.Bool(false),
+				AllowPrivilegeEscalation: pointer.Bool(false),
+			}
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable:             true,
+						PodSecurityContext: podSecurityContext,
+						SecurityContext:    securityContext,
+					},
+				},
+			}
+			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
+			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
 	})
 })

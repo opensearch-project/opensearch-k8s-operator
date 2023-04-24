@@ -40,8 +40,6 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch"
 
-	var version string
-
 	// If a general custom image is specified, use it.
 	if cr.Spec.General.ImageSpec != nil {
 		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
@@ -49,26 +47,8 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 		}
 	}
 
-	// Calculate version based on upgrading status
-	if nodePool == nil {
-		version = cr.Spec.General.Version
-	} else {
-		componentStatus := opsterv1.ComponentStatus{
-			Component:   "Upgrader",
-			Description: nodePool.Component,
-		}
-		_, found := FindFirstPartial(cr.Status.ComponentsStatus, componentStatus, GetByDescriptionAndGroup)
-
-		if cr.Status.Version == "" || cr.Status.Version == cr.Spec.General.Version {
-			version = cr.Spec.General.Version
-		} else {
-			if found {
-				version = cr.Spec.General.Version
-			} else {
-				version = cr.Status.Version
-			}
-		}
-	}
+	// Default to version from spec
+	version := cr.Spec.General.Version
 
 	// If a different image repo is requested, use that with the default image
 	// name and version tag.
@@ -161,5 +141,20 @@ func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bo
 		mainCommand = []string{"/bin/bash", "-c", entrypoint}
 	}
 
+	return mainCommand
+}
+
+func BuildMainCommandOSD(installerBinary string, pluginsList []string, entrypoint string) []string {
+	var mainCommand []string
+	mainCommand = append(mainCommand, "/bin/bash", "-c")
+
+	var com string
+	for _, plugin := range pluginsList {
+		com = com + installerBinary + " install" + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
+		com = com + " && "
+	}
+	com = com + entrypoint
+
+	mainCommand = append(mainCommand, com)
 	return mainCommand
 }

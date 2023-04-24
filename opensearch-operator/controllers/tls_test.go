@@ -35,7 +35,7 @@ var _ = Describe("TLS Reconciler", func() {
 			Spec: opsterv1.ClusterSpec{
 				General: opsterv1.GeneralConfig{
 					ServiceName: clusterName,
-					Version:     "1.0.0",
+					Version:     "2.0.0",
 				},
 				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 					Transport: &opsterv1.TlsConfigTransport{

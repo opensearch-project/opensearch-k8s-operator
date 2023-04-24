@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/Masterminds/semver v1.5.0
 	github.com/banzaicloud/k8s-objectmatcher v1.8.0
-	github.com/banzaicloud/operator-tools v0.28.8
+	github.com/banzaicloud/operator-tools v0.28.10
 	github.com/go-logr/logr v1.2.3
 	github.com/hashicorp/go-version v1.6.0
 	github.com/jarcoal/httpmock v1.2.0
@@ -14,12 +14,14 @@ require (
 	github.com/onsi/gomega v1.22.1
 	github.com/opensearch-project/opensearch-go v1.1.0
 	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5
-	k8s.io/api v0.25.3
-	k8s.io/apimachinery v0.25.3
-	k8s.io/client-go v0.25.3
+	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.61.1
+	k8s.io/api v0.25.4
+	k8s.io/apiextensions-apiserver v0.25.4
+	k8s.io/apimachinery v0.25.4
+	k8s.io/client-go v0.25.4
 	k8s.io/kube-openapi v0.0.0-20221012153701-172d655c2280
-	k8s.io/utils v0.0.0-20221012122500-cfd413dd9e85
-	sigs.k8s.io/controller-runtime v0.13.0
+	k8s.io/utils v0.0.0-20221108210102-8e77b1f39fe2
+	sigs.k8s.io/controller-runtime v0.13.1
 )
 
 require (
@@ -78,20 +80,21 @@ require (
 	go.uber.org/multierr v1.6.0 // indirect
 	go.uber.org/zap v1.21.0 // indirect
 	golang.org/x/crypto v0.0.0-20220525230936-793ad666bf5e // indirect
-	golang.org/x/net v0.1.0 // indirect
+	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
+	golang.org/x/net v0.5.0 // indirect
 	golang.org/x/oauth2 v0.0.0-20211104180415-d3ed0bb246c8 // indirect
-	golang.org/x/sys v0.1.0 // indirect
-	golang.org/x/term v0.1.0 // indirect
-	golang.org/x/text v0.4.0 // indirect
+	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/term v0.4.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
 	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
+	golang.org/x/tools v0.5.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.2.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/protobuf v1.28.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	k8s.io/apiextensions-apiserver v0.25.0 // indirect
-	k8s.io/component-base v0.25.0 // indirect
+	k8s.io/component-base v0.25.4 // indirect
 	k8s.io/klog/v2 v2.80.1 // indirect
 	sigs.k8s.io/json v0.0.0-20220713155537-f223a00ba0e2 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
