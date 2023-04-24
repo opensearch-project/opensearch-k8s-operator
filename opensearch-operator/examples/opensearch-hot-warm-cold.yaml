@@ -1,7 +1,9 @@
+#Minimal configuration of a cluster with version 2.X of the operator.
+#Note the replacement of 'master' role with 'cluster_manager' on line 49
 apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
-  name: opensearch-test
+  name: my-first-hot-warm-cold-cluster
   namespace: default
 spec:
   security:
@@ -14,75 +16,82 @@ spec:
          perNode: true
   general:
     httpPort: 9200
-    serviceName: opensearch-test
-    version: latest
+    setVMMaxMapCount: true
+    serviceName: my-first-hot-warm-cold-cluster
+    version: 2.6.0
     drainDataNodes: true
   dashboards:
     tls:
       enable: true
       generate: true
-    version: latest
+    version: 2.6.0
     enable: true
     replicas: 1
     resources:
       requests:
-         memory: "1Gi"
-         cpu: "1000m"
+         memory: "512Mi"
+         cpu: "200m"
       limits:
-         memory: "1Gi"
-         cpu: "1000m"
+         memory: "512Mi"
+         cpu: "200m"
   nodePools:
-    - component: managers
+    - component: cluster_managers
       replicas: 3
-      diskSize: "10Gi"
+      jvm: -Xmx2G -Xms2G
       resources:
          requests:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "1"
          limits:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "1"
       roles:
         - "cluster_manager"
+      persistence:
+         emptyDir: {}
     - component: hot-nodes
       replicas: 3
       diskSize: "100Gi"
+      jvm: -Xmx2G -Xms2G
       resources:
          requests:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "1"
          limits:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "1"
       additionalConfig:
         node.attr.temp: "hot"
       roles:
-        - "data_hot"
+        - "data"
+        - "ingest"
     - component: warm-nodes
       replicas: 3
-      diskSize: "100Gi"
+      diskSize: "200Gi"
+      jvm: -Xmx2G -Xms2G
       resources:
          requests:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "1"
          limits:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "1"
       additionalConfig:
         node.attr.temp: "warm"
       roles:
-        - "data_warm"
+        - "data"
     - component: cold-nodes
       replicas: 3
-      diskSize: "100Gi"
+      diskSize: "200Gi"
+      jvm: -Xmx2G -Xms2G
       resources:
          requests:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "1"
          limits:
-            memory: "2Gi"
-            cpu: "1000m"
+            memory: "4Gi"
+            cpu: "1"
       additionalConfig:
         node.attr.temp: "cold"
       roles:
-        - "data_cold"
+        - "data"
