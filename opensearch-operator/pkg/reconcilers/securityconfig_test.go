@@ -88,6 +88,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					"internal_users.yml": "bar",
 					// Invalid yml in secret should not throw an error
 					"invalid.yml": "foo",
+					// Empty contents for a yml should be ignored
+					"action_groups.yml": "",
 				},
 			}
 			err := k8sClient.Create(context.Background(), securityConfigSecret)
@@ -108,6 +110,9 @@ var _ = Describe("Securityconfig Reconciler", func() {
 							Transport: &opsterv1.TlsConfigTransport{Generate: true},
 						},
 					},
+				},
+				Status: opsterv1.ClusterStatus{
+					Initialized: true,
 				},
 			}
 
@@ -138,6 +143,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			Expect(actualCmdArg).To(ContainSubstring("internal_users.yml"))
 			// Verify that invalid files were not included in the command
 			Expect(actualCmdArg).ToNot(ContainSubstring("invalid.yml"))
+			// Verify that empty files were not included in the command
+			Expect(actualCmdArg).ToNot(ContainSubstring("action_groups.yml"))
 		})
 	})
 

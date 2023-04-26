@@ -167,8 +167,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
-	// If securityconfig secret was not passed, build the command to apply all yml files
-	if len(cmdArg) == 0 {
+	// If the cluster has not yet initialized or
+	// securityconfig secret was not passed, build the command to apply all yml files
+	if !r.instance.Status.Initialized || len(cmdArg) == 0 {
 		clusterHostName := BuildHostName(r.instance)
 		httpPort, securityconfigPath := helpers.VersionCheck(r.instance)
 		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort) +
@@ -222,7 +223,12 @@ func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, lo
 			log.Error(fmt.Errorf("invalid yml file %s in securityconfig secret", k), fmt.Sprintf("skipping %s", k))
 			continue
 		}
-		arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, httpPort)
+		// Necessary as kubectl apply for stringData doesn't completely remove the field from the secret
+		// Even if the field was removed from the yaml file it was applied from
+		// Instead it sets it to an empty value
+		if string(secret.Data[k]) != "" {
+			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, httpPort)
+		}
 	}
 
 	return arg
