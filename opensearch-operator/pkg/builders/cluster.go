@@ -26,6 +26,7 @@ import (
 const (
 	ConfigurationChecksumAnnotation      = "opster.io/config"
 	DefaultDiskSize                      = "30Gi"
+	defaultMonitoringPlugin              = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation     = "securityconfig/checksum"
 	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
 )
@@ -239,7 +240,7 @@ func NewSTSForNodePool(
 		if cr.Spec.General.Monitoring.PluginURL != "" {
 			pluginslist = append(pluginslist, cr.Spec.General.Monitoring.PluginURL)
 		} else {
-			pluginslist = append(pluginslist, fmt.Sprintf("https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip", cr.Spec.General.Version, cr.Spec.General.Version))
+			pluginslist = append(pluginslist, fmt.Sprintf(defaultMonitoringPlugin, cr.Spec.General.Version, cr.Spec.General.Version))
 		}
 	}
 
