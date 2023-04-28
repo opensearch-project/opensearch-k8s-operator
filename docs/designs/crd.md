@@ -615,37 +615,43 @@ Monitoring defines Opensearch monitoring configuration
       </tr><tr>
         <td><b>tlsConfig</b></td>
         <td>map[]</td>
-        <td>Tls Configuration</td>
+        <td>Tls Configuration <b>See <i>tlsConfig</i> below</b></td>
         <td>false</td>
         <td> - </td>
-        <table>
-          <thead>
-              <tr>
-                  <th>tlsConfig Settings</th>
-                  <th>Type</th>
-                  <th>Description</th>
-                  <th>Required</th>
-                  <th>default</th>
-              </tr>
-          </thead>
-          <tbody><tr>
-            <td><b>serverName</b></td>
-            <td>string</td>
-            <td>Used to verify the hostname for the targets</td>
-            <td>false</td>
-            <td></td>
-            </tr><tr>
-            <td><b>insecureSkipVerify</b></td>
-            <td>bool</td>
-            <td>Disable target certificate validation</td>
-            <td>false</td>
-            <td>false</td>
-            </tr><tr>
-          </tbody>
-        </table>
      </tr><tr>
 </table>
 
+<h3 id="GeneralConfig">
+  tlsConfig
+</h3>
+
+Monitoring TLS configuration options
+
+<table>
+  <thead>
+      <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Required</th>
+          <th>default</th>
+      </tr>
+  </thead>
+  <tbody><tr>
+    <td><b>serverName</b></td>
+    <td>string</td>
+    <td>Used to verify the hostname for the targets</td>
+    <td>false</td>
+    <td></td>
+    </tr><tr>
+    <td><b>insecureSkipVerify</b></td>
+    <td>bool</td>
+    <td>Disable target certificate validation</td>
+    <td>false</td>
+    <td>false</td>
+    </tr><tr>
+  </tbody>
+</table>
 
 <h3 id="GeneralConfig">
   Keystore
