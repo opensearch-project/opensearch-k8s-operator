@@ -622,7 +622,7 @@ Monitoring defines Opensearch monitoring configuration
 </table>
 
 <h3 id="GeneralConfig">
-  tlsConfig
+  Monitoring.tlsConfig
 </h3>
 
 Monitoring TLS configuration options
