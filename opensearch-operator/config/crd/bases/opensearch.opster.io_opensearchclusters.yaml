@@ -2874,8 +2874,6 @@ spec:
                         type: string
                       pluginUrl:
                         type: string
-                      scheme:
-                        type: string
                       scrapeInterval:
                         type: string
                       tlsConfig:

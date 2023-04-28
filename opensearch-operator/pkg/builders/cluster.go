@@ -1118,10 +1118,6 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		},
 	}
 
-	if cr.Spec.General.Monitoring.Scheme == "" {
-		cr.Spec.General.Monitoring.Scheme = "https"
-	}
-
 	safetlsconfig := monitoring.SafeTLSConfig{
 		ServerName:         cr.Spec.General.Monitoring.TLSConfig.ServerName,
 		InsecureSkipVerify: cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify,
@@ -1154,7 +1150,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth:       &user,
-					Scheme:          string(cr.Spec.General.Monitoring.Scheme),
+					Scheme:          "https",
 				},
 			},
 			Selector:          selector,

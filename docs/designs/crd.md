@@ -613,13 +613,6 @@ Monitoring defines Opensearch monitoring configuration
         <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
       </tr><tr>
       </tr><tr>
-        <td><b>scheme</b></td>
-        <td>string</td>
-        <td>HTTP scheme to use for scraping</td>
-        <td>false</td>
-        <td>https</td>
-      </tr><tr>
-      </tr><tr>
         <td><b>tlsConfig</b></td>
         <td>map[]</td>
         <td>Tls Configuration</td>

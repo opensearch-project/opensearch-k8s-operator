@@ -111,7 +111,6 @@ type MonitoringConfig struct {
 	MonitoringUserSecret string              `json:"monitoringUserSecret,omitempty"`
 	ScrapeInterval       string              `json:"scrapeInterval,omitempty"`
 	PluginURL            string              `json:"pluginUrl,omitempty"`
-	Scheme               string              `json:"scheme,omitempty"`
 	TLSConfig            MonitoringConfigTLS `json:"tlsConfig,omitempty"`
 }
 
