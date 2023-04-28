@@ -236,11 +236,10 @@ func NewSTSForNodePool(
 
 	var pluginslist []string
 	if cr.Spec.General.Monitoring.Enable {
-		if cr.Spec.General.Monitoring.PluginURL == "" {
-			pluginslist = append(pluginslist, fmt.Sprintf("https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip", cr.Spec.General.Version, cr.Spec.General.Version))
-		}
 		if cr.Spec.General.Monitoring.PluginURL != "" {
 			pluginslist = append(pluginslist, cr.Spec.General.Monitoring.PluginURL)
+		} else {
+			pluginslist = append(pluginslist, fmt.Sprintf("https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip", cr.Spec.General.Version, cr.Spec.General.Version))
 		}
 	}
 
