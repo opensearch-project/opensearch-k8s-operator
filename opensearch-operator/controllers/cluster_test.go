@@ -116,6 +116,14 @@ var _ = Describe("Cluster Reconciler", func() {
 
 			Expect(sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapeInterval))
 
+			// check if the ServiceMonitor is using the tlsConfig.insecureSkipVerify from the CRD declaration
+
+			Expect(sm.Spec.Endpoints[0].TLSConfig.InsecureSkipVerify).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify))
+
+			// check if the ServiceMonitor is using the tlsConfig.serverName from the CRD declaration
+
+			Expect(sm.Spec.Endpoints[0].TLSConfig.ServerName).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.ServerName))
+
 		})
 	})
 
