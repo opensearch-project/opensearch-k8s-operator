@@ -32,10 +32,7 @@ jobs:
       - name: Prepare helm chart
         run: |
           # Copy CRDs to chart to make sure they are identical
-          cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchclusters.yaml charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
-          cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchroles.yaml charts/opensearch-operator/templates/OpensearchRole-crd.yaml
-          cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchuserrolebindings.yaml charts/opensearch-operator/templates/OpensearchUserRoleBinding-crd.yaml
-          cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchusers.yaml charts/opensearch-operator/templates/OpensearchUser-crd.yaml
+          cp opensearch-operator/config/crd/bases/opensearch.opster.io_*.yaml charts/opensearch-operator/crds/
           # Set versions in helm chart
           sed -i -e 's/^appVersion:.*/appVersion: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
           sed -i -e 's/^version:.*/version: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
