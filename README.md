@@ -1,18 +1,18 @@
 ![build](https://github.com/opster/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opster/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opster/opensearch-k8s-operator) [![Golang Lint](https://github.com/Opster/opensearch-k8s-operator/actions/workflows/linting.yaml/badge.svg)](https://github.com/Opster/opensearch-k8s-operator/actions/workflows/linting.yaml) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/opensearch-operator)](https://artifacthub.io/packages/search?repo=opensearch-operator)
 
-# OpenSearch-k8s-operator
+# OpenSearch Kubernetes Operator
 
 The Kubernetes OpenSearch Operator is used for automating the deployment, provisioning, management, and orchestration of OpenSearch clusters and OpenSearch dashboards.
+
+To get all the capabilites of the Operator with a UI, you can use the free [Opster Management Console](https://opster.com/opensearch-opster-management-console/). Beyond being able to easily carry out all of the actions provided by the Operator, it also include additional features like monitoring and more.
 
 ## Getting started
 
 The Operator can be easily installed using helm on any CNCF-certified Kubernetes cluster. Please refer to the [User Guide](./docs/userguide/main.md) for installation instructions.
 
-## Roadmap
+## Current feature list
 
-The full roadmap is available in the [Development plan](./docs/designs/dev-plan.md).
-
-Currently planned features:
+Features:
 
 - [x] Deploy a new OS cluster.
 - [x] Ability to deploy multiple clusters.
@@ -27,9 +27,10 @@ Currently planned features:
 - [x] Rolling restarts - through API.
 - [x] Scaling nodes' disks - increase disk size.
 - [x] Cluster configurations and nodes' settings updates.
-- [ ] Operator Monitoring, with Prometheus and Grafana.
+- [x] Operator Monitoring, with Prometheus and Grafana.
 - [ ] Auto scaler based on usage, load, and resources.
-- [ ] Control shard balancing and allocation: AZ/Rack awareness, Hot/Warm.
+
+A full roadmap is available in the [Development plan](./docs/designs/dev-plan.md).
 
 ## Installation
 
@@ -37,6 +38,16 @@ The Operator can be easily installed using Helm:
 
 1. Add the helm repo: `helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator/`
 2. Install the Operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
+
+## OpenSearch Kuberentes Operator installation & demo video
+
+[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://player.vimeo.com/video/708641527)
+
+## Manage OpenSearch on K8s through a single interface (UI)
+
+To get all the capabilites of the Operator with a UI, you can use the free Opster Management Console. Beyond being able to easily carry out all of the actions provided by the Operator, it also include additional features like monitoring and more.
+
+[![Watch the video](https://opster.com/wp-content/uploads/2023/04/Screen-cap-for-omc-video.png)](https://player.vimeo.com/video/767761262)
 
 ## Compatibility
 
@@ -55,10 +66,6 @@ This table only lists versions that have been explicitly tested with the operato
 ## Development
 
 If you want to develop the operator, please see the separate [developer docs](./docs/developing.md).
-
-## Installation Tutorial and Demo
-
-[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://player.vimeo.com/video/708641527)
 
 ## Contributions
 
