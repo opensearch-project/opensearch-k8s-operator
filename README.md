@@ -45,7 +45,7 @@ The Operator can be easily installed using Helm:
 
 ## Manage OpenSearch on K8s through a single interface (UI)
 
-To get all the capabilites of the Operator with a UI, you can use the free Opster Management Console. Beyond being able to easily carry out all of the actions provided by the Operator, it also include additional features like monitoring and more.
+To get all the capabilites of the Operator with a UI, you can use the free [Opster Management Console](https://opster.com/opensearch-opster-management-console/). Beyond being able to easily carry out all of the actions provided by the Operator, it also include additional features like monitoring and more.
 
 [![Watch the video](https://opster.com/wp-content/uploads/2023/04/Screen-cap-for-omc-video.png)](https://player.vimeo.com/video/767761262)
 
