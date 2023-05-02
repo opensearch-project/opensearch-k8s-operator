@@ -970,14 +970,10 @@ func NewSecurityconfigUpdateJob(
 	namespace string,
 	checksum string,
 	adminCertName string,
-	clusterName string,
+	cmdArg string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
-	dns := DnsOfService(instance)
-	adminCert := "/certs/tls.crt"
-	adminKey := "/certs/tls.key"
-	caCert := "/certs/ca.crt"
 
 	// Dummy node spec required to resolve image
 	node := opsterv1.NodePool{
@@ -992,18 +988,7 @@ func NewSecurityconfigUpdateJob(
 		Name:      "admin-cert",
 		MountPath: "/certs",
 	})
-	//Following httpPort, securityconfigPath are used for executing securityadmin.sh
-	httpPort, securityconfigPath := helpers.VersionCheck(instance)
-	// The following curl command is added to make sure cluster is full connected before .opendistro_security is created.
-	arg := "ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;" +
-		"chmod +x $ADMIN;" +
-		fmt.Sprintf("until curl -k --silent https://%s.svc.%s:%v; do", dns, helpers.ClusterDnsBase(), instance.Spec.General.HttpPort) +
-		" echo 'Waiting to connect to the cluster'; sleep 120; " +
-		"done; " +
-		"count=0;" +
-		fmt.Sprintf("until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s.svc.%s -p %v || (( count++ >= 20 )); do", caCert, adminCert, adminKey, securityconfigPath, dns, helpers.ClusterDnsBase(), httpPort) +
-		"  sleep 20; " +
-		"done"
+
 	annotations := map[string]string{
 		securityconfigChecksumAnnotation: checksum,
 	}
@@ -1027,7 +1012,7 @@ func NewSecurityconfigUpdateJob(
 						Image:           image.GetImage(),
 						ImagePullPolicy: image.GetImagePullPolicy(),
 						Command:         []string{"/bin/bash", "-c"},
-						Args:            []string{arg},
+						Args:            []string{cmdArg},
 						VolumeMounts:    volumeMounts,
 						SecurityContext: securityContext,
 					}},
