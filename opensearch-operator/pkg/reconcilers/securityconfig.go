@@ -170,7 +170,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	// If the cluster has not yet initialized or
 	// securityconfig secret was not passed, build the command to apply all yml files
 	if !r.instance.Status.Initialized || len(cmdArg) == 0 {
-		clusterHostName := BuildHostName(r.instance)
+		clusterHostName := BuildClusterSvcHostName(r.instance)
 		httpPort, securityconfigPath := helpers.VersionCheck(r.instance)
 		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort) +
 			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, httpPort)
@@ -200,7 +200,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 // BuildCmdArg builds the command for the securityconfig-update job for each individual ymls present in the
 // securityconfig secret. yml files which are not present in the secret are not applied/updated
 func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, log logr.Logger) string {
-	clusterHostName := BuildHostName(instance)
+	clusterHostName := BuildClusterSvcHostName(instance)
 	httpPort, securityconfigPath := helpers.VersionCheck(instance)
 
 	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort)
@@ -297,7 +297,7 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.Ope
 	return nil
 }
 
-// BuildHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}
-func BuildHostName(instance *opsterv1.OpenSearchCluster) string {
+// BuildClusterSvcHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}
+func BuildClusterSvcHostName(instance *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s.svc.%s", builders.DnsOfService(instance), helpers.ClusterDnsBase())
 }

@@ -2,7 +2,6 @@ package reconcilers
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -134,10 +133,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			expectedCmdArg := BuildCmdArg(&spec, securityConfigSecret, underTest.logger)
 			actualCmdArg := job.Spec.Template.Spec.Containers[0].Args[0]
 
-			Expect(actualCmdArg).To(Equal(expectedCmdArg))
 			// Verify that expected files were present in the command
 			Expect(actualCmdArg).To(ContainSubstring("config.yml"))
 			Expect(actualCmdArg).To(ContainSubstring("internal_users.yml"))
@@ -145,6 +142,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			Expect(actualCmdArg).ToNot(ContainSubstring("invalid.yml"))
 			// Verify that empty files were not included in the command
 			Expect(actualCmdArg).ToNot(ContainSubstring("action_groups.yml"))
+			// Verify that files not present in the secret are not included
+			Expect(actualCmdArg).ToNot(ContainSubstring("audit.yml"))
 		})
 	})
 
@@ -282,11 +281,16 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
 
-			clusterHostName := BuildHostName(&spec)
-			httpPort, securityconfigPath := helpers.VersionCheck(&spec)
-			cmdArg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort) +
-				fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, httpPort)
-
+			cmdArg := `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
+chmod +x $ADMIN;
+until curl -k --silent https://no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local:9200;
+do
+echo 'Waiting to connect to the cluster'; sleep 120;
+done;count=0;
+until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd /usr/share/opensearch/config/opensearch-security -icl -nhnv -h no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local -p 9200 || (( count++ >= 20 ));
+do
+sleep 20;
+done;`
 			Expect(job.Spec.Template.Spec.Containers[0].Args[0]).To(Equal(cmdArg))
 		})
 	})
