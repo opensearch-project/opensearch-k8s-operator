@@ -177,7 +177,7 @@ func NewSTSForNodePool(
 	}
 
 	// If node role `search` defined add required experimental flag if version less than 2.7
-	if helpers.ContainsString(selectedRoles, "search") && cr.Spec.General.Version < "2.7" {
+	if helpers.ContainsString(selectedRoles, "search") && helpers.CompareVersions(cr.Spec.General.Version, "2.7.0") {
 		jvm += " -Dopensearch.experimental.feature.searchable_snapshot.enabled=true"
 	}
 
