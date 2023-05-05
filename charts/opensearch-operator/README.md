@@ -5,6 +5,11 @@ The Kubernetes [OpenSearch Operator](https://github.com/Opster/opensearch-k8s-op
 ## Getting started
 
 The Operator can be easily installed using helm on any CNCF-certified Kubernetes cluster. Please refer to the [User Guide](https://github.com/Opster/opensearch-k8s-operator/blob/main/docs/userguide/main.md) for more information.
+To install an OpenSearchCluster alongwith Operator, set in values.yaml
+```
+OpenSearchClusterSpec:
+  enabled: true
+ ```
 
 ### Installation Using Helm
 
