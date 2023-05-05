@@ -118,6 +118,32 @@ rules:
 - apiGroups:
   - opensearch.opster.io
   resources:
+  - opensearchactiongroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchactiongroups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchactiongroups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
   - opensearchclusters
   verbs:
   - create

@@ -3,7 +3,6 @@ package builders
 import (
 	"context"
 	"fmt"
-	"sort"
 	"strings"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -314,11 +313,11 @@ func NewSTSForNodePool(
 					MountPath: "/tmp/keystoreSecrets/" + keystoreValue.Secret.Name,
 				})
 			} else {
-				// If renames are necessary, mount keys from secrets directly and rename from old to new
-				for oldKey, newKey := range keystoreValue.KeyMappings {
+				keys := helpers.SortedKeys(keystoreValue.KeyMappings)
+				for _, oldKey := range keys {
 					initContainerVolumeMounts = append(initContainerVolumeMounts, corev1.VolumeMount{
 						Name:      "keystore-" + keystoreValue.Secret.Name,
-						MountPath: "/tmp/keystoreSecrets/" + keystoreValue.Secret.Name + "/" + newKey,
+						MountPath: "/tmp/keystoreSecrets/" + keystoreValue.Secret.Name + "/" + keystoreValue.KeyMappings[oldKey],
 						SubPath:   oldKey,
 					})
 				}
@@ -461,11 +460,7 @@ func NewSTSForNodePool(
 	}
 
 	// Append additional config to env vars
-	keys := make([]string, 0, len(extraConfig))
-	for key := range extraConfig {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	keys := helpers.SortedKeys(extraConfig)
 	for _, k := range keys {
 		sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
 			Name:  k,
@@ -747,11 +742,7 @@ func NewBootstrapPod(
 		extraConfig = cr.Spec.Bootstrap.AdditionalConfig
 	}
 
-	keys := make([]string, 0, len(extraConfig))
-	for key := range extraConfig {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
+	keys := helpers.SortedKeys(extraConfig)
 	for _, k := range keys {
 		env = append(env, corev1.EnvVar{
 			Name:  k,
@@ -914,12 +905,7 @@ func NewSnapshotRepoconfigUpdateJob(
 		var snapshotSettings string
 
 		// Sort keys to have a stable order
-		keys := make([]string, 0, len(repository.Settings))
-		for key := range repository.Settings {
-			keys = append(keys, key)
-		}
-		sort.Strings(keys)
-
+		keys := helpers.SortedKeys(repository.Settings)
 		for _, settingsKey := range keys {
 			snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, repository.Settings[settingsKey])
 		}

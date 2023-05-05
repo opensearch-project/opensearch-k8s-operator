@@ -7,3 +7,5 @@ type GetRoleMappingReponse map[string]requests.RoleMapping
 type GetRoleResponse map[string]requests.Role
 
 type GetUserResponse map[string]requests.User
+
+type GetActionGroupResponse map[string]requests.ActionGroup

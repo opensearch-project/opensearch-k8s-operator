@@ -1,0 +1,98 @@
+#Minimal configuration of a cluster with version 2.6.0 of the operator.
+#This example will stand up a cluster with managers, hot, warm and cold
+#nodes to test hot-warm architectures
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-first-hot-warm-cold-cluster
+  namespace: default
+spec:
+  security:
+    config:
+    tls:
+       http:
+         generate: true
+       transport:
+         generate: true
+         perNode: true
+  general:
+    httpPort: 9200
+    setVMMaxMapCount: true
+    serviceName: my-first-hot-warm-cold-cluster
+    version: 2.6.0
+    drainDataNodes: true
+  dashboards:
+    tls:
+      enable: true
+      generate: true
+    version: 2.6.0
+    enable: true
+    replicas: 1
+    resources:
+      requests:
+         memory: "512Mi"
+         cpu: "200m"
+      limits:
+         memory: "512Mi"
+         cpu: "200m"
+  nodePools:
+    - component: cluster_managers
+      replicas: 3
+      jvm: -Xmx2G -Xms2G
+      resources:
+         requests:
+            memory: "4Gi"
+            cpu: "1"
+         limits:
+            memory: "4Gi"
+            cpu: "1"
+      roles:
+        - "cluster_manager"
+      persistence:
+         emptyDir: {}
+    - component: hot-nodes
+      replicas: 3
+      diskSize: "100Gi"
+      jvm: -Xmx2G -Xms2G
+      resources:
+         requests:
+            memory: "4Gi"
+            cpu: "1"
+         limits:
+            memory: "4Gi"
+            cpu: "1"
+      additionalConfig:
+        node.attr.temp: "hot"
+      roles:
+        - "data"
+        - "ingest"
+    - component: warm-nodes
+      replicas: 3
+      diskSize: "200Gi"
+      jvm: -Xmx2G -Xms2G
+      resources:
+         requests:
+            memory: "4Gi"
+            cpu: "1"
+         limits:
+            memory: "4Gi"
+            cpu: "1"
+      additionalConfig:
+        node.attr.temp: "warm"
+      roles:
+        - "data"
+    - component: cold-nodes
+      replicas: 3
+      diskSize: "200Gi"
+      jvm: -Xmx2G -Xms2G
+      resources:
+         requests:
+            memory: "4Gi"
+            cpu: "1"
+         limits:
+            memory: "4Gi"
+            cpu: "1"
+      additionalConfig:
+        node.attr.temp: "cold"
+      roles:
+        - "data"

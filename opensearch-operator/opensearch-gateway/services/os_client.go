@@ -289,194 +289,30 @@ func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
 	return true, nil
 }
 
-func (client *OsClusterClient) GetRole(ctx context.Context, name string) (*opensearchapi.Response, error) {
-	path := generateRolesPath(name)
-
-	req, err := http.NewRequest(http.MethodGet, path.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+// GetSecurityResource performs an HTTP GET request to OS to fetch the security resource specified by name
+func (client *OsClusterClient) GetSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPath(resource, name)
+	return doHTTPGet(ctx, client.client, path)
 }
 
-func (client *OsClusterClient) PutRole(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
-	path := generateRolesPath(name)
-
-	req, err := http.NewRequest(http.MethodPut, path.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-	req.Header.Add(headerContentType, jsonContentHeader)
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+func (client *OsClusterClient) PutSecurityResource(ctx context.Context, resource, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPath(resource, name)
+	return doHTTPPut(ctx, client.client, path, body)
 }
 
-func (client *OsClusterClient) DeleteRole(ctx context.Context, name string) (*opensearchapi.Response, error) {
-	path := generateRolesPath(name)
-
-	req, err := http.NewRequest(http.MethodDelete, path.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
+// DeleteSecurityResource performs an HTTP DELETE request to OS to delete the security resource specified by name
+func (client *OsClusterClient) DeleteSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPath(resource, name)
+	return doHTTPDelete(ctx, client.client, path)
 }
 
-func (client *OsClusterClient) GetUser(ctx context.Context, name string) (*opensearchapi.Response, error) {
-	path := generateUserPath(name)
-
-	req, err := http.NewRequest(http.MethodGet, path.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
-}
-
-func (client *OsClusterClient) PutUser(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
-	path := generateUserPath(name)
-
-	req, err := http.NewRequest(http.MethodPut, path.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-	req.Header.Add(headerContentType, jsonContentHeader)
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
-}
-
-func (client *OsClusterClient) DeleteUser(ctx context.Context, name string) (*opensearchapi.Response, error) {
-	path := generateUserPath(name)
-
-	req, err := http.NewRequest(http.MethodDelete, path.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
-}
-
-func (client *OsClusterClient) GetRolesMapping(ctx context.Context, name string) (*opensearchapi.Response, error) {
-	path := generateRolesMappingPath(name)
-
-	req, err := http.NewRequest(http.MethodGet, path.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
-}
-
-func (client *OsClusterClient) PutRolesMapping(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
-	method := "PUT"
-	path := generateRolesMappingPath(name)
-
-	req, err := http.NewRequest(method, path.String(), body)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-	req.Header.Add(headerContentType, jsonContentHeader)
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
-}
-
-func (client *OsClusterClient) DeleteRolesMapping(ctx context.Context, name string) (*opensearchapi.Response, error) {
-	path := generateRolesMappingPath(name)
-
-	req, err := http.NewRequest(http.MethodDelete, path.String(), nil)
-	if err != nil {
-		return nil, err
-	}
-
-	if ctx != nil {
-		req = req.WithContext(ctx)
-	}
-	req.Header.Add(headerContentType, jsonContentHeader)
-
-	res, err := client.client.Perform(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return &opensearchapi.Response{StatusCode: res.StatusCode, Body: res.Body, Header: res.Header}, nil
-}
-
-func generateRolesPath(name string) strings.Builder {
+// generateAPIPath generates a URI PATH for a specific resource endpoint and name
+// For example: resource = internalusers, name = example
+// URI PATH = '_plugins/_security/api/internalusers/example'
+func generateAPIPath(resource, name string) strings.Builder {
 	var path strings.Builder
-	path.Grow(1 + len("_plugins") + 1 + len("_security") + 1 + len("api") + 1 + len("roles") + 1 + len(name))
+	path.Grow(1 + len("_plugins") + 1 + len("_security") + 1 + len("api") + 1 + len(resource) + 1 + len(name))
 	path.WriteString("/")
 	path.WriteString("_plugins")
 	path.WriteString("/")
@@ -484,39 +320,7 @@ func generateRolesPath(name string) strings.Builder {
 	path.WriteString("/")
 	path.WriteString("api")
 	path.WriteString("/")
-	path.WriteString("roles")
-	path.WriteString("/")
-	path.WriteString(name)
-	return path
-}
-
-func generateUserPath(name string) strings.Builder {
-	var path strings.Builder
-	path.Grow(1 + len("_plugins") + 1 + len("_security") + 1 + len("api") + 1 + len("internalusers") + 1 + len(name))
-	path.WriteString("/")
-	path.WriteString("_plugins")
-	path.WriteString("/")
-	path.WriteString("_security")
-	path.WriteString("/")
-	path.WriteString("api")
-	path.WriteString("/")
-	path.WriteString("internalusers")
-	path.WriteString("/")
-	path.WriteString(name)
-	return path
-}
-
-func generateRolesMappingPath(name string) strings.Builder {
-	var path strings.Builder
-	path.Grow(1 + len("_plugins") + 1 + len("_security") + 1 + len("api") + 1 + len("rolesmapping") + 1 + len(name))
-	path.WriteString("/")
-	path.WriteString("_plugins")
-	path.WriteString("/")
-	path.WriteString("_security")
-	path.WriteString("/")
-	path.WriteString("api")
-	path.WriteString("/")
-	path.WriteString("rolesmapping")
+	path.WriteString(resource)
 	path.WriteString("/")
 	path.WriteString(name)
 	return path

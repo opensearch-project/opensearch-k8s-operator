@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/hashicorp/go-version"
@@ -119,6 +120,17 @@ func MergeConfigs(left map[string]string, right map[string]string) map[string]st
 		left[k] = v
 	}
 	return left
+}
+
+// Return the keys of the input map in sorted order
+// Can be used if you want to iterate over a map but have a stable order
+func SortedKeys(input map[string]string) []string {
+	keys := make([]string, 0, len(input))
+	for key := range input {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func ResolveClusterManagerRole(ver string) string {
