@@ -85,23 +85,29 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 
 	var desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
 	if desireReplicaDiff == 0 {
-		// Change the status to waiting while the pods are coming up or getting deleted
-		if found && currentSts.Status.ReadyReplicas != nodePool.Replicas {
-			componentStatus.Status = "Waiting"
-			r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-		} else {
-			r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
-		}
-
-		err := r.Status().Update(r.ctx, r.instance)
-		if err != nil {
-			lg.Error(err, "failed to update status")
-			return false, err
+		// If a scaling operation was started before for this nodePool
+		if found {
+			if currentSts.Status.ReadyReplicas != nodePool.Replicas {
+				// Change the status to waiting while the pods are coming up or getting deleted
+				componentStatus.Status = "Waiting"
+				r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+			} else {
+				// Scaling operation is completed, remove the status
+				r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
+			}
+			err := r.Status().Update(r.ctx, r.instance)
+			if err != nil {
+				lg.Error(err, "failed to update status")
+				return false, err
+			}
 		}
 		return false, nil
 	}
 
+	// Check for 'Running' status as we set it to indicate the scaling operation has begun
+	// Also the status is set to 'Running' if it fails to exclude node for some reason
 	if !found || currentStatus.Status == "Running" {
+		// Change the status to running, to indicate that a scaling operation for this nodePool has started
 		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
 		err := r.Status().Update(r.ctx, r.instance)
 		if err != nil {
@@ -109,6 +115,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 			lg.Error(err, "failed to update status")
 			return true, err
 		}
+
 		if desireReplicaDiff > 0 {
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to scaling")
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
