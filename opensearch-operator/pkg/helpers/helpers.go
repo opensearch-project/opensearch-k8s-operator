@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	"sort"
@@ -273,6 +274,24 @@ func DeleteSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool
 	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
 
 	err = k8sClient.Delete(ctx, sts, &opts)
+
+	return err
+}
+
+// DeleteSecurityUpdateJob deletes the securityconfig update job
+func DeleteSecurityUpdateJob(ctx context.Context, k8sClient client.Client, clusterName, clusterNamespace string) error {
+	jobName := clusterName + "-securityconfig-update"
+	job := batchv1.Job{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: clusterNamespace}, &job)
+
+	if err != nil {
+		return err
+	}
+
+	opts := client.DeleteOptions{}
+	// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
+	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+	err = k8sClient.Delete(ctx, &job, &opts)
 
 	return err
 }

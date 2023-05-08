@@ -425,6 +425,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 		}
 	}
 
+	// If the failure condition is met,
 	// Delete all the sts so that everything will be created
 	// Then delete the securityconfig job and set cluster initialized to false
 	// This will cause the bootstrap pod to run again and security indices to be initialized again
@@ -439,16 +440,9 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			}
 		}
 
-		jobName := clusterName + "-securityconfig-update"
-		job := batchv1.Job{}
-		err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: clusterNamespace}, &job)
-
-		opts := client.DeleteOptions{}
-		// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
-		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
-		err = r.Delete(r.ctx, &job, &opts)
+		err := helpers.DeleteSecurityUpdateJob(r.ctx, r.Client, clusterName, clusterNamespace)
 		if err != nil {
-			lg.Error(err, "Failed to delete securityconfig job")
+			lg.Error(err, "Failed to delete security update job")
 			return &ctrl.Result{Requeue: true}, err
 		}
 
