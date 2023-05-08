@@ -124,6 +124,12 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		// Calculate checksum and check for changes
 		result.Combine(r.ReconcileSnapshotRepoConfig(username))
 	}
+
+	// If the cluster is using only emptyDir, then check for failure and recreate if necessary
+	if r.isEmptyDirCluster() {
+		result.Combine(r.checkForEmptyDirRecovery())
+	}
+
 	return result.Result, result.Err
 }
 
@@ -353,4 +359,110 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+// isEmptyDirCluster returns true only if every nodePool is using emptyDir
+func (r *ClusterReconciler) isEmptyDirCluster() bool {
+
+	for _, nodePool := range r.instance.Spec.NodePools {
+		if nodePool.Persistence == nil {
+			return false
+		} else if nodePool.Persistence != nil && nodePool.Persistence.EmptyDir == nil {
+			return false
+		}
+	}
+	return true
+}
+
+// checkForEmptyDirRecovery checks if the cluster has failed and recreates the cluster if needed
+func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
+	lg := log.FromContext(r.ctx)
+	// If cluster has not yet initialized, don't do anything
+	if !r.instance.Status.Initialized {
+		return &ctrl.Result{}, nil
+	}
+
+	// If any scaling operation is going on, don't do anything
+	for _, nodePool := range r.instance.Spec.NodePools {
+		componentStatus := opsterv1.ComponentStatus{
+			Component:   "Scaler",
+			Description: nodePool.Component,
+		}
+		comp := r.instance.Status.ComponentsStatus
+		_, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
+
+		if found {
+			return &ctrl.Result{}, nil
+		}
+	}
+
+	// Check at least one data node is running
+	// Check at least half of master pods are running
+	var readyDataNodes int32
+	var readyMasterNodes int32
+	var totalMasterNodes int32
+
+	clusterName := r.instance.Name
+	clusterNamespace := r.instance.Namespace
+
+	for _, nodePool := range r.instance.Spec.NodePools {
+		var sts *appsv1.StatefulSet
+		var err error
+		if helpers.HasDataRole(&nodePool) || helpers.HasManagerRole(&nodePool) {
+			sts, err = helpers.GetSTSForNodePool(r.ctx, r.Client, nodePool, clusterName, clusterNamespace)
+			if err != nil {
+				return &ctrl.Result{Requeue: true}, err
+			}
+		}
+
+		if helpers.HasDataRole(&nodePool) {
+			readyDataNodes += sts.Status.ReadyReplicas
+		}
+
+		if helpers.HasManagerRole(&nodePool) {
+			totalMasterNodes += *sts.Spec.Replicas
+			readyMasterNodes += sts.Status.ReadyReplicas
+		}
+	}
+
+	// Delete all the sts so that everything will be created
+	// Then delete the securityconfig job and set cluster initialized to false
+	// This will cause the bootstrap pod to run again and security indices to be initialized again
+	if readyDataNodes == 0 || readyMasterNodes < (totalMasterNodes+1)/2 {
+		lg.Info("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace)
+		lg.Info("Deleting all sts and securityconfig job to re-create cluster")
+		for _, nodePool := range r.instance.Spec.NodePools {
+			err := helpers.DeleteSTSForNodePool(r.ctx, r.Client, nodePool, clusterName, clusterNamespace)
+			if err != nil {
+				lg.Error(err, fmt.Sprintf("Failed to delete sts for nodePool %s", nodePool.Component))
+				return &ctrl.Result{Requeue: true}, err
+			}
+		}
+
+		jobName := clusterName + "-securityconfig-update"
+		job := batchv1.Job{}
+		err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: clusterNamespace}, &job)
+
+		opts := client.DeleteOptions{}
+		// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
+		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+		err = r.Delete(r.ctx, &job, &opts)
+		if err != nil {
+			lg.Error(err, "Failed to delete securityconfig job")
+			return &ctrl.Result{Requeue: true}, err
+		}
+
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+				return err
+			}
+			r.instance.Status.Initialized = false
+			return r.Status().Update(r.ctx, r.instance)
+		}); err != nil {
+			lg.Error(err, "Failed to update cluster status")
+			return &ctrl.Result{Requeue: true}, err
+		}
+	}
+
+	return &ctrl.Result{}, nil
 }
