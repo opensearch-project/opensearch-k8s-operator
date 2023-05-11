@@ -1099,13 +1099,18 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		},
 	}
 
-	safetlsconfig := monitoring.SafeTLSConfig{
-		ServerName:         cr.Spec.General.Monitoring.TLSConfig.ServerName,
-		InsecureSkipVerify: cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify,
-	}
+	var tlsconfig *monitoring.TLSConfig
+	if cr.Spec.General.Monitoring.TLSConfig != nil {
+		safetlsconfig := monitoring.SafeTLSConfig{
+			ServerName:         cr.Spec.General.Monitoring.TLSConfig.ServerName,
+			InsecureSkipVerify: cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify,
+		}
 
-	tlsconfig := monitoring.TLSConfig{
-		SafeTLSConfig: safetlsconfig,
+		tlsconfig = &monitoring.TLSConfig{
+			SafeTLSConfig: safetlsconfig,
+		}
+	} else {
+		tlsconfig = nil
 	}
 
 	return &monitoring.ServiceMonitor{
@@ -1127,7 +1132,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
 					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapeInterval),
-					TLSConfig:       &tlsconfig,
+					TLSConfig:       tlsconfig,
 					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth:       &user,
