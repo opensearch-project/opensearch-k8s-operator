@@ -247,12 +247,7 @@ func HasManagerRole(nodePool *opsterv1.NodePool) bool {
 
 // Compares whether v1 is LessThan v2
 func CompareVersions(v1 string, v2 string) bool {
-	lessThan := false
 	ver1, err := version.NewVersion(v1)
-
 	ver2, _ := version.NewVersion(v2)
-	if err == nil && ver1.LessThan(ver2) {
-		lessThan = true
-	}
-	return lessThan
+	return err == nil && ver1.LessThan(ver2)
 }
