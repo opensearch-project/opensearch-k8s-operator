@@ -1042,6 +1042,16 @@ spec:
                   additionalVolumes:
                     items:
                       properties:
+                        emptyDir:
+                          description: emptyDir to use to populate the volume
+                          type: object
+                          properties:
+                            sizeLimit:
+                              description: Total amount of local storage required for this EmptyDir volume
+                              type: string
+                            medium:
+                              description: hat type of storage medium should back this directory
+                              type: string
                         configMap:
                           description: ConfigMap to use to populate the volume
                           properties:
@@ -2727,6 +2737,16 @@ spec:
                     description: Additional volumes to mount to all pods in the cluster
                     items:
                       properties:
+                        emptyDir:
+                          description: emptyDir to use to populate the volume
+                          properties:
+                            sizeLimit:
+                              description: Total amount of local storage required for this EmptyDir volume
+                              type: string
+                            medium:
+                              description: hat type of storage medium should back this directory
+                              type: string
+                          type: object
                         configMap:
                           description: ConfigMap to use to populate the volume
                           properties:
