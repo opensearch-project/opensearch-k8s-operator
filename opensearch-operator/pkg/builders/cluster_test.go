@@ -208,7 +208,7 @@ var _ = Describe("Builders", func() {
 			Expect(expected).To(Equal(actual))
 		})
 
-		It("should properly add the required when the node.roles contains search", func() {
+		It("should add experimental flag when the node.roles contains search and the version is below 2.7", func() {
 			var clusterObject = ClusterDescWithVersion("2.2.1")
 			var nodePool = opsterv1.NodePool{
 				Component: "masters",
@@ -223,6 +223,24 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xmx512M -Xms512M -Dopensearch.experimental.feature.searchable_snapshot.enabled=true -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+
+		It("should not add experimental flag when the node.roles contains search and the version is 2.7 or above", func() {
+			var clusterObject = ClusterDescWithVersion("2.7.0")
+			var nodePool = opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "node.roles",
+				Value: "search",
+			}))
+
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx512M -Xms512M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 
