@@ -15,6 +15,7 @@ spec:
         control-plane: controller-manager
     spec:
       containers:
+      {{- if or (.Values.kubeRbacProxy.enable) (eq (.Values.kubeRbacProxy.enable | toString) "<nil>") }}
       - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
@@ -31,6 +32,7 @@ spec:
         ports:
         - containerPort: 8443
           name: https
+      {{- end}}
       - args:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
