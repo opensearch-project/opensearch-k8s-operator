@@ -3,7 +3,6 @@ package reconcilers
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
@@ -64,10 +63,10 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 	var err error
 	var json string
 	results := reconciler.CombinedResult{}
-	//if !isTimeToRunFunction() {
-	//	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
-	//	return results.Result, results.Err
-	//}
+	if !isTimeToRunFunction() {
+		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+		return results.Result, nil
+	}
 	json, err = r.BuildJSONPayload()
 	if err != nil {
 		results.Combine(&ctrl.Result{Requeue: requeue}, err)
@@ -130,19 +129,20 @@ func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context, k8sCli
 	var valueStr string
 	var namespace string
 	if err := r.List(ctx, secretList); err != nil {
+		r.logger.Error(err, "Cannot find UDI secret")
 		return "-1", "-1", err
 		// Handle the error
 	}
 
 	for _, secret := range secretList.Items {
-		if secret.Name == "uid" {
-			value, ok := secret.Data["uid"]
+		if secret.Name == "operator-uid" {
+			value, ok := secret.Data["secretKey"]
 			if !ok {
-				fmt.Errorf("key not found in secret")
+				r.logger.Info("Cannot secretKey inside of UDI secret")
 			}
 			valueStr = string(value)
 			namespace = secret.Namespace
-			fmt.Printf("The value of the secret is: %s", valueStr)
+			r.logger.Info("UID:", valueStr)
 			break
 		}
 	}
@@ -150,11 +150,12 @@ func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context, k8sCli
 	return valueStr, namespace, nil
 }
 
-func FindOperatorVersion(ctx context.Context, k8sClient client.Client, operatorNamespace string, cr *opsterv1.OpenSearchCluster) (string, error) {
+func (r *UpgradeCheckerReconciler) FindOperatorVersion(ctx context.Context, k8sClient client.Client, operatorNamespace string) (string, error) {
 	deployOperator := &appsv1.Deployment{}
 	var imageVersion string
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: "opensearch-operator-controller-manager", Namespace: operatorNamespace}, deployOperator)
 	if err != nil {
+		r.logger.Error(err, "Cannot find Operator Deployment")
 		return "0", err
 	}
 
@@ -171,10 +172,11 @@ func FindOperatorVersion(ctx context.Context, k8sClient client.Client, operatorN
 
 }
 
-func FindCountOfOsClusterAndVersions(ctx context.Context, k8sClient client.Client) (int, []string, error) {
+func (r *UpgradeCheckerReconciler) FindCountOfOsClusterAndVersions(ctx context.Context, k8sClient client.Client) (int, []string, error) {
 	var empty []string
 	list := &opsterv1.OpenSearchClusterList{}
 	if err := k8sClient.List(ctx, list); err != nil {
+		r.logger.Error(err, "Cannot find the CRD instances ")
 		return 0, empty, err
 	}
 	var clustersVersion []string
