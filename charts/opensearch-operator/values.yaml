@@ -45,6 +45,9 @@ manager:
   # watch objects in the desired namespace. Defaults is to watch all namespaces.
   watchNamespace:
 
+# Install the Custom Resource Definitions with Helm
+installCRDs: true
+
 kubeRbacProxy:
   resources:
     limits:
