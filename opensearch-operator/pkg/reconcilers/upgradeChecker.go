@@ -1,14 +1,17 @@
 package reconcilers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
+	"net/http"
 	opsterv1 "opensearch.opster.io/api/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -61,21 +64,46 @@ type Payload struct {
 func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 	requeue := false
 	var err error
-	var json string
+	var Builtjson []byte
 	results := reconciler.CombinedResult{}
-	if !isTimeToRunFunction() {
-		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
-		return results.Result, nil
-	}
-	json, err = r.BuildJSONPayload()
+	//if !isTimeToRunFunction() {
+	//	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+	//	return results.Result, nil
+	//}
+
+	Builtjson, err = r.BuildJSONPayload()
 	if err != nil {
 		results.Combine(&ctrl.Result{Requeue: requeue}, err)
 		return results.Result, results.Err
 	}
-	print(json)
+	print(Builtjson)
+	Builtjson, err = json.Marshal(Builtjson)
+	if err != nil {
+		results.Combine(&ctrl.Result{Requeue: requeue}, err)
+		return results.Result, results.Err
+	}
+
+	serverURL := "http://localhost:1111/operator-usage"
+	response, err := sendJSONToServer(Builtjson, serverURL)
+
+	// if err != nil so I didnt got a response
+	if err != nil {
+		fmt.Println("Failed to send JSON payload:", err)
+		results.Combine(&ctrl.Result{Requeue: requeue}, err)
+		return results.Result, results.Err
+	}
+
+	// if respnse == nil and no error so the Operator is Up to date (cause the server is not returning anything when the Version is latest).
+	if response == true && err == nil {
+		// Operator is up to date
+		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+		return results.Result, results.Err
+	}
+
+	// Log for the client, you are not up to date
+	r.logger.Info("Notice - Your Operator deployment is not up to date, follow the instructions on ArtifactHUB.io page https://artifacthub.io/packages/helm/opensearch-operator/opensearch-operator ")
 	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
 	return results.Result, results.Err
-
 }
 
 func isTimeToRunFunction() bool {
@@ -83,22 +111,22 @@ func isTimeToRunFunction() bool {
 	return now.Hour() == 12 && now.Minute() == 0 && now.Second() == 0
 }
 
-func (r *UpgradeCheckerReconciler) BuildJSONPayload() (string, error) {
+func (r *UpgradeCheckerReconciler) BuildJSONPayload() ([]byte, error) {
 	var versions []string
 	var ClusterCount int
-	myUid, operatorNamespace, err := r.FindUidFromSecret(r.ctx, r.Client)
+	myUid, operatorNamespace, err := r.FindUidFromSecret(r.ctx)
 	if err != nil {
-		return "", err
+		return []byte{}, err
 	}
 
-	OperatorVersion, err := FindOperatorVersion(r.ctx, r.Client, operatorNamespace, r.instance)
+	OperatorVersion, err := r.FindOperatorVersion(r.ctx, r.Client, operatorNamespace)
 	if err != nil {
-		return "", err
+		return []byte{}, err
 	}
 
-	ClusterCount, versions, err = FindCountOfOsClusterAndVersions(r.ctx, r.Client)
+	ClusterCount, versions, err = r.FindCountOfOsClusterAndVersions(r.ctx, r.Client)
 	if err != nil {
-		return "", err
+		return []byte{}, err
 	}
 	Pay := Payload{
 		UDI:                myUid,
@@ -115,15 +143,15 @@ func (r *UpgradeCheckerReconciler) BuildJSONPayload() (string, error) {
 
 }
 
-func ConvertToJSON(pay Payload) (string, error) {
+func ConvertToJSON(pay Payload) ([]byte, error) {
 	jsonData, err := json.Marshal(pay)
 	if err != nil {
-		return "", err
+		return []byte{}, err
 	}
-	return string(jsonData), nil
+	return jsonData, nil
 }
 
-func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context, k8sClient client.Client) (string, string, error) {
+func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context) (string, string, error) {
 
 	secretList := &v1.SecretList{}
 	var valueStr string
@@ -142,7 +170,7 @@ func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context, k8sCli
 			}
 			valueStr = string(value)
 			namespace = secret.Namespace
-			r.logger.Info("UID:", valueStr)
+			//r.logger.Info("UID:", valueStr)
 			break
 		}
 	}
@@ -191,4 +219,34 @@ func findVersion(image string) string {
 	index := strings.Index(image, ":")
 	ver := image[index+1:]
 	return ver
+}
+
+func sendJSONToServer(jsonPayload []byte, serverURL string) (bool, error) {
+	retries := 5
+	timeout := 15 * time.Second
+
+	client := http.Client{
+		Timeout: timeout,
+	}
+
+	for attempt := 1; attempt <= retries; attempt++ {
+		req, err := http.NewRequest("POST", serverURL, bytes.NewBuffer(jsonPayload))
+		if err != nil {
+			return false, err
+		}
+		req.Header.Set("Content-Type", "application/json")
+
+		resp, err := client.Do(req)
+		if err == nil && resp.StatusCode == http.StatusOK {
+			defer resp.Body.Close()
+			if err != nil {
+				return false, err
+			}
+			return true, nil
+		}
+
+		//	time.Sleep(timeout)
+	}
+
+	return false, nil
 }
