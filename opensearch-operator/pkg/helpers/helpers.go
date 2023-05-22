@@ -257,6 +257,18 @@ func HasManagerRole(nodePool *opsterv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
 }
 
+func RemoveDuplicateStrings(strSlice []string) []string {
+	allKeys := make(map[string]bool)
+	list := []string{}
+	for _, item := range strSlice {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			list = append(list, item)
+		}
+	}
+	return list
+}
+
 // Compares whether v1 is LessThan v2
 func CompareVersions(v1 string, v2 string) bool {
 	ver1, err := version.NewVersion(v1)

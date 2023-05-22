@@ -599,21 +599,59 @@ Monitoring defines Opensearch monitoring configuration
         <td>false</td>
         <td>admin</td>
       </tr><tr>
-        <td><b>ScrapeInterval</b></td>
+        <td><b>scrapeInterval</b></td>
         <td>string</td>
         <td>Define interval for scraping</td>
         <td>false</td>
         <td>30s</td>
       </tr><tr>
       </tr><tr>
-        <td><b>PluginURL</b></td>
+        <td><b>pluginURL</b></td>
         <td>string</td>
         <td>Define offline link to Aiven Plugin</td>
         <td>false</td>
         <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
       </tr><tr>
+      </tr><tr>
+        <td><b>tlsConfig</b></td>
+        <td>map[]</td>
+        <td>Tls Configuration <b>See <i>tlsConfig</i> below</b></td>
+        <td>false</td>
+        <td> - </td>
+     </tr><tr>
 </table>
 
+<h3 id="GeneralConfig">
+  Monitoring.tlsConfig
+</h3>
+
+Monitoring TLS configuration options
+
+<table>
+  <thead>
+      <tr>
+          <th>Name</th>
+          <th>Type</th>
+          <th>Description</th>
+          <th>Required</th>
+          <th>default</th>
+      </tr>
+  </thead>
+  <tbody><tr>
+    <td><b>serverName</b></td>
+    <td>string</td>
+    <td>Used to verify the hostname for the targets</td>
+    <td>false</td>
+    <td></td>
+    </tr><tr>
+    <td><b>insecureSkipVerify</b></td>
+    <td>bool</td>
+    <td>Disable target certificate validation</td>
+    <td>false</td>
+    <td>false</td>
+    </tr><tr>
+  </tbody>
+</table>
 
 <h3 id="GeneralConfig">
   Keystore

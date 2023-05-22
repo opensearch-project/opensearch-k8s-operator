@@ -25,6 +25,7 @@ import (
 const (
 	ConfigurationChecksumAnnotation      = "opster.io/config"
 	DefaultDiskSize                      = "30Gi"
+	defaultMonitoringPlugin              = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation     = "securityconfig/checksum"
 	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
 )
@@ -232,7 +233,19 @@ func NewSTSForNodePool(
 	if len(cr.Spec.General.Command) > 0 {
 		startUpCommand = cr.Spec.General.Command
 	}
-	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", cr.Spec.General.PluginsList, true, startUpCommand)
+
+	var pluginslist []string
+	if cr.Spec.General.Monitoring.Enable {
+		if cr.Spec.General.Monitoring.PluginURL != "" {
+			pluginslist = append(pluginslist, cr.Spec.General.Monitoring.PluginURL)
+		} else {
+			pluginslist = append(pluginslist, fmt.Sprintf(defaultMonitoringPlugin, cr.Spec.General.Version, cr.Spec.General.Version))
+		}
+	}
+
+	pluginslist = helpers.RemoveDuplicateStrings(append(pluginslist, cr.Spec.General.PluginsList...))
+
+	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
 
 	podSecurityContext := cr.Spec.General.PodSecurityContext
 	securityContext := cr.Spec.General.SecurityContext
@@ -1086,6 +1099,20 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		},
 	}
 
+	var tlsconfig *monitoring.TLSConfig
+	if cr.Spec.General.Monitoring.TLSConfig != nil {
+		safetlsconfig := monitoring.SafeTLSConfig{
+			ServerName:         cr.Spec.General.Monitoring.TLSConfig.ServerName,
+			InsecureSkipVerify: cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify,
+		}
+
+		tlsconfig = &monitoring.TLSConfig{
+			SafeTLSConfig: safetlsconfig,
+		}
+	} else {
+		tlsconfig = nil
+	}
+
 	return &monitoring.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-monitor",
@@ -1101,18 +1128,20 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 				helpers.ClusterLabel,
 			},
 			Endpoints: []monitoring.Endpoint{
-				{Port: string(cr.Spec.General.HttpPort),
+				{Port: "http",
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
 					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapeInterval),
-					TLSConfig:       nil,
+					TLSConfig:       tlsconfig,
 					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth:       &user,
+					Scheme:          "https",
 				},
 			},
 			Selector:          selector,
 			NamespaceSelector: namespaceSelector,
 		},
 	}
+
 }
