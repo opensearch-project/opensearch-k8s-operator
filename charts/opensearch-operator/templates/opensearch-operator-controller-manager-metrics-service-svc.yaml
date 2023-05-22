@@ -3,7 +3,7 @@ kind: Service
 metadata:
   labels:
     control-plane: controller-manager
-  name: opensearch-operator-controller-manager-metrics-service
+  name: {{ include "opensearch-operator.fullname" . }}-controller-manager-metrics-service
 spec:
   ports:
   - name: https
