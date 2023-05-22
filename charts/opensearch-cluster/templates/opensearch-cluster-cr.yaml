@@ -1,8 +1,8 @@
-{{- $cluster_name := .Release.Name }}
+{{- if eq .Values.OpenSearchClusterSpec.enabled true }}
 apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
-  name: {{ $cluster_name }}
+  name: {{ .Values.clusterName | default .Release.Name}}
   namespace: {{ .Release.Namespace }}
 spec:
   {{- if .Values.OpenSearchClusterSpec.bootstrap }}
@@ -48,6 +48,14 @@ spec:
     keystore:
 {{ toYaml .Values.OpenSearchClusterSpec.general.keystore | indent 6 }}
     {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.general.securityContext }}
+    securityContext:
+{{ toYaml .Values.OpenSearchClusterSpec.general.securityContext | indent 6}}
+    {{- end}}
+    {{- if .Values.OpenSearchClusterSpec.general.podSecurityContext }}
+    podSecurityContext:
+{{ toYaml .Values.OpenSearchClusterSpec.general.podSecurityContext | indent 6 }}
+    {{- end}}
     {{- if .Values.OpenSearchClusterSpec.general.additionalVolumes }}
     additionalVolumes:
   {{- range $key, $val := .Values.OpenSearchClusterSpec.general.additionalVolumes }}
@@ -63,13 +71,13 @@ spec:
     {{- end }}
   {{- if .Values.OpenSearchClusterSpec.dashboards }}
   dashboards:
-   {{- if .Values.OpenSearchClusterSpec.dashboards.image }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.image }}
     image: {{ .Values.OpenSearchClusterSpec.dashboards.image | quote }}
-   {{- end }}
+    {{- end }}
     version: {{ .Values.OpenSearchClusterSpec.dashboards.version }}
-   {{- if .Values.OpenSearchClusterSpec.dashboards.enable }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.enable }}
     enable: {{ .Values.OpenSearchClusterSpec.dashboards.enable }}
-   {{- end }}
+    {{- end }}
     replicas: {{ .Values.OpenSearchClusterSpec.dashboards.replicas }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.pluginsList }}
     pluginsList:
@@ -104,7 +112,7 @@ spec:
         {{- if .Values.OpenSearchClusterSpec.dashboards.resources.requests.cpu }}
         cpu: {{ .Values.OpenSearchClusterSpec.dashboards.resources.requests.cpu }}
         {{- end }}
-     {{- end }}
+      {{- end }}
       {{- if .Values.OpenSearchClusterSpec.dashboards.resources.limits }}
       limits:
         {{- if .Values.OpenSearchClusterSpec.dashboards.resources.limits.memory }}
@@ -113,8 +121,8 @@ spec:
         {{- if .Values.OpenSearchClusterSpec.dashboards.resources.limits.cpu }}
         cpu: {{ .Values.OpenSearchClusterSpec.dashboards.resources.limits.cpu }}
         {{- end }}
-      {{- end }}
-    {{- end }}
+        {{- end }}
+        {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.tls }}
     tls:
       {{- if .Values.OpenSearchClusterSpec.dashboards.tls.enable }}
@@ -132,6 +140,14 @@ spec:
         name: {{ .Values.OpenSearchClusterSpec.dashboards.tls.caSecret.name }}
       {{- end }}
     {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.securityContext }}
+    securityContext:
+{{ toYaml .Values.OpenSearchClusterSpec.dashboards.securityContext | indent 6 }}
+    {{- end}}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.podSecurityContext }}
+    podSecurityContext:
+{{ toYaml .Values.OpenSearchClusterSpec.dashboards.podSecurityContext | indent 6}}
+    {{- end}}
     {{- if .Values.OpenSearchClusterSpec.dashboards.additionalVolumes }}
     additionalVolumes:
     {{- range $key,$val := .Values.OpenSearchClusterSpec.dashboards.additionalVolumes }}
@@ -176,9 +192,9 @@ spec:
       env:
 {{- toYaml $val.env | nindent 8 }}
       {{- end }}
-     {{- if  $val.resources }}
+      {{- if  $val.resources }}
       resources:
-        {{- if  $val.resources.requests }}
+      {{- if  $val.resources.requests }}
         requests:
           {{- if  $val.resources.requests.memory }}
           memory: {{  $val.resources.requests.memory }}
@@ -196,7 +212,7 @@ spec:
           cpu: {{ $val.resources.limits.cpu }}
           {{- end }}
         {{- end }}
-     {{- end }}
+      {{- end }}
       {{- if  $val.roles }}
       roles:
 {{ toYaml $val.roles | indent 6 }}
@@ -223,7 +239,7 @@ spec:
       additionalConfig:
 {{ toYaml $val.additionalConfig | indent 8 }}
       {{- end }}
-     {{- end }}
+  {{- end }}
   {{- if .Values.OpenSearchClusterSpec.security }}
   security:
     {{- if .Values.OpenSearchClusterSpec.security.config }}
@@ -240,7 +256,7 @@ spec:
       securityConfigSecret:
         name: {{ .Values.OpenSearchClusterSpec.security.config.securityConfigSecret.name }}
       {{- end }}
-   {{- end }}
+    {{- end }}
     {{- if .Values.OpenSearchClusterSpec.security.tls }}
     tls:
       {{- if .Values.OpenSearchClusterSpec.security.tls.transport }}
@@ -260,7 +276,7 @@ spec:
         nodesDn:
 {{ toYaml .Values.OpenSearchClusterSpec.security.tls.transport.nodesDn | indent 10 }}
         {{- end }}
-    {{- end }}
+      {{- end }}
       {{- if .Values.OpenSearchClusterSpec.security.tls.http }}
       http:
         {{- if .Values.OpenSearchClusterSpec.security.tls.http.generate }}
@@ -273,3 +289,4 @@ spec:
       {{- end }}
     {{- end }}
   {{- end }}
+{{- end }}

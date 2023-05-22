@@ -15,10 +15,11 @@ k3d image import -c $CLUSTER_NAME controller:latest
 
 ## Install helm chart
 helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
+helm install opensearch-cluster ../charts/opensearch-cluster --set OpenSearchClusterSpec.enabled=true --wait
+
 cd functionaltests
 
 ## Run tests
 go test -timeout 30m
-
 ## Delete k3d cluster
 k3d cluster delete $CLUSTER_NAME

@@ -101,3 +101,32 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 		Cleanup(name)
 	})
 })
+
+var _ = Describe("DeployWithHelm", Ordered, func() {
+	name := "opensearch-cluster"
+	namespace := "default"
+
+	When("creating a cluster", Ordered, func() {
+		It("should have 3 ready master pods", func() {
+			sts := appsv1.StatefulSet{}
+			Eventually(func() int32 {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-masters", Namespace: namespace}, &sts)
+				if err == nil {
+					return sts.Status.ReadyReplicas
+				}
+				return 0
+			}, time.Minute*8, time.Second*5).Should(Equal(int32(3)))
+		})
+
+		It("should have a ready dashboards pod", func() {
+			deployment := appsv1.Deployment{}
+			Eventually(func() int32 {
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-dashboards", Namespace: namespace}, &deployment)
+				if err == nil {
+					return deployment.Status.ReadyReplicas
+				}
+				return 0
+			}, time.Minute*2, time.Second*5).Should(Equal(int32(1)))
+		})
+	})
+})

@@ -1,4 +1,5 @@
 OpenSearchClusterSpec:
+  enabled: false
   general:
     httpPort: "9200"
     version: 2.3.0
@@ -19,8 +20,8 @@ OpenSearchClusterSpec:
       diskSize: "30Gi"
       replicas: 3
       roles:
-      - "master"
-      - "data"
+        - "master"
+        - "data"
       resources:
         requests:
           memory: "2Gi"
