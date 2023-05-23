@@ -8,11 +8,13 @@ import (
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
+	"io/ioutil"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
 	"net/http"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -28,6 +30,10 @@ type UpgradeCheckerReconciler struct {
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
+}
+
+type Response struct {
+	Result bool `json:"result"`
 }
 
 func NewUpgradeCheckerReconciler(
@@ -55,7 +61,7 @@ func NewUpgradeCheckerReconciler(
 }
 
 type Payload struct {
-	UDI                string   `json:"udi"`
+	UID                string   `json:"uid"`
 	OperatorVersion    string   `json:"operatorVersion"`
 	ClusterCount       int      `json:"clusterCount"`
 	OsClustersVersions []string `json:"osClustersVersions"`
@@ -76,15 +82,13 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 		results.Combine(&ctrl.Result{Requeue: requeue}, err)
 		return results.Result, results.Err
 	}
-	print(Builtjson)
-	Builtjson, err = json.Marshal(Builtjson)
 	if err != nil {
 		results.Combine(&ctrl.Result{Requeue: requeue}, err)
 		return results.Result, results.Err
 	}
 
 	serverURL := "http://localhost:1111/operator-usage"
-	response, err := sendJSONToServer(Builtjson, serverURL)
+	response, err := r.sendJSONToServer(Builtjson, serverURL)
 
 	// if err != nil so I didnt got a response
 	if err != nil {
@@ -129,7 +133,7 @@ func (r *UpgradeCheckerReconciler) BuildJSONPayload() ([]byte, error) {
 		return []byte{}, err
 	}
 	Pay := Payload{
-		UDI:                myUid,
+		UID:                myUid,
 		OperatorVersion:    OperatorVersion,
 		ClusterCount:       ClusterCount,
 		OsClustersVersions: versions,
@@ -145,6 +149,8 @@ func (r *UpgradeCheckerReconciler) BuildJSONPayload() ([]byte, error) {
 
 func ConvertToJSON(pay Payload) ([]byte, error) {
 	jsonData, err := json.Marshal(pay)
+	fmt.Println(jsonData)
+	fmt.Println(pay)
 	if err != nil {
 		return []byte{}, err
 	}
@@ -157,7 +163,7 @@ func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context) (strin
 	var valueStr string
 	var namespace string
 	if err := r.List(ctx, secretList); err != nil {
-		r.logger.Error(err, "Cannot find UDI secret")
+		r.logger.Error(err, "Cannot find UID secret")
 		return "-1", "-1", err
 		// Handle the error
 	}
@@ -166,7 +172,7 @@ func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context) (strin
 		if secret.Name == "operator-uid" {
 			value, ok := secret.Data["secretKey"]
 			if !ok {
-				r.logger.Info("Cannot secretKey inside of UDI secret")
+				r.logger.Info("Cannot secretKey inside of UID secret")
 			}
 			valueStr = string(value)
 			namespace = secret.Namespace
@@ -195,7 +201,7 @@ func (r *UpgradeCheckerReconciler) FindOperatorVersion(ctx context.Context, k8sC
 
 	}
 
-	version := findVersion(imageVersion)
+	version := helpers.FindVersion(imageVersion)
 	return version, err
 
 }
@@ -215,13 +221,7 @@ func (r *UpgradeCheckerReconciler) FindCountOfOsClusterAndVersions(ctx context.C
 	return len(list.Items), clustersVersion, nil
 }
 
-func findVersion(image string) string {
-	index := strings.Index(image, ":")
-	ver := image[index+1:]
-	return ver
-}
-
-func sendJSONToServer(jsonPayload []byte, serverURL string) (bool, error) {
+func (r *UpgradeCheckerReconciler) sendJSONToServer(jsonPayload []byte, serverURL string) (bool, error) {
 	retries := 5
 	timeout := 15 * time.Second
 
@@ -229,23 +229,45 @@ func sendJSONToServer(jsonPayload []byte, serverURL string) (bool, error) {
 		Timeout: timeout,
 	}
 
+	fmt.Println(string(jsonPayload))
 	for attempt := 1; attempt <= retries; attempt++ {
 		req, err := http.NewRequest("POST", serverURL, bytes.NewBuffer(jsonPayload))
 		if err != nil {
 			return false, err
 		}
-		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Content-Type", "application/json; charset=UTF-8")
 
+		// run the actule request
 		resp, err := client.Do(req)
-		if err == nil && resp.StatusCode == http.StatusOK {
+
+		if err == nil && resp.Status == "200 OK" {
 			defer resp.Body.Close()
+			body, _ := ioutil.ReadAll(resp.Body)
+			fmt.Println("response Status:", resp.Status)
+			fmt.Println("response Headers:", resp.Header)
+			fmt.Println("response Body:", string(body))
+			var response Response
+			err = json.Unmarshal(body, &response)
 			if err != nil {
 				return false, err
 			}
-			return true, nil
-		}
+			if response.Result {
+				return true, nil
+			} else {
+				if !response.Result {
+					return false, nil
+				}
+			}
+			if err != nil {
+				return false, err
+			}
+		} else {
+			if err != nil {
+				return false, err
 
-		//	time.Sleep(timeout)
+			}
+		}
+		time.Sleep(timeout)
 	}
 
 	return false, nil

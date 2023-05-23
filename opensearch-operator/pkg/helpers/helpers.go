@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-version"
@@ -199,6 +200,12 @@ func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opst
 		return 0, err
 	}
 	return len(list.Items), nil
+}
+
+func FindVersion(image string) string {
+	index := strings.Index(image, ":")
+	ver := image[index+1:]
+	return ver
 }
 
 // Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
