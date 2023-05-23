@@ -46,6 +46,7 @@ manager:
   watchNamespace:
 
 kubeRbacProxy:
+  enable: true
   resources:
     limits:
       cpu: 50m
