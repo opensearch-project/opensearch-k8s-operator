@@ -991,6 +991,22 @@ spec:
   description: Sample action group
 ```
 
+#### Opensearch Tenants
+
+It is possible to manage Opensearch tenants in Kubernetes with the operator. The operator will not modify tenants that already exist. You can create an example tenant as follows:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchTenant
+metadata:
+  name: sample-tenant
+  namespace: default
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  description: Sample tenant
+```
+
 ### Custom Admin User
 
 In order to create your cluster with an adminuser different from the default `admin:admin` you will have to walk through the following steps:

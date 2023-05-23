@@ -197,6 +197,32 @@ rules:
 - apiGroups:
   - opensearch.opster.io
   resources:
+  - opensearchtenants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchtenants/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchtenants/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
   - opensearchuserrolebindings
   verbs:
   - create
