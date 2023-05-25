@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	"sort"
 	"time"
@@ -247,6 +249,51 @@ func WaitForSTSStatus(ctx context.Context, k8sClient client.Client, obj *appsv1.
 		time.Sleep(time.Second * updateStepTime)
 	}
 	return nil, fmt.Errorf("failed to wait for STS")
+}
+
+// GetSTSForNodePool returns the corresponding sts for a given nodePool and cluster name
+func GetSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) (*appsv1.StatefulSet, error) {
+	sts := &appsv1.StatefulSet{}
+	stsName := clusterName + "-" + nodePool.Component
+
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: stsName, Namespace: clusterNamespace}, sts)
+
+	return sts, err
+}
+
+// DeleteSTSForNodePool deletes the sts for the corresponding nodePool
+func DeleteSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
+
+	sts, err := GetSTSForNodePool(ctx, k8sClient, nodePool, clusterName, clusterNamespace)
+	if err != nil {
+		return err
+	}
+
+	opts := client.DeleteOptions{}
+	// Add this so pods of the sts are deleted as well, otherwise they would remain as orphaned pods
+	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+
+	err = k8sClient.Delete(ctx, sts, &opts)
+
+	return err
+}
+
+// DeleteSecurityUpdateJob deletes the securityconfig update job
+func DeleteSecurityUpdateJob(ctx context.Context, k8sClient client.Client, clusterName, clusterNamespace string) error {
+	jobName := clusterName + "-securityconfig-update"
+	job := batchv1.Job{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: clusterNamespace}, &job)
+
+	if err != nil {
+		return err
+	}
+
+	opts := client.DeleteOptions{}
+	// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
+	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+	err = k8sClient.Delete(ctx, &job, &opts)
+
+	return err
 }
 
 func HasDataRole(nodePool *opsterv1.NodePool) bool {

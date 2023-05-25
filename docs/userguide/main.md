@@ -813,6 +813,12 @@ In case the operator detects several crashed or missing pods (for a nodepool) at
 
 The recovery mode also kicks in if you deleted your cluster but kept the PVCs around and are then reinstalling the cluster.
 
+If the cluster is using emptyDir i.e. every node pool is using emptyDir, the operator starts recovery in case of these failure scenarios:
+1. More than half the master nodes are missing or crashed and thus, the quorum is broken.
+2. All data nodes are missing or crashed and thus, no data node is available.
+
+But since the cluster is using emptyDir, data is lost and not recoverable. So, it is impossible to restore the cluster to its old state. Therefore, the operator deletes and recreates the entire OpenSearch cluster.
+
 ### Rolling Upgrades
 
 The operator supports automatic rolling version upgrades. To do so simply change the `general.version` in your cluster spec and reapply it:

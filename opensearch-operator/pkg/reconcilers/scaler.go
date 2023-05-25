@@ -66,6 +66,7 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 }
 
 func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool, error) {
+	lg := log.FromContext(r.ctx)
 	namespace := r.instance.Namespace
 	sts_name := builders.StsName(r.instance, nodePool)
 	currentSts := appsv1.StatefulSet{}
@@ -74,17 +75,47 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		return false, err
 	}
 
-	var desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
-	if desireReplicaDiff == 0 {
-		return false, nil
-	}
 	componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
+		Status:      "Running",
 		Description: nodePool.Component,
 	}
 	comp := r.instance.Status.ComponentsStatus
 	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
-	if !found {
+
+	var desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
+	if desireReplicaDiff == 0 {
+		// If a scaling operation was started before for this nodePool
+		if found {
+			if currentSts.Status.ReadyReplicas != nodePool.Replicas {
+				// Change the status to waiting while the pods are coming up or getting deleted
+				componentStatus.Status = "Waiting"
+				r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+			} else {
+				// Scaling operation is completed, remove the status
+				r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
+			}
+			err := r.Status().Update(r.ctx, r.instance)
+			if err != nil {
+				lg.Error(err, "failed to update status")
+				return false, err
+			}
+		}
+		return false, nil
+	}
+
+	// Check for 'Running' status as we set it to indicate the scaling operation has begun
+	// Also the status is set to 'Running' if it fails to exclude node for some reason
+	if !found || currentStatus.Status == "Running" {
+		// Change the status to running, to indicate that a scaling operation for this nodePool has started
+		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+		err := r.Status().Update(r.ctx, r.instance)
+		if err != nil {
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to update status")
+			lg.Error(err, "failed to update status")
+			return true, err
+		}
+
 		if desireReplicaDiff > 0 {
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to scaling")
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
