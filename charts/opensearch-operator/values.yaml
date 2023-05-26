@@ -52,9 +52,11 @@ manager:
 installCRDs: true
 
 serviceAccount:
+  # Specifies whether a service account should be created
   create: true
   # Override the service account name. Defaults to opensearch-operator-controller-manager
   name: ""
+
 kubeRbacProxy:
   resources:
     limits:
