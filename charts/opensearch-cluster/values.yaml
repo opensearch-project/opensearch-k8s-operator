@@ -1,5 +1,5 @@
 OpenSearchClusterSpec:
-  enabled: false
+  enabled: true
   general:
     httpPort: "9200"
     version: 2.3.0

@@ -9,7 +9,7 @@ spec:
   bootstrap:
     {{- if .Values.OpenSearchClusterSpec.bootstrap.additionalConfig }}
     additionalConfig:
-{{ toYaml .Values.OpenSearchClusterSpec.bootstrap.additionalConfig | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.bootstrap.additionalConfig | nindent 6 }}
     {{- end }}
   {{- end }}
   {{- if .Values.OpenSearchClusterSpec.initHelper }}
@@ -25,7 +25,7 @@ spec:
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.initHelper.imagePullSecrets }}
     imagePullSecrets:
-    {{ toYaml .Values.OpenSearchClusterSpec.initHelper.imagePullSecrets | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.initHelper.imagePullSecrets | nindent 6 }}
     {{- end }}
   {{- end }}
   general:
@@ -42,19 +42,19 @@ spec:
     serviceName: {{ .Values.OpenSearchClusterSpec.general.serviceName }}
     {{- if .Values.OpenSearchClusterSpec.general.pluginsList }}
     pluginsList:
-{{ toYaml .Values.OpenSearchClusterSpec.general.pluginsList | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.general.pluginsList | nindent 6 }}
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.general.keystore }}
     keystore:
-{{ toYaml .Values.OpenSearchClusterSpec.general.keystore | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.general.keystore |  nindent 6 }}
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.general.securityContext }}
     securityContext:
-{{ toYaml .Values.OpenSearchClusterSpec.general.securityContext | indent 6}}
+      {{ toYaml .Values.OpenSearchClusterSpec.general.securityContext | nindent 6}}
     {{- end}}
     {{- if .Values.OpenSearchClusterSpec.general.podSecurityContext }}
     podSecurityContext:
-{{ toYaml .Values.OpenSearchClusterSpec.general.podSecurityContext | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.general.podSecurityContext | nindent 6 }}
     {{- end}}
     {{- if .Values.OpenSearchClusterSpec.general.additionalVolumes }}
     additionalVolumes:
@@ -67,7 +67,7 @@ spec:
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.general.additionalConfig }}
     additionalConfig:
-{{ toYaml .Values.OpenSearchClusterSpec.general.additionalConfig | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.general.additionalConfig | nindent 6 }}
     {{- end }}
   {{- if .Values.OpenSearchClusterSpec.dashboards }}
   dashboards:
@@ -81,18 +81,18 @@ spec:
     replicas: {{ .Values.OpenSearchClusterSpec.dashboards.replicas }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.pluginsList }}
     pluginsList:
-{{ toYaml .Values.OpenSearchClusterSpec.dashboards.pluginsList | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.pluginsList | nindent 6 }}
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.basePath }}
     basePath: {{ .Values.OpenSearchClusterSpec.dashboards.basePath }}
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.labels }}
     labels: # Add any extra labels as key-value pairs here
-{{ toYaml .Values.OpenSearchClusterSpec.dashboards.labels | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.labels | nindent 6 }}
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.annotations }}
     annotations: # Add any extra annotations as key-value pairs here
-{{ toYaml .Values.OpenSearchClusterSpec.dashboards.annotations | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.annotations | nindent 6 }}
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.opensearchCredentialsSecret }}
     opensearchCredentialsSecret:
@@ -100,7 +100,7 @@ spec:
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.env }}
     env:
-{{- toYaml .Values.OpenSearchClusterSpec.dashboards.env | nindent 8 }}
+      {{- toYaml .Values.OpenSearchClusterSpec.dashboards.env | nindent 8 }}
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.resources }}
     resources:
@@ -142,11 +142,11 @@ spec:
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.securityContext }}
     securityContext:
-{{ toYaml .Values.OpenSearchClusterSpec.dashboards.securityContext | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.securityContext | nindent 6 }}
     {{- end}}
     {{- if .Values.OpenSearchClusterSpec.dashboards.podSecurityContext }}
     podSecurityContext:
-{{ toYaml .Values.OpenSearchClusterSpec.dashboards.podSecurityContext | indent 6}}
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.podSecurityContext | nindent 6}}
     {{- end}}
     {{- if .Values.OpenSearchClusterSpec.dashboards.additionalVolumes }}
     additionalVolumes:
@@ -159,7 +159,7 @@ spec:
     {{- end }}
     {{- if .Values.OpenSearchClusterSpec.dashboards.additionalConfig }}
     additionalConfig:
-{{ toYaml .Values.OpenSearchClusterSpec.dashboards.additionalConfig | indent 6 }}
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.additionalConfig | nindent 6 }}
     {{- end }}
   {{- end }}
   {{- if .Values.OpenSearchClusterSpec.confMgmt }}
@@ -175,22 +175,22 @@ spec:
       diskSize: {{ $val.diskSize | quote }}
       {{- if $val.NodeSelector }}
       nodeSelector:
-{{- toYaml $val.NodeSelector | nindent 8 }}
+        {{- toYaml $val.NodeSelector | nindent 8 }}
       {{- end }}
       {{- if  $val.labels }}
       labels: # Add any extra labels as key-value pairs here
-{{ toYaml  $val.labels | indent 8 }}
+        {{ toYaml  $val.labels | nindent 8 }}
       {{- end }}
       {{- if  $val.annotations }}
       annotations: # Add any extra annotations as key-value pairs here
-{{ toYaml  $val.annotations | indent 8 }}
+        {{ toYaml  $val.annotations | nindent 8 }}
       {{- end }}
       {{- if  $val.priorityClassName }}
       priorityClassName: {{  $val.priorityClassName }}
       {{- end }}
       {{- if $val.env }}
       env:
-{{- toYaml $val.env | nindent 8 }}
+        {{- toYaml $val.env | nindent 8 }}
       {{- end }}
       {{- if  $val.resources }}
       resources:
@@ -215,7 +215,7 @@ spec:
       {{- end }}
       {{- if  $val.roles }}
       roles:
-{{ toYaml $val.roles | indent 6 }}
+        {{ toYaml $val.roles | nindent 6 }}
       {{- end }}
       {{- if  $val.persistence }}
       persistence:
@@ -229,7 +229,7 @@ spec:
           {{- end }}
           {{- if  $val.persistence.pvc.accessModes }}
           accessModes:
-{{  toYaml $val.persistence.pvc.accessModes | indent 10 }}
+            {{  toYaml $val.persistence.pvc.accessModes | nindent 10 }}
           {{- end }}
        {{- else if eq (len $val.persistence.emptyDir) 0 }}
        emptyDir: {}
@@ -237,7 +237,7 @@ spec:
      {{- end }}
       {{- if $val.additionalConfig }}
       additionalConfig:
-{{ toYaml $val.additionalConfig | indent 8 }}
+        {{ toYaml $val.additionalConfig | nindent 8 }}
       {{- end }}
   {{- end }}
   {{- if .Values.OpenSearchClusterSpec.security }}
@@ -270,11 +270,11 @@ spec:
         {{- end }}
         {{- if .Values.OpenSearchClusterSpec.security.tls.transport.adminDn }}
         adminDn:
-{{ toYaml .Values.OpenSearchClusterSpec.security.tls.transport.adminDn | indent 10 }}
+          {{ toYaml .Values.OpenSearchClusterSpec.security.tls.transport.adminDn | nindent 10 }}
         {{- end }}
         {{- if .Values.OpenSearchClusterSpec.security.tls.transport.nodesDn }}
         nodesDn:
-{{ toYaml .Values.OpenSearchClusterSpec.security.tls.transport.nodesDn | indent 10 }}
+          {{ toYaml .Values.OpenSearchClusterSpec.security.tls.transport.nodesDn | nindent 10 }}
         {{- end }}
       {{- end }}
       {{- if .Values.OpenSearchClusterSpec.security.tls.http }}

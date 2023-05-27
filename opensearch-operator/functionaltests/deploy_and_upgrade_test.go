@@ -102,11 +102,12 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 	})
 })
 
+// The cluster has been created using Helm outside of this test. This test verifies the presence of the resources after the cluster is created.
 var _ = Describe("DeployWithHelm", Ordered, func() {
 	name := "opensearch-cluster"
 	namespace := "default"
 
-	When("creating a cluster", Ordered, func() {
+	When("cluster is created using helm", Ordered, func() {
 		It("should have 3 ready master pods", func() {
 			sts := appsv1.StatefulSet{}
 			Eventually(func() int32 {
