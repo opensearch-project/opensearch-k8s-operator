@@ -70,15 +70,14 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			if retErr != nil {
 				r.instance.Status.State = opsterv1.OpensearchRoleStateError
 			}
-			if retResult.Requeue {
+			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
 				r.instance.Status.State = opsterv1.OpensearchRoleStatePending
 			}
-			if retErr == nil && !retResult.Requeue {
-				if reason == opensearchRoleExists {
-					r.instance.Status.State = opsterv1.OpensearchRoleIgnored
-				} else {
-					r.instance.Status.State = opsterv1.OpensearchRoleStateCreated
-				}
+			if retErr == nil && retResult.Requeue {
+				r.instance.Status.State = opsterv1.OpensearchRoleStateCreated
+			}
+			if reason == opensearchRoleExists {
+				r.instance.Status.State = opsterv1.OpensearchRoleIgnored
 			}
 			return r.Status().Update(r.ctx, r.instance)
 		})
@@ -217,7 +216,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 	if !shouldUpdate {
 		r.logger.V(1).Info(fmt.Sprintf("role %s is in sync", r.instance.Name))
-		return
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
 
 	retErr = services.CreateOrUpdateRole(r.ctx, r.osClient, r.instance.Name, role)
@@ -229,7 +228,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "role updated in opensearch")
 
-	return
+	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 }
 
 func (r *RoleReconciler) Delete() error {

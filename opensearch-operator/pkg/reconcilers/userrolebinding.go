@@ -68,10 +68,10 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 			if retErr != nil {
 				r.instance.Status.State = opsterv1.OpensearchUserRoleBindingStateError
 			}
-			if retResult.Requeue {
+			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
 				r.instance.Status.State = opsterv1.OpensearchUserRoleBindingPending
 			}
-			if retErr == nil && !retResult.Requeue {
+			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
 				r.instance.Status.ProvisionedRoles = r.instance.Spec.Roles
 				r.instance.Status.ProvisionedBackendRoles = r.instance.Spec.BackendRoles
 				r.instance.Status.ProvisionedUsers = r.instance.Spec.Users
@@ -210,7 +210,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 	}
 
-	return
+	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 }
 
 func (r *UserRoleBindingReconciler) Delete() error {

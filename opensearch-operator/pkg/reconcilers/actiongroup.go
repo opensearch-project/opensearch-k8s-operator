@@ -69,15 +69,14 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 			if retErr != nil {
 				r.instance.Status.State = opsterv1.OpensearchActionGroupError
 			}
-			if retResult.Requeue {
+			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
 				r.instance.Status.State = opsterv1.OpensearchActionGroupPending
 			}
-			if retErr == nil && !retResult.Requeue {
-				if reason == opensearchActionGroupExists {
-					r.instance.Status.State = opsterv1.OpensearchActionGroupIgnored
-				} else {
-					r.instance.Status.State = opsterv1.OpensearchActionGroupCreated
-				}
+			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
+				r.instance.Status.State = opsterv1.OpensearchActionGroupCreated
+			}
+			if reason == opensearchActionGroupExists {
+				r.instance.Status.State = opsterv1.OpensearchActionGroupIgnored
 			}
 			return r.Status().Update(r.ctx, r.instance)
 		})
@@ -210,7 +209,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 
 	if !shouldUpdate {
 		r.logger.V(1).Info(fmt.Sprintf("actiongroup %s is in sync", r.instance.Name))
-		return
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
 
 	retErr = services.CreateOrUpdateActionGroup(r.ctx, r.osClient, r.instance.Name, actionGroup)
@@ -222,7 +221,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 
 	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "actiongroup updated in opensearch")
 
-	return
+	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 }
 
 func (r *ActionGroupReconciler) Delete() error {

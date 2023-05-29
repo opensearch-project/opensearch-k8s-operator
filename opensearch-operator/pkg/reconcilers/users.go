@@ -69,10 +69,10 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			if retErr != nil {
 				r.instance.Status.State = opsterv1.OpensearchUserStateError
 			}
-			if retResult.Requeue {
+			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
 				r.instance.Status.State = opsterv1.OpensearchUserStatePending
 			}
-			if retErr == nil && !retResult.Requeue {
+			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
 				r.instance.Status.State = opsterv1.OpensearchUserStateCreated
 			}
 			return r.Status().Update(r.ctx, r.instance)
@@ -180,7 +180,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	}
 	if !update {
 		r.logger.V(1).Info(fmt.Sprintf("user %s is in sync", r.instance.Name))
-		return
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
 
 	retErr = services.CreateOrUpdateUser(r.ctx, r.osClient, r.instance.Name, user)
@@ -191,7 +191,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	}
 
 	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "user updated in opensearch")
-	return
+	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 }
 
 func (r *UserReconciler) Delete() error {
