@@ -8,7 +8,7 @@ import (
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
-	"io/ioutil"
+	"io"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/tools/record"
@@ -72,10 +72,10 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 	var err error
 	var Builtjson []byte
 	results := reconciler.CombinedResult{}
-	//if !isTimeToRunFunction() {
-	//	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
-	//	return results.Result, nil
-	//}
+	if !isTimeToRunFunction() {
+		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+		return results.Result, nil
+	}
 
 	Builtjson, err = r.BuildJSONPayload()
 	if err != nil {
@@ -98,7 +98,7 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// if respnse == nil and no error so the Operator is Up to date (cause the server is not returning anything when the Version is latest).
-	if response == true && err == nil {
+	if response && err == nil {
 		// Operator is up to date
 		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
 		return results.Result, results.Err
@@ -163,7 +163,7 @@ func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context) (strin
 	var valueStr string
 	var namespace string
 	if err := r.List(ctx, secretList); err != nil {
-		r.logger.Error(err, "Cannot find UID secret")
+		r.logger.Error(err, "Cannot list secrets")
 		return "-1", "-1", err
 		// Handle the error
 	}
@@ -242,7 +242,7 @@ func (r *UpgradeCheckerReconciler) sendJSONToServer(jsonPayload []byte, serverUR
 
 		if err == nil && resp.Status == "200 OK" {
 			defer resp.Body.Close()
-			body, _ := ioutil.ReadAll(resp.Body)
+			body, _ := io.ReadAll(resp.Body)
 			fmt.Println("response Status:", resp.Status)
 			fmt.Println("response Headers:", resp.Header)
 			fmt.Println("response Body:", string(body))

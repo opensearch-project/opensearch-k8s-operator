@@ -2,6 +2,8 @@ package helpers
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"reflect"
@@ -20,8 +22,9 @@ import (
 )
 
 const (
-	stsUpdateWaitTime = 30
-	updateStepTime    = 3
+	stsUpdateWaitTime        = 30
+	updateStepTime           = 3
+	UpgradeCheckerCharsCount = 15
 )
 
 func ContainsString(slice []string, s string) bool {
@@ -269,4 +272,24 @@ func CompareVersions(v1 string, v2 string) bool {
 	ver1, err := version.NewVersion(v1)
 	ver2, _ := version.NewVersion(v2)
 	return err == nil && ver1.LessThan(ver2)
+}
+
+func GenerateSecretString() (string, error) {
+	// Calculate the required number of random bytes
+	byteLength := (UpgradeCheckerCharsCount * 3) / 4
+
+	// Generate random bytes
+	randomBytes := make([]byte, byteLength)
+	_, err := rand.Read(randomBytes)
+	if err != nil {
+		return "", err
+	}
+
+	// Convert random bytes to base64 encoded string
+	secretString := base64.URLEncoding.EncodeToString(randomBytes)
+
+	// Trim any padding characters from the base64 encoded string
+	secretString = secretString[:UpgradeCheckerCharsCount]
+
+	return secretString, nil
 }
