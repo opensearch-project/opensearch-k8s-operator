@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 	"fmt"
-	"k8s.io/api/extensions/v1beta1"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -315,103 +314,68 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		r.Instance,
 	)
 
-	DeployList := v1beta1.DeploymentList{}
+	DeployList := &appsv1.DeploymentList{}
 	componentReconcilers := []reconcilers.ComponentReconciler{}
+	var envs []corev1.EnvVar
 
 	// check the UpgradeChecker env inside of the manager deployment is true
-	if err := r.List(ctx, &DeployList); err != nil {
+	if err := r.List(ctx, DeployList); err != nil {
 		fmt.Println("Cannot find UID secret")
 		// Handle the error
 	}
+	componentReconcilers = nil
 	//secretList := &v1core.SecretList{}
 	for _, deploy := range DeployList.Items {
+		if componentReconcilers != nil {
+			break
+		}
 		if deploy.Name == "opensearch-operator-controller-manager" {
-			envVars := deploy.Spec.Template.Spec.Containers[0].Env
-			for _, envVar := range envVars {
-				// check each envVar, which is of type corev1.EnvVar
-				// thats logic is for already running users that will upgrade to that version, the controller
+			for _, container := range deploy.Spec.Template.Spec.Containers {
+				if componentReconcilers != nil {
+					break
+				}
+				envs = container.Env
+				for _, envVar := range envs {
+					// check each envVar, which is of type corev1.EnvVar
+					// thats logic is for already running users that will upgrade to that version, the controller
 
-				if envVar.Name == "UpgradeChecker" { //check if upgrade Chcker is enable
-					if envVar.Value == "true" { // if not ture, the upgrade checker  is disabled and we building the reconciler list without the UpgradeCheckerReconciler.
+					if envVar.Name == "UpgradeChecker" { //check if upgrade Chcker is enable
+						if envVar.Value == "true" {
 
-						//if err := r.List(ctx, secretList); err != nil {
-						//	r.Logger.Error(err, "Cannot list secrets")
-						//	break
-						//}
-						//
-						//for _, secret := range secretList.Items {
-						//	if secret.Name == "operator-uid" {
-						//		value, ok := secret.Data["secretKey"]
-						//		if !ok {
-						//			r.Logger.Info("Cannot secretKey inside of UID secret", value)
-						//		}
-						//		break
-						//	}
-						//}
-						//r.Logger.Info("UpgradeChecker is enabled but Operator cannot find UID secret,creating one")
-						//uid, err := helpers.GenerateSecretString()
-						//if err != nil {
-						//	r.Logger.Info("UpgradeChecker Cannot create UID secret - aborting ")
-						//	break
-						//}
-						//// Create the secret object
-						//secret := &corev1.Secret{
-						//	ObjectMeta: metav1.ObjectMeta{
-						//		Name:      "operator-uid",
-						//		Namespace: deploy.Namespace,
-						//	},
-						//	Data: map[string][]byte{
-						//		"secretKey": []byte(uid),
-						//	},
-						//}
-						//
-						//createdSecret, err := client.crt(context.TODO(), secret, metav1.CreateOptions{})
-						//if err != nil {
-						//	r.Logger.Info("UpgradeChecker Failed create UID secret - aborting ")
-						//	break
-						//}
+							componentReconcilers = []reconcilers.ComponentReconciler{
+								upgradeChecker.Reconcile,
+								tls.Reconcile,
+								securityconfig.Reconcile,
+								config.Reconcile,
+								cluster.Reconcile,
+								scaler.Reconcile,
+								dashboards.Reconcile,
+								upgrade.Reconcile,
+								restart.Reconcile,
+							}
+							break
+						} else {
 
-						componentReconcilers = []reconcilers.ComponentReconciler{
-							upgradeChecker.Reconcile,
-							tls.Reconcile,
-							securityconfig.Reconcile,
-							config.Reconcile,
-							cluster.Reconcile,
-							scaler.Reconcile,
-							dashboards.Reconcile,
-							upgrade.Reconcile,
-							restart.Reconcile,
-						}
-					} else {
-						componentReconcilers = []reconcilers.ComponentReconciler{
-							tls.Reconcile,
-							securityconfig.Reconcile,
-							config.Reconcile,
-							cluster.Reconcile,
-							scaler.Reconcile,
-							dashboards.Reconcile,
-							upgrade.Reconcile,
-							restart.Reconcile,
+							// if not ture, the upgrade checker  is disabled and building the reconciler list without the UpgradeCheckerReconciler.
+
+							componentReconcilers = []reconcilers.ComponentReconciler{
+								tls.Reconcile,
+								securityconfig.Reconcile,
+								config.Reconcile,
+								cluster.Reconcile,
+								scaler.Reconcile,
+								dashboards.Reconcile,
+								upgrade.Reconcile,
+								restart.Reconcile,
+							}
+							r.Logger.Info("Upgrade Checker is disabled- aborted")
+							break
 						}
 					}
 				}
 			}
 		}
-
 	}
-	// check if the componentReconcilers is nil cause of break in the last for
-	//if componentReconcilers == nil {
-	//	componentReconcilers = []reconcilers.ComponentReconciler{
-	//		tls.Reconcile,
-	//		securityconfig.Reconcile,
-	//		config.Reconcile,
-	//		cluster.Reconcile,
-	//		scaler.Reconcile,
-	//		dashboards.Reconcile,
-	//		upgrade.Reconcile,
-	//		restart.Reconcile,
-	//	}
-	//}
 
 	for _, rec := range componentReconcilers {
 		result, err := rec()
