@@ -315,7 +315,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 	)
 
 	DeployList := &appsv1.DeploymentList{}
-	componentReconcilers := []reconcilers.ComponentReconciler{}
+	var componentReconcilers []reconcilers.ComponentReconciler
 	var envs []corev1.EnvVar
 
 	// check the UpgradeChecker env inside of the manager deployment is true
