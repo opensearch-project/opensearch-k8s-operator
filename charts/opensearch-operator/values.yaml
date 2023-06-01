@@ -1,3 +1,6 @@
+nameOverride: ""
+fullnameOverride: ""
+
 nodeSelector: {}
 tolerations: []
 manager:
@@ -45,6 +48,15 @@ manager:
   # watch objects in the desired namespace. Defaults is to watch all namespaces.
   watchNamespace:
 
+# Install the Custom Resource Definitions with Helm
+installCRDs: true
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Override the service account name. Defaults to opensearch-operator-controller-manager
+  name: ""
+
 kubeRbacProxy:
   enable: true
   resources:
@@ -73,6 +85,6 @@ kubeRbacProxy:
     timeoutSeconds: 3
     initialDelaySeconds: 10
 
-  image: 
+  image:
     repository: "gcr.io/kubebuilder/kube-rbac-proxy"
     tag: "v0.12.0"
