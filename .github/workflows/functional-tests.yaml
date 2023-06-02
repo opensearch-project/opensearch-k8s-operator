@@ -36,6 +36,7 @@ jobs:
           
           ## Install helm chart
           helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
+          helm install opensearch-cluster ../charts/opensearch-cluster --set OpenSearchClusterSpec.enabled=true --wait
           cd functionaltests
 
           ## Run tests

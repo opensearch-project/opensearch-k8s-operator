@@ -21,7 +21,13 @@ A few notes on operator releases:
 
 ## Quickstart
 
-After you have successfully installed the Operator, you can deploy your first OpenSearch cluster. This is done by creating an `OpenSearchCluster` custom object in Kubernetes.
+After you have successfully installed the Operator, you can deploy your first OpenSearch cluster. This is done by creating an `OpenSearchCluster` custom object in Kubernetes or using Helm.
+
+### Using Helm
+
+OpenSearch cluster can be easily deployed using Helm. Follow the instructions in  [Cluster Chart Guide](./cluster-chart.md) to install the cluster.
+
+### Using Custom Object
 
 Create a file `cluster.yaml` with the following content:
 
