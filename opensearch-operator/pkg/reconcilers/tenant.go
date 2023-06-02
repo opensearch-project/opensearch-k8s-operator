@@ -69,15 +69,16 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			if retErr != nil {
 				r.instance.Status.State = opsterv1.OpensearchTenantError
 			}
-			if retResult.Requeue {
+			// Requeue after is 10 seconds if waiting for OpenSearch cluster
+			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
 				r.instance.Status.State = opsterv1.OpensearchTenantPending
 			}
-			if retErr == nil && !retResult.Requeue {
-				if reason == opensearchTenantExists {
-					r.instance.Status.State = opsterv1.OpensearchTenantIgnored
-				} else {
-					r.instance.Status.State = opsterv1.OpensearchTenantCreated
-				}
+			// Requeue is after 30 seconds for normal reconciliation after creation/update
+			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
+				r.instance.Status.State = opsterv1.OpensearchTenantCreated
+			}
+			if reason == opensearchTenantExists {
+				r.instance.Status.State = opsterv1.OpensearchTenantIgnored
 			}
 			return r.Status().Update(r.ctx, r.instance)
 		})
@@ -202,7 +203,7 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 	if !shouldUpdate {
 		r.logger.V(1).Info(fmt.Sprintf("tenant %s is in sync", r.instance.Name))
-		return
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
 
 	retErr = services.CreateOrUpdateTenant(r.ctx, r.osClient, r.instance.Name, tenant)
@@ -214,7 +215,7 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "tenant updated in opensearch")
 
-	return
+	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 }
 
 func (r *TenantReconciler) Delete() error {

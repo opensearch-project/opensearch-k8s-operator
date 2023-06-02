@@ -446,14 +446,14 @@ var _ = Describe("Cluster Reconciler", func() {
 				Status:      "Upgraded",
 				Description: "master",
 			}
-			Expect(func() error {
+			Eventually(func() error {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return err
 				}
 				OpensearchCluster.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, OpensearchCluster.Status.ComponentsStatus)
 				OpensearchCluster.Status.ComponentsStatus = append(OpensearchCluster.Status.ComponentsStatus, masterComponentStatus)
 				return k8sClient.Status().Update(context.Background(), &OpensearchCluster)
-			}()).To(Succeed())
+			}, timeout, interval).Should(BeNil())
 		})
 		It("should cleanup the status", func() {
 			Eventually(func() bool {
