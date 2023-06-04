@@ -52,7 +52,7 @@ spec:
         env:
         {{- if .Values.UpgradeChecker.env }}
         - name: UpgradeChecker
-          value: {{ .Values.UpgradeChecker.env }}
+          value: "{{ .Values.UpgradeChecker.env }}"
         {{- end }}
         - name: DNS_BASE
           value: {{ .Values.manager.dnsBase }}

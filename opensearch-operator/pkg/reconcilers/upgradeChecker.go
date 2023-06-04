@@ -73,10 +73,12 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 	var Builtjson []byte
 	results := reconciler.CombinedResult{}
 	if !isTimeToRunFunction() {
+		r.logger.Info("No the time for UpgardeChecker")
 		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
 		return results.Result, nil
 	}
 
+	r.logger.Info("started UpgardeChecker")
 	Builtjson, err = r.BuildJSONPayload()
 	if err != nil {
 		results.Combine(&ctrl.Result{Requeue: requeue}, err)
@@ -87,7 +89,7 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 		return results.Result, results.Err
 	}
 
-	serverURL := "http://localhost:1111/operator-usage"
+	serverURL := "http://upgrade-chcker-dev.opster.co/operator-usage"
 	response, err := r.sendJSONToServer(Builtjson, serverURL)
 
 	// if err != nil so I didnt got a response
@@ -169,14 +171,14 @@ func (r *UpgradeCheckerReconciler) FindUidFromSecret(ctx context.Context) (strin
 	}
 
 	for _, secret := range secretList.Items {
-		if secret.Name == "operator-uid" {
+		if secret.ObjectMeta.Name == "opensearch-operator-uid" {
 			value, ok := secret.Data["secretKey"]
 			if !ok {
 				r.logger.Info("Cannot secretKey inside of UID secret")
 			}
 			valueStr = string(value)
 			namespace = secret.Namespace
-			//r.logger.Info("UID:", valueStr)
+			//		r.logger.Info("UID: %s", valueStr)
 			break
 		}
 	}
