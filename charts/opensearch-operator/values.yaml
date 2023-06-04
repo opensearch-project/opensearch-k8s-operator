@@ -76,4 +76,4 @@ kubeRbacProxy:
     repository: "gcr.io/kubebuilder/kube-rbac-proxy"
     tag: "v0.12.0"
 UpgradeChecker:
-        env: true
+        env: "true"
