@@ -185,7 +185,7 @@ var _ = Describe("Cluster Reconciler", func() {
 						)),
 						HaveMatchingVolume(And(
 							HaveName("test-emptydir"),
-							HaveVolumeSource("emptyDir"),
+							HaveVolumeSource("EmptyDir"),
 						)),
 					))
 				}(nodePool)
