@@ -320,7 +320,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 
 	// check the UpgradeChecker env inside of the manager deployment is true
 	if err := r.List(ctx, DeployList); err != nil {
-		fmt.Println("Cannot find UID secret")
+		fmt.Println("Cannot list deployments")
 		// Handle the error
 	}
 	componentReconcilers = nil

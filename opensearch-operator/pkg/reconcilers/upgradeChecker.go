@@ -15,6 +15,7 @@ import (
 	"net/http"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -25,7 +26,12 @@ import (
 type UpgradeCheckerReconciler struct {
 	client.Client
 	reconciler.ResourceReconciler
-	ctx               context.Context
+	ctx context.Context //if !isTimeToRunFunction() {
+	//	r.logger.Info("No the time for UpgardeChecker")
+	//	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+	//	return results.Result, nil
+	//}
+	pki               tls.PKI
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
@@ -72,6 +78,7 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 	var err error
 	var Builtjson []byte
 	results := reconciler.CombinedResult{}
+
 	if !isTimeToRunFunction() {
 		r.logger.Info("No the time for UpgardeChecker")
 		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
