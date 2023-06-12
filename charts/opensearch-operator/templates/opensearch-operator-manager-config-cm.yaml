@@ -14,4 +14,4 @@ data:
       resourceName: a867c7dc.opensearch.opster.io
 kind: ConfigMap
 metadata:
-  name: opensearch-operator-manager-config
+  name: {{ include "opensearch-operator.fullname" . }}-manager-config

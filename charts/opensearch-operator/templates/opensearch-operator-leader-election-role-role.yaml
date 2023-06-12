@@ -1,7 +1,7 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
-  name: opensearch-operator-leader-election-role
+  name: {{ include "opensearch-operator.fullname" . }}-leader-election-role
 rules:
 - apiGroups:
   - ""
@@ -34,3 +34,15 @@ rules:
   verbs:
   - create
   - patch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

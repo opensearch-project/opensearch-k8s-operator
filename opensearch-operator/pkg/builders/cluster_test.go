@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
+	"os"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
-	"os"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -209,6 +209,42 @@ var _ = Describe("Builders", func() {
 			Expect(expected).To(Equal(actual))
 		})
 
+		It("should add experimental flag when the node.roles contains search and the version is below 2.7", func() {
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "node.roles",
+				Value: "search",
+			}))
+
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx512M -Xms512M -Dopensearch.experimental.feature.searchable_snapshot.enabled=true -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+
+		It("should not add experimental flag when the node.roles contains search and the version is 2.7 or above", func() {
+			var clusterObject = ClusterDescWithVersion("2.7.0")
+			var nodePool = opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "node.roles",
+				Value: "search",
+			}))
+
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx512M -Xms512M -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+
 		It("should properly configure security contexts if set", func() {
 			user := int64(1000)
 			podSecurityContext := &corev1.PodSecurityContext{
@@ -232,6 +268,43 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, logr.Logger{}, nil, nil)
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
+		})
+		It("should use default storageclass if not specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{PVC: &opsterv1.PVCSource{
+					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				},
+				}},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+	})
+
+	When("When Reconciling the snapshotRepoJob", func() {
+		It("should create a snapshotconfig batch job", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = "snapshot"
+			clusterObject.Spec.General.ServiceName = "snapshotservice"
+
+			var snapshotRepoSettings = map[string]string{"bucket": "opensearch-s3-snapshot", "region": "us-east-1", "base_path": "os-snapshot"}
+			snapshotConfig := opsterv1.SnapshotRepoConfig{
+				Name:     "os-snap",
+				Type:     "s3",
+				Settings: snapshotRepoSettings,
+			}
+			clusterObject.Spec.General.SnapshotRepositories = []opsterv1.SnapshotRepoConfig{snapshotConfig}
+			result := NewSnapshotRepoconfigUpdateJob(&clusterObject, "snapshotrepoconfig", "foobar", "snapshotrepoconfig/checksum", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Name).To(Equal("snapshotrepoconfig"))
+			snapshotCmd := "curl --fail-with-body -s -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://snapshotservice.snapshot.svc.cluster.local:9200/_snapshot/os-snap?pretty -H \"Content-Type: application/json\" -d '{\"type\": \"s3\", \"settings\": {\"base_path\": \"os-snapshot\" , \"bucket\": \"opensearch-s3-snapshot\" , \"region\": \"us-east-1\"}}'; "
+			Expect(result.Spec.Template.Spec.Containers[0].Args).To(ContainElement(snapshotCmd))
 		})
 	})
 

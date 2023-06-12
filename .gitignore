@@ -18,5 +18,9 @@ testbin/
 *.bin
 
 .vscode
+.idea/
 
 opensearch-operator/functionaltests/kubeconfig
+
+# Macos files
+.DS_Store

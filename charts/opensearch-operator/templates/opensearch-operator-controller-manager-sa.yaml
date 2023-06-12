@@ -1,4 +1,6 @@
+{{- if .Values.serviceAccount.create -}}
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: opensearch-operator-controller-manager
+  name: {{ include "opensearch-operator.serviceAccountName" . }}
+{{- end -}}

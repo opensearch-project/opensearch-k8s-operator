@@ -21,7 +21,13 @@ A few notes on operator releases:
 
 ## Quickstart
 
-After you have successfully installed the Operator, you can deploy your first OpenSearch cluster. This is done by creating an `OpenSearchCluster` custom object in Kubernetes.
+After you have successfully installed the Operator, you can deploy your first OpenSearch cluster. This is done by creating an `OpenSearchCluster` custom object in Kubernetes or using Helm.
+
+### Using Helm
+
+OpenSearch cluster can be easily deployed using Helm. Follow the instructions in  [Cluster Chart Guide](./cluster-chart.md) to install the cluster.
+
+### Using Custom Object
 
 Create a file `cluster.yaml` with the following content:
 
@@ -246,7 +252,7 @@ Please note:
 * Updating the list for an already installed cluster will lead to a rolling restart of all opensearch nodes to install the new plugin.
 * If your plugin requires additional configuration you must provide that either through `additionalConfig` (see section [Configuring opensearch.yml](#configuring-opensearchyml)) or as secrets in the opensearch keystore (see section [Add secrets to keystore](#add-secrets-to-keystore)).
 
-## Add secrets to keystore
+### Add secrets to keystore
 
 Some OpenSearch features (e.g. snapshot repository plugins) require sensitive configuration. This is handled via the opensearch keystore. The operator allows you to populate this keystore using Kubernetes secrets.
 To do so add the secrets under the `general.keystore` section:
@@ -307,7 +313,78 @@ spec:
         roles:
           - "data"
 ```
+### Configuring Snapshot Repo (BETA):
 
+This feature is Currently in BETA, you can configure the snapshot repo settings for the OpenSearch cluster through the operator. Using `snapshotRepositories` settings you can configure multiple snapshot repos. Once the snapshot repo is configured a user can create custom `_ism` policies through dashboard to backup the in indexes.
+
+Note: BETA flagged Features in a release are experimental. Therefore, we do not recommend the use of configuring snapshot repo in a production environment. For updates on the progress of snapshot/restore, or if you want leave feedback/contribute that could help improve the feature, please refer to the issue on [GitHub](https://github.com/Opster/opensearch-k8s-operator/issues/278).
+
+```yaml
+spec:
+  general:
+    snapshotRepositories: 
+        - name: my_s3_repository_1
+          type: s3
+          settings:
+            bucket: opensearch-s3-snapshot
+            region: us-east-1
+            base_path: os-snapshot
+        - name: my_s3_repository_3
+          type: s3
+          settings:
+            bucket: opensearch-s3-snapshot
+            region: us-east-1
+            base_path: os-snapshot_1
+```
+#### Prerequisites for Configuring Snapshot Repo:
+
+Before applying the setting `snapshotRepositories` to the operator, please ensure the following prerequisites are met.
+
+1. The right cloud provider native plugins are installed.
+Example:
+```yaml
+spec:
+  general:
+    pluginsList: ["repository-s3"]
+```
+
+2. Ensure the cluster is fully healthy before applying the `snapshotRepositories` settings to the custom resource. 
+Note: For the BETA you cannot add the settings if the cluster is not yet provisioned and healthy, otherwise the configuration of the repositories will fail.
+
+3. The required roles/permissions for the backend cloud are pre-created.
+Example: Following is the AWS IAM role added for kubernetes nodes so that snapshots can be published to `opensearch-s3-snapshot` s3 bucket.
+```json
+{
+    "Statement": [
+        {
+            "Action": [
+                "s3:ListBucket",
+                "s3:GetBucketLocation",
+                "s3:ListBucketMultipartUploads",
+                "s3:ListBucketVersions"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::opensearch-s3-snapshot"
+            ]
+        },
+        {
+            "Action": [
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:DeleteObject",
+                "s3:AbortMultipartUpload",
+                "s3:ListMultipartUploadParts"
+            ],
+            "Effect": "Allow",
+            "Resource": [
+                "arn:aws:s3:::opensearch-s3-snapshot/*"
+            ]
+        }
+    ],
+    "Version": "2012-10-17"
+}
+```
 ## Configuring Dashboards
 
 The operator can automatically deploy and manage a OpenSearch Dashboards instance. To do so add the following section to your cluster spec:
@@ -645,6 +722,20 @@ During cluster initialization the operator uses init containers as helpers. For 
       imagePullSecrets:
         - name: docker-pull-secret
 ```
+### Edit init container resources
+Init container run without any resource constraints, but it's possible to specify resource requests and limits by adding a resources section to the YAML definition. This allows you to control the amount of CPU and memory allocated to the init container, it's helps to ensure that it doesn't starve other containers, by setting appropriate resource limits.
+```yaml
+  spec:
+    initHelper:
+      resources:
+        requests:
+          memory: "128Mi"
+          cpu: "250m"
+        limits:
+          memory: "512Mi"
+          cpu: "500m"
+ ```
+          
 
 ### Disabling the init helper
 
@@ -728,6 +819,12 @@ In case the operator detects several crashed or missing pods (for a nodepool) at
 
 The recovery mode also kicks in if you deleted your cluster but kept the PVCs around and are then reinstalling the cluster.
 
+If the cluster is using emptyDir i.e. every node pool is using emptyDir, the operator starts recovery in case of these failure scenarios:
+1. More than half the master nodes are missing or crashed and thus, the quorum is broken.
+2. All data nodes are missing or crashed and thus, no data node is available.
+
+But since the cluster is using emptyDir, data is lost and not recoverable. So, it is impossible to restore the cluster to its old state. Therefore, the operator deletes and recreates the entire OpenSearch cluster.
+
 ### Rolling Upgrades
 
 The operator supports automatic rolling version upgrades. To do so simply change the `general.version` in your cluster spec and reapply it:
@@ -774,7 +871,7 @@ Note that currently a combination of both approaches is not possible. Once you u
 
 ### Securityconfig
 
-You can provide your own securityconfig (see the entire [demo securityconfig](https://github.com/opensearch-project/security/blob/main/securityconfig) as an example and the [Access control documentation](https://opensearch.org/docs/latest/security-plugin/access-control/index/) of the OpenSearch project) with your own users and roles. To do that, you must provide a secret with all the required securityconfig yaml files.
+You can provide your own securityconfig (see the entire [demo securityconfig](https://github.com/Opster/opensearch-k8s-operator/blob/main/opensearch-operator/examples/securityconfig-secret.yaml) as an example and the [Access control documentation](https://opensearch.org/docs/latest/security-plugin/access-control/index/) of the OpenSearch project) with your own users and roles. To do that, you must provide a secret with all the required securityconfig yaml files.
 
 The Operator can be controlled using the following fields in the `OpenSearchCluster` custom resource:
 
@@ -792,17 +889,30 @@ spec:
 # ...
 ```
 
-Provide the name of the secret that contains your securityconfig yaml files as `securityconfigSecret.name`. Note that all files must be provided, you cannot provide only some of them, as the demo files and your provided ones cannot be merged. In addition, you must provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). This user must be defined in your securityconfig and must have appropriate permissions (currently admin).
+Provide the name of the secret that contains your securityconfig yaml files as `securityconfigSecret.name`. In the secret, you can provide the files that you want to configure. The operator will only apply the files present in the secret. Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
 
-In addition you must also configure TLS transport (see [Node Transport](#node-transport)). You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
+If you don't want to use the default files, you must provide at least a minimum configuration for the file. Example:
+
+```yaml
+tenants.yml: |-
+  _meta:
+    type: "tenants"
+    config_version: 2
+```
+
+These minimum configuration files can later be removed from the secret so that you don't overwrite the resources created via the CRDs or the REST APIs when modifying other configuration files.
+
+In addition, you must provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). This user must be defined in your securityconfig and must have appropriate permissions (currently admin).
+
+You must also configure TLS transport (see [Node Transport](#node-transport)). You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
 
 If you provided your own certificate for node transport communication, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.transport.adminDn`. Be advised that the `adminDn` and `nodesDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
-### Managing users and roles with kubernetes resources
+### Managing security configurations with kubernetes resources
 
-The operator provides custom kubernetes resources that allow you to manage users and roles as kubernetes objects.
+The operator provides custom kubernetes resources that allow you to create/update/manage security configuration resources such as users, roles, action groups etc. as kubernetes objects.
 
 #### Opensearch Users
 
@@ -873,6 +983,42 @@ spec:
   - sample-role
 ```
 
+#### Opensearch Action Groups
+
+It is possible to manage Opensearch action groups in Kubernetes with the operator. The operator will not modify action groups that already exist. You can create an example action group as follows:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchActionGroup
+metadata:
+  name: sample-action-group
+  namespace: default
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  allowedActions:
+    - indices:admin/aliases/get
+    - indices:admin/aliases/exists
+  type: index
+  description: Sample action group
+```
+
+#### Opensearch Tenants
+
+It is possible to manage Opensearch tenants in Kubernetes with the operator. The operator will not modify tenants that already exist. You can create an example tenant as follows:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchTenant
+metadata:
+  name: sample-tenant
+  namespace: default
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  description: Sample tenant
+```
+
 ### Custom Admin User
 
 In order to create your cluster with an adminuser different from the default `admin:admin` you will have to walk through the following steps:
@@ -936,4 +1082,30 @@ spec:
   dashboards:
     opensearchCredentialsSecret:
       name: dashboards-credentials  # This is the name of your secret that contains the credentials for Dashboards to use
+```
+
+## Adding Opensearch Monitoring to your cluster
+
+The operator allows you to install and enable the Aiven monitoring plugin for OpenSearch on your cluster as a built-in feature (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch)
+That feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below will be used if no `pluginUrl` is specified.  
+By default the Opensearch admin user will be used to access the monitoring API. If you want to use a separate user with limited permissions you need to create that user using either of the following options:
+1) Create new applicative User using OpenSearch API/UI, create new secret with 'username':'password' keys and provide that secret name under monitoringUserSecret.
+2) Use Our OpenSearchUser CRD and provide the secret under monitoringUserSecret.
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-first-cluster
+  namespace: default
+spec:
+  general:
+    version: <YOUR_CLUSTER_VERSION>
+    monitoring:
+      enable: true
+      scrapeInterval: 30s
+      monitoringUserSecret: appUserSecret
+      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip
+      tlsConfig:
+        serverName: "testserver.test.local"
+        insecureSkipVerify: true
 ```

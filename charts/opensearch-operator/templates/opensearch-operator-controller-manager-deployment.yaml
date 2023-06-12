@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   labels:
     control-plane: controller-manager
-  name: opensearch-operator-controller-manager
+  name: {{ include "opensearch-operator.fullname" . }}-controller-manager
 spec:
   replicas: 1
   selector:
@@ -15,6 +15,7 @@ spec:
         control-plane: controller-manager
     spec:
       containers:
+      {{- if or (.Values.kubeRbacProxy.enable) (eq (.Values.kubeRbacProxy.enable | toString) "<nil>") }}
       - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
@@ -31,6 +32,7 @@ spec:
         ports:
         - containerPort: 8443
           name: https
+      {{- end}}
       - args:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
@@ -65,5 +67,5 @@ spec:
 {{- toYaml .Values.tolerations | nindent 8 }}
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: opensearch-operator-controller-manager
+      serviceAccountName: {{ include "opensearch-operator.serviceAccountName" . }}
       terminationGracePeriodSeconds: 10

@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"reflect"
+	"sort"
 	"time"
 
 	"github.com/hashicorp/go-version"
@@ -119,6 +122,17 @@ func MergeConfigs(left map[string]string, right map[string]string) map[string]st
 		left[k] = v
 	}
 	return left
+}
+
+// Return the keys of the input map in sorted order
+// Can be used if you want to iterate over a map but have a stable order
+func SortedKeys(input map[string]string) []string {
+	keys := make([]string, 0, len(input))
+	for key := range input {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func ResolveClusterManagerRole(ver string) string {
@@ -237,10 +251,74 @@ func WaitForSTSStatus(ctx context.Context, k8sClient client.Client, obj *appsv1.
 	return nil, fmt.Errorf("failed to wait for STS")
 }
 
+// GetSTSForNodePool returns the corresponding sts for a given nodePool and cluster name
+func GetSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) (*appsv1.StatefulSet, error) {
+	sts := &appsv1.StatefulSet{}
+	stsName := clusterName + "-" + nodePool.Component
+
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: stsName, Namespace: clusterNamespace}, sts)
+
+	return sts, err
+}
+
+// DeleteSTSForNodePool deletes the sts for the corresponding nodePool
+func DeleteSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
+
+	sts, err := GetSTSForNodePool(ctx, k8sClient, nodePool, clusterName, clusterNamespace)
+	if err != nil {
+		return err
+	}
+
+	opts := client.DeleteOptions{}
+	// Add this so pods of the sts are deleted as well, otherwise they would remain as orphaned pods
+	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+
+	err = k8sClient.Delete(ctx, sts, &opts)
+
+	return err
+}
+
+// DeleteSecurityUpdateJob deletes the securityconfig update job
+func DeleteSecurityUpdateJob(ctx context.Context, k8sClient client.Client, clusterName, clusterNamespace string) error {
+	jobName := clusterName + "-securityconfig-update"
+	job := batchv1.Job{}
+	err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: clusterNamespace}, &job)
+
+	if err != nil {
+		return err
+	}
+
+	opts := client.DeleteOptions{}
+	// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
+	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+	err = k8sClient.Delete(ctx, &job, &opts)
+
+	return err
+}
+
 func HasDataRole(nodePool *opsterv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "data")
 }
 
 func HasManagerRole(nodePool *opsterv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
+}
+
+func RemoveDuplicateStrings(strSlice []string) []string {
+	allKeys := make(map[string]bool)
+	list := []string{}
+	for _, item := range strSlice {
+		if _, value := allKeys[item]; !value {
+			allKeys[item] = true
+			list = append(list, item)
+		}
+	}
+	return list
+}
+
+// Compares whether v1 is LessThan v2
+func CompareVersions(v1 string, v2 string) bool {
+	ver1, err := version.NewVersion(v1)
+	ver2, _ := version.NewVersion(v2)
+	return err == nil && ver1.LessThan(ver2)
 }

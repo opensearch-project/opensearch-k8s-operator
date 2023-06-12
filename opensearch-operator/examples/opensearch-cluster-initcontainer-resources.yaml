@@ -1,0 +1,74 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: test-init-resources
+  namespace: default
+spec:
+  general:
+    version: 1.3.0
+    httpPort: 9200
+    vendor: opensearch
+    serviceName: my-cluster
+    pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
+  initHelper:
+    resources:
+      requests:
+        memory: "128Mi"
+        cpu: "250m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+  dashboards:
+    version: 1.3.0
+    enable: true
+    replicas: 1
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+  confMgmt:
+    smartScaler: true
+  nodePools:
+    - component: masters
+      replicas: 1
+      diskSize: "10Gi"
+      nodeSelector:
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+      roles:
+        - "master"
+        - "data"
+    - component: nodes
+      replicas: 1
+      diskSize: "10Gi"
+      nodeSelector:
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+      roles:
+        - "data"
+    - component: coordinators
+      replicas: 1
+      diskSize: "10Gi"
+      nodeSelector:
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+        limits:
+          memory: "1Gi"
+          cpu: "500m"
+      roles:
+        - "ingest"
