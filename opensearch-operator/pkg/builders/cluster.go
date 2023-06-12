@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"github.com/go-logr/logr"
 	"sort"
 	"strings"
 
@@ -32,9 +33,11 @@ func NewSTSForNodePool(
 	node opsterv1.NodePool,
 	configChecksum string,
 	volumes []corev1.Volume,
+	logger logr.Logger,
 	volumeMounts []corev1.VolumeMount,
 	extraConfig map[string]string,
 ) *appsv1.StatefulSet {
+
 	//To make sure disksize is not passed as empty
 	var disksize string
 	if len(node.DiskSize) == 0 {
@@ -62,19 +65,8 @@ func NewSTSForNodePool(
 		if helpers.ContainsString(availableRoles, role) {
 			role = helpers.MapClusterRole(role, cr.Spec.General.Version)
 			selectedRoles = append(selectedRoles, role)
-		}
-	}
-
-	for _, role := range selectedRoles {
-		found := false
-		for _, availRole := range availableRoles {
-			if role == availRole {
-				found = true
-				break
-			}
-		}
-		if !found {
-			fmt.Printf("NOTICE! -- %s is not an available role\n", role)
+		} else {
+			logger.Info("NOTICE! -- %s is not an available role\n", role)
 		}
 	}
 

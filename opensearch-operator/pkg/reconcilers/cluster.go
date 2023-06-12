@@ -125,6 +125,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		nodePool,
 		nodePoolConfig.ConfigHash,
 		r.reconcilerContext.Volumes,
+		r.logger,
 		r.reconcilerContext.VolumeMounts,
 		extraConfig,
 	)
