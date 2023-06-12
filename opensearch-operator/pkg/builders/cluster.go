@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
-	"sort"
 	"strings"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
