@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
-	"io/ioutil"
+	"io"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"net/http"
@@ -48,9 +48,9 @@ var _ = Describe("UpgradeChecker Controller", func() {
 		url      = "http://upgrade-chcker-dev.opster.co/operator-usage"
 	)
 
-	Context("When Reconciling the TLS configuration with no existing secrets", func() {
-		It("should create the needed secrets ", func() {
-			clusterName := "upgradeChecker-test"
+	Context("When Reconciling Cluster with UpgradeChecker enable ", func() {
+		It("it should send details to UpgradeChecker server and retun true/false", func() {
+			clusterName := "upgradecheck"
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -130,7 +130,7 @@ func performRequest(url string, method string, data []byte, headers map[string]s
 	}
 	defer resp.Body.Close()
 
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return "", fmt.Errorf("error reading response: %v", err)
 	}
@@ -160,7 +160,7 @@ func GetlatestVersion(installedVersion string) (bool, error, string) {
 	defer resp.Body.Close()
 
 	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		fmt.Println("Failed to read response body:", err)
 		return false, err, ""
