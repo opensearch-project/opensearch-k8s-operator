@@ -4,13 +4,13 @@ import (
 	"context"
 	"fmt"
 	"github.com/go-logr/logr"
-	"os"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
+	"os"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -215,7 +215,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, logr.Logger{}, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "search",
@@ -233,7 +233,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, logr.Logger{}, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "search",
@@ -281,7 +281,7 @@ var _ = Describe("Builders", func() {
 				}},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, logr.Logger{}, nil, nil)
 			var expected *string = nil
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
