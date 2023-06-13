@@ -272,3 +272,29 @@ rules:
   - get
   - patch
   - update
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - autoscalers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - autoscalers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - autoscalers/status
+  verbs:
+  - get
+  - patch
+  - update

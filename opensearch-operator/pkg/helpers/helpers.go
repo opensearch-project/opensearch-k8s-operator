@@ -5,6 +5,9 @@ import (
 	"errors"
 	"fmt"
 	batchv1 "k8s.io/api/batch/v1"
+	"github.com/prometheus/client_golang/api"
+	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/common/model"
 	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	"sort"
@@ -321,4 +324,157 @@ func CompareVersions(v1 string, v2 string) bool {
 	ver1, err := version.NewVersion(v1)
 	ver2, _ := version.NewVersion(v2)
 	return err == nil && ver1.LessThan(ver2)
+
+func GetAutoscalingPolicy(k8sClient client.Client, nodePool *opsterv1.NodePool, instance *opsterv1.OpenSearchCluster) (*opsterv1.Autoscaler, error) {
+	var policy string
+	//if a cluster level policy is defined, default to that over nodepool
+	if instance.Spec.General.AutoScaler.ClusterAutoScalePolicy != "" {
+		policy = instance.Spec.General.AutoScaler.ClusterAutoScalePolicy
+		//if a nodePool level policy is defined
+	} else if nodePool.AutoScalePolicy != "" {
+		policy = nodePool.AutoScalePolicy
+		//if no policy is defined
+	} else {
+		return nil, fmt.Errorf("No autoscaling policies defined for cluster. ")
+	}
+	autoscaler := &opsterv1.Autoscaler{}
+	err := k8sClient.Get(context.TODO(), types.NamespacedName{
+		Name: policy,
+		//Namespace: instance.Namespace, TODO: This will need to be re-added once cluster scope is removed
+	}, autoscaler)
+	if err != nil {
+		return nil, err
+	}
+	return autoscaler, nil
+}
+
+func EvalScalingTime(component string, instance *opsterv1.OpenSearchCluster) (bool, error) {
+	autoscaleStatus := instance.Status.Scaler
+	//get duration; if empty invalid format string defaults to 0s
+	duration, err := time.ParseDuration(instance.Spec.General.AutoScaler.ScaleTimeout)
+	if err != nil {
+		return false, fmt.Errorf("Unable to parse scaleTimeout: %v", err)
+	}
+	//if the cluster has existed longer than the scaleInterval
+	if time.Now().UTC().After(instance.CreationTimestamp.Add(duration)) {
+		//if the key exists in the map
+		if existingLastScaleTime, ok := autoscaleStatus[component]; ok {
+			targetTime := existingLastScaleTime.LastScaleTime.Add(duration)
+			//if now is after the lastScaleTime + duration
+			if time.Now().UTC().After(targetTime) {
+				//update lastScaleTime to now and return
+				//cluster.Status.LastScaleTime[component] = parsedTime
+				//err := k8sClient.Update(context.TODO(), cluster)
+				//if err != nil {
+				//	return fmt.Errorf("Unable to update lastScaleTime status", err)
+				//}
+				return true, nil
+			}
+		} else {
+			//scaling allowed
+			return true, nil
+		}
+	}
+	//scaling not allowed
+	return false, nil
+}
+
+func EvalScalingRules(nodePool *opsterv1.NodePool, autoscalerPolicy *opsterv1.Autoscaler, instance *opsterv1.OpenSearchCluster) (int32, error) {
+	apiClient, err := NewPrometheusClient(instance.Spec.General.AutoScaler.PrometheusEndpoint)
+	if err != nil {
+		return 0, fmt.Errorf("Unable to create Prometheus client: %v", err)
+	}
+	scaleCount := int32(0)
+	for r, rule := range autoscalerPolicy.Spec.Rules {
+		//if the rule and nodetype do not match, break to the next ruleEval
+		if !ContainsString(nodePool.Roles, rule.NodeRole) {
+			break
+		}
+		ruleEval := false //if the ruleSet ever evaluates to false the scaling decision will not occur
+		//iterate through items for the relevant nodeRole type
+	itemLoop:
+		for _, item := range rule.Items {
+
+			query := item.Metric
+			nodeMatcher := "node=~\"" + instance.Name + "-" + nodePool.Component + "-[0-9]+$\""
+			//build nodeMatcher string
+			if &item.QueryOptions.LabelMatchers != nil {
+				for i, labelMatcher := range item.QueryOptions.LabelMatchers {
+					if i == 0 {
+						query = query + "{"
+					}
+					query = query + labelMatcher
+				}
+				query = query + "," + nodeMatcher + "}"
+			} else {
+				query = query + "{" + nodeMatcher + "}"
+			}
+			//add time interval if exists; a function wrapper must exist
+			if &item.QueryOptions.Interval != nil && &item.QueryOptions.Function != nil {
+				query = query + "[" + item.QueryOptions.Interval + "]"
+			} else {
+				return 0, fmt.Errorf("A function wrapper is required when using intervals for Prometheus query. ")
+			}
+			//add func wrapper if exists
+			if &item.QueryOptions.Function != nil {
+				query = item.QueryOptions.Function + "(" + query + ")"
+			}
+			if item.QueryOptions.AggregateEvaluation {
+				query = "avg(" + query + ")"
+			}
+			//do boolean threshold comparison
+			query = query + " " + item.Operator + "bool " + item.Threshold
+
+			result, warnings, err := apiClient.Query(context.Background(), query, time.Now())
+			if err != nil { //if the query fails we will not make a scaling decision
+				return 0, fmt.Errorf("Prometheus query [ %q ] failed with error: %v ", query, err)
+			}
+			if len(warnings) > 0 { //if there are warnings we will not make a scaling decision
+				return 0, fmt.Errorf("Warnings received: %v", err)
+			}
+
+			// Check the result type and iterate over the data
+			if result.Type() != model.ValVector {
+				return 0, fmt.Errorf("Prometheus result type not a Vector: %v", err)
+			} else {
+
+				for _, vector := range result.(model.Vector) {
+					if vector.Value == 1 {
+						ruleEval = true
+					} else {
+						ruleEval = false
+						break itemLoop
+					}
+				}
+			}
+		}
+		//if any ruleset evals to true, we are going to scale;
+		if ruleEval {
+			scaleUp := rule.Behavior.ScaleUp
+			scaleDown := rule.Behavior.ScaleDown
+			if scaleUp.Enable && scaleDown.Enable {
+				return 0, fmt.Errorf("Both scaleUp and scaleDown logic enabled for rule[%v] in %v autoscaler policy. ", r, autoscalerPolicy.Name)
+			}
+
+			if instance.Status.Scaler[nodePool.Component].Replicas < scaleUp.MaxReplicas && scaleUp.Enable {
+				scaleCount++
+			}
+			if instance.Status.Scaler[nodePool.Component].Replicas > nodePool.Replicas && scaleDown.Enable {
+				scaleCount--
+			}
+		}
+	}
+	return scaleCount, nil
+}
+
+func NewPrometheusClient(prometheusEndpoint string) (v1.API, error) {
+	client, err := api.NewClient(api.Config{
+		Address: prometheusEndpoint,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create client")
+	}
+
+	v1api := v1.NewAPI(client)
+	return v1api, nil
 }

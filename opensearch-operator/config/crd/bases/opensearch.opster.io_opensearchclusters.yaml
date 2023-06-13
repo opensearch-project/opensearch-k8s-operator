@@ -993,8 +993,6 @@ spec:
                 properties:
                   VerUpdate:
                     type: boolean
-                  autoScaler:
-                    type: boolean
                   smartScaler:
                     type: boolean
                 type: object
@@ -2816,6 +2814,17 @@ spec:
                       - path
                       type: object
                     type: array
+                  autoScaler:
+                    properties:
+                      clusterAutoScalePolicy:
+                        type: string
+                      enable:
+                        type: boolean
+                      prometheusEndpoint:
+                        type: string
+                      scaleTimeout:
+                        type: string
+                    type: object
                   command:
                     type: string
                   defaultRepo:
@@ -4203,6 +4212,8 @@ spec:
                       additionalProperties:
                         type: string
                       type: object
+                    autoScalePolicy:
+                      type: string
                     component:
                       type: string
                     diskSize:
@@ -4805,6 +4816,17 @@ spec:
                   of cluster Important: Run "make" to regenerate code after modifying
                   this file'
                 type: string
+              scaler:
+                additionalProperties:
+                  properties:
+                    lastScaleTime:
+                      format: date-time
+                      type: string
+                    replicas:
+                      format: int32
+                      type: integer
+                  type: object
+                type: object
               version:
                 type: string
             required:

@@ -49,6 +49,7 @@ type GeneralConfig struct {
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 	Monitoring        MonitoringConfig   `json:"monitoring,omitempty"`
+	AutoScaler        AutoScalingConfig  `json:"autoScaler,omitempty"`
 	// Populate opensearch keystore before startup
 	Keystore             []KeystoreValue      `json:"keystore,omitempty"`
 	SnapshotRepositories []SnapshotRepoConfig `json:"snapshotRepositories,omitempty"`
@@ -81,6 +82,7 @@ type NodePool struct {
 	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
+	AutoScalePolicy           string                            `json:"autoScalePolicy,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -101,9 +103,15 @@ type PVCSource struct {
 
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
-	AutoScaler  bool `json:"autoScaler,omitempty"`
 	VerUpdate   bool `json:"VerUpdate,omitempty"`
 	SmartScaler bool `json:"smartScaler,omitempty"`
+}
+
+type AutoScalingConfig struct {
+	Enable                 bool   `json:"enable,omitempty"`
+	ClusterAutoScalePolicy string `json:"clusterAutoScalePolicy,omitempty"`
+	ScaleTimeout           string `json:"scaleTimeout,omitempty"`
+	PrometheusEndpoint     string `json:"prometheusEndpoint,omitempty"`
 }
 
 type MonitoringConfig struct {
@@ -274,10 +282,16 @@ type ClusterSpec struct {
 type ClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	Phase            string            `json:"phase,omitempty"`
-	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
-	Version          string            `json:"version,omitempty"`
-	Initialized      bool              `json:"initialized,omitempty"`
+	Phase            string                  `json:"phase,omitempty"`
+	ComponentsStatus []ComponentStatus       `json:"componentsStatus"`
+	Version          string                  `json:"version,omitempty"`
+	Initialized      bool                    `json:"initialized,omitempty"`
+	Scaler           map[string]*ScaleStatus `json:"scaler,omitempty"`
+}
+
+type ScaleStatus struct {
+	LastScaleTime metav1.Time `json:"lastScaleTime,omitempty"`
+	Replicas      int32       `json:"replicas,omitempty"`
 }
 
 // +kubebuilder:object:root=true
