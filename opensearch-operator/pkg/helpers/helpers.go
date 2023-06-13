@@ -363,12 +363,6 @@ func EvalScalingTime(component string, instance *opsterv1.OpenSearchCluster) (bo
 			targetTime := existingLastScaleTime.LastScaleTime.Add(duration)
 			//if now is after the lastScaleTime + duration
 			if time.Now().UTC().After(targetTime) {
-				//update lastScaleTime to now and return
-				//cluster.Status.LastScaleTime[component] = parsedTime
-				//err := k8sClient.Update(context.TODO(), cluster)
-				//if err != nil {
-				//	return fmt.Errorf("Unable to update lastScaleTime status", err)
-				//}
 				return true, nil
 			}
 		} else {
