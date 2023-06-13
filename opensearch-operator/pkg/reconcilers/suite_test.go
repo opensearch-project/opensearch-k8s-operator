@@ -24,16 +24,17 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"path/filepath"
 	"testing"
+
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	"github.com/phayes/freeport"
 	opsterv1 "opensearch.opster.io/api/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/banzaicloud/operator-tools/pkg/prometheus"
+	"github.com/cisco-open/operator-tools/pkg/prometheus"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"

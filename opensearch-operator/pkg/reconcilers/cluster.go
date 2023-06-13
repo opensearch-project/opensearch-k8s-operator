@@ -8,8 +8,8 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
 
-	"github.com/banzaicloud/k8s-objectmatcher/patch"
-	"github.com/banzaicloud/operator-tools/pkg/reconciler"
+	"github.com/cisco-open/k8s-objectmatcher/patch"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
