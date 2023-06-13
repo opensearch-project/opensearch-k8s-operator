@@ -75,17 +75,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		return false, err
 	}
 
-	var desireReplicaDiff int32
-	if r.instance.Spec.General.AutoScaler.Enable {
-		desireReplicaDiff = *currentSts.Spec.Replicas - r.instance.Status.Scaler[nodePool.Component].Replicas
-	} else {
-		desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
-	}
-	if desireReplicaDiff == 0 {
-		return false, nil
-	}
-	
-    componentStatus := opsterv1.ComponentStatus{
+	componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Running",
 		Description: nodePool.Component,
@@ -93,7 +83,12 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	comp := r.instance.Status.ComponentsStatus
 	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
 
-	var desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
+	var desireReplicaDiff int32
+	if r.instance.Spec.General.AutoScaler.Enable {
+		desireReplicaDiff = *currentSts.Spec.Replicas - r.instance.Status.Scaler[nodePool.Component].Replicas
+	} else {
+		desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
+	}
 	if desireReplicaDiff == 0 {
 		// If a scaling operation was started before for this nodePool
 		if found {

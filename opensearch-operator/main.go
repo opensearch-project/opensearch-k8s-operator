@@ -130,9 +130,9 @@ func main() {
 		Recorder: mgr.GetEventRecorderFor("actiongroup-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchActionGroup")
-	    os.Exit(1)
-    }
-    if err = (&controllers.AutoscalerReconciler{
+		os.Exit(1)
+	}
+	if err = (&controllers.AutoscalerReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {

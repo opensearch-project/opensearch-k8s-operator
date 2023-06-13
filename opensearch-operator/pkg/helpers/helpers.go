@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	batchv1 "k8s.io/api/batch/v1"
 	"github.com/prometheus/client_golang/api"
 	v1 "github.com/prometheus/client_golang/api/prometheus/v1"
 	"github.com/prometheus/common/model"
+	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	"sort"
@@ -324,6 +324,7 @@ func CompareVersions(v1 string, v2 string) bool {
 	ver1, err := version.NewVersion(v1)
 	ver2, _ := version.NewVersion(v2)
 	return err == nil && ver1.LessThan(ver2)
+}
 
 func GetAutoscalingPolicy(k8sClient client.Client, nodePool *opsterv1.NodePool, instance *opsterv1.OpenSearchCluster) (*opsterv1.Autoscaler, error) {
 	var policy string
@@ -333,9 +334,9 @@ func GetAutoscalingPolicy(k8sClient client.Client, nodePool *opsterv1.NodePool, 
 		//if a nodePool level policy is defined
 	} else if nodePool.AutoScalePolicy != "" {
 		policy = nodePool.AutoScalePolicy
-		//if no policy is defined
+		//if no policy is defined, continue running and warn the user
 	} else {
-		return nil, fmt.Errorf("No autoscaling policies defined for cluster. ")
+		return nil, nil
 	}
 	autoscaler := &opsterv1.Autoscaler{}
 	err := k8sClient.Get(context.TODO(), types.NamespacedName{
@@ -398,7 +399,7 @@ func EvalScalingRules(nodePool *opsterv1.NodePool, autoscalerPolicy *opsterv1.Au
 			query := item.Metric
 			nodeMatcher := "node=~\"" + instance.Name + "-" + nodePool.Component + "-[0-9]+$\""
 			//build nodeMatcher string
-			if &item.QueryOptions.LabelMatchers != nil {
+			if item.QueryOptions.LabelMatchers != nil {
 				for i, labelMatcher := range item.QueryOptions.LabelMatchers {
 					if i == 0 {
 						query = query + "{"
