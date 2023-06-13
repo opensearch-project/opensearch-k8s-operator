@@ -75,7 +75,17 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		return false, err
 	}
 
-	componentStatus := opsterv1.ComponentStatus{
+	var desireReplicaDiff int32
+	if r.instance.Spec.General.AutoScaler.Enable {
+		desireReplicaDiff = *currentSts.Spec.Replicas - r.instance.Status.Scaler[nodePool.Component].Replicas
+	} else {
+		desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
+	}
+	if desireReplicaDiff == 0 {
+		return false, nil
+	}
+	
+    componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Running",
 		Description: nodePool.Component,

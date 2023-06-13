@@ -47,6 +47,7 @@ type OpenSearchClusterReconciler struct {
 	Recorder record.EventRecorder
 	Instance *opsterv1.OpenSearchCluster
 	logr.Logger
+	Autoscaler *opsterv1.Autoscaler
 }
 
 //+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch

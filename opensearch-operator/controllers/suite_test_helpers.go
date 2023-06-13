@@ -106,6 +106,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
 				Monitoring:  opsterv1.MonitoringConfig{Enable: true, ScrapeInterval: "35s", TLSConfig: &opsterv1.MonitoringConfigTLS{InsecureSkipVerify: true, ServerName: "foo.bar"}},
+				AutoScaler:  opsterv1.AutoScalingConfig{Enable: true, PrometheusEndpoint: "http://foo:9090"},
 				HttpPort:    9200,
 				Vendor:      "opensearch",
 				Version:     "2.0.0",
@@ -136,7 +137,6 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				},
 			},
 			ConfMgmt: opsterv1.ConfMgmt{
-				AutoScaler:  false,
 				VerUpdate:   false,
 				SmartScaler: false,
 			},
@@ -212,7 +212,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Roles: []string{
 					"data",
 				},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+				AutoScalePolicy: "autoscalerYaml",
+				Persistence:     &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			}, {
 				Component: "client",
 				Replicas:  3,
