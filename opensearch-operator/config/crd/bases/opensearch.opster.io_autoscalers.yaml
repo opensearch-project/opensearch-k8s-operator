@@ -1,0 +1,121 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.10.0
+  creationTimestamp: null
+  name: autoscalers.opensearch.opster.io
+spec:
+  group: opensearch.opster.io
+  names:
+    kind: Autoscaler
+    listKind: AutoscalerList
+    plural: autoscalers
+    singular: autoscaler
+  scope: Cluster
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: Autoscaler is the Schema for the autoscalers API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: AutoscalerSpec defines the desired state of Autoscaler
+            properties:
+              rules:
+                items:
+                  description: Rule defines the contents of an autoscaler rule
+                  properties:
+                    behavior:
+                      properties:
+                        scaleDown:
+                          properties:
+                            enable:
+                              type: boolean
+                            maxReplicas:
+                              format: int32
+                              type: integer
+                          required:
+                          - enable
+                          type: object
+                        scaleUp:
+                          properties:
+                            enable:
+                              type: boolean
+                            maxReplicas:
+                              format: int32
+                              type: integer
+                          required:
+                          - enable
+                          type: object
+                      type: object
+                    items:
+                      items:
+                        description: Item defines the contents of an autoscaler rule
+                          item
+                        properties:
+                          metric:
+                            type: string
+                          operator:
+                            type: string
+                          queryOptions:
+                            properties:
+                              aggregateEvaluation:
+                                type: boolean
+                              function:
+                                type: string
+                              interval:
+                                type: string
+                              labelMatchers:
+                                items:
+                                  type: string
+                                type: array
+                            type: object
+                          threshold:
+                            type: string
+                        required:
+                        - metric
+                        - operator
+                        - threshold
+                        type: object
+                      type: array
+                    nodeRole:
+                      type: string
+                  required:
+                  - behavior
+                  - items
+                  - nodeRole
+                  type: object
+                type: array
+            type: object
+          status:
+            description: AutoscalerStatus defines the observed state of Autoscaler
+            properties:
+              component:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                type: string
+              description:
+                type: string
+              status:
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

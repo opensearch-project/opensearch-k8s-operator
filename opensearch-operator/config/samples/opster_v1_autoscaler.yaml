@@ -1,0 +1,12 @@
+apiVersion: opster.opensearch.opster.io/v1
+kind: Autoscaler
+metadata:
+  labels:
+    app.kubernetes.io/name: autoscaler
+    app.kubernetes.io/instance: autoscaler-sample
+    app.kubernetes.io/part-of: opensearch-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: opensearch-operator
+  name: autoscaler-sample
+spec:
+  # TODO(user): Add fields here
