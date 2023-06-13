@@ -3,8 +3,6 @@ package builders
 import (
 	"context"
 	"fmt"
-	"sort"
-	"strconv"
 	"strings"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -1131,7 +1129,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 			},
 			Endpoints: []monitoring.Endpoint{
 				{
-                    Port: "http",
+					Port:            "http",
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
 					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapeInterval),

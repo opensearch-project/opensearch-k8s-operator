@@ -2,71 +2,67 @@ apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
   name: my-cluster
-  namespace: monitoring
+  namespace: default
 spec:
   general:
     version: "1.3.0"
     httpPort: 9200
     vendor: opensearch
     serviceName: my-cluster
-    autoScaler:
-      enable: false
-      prometheusEndpoint: 'http://localhost:9090'
-      scaleTimeout: 5m
     monitoring:
-     enable: true
-    pluginsList: ["repository-s3","https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip"]
+      enable: true
+    pluginsList: ["repository-s3"]
   dashboards:
     version: "1.3.0"
-    enable: false
-    replicas: 1
+    enable: true
+    replicas: 2
     resources:
       requests:
-         memory: "1Gi"
-         cpu: "500m"
+        memory: "1Gi"
+        cpu: "500m"
       limits:
-         memory: "1Gi"
-         cpu: "500m"
+        memory: "1Gi"
+        cpu: "500m"
   confMgmt:
-    smartScaler: false
+    smartScaler: true
   nodePools:
     - component: masters
       replicas: 3
-      diskSize: "10Gi"
+      diskSize: "30Gi"
       nodeSelector:
       resources:
-         requests:
-            memory: "1Gi"
-            cpu: "500m"
-         limits:
-            memory: "1.5Gi"
-            cpu: "500m"
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
       roles:
         - "master"
+        - "data"
     - component: nodes
-      autoScalePolicy: "my-cluster-autoscaler"
-      replicas: 2
-      diskSize: "10Gi"
+      replicas: 3
+      diskSize: "30Gi"
       nodeSelector:
       resources:
-         requests:
-            memory: "1Gi"
-            cpu: "500m"
-         limits:
-            memory: "1.5Gi"
-            cpu: "500m"
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
       roles:
         - "data"
     - component: coordinators
-      replicas: 1
-      diskSize: "10Gi"
+      replicas: 3
+      diskSize: "30Gi"
       nodeSelector:
       resources:
-         requests:
-            memory: "1Gi"
-            cpu: "500m"
-         limits:
-            memory: "2Gi"
-            cpu: "500m"
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
       roles:
         - "ingest"

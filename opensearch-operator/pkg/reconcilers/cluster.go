@@ -360,7 +360,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		if r.instance.Spec.General.AutoScaler.Enable && !helpers.HasManagerRole(&nodePool) {
 			//if an autoscale policy is defined
 			autoscalerPolicy, err := helpers.GetAutoscalingPolicy(r.Client, &nodePool, r.instance)
-			if err == nil {
+			if autoscalerPolicy != nil {
 				//evaluate lastScaleTime
 				scaleTime, err := helpers.EvalScalingTime(nodePool.Component, r.instance)
 				if err == nil && scaleTime {
@@ -396,16 +396,21 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 						}
 					}
 				} else {
-					r.logger.Error(err, "Failed to evaluate lastScaledTime for autoscaler")
+					if err != nil {
+						r.logger.Error(err, "Failed to evaluate lastScaledTime for autoscaler")
+					}
 				}
 			} else {
-				r.logger.Error(err, "Failed to get autoscaling policy")
+				if err != nil {
+					r.logger.Error(err, "Failed to get autoscaling policy")
+				}
 			}
 		} else {
 			//if autoscaling is not controlling replicas, update the status replicas with nodePool replicas in case they change.
 			if nodePool.Replicas != r.instance.Status.Scaler[nodePool.Component].Replicas {
 				autoscalerStatus = r.instance.Status.Scaler
 				autoscalerStatus[nodePool.Component].Replicas = nodePool.Replicas
+				autoscalerStatus[nodePool.Component].LastScaleTime = metav1.Now()
 				err := r.UpdateReplicaStatus(autoscalerStatus)
 				if err != nil {
 					r.logger.Info("Failed to update scaler status for cluster[" + r.instance.Name + "], nodePool[" + nodePool.Component + "].")
@@ -535,6 +540,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 	}
 
 	return &ctrl.Result{}, nil
+}
 
 func (r *ClusterReconciler) UpdateReplicaStatus(scaleStatus map[string]*opsterv1.ScaleStatus) error {
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {

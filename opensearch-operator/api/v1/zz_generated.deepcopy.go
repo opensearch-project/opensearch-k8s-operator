@@ -467,11 +467,8 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-
-    in.Monitoring.DeepCopyInto(&out.Monitoring)
-	out.Monitoring = in.Monitoring
+	in.Monitoring.DeepCopyInto(&out.Monitoring)
 	out.AutoScaler = in.AutoScaler
-
 	if in.Keystore != nil {
 		in, out := &in.Keystore, &out.Keystore
 		*out = make([]KeystoreValue, len(*in))
