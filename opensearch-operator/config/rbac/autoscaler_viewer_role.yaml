@@ -1,0 +1,27 @@
+# permissions for end users to view autoscalers.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: autoscaler-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: opensearch-operator
+    app.kubernetes.io/part-of: opensearch-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: autoscaler-viewer-role
+rules:
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - autoscalers
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - autoscalers/status
+  verbs:
+  - get

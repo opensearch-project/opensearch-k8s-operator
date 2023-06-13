@@ -1,0 +1,38 @@
+apiVersion: opensearch.opster.io/v1
+kind: Autoscaler
+metadata:
+  name: my-cluster-autoscaler
+  namespace: monitoring
+spec:
+  rules:
+    - items:
+      - metric: 'opensearch_os_cpu_percent'
+        operator: "<"
+        threshold: "75.0"
+        queryOptions:
+          interval: "10m"
+          function: "avg_over_time"
+      - metric: 'opensearch_os_mem_used_percent'
+        operator: ">"
+        threshold: "90.0"
+        queryOptions:
+          interval: "10m"
+          function: "avg_over_time"
+      nodeRole: "data"
+      behavior:
+        scaleUp:
+          enable: true
+          maxReplicas: 3
+    - items:
+      - metric: 'opensearch_os_cpu_percent'
+        operator: ">"
+        threshold: "40.0"
+        queryOptions:
+          labelMatchers:
+          interval: "10m"
+          function: "avg_over_time"
+      nodeRole: "data"
+      behavior:
+        scaleDown:
+          enable: true
+          maxReplicas: 3
