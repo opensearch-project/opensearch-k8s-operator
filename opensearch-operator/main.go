@@ -18,8 +18,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
+	"strconv"
 
+	"go.uber.org/zap/zapcore"
 	"opensearch.opster.io/controllers"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -53,6 +56,7 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var watchNamespace string
+	var logLevel string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -60,11 +64,26 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
 		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
+	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: TODO")
+
 	opts := zap.Options{
-		Development: true,
+		Development: false,
+		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	level, err := zapcore.ParseLevel(logLevel)
+	if err != nil {
+		fmt.Printf("Invalid log level '%s'. Leaving on info", logLevel)
+		opts.Level = zapcore.InfoLevel
+	} else {
+		opts.Level = level
+	}
+	devmode, err := strconv.ParseBool(os.Getenv("OPERATOR_DEV_LOGGING"))
+	if err == nil {
+		opts.Development = devmode
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 

@@ -40,6 +40,7 @@ spec:
         {{- if .Values.manager.watchNamespace }}
         - --watch-namespace={{ .Values.manager.watchNamespace }}
         {{- end }}
+        - --loglevel={{ .Values.manager.loglevel }}
         command:
         - /manager
         image: "{{ .Values.manager.image.repository }}:{{ .Values.manager.image.tag | default .Chart.AppVersion }}"
