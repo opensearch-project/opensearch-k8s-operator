@@ -1005,6 +1005,7 @@ func NewSecurityconfigUpdateJob(
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{Name: jobName},
 				Spec: corev1.PodSpec{
+					ServiceAccountName:            instance.Spec.General.ServiceAccount,
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 					Containers: []corev1.Container{{
 						Name:            "updater",
