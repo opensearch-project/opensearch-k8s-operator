@@ -20,6 +20,7 @@ helm install opensearch-cluster ../charts/opensearch-cluster --set OpenSearchClu
 cd functionaltests
 
 ## Run tests
-go test -timeout 30m
+go test ./operatortests -timeout 30m
+go test ./helmtests -timeout 15m
 ## Delete k3d cluster
 k3d cluster delete $CLUSTER_NAME
