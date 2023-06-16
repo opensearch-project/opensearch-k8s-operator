@@ -73,8 +73,8 @@ type AutoscalerStatus struct {
 }
 
 //+kubebuilder:object:root=true
+//+kubebuilder:resource:shortName=autoscaler
 //+kubebuilder:subresource:status
-//+kubebuilder:resource:scope=Cluster
 
 // Autoscaler is the Schema for the autoscalers API
 type Autoscaler struct {

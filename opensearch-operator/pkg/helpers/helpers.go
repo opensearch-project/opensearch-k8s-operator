@@ -340,8 +340,8 @@ func GetAutoscalingPolicy(k8sClient client.Client, nodePool *opsterv1.NodePool, 
 	}
 	autoscaler := &opsterv1.Autoscaler{}
 	err := k8sClient.Get(context.TODO(), types.NamespacedName{
-		Name: policy,
-		//Namespace: instance.Namespace, TODO: This will need to be re-added once cluster scope is removed
+		Name:      policy,
+		Namespace: instance.Namespace,
 	}, autoscaler)
 	if err != nil {
 		return nil, err

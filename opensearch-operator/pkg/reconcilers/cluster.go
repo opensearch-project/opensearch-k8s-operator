@@ -355,7 +355,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 
 	} else {
-		autoscalerStatus := map[string]*opsterv1.ScaleStatus{}
+		//autoscalerStatus := map[string]*opsterv1.ScaleStatus{}
 		//if autoscaling is enabled and nodePool doesn't contain masters/manager nodes
 		if r.instance.Spec.General.AutoScaler.Enable && !helpers.HasManagerRole(&nodePool) {
 			//if an autoscale policy is defined
@@ -371,23 +371,32 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 						r.logger.Info("Failed to make a scaling decision. ")
 						//r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Autoscaler", "Failed to get a scaling decision %s/%s", existing.Namespace, existing.Name)
 					} else {
-						autoscalerStatus = r.instance.Status.Scaler
+						//autoscalerStatus = r.instance.Status.Scaler
 						if scalingDecision > 0 {
 							//scale up one and set scale time
-							autoscalerStatus[nodePool.Component].Replicas++
-							autoscalerStatus[nodePool.Component].LastScaleTime = metav1.Now()
-							err := r.UpdateReplicaStatus(autoscalerStatus)
-							if err != nil {
-								r.logger.Info("Failed to update autoscaler status for scale-up operation. ")
-							} else {
-								sts.Spec.Replicas = &r.instance.Status.Scaler[nodePool.Component].Replicas
-							}
+							//autoscalerStatus[nodePool.Component].Replicas++
+							//autoscalerStatus[nodePool.Component].LastScaleTime = metav1.Now()
+							//err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+							//	if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+							//		return err
+							//	}
+							r.instance.Status.Scaler[nodePool.Component].Replicas++
+							r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
+							//	return r.Status().Update(r.ctx, r.instance)
+							//})
+							//if err != nil {
+							//	r.logger.Info("Failed to update autoscaler status for scale-up operation. ")
+							//} else {
+							sts.Spec.Replicas = &r.instance.Status.Scaler[nodePool.Component].Replicas
+							//}
+							//err := r.UpdateReplicaStatus(r.instance.Status.Scaler)
+
 						}
 						if scalingDecision < 0 {
 							//scale down 1 and set scaleTime
-							autoscalerStatus[nodePool.Component].Replicas--
-							autoscalerStatus[nodePool.Component].LastScaleTime = metav1.Now()
-							err := r.UpdateReplicaStatus(autoscalerStatus)
+							r.instance.Status.Scaler[nodePool.Component].Replicas--
+							r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
+							err := r.UpdateReplicaStatus(r.instance.Status.Scaler)
 							if err != nil {
 								r.logger.Info("Failed to update autoscaler status for scale-down operation. ")
 							} else {
@@ -408,13 +417,15 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		} else {
 			//if autoscaling is not controlling replicas, update the status replicas with nodePool replicas in case they change.
 			if nodePool.Replicas != r.instance.Status.Scaler[nodePool.Component].Replicas {
-				autoscalerStatus = r.instance.Status.Scaler
-				autoscalerStatus[nodePool.Component].Replicas = nodePool.Replicas
-				autoscalerStatus[nodePool.Component].LastScaleTime = metav1.Now()
-				err := r.UpdateReplicaStatus(autoscalerStatus)
-				if err != nil {
-					r.logger.Info("Failed to update scaler status for cluster[" + r.instance.Name + "], nodePool[" + nodePool.Component + "].")
-				}
+				r.instance.Status.Scaler[nodePool.Component].Replicas = nodePool.Replicas
+				r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
+				//autoscalerStatus = r.instance.Status.Scaler
+				//autoscalerStatus[nodePool.Component].Replicas = nodePool.Replicas
+				//autoscalerStatus[nodePool.Component].LastScaleTime = metav1.Now()
+				//err := r.UpdateReplicaStatus(autoscalerStatus)
+				//if err != nil {
+				//	r.logger.Info("Failed to update scaler status for cluster[" + r.instance.Name + "], nodePool[" + nodePool.Component + "].")
+				//}
 			}
 		}
 	}
