@@ -12,8 +12,10 @@ spec:
     kind: Autoscaler
     listKind: AutoscalerList
     plural: autoscalers
+    shortNames:
+    - autoscaler
     singular: autoscaler
-  scope: Cluster
+  scope: Namespaced
   versions:
   - name: v1
     schema:
