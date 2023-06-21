@@ -515,4 +515,26 @@ var _ = Describe("Builders", func() {
 			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
 		})
 	})
+
+	When("Configuring a serviceAccount", func() {
+		It("should set it for all cluster pods and the securityconfig-update job", func() {
+			const serviceAccount = "my-test-serviceaccount"
+			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject.ObjectMeta.Namespace = "foobar"
+			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Spec.General.ServiceAccount = serviceAccount
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(sts.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
+
+			var job = NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "cmd", nil, nil)
+			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
+		})
+	})
 })

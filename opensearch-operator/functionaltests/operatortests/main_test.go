@@ -1,4 +1,4 @@
-package functionaltests
+package operatortests
 
 import (
 	"testing"
@@ -14,7 +14,7 @@ var (
 )
 
 func TestAPIs(t *testing.T) {
-	config, err := clientcmd.BuildConfigFromFlags("", "kubeconfig")
+	config, err := clientcmd.BuildConfigFromFlags("", "../kubeconfig")
 	if err != nil {
 		panic(err.Error())
 	}
