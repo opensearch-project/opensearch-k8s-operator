@@ -1,4 +1,4 @@
-package functionaltests
+package operatortests
 
 import (
 	"bytes"
