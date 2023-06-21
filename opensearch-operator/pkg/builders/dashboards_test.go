@@ -2,6 +2,7 @@ package builders
 
 import (
 	"fmt"
+
 	"k8s.io/utils/pointer"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -139,6 +140,26 @@ var _ = Describe("Builders", func() {
 			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
+		})
+	})
+
+	When("configuring a serviceaccount for the cluster", func() {
+		It("should configure the serviceaccount for the dashboard pods", func() {
+			const serviceAccountName = "my-serviceaccount"
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName:    "some-name",
+						ServiceAccount: serviceAccountName,
+					},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+					},
+				},
+			}
+			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccountName))
 		})
 	})
 })
