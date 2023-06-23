@@ -313,7 +313,20 @@ spec:
         roles:
           - "data"
 ```
-### Configuring Snapshot Repo (BETA):
+
+### Deal with `max virtual memory areas vm.max_map_count` errors
+
+OpenSearch requires the Linux kernel `vm.max_map_count` option [to be set to at least 262144](https://opensearch.org/docs/1.0/opensearch/install/important-settings/). You can either set this yourself on the Kubernetes hosts using sysctl or you can let the operator take care of it by adding the following option to your cluster spec:
+
+```yaml
+spec:
+  general:
+    setVMMaxMapCount: true
+```
+
+This will configure an init container for each opensearch pod that executes the needed `sysctl` command. By default the init container uses a busybox image. If you want to change that (for example to use an image from a private registry), see [Custom init helper](#custom-init-helper).
+
+### Configuring Snapshot Repo (BETA)
 
 This feature is Currently in BETA, you can configure the snapshot repo settings for the OpenSearch cluster through the operator. Using `snapshotRepositories` settings you can configure multiple snapshot repos. Once the snapshot repo is configured a user can create custom `_ism` policies through dashboard to backup the in indexes.
 
@@ -336,55 +349,56 @@ spec:
             region: us-east-1
             base_path: os-snapshot_1
 ```
-#### Prerequisites for Configuring Snapshot Repo:
+
+#### Prerequisites for Configuring Snapshot Repo
 
 Before applying the setting `snapshotRepositories` to the operator, please ensure the following prerequisites are met.
 
-1. The right cloud provider native plugins are installed.
-Example:
-```yaml
-spec:
-  general:
-    pluginsList: ["repository-s3"]
-```
+1. The right cloud provider native plugins are installed. For example:
 
-2. Ensure the cluster is fully healthy before applying the `snapshotRepositories` settings to the custom resource. 
-Note: For the BETA you cannot add the settings if the cluster is not yet provisioned and healthy, otherwise the configuration of the repositories will fail.
+    ```yaml
+    spec:
+      general:
+        pluginsList: ["repository-s3"]
+    ```
 
-3. The required roles/permissions for the backend cloud are pre-created.
-Example: Following is the AWS IAM role added for kubernetes nodes so that snapshots can be published to `opensearch-s3-snapshot` s3 bucket.
-```json
-{
-    "Statement": [
-        {
-            "Action": [
-                "s3:ListBucket",
-                "s3:GetBucketLocation",
-                "s3:ListBucketMultipartUploads",
-                "s3:ListBucketVersions"
-            ],
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:s3:::opensearch-s3-snapshot"
-            ]
-        },
-        {
-            "Action": [
-                "s3:GetObject",
-                "s3:PutObject",
-                "s3:DeleteObject",
-                "s3:AbortMultipartUpload",
-                "s3:ListMultipartUploadParts"
-            ],
-            "Effect": "Allow",
-            "Resource": [
-                "arn:aws:s3:::opensearch-s3-snapshot/*"
-            ]
-        }
-    ],
-    "Version": "2012-10-17"
-}
-```
+2. Ensure the cluster is fully healthy before applying the `snapshotRepositories` settings to the custom resource. Note: For the BETA you cannot add the settings if the cluster is not yet provisioned and healthy, otherwise the configuration of the repositories will fail.
+
+3. The required roles/permissions for the backend cloud are pre-created. Example: Following is the AWS IAM role added for kubernetes nodes so that snapshots can be published to `opensearch-s3-snapshot` s3 bucket.
+
+    ```json
+    {
+        "Statement": [
+            {
+                "Action": [
+                    "s3:ListBucket",
+                    "s3:GetBucketLocation",
+                    "s3:ListBucketMultipartUploads",
+                    "s3:ListBucketVersions"
+                ],
+                "Effect": "Allow",
+                "Resource": [
+                    "arn:aws:s3:::opensearch-s3-snapshot"
+                ]
+            },
+            {
+                "Action": [
+                    "s3:GetObject",
+                    "s3:PutObject",
+                    "s3:DeleteObject",
+                    "s3:AbortMultipartUpload",
+                    "s3:ListMultipartUploadParts"
+                ],
+                "Effect": "Allow",
+                "Resource": [
+                    "arn:aws:s3:::opensearch-s3-snapshot/*"
+                ]
+            }
+        ],
+        "Version": "2012-10-17"
+    }
+    ```
+
 ## Configuring Dashboards
 
 The operator can automatically deploy and manage a OpenSearch Dashboards instance. To do so add the following section to your cluster spec:
@@ -722,8 +736,11 @@ During cluster initialization the operator uses init containers as helpers. For 
       imagePullSecrets:
         - name: docker-pull-secret
 ```
+
 ### Edit init container resources
+
 Init container run without any resource constraints, but it's possible to specify resource requests and limits by adding a resources section to the YAML definition. This allows you to control the amount of CPU and memory allocated to the init container, it's helps to ensure that it doesn't starve other containers, by setting appropriate resource limits.
+
 ```yaml
   spec:
     initHelper:
@@ -735,7 +752,6 @@ Init container run without any resource constraints, but it's possible to specif
           memory: "512Mi"
           cpu: "500m"
  ```
-          
 
 ### Disabling the init helper
 
@@ -820,6 +836,7 @@ In case the operator detects several crashed or missing pods (for a nodepool) at
 The recovery mode also kicks in if you deleted your cluster but kept the PVCs around and are then reinstalling the cluster.
 
 If the cluster is using emptyDir i.e. every node pool is using emptyDir, the operator starts recovery in case of these failure scenarios:
+
 1. More than half the master nodes are missing or crashed and thus, the quorum is broken.
 2. All data nodes are missing or crashed and thus, no data node is available.
 
@@ -1086,11 +1103,16 @@ spec:
 
 ## Adding Opensearch Monitoring to your cluster
 
-The operator allows you to install and enable the Aiven monitoring plugin for OpenSearch on your cluster as a built-in feature (https://github.com/aiven/prometheus-exporter-plugin-for-opensearch)
-That feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below will be used if no `pluginUrl` is specified.  
+The operator allows you to install and enable the [Aiven monitoring plugin for OpenSearch](https://github.com/aiven/prometheus-exporter-plugin-for-opensearch) on your cluster as a built-in feature. If enabled the operator will install the aiven plugin into the opensearch pods and generate a Prometheus ServiceMonitor object to configure the plugin for scraping.
+This feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: `https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip`) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below in the example will be used if no `pluginUrl` is specified.
+
 By default the Opensearch admin user will be used to access the monitoring API. If you want to use a separate user with limited permissions you need to create that user using either of the following options:
-1) Create new applicative User using OpenSearch API/UI, create new secret with 'username':'password' keys and provide that secret name under monitoringUserSecret.
-2) Use Our OpenSearchUser CRD and provide the secret under monitoringUserSecret.
+
+a. Create new applicative User using OpenSearch API/UI, create new secret with 'username' and 'password' keys and provide that secret name under `monitoringUserSecret`.
+b. Use Our OpenSearchUser CRD and provide the secret under monitoringUserSecret.
+
+To configure monitoring you can add the following fields to your cluster spec:
+
 ```yaml
 apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
@@ -1101,11 +1123,12 @@ spec:
   general:
     version: <YOUR_CLUSTER_VERSION>
     monitoring:
-      enable: true
-      scrapeInterval: 30s
-      monitoringUserSecret: appUserSecret
-      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip
-      tlsConfig:
+      enable: true # Enable or disable the monitoring plugin
+      scrapeInterval: 30s # The scrape interval for Prometheus
+      monitoringUserSecret: monitoring-user-secret # Optional, name of a secret with username/password for prometheus to acces the plugin metrics endpoint with, defaults to the admin user
+      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugi
+      tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor
         serverName: "testserver.test.local"
         insecureSkipVerify: true
+  # ...
 ```
