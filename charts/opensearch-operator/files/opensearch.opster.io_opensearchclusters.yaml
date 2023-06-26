@@ -18,7 +18,25 @@ spec:
     singular: opensearchcluster
   scope: Namespaced
   versions:
-  - name: v1
+  - additionalPrinterColumns:
+    - jsonPath: .status.health
+      name: health
+      type: string
+    - description: Available nodes
+      jsonPath: .status.availableNodes
+      name: nodes
+      type: integer
+    - description: Elasticsearch version
+      jsonPath: .status.version
+      name: version
+      type: string
+    - jsonPath: .status.phase
+      name: phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: age
+      type: date
+    name: v1
     schema:
       openAPIV3Schema:
         description: Es is the Schema for the es API

@@ -293,9 +293,8 @@ type OpenSearchCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec       ClusterSpec                                      `json:"spec,omitempty"`
-	Status     ClusterStatus                                    `json:"status,omitempty"`
-	AssocConfs map[metav1.ObjectSelector]metav1.AssociationConf `json:"-"`
+	Spec   ClusterSpec   `json:"spec,omitempty"`
+	Status ClusterStatus `json:"status,omitempty"`
 }
 
 type ComponentStatus struct {
