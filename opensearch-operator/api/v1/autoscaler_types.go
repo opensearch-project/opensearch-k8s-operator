@@ -38,13 +38,15 @@ type Rule struct {
 	Items    []Item `json:"items"`
 }
 
+// Scale defines the behaviors of the scaling rule
 type Scale struct {
+	Enable    bool      `json:"enable"`
 	ScaleUp   ScaleConf `json:"scaleUp,omitempty"`
 	ScaleDown ScaleConf `json:"scaleDown,omitempty"`
 }
 
+// ScaleConf defines configuration rules for scaling as needed
 type ScaleConf struct {
-	Enable      bool  `json:"enable"`
 	MaxReplicas int32 `json:"maxReplicas,omitempty"`
 }
 
@@ -56,6 +58,7 @@ type Item struct {
 	QueryOptions QueryOptions `json:"queryOptions,omitempty"`
 }
 
+// QueryOptions defines the components to build a prometheus query for a scaling item
 type QueryOptions struct {
 	LabelMatchers       []string `json:"labelMatchers,omitempty"`
 	Function            string   `json:"function,omitempty"`
