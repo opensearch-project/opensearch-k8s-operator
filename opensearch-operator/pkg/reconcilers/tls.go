@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"k8s.io/client-go/tools/record"
 	"strings"
+
+	"k8s.io/client-go/tools/record"
 
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
@@ -14,6 +15,7 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -111,7 +113,7 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 		if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+			ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
 		if err != nil {
 			return err
@@ -122,7 +124,7 @@ func (r *TLSReconciler) handleAdminCertificate() error {
 			adminCert, err := ca.CreateAndSignCertificate("admin", clusterName, nil)
 			if err != nil {
 				r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
-				r.recorder.Event(r.instance, "Warning", "Security", "Failed to create admin certificate")
+				r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "Security", "Failed to create admin certificate")
 				return err
 			}
 			adminSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: adminSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: adminCert.SecretData(ca)}
@@ -157,7 +159,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
 		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 	} else {
-		ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+		ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 	}
 	if err != nil {
 		return err
@@ -171,7 +173,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			clusterName,
 			fmt.Sprintf("%s.%s", clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-			fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
+			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 		}
 		nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
 		if err != nil {
@@ -214,7 +216,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
 		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 	} else {
-		ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+		ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 	}
 	if err != nil {
 		return err
@@ -244,8 +246,8 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			fmt.Sprintf("%s.%s.%s", bootstrapPodName, clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 			fmt.Sprintf("%s.%s.%s.svc", bootstrapPodName, clusterName, namespace),
-			fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
-			fmt.Sprintf("%s.%s.%s.svc.cluster.local", bootstrapPodName, clusterName, namespace),
+			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
+			fmt.Sprintf("%s.%s.%s.svc.%s", bootstrapPodName, clusterName, namespace, helpers.ClusterDnsBase()),
 		}
 		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames)
 		if err != nil {
@@ -278,8 +280,8 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 				fmt.Sprintf("%s.%s.%s", podName, clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 				fmt.Sprintf("%s.%s.%s.svc", podName, clusterName, namespace),
-				fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
-				fmt.Sprintf("%s.%s.%s.svc.cluster.local", podName, clusterName, namespace),
+				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
+				fmt.Sprintf("%s.%s.%s.svc.%s", podName, clusterName, namespace, helpers.ClusterDnsBase()),
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(podName, clusterName, dnsNames)
 			if err != nil {
@@ -372,7 +374,7 @@ func (r *TLSReconciler) handleHttp() error {
 		if tlsConfig.TlsCertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(tlsConfig.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+			ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
 		if err != nil {
 			return err
@@ -388,7 +390,7 @@ func (r *TLSReconciler) handleHttp() error {
 				builders.DiscoveryServiceName(r.instance),
 				fmt.Sprintf("%s.%s", clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-				fmt.Sprintf("%s.%s.svc.cluster.local", clusterName, namespace),
+				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
 			if err != nil {

@@ -1,0 +1,24 @@
+# permissions for end users to edit opensearchroles.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensearchrole-editor-role
+rules:
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - opensearchroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opster.opensearch.opster.io
+  resources:
+  - opensearchroles/status
+  verbs:
+  - get

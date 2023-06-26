@@ -1,0 +1,6 @@
+apiVersion: opster.opensearch.opster.io/v1
+kind: OpensearchUser
+metadata:
+  name: opensearchuser-sample
+spec:
+  # TODO(user): Add fields here

@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 // Package v1 contains API Schema definitions for the opster v1 API group
-//+kubebuilder:object:generate=true
-//+groupName=opensearch.opster.io
+// +kubebuilder:object:generate=true
+// +groupName=opensearch.opster.io
 package v1
 
 import (

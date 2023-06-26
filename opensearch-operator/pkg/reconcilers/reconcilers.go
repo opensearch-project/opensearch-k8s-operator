@@ -3,6 +3,8 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"net/http"
+
 	"k8s.io/client-go/tools/record"
 
 	corev1 "k8s.io/api/core/v1"
@@ -12,7 +14,42 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
+const (
+	opensearchPending     = "OpensearchPending"
+	opensearchError       = "OpensearchError"
+	opensearchAPIError    = "OpensearchAPIError"
+	opensearchRefMismatch = "OpensearchRefMismatch"
+	opensearchAPIUpdated  = "OpensearchAPIUpdated"
+	passwordError         = "PasswordError"
+	statusError           = "StatusUpdateError"
+)
+
 type ComponentReconciler func() (reconcile.Result, error)
+
+type ReconcilerOptions struct {
+	osClientTransport http.RoundTripper
+	updateStatus      *bool
+}
+
+type ReconcilerOption func(*ReconcilerOptions)
+
+func (o *ReconcilerOptions) apply(opts ...ReconcilerOption) {
+	for _, op := range opts {
+		op(o)
+	}
+}
+
+func WithOSClientTransport(transport http.RoundTripper) ReconcilerOption {
+	return func(o *ReconcilerOptions) {
+		o.osClientTransport = transport
+	}
+}
+
+func WithUpdateStatus(update bool) ReconcilerOption {
+	return func(o *ReconcilerOptions) {
+		o.updateStatus = &update
+	}
+}
 
 type ReconcilerContext struct {
 	Volumes          []corev1.Volume
@@ -57,7 +94,7 @@ func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 	_, exists := c.DashboardsConfig[key]
 	if exists {
 		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
-		c.recorder.Event(c.instance, "Warning", "Config", fmt.Sprintf("Notice - Config key '%s' already exists in dashboard config. Will be overwrittenn\", key)", key))
+		c.recorder.AnnotatedEventf(c.instance, map[string]string{"cluster-name": c.instance.GetName()}, "Warning", "Config", "Notice - Config key '%s' already exists in dashboard config. Will be overwritten\", key)", key)
 	}
 	//c.recorder.Event(c.instance, "Normal", "Config", fmt.Sprintf("Strating to add '%s' dashboard config", key))
 	c.DashboardsConfig[key] = value
@@ -87,7 +124,7 @@ func (c *ReconcilerContext) replaceNodePoolHash(newConfig NodePoolHash) {
 	c.NodePoolHashes = configs
 }
 
-func UpdateOpensearchStatus(
+func UpdateComponentStatus(
 	ctx context.Context,
 	k8sClient client.Client,
 	instance *opsterv1.OpenSearchCluster,

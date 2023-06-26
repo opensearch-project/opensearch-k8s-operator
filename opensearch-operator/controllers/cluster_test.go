@@ -6,8 +6,10 @@ import (
 	"sync"
 	"time"
 
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
 	. "github.com/kralicky/kmatch"
-	. "github.com/onsi/ginkgo"
+	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -27,11 +29,10 @@ var _ = Describe("Cluster Reconciler", func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		clusterName  = "cluster-test-cluster"
-		namespace    = clusterName
-		timeout      = time.Second * 30
-		interval     = time.Second * 1
-		consistently = time.Second * 10
+		clusterName = "cluster-test-cluster"
+		namespace   = clusterName
+		timeout     = time.Second * 30
+		interval    = time.Second * 1
 	)
 	var (
 		OpensearchCluster      = ComposeOpensearchCrd(clusterName, namespace)
@@ -83,8 +84,47 @@ var _ = Describe("Cluster Reconciler", func() {
 
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+
 		})
 
+		It("should create a ServiceMonitor for the cluster", func() {
+			sm := &monitoring.ServiceMonitor{}
+			secret := &corev1.Secret{}
+			Eventually(func() error {
+				// check if the ServiceMonitor created
+				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-monitor", Namespace: OpensearchCluster.Namespace}, sm)
+			}, timeout, interval).Should(Succeed())
+
+			// check if the Auth secret created
+
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), client.ObjectKey{Name: OpensearchCluster.Name + "-admin-password", Namespace: OpensearchCluster.Namespace}, secret)
+			}, timeout, interval).Should(Succeed())
+
+			// check if the ServiceMonitor is using the Admin secret for basicAuth
+
+			Expect(sm.Spec.Endpoints[0].BasicAuth).Should(BeEquivalentTo(
+				&monitoring.BasicAuth{Username: corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: OpensearchCluster.Name + "-admin-password"},
+					Key:                  "username"},
+					Password: corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: OpensearchCluster.Name + "-admin-password"},
+						Key:                  "password"},
+				}))
+
+			// check if the ServiceMonitor is using the interval from the CRD declaration
+			Expect(sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapeInterval))
+
+			// check if the ServiceMonitor is using the tlsConfig.insecureSkipVerify from the CRD declaration
+			Expect(sm.Spec.Endpoints[0].TLSConfig.InsecureSkipVerify).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify))
+
+			// check if the ServiceMonitor is using the tlsConfig.serverName from the CRD declaration
+			Expect(sm.Spec.Endpoints[0].TLSConfig.ServerName).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.ServerName))
+
+			// check if tlsConfig is not defined in the CRD declaration the ServiceMonitor not deploy that part of the config
+			// Expect(sm.Spec.Endpoints[0].TLSConfig).To(BeNil())
+
+		})
 	})
 
 	/// ------- Tests logic Check phase -------
@@ -123,7 +163,7 @@ var _ = Describe("Cluster Reconciler", func() {
 						},
 					}, k8sClient), timeout, interval).Should(ExistAnd(
 						HaveMatchingContainer(And(
-							HaveImage("docker.io/opensearchproject/opensearch:1.0.0"),
+							HaveImage("docker.io/opensearchproject/opensearch:2.0.0"),
 							HaveLimits(corev1.ResourceList{
 								corev1.ResourceCPU:    resource.MustParse("500m"),
 								corev1.ResourceMemory: resource.MustParse("2Gi"),
@@ -191,6 +231,17 @@ var _ = Describe("Cluster Reconciler", func() {
 				}, sts)
 			}, timeout, interval).Should(Succeed())
 			Expect(sts.ObjectMeta.Labels).To(HaveKeyWithValue("quux", "quut"))
+		})
+
+		It("should set nodepool topologySpreadConstraints", func() {
+			sts := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-master", OpensearchCluster.Name),
+					Namespace: OpensearchCluster.Namespace,
+				}, sts)
+			}, timeout, interval).Should(Succeed())
+			Expect(sts.Spec.Template.Spec.TopologySpreadConstraints[0].TopologyKey).To(Equal("zone"))
 		})
 
 		It("should create a bootstrap pod", func() {
@@ -292,7 +343,7 @@ var _ = Describe("Cluster Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return false
 				}
-				return OpensearchCluster.Status.Version == "1.0.0"
+				return OpensearchCluster.Status.Version == "2.0.0"
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
@@ -306,6 +357,7 @@ var _ = Describe("Cluster Reconciler", func() {
 			// Update the opensearch object
 			OpensearchCluster.Spec.NodePools = OpensearchCluster.Spec.NodePools[:2]
 			OpensearchCluster.Spec.General.Version = "1.1.0"
+			OpensearchCluster.Spec.General.PluginsList[0] = "http://foo-plugin-1.1.0"
 			Expect(k8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
 
 			Eventually(func() bool {
@@ -318,39 +370,20 @@ var _ = Describe("Cluster Reconciler", func() {
 				return len(stsList.Items) == 2
 			})
 		})
-		It("should not update the node pool image version", func() {
-			Consistently(func() bool {
-				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
-					return false
-				}
-				return OpensearchCluster.Status.Version == "1.0.0"
-			}, consistently, interval).Should(BeTrue())
-			wg := sync.WaitGroup{}
+		It("should update the node pool image version", func() {
 			for _, pool := range OpensearchCluster.Spec.NodePools {
-				wg.Add(1)
-				By(fmt.Sprintf("checking %s node pool", pool.Component))
-				go func(pool opsterv1.NodePool) {
-					defer GinkgoRecover()
-					defer wg.Done()
-
+				Eventually(func() bool {
 					sts := &appsv1.StatefulSet{}
-
-					Consistently(func() bool {
-						if err := k8sClient.Get(
-							context.Background(),
-							client.ObjectKey{
-								Namespace: OpensearchCluster.Namespace,
-								Name:      clusterName + "-" + pool.Component,
-							}, sts); err != nil {
-							return false
-						}
-						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.0.0"
-					}, consistently, interval).Should(BeTrue())
-				}(pool)
+					err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: OpensearchCluster.Namespace, Name: clusterName + "-" + pool.Component}, sts)
+					if err != nil {
+						return false
+					}
+					return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.1.0"
+				}).Should(BeTrue())
 			}
-			wg.Wait()
 		})
 	})
+
 	When("A node pool is upgrading", func() {
 		Specify("updating the status should succeed", func() {
 			status := opsterv1.ComponentStatus{
@@ -358,14 +391,14 @@ var _ = Describe("Cluster Reconciler", func() {
 				Description: "nodes",
 				Status:      "Upgrading",
 			}
-			Expect(func() error {
+			Eventually(func() error {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return err
 				}
 				preUpgradeStatusLength = len(OpensearchCluster.Status.ComponentsStatus)
 				OpensearchCluster.Status.ComponentsStatus = append(OpensearchCluster.Status.ComponentsStatus, status)
 				return k8sClient.Status().Update(context.Background(), &OpensearchCluster)
-			}()).To(Succeed())
+			}()).Should(Succeed())
 		})
 		It("should update the node pool image", func() {
 			Eventually(func() bool {
@@ -379,6 +412,20 @@ var _ = Describe("Cluster Reconciler", func() {
 					return false
 				}
 				return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.1.0"
+			}, timeout, interval).Should(BeTrue())
+		})
+		It("should update any plugin URLs", func() {
+			Eventually(func() bool {
+				sts := &appsv1.StatefulSet{}
+				if err := k8sClient.Get(
+					context.Background(),
+					client.ObjectKey{
+						Namespace: OpensearchCluster.Namespace,
+						Name:      clusterName + "-nodes",
+					}, sts); err != nil {
+					return false
+				}
+				return ArrayElementContains(sts.Spec.Template.Spec.Containers[0].Command, "http://foo-plugin-1.1.0")
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
@@ -399,14 +446,14 @@ var _ = Describe("Cluster Reconciler", func() {
 				Status:      "Upgraded",
 				Description: "master",
 			}
-			Expect(func() error {
+			Eventually(func() error {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return err
 				}
 				OpensearchCluster.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, OpensearchCluster.Status.ComponentsStatus)
 				OpensearchCluster.Status.ComponentsStatus = append(OpensearchCluster.Status.ComponentsStatus, masterComponentStatus)
 				return k8sClient.Status().Update(context.Background(), &OpensearchCluster)
-			}()).To(Succeed())
+			}, timeout, interval).Should(BeNil())
 		})
 		It("should cleanup the status", func() {
 			Eventually(func() bool {

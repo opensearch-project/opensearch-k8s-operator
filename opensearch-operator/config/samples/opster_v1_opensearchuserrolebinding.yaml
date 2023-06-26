@@ -1,0 +1,6 @@
+apiVersion: opster.opensearch.opster.io/v1
+kind: OpensearchUserRoleBinding
+metadata:
+  name: opensearchuserrolebinding-sample
+spec:
+  # TODO(user): Add fields here

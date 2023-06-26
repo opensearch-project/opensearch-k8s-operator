@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   labels:
     control-plane: controller-manager
-  name: opensearch-operator-controller-manager
+  name: {{ include "opensearch-operator.fullname" . }}-controller-manager
 spec:
   replicas: 1
   selector:
@@ -15,16 +15,24 @@ spec:
         control-plane: controller-manager
     spec:
       containers:
+      {{- if or (.Values.kubeRbacProxy.enable) (eq (.Values.kubeRbacProxy.enable | toString) "<nil>") }}
       - args:
         - --secure-listen-address=0.0.0.0:8443
         - --upstream=http://127.0.0.1:8080/
         - --logtostderr=true
         - --v=10
-        image: gcr.io/kubebuilder/kube-rbac-proxy:v0.8.0
+        image: "{{ .Values.kubeRbacProxy.image.repository }}:{{ .Values.kubeRbacProxy.image.tag}}"
         name: kube-rbac-proxy
+        resources:
+{{- toYaml .Values.kubeRbacProxy.resources | nindent 10 }}
+        readinessProbe:
+{{- toYaml .Values.kubeRbacProxy.readinessProbe | nindent 10 }}
+        livenessProbe:
+{{- toYaml .Values.kubeRbacProxy.livenessProbe | nindent 10 }}
         ports:
         - containerPort: 8443
           name: https
+      {{- end}}
       - args:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address=127.0.0.1:8080
@@ -38,14 +46,26 @@ spec:
         name: operator-controller-manager
         imagePullPolicy: "{{ .Values.manager.image.pullPolicy }}"
         resources:
-          {{- toYaml .Values.manager.resources | nindent 12 }}
+{{- toYaml .Values.manager.resources | nindent 10 }}
+        readinessProbe:
+{{- toYaml .Values.manager.readinessProbe | nindent 10 }}
+        livenessProbe:
+{{- toYaml .Values.manager.livenessProbe | nindent 10 }}
+        env:
+        - name: DNS_BASE
+          value: {{ .Values.manager.dnsBase }}
+        - name: PARALLEL_RECOVERY_ENABLED
+          value: "{{ .Values.manager.parallelRecoveryEnabled }}"
+        {{- if .Values.manager.extraEnv }}
+        {{- toYaml .Values.manager.extraEnv | nindent 8 }}
+        {{- end }}
         securityContext:
           allowPrivilegeEscalation: false
       nodeSelector:
-        {{- toYaml .Values.nodeSelector | nindent 8 }}
+{{- toYaml .Values.nodeSelector | nindent 8 }}
       tolerations:
-        {{- toYaml .Values.tolerations | nindent 8 }}
+{{- toYaml .Values.tolerations | nindent 8 }}
       securityContext:
         runAsNonRoot: true
-      serviceAccountName: opensearch-operator-controller-manager
+      serviceAccountName: {{ include "opensearch-operator.serviceAccountName" . }}
       terminationGracePeriodSeconds: 10

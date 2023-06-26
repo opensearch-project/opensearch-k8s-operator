@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -13,6 +14,12 @@ import (
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"k8s.io/utils/pointer"
 	"opensearch.opster.io/opensearch-gateway/responses"
+)
+
+const (
+	headerContentType = "Content-Type"
+
+	jsonContentHeader = "application/json"
 )
 
 var (
@@ -33,20 +40,54 @@ var (
 )
 
 type OsClusterClient struct {
+	OsClusterClientOptions
 	client   *opensearch.Client
 	MainPage responses.MainResponse
 }
 
-func NewOsClusterClient(clusterUrl string, username string, password string) (*OsClusterClient, error) {
+type OsClusterClientOptions struct {
+	transport http.RoundTripper
+}
+
+type OsClusterClientOption func(*OsClusterClientOptions)
+
+func (o *OsClusterClientOptions) apply(opts ...OsClusterClientOption) {
+	for _, op := range opts {
+		op(o)
+	}
+}
+
+func WithTransport(transport http.RoundTripper) OsClusterClientOption {
+	return func(o *OsClusterClientOptions) {
+		o.transport = transport
+	}
+}
+
+func NewOsClusterClient(clusterUrl string, username string, password string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
+	options := OsClusterClientOptions{}
+	options.apply(opts...)
+
 	config := opensearch.Config{
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		},
+		Transport: func() http.RoundTripper {
+			if options.transport != nil {
+				return options.transport
+			}
+			return &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+		}(),
 		Addresses: []string{clusterUrl},
 		Username:  username,
 		Password:  password,
 	}
-	return NewOsClusterClientFromConfig(config)
+
+	client, err := NewOsClusterClientFromConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	client.OsClusterClientOptions = options
+	return client, nil
 }
 
 func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, error) {
@@ -164,7 +205,7 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 
 func (client *OsClusterClient) GetFlatClusterSettings() (responses.FlatClusterSettingsResponse, error) {
 	req := opensearchapi.ClusterGetSettingsRequest{
-		FlatSettings: pointer.BoolPtr(true),
+		FlatSettings: pointer.Bool(true),
 	}
 	settingsRes, err := req.Do(context.Background(), client.client)
 	var response responses.FlatClusterSettingsResponse
@@ -246,4 +287,41 @@ func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// GetSecurityResource performs an HTTP GET request to OS to fetch the security resource specified by name
+func (client *OsClusterClient) GetSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPath(resource, name)
+	return doHTTPGet(ctx, client.client, path)
+}
+
+// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+func (client *OsClusterClient) PutSecurityResource(ctx context.Context, resource, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPath(resource, name)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// DeleteSecurityResource performs an HTTP DELETE request to OS to delete the security resource specified by name
+func (client *OsClusterClient) DeleteSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPath(resource, name)
+	return doHTTPDelete(ctx, client.client, path)
+}
+
+// generateAPIPath generates a URI PATH for a specific resource endpoint and name
+// For example: resource = internalusers, name = example
+// URI PATH = '_plugins/_security/api/internalusers/example'
+func generateAPIPath(resource, name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len("_security") + 1 + len("api") + 1 + len(resource) + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString("_security")
+	path.WriteString("/")
+	path.WriteString("api")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
 }

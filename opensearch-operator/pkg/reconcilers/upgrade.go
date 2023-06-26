@@ -8,6 +8,7 @@ import (
 
 	"github.com/Masterminds/semver"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -18,6 +19,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -37,6 +39,7 @@ type UpgradeReconciler struct {
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
+	logger            logr.Logger
 }
 
 func NewUpgradeReconciler(
@@ -55,6 +58,7 @@ func NewUpgradeReconciler(
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
 		instance:          instance,
+		logger:            log.FromContext(ctx).WithValues("reconciler", "upgrade"),
 	}
 }
 
@@ -63,30 +67,24 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Spec.General.Version == r.instance.Status.Version {
 		return ctrl.Result{}, nil
 	}
-
-	lg := log.FromContext(r.ctx)
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
 	// If version validation fails log a warning and do nothing
 	if err := r.validateUpgrade(); err != nil {
-		lg.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
-		r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("Failed to validation version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version))
+		r.logger.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Failed to validation version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
 		return ctrl.Result{}, err
 	}
 
-	// If there is work to do create an Opensearch Client
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
+	var err error
 
-	clusterClient, err := services.NewOsClusterClient(fmt.Sprintf("https://%s.%s.svc.cluster.local:%v", r.instance.Spec.General.ServiceName, r.instance.Namespace, r.instance.Spec.General.HttpPort), username, password)
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	r.osClient = clusterClient
 
 	//Fetch the working nodepool
-	nodePool, currentStatus := r.findWorkingNodePool()
+	nodePool, currentStatus := r.findNextNodePoolForUpgrade()
 
 	// Work on the current nodepool as appropriate
 	switch currentStatus.Status {
@@ -100,28 +98,13 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			r.instance.Status.ComponentsStatus = append(r.instance.Status.ComponentsStatus, currentStatus)
 			return r.Status().Update(r.ctx, r.instance)
 		})
-		r.recorder.Eventf(r.instance, "Normal", "Upgrade", "Start to upgrade of data node pool %s", currentStatus.Component)
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: 15 * time.Second,
-		}, err
-	case "NonDataPending":
-		// Set it to upgrading and requeue
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			currentStatus.Status = "UntrackedUpgrade"
-			r.instance.Status.ComponentsStatus = append(r.instance.Status.ComponentsStatus, currentStatus)
-			return r.Status().Update(r.ctx, r.instance)
-		})
-		r.recorder.Eventf(r.instance, "Normal", "Upgrade", "Start to rollout of non data node pool %s", currentStatus.Component)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", currentStatus.Description)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
 		}, err
 	case "Upgrading":
-		err := r.doDataNodeUpgrade(nodePool)
+		err := r.doNodePoolUpgrade(nodePool)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 30 * time.Second,
@@ -145,7 +128,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			}
 			return r.Status().Update(r.ctx, r.instance)
 		})
-		r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("Finished to upgrade - NewVersion: %s", r.instance.Status.Version))
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade - NewVersion: %s", r.instance.Status.Version)
 		return ctrl.Result{}, err
 	default:
 		// We should never get here so return an error
@@ -166,10 +149,11 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 	if err != nil {
 		return err
 	}
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
 	// Don't allow version downgrades as they might cause unexpected issues
 	if new.LessThan(existing) {
-		r.recorder.Event(r.instance, "Warning", "Upgrade", " Notice - invalid version - specified version is more than 1 major version greater than existing")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Error", "Upgrade", "Invalid version: specified version is more than 1 major version greater than existing")
 		return ErrVersionDowngrade
 	}
 
@@ -181,7 +165,7 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 	}
 
 	if !upgradeConstraint.Check(new) {
-		r.recorder.Event(r.instance, "Warning", "invalid version", "specified version is more than 1 major version greater than existing")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Error", "Upgrade", "Invalid version: specified version is more than 1 major version greater than existing")
 		return ErrMajorVersionJump
 	}
 
@@ -189,12 +173,12 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 }
 
 // Find which nodepool to work on
-func (r *UpgradeReconciler) findWorkingNodePool() (opsterv1.NodePool, opsterv1.ComponentStatus) {
+func (r *UpgradeReconciler) findNextNodePoolForUpgrade() (opsterv1.NodePool, opsterv1.ComponentStatus) {
 	// First sort node pools
 	var dataNodes, dataAndMasterNodes, otherNodes []opsterv1.NodePool
 	for _, nodePool := range r.instance.Spec.NodePools {
-		if helpers.ContainsString(nodePool.Roles, "data") {
-			if helpers.ContainsString(nodePool.Roles, "master") {
+		if helpers.HasDataRole(&nodePool) {
+			if helpers.HasManagerRole(&nodePool) {
 				dataAndMasterNodes = append(dataAndMasterNodes, nodePool)
 			} else {
 				dataNodes = append(dataNodes, nodePool)
@@ -241,18 +225,25 @@ func (r *UpgradeReconciler) findWorkingNodePool() (opsterv1.NodePool, opsterv1.C
 		}
 	}
 
-	// Finally do the non data nodes.  We can let the kubernetes rollout logic do the work here
+	// Finally do the non data nodes
+	pool, found = r.findInProgress(otherNodes)
+	if found {
+		return pool, opsterv1.ComponentStatus{
+			Component:   "Upgrader",
+			Description: pool.Component,
+			Status:      "Upgrading",
+		}
+	}
 	pool, found = r.findNextPool(otherNodes)
 	if found {
 		return pool, opsterv1.ComponentStatus{
 			Component:   "Upgrader",
 			Description: pool.Component,
-			Status:      "NonDataPending",
+			Status:      "Pending",
 		}
 	}
 
 	// If we get here all nodes should be upgraded
-	r.recorder.Event(r.instance, "Normal", "Upgrade", fmt.Sprintf("Finished to upgrade - NewVersion: %s", r.instance.Status.Version))
 	return opsterv1.NodePool{}, opsterv1.ComponentStatus{
 		Component: "Upgrade",
 		Status:    "Finished",
@@ -287,11 +278,11 @@ func (r *UpgradeReconciler) findNextPool(pools []opsterv1.NodePool) (opsterv1.No
 	return opsterv1.NodePool{}, false
 }
 
-func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
+func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 	// Fetch the STS
-	lg := log.FromContext(r.ctx).WithValues("reconciler", "upgrader")
 	stsName := builders.StsName(r.instance, &pool)
 	sts := &appsv1.StatefulSet{}
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	if err := r.Get(r.ctx, types.NamespacedName{
 		Name:      stsName,
 		Namespace: r.instance.Namespace,
@@ -301,20 +292,27 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 
 	dataCount := builders.DataNodesCount(r.ctx, r.Client, r.instance)
 	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {
-		lg.Info("only 2 data nodes and drain is set, some shards may not drain")
+		r.logger.Info("only 2 data nodes and drain is set, some shards may not drain")
 	}
 
 	ready, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
 	if err != nil {
+		r.logger.Error(err, "Could not check opensearch cluster status")
 		return err
 	}
 	if !ready {
+		r.logger.Info("Cluster is not ready for next pod to restart")
 		return nil
 	}
 
 	// Work around for https://github.com/kubernetes/kubernetes/issues/73492
 	// If upgrade on this node pool is complete update status and return
 	if sts.Status.UpdatedReplicas == sts.Status.Replicas {
+		if err = services.ReactivateShardAllocation(r.osClient); err != nil {
+			return err
+		}
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade of node pool '%s'", pool.Component)
+
 		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 				return err
@@ -330,7 +328,7 @@ func (r *UpgradeReconciler) doDataNodeUpgrade(pool opsterv1.NodePool) error {
 				Description: pool.Component,
 			}
 			r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-			r.recorder.Eventf(r.instance, "Normal", "Upgrade", "Finished to upgrade data node pool %s", currentStatus.Component)
+
 			return r.Status().Update(r.ctx, r.instance)
 		})
 	}

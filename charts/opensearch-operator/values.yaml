@@ -1,18 +1,90 @@
+nameOverride: ""
+fullnameOverride: ""
+
 nodeSelector: {}
 tolerations: []
 manager:
+  extraEnv: []
   resources:
     limits:
-      cpu: 2
-      memory: 1Gi
+      cpu: 200m
+      memory: 500Mi
     requests:
-      cpu: 2
-      memory: 1Gi
+      cpu: 100m
+      memory: 350Mi
+
+  livenessProbe:
+    failureThreshold: 3
+    httpGet:
+      path: /healthz
+      port: 8081
+    periodSeconds: 15
+    successThreshold: 1
+    timeoutSeconds: 3
+    initialDelaySeconds: 10
+
+  readinessProbe:
+    failureThreshold: 3
+    httpGet:
+      path: /readyz
+      port: 8081
+    periodSeconds: 15
+    successThreshold: 1
+    timeoutSeconds: 3
+    initialDelaySeconds: 10
+
+  # Set this to false to disable the experimental parallel recovery in case you are experiencing problems
+  parallelRecoveryEnabled: true
+
   image:
     repository: public.ecr.aws/opsterio/opensearch-operator
     ## tag default uses appVersion from Chart.yaml, to override specify tag tag: "v1.1"
     tag: ""
     pullPolicy: "Always"
+
+  dnsBase: cluster.local
+
   # If a watchNamespace is specified, the manager's cache will be restricted to
   # watch objects in the desired namespace. Defaults is to watch all namespaces.
   watchNamespace:
+
+# Install the Custom Resource Definitions with Helm
+installCRDs: true
+
+serviceAccount:
+  # Specifies whether a service account should be created
+  create: true
+  # Override the service account name. Defaults to opensearch-operator-controller-manager
+  name: ""
+
+kubeRbacProxy:
+  enable: true
+  resources:
+    limits:
+      cpu: 50m
+      memory: 50Mi
+    requests:
+      cpu: 25m
+      memory: 25Mi
+
+  livenessProbe:
+    failureThreshold: 3
+    tcpSocket:
+      port: 8443
+    periodSeconds: 15
+    successThreshold: 1
+    timeoutSeconds: 3
+    initialDelaySeconds: 10
+
+  readinessProbe:
+    failureThreshold: 3
+    tcpSocket:
+      port: 8443
+    periodSeconds: 15
+    successThreshold: 1
+    timeoutSeconds: 3
+    initialDelaySeconds: 10
+
+  image:
+    repository: "gcr.io/kubebuilder/kube-rbac-proxy"
+    tag: "v0.12.0"

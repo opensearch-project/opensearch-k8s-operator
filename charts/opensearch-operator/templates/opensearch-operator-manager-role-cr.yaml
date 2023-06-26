@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: opensearch-operator-manager-role
+  name: {{ include "opensearch-operator.fullname" . }}-{{ .Release.Namespace }}-manager-role
 rules:
 - apiGroups:
   - apps
@@ -29,22 +29,9 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
+  - batch
   resources:
-  - persistentvolumeclaims
-  verbs:
-  - create
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - configmaps
-  - pods
-  - persistentvolumeclaims
+  - jobs
   verbs:
   - create
   - delete
@@ -56,7 +43,39 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - configmaps
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
   - namespaces
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
   verbs:
   - create
   - delete
@@ -90,9 +109,16 @@ rules:
   - update
   - watch
 - apiGroups:
-  - batch
+  - opensearch.opster.io
   resources:
-  - jobs
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchactiongroups
   verbs:
   - create
   - delete
@@ -104,10 +130,17 @@ rules:
 - apiGroups:
   - opensearch.opster.io
   resources:
-  - events
+  - opensearchactiongroups/finalizers
   verbs:
-  - create
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchactiongroups/status
+  verbs:
+  - get
   - patch
+  - update
 - apiGroups:
   - opensearch.opster.io
   resources:
@@ -134,4 +167,131 @@ rules:
   - get
   - patch
   - update
-
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchroles/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchroles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchtenants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchtenants/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchtenants/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchuserrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchuserrolebindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchuserrolebindings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchusers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchusers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchusers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch

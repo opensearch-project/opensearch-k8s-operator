@@ -1,0 +1,292 @@
+{{- if eq .Values.OpenSearchClusterSpec.enabled true }}
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: {{ .Values.clusterName | default .Release.Name}}
+  namespace: {{ .Release.Namespace }}
+spec:
+  {{- if .Values.OpenSearchClusterSpec.bootstrap }}
+  bootstrap:
+    {{- if .Values.OpenSearchClusterSpec.bootstrap.additionalConfig }}
+    additionalConfig:
+      {{ toYaml .Values.OpenSearchClusterSpec.bootstrap.additionalConfig | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  {{- if .Values.OpenSearchClusterSpec.initHelper }}
+  initHelper:
+    {{- if .Values.OpenSearchClusterSpec.initHelper.version }}
+    version: {{ .Values.OpenSearchClusterSpec.initHelper.version }}
+    {{ end }}
+    {{- if .Values.OpenSearchClusterSpec.initHelper.image }}
+    image: {{ .Values.OpenSearchClusterSpec.initHelper.image }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.initHelper.imagePullPolicy }}
+    imagePullPolicy: {{ .Values.OpenSearchClusterSpec.initHelper.imagePullPolicy }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.initHelper.imagePullSecrets }}
+    imagePullSecrets:
+      {{ toYaml .Values.OpenSearchClusterSpec.initHelper.imagePullSecrets | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  general:
+    {{- if .Values.OpenSearchClusterSpec.general.version }}
+    version: {{ .Values.OpenSearchClusterSpec.general.version }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.general.image }}
+    image: {{ .Values.OpenSearchClusterSpec.general.image | quote }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.general.httpPort }}
+    httpPort: {{ .Values.OpenSearchClusterSpec.general.httpPort }}
+    {{- end }}
+    vendor: opensearch
+    serviceName: {{ .Values.OpenSearchClusterSpec.general.serviceName }}
+    {{- if .Values.OpenSearchClusterSpec.general.pluginsList }}
+    pluginsList:
+      {{ toYaml .Values.OpenSearchClusterSpec.general.pluginsList | nindent 6 }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.general.keystore }}
+    keystore:
+      {{ toYaml .Values.OpenSearchClusterSpec.general.keystore |  nindent 6 }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.general.securityContext }}
+    securityContext:
+      {{ toYaml .Values.OpenSearchClusterSpec.general.securityContext | nindent 6}}
+    {{- end}}
+    {{- if .Values.OpenSearchClusterSpec.general.podSecurityContext }}
+    podSecurityContext:
+      {{ toYaml .Values.OpenSearchClusterSpec.general.podSecurityContext | nindent 6 }}
+    {{- end}}
+    {{- if .Values.OpenSearchClusterSpec.general.additionalVolumes }}
+    additionalVolumes:
+  {{- range $key, $val := .Values.OpenSearchClusterSpec.general.additionalVolumes }}
+      - name: {{ $val.name }}
+        path: {{ $val.path }}
+        secret:
+          secretName: {{ $val.secret.secretName }}
+  {{- end -}}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.general.additionalConfig }}
+    additionalConfig:
+      {{ toYaml .Values.OpenSearchClusterSpec.general.additionalConfig | nindent 6 }}
+    {{- end }}
+  {{- if .Values.OpenSearchClusterSpec.dashboards }}
+  dashboards:
+    {{- if .Values.OpenSearchClusterSpec.dashboards.image }}
+    image: {{ .Values.OpenSearchClusterSpec.dashboards.image | quote }}
+    {{- end }}
+    version: {{ .Values.OpenSearchClusterSpec.dashboards.version }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.enable }}
+    enable: {{ .Values.OpenSearchClusterSpec.dashboards.enable }}
+    {{- end }}
+    replicas: {{ .Values.OpenSearchClusterSpec.dashboards.replicas }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.pluginsList }}
+    pluginsList:
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.pluginsList | nindent 6 }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.basePath }}
+    basePath: {{ .Values.OpenSearchClusterSpec.dashboards.basePath }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.labels }}
+    labels: # Add any extra labels as key-value pairs here
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.labels | nindent 6 }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.annotations }}
+    annotations: # Add any extra annotations as key-value pairs here
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.annotations | nindent 6 }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.opensearchCredentialsSecret }}
+    opensearchCredentialsSecret:
+      name: {{ .Values.OpenSearchClusterSpec.dashboards.opensearchCredentialsSecret.name }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.env }}
+    env:
+      {{- toYaml .Values.OpenSearchClusterSpec.dashboards.env | nindent 8 }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.resources }}
+    resources:
+      {{- if .Values.OpenSearchClusterSpec.dashboards.resources.requests }}
+      requests:
+        {{- if .Values.OpenSearchClusterSpec.dashboards.resources.requests.memory }}
+        memory: {{ .Values.OpenSearchClusterSpec.dashboards.resources.requests.memory }}
+        {{- end }}
+        {{- if .Values.OpenSearchClusterSpec.dashboards.resources.requests.cpu }}
+        cpu: {{ .Values.OpenSearchClusterSpec.dashboards.resources.requests.cpu }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.OpenSearchClusterSpec.dashboards.resources.limits }}
+      limits:
+        {{- if .Values.OpenSearchClusterSpec.dashboards.resources.limits.memory }}
+        memory: {{ .Values.OpenSearchClusterSpec.dashboards.resources.limits.memory }}
+        {{- end }}
+        {{- if .Values.OpenSearchClusterSpec.dashboards.resources.limits.cpu }}
+        cpu: {{ .Values.OpenSearchClusterSpec.dashboards.resources.limits.cpu }}
+        {{- end }}
+        {{- end }}
+        {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.tls }}
+    tls:
+      {{- if .Values.OpenSearchClusterSpec.dashboards.tls.enable }}
+      enable: {{ .Values.OpenSearchClusterSpec.dashboards.tls.enable  }}  # Configure TLS
+      {{- end }}
+      {{- if .Values.OpenSearchClusterSpec.dashboards.tls.generate }}
+      generate: {{ .Values.OpenSearchClusterSpec.dashboards.tls.generate }}  # Have the Operator generate and sign a certificate
+      {{- end }}
+      {{- if .Values.OpenSearchClusterSpec.dashboards.tls.secret }}
+      secret:
+        name: {{ .Values.OpenSearchClusterSpec.dashboards.tls.secret.name }}
+      {{- end }}
+      {{- if .Values.OpenSearchClusterSpec.dashboards.tls.casecret }}
+      caSecret:
+        name: {{ .Values.OpenSearchClusterSpec.dashboards.tls.caSecret.name }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.securityContext }}
+    securityContext:
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.securityContext | nindent 6 }}
+    {{- end}}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.podSecurityContext }}
+    podSecurityContext:
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.podSecurityContext | nindent 6}}
+    {{- end}}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.additionalVolumes }}
+    additionalVolumes:
+    {{- range $key,$val := .Values.OpenSearchClusterSpec.dashboards.additionalVolumes }}
+    - name: {{ $val.name }}
+      path: {{ $val.path }}
+      secret:
+        secretName: {{ $val.secretName.name }}
+    {{- end }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.dashboards.additionalConfig }}
+    additionalConfig:
+      {{ toYaml .Values.OpenSearchClusterSpec.dashboards.additionalConfig | nindent 6 }}
+    {{- end }}
+  {{- end }}
+  {{- if .Values.OpenSearchClusterSpec.confMgmt }}
+  confMgmt:
+    {{- if .Values.OpenSearchClusterSpec.confMgmt.smartScaler }}
+    smartScaler: .Values.OpenSearchClusterSpec.confMgmt.smartScaler
+    {{- end }}
+  {{- end }}
+  nodePools:
+  {{- range $key,$val := .Values.OpenSearchClusterSpec.nodePools }}
+    - component: {{ $val.component }}
+      replicas: {{ $val.replicas }}
+      diskSize: {{ $val.diskSize | quote }}
+      {{- if $val.NodeSelector }}
+      nodeSelector:
+        {{- toYaml $val.NodeSelector | nindent 8 }}
+      {{- end }}
+      {{- if  $val.labels }}
+      labels: # Add any extra labels as key-value pairs here
+        {{ toYaml  $val.labels | nindent 8 }}
+      {{- end }}
+      {{- if  $val.annotations }}
+      annotations: # Add any extra annotations as key-value pairs here
+        {{ toYaml  $val.annotations | nindent 8 }}
+      {{- end }}
+      {{- if  $val.priorityClassName }}
+      priorityClassName: {{  $val.priorityClassName }}
+      {{- end }}
+      {{- if $val.env }}
+      env:
+        {{- toYaml $val.env | nindent 8 }}
+      {{- end }}
+      {{- if  $val.resources }}
+      resources:
+      {{- if  $val.resources.requests }}
+        requests:
+          {{- if  $val.resources.requests.memory }}
+          memory: {{  $val.resources.requests.memory }}
+          {{- end}}
+          {{- if  $val.resources.requests.cpu }}
+          cpu: {{ $val.resources.requests.cpu }}
+          {{- end}}
+        {{- end }}
+        {{- if  $val.resources.limits }}
+        limits:
+          {{- if  $val.resources.limits.memory }}
+          memory: {{ $val.resources.limits.memory }}
+          {{- end}}
+          {{- if  $val.resources.limits.cpu }}
+          cpu: {{ $val.resources.limits.cpu }}
+          {{- end }}
+        {{- end }}
+      {{- end }}
+      {{- if  $val.roles }}
+      roles:
+        {{ toYaml $val.roles | nindent 6 }}
+      {{- end }}
+      {{- if  $val.persistence }}
+      persistence:
+        {{- if  $val.persistence.hostPath }}
+        hostPath:
+          path: {{  $val.persistence.hostPath.path }}
+        {{- else if  $val.persistence.pvc }}
+        pvc:
+          {{- if  $val.persistence.pvc.storageClass }}
+          storageClass: {{  $val.persistence.pvc.storageClass }}
+          {{- end }}
+          {{- if  $val.persistence.pvc.accessModes }}
+          accessModes:
+            {{  toYaml $val.persistence.pvc.accessModes | nindent 10 }}
+          {{- end }}
+       {{- else if eq (len $val.persistence.emptyDir) 0 }}
+       emptyDir: {}
+       {{- end }}
+     {{- end }}
+      {{- if $val.additionalConfig }}
+      additionalConfig:
+        {{ toYaml $val.additionalConfig | nindent 8 }}
+      {{- end }}
+  {{- end }}
+  {{- if .Values.OpenSearchClusterSpec.security }}
+  security:
+    {{- if .Values.OpenSearchClusterSpec.security.config }}
+    config:
+      {{- if .Values.OpenSearchClusterSpec.security.config.adminSecret }}
+      adminSecret:
+        name: {{ .Values.OpenSearchClusterSpec.security.config.adminSecret.name }}
+      {{- end }}
+      {{- if .Values.OpenSearchClusterSpec.security.config.adminCredentialsSecret }}
+      adminCredentialsSecret:
+        name: {{ .Values.OpenSearchClusterSpec.security.config.adminCredentialsSecret.name }}
+      {{- end }}
+      {{- if .Values.OpenSearchClusterSpec.security.config.securityConfigSecret }}
+      securityConfigSecret:
+        name: {{ .Values.OpenSearchClusterSpec.security.config.securityConfigSecret.name }}
+      {{- end }}
+    {{- end }}
+    {{- if .Values.OpenSearchClusterSpec.security.tls }}
+    tls:
+      {{- if .Values.OpenSearchClusterSpec.security.tls.transport }}
+      transport:
+        {{- if .Values.OpenSearchClusterSpec.security.tls.http.generate }}
+        generate: {{ .Values.OpenSearchClusterSpec.security.tls.transport.generate }}
+        {{- end }}
+        {{- if .Values.OpenSearchClusterSpec.security.tls.transport.secret }}
+        secret:
+          name: {{ .Values.OpenSearchClusterSpec.security.tls.transport.secret.name }}
+        {{- end }}
+        {{- if .Values.OpenSearchClusterSpec.security.tls.transport.adminDn }}
+        adminDn:
+          {{ toYaml .Values.OpenSearchClusterSpec.security.tls.transport.adminDn | nindent 10 }}
+        {{- end }}
+        {{- if .Values.OpenSearchClusterSpec.security.tls.transport.nodesDn }}
+        nodesDn:
+          {{ toYaml .Values.OpenSearchClusterSpec.security.tls.transport.nodesDn | nindent 10 }}
+        {{- end }}
+      {{- end }}
+      {{- if .Values.OpenSearchClusterSpec.security.tls.http }}
+      http:
+        {{- if .Values.OpenSearchClusterSpec.security.tls.http.generate }}
+        generate: {{ .Values.OpenSearchClusterSpec.security.tls.http.generate }}
+        {{- end }}
+        {{- if .Values.OpenSearchClusterSpec.security.tls.http.secret }}
+        secret:
+          name: {{ .Values.OpenSearchClusterSpec.security.tls.http.secret.name }}
+        {{- end }}
+      {{- end }}
+    {{- end }}
+  {{- end }}
+{{- end }}

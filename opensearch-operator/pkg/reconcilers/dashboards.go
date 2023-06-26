@@ -12,6 +12,7 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -67,7 +68,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// Generate additional volumes
-	addVolumes, addVolumeMounts, _, err := helpers.CreateAdditionalVolumes(
+	addVolumes, addVolumeMounts, _, err := util.CreateAdditionalVolumes(
 		r.ctx,
 		r.Client,
 		r.instance.Namespace,
@@ -84,7 +85,18 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
 
-	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts)
+	annotations := make(map[string]string)
+
+	if cmData, ok := cm.Data[helpers.DashboardConfigName]; ok {
+		sha1sum, err := util.GetSha1Sum([]byte(cmData))
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+
+		annotations[helpers.DashboardChecksumName] = sha1sum
+	}
+
+	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(deployment, reconciler.StatePresent))
 
@@ -101,6 +113,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	}
 	clusterName := r.instance.Name
 	namespace := r.instance.Namespace
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	tlsSecretName := clusterName + "-dashboards-cert"
 	tlsConfig := r.instance.Spec.Dashboards.Tls
 	var volumes []corev1.Volume
@@ -108,14 +121,14 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 
 	if tlsConfig.Generate {
 		r.logger.Info("Generating certificates")
-		r.recorder.Event(r.instance, "Info", "Security", "Starting to generating certificates for Dashboard Cluster")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Info", "Security", "Starting to generating certificates for Dashboard Cluster")
 		// Take CA from TLS reconciler or generate new one
 		var ca tls.Cert
 		var err error
 		if tlsConfig.TlsCertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(tlsConfig.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = helpers.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+			ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 		}
 		if err != nil {
 			return volumes, volumeMounts, err
@@ -129,12 +142,12 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 				fmt.Sprintf("%s-dashboards", clusterName),
 				fmt.Sprintf("%s-dashboards.%s", clusterName, namespace),
 				fmt.Sprintf("%s-dashboards.%s.svc", clusterName, namespace),
-				fmt.Sprintf("%s-dashboards.%s.svc.cluster.local", clusterName, namespace),
+				fmt.Sprintf("%s-dashboards.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName+"-dashboards", clusterName, dnsNames)
 			if err != nil {
 				r.logger.Error(err, "Failed to create tls certificate")
-				r.recorder.Event(r.instance, "Warning", "Security", "Failed to store tls certificate for Dashboard Cluster")
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Failed to store tls certificate for Dashboard Cluster")
 				return volumes, volumeMounts, err
 			}
 			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
@@ -143,7 +156,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 			}
 			if err := r.Create(r.ctx, &tlsSecret); err != nil {
 				r.logger.Error(err, "Failed to store tls certificate in secret")
-				r.recorder.Event(r.instance, "Warning", "Security", "Failed to store tls certificate for Dashboard Cluster")
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Failed to store tls certificate for Dashboard Cluster")
 				return volumes, volumeMounts, err
 			}
 		}
@@ -154,7 +167,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		volumeMounts = append(volumeMounts, mount)
 	} else {
 		r.logger.Info("Using externally provided certificates")
-		r.recorder.Event(r.instance, "Info", "Security", "Notice - using externally provided certificates for Dashboard Cluster")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Info", "Security", "Notice - using externally provided certificates for Dashboard Cluster")
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.TlsCertificateConfig.Secret.Name}}}
 		volumes = append(volumes, volume)
 		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}

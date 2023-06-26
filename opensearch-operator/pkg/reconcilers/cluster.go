@@ -2,7 +2,11 @@ package reconcilers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+
+	batchv1 "k8s.io/api/batch/v1"
+	"opensearch.opster.io/pkg/reconcilers/util"
 
 	"github.com/banzaicloud/k8s-objectmatcher/patch"
 	"github.com/banzaicloud/operator-tools/pkg/reconciler"
@@ -20,6 +24,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+const (
+	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
 )
 
 type ClusterReconciler struct {
@@ -64,6 +72,15 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	if r.instance.Spec.General.Monitoring.Enable {
+		serviceMonitor := builders.NewServiceMonitor(r.instance)
+		result.CombineErr(ctrl.SetControllerReference(r.instance, serviceMonitor, r.Client.Scheme()))
+		result.Combine(r.ReconcileResource(serviceMonitor, reconciler.StatePresent))
+
+	} else {
+		serviceMonitor := builders.NewServiceMonitor(r.instance)
+		result.Combine(r.ReconcileResource(serviceMonitor, reconciler.StateAbsent))
+	}
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))
 	result.Combine(r.ReconcileResource(clusterService, reconciler.StatePresent))
@@ -72,7 +89,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.Scheme()))
 	result.Combine(r.ReconcileResource(discoveryService, reconciler.StatePresent))
 
-	passwordSecret := builders.PasswordSecret(r.instance, password)
+	passwordSecret := builders.PasswordSecret(r.instance, username, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.Scheme()))
 	result.Combine(r.ReconcileResource(passwordSecret, reconciler.StatePresent))
 
@@ -103,8 +120,66 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		})
 		result.CombineErr(err)
 	}
+	if r.instance.Spec.General.SnapshotRepositories != nil && len(r.instance.Spec.General.SnapshotRepositories) > 0 {
+		// Calculate checksum and check for changes
+		result.Combine(r.ReconcileSnapshotRepoConfig(username))
+	}
+
+	// If the cluster is using only emptyDir, then check for failure and recreate if necessary
+	if r.isEmptyDirCluster() {
+		result.Combine(r.checkForEmptyDirRecovery())
+	}
 
 	return result.Result, result.Err
+}
+
+func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.Result, error) {
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	var checksumerr error
+	var checksumval string
+	snapshotRepodata, _ := json.Marshal(&r.instance.Spec.General.SnapshotRepositories)
+	checksumval, checksumerr = util.GetSha1Sum(snapshotRepodata)
+	if checksumerr != nil {
+		return &ctrl.Result{}, checksumerr
+	}
+	clusterName := r.instance.Name
+	jobName := clusterName + "-snapshotrepoconfig-update"
+	job := batchv1.Job{}
+	if err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: r.instance.Namespace}, &job); err == nil {
+		value, exists := job.ObjectMeta.Annotations[snapshotRepoConfigChecksumAnnotation]
+		if exists && value == checksumval {
+			// Nothing to do, current snapshotconfig already applied
+			return &ctrl.Result{}, nil
+		}
+		// Delete old job
+		r.logger.Info("Deleting old snapshotconfig job")
+		opts := client.DeleteOptions{}
+		// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
+		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+		err = r.Delete(r.ctx, &job, &opts)
+		if err != nil {
+			return &ctrl.Result{}, err
+		}
+		// Make sure job is completely deleted (when r.Delete returns deletion sometimes is not yet complete)
+		_, err = r.ReconcileResource(&job, reconciler.StateAbsent)
+		if err != nil {
+			return &ctrl.Result{}, err
+		}
+	}
+	r.logger.Info("Starting snapshotconfig update job")
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Snapshot", "Starting to snapshotconfig update job")
+	snapshotRepoJob := builders.NewSnapshotRepoconfigUpdateJob(
+		r.instance,
+		jobName,
+		r.instance.Namespace,
+		checksumval,
+		r.reconcilerContext.Volumes,
+		r.reconcilerContext.VolumeMounts,
+	)
+	if err := ctrl.SetControllerReference(r.instance, &snapshotRepoJob, r.Client.Scheme()); err != nil {
+		return &ctrl.Result{}, err
+	}
+	return r.ReconcileResource(&snapshotRepoJob, reconciler.StatePresent)
 }
 
 func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
@@ -145,17 +220,87 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	if err != nil {
 		return result, err
 	}
-	//Checking for existing statefulset disksize
+
+	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
+	if _, exists := existing.Spec.Selector.MatchLabels["opensearch.role"]; exists {
+		r.logger.Info("deleting statefulset while orphaning pods to fix labels " + existing.Name)
+		if err := helpers.WaitForSTSDelete(r.ctx, r.Client, existing); err != nil {
+			r.logger.Error(err, "Failed to delete Statefulset for nodePool "+nodePool.Component)
+			return result, err
+		}
+		result, err := r.ReconcileResource(sts, reconciler.StateCreated)
+		if err != nil || result != nil {
+			return result, err
+		}
+	}
+
+	// Detect cluster failure and initiate parallel recovery
+	if helpers.ParallelRecoveryMode() && (nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
+		// This logic only works if the STS uses PVCs
+		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
+		if existing.Status.CurrentRevision == "" {
+			existing, err = helpers.WaitForSTSStatus(r.ctx, r.Client, existing)
+			if err != nil {
+				return &ctrl.Result{Requeue: true}, err
+			}
+		}
+		// Check number of PVCs for nodepool
+		pvcCount, err := helpers.CountPVCsForNodePool(r.ctx, r.Client, r.instance, &nodePool)
+		if err != nil {
+			r.logger.Error(err, "Failed to determine PVC count. Continuing on normally")
+		} else {
+			// A failure is assumed if n PVCs exist but less than n-1 pods (one missing pod is allowed for rolling restart purposes)
+			// We can assume the cluster is in a failure state and cannot recover on its own
+			if pvcCount >= int(nodePool.Replicas) && existing.Status.ReadyReplicas < nodePool.Replicas-1 {
+				r.logger.Info(fmt.Sprintf("Detected recovery situation for nodepool %s: PVC count: %d, replicas: %d. Recreating STS with parallel mode", nodePool.Component, pvcCount, existing.Status.Replicas))
+				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
+					// Switch to Parallel to jumpstart the cluster
+					// First delete existing STS
+					if err := helpers.WaitForSTSDelete(r.ctx, r.Client, existing); err != nil {
+						r.logger.Error(err, "Failed to delete STS")
+						return result, err
+					}
+					// Recreate with PodManagementPolicy=Parallel
+					sts.Spec.PodManagementPolicy = appsv1.ParallelPodManagement
+					sts.ObjectMeta.ResourceVersion = ""
+					sts.ObjectMeta.UID = ""
+					result, err = r.ReconcileResource(sts, reconciler.StatePresent)
+					if err != nil {
+						r.logger.Error(err, "Failed to create STS")
+						return result, err
+					}
+					// Wait for pods to appear
+					err := helpers.WaitForSTSReplicas(r.ctx, r.Client, existing, nodePool.Replicas)
+					// Abort normal logic and requeue
+					return &ctrl.Result{Requeue: true}, err
+				}
+			} else if existing.Spec.PodManagementPolicy == appsv1.ParallelPodManagement {
+				// We are in Parallel mode but appear to not have a failure situation any longer. Switch back to normal mode
+				r.logger.Info(fmt.Sprintf("Ending recovery mode for nodepool %s", nodePool.Component))
+				if err := helpers.WaitForSTSDelete(r.ctx, r.Client, existing); err != nil {
+					r.logger.Error(err, "Failed to delete STS")
+					return result, err
+				}
+				// STS will be recreated by the normal code below
+			}
+		}
+	}
+
+	// Handle PVC resizing
 
 	//Default is PVC, or explicit check for PersistenceSource as PVC
 	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
 		existingDisk := existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
 		r.logger.Info("The existing statefulset VolumeClaimTemplate disk size is: " + existingDisk)
 		r.logger.Info("The cluster definition nodePool disk size is: " + nodePool.DiskSize)
+		if nodePool.DiskSize == "" { // Default case
+			nodePool.DiskSize = builders.DefaultDiskSize
+		}
 		if existingDisk == nodePool.DiskSize {
 			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
 		} else {
-			r.recorder.Event(r.instance, "Normal", "PVC", fmt.Sprintf("Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize))
+			annotations := map[string]string{"cluster-name": r.instance.GetName()}
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize)
 			//Removing statefulset while allowing pods to run
 			r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
 			opts := client.DeleteOptions{}
@@ -188,7 +333,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 				if err := r.Update(r.ctx, &pvc); err != nil {
 					r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
-					r.recorder.Event(r.instance, "Warning", "PVC", fmt.Sprintf("Failed to Resize %s/%s", existing.Namespace, existing.Name))
+					r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
 					return result, err
 				}
 			}
@@ -203,7 +348,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// as we don't want uncontrolled restarts while we're doing an upgrade
 	if r.instance.Status.Version != "" &&
 		r.instance.Status.Version != r.instance.Spec.General.Version &&
-		!helpers.ContainsString(nodePool.Roles, "data") {
+		!helpers.HasDataRole(&nodePool) {
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 
@@ -214,4 +359,104 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+// isEmptyDirCluster returns true only if every nodePool is using emptyDir
+func (r *ClusterReconciler) isEmptyDirCluster() bool {
+
+	for _, nodePool := range r.instance.Spec.NodePools {
+		if nodePool.Persistence == nil {
+			return false
+		} else if nodePool.Persistence != nil && nodePool.Persistence.EmptyDir == nil {
+			return false
+		}
+	}
+	return true
+}
+
+// checkForEmptyDirRecovery checks if the cluster has failed and recreates the cluster if needed
+func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
+	lg := log.FromContext(r.ctx)
+	// If cluster has not yet initialized, don't do anything
+	if !r.instance.Status.Initialized {
+		return &ctrl.Result{}, nil
+	}
+
+	// If any scaling operation is going on, don't do anything
+	for _, nodePool := range r.instance.Spec.NodePools {
+		componentStatus := opsterv1.ComponentStatus{
+			Component:   "Scaler",
+			Description: nodePool.Component,
+		}
+		comp := r.instance.Status.ComponentsStatus
+		_, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
+
+		if found {
+			return &ctrl.Result{}, nil
+		}
+	}
+
+	// Check at least one data node is running
+	// Check at least half of master pods are running
+	var readyDataNodes int32
+	var readyMasterNodes int32
+	var totalMasterNodes int32
+
+	clusterName := r.instance.Name
+	clusterNamespace := r.instance.Namespace
+
+	for _, nodePool := range r.instance.Spec.NodePools {
+		var sts *appsv1.StatefulSet
+		var err error
+		if helpers.HasDataRole(&nodePool) || helpers.HasManagerRole(&nodePool) {
+			sts, err = helpers.GetSTSForNodePool(r.ctx, r.Client, nodePool, clusterName, clusterNamespace)
+			if err != nil {
+				return &ctrl.Result{Requeue: true}, err
+			}
+		}
+
+		if helpers.HasDataRole(&nodePool) {
+			readyDataNodes += sts.Status.ReadyReplicas
+		}
+
+		if helpers.HasManagerRole(&nodePool) {
+			totalMasterNodes += *sts.Spec.Replicas
+			readyMasterNodes += sts.Status.ReadyReplicas
+		}
+	}
+
+	// If the failure condition is met,
+	// Delete all the sts so that everything will be created
+	// Then delete the securityconfig job and set cluster initialized to false
+	// This will cause the bootstrap pod to run again and security indices to be initialized again
+	if readyDataNodes == 0 || readyMasterNodes < (totalMasterNodes+1)/2 {
+		lg.Info("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace)
+		lg.Info("Deleting all sts and securityconfig job to re-create cluster")
+		for _, nodePool := range r.instance.Spec.NodePools {
+			err := helpers.DeleteSTSForNodePool(r.ctx, r.Client, nodePool, clusterName, clusterNamespace)
+			if err != nil {
+				lg.Error(err, fmt.Sprintf("Failed to delete sts for nodePool %s", nodePool.Component))
+				return &ctrl.Result{Requeue: true}, err
+			}
+		}
+
+		err := helpers.DeleteSecurityUpdateJob(r.ctx, r.Client, clusterName, clusterNamespace)
+		if err != nil {
+			lg.Error(err, "Failed to delete security update job")
+			return &ctrl.Result{Requeue: true}, err
+		}
+
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+				return err
+			}
+			r.instance.Status.Initialized = false
+			return r.Status().Update(r.ctx, r.instance)
+		}); err != nil {
+			lg.Error(err, "Failed to update cluster status")
+			return &ctrl.Result{Requeue: true}, err
+		}
+	}
+
+	return &ctrl.Result{}, nil
 }

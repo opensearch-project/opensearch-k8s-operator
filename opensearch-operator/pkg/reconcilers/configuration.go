@@ -20,6 +20,7 @@ import (
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -71,6 +72,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
+
 	}
 
 	var sb strings.Builder
@@ -118,7 +120,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// Generate additional volumes
-	addVolumes, addVolumeMounts, addVolumeData, err := helpers.CreateAdditionalVolumes(
+	addVolumes, addVolumeMounts, addVolumeData, err := util.CreateAdditionalVolumes(
 		r.ctx,
 		r.Client,
 		r.instance.Namespace,
@@ -166,7 +168,7 @@ func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePo
 	// If an upgrade is in process we want to wait to schedule non data nodes
 	// data nodes will be picked up by the rolling restarter, or the upgrade
 	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
-		if !helpers.ContainsString(nodePool.Roles, "data") {
+		if !helpers.HasDataRole(&nodePool) {
 			sts := &appsv1.StatefulSet{}
 			err := r.Get(r.ctx, types.NamespacedName{
 				Name:      builders.StsName(r.instance, &nodePool),

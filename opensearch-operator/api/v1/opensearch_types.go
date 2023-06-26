@@ -43,25 +43,44 @@ type GeneralConfig struct {
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
-	DrainDataNodes bool `json:"drainDataNodes,omitempty"`
+	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
+	PluginsList    []string `json:"pluginsList,omitempty"`
+	Command        string   `json:"command,omitempty"`
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
+	Monitoring        MonitoringConfig   `json:"monitoring,omitempty"`
+	// Populate opensearch keystore before startup
+	Keystore             []KeystoreValue      `json:"keystore,omitempty"`
+	SnapshotRepositories []SnapshotRepoConfig `json:"snapshotRepositories,omitempty"`
+	// Set security context for the cluster pods
+	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	// Set security context for the cluster pods' container
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+}
+
+type InitHelperConfig struct {
+	*ImageSpec `json:",inline,omitempty"`
+	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
+	Version    *string                     `json:"version,omitempty"`
 }
 
 type NodePool struct {
-	Component        string                      `json:"component"`
-	Replicas         int32                       `json:"replicas"`
-	DiskSize         string                      `json:"diskSize,omitempty"`
-	Resources        corev1.ResourceRequirements `json:"resources,omitempty"`
-	Jvm              string                      `json:"jvm,omitempty"`
-	Roles            []string                    `json:"roles"`
-	Tolerations      []corev1.Toleration         `json:"tolerations,omitempty"`
-	NodeSelector     map[string]string           `json:"nodeSelector,omitempty"`
-	Affinity         *corev1.Affinity            `json:"affinity,omitempty"`
-	Persistence      *PersistenceConfig          `json:"persistence,omitempty"`
-	AdditionalConfig map[string]string           `json:"additionalConfig,omitempty"`
-	Labels           map[string]string           `json:"labels,omitempty"`
-	Env              []corev1.EnvVar             `json:"env,omitempty"`
+	Component                 string                            `json:"component"`
+	Replicas                  int32                             `json:"replicas"`
+	DiskSize                  string                            `json:"diskSize,omitempty"`
+	Resources                 corev1.ResourceRequirements       `json:"resources,omitempty"`
+	Jvm                       string                            `json:"jvm,omitempty"`
+	Roles                     []string                          `json:"roles"`
+	Tolerations               []corev1.Toleration               `json:"tolerations,omitempty"`
+	NodeSelector              map[string]string                 `json:"nodeSelector,omitempty"`
+	Affinity                  *corev1.Affinity                  `json:"affinity,omitempty"`
+	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
+	Persistence               *PersistenceConfig                `json:"persistence,omitempty"`
+	AdditionalConfig          map[string]string                 `json:"additionalConfig,omitempty"`
+	Labels                    map[string]string                 `json:"labels,omitempty"`
+	Annotations               map[string]string                 `json:"annotations,omitempty"`
+	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
+	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -83,9 +102,21 @@ type PVCSource struct {
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
 	AutoScaler  bool `json:"autoScaler,omitempty"`
-	Monitoring  bool `json:"monitoring,omitempty"`
 	VerUpdate   bool `json:"VerUpdate,omitempty"`
 	SmartScaler bool `json:"smartScaler,omitempty"`
+}
+
+type MonitoringConfig struct {
+	Enable               bool                 `json:"enable,omitempty"`
+	MonitoringUserSecret string               `json:"monitoringUserSecret,omitempty"`
+	ScrapeInterval       string               `json:"scrapeInterval,omitempty"`
+	PluginURL            string               `json:"pluginUrl,omitempty"`
+	TLSConfig            *MonitoringConfigTLS `json:"tlsConfig,omitempty"`
+}
+
+type MonitoringConfigTLS struct {
+	ServerName         string `json:"serverName,omitempty"`
+	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
 }
 
 type BootstrapConfig struct {
@@ -94,6 +125,15 @@ type BootstrapConfig struct {
 	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
+	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+}
+
+type DashboardsServiceSpec struct {
+	// +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer
+	// +kubebuilder:default=ClusterIP
+	Type                     corev1.ServiceType `json:"type,omitempty"`
+	LoadBalancerSourceRanges []string           `json:"loadBalancerSourceRanges,omitempty"`
 }
 
 type DashboardsConfig struct {
@@ -103,12 +143,25 @@ type DashboardsConfig struct {
 	Replicas   int32                       `json:"replicas"`
 	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
 	Version    string                      `json:"version"`
+	// Base Path for Opensearch Clusters running behind a reverse proxy
+	BasePath string `json:"basePath,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
 	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
 	Env                         []corev1.EnvVar             `json:"env,omitempty"`
 	AdditionalVolumes           []AdditionalVolume          `json:"additionalVolumes,omitempty"`
+	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
+	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
+	Labels                      map[string]string           `json:"labels,omitempty"`
+	Annotations                 map[string]string           `json:"annotations,omitempty"`
+	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
+	PluginsList                 []string                    `json:"pluginsList,omitempty"`
+	// Set security context for the dashboards pods
+	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	// Set security context for the dashboards pods' container
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -191,6 +244,19 @@ type AdditionalVolume struct {
 	RestartPods bool `json:"restartPods,omitempty"`
 }
 
+type KeystoreValue struct {
+	// Secret containing key value pairs
+	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
+	// Key mappings from secret to keystore keys
+	KeyMappings map[string]string `json:"keyMappings,omitempty"`
+}
+
+type SnapshotRepoConfig struct {
+	Name     string            `json:"name"`
+	Type     string            `json:"type"`
+	Settings map[string]string `json:"settings,omitempty"`
+}
+
 // ClusterSpec defines the desired state of OpenSearchCluster
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -201,6 +267,7 @@ type ClusterSpec struct {
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
+	InitHelper InitHelperConfig `json:"initHelper,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Es
@@ -213,9 +280,9 @@ type ClusterStatus struct {
 	Initialized      bool              `json:"initialized,omitempty"`
 }
 
-//+kubebuilder:object:root=true
-//+kubebuilder:subresource:status
-//+kubebuilder:resource:shortName=os;opensearch
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=os;opensearch
 // Es is the Schema for the es API
 type OpenSearchCluster struct {
 	metav1.TypeMeta   `json:",inline"`
@@ -231,7 +298,7 @@ type ComponentStatus struct {
 	Description string `json:"description,omitempty"`
 }
 
-//+kubebuilder:object:root=true
+// +kubebuilder:object:root=true
 // EsList contains a list of Es
 type OpenSearchClusterList struct {
 	metav1.TypeMeta `json:",inline"`
