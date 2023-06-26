@@ -284,12 +284,18 @@ type ClusterStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=os;opensearch
 // Es is the Schema for the es API
+// +kubebuilder:printcolumn:name="health",type="string",JSONPath=".status.health"
+// +kubebuilder:printcolumn:name="nodes",type="integer",JSONPath=".status.availableNodes",description="Available nodes"
+// +kubebuilder:printcolumn:name="version",type="string",JSONPath=".status.version",description="Elasticsearch version"
+// +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 type OpenSearchCluster struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   ClusterSpec   `json:"spec,omitempty"`
-	Status ClusterStatus `json:"status,omitempty"`
+	Spec       ClusterSpec                                      `json:"spec,omitempty"`
+	Status     ClusterStatus                                    `json:"status,omitempty"`
+	AssocConfs map[metav1.ObjectSelector]metav1.AssociationConf `json:"-"`
 }
 
 type ComponentStatus struct {
