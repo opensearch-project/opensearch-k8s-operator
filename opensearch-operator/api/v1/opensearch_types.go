@@ -19,6 +19,7 @@ package v1
 import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 const (
@@ -58,6 +59,13 @@ type GeneralConfig struct {
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
+type PdbConfig struct {
+	EnablePDB      bool                 `json:"enablePDB,omitempty"`
+	MinAvailable   *intstr.IntOrString  `json:"minAvailable,omitempty"`
+	MaxUnavailable *intstr.IntOrString  `json:"maxUnavailable,omitempty"`
+	Selector       metav1.LabelSelector `json:"selector,omitempty"`
+}
+
 type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
@@ -81,6 +89,7 @@ type NodePool struct {
 	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
+	Pdb                       PdbConfig                         `json:"pdb,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
