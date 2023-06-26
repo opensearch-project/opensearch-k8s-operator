@@ -42,27 +42,28 @@ spec:
                   description: Rule defines the contents of an autoscaler rule
                   properties:
                     behavior:
+                      description: Scale defines the behaviors of the scaling rule
                       properties:
+                        enable:
+                          type: boolean
                         scaleDown:
+                          description: ScaleConf defines configuration rules for scaling
+                            as needed
                           properties:
-                            enable:
-                              type: boolean
                             maxReplicas:
                               format: int32
                               type: integer
-                          required:
-                          - enable
                           type: object
                         scaleUp:
+                          description: ScaleConf defines configuration rules for scaling
+                            as needed
                           properties:
-                            enable:
-                              type: boolean
                             maxReplicas:
                               format: int32
                               type: integer
-                          required:
-                          - enable
                           type: object
+                      required:
+                      - enable
                       type: object
                     items:
                       items:
@@ -74,6 +75,8 @@ spec:
                           operator:
                             type: string
                           queryOptions:
+                            description: QueryOptions defines the components to build
+                              a prometheus query for a scaling item
                             properties:
                               aggregateEvaluation:
                                 type: boolean

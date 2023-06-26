@@ -38,9 +38,11 @@ type AutoscalerReconciler struct {
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opster.opensearch.opster.io,resources=autoscalers,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opster.opensearch.opster.io,resources=autoscalers/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opster.opensearch.opster.io,resources=autoscalers/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=autoscalers,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=autoscalers/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=autoscalers/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -54,38 +56,6 @@ type AutoscalerReconciler struct {
 func (r *AutoscalerReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("autoscaler", req.NamespacedName)
 	r.Logger.Info("Reconciling Autoscaler")
-
-	// r.Instance = &opsterv1.Autoscaler{}
-	// err := r.Get(ctx, req.NamespacedName, r.Instance)
-	// if err != nil {
-	// 	return ctrl.Result{}, client.IgnoreNotFound(err)
-	// }
-
-	// userRoleBindingReconciler := reconcilers.NewScalerReconciler(
-	// 	ctx,
-	// 	r.Client,
-	// 	r.Recorder,
-	// 	r.Instance,
-	// )
-
-	// if r.Instance.DeletionTimestamp.IsZero() {
-	// 	controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-	// 	err = r.Client.Update(ctx, r.Instance)
-	// 	if err != nil {
-	// 		return ctrl.Result{}, err
-	// 	}
-	// 	return userRoleBindingReconciler.Reconcile()
-	// } else {
-	// 	if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
-	// 		err = userRoleBindingReconciler.Delete()
-	// 		if err != nil {
-	// 			return ctrl.Result{}, err
-	// 		}
-	// 		controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
-	// 		return ctrl.Result{}, r.Client.Update(ctx, r.Instance)
-	// 	}
-	// }
-
 	return ctrl.Result{}, nil
 }
 

@@ -11,8 +11,8 @@ spec:
     serviceName: my-cluster
     autoScaler:
       enable: true
-      prometheusEndpoint: 'http://localhost:9090'
-      scaleTimeout: 5m
+      prometheusEndpoint: 'http://10.42.0.146:9090'
+      scaleTimeout: 1m
     monitoring:
      enable: true
      tlsConfig:
@@ -47,7 +47,7 @@ spec:
         - "master"
     - component: nodes
       autoScalePolicy: "my-cluster-autoscaler"
-      replicas: 2
+      replicas: 1
       diskSize: "10Gi"
       nodeSelector:
       resources:

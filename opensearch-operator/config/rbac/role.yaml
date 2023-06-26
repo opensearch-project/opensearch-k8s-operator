@@ -6,6 +6,14 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
+  - ""
+  resources:
+  - persistentvolumeclaims
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
   - apps
   resources:
   - deployments
@@ -109,6 +117,44 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - autoscalers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - autoscalers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - autoscalers/status
+  verbs:
+  - get
+  - patch
+  - update
 - apiGroups:
   - opensearch.opster.io
   resources:
@@ -268,32 +314,6 @@ rules:
   - opensearch.opster.io
   resources:
   - opensearchusers/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opster.opensearch.opster.io
-  resources:
-  - autoscalers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opster.opensearch.opster.io
-  resources:
-  - autoscalers/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opster.opensearch.opster.io
-  resources:
-  - autoscalers/status
   verbs:
   - get
   - patch

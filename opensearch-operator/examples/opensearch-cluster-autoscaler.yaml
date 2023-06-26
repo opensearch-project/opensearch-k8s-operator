@@ -20,12 +20,12 @@ spec:
           function: "avg_over_time"
       nodeRole: "data"
       behavior:
+        enable: false
         scaleUp:
-          enable: true
-          maxReplicas: 3
+          maxReplicas: 2
     - items:
       - metric: 'opensearch_os_cpu_percent'
-        operator: ">"
+        operator: "<"
         threshold: "40.0"
         queryOptions:
           labelMatchers:
@@ -33,6 +33,6 @@ spec:
           function: "avg_over_time"
       nodeRole: "data"
       behavior:
+        enable: true
         scaleDown:
-          enable: false
-          maxReplicas: 3
+          maxReplicas: 2

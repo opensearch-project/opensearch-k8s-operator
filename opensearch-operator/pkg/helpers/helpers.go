@@ -385,7 +385,12 @@ func EvalScalingRules(nodePool *opsterv1.NodePool, autoscalerPolicy *opsterv1.Au
 		if !ContainsString(nodePool.Roles, rule.NodeRole) {
 			break
 		}
-		ruleEval := false //if the ruleSet ever evaluates to false the scaling decision will not occur
+		//if the rule is disabled go on to the next rule eval
+		if !rule.Behavior.Enable {
+			continue
+		}
+		//if the ruleSet ever evaluates to false the scaling decision will not occur
+		ruleEval := false
 		//iterate through items for the relevant nodeRole type
 	itemLoop:
 		for _, item := range rule.Items {
@@ -432,7 +437,7 @@ func EvalScalingRules(nodePool *opsterv1.NodePool, autoscalerPolicy *opsterv1.Au
 			if result.Type() != model.ValVector {
 				return 0, fmt.Errorf("Prometheus result type not a Vector: %v", err)
 			} else {
-
+				//if all values a true set ruleEval, else break out of the itemloop and check the next rule
 				for _, vector := range result.(model.Vector) {
 					if vector.Value == 1 {
 						ruleEval = true
@@ -445,16 +450,16 @@ func EvalScalingRules(nodePool *opsterv1.NodePool, autoscalerPolicy *opsterv1.Au
 		}
 		//if any ruleset evals to true, we are going to scale;
 		if ruleEval {
-			scaleUp := rule.Behavior.ScaleUp
-			scaleDown := rule.Behavior.ScaleDown
-			if scaleUp.Enable && scaleDown.Enable {
+			//if max replicas are set for both scalingActions then we know there is a problem with the config
+			if rule.Behavior.ScaleUp.MaxReplicas != 0 && rule.Behavior.ScaleDown.MaxReplicas != 0 {
 				return 0, fmt.Errorf("Both scaleUp and scaleDown logic enabled for rule[%v] in %v autoscaler policy. ", r, autoscalerPolicy.Name)
 			}
-
-			if instance.Status.Scaler[nodePool.Component].Replicas < scaleUp.MaxReplicas && scaleUp.Enable {
+			//if the current replicas is less than the defined MaxReplicas, scale up
+			if instance.Status.Scaler[nodePool.Component].Replicas < rule.Behavior.ScaleUp.MaxReplicas {
 				scaleCount++
 			}
-			if instance.Status.Scaler[nodePool.Component].Replicas > nodePool.Replicas && scaleDown.Enable {
+			//if the current replicas is greater than the defined nodePool replicas, scale down
+			if instance.Status.Scaler[nodePool.Component].Replicas > nodePool.Replicas && rule.Behavior.ScaleDown.MaxReplicas != 0 {
 				scaleCount--
 			}
 		}
