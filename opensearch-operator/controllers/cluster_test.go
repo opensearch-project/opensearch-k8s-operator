@@ -3,14 +3,16 @@ package controllers
 import (
 	"context"
 	"fmt"
-	policyv1 "k8s.io/api/policy/v1"
 	"sync"
 	"time"
+	policyv1 "k8s.io/api/policy/v1"
+
+
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -506,6 +508,5 @@ var _ = Describe("Cluster Reconciler", func() {
 				}, timeout, interval)
 			})
 		})
-
 	})
 })

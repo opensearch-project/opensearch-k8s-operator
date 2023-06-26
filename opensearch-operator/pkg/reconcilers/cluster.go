@@ -4,10 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+
 	batchv1 "k8s.io/api/batch/v1"
-	policy "k8s.io/api/policy/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
-	"strings"
 
 	"github.com/cisco-open/k8s-objectmatcher/patch"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
@@ -80,17 +79,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	} else {
 		serviceMonitor := builders.NewServiceMonitor(r.instance)
-		res, err := r.ReconcileResource(serviceMonitor, reconciler.StateAbsent)
-		if err != nil {
-			if strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs: monitoring.coreos.com/v1") {
-				r.logger.Info("ServiceMonitor crd not found, skipping deletion")
-			} else {
-				result.Combine(res, err)
-			}
-		} else {
-			result.Combine(res, err)
-		}
-
+		result.Combine(r.ReconcileResource(serviceMonitor, reconciler.StateAbsent))
 	}
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))
@@ -171,7 +160,6 @@ func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.
 		if err != nil {
 			return &ctrl.Result{}, err
 		}
-
 		// Make sure job is completely deleted (when r.Delete returns deletion sometimes is not yet complete)
 		_, err = r.ReconcileResource(&job, reconciler.StateAbsent)
 		if err != nil {
@@ -247,8 +235,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Detect cluster failure and initiate parallel recovery
-	if helpers.ParallelRecoveryMode() &&
-		(nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
+	if helpers.ParallelRecoveryMode() && (nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
 		// This logic only works if the STS uses PVCs
 		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
 		if existing.Status.CurrentRevision == "" {
@@ -264,8 +251,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		} else {
 			// A failure is assumed if n PVCs exist but less than n-1 pods (one missing pod is allowed for rolling restart purposes)
 			// We can assume the cluster is in a failure state and cannot recover on its own
-			if !helpers.UpgradeInProgress(r.instance.Status) &&
-				pvcCount >= int(nodePool.Replicas) && existing.Status.ReadyReplicas < nodePool.Replicas-1 {
+			if pvcCount >= int(nodePool.Replicas) && existing.Status.ReadyReplicas < nodePool.Replicas-1 {
 				r.logger.Info(fmt.Sprintf("Detected recovery situation for nodepool %s: PVC count: %d, replicas: %d. Recreating STS with parallel mode", nodePool.Component, pvcCount, existing.Status.Replicas))
 				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 					// Switch to Parallel to jumpstart the cluster
@@ -320,62 +306,62 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 	}
 
+
+
 	// Handle PVC resizing
 
 	//Default is PVC, or explicit check for PersistenceSource as PVC
 	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
+		existingDisk := existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
+		r.logger.Info("The existing statefulset VolumeClaimTemplate disk size is: " + existingDisk)
+		r.logger.Info("The cluster definition nodePool disk size is: " + nodePool.DiskSize)
 		if nodePool.DiskSize == "" { // Default case
 			nodePool.DiskSize = builders.DefaultDiskSize
 		}
-
-		existingDisk := *existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage()
-		nodePoolDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
-		if err != nil {
-			r.logger.Error(err, fmt.Sprintf("Invalid diskSize '%s' for nodepool %s", nodePool.DiskSize, nodePool.Component))
-			return result, err
-		}
-
-		if existingDisk.Equal(nodePoolDiskSize) {
-			r.logger.Info("The existing disk size " + existingDisk.String() + " is same as passed in disk size " + nodePoolDiskSize.String())
+		if existingDisk == nodePool.DiskSize {
+			r.logger.Info("The existing disk size " + existingDisk + " is same as passed in disk size " + nodePool.DiskSize)
 		} else {
-			r.logger.Info("Disk sizes differ for nodePool %s: current: %s, desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
 			annotations := map[string]string{"cluster-name": r.instance.GetName()}
-			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
-			// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
-			r.logger.Info("Deleting statefulset while orphaning pods " + existing.Name)
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk, nodePool.DiskSize)
+			//Removing statefulset while allowing pods to run
+			r.logger.Info("deleting statefulset while orphaning pods " + existing.Name)
 			opts := client.DeleteOptions{}
 			client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
 			if err := r.Delete(r.ctx, existing, &opts); err != nil {
-				r.logger.Info("Failed to delete statefulset" + existing.Name)
+				r.logger.Info("failed to delete statefulset" + existing.Name)
 				return result, err
 			}
-
-			// Identify the PVC for each statefulset pod and patch with the new size
+			//Identifying the PVC per statefulset pod and patching the new size
 			for i := 0; i < int(*existing.Spec.Replicas); i++ {
 				clusterName := r.instance.Name
 				claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
+				r.logger.Info("The claimName identified as " + claimName)
 				var pvc corev1.PersistentVolumeClaim
 				nsn := types.NamespacedName{
 					Namespace: existing.Namespace,
 					Name:      claimName,
 				}
 				if err := r.Get(r.ctx, nsn, &pvc); err != nil {
-					r.logger.Info("Failed to get pvc" + pvc.Name)
+					r.logger.Info("failed to get pvc" + pvc.Name)
+					return result, err
+				}
+				newDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
+				if err != nil {
+					r.logger.Info("failed to parse size " + nodePool.DiskSize)
 					return result, err
 				}
 
-				pvc.Spec.Resources.Requests["storage"] = nodePoolDiskSize
+				pvc.Spec.Resources.Requests["storage"] = newDiskSize
 
 				if err := r.Update(r.ctx, &pvc); err != nil {
-					r.logger.Error(err, fmt.Sprintf("Failed to resize statefulset pvc %s", pvc.Name))
+					r.logger.Info("failed to resize statefulset pvc " + pvc.Name)
 					r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
 					return result, err
 				}
 			}
-			// STS will be recreated by the normal reconcile below
+
 		}
 	}
-
 	// Now set the desired replicas to be the existing replicas
 	// This will allow the scaler reconciler to function correctly
 	sts.Spec.Replicas = existing.Spec.Replicas
