@@ -1036,6 +1036,40 @@ spec:
   description: Sample tenant
 ```
 
+
+### PodDisruptionBudget
+
+
+The PDB (Pod Disruption Budget) is a Kubernetes resource that helps ensure the high availability of applications by defining the acceptable disruption level during maintenance or unexpected events.
+It specifies the minimum number of pods that must remain available to maintain the desired level of service.
+The PDB definition is unique for every nodePool.
+Please be aware that you must provide `MinAvailable` and `MaxUnavailable` configurations in order to use PDB feature.
+
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+   nodePools:
+      - component: masters
+        replicas: 3
+        diskSize: "30Gi"
+        pdb:
+          enable: true
+          MinAvailable: 3
+          MaxUnavailable: 0 
+      - component: datas
+        replicas: 7
+        diskSize: "100Gi"
+        pdb:
+          enable: true
+          MinAvailable: 5
+          MaxUnavailable: 2 
+```
+```
+
+
 ### Custom Admin User
 
 In order to create your cluster with an adminuser different from the default `admin:admin` you will have to walk through the following steps:
@@ -1101,7 +1135,7 @@ spec:
       name: dashboards-credentials  # This is the name of your secret that contains the credentials for Dashboards to use
 ```
 
-## Adding Opensearch Monitoring to your cluster
+### Adding Opensearch Monitoring to your cluster
 
 The operator allows you to install and enable the [Aiven monitoring plugin for OpenSearch](https://github.com/aiven/prometheus-exporter-plugin-for-opensearch) on your cluster as a built-in feature. If enabled the operator will install the aiven plugin into the opensearch pods and generate a Prometheus ServiceMonitor object to configure the plugin for scraping.
 This feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: `https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip`) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below in the example will be used if no `pluginUrl` is specified.
