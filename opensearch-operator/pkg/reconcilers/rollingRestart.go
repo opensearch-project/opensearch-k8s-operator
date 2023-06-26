@@ -133,9 +133,15 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}, sts); err != nil {
 			return ctrl.Result{}, err
 		}
-		if sts.Status.UpdateRevision != "" &&
+		// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
+		if sts.Status.ReadyReplicas == pointer.Int32Deref(sts.Spec.Replicas, 1) &&
+			sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
-			return r.restartStatefulSetPod(sts)
+			if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.ctx, r.Client, r.instance, &nodePool); err == nil {
+				if numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
+					return r.restartStatefulSetPod(sts)
+				}
+			}
 		}
 	}
 

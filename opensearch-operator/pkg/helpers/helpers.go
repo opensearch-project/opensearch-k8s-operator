@@ -8,6 +8,9 @@ import (
 	"sort"
 	"time"
 
+	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/apimachinery/pkg/types"
+
 	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -180,6 +183,42 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 		}
 	}
 	return diff
+}
+
+// Count the number of pods running and ready and not terminating for a given nodePool
+func CountRunningPodsForNodePool(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
+	// Constrict selector from labels
+	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
+	if err != nil {
+		return 0, err
+	}
+	componentReq, err := labels.NewRequirement(NodePoolLabel, selection.Equals, []string{nodePool.Component})
+	if err != nil {
+		return 0, err
+	}
+	selector := labels.NewSelector()
+	selector = selector.Add(*clusterReq, *componentReq)
+	// List pods matching selector
+	list := corev1.PodList{}
+	if err := k8sClient.List(ctx, &list, &client.ListOptions{LabelSelector: selector}); err != nil {
+		return 0, err
+	}
+	// Count pods that are ready
+	var numReadyPods = 0
+	for _, pod := range list.Items {
+		// If DeletionTimestamp is set the pod is terminating
+		var podReady = pod.ObjectMeta.DeletionTimestamp == nil
+		// Count the pod as not ready if one of its containers is not running or not ready
+		for _, container := range pod.Status.ContainerStatuses {
+			if !container.Ready || container.State.Running == nil {
+				podReady = false
+			}
+		}
+		if podReady {
+			numReadyPods += 1
+		}
+	}
+	return numReadyPods, nil
 }
 
 // Count the number of PVCs created for the given NodePool
