@@ -55,7 +55,7 @@ The opensearch k8s operator aims to be compatible to all supported opensearch ve
 
 | Operator Version | Min Supported Opensearch Version | Max supported Opensearch version | Comment |
 |------------------|----------------------------------|----------------------------------|---------|
-| 2.3              | 1.0                              | 2.7                              |         |
+| 2.3              | 1.0                              | 2.8                              |         |
 | 2.2              | 1.0                              | 2.5                              |         |
 | 2.1              | 1.0                              | 2.3                              |         |
 | 2.0              | 1.0                              | 2.3                              |         |
