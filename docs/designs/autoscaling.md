@@ -20,7 +20,8 @@ To support the second goal of being able to make scaling decisions with aggregat
 Some design considerations to make note of:
 1. ScaleConf only contains maxReplicas but no minReplicas, this is because the number of replicas specified in the nodepool for the OpenSearch cluster is used for the minReplica value.
 2. The operator field of an Item can be any supported Prometheus comparison binary operator.
-```== (equal)
+```
+== (equal)
 != (not-equal)
 > (greater-than)
 < (less-than)
