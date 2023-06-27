@@ -4,7 +4,7 @@
 - [Autoscaling](#autoscaling)
 - [Goals](#goals)
 - [Design](#design)
-- [Getting Started](#getting started)
+- [Getting Started](#gettingstarted)
 
 ## Goals
 1. Scale OpenSearch clusters managed by the operator up and down via monitoring metrics.
@@ -151,7 +151,7 @@ Addition of `AutoScalePolicy` to nodePools.
 </details>
 
 
-## Getting Started
+## GettingStarted
 1. Have a Prometheus instance where metrics from your cluster are being stored.
 2. Create an autoscaling policy with the CRD that meets your scaling requirements.
 3. Define the autoscaling policy in your OpensearchCluster and enable it.
