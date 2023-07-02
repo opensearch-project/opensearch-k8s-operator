@@ -60,10 +60,9 @@ type GeneralConfig struct {
 }
 
 type PdbConfig struct {
-	EnablePDB      bool                 `json:"enablePDB,omitempty"`
-	MinAvailable   *intstr.IntOrString  `json:"minAvailable,omitempty"`
-	MaxUnavailable *intstr.IntOrString  `json:"maxUnavailable,omitempty"`
-	Selector       metav1.LabelSelector `json:"selector,omitempty"`
+	Enable         bool                `json:"enable,omitempty"`
+	MinAvailable   *intstr.IntOrString `json:"minAvailable,omitempty"`
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
 
 type InitHelperConfig struct {
@@ -89,7 +88,7 @@ type NodePool struct {
 	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
-	Pdb                       PdbConfig                         `json:"pdb,omitempty"`
+	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
