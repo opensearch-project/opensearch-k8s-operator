@@ -60,10 +60,9 @@ type GeneralConfig struct {
 }
 
 type PdbConfig struct {
-	EnablePDB      bool                 `json:"enablePDB,omitempty"`
-	MinAvailable   *intstr.IntOrString  `json:"minAvailable,omitempty"`
-	MaxUnavailable *intstr.IntOrString  `json:"maxUnavailable,omitempty"`
-	Selector       metav1.LabelSelector `json:"selector,omitempty"`
+	Enable         bool                `json:"enable,omitempty"`
+	MinAvailable   *intstr.IntOrString `json:"minAvailable,omitempty"`
+	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }
 
 type InitHelperConfig struct {

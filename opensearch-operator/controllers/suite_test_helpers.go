@@ -2,9 +2,8 @@ package controllers
 
 import (
 	"context"
-	"strings"
 	"k8s.io/apimachinery/pkg/util/intstr"
-
+	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -126,11 +125,6 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 						RestartPods: false,
 					},
 					{
-						Name:        "test-emptydir",
-						Path:        "/tmp/",
-						EmptyDir:    &corev1.EmptyDirVolumeSource{},
-					},
-					{
 						Name: "test-cm",
 						Path: "/opt/test-cm",
 						ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -187,9 +181,12 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					MinAvailable: &intstr.IntOrString{
 						IntVal: 3,
 					},
+					MaxUnavailable: &intstr.IntOrString{
+						IntVal: 3,
+					},
 				},
-				Replicas:  3,
-				DiskSize:  "32Gi",
+				Replicas: 3,
+				DiskSize: "32Gi",
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),

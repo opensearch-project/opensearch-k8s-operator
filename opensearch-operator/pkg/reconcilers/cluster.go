@@ -4,9 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-
 	batchv1 "k8s.io/api/batch/v1"
+	policy "k8s.io/api/policy/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 
 	"github.com/cisco-open/k8s-objectmatcher/patch"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
@@ -287,11 +289,10 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Habdle PDB
+	pdb := policy.PodDisruptionBudget{}
 
-	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
+	if nodePool.Pdb != nil && nodePool.Pdb.EnablePDB {
 
-		pdb := policy.PodDisruptionBudget{}
-		//newpdb := v1.PodDisruptionBudget{}
 		// Check if it already exist
 		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
 			r.logger.Info(" Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
@@ -304,9 +305,33 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		if err != nil {
 			return result, err
 		}
+	} else {
+		// if pdb is not enabled and pdb resource exist, deleting it
+		nsn := types.NamespacedName{
+			Namespace: r.instance.Namespace,
+			Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
+		}
+		if err = r.Get(r.ctx, nsn, &pdb); err == nil {
+			r.logger.Info("Deleting pdb" + pdb.Name)
+			// remove our finalizer from the resource and update it.
+			controllerutil.RemoveFinalizer(&pdb, "Opster")
+			if err = r.Update(r.ctx, &pdb); err != nil {
+				r.logger.Info("Tried to remove Finalizer from" + pdb.Name + "but got an  error")
+				return &ctrl.Result{}, err
+			}
+			err = r.Delete(r.ctx, &policy.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
+					Namespace: r.instance.Namespace,
+				},
+			})
+			if err != nil {
+				r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
+				return &ctrl.Result{}, err
+			}
+
+		}
 	}
-
-
 
 	// Handle PVC resizing
 

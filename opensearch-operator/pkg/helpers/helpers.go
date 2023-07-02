@@ -4,21 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-<<<<<<< HEAD
-=======
 	batchv1 "k8s.io/api/batch/v1"
-	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/types"
->>>>>>> 2977313 (fix after sebastian's review)
+	policyv1 "k8s.io/api/policy/v1"
+
 	"reflect"
 	"sort"
 	"time"
-
-	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/apimachinery/pkg/types"
-
-	version "github.com/hashicorp/go-version"
 	"github.com/samber/lo"
+
+	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,8 +26,8 @@ import (
 const (
 	stsUpdateWaitTime = 30
 	updateStepTime    = 3
-
 	stsRevisionLabel = "controller-revision-hash"
+
 )
 
 func ContainsString(slice []string, s string) bool {
@@ -54,7 +49,7 @@ func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 
 func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	for idx, v := range ssSlice {
-		if ComponentStatusEqual(v, ss) {
+		if v == ss {
 			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
 		}
 	}
@@ -64,10 +59,6 @@ func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSl
 	removedSlice := RemoveIt(remove, ssSlice)
 	fullSliced := append(removedSlice, add)
 	return fullSliced
-}
-
-func ComponentStatusEqual(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) bool {
-	return left.Component == right.Component && left.Description == right.Description && left.Status == right.Status
 }
 
 func FindFirstPartial(
@@ -123,13 +114,6 @@ func UsernameAndPassword(ctx context.Context, k8sClient client.Client, cr *opste
 
 func GetByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
 	if left.Description == right.Description && left.Component == right.Component {
-		return left, true
-	}
-	return right, false
-}
-
-func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
-	if left.Component == right.Component {
 		return left, true
 	}
 	return right, false
@@ -205,9 +189,8 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 	return diff
 }
 
-// Count the number of pods running and ready and not terminating for a given nodePool
-func CountRunningPodsForNodePool(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
-	// Constrict selector from labels
+// Count the number of PVCs created for the given NodePool
+func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
 	if err != nil {
 		return 0, err
@@ -218,27 +201,11 @@ func CountRunningPodsForNodePool(ctx context.Context, k8sClient client.Client, c
 	}
 	selector := labels.NewSelector()
 	selector = selector.Add(*clusterReq, *componentReq)
-	// List pods matching selector
-	list := corev1.PodList{}
+	list := corev1.PersistentVolumeClaimList{}
 	if err := k8sClient.List(ctx, &list, &client.ListOptions{LabelSelector: selector}); err != nil {
 		return 0, err
 	}
-	// Count pods that are ready
-	var numReadyPods = 0
-	for _, pod := range list.Items {
-		// If DeletionTimestamp is set the pod is terminating
-		var podReady = pod.ObjectMeta.DeletionTimestamp == nil
-		// Count the pod as not ready if one of its containers is not running or not ready
-		for _, container := range pod.Status.ContainerStatuses {
-			if !container.Ready || container.State.Running == nil {
-				podReady = false
-			}
-		}
-		if podReady {
-			numReadyPods += 1
-		}
-	}
-	return numReadyPods, nil
+	return len(list.Items), nil
 }
 
 // Count the number of PVCs created for the given NodePool
@@ -259,6 +226,7 @@ func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opst
 	}
 	return len(list.Items), nil
 }
+
 
 // Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
 func WaitForSTSDelete(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet) error {
@@ -380,9 +348,6 @@ func CompareVersions(v1 string, v2 string) bool {
 	return err == nil && ver1.LessThan(ver2)
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) policyv1.PodDisruptionBudget {
 	matchLabels := map[string]string{
 		ClusterLabel:  cr.Name,
@@ -404,8 +369,6 @@ func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) polic
 	}
 	return newpdb
 }
-
->>>>>>> 07be50a (fix and add PDB to chart)
 func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
 
@@ -461,26 +424,4 @@ func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, s
 		}
 	}
 	return "", errors.New("unable to calculate the working pod for rolling restart")
-=======
-func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) policyv1.PodDisruptionBudget {
-	matchLabels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: nodepool.Component,
-	}
-	newpdb := policyv1.PodDisruptionBudget{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:       cr.Name + "-" + nodepool.Component + "-pdb",
-			Namespace:  cr.Namespace,
-			Finalizers: cr.Finalizers,
-		},
-		Spec: policyv1.PodDisruptionBudgetSpec{
-			MinAvailable: nodepool.Pdb.MinAvailable,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: matchLabels,
-			},
-			MaxUnavailable: nodepool.Pdb.MaxUnavailable,
-		},
-	}
-	return newpdb
->>>>>>> 2977313 (fix after sebastian's review)
 }
