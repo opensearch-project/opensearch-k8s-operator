@@ -287,7 +287,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Habdle PDB
-	needToUpdate := false
+	//needToUpdate := false
 	// Check if it needed
 	if nodePool.Pdb.Enable {
 
@@ -316,8 +316,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			//		return result, err
 			//	}
 			//}
-			if err = r.Update(r.ctx, &pdb); err != nil {
-				r.ReconcileResource(&pdb, reconciler.StatePresent)
+			if result, err = r.ReconcileResource(&pdb, reconciler.StatePresent); err != nil {
 				return result, err
 			}
 		} else {
