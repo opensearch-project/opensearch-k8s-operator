@@ -5,9 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 	batchv1 "k8s.io/api/batch/v1"
-	policy "k8s.io/api/policy/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
 
 
 	"github.com/cisco-open/k8s-objectmatcher/patch"
@@ -289,7 +290,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Habdle PDB
-	pdb := policy.PodDisruptionBudget{}
+	pdb := policyv1.PodDisruptionBudget{}
 
 	if nodePool.Pdb != nil && nodePool.Pdb.EnablePDB {
 
@@ -305,7 +306,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		if err != nil {
 			return result, err
 		}
-	} else {
+	} else {s
 		// if pdb is not enabled and pdb resource exist, deleting it
 		nsn := types.NamespacedName{
 			Namespace: r.instance.Namespace,
@@ -319,7 +320,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				r.logger.Info("Tried to remove Finalizer from" + pdb.Name + "but got an  error")
 				return &ctrl.Result{}, err
 			}
-			err = r.Delete(r.ctx, &policy.PodDisruptionBudget{
+			err = r.Delete(r.ctx, &policyv1.PodDisruptionBudget{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
 					Namespace: r.instance.Namespace,
