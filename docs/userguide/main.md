@@ -290,6 +290,15 @@ If you only want to load some keys from a secret or rename the existing keys, yo
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
 
+
+### SmartScaler 
+
+What is SmartScaler?
+
+SmartScaler is a mechanism built into the Operator that enables nodes to be safely removed from the cluster. When a node is being removed from a cluster, the safe drain process ensures that all of its data is transferred to other nodes in the cluster before the node is taken offline. This prevents any data loss or corruption that could occur if the node were simply shut down or disconnected without first transferring its data to other nodes.
+
+During the safe drain process, the node being removed is marked as "draining", which means that it will no longer receive any new requests. Instead, it will only process outstanding requests until its workload has been completed. Once all requests have been processed, the node will begin transferring its data to other nodes in the cluster. The safe drain process will continue until all data has been transferred and the node is no longer part of the cluster. Only after that, the OMC will turn down the node.
+
 ### Set Java heap size
 
 To configure the amount of memory allocated to the OpenSearch nodes, configure the heap size using the JVM args. This operation is expected to have no downtime and the cluster should be operational.
