@@ -176,12 +176,9 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			},
 			NodePools: []opsterv1.NodePool{{
 				Component: "master",
-				Pdb: opsterv1.PdbConfig{
-					EnablePDB: true,
+				Pdb: &opsterv1.PdbConfig{
+					Enable: true,
 					MinAvailable: &intstr.IntOrString{
-						IntVal: 3,
-					},
-					MaxUnavailable: &intstr.IntOrString{
 						IntVal: 3,
 					},
 				},
