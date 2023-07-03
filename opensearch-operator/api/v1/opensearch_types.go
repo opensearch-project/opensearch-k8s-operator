@@ -278,6 +278,8 @@ type ClusterStatus struct {
 	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
 	Version          string            `json:"version,omitempty"`
 	Initialized      bool              `json:"initialized,omitempty"`
+	Nodes            int32             `json:"nodes,omitempty"`
+	Health           string            `json:"health,omitempty"`
 }
 
 // +kubebuilder:object:root=true

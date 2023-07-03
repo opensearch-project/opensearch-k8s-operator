@@ -4816,8 +4816,13 @@ spec:
                       type: string
                   type: object
                 type: array
+              health:
+                type: string
               initialized:
                 type: boolean
+              nodes:
+                format: int32
+                type: integer
               phase:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
