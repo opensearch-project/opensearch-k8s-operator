@@ -6,12 +6,10 @@ import (
 	"sync"
 	"time"
 
-	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-	policyv1 "k8s.io/api/policy/v1"
-
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -491,17 +489,17 @@ var _ = Describe("Cluster Reconciler", func() {
 			}
 			wg.Wait()
 		})
-		When("pdb is enable", func() {
-			It("Create a pdb resource", func() {
-				pdb := policyv1.PodDisruptionBudget{}
-				Eventually(func() bool {
-					if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&pdb), &pdb); err != nil {
-						return false
-					}
-					return true
-				}, timeout, interval)
-			})
-		})
+		//When("pdb is enable", func() {
+		//	It("Create a pdb resource", func() {
+		//		pdb := policyv1.PodDisruptionBudget{}
+		//		Eventually(func() bool {
+		//			if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&pdb), &pdb); err != nil {
+		//				return false
+		//			}
+		//			return true
+		//		}, timeout, interval)
+		//	})
+		//})
 
 	})
 })

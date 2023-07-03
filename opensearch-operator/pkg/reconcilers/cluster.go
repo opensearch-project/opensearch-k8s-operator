@@ -289,7 +289,8 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// Habdle PDB
 	//needToUpdate := false
 	// Check if it needed
-	if nodePool.Pdb.Enable {
+
+	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
 
 		pdb := v1.PodDisruptionBudget{}
 		newpdb := v1.PodDisruptionBudget{}
@@ -329,6 +330,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				// If all details are provided, build and create PDB
 				// Build the PDB resource
 				newpdb = helpers.ComposePDB(*r.instance, nodePool)
+
 				// Create the PDB resource
 				result, err = r.ReconcileResource(&newpdb, reconciler.StateCreated)
 				if err != nil {
