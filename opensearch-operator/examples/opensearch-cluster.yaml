@@ -29,7 +29,7 @@ spec:
     - component: masters
       pdb:
         enable: true
-        minAvailable: 1
+        minAvailable: 3
       replicas: 3
       diskSize: "30Gi"
       nodeSelector:

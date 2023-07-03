@@ -5,14 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	batchv1 "k8s.io/api/batch/v1"
-	policyv1 "k8s.io/api/policy/v1"
+	v1 "k8s.io/api/policy/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
-
-
-	"github.com/cisco-open/k8s-objectmatcher/patch"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
+	"github.com/banzaicloud/k8s-objectmatcher/patch"
+	"github.com/banzaicloud/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -290,45 +287,55 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Habdle PDB
-	pdb := policyv1.PodDisruptionBudget{}
+	//needToUpdate := false
+	// Check if it needed
 
-	if nodePool.Pdb != nil && nodePool.Pdb.EnablePDB {
+	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
 
+		pdb := v1.PodDisruptionBudget{}
+		newpdb := v1.PodDisruptionBudget{}
 		// Check if it already exist
-		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
-			r.logger.Info(" Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
-			return result, err
-
-		}
-		pdb = helpers.ComposePDB(*r.instance, nodePool)
-
-		result, err = r.ReconcileResource(&pdb, reconciler.StateCreated)
-		if err != nil {
-			return result, err
-		}
-	} else {s
-		// if pdb is not enabled and pdb resource exist, deleting it
-		nsn := types.NamespacedName{
-			Namespace: r.instance.Namespace,
-			Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
-		}
-		if err = r.Get(r.ctx, nsn, &pdb); err == nil {
-			r.logger.Info("Deleting pdb" + pdb.Name)
-			// remove our finalizer from the resource and update it.
-			controllerutil.RemoveFinalizer(&pdb, "Opster")
-			if err = r.Update(r.ctx, &pdb); err != nil {
-				r.logger.Info("Tried to remove Finalizer from" + pdb.Name + "but got an  error")
-				return &ctrl.Result{}, err
+		if err = r.Get(r.ctx, client.ObjectKey{Name: r.instance.Name + "-" + nodePool.Component + "-pdb", Namespace: r.instance.Namespace}, &pdb); err == nil {
+			//// IF the resource exist, start to check if there is any changes in the configurations
+			//if pdb.Spec.MaxUnavailable != nil {
+			//	if pdb.Spec.MaxUnavailable.IntVal != nodePool.Pdb.MaxUnavailable.IntVal {
+			//		pdb.Spec.MaxUnavailable.IntVal = nodePool.Pdb.MaxUnavailable.IntVal
+			//		needToUpdate = true
+			//	}
+			//}
+			//if pdb.Spec.MinAvailable != nil {
+			//	if pdb.Spec.MinAvailable.IntVal != nodePool.Pdb.MinAvailable.IntVal {
+			//		pdb.Spec.MinAvailable.IntVal = nodePool.Pdb.MinAvailable.IntVal
+			//		needToUpdate = true
+			//	}
+			//}
+			//// Update configuration and requeue
+			//if needToUpdate {
+			//	r.logger.Info("Updating PDB ")
+			//	if err = r.Update(r.ctx, &pdb); err != nil {
+			//		r.ReconcileResource(&pdb, reconciler.StatePresent)
+			//		return result, err
+			//	}
+			//}
+			if result, err = r.ReconcileResource(&pdb, reconciler.StatePresent); err != nil {
+				return result, err
 			}
-			err = r.Delete(r.ctx, &policyv1.PodDisruptionBudget{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
-					Namespace: r.instance.Namespace,
-				},
-			})
-			if err != nil {
-				r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
-				return &ctrl.Result{}, err
+		} else {
+
+			// If the PDB does not exist , build and create it but before check that all the parameters are provided
+			if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
+				r.logger.Info(" Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
+
+			} else {
+				// If all details are provided, build and create PDB
+				// Build the PDB resource
+				newpdb = helpers.ComposePDB(*r.instance, nodePool)
+
+				// Create the PDB resource
+				result, err = r.ReconcileResource(&newpdb, reconciler.StateCreated)
+				if err != nil {
+					return result, err
+				}
 			}
 
 		}
