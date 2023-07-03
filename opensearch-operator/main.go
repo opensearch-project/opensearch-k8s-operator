@@ -64,7 +64,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
 		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
-	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: TODO")
+	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
 
 	opts := zap.Options{
 		Development: false,
@@ -83,6 +83,9 @@ func main() {
 	devmode, err := strconv.ParseBool(os.Getenv("OPERATOR_DEV_LOGGING"))
 	if err == nil {
 		opts.Development = devmode
+		if devmode {
+			setupLog.Info("Enabled debug logging via environment variable OPERATOR_DEV_LOGGING")
+		}
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
