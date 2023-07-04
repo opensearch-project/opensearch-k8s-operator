@@ -86,6 +86,8 @@ To test your changes you can launch the operator locally. You need a running kub
 * In a separate terminal apply a `OpenSearchCluster` YAML (you can use one of the examples as a starting point, for example `kubectl apply -f examples/opensearch-cluster.yaml`)
 * In the end you can delete your cluster again by running `kubectl delete -f examples/opensearch-cluster.yaml`
 
+By default the operator produces logs in a JSON format. For easier reading during debugging you can switch the logging framework into a special development mode that switches off JSON and produces more details (stacktraces on warnings). Simply set the environment variable `OPERATOR_DEV_LOGGING=true` before running. E.g. to run locally with make: `OPERATOR_DEV_LOGGING=true make run`. If you want to enable this mode for a deployed operator use the `manager.extraEnv` helm chart values option to set the environment variable.
+
 Note that for some features the operator expects to be able to communicate directly with opensearch. This is not possible when the operator is running outside of kubernetes. In these cases you will need to deploy the operator to test it. Follow these steps:
 
 * Run `make docker-build` to build the docker image
@@ -115,11 +117,7 @@ All PRs must conform to the following rules:
 * If you make changes to the CRD the CRD YAMLs must be updated (via `make manifests`) and also copied into the helm chart:
 
     ```bash
-        cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchclusters.yaml charts/opensearch-operator/templates/opensearchclusters.opensearch.opster.io-crd.yaml
-        cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchroles.yaml charts/opensearch-operator/templates/OpensearchRole-crd.yaml
-        cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchuserrolebindings.yaml charts/opensearch-operator/templates/OpensearchUserRoleBinding-crd.yaml
-        cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchusers.yaml charts/opensearch-operator/templates/OpensearchUser-crd.yaml
-        cp opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchactiongroups.yaml charts/opensearch-operator/templates/OpensearchActionGroup-crd.yaml
+        cp opensearch-operator/config/crd/bases/opensearch.opster.io_*.yaml charts/opensearch-operator/files/
     ```
 
 * Changes to the CRD must be documented in the [CRD reference](./designs/crd.md)

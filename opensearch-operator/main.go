@@ -18,8 +18,11 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"os"
+	"strconv"
 
+	"go.uber.org/zap/zapcore"
 	"opensearch.opster.io/controllers"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -53,18 +56,37 @@ func main() {
 	var enableLeaderElection bool
 	var probeAddr string
 	var watchNamespace string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":2222", "The address the metric endpoint binds to.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":2221", "The address the probe endpoint binds to.")
+	var logLevel string
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
 		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
+	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
+
 	opts := zap.Options{
-		Development: true,
+		Development: false,
+		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	level, err := zapcore.ParseLevel(logLevel)
+	if err != nil {
+		fmt.Printf("Invalid log level '%s'. Leaving on info", logLevel)
+		opts.Level = zapcore.InfoLevel
+	} else {
+		opts.Level = level
+	}
+	devmode, err := strconv.ParseBool(os.Getenv("OPERATOR_DEV_LOGGING"))
+	if err == nil {
+		opts.Development = devmode
+		if devmode {
+			setupLog.Info("Enabled debug logging via environment variable OPERATOR_DEV_LOGGING")
+		}
+	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
@@ -105,6 +127,14 @@ func main() {
 		Recorder: mgr.GetEventRecorderFor("role-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchRole")
+		os.Exit(1)
+	}
+	if err = (&controllers.OpensearchTenantReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("tenant-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchTenant")
 		os.Exit(1)
 	}
 	if err = (&controllers.OpensearchUserRoleBindingReconciler{

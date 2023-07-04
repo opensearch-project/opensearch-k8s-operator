@@ -15,8 +15,8 @@ The following sections explain what maintainers do in this repo, and how they sh
 To release a new version of the operator open Github in the browser, navigate to "Actions", select the workflow `Prepare and publish release`, select "Run workflow", then enter the version of the release (semver, x.y.z) and click "Run workflow". After a few seconds a new workflow run will start. It will do the following:
 
 * Run the test suite to make sure the version is functional
-* Update the helm chart with the newest CRD YAMLs
-* Update `version` and `appVersion` in the chart
+* Update the helm chart for operator with the newest CRD YAMLs
+* Update `version` and `appVersion` in both the charts
 * Commit and push the chart changes
 * Tag the commit
 * Build and push the docker image

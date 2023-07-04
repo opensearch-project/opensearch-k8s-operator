@@ -3,8 +3,6 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
@@ -17,50 +15,51 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"time"
 )
 
 const (
-	opensearchRoleExists = "role already exists in Opensearch; not modifying"
+	opensearchTenantExists = "tenant already exists in Opensearch; not modifying"
 )
 
-type RoleReconciler struct {
+type TenantReconciler struct {
 	client.Client
 	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opsterv1.OpensearchRole
+	instance *opsterv1.OpensearchTenant
 	cluster  *opsterv1.OpenSearchCluster
 	logger   logr.Logger
 }
 
-func NewRoleReconciler(
+func NewTenantReconciler(
 	ctx context.Context,
 	client client.Client,
 	recorder record.EventRecorder,
-	instance *opsterv1.OpensearchRole,
+	instance *opsterv1.OpensearchTenant,
 	opts ...ReconcilerOption,
-) *RoleReconciler {
+) *TenantReconciler {
 	options := ReconcilerOptions{}
 	options.apply(opts...)
-	return &RoleReconciler{
+	return &TenantReconciler{
 		Client:            client,
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "role"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", "tenant"),
 	}
 }
 
-func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
+func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	var reason string
 
 	defer func() {
 		if !pointer.BoolDeref(r.updateStatus, true) {
 			return
 		}
-		// When the reconciler is done, figure out what the state of the resource is
+		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
 		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
@@ -68,16 +67,18 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			}
 			r.instance.Status.Reason = reason
 			if retErr != nil {
-				r.instance.Status.State = opsterv1.OpensearchRoleStateError
+				r.instance.Status.State = opsterv1.OpensearchTenantError
 			}
+			// Requeue after is 10 seconds if waiting for OpenSearch cluster
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchRoleStatePending
+				r.instance.Status.State = opsterv1.OpensearchTenantPending
 			}
-			if retErr == nil && retResult.Requeue {
-				r.instance.Status.State = opsterv1.OpensearchRoleStateCreated
+			// Requeue is after 30 seconds for normal reconciliation after creation/update
+			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
+				r.instance.Status.State = opsterv1.OpensearchTenantCreated
 			}
-			if reason == opensearchRoleExists {
-				r.instance.Status.State = opsterv1.OpensearchRoleIgnored
+			if reason == opensearchTenantExists {
+				r.instance.Status.State = opsterv1.OpensearchTenantIgnored
 			}
 			return r.Status().Update(r.ctx, r.instance)
 		})
@@ -111,7 +112,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	// Check cluster ref has not changed
 	if r.instance.Status.ManagedCluster != nil {
 		if *r.instance.Status.ManagedCluster != r.cluster.UID {
-			reason = "cannot change the cluster a role refers to"
+			reason = "cannot change the cluster an tenant refers to"
 			retErr = fmt.Errorf("%s", reason)
 			r.recorder.Event(r.instance, "Warning", opensearchRefMismatch, reason)
 			return
@@ -152,12 +153,12 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		return
 	}
 
-	// Check role state to make sure we don't touch preexisting roles
-	if r.instance.Status.ExistingRole == nil {
+	// Check tenant state to make sure we don't touch preexisting tenants
+	if r.instance.Status.ExistingTenant == nil {
 		var exists bool
-		exists, retErr = services.RoleExists(r.ctx, r.osClient, r.instance.Name)
+		exists, retErr = services.TenantExists(r.ctx, r.osClient, r.instance.Name)
 		if retErr != nil {
-			reason = "failed to get user status from Opensearch API"
+			reason = "failed to get tenant status from Opensearch API"
 			r.logger.Error(retErr, reason)
 			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 			return
@@ -167,7 +168,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 					return err
 				}
-				r.instance.Status.ExistingRole = &exists
+				r.instance.Status.ExistingTenant = &exists
 				return r.Status().Update(r.ctx, r.instance)
 			})
 			if retErr != nil {
@@ -182,63 +183,49 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 	}
 
-	// If role is existing do nothing
-	if *r.instance.Status.ExistingRole {
-		reason = opensearchRoleExists
+	// If tenant is existing do nothing
+	if *r.instance.Status.ExistingTenant {
+		reason = opensearchTenantExists
 		return
 	}
 
-	role := requests.Role{
-		ClusterPermissions: r.instance.Spec.ClusterPermissions,
+	tenant := requests.Tenant{
+		Description: r.instance.Spec.Description,
 	}
 
-	if len(r.instance.Spec.IndexPermissions) > 0 {
-		role.IndexPermissions = make([]requests.IndexPermissionSpec, 0, len(r.instance.Spec.IndexPermissions))
-		for _, permission := range r.instance.Spec.IndexPermissions {
-			role.IndexPermissions = append(role.IndexPermissions, requests.IndexPermissionSpec(permission))
-		}
-	}
-
-	if len(r.instance.Spec.TenantPermissions) > 0 {
-		role.TenantPermissions = make([]requests.TenantPermissionsSpec, 0, len(r.instance.Spec.TenantPermissions))
-		for _, permission := range r.instance.Spec.TenantPermissions {
-			role.TenantPermissions = append(role.TenantPermissions, requests.TenantPermissionsSpec(permission))
-		}
-	}
-
-	shouldUpdate, retErr := services.ShouldUpdateRole(r.ctx, r.osClient, r.instance.Name, role)
+	shouldUpdate, retErr := services.ShouldUpdateTenant(r.ctx, r.osClient, r.instance.Name, tenant)
 	if retErr != nil {
-		reason = "failed to get role status from Opensearch API"
+		reason = "failed to get tenant status from Opensearch API"
 		r.logger.Error(retErr, reason)
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 		return
 	}
 
 	if !shouldUpdate {
-		r.logger.V(1).Info(fmt.Sprintf("role %s is in sync", r.instance.Name))
+		r.logger.V(1).Info(fmt.Sprintf("tenant %s is in sync", r.instance.Name))
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
 
-	retErr = services.CreateOrUpdateRole(r.ctx, r.osClient, r.instance.Name, role)
+	retErr = services.CreateOrUpdateTenant(r.ctx, r.osClient, r.instance.Name, tenant)
 	if retErr != nil {
-		reason = "failed to update role with Opensearch API"
+		reason = "failed to update tenant with Opensearch API"
 		r.logger.Error(retErr, reason)
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 	}
 
-	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "role updated in opensearch")
+	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "tenant updated in opensearch")
 
 	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 }
 
-func (r *RoleReconciler) Delete() error {
+func (r *TenantReconciler) Delete() error {
 	// If we have never successfully reconciled we can just exit
-	if r.instance.Status.ExistingRole == nil {
+	if r.instance.Status.ExistingTenant == nil {
 		return nil
 	}
 
-	if *r.instance.Status.ExistingRole {
-		r.logger.Info("role was pre-existing; not deleting")
+	if *r.instance.Status.ExistingTenant {
+		r.logger.Info("tenant was pre-existing; not deleting")
 		return nil
 	}
 
@@ -262,14 +249,14 @@ func (r *RoleReconciler) Delete() error {
 		return err
 	}
 
-	exist, err := services.RoleExists(r.ctx, r.osClient, r.instance.Name)
+	exist, err := services.TenantExists(r.ctx, r.osClient, r.instance.Name)
 	if err != nil {
 		return err
 	}
 	if !exist {
-		r.logger.V(1).Info("role already deleted from opensearch")
+		r.logger.V(1).Info("tenant already deleted from opensearch")
 		return nil
 	}
 
-	return services.DeleteRole(r.ctx, r.osClient, r.instance.Name)
+	return services.DeleteTenant(r.ctx, r.osClient, r.instance.Name)
 }

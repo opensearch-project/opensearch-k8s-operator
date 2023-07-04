@@ -1,0 +1,37 @@
+OpenSearchClusterSpec:
+  enabled: true
+  general:
+    httpPort: "9200"
+    version: 2.3.0
+    serviceName: "my-cluster"
+  dashboards:
+    enable: true
+    replicas: 1
+    version: 2.3.0
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+  nodePools:
+    - component: masters
+      diskSize: "30Gi"
+      replicas: 3
+      roles:
+        - "master"
+        - "data"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
+  security:
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true

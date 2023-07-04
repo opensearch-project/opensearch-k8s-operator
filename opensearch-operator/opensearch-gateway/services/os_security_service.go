@@ -19,6 +19,7 @@ const (
 	INTERNALUSERS = "internalusers"
 	ROLESMAPPING  = "rolesmapping"
 	ACTIONGROUPS  = "actiongroups"
+	TENANTS       = "tenants"
 )
 
 func ShouldUpdateUser(
@@ -363,6 +364,91 @@ func CreateOrUpdateActionGroup(
 // DeleteActionGroup deletes a previously created action group
 func DeleteActionGroup(ctx context.Context, service *OsClusterClient, actionGroupName string) error {
 	resp, err := service.DeleteSecurityResource(ctx, ACTIONGROUPS, actionGroupName)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return nil
+}
+
+// TenantExists checks if the passed tenant already exists or not
+func TenantExists(ctx context.Context, service *OsClusterClient, tenantName string) (bool, error) {
+	resp, err := service.GetSecurityResource(ctx, TENANTS, tenantName)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return false, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return true, nil
+}
+
+// ShouldUpdateTenant checks whether a previously created tenant needs an update or not
+func ShouldUpdateTenant(
+	ctx context.Context,
+	service *OsClusterClient,
+	tenantName string,
+	tenant requests.Tenant,
+) (bool, error) {
+	resp, err := service.GetSecurityResource(ctx, TENANTS, tenantName)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return true, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+
+	tenantResponse := responses.GetTenantResponse{}
+
+	err = json.NewDecoder(resp.Body).Decode(&tenantResponse)
+	if err != nil {
+		return false, err
+	}
+
+	if reflect.DeepEqual(tenant, tenantResponse[tenantName]) {
+		return false, nil
+	}
+
+	lg := log.FromContext(ctx).WithValues("os_service", "security")
+	lg.V(1).Info(fmt.Sprintf("exsiting tenant: %+v", tenantResponse[tenantName]))
+	lg.V(1).Info(fmt.Sprintf("new tenant: %+v", tenant))
+	lg.Info("tenant requires update")
+	return true, nil
+}
+
+// CreateOrUpdateTenant creates a new tenant or updates a previously created tenant
+func CreateOrUpdateTenant(
+	ctx context.Context,
+	service *OsClusterClient,
+	tenantName string,
+	tenant requests.Tenant,
+) error {
+	resp, err := service.PutSecurityResource(ctx, TENANTS, tenantName, opensearchutil.NewJSONReader(tenant))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.IsError() {
+		return fmt.Errorf("failed to create tenant: %s", resp.String())
+	}
+	return nil
+}
+
+// DeleteTenant deletes a previously created tenant
+func DeleteTenant(ctx context.Context, service *OsClusterClient, tenantName string) error {
+	resp, err := service.DeleteSecurityResource(ctx, TENANTS, tenantName)
 	if err != nil {
 		return err
 	}

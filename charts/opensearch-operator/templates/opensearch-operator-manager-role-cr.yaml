@@ -2,7 +2,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
   creationTimestamp: null
-  name: opensearch-operator-manager-role
+  name: {{ include "opensearch-operator.fullname" . }}-{{ .Release.Namespace }}-manager-role
 rules:
 - apiGroups:
   - apps
@@ -189,6 +189,32 @@ rules:
   - opensearch.opster.io
   resources:
   - opensearchroles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchtenants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchtenants/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchtenants/status
   verbs:
   - get
   - patch

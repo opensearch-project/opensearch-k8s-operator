@@ -1,0 +1,9 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchTenant
+metadata:
+  name: sample-tenant
+  namespace: default
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  description: Sample tenant

@@ -113,8 +113,16 @@ var _ = Describe("Cluster Reconciler", func() {
 				}))
 
 			// check if the ServiceMonitor is using the interval from the CRD declaration
-
 			Expect(sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapeInterval))
+
+			// check if the ServiceMonitor is using the tlsConfig.insecureSkipVerify from the CRD declaration
+			Expect(sm.Spec.Endpoints[0].TLSConfig.InsecureSkipVerify).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify))
+
+			// check if the ServiceMonitor is using the tlsConfig.serverName from the CRD declaration
+			Expect(sm.Spec.Endpoints[0].TLSConfig.ServerName).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.ServerName))
+
+			// check if tlsConfig is not defined in the CRD declaration the ServiceMonitor not deploy that part of the config
+			// Expect(sm.Spec.Endpoints[0].TLSConfig).To(BeNil())
 
 		})
 	})
@@ -438,14 +446,14 @@ var _ = Describe("Cluster Reconciler", func() {
 				Status:      "Upgraded",
 				Description: "master",
 			}
-			Expect(func() error {
+			Eventually(func() error {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return err
 				}
 				OpensearchCluster.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, OpensearchCluster.Status.ComponentsStatus)
 				OpensearchCluster.Status.ComponentsStatus = append(OpensearchCluster.Status.ComponentsStatus, masterComponentStatus)
 				return k8sClient.Status().Update(context.Background(), &OpensearchCluster)
-			}()).To(Succeed())
+			}, timeout, interval).Should(BeNil())
 		})
 		It("should cleanup the status", func() {
 			Eventually(func() bool {

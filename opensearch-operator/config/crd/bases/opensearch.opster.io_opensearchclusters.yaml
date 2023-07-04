@@ -2876,6 +2876,13 @@ spec:
                         type: string
                       scrapeInterval:
                         type: string
+                      tlsConfig:
+                        properties:
+                          insecureSkipVerify:
+                            type: boolean
+                          serverName:
+                            type: string
+                        type: object
                     type: object
                   pluginsList:
                     items:
