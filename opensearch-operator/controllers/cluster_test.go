@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	policyv1 "k8s.io/api/policy/v1"
 	"sync"
 	"time"
 
@@ -494,17 +495,17 @@ var _ = Describe("Cluster Reconciler", func() {
 			}
 			wg.Wait()
 		})
-		//When("pdb is enable", func() {
-		//	It("Create a pdb resource", func() {
-		//		pdb := policyv1.PodDisruptionBudget{}
-		//		Eventually(func() bool {
-		//			if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&pdb), &pdb); err != nil {
-		//				return false
-		//			}
-		//			return true
-		//		}, timeout, interval)
-		//	})
-		//})
+		When("pdb is enable", func() {
+			It("Create a pdb resource", func() {
+				pdb := policyv1.PodDisruptionBudget{}
+				Eventually(func() bool {
+					if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&pdb), &pdb); err != nil {
+						return false
+					}
+					return true
+				}, timeout, interval)
+			})
+		})
 
 	})
 })
