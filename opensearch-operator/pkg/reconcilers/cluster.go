@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	batchv1 "k8s.io/api/batch/v1"
-	v1 "k8s.io/api/policy/v1"
+	policy "k8s.io/api/policy/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	"strings"
 
@@ -301,57 +301,22 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Habdle PDB
-	//needToUpdate := false
-	// Check if it needed
 
 	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
 
-		pdb := v1.PodDisruptionBudget{}
-		newpdb := v1.PodDisruptionBudget{}
+		pdb := policy.PodDisruptionBudget{}
+		//newpdb := v1.PodDisruptionBudget{}
 		// Check if it already exist
-		if err = r.Get(r.ctx, client.ObjectKey{Name: r.instance.Name + "-" + nodePool.Component + "-pdb", Namespace: r.instance.Namespace}, &pdb); err == nil {
-			//// IF the resource exist, start to check if there is any changes in the configurations
-			//if pdb.Spec.MaxUnavailable != nil {
-			//	if pdb.Spec.MaxUnavailable.IntVal != nodePool.Pdb.MaxUnavailable.IntVal {
-			//		pdb.Spec.MaxUnavailable.IntVal = nodePool.Pdb.MaxUnavailable.IntVal
-			//		needToUpdate = true
-			//	}
-			//}
-			//if pdb.Spec.MinAvailable != nil {
-			//	if pdb.Spec.MinAvailable.IntVal != nodePool.Pdb.MinAvailable.IntVal {
-			//		pdb.Spec.MinAvailable.IntVal = nodePool.Pdb.MinAvailable.IntVal
-			//		needToUpdate = true
-			//	}
-			//}
-			//// Update configuration and requeue
-			//if needToUpdate {
-			//	r.logger.Info("Updating PDB ")
-			//	if err = r.Update(r.ctx, &pdb); err != nil {
-			//		r.ReconcileResource(&pdb, reconciler.StatePresent)
-			//		return result, err
-			//	}
-			//}
-			if result, err = r.ReconcileResource(&pdb, reconciler.StatePresent); err != nil {
-				return result, err
-			}
-		} else {
+		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
+			r.logger.Info(" Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
+			return result, err
 
-			// If the PDB does not exist , build and create it but before check that all the parameters are provided
-			if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
-				r.logger.Info(" Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
+		}
+		pdb = helpers.ComposePDB(*r.instance, nodePool)
 
-			} else {
-				// If all details are provided, build and create PDB
-				// Build the PDB resource
-				newpdb = helpers.ComposePDB(*r.instance, nodePool)
-
-				// Create the PDB resource
-				result, err = r.ReconcileResource(&newpdb, reconciler.StateCreated)
-				if err != nil {
-					return result, err
-				}
-			}
-
+		result, err = r.ReconcileResource(&pdb, reconciler.StateCreated)
+		if err != nil {
+			return result, err
 		}
 	}
 
