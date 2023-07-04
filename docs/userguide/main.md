@@ -1067,13 +1067,11 @@ spec:
         pdb:
           enable: true
           MinAvailable: 3
-          MaxUnavailable: 0 
       - component: datas
         replicas: 7
         diskSize: "100Gi"
         pdb:
           enable: true
-          MinAvailable: 5
           MaxUnavailable: 2 
 ```
 ```
