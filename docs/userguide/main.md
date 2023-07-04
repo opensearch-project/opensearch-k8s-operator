@@ -80,6 +80,27 @@ The minimal cluster you deployed in this section is only intended for demo purpo
 
 **Single-Node clusters are currently not supported**. Your cluster must have at least 3 nodes with the `master/cluster_manager` role configured.
 
+## Configuring the operator
+
+The majority of this guide deals with configuring and managing OpenSearch clusters. But there are some general options that can be configured for the operator itself. All of this is done using helm values your provide during installation: `helm install opensearch-operator opensearch-operator/opensearch-operator -f values.yaml`.
+
+For a list of all possible values see the [chart default values.yaml](../../charts/opensearch-operator/values.yaml). Some important ones:
+
+```yaml
+manager:
+  # Log level of the operator. Possible values: debug, info, warn, error
+  loglevel: info
+
+  # If specified, the operator will be restricted to watch objects only in the desired namespace. Defaults is to watch all namespaces.
+  watchNamespace:
+
+  # Configure extra environment variables for the operator. You can also pull them from secrets or configmaps
+  extraEnv: []
+  #  - name: MY_ENV
+  #    value: somevalue
+```
+
+
 ## Configuring OpenSearch
 
 The main job of the operator is to deploy and manage OpenSearch clusters. As such it offers a wide range of options to configure clusters.
