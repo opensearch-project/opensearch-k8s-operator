@@ -278,16 +278,12 @@ type ClusterStatus struct {
 	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
 	Version          string            `json:"version,omitempty"`
 	Initialized      bool              `json:"initialized,omitempty"`
-	Nodes            int32             `json:"nodes,omitempty"`
-	Health           string            `json:"health,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=os;opensearch
 // Es is the Schema for the es API
-// +kubebuilder:printcolumn:name="health",type="string",JSONPath=".status.health"
-// +kubebuilder:printcolumn:name="nodes",type="integer",JSONPath=".status.availableNodes",description="Available nodes"
 // +kubebuilder:printcolumn:name="version",type="string",JSONPath=".status.version",description="Elasticsearch version"
 // +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"

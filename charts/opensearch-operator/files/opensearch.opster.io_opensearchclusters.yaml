@@ -19,13 +19,6 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.health
-      name: health
-      type: string
-    - description: Available nodes
-      jsonPath: .status.availableNodes
-      name: nodes
-      type: integer
     - description: Elasticsearch version
       jsonPath: .status.version
       name: version
