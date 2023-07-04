@@ -1082,7 +1082,7 @@ spec:
 The PDB (Pod Disruption Budget) is a Kubernetes resource that helps ensure the high availability of applications by defining the acceptable disruption level during maintenance or unexpected events.
 It specifies the minimum number of pods that must remain available to maintain the desired level of service.
 The PDB definition is unique for every nodePool.
-Please be aware that you must provide `MinAvailable` and `MaxUnavailable` configurations in order to use PDB feature.
+You must provide either `minAvailable` or `maxUnavailable` to configure PDB, but noth both.
 
 
 ```yaml
