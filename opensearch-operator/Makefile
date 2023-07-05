@@ -68,7 +68,7 @@ build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go
+	go run ./main.go --loglevel debug
 
 docker-build: generate fmt vet ## Build docker image with the manager.
 	go install opensearch.opster.io/pkg/builders
