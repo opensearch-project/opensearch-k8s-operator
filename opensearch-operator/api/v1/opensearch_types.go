@@ -284,7 +284,7 @@ type ClusterStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=os;opensearch
 // Es is the Schema for the es API
-// +kubebuilder:printcolumn:name="version",type="string",JSONPath=".status.version",description="Elasticsearch version"
+// +kubebuilder:printcolumn:name="version",type="string",JSONPath=".status.version",description="Opensearch version"
 // +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 type OpenSearchCluster struct {
