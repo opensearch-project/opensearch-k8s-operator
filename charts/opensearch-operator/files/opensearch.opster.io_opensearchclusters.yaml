@@ -19,7 +19,7 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
-    - description: Elasticsearch version
+    - description: Opensearch version
       jsonPath: .status.version
       name: version
       type: string
