@@ -1132,3 +1132,107 @@ spec:
         insecureSkipVerify: true
   # ...
 ```
+
+## Configuring automatic scaling for your cluster
+
+The operator allows for the definition and configuration of an autoscaling policy to allow you OpenSearch cluster to scale node as needed. The autoscaler currently requires metrics gathered from the [Aiven monitoring plugin for OpenSearch](https://github.com/aiven/prometheus-exporter-plugin-for-opensearch) to be stored in a Prometheus instance of the users choosing; this allows the autoscaler to perform metric aggregations over time. 
+
+A separate CRD exists for defining the rules for autoscaling. An autoscaling policy comprises a number of rules, which in turn comprise a number of items. 
+
+Each item of a rule needs at minimum, to have the following:
+1. **Metric** - The Prometheus metric you wish to compare against your threshold value.
+2. **Operator** - The Prometheus comparison binary operator used to compare the metric value to the threshold value. 
+3. **Threshold** - The value to compare against the metric.
+
+Each rule needs at minimum, to have the following:
+1. **NodeRoll** - They node roll type of OpenSearch node for the rule to apply to.
+2. **Behavior** - The container for the scaling behavior if the rule evaluates to perform a scaling action.
+3. **Enable** - A boolen flag to enable or disable individual rules.
+4. **ScaleUp/ScaleDown** - Either ScaleUp or ScaleDown, each rule needs to know if it should scale up or down.
+5. **MaxReplicas** - The maximum number of replicas allowed.
+
+In the example below two rules have been defined, the first of which has multiple items defined.
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: Autoscaler
+metadata:
+  name: my-cluster-autoscaler
+  namespace: monitoring
+spec:
+  rules:
+    - items:
+      - metric: 'opensearch_os_cpu_percent'
+        operator: "<"
+        threshold: "75.0"
+        queryOptions:
+          interval: "10m"
+          function: "avg_over_time"
+      - metric: 'opensearch_os_mem_used_percent'
+        operator: ">"
+        threshold: "75.0"
+        queryOptions:
+          interval: "10m"
+          function: "avg_over_time"
+      nodeRole: "data"
+      behavior:
+        enable: false
+        scaleUp:
+          maxReplicas: 2
+    - items:
+      - metric: 'opensearch_os_cpu_percent'
+        operator: "<"
+        threshold: "40.0"
+        queryOptions:
+          labelMatchers:
+          interval: "10m"
+          function: "avg_over_time"
+      nodeRole: "data"
+      behavior:
+        enable: true
+        scaleDown:
+          maxReplicas: 2
+```
+The above example utilizes some optional parameters, to read more about these please reference the full [autoscaler documentation](../docs/designs/autoscaling.md) for more detailed information.
+
+Once an autoscaling policy is defined, it is simply a matter of referencing it from the cluster spec. 
+The cluster spec contains an autoscaler section where the following parameters are required:
+1. **Enable** - A boolean to enable or disable autoscaling.
+2. **PrometheusEndpoint** - The required Prometheus endpoint where cluster metrics are being stored.
+3. **ScaleTimeout** - The amount of time to wait between taking scaling actions.
+4. The **autoscale policy** name.(This can be defined at a cluster level via `clusterAutoScalePolicy` or a nodepool level via `autoScalePolicy` depending on your needs.)
+
+For example, to apply the previous example policy: 
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+  namespace: monitoring
+spec:
+  general:
+    version: "1.3.0"
+    httpPort: 9200
+    vendor: opensearch
+    serviceName: my-cluster
+    autoScaler:
+      enable: true
+      prometheusEndpoint: 'http://127.0.0.1:9090'
+      scaleTimeout: 10m
+```
+With the policy itself defined at the nodepool level:
+```yaml
+    - component: nodes
+      autoScalePolicy: "my-cluster-autoscaler"
+      replicas: 1
+      diskSize: "10Gi"
+      nodeSelector:
+      resources:
+         requests:
+            memory: "1Gi"
+            cpu: "500m"
+         limits:
+            memory: "1.5Gi"
+            cpu: "500m"
+      roles:
+        - "data"
+```

@@ -38,11 +38,9 @@ d - days - assuming a day has always 24h
 w - weeks - assuming a week has always 7d
 y - years - assuming a year has always 365d
 ```
-4. The function field of a queryOption can be any valid Prometheus function.
+4. The function field of a queryOption can be any valid singular Prometheus function.
 
 ### Autoscaler Custom Resource Reference Guide
-<details open>
-  <summary>Autoscaler</summary>
 
 The Autoscaler CRD is defined by kind: `Autoscaler`, group: `opensearch.opster.io` and version `v1`.
 | Name | Type | Description | Required |
@@ -52,9 +50,6 @@ The Autoscaler CRD is defined by kind: `Autoscaler`, group: `opensearch.opster.i
 | metadata | object | Refer to the Kubernetes API documentation for the fields of the `metadata` field. | true |
 | spec | object | AutoscalerSpec defines the desired configuration of the autoscaler. | true |
 
-</details>
-<details open>
-  <summary>Autoscaler.spec</summary>
 
 ### Autoscaler.spec
 AutoscalerSpec defines the desired configuration of the autoscaler.
@@ -62,9 +57,6 @@ AutoscalerSpec defines the desired configuration of the autoscaler.
 |--------|--------|--------|--------|
 | rules | []Rule | The container for lists of type Rule, defining scaling logic. | true |
 
-</details>
-<details open>
-  <summary>Rule</summary>
 
 ### Rule
 Rule defines a single rule.
@@ -74,9 +66,8 @@ Rule defines a single rule.
 | nodeRole | string | The role of the Opensearch node type you would like to target for scaling. | true |
 | behavior | Scale | The container for the scaling behavior of the ruleset. | true |
 
-</details>
-<details open>
-  <summary>Item</summary>
+A rule may contain many items; by default all items expressions generated from the configuration must evaluate to true for a scaling action to take place.
+A nodeRole is needed primarily in the case that the autoscalePolicy is defined at the cluster level so which nodes to scale is known.
 
 ### Item
 Item defines a singular item in a rule.
@@ -87,9 +78,15 @@ Item defines a singular item in a rule.
 | threshold | string | The threshold value for taking scaling action. | true |
 | queryOptions | QueryOptions | Optional additions to the prometheus query. | false |
 
-</details>
-<details open>
-  <summary>QueryOptions</summary>
+The operator field of an Item can be any supported Prometheus comparison binary operator.
+```
+== (equal)
+!= (not-equal)
+> (greater-than)
+< (less-than)
+>= (greater-or-equal)
+<= (less-or-equal)
+```
 
 ### QueryOptions
 QueryOptions defined additional query configurations.
@@ -100,9 +97,18 @@ QueryOptions defined additional query configurations.
 | function | string | A prometheus supported function wrapper. | false |
 | aggregateEvaluation | bool | A flag to average your prometheus query results together. | false |
 
-</details>
-<details open>
-  <summary>Behavior</summary>
+The interval field of a queryOption can be an integer follow by any valid Prometheus time duration.
+```
+ms - milliseconds
+s - seconds
+m - minutes
+h - hours
+d - days - assuming a day has always 24h
+w - weeks - assuming a week has always 7d
+y - years - assuming a year has always 365d
+```
+
+The aggregateEvaluation field is designed to average the results from multiple nodes for comparison. This is useful for when you want to scale based off an average of nodes metrics versus each individual node needing to be evaluated.
 
 ### Behavior
 Behavior defines a scaling behavior for a rule.
@@ -112,9 +118,7 @@ Behavior defines a scaling behavior for a rule.
 | scaleUp | ScaleConf | Container for upscaling behavior. | false |
 | scaleDown | ScaleConf | Container for downscaling behavior. | false |
 
-</details>
-<details open>
-  <summary>ScaleConf</summary>
+You should never have both scaleUp and scaleDown defined for the same rule. Each rule should only ever have one or the other.
 
 ### ScaleConf
 Scaling behavior for scaling up or down.
@@ -122,13 +126,10 @@ Scaling behavior for scaling up or down.
 |--------|--------|--------|--------|
 | maxReplicas | int32 | Maximum amount of replicas to scale up to. | false |
 
-</details>
+MaxReplicas is an optional field in the case of a rule that is scaling down, however if scaling up it is needed so there is an upper boundary. MinReplicas is absent because the nodepool.Replicas defined in the cluster spec performs this function. When scaling down the cluster will never scale below the number of replicas defined in the cluster.
 
 
 In addition to the autoscaler CRD, changes to the existing OpensearchCluster CRD are included, specifically the generalConfig and nodePools.
-
-<details open>
-  <summary>OpensearchCluster.General.Autoscaler</summary>
 
 ### OpensearchCluster.General.Autoscaler
 Addition of an `Autoscaler` section under generalConfig.
@@ -139,18 +140,13 @@ Addition of an `Autoscaler` section under generalConfig.
 | scaleTimeout | int | The amount of time to wait before scaling since last scale or cluster creation in minutes. | false |
 | clusterPolicy | string | The override to set a cluster specific autoscale policy. | false |
 
-</details>
-<details open>
-  <summary>OpensearchCluster.nodePools</summary>
-
 ### OpensearchCluster.nodePools
 Addition of `AutoScalePolicy` to nodePools.
 | Name | Type | Description | Required |
 |--------|--------|--------|--------|
 | autoScalePolicy | string | The name of an autoscaler that the user has applied. | false |
 
-</details>
-
+Note that the clusterPolicy and autoScalePolicy are synonymous and users should choose one or the other based on their needs. 
 
 ## GettingStarted
 1. Have a Prometheus instance where metrics from your cluster are being stored.

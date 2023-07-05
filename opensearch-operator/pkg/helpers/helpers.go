@@ -459,7 +459,7 @@ func EvalScalingRules(nodePool *opsterv1.NodePool, autoscalerPolicy *opsterv1.Au
 				scaleCount++
 			}
 			//if the current replicas is greater than the defined nodePool replicas, scale down
-			if instance.Status.Scaler[nodePool.Component].Replicas > nodePool.Replicas && rule.Behavior.ScaleDown.MaxReplicas != 0 {
+			if instance.Status.Scaler[nodePool.Component].Replicas > nodePool.Replicas {
 				scaleCount--
 			}
 		}

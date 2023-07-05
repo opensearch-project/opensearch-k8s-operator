@@ -92,6 +92,50 @@ func ArrayElementContains(array []string, content string) bool {
 	return false
 }
 
+func ComposeAutoscalerCrd(clusterName string, namespace string) opsterv1.Autoscaler {
+	Autoscaler := &opsterv1.Autoscaler{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Autoscaler",
+			APIVersion: "opensearch.opster.io/v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: namespace,
+		},
+		Spec: opsterv1.AutoscalerSpec{
+			Rules: []opsterv1.Rule{{
+				Items: []opsterv1.Item{{
+					Metric:    "test_metric",
+					Operator:  "==",
+					Threshold: "100",
+					QueryOptions: opsterv1.QueryOptions{
+						LabelMatchers:       []string{"foo"},
+						Function:            "foo",
+						Interval:            "foo",
+						AggregateEvaluation: false,
+					},
+				}},
+				NodeRole: "foo",
+				Behavior: opsterv1.Scale{
+					Enable: true,
+					ScaleUp: opsterv1.ScaleConf{
+						MaxReplicas: 2,
+					},
+					ScaleDown: opsterv1.ScaleConf{
+						MaxReplicas: 2,
+					},
+				},
+			}},
+		},
+		Status: opsterv1.AutoscalerStatus{
+			Component:   "",
+			Status:      "",
+			Description: "",
+		},
+	}
+	return *Autoscaler
+}
+
 func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSearchCluster {
 
 	OpensearchCluster := &opsterv1.OpenSearchCluster{
