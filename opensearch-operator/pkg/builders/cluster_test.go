@@ -131,6 +131,14 @@ var _ = Describe("Builders", func() {
 				"testAnnotationKey":             "testAnnotationValue",
 			}))
 		})
+		It("should have annotations added to sts", func() {
+			var clusterObject = ClusterDescWithVersion("1.3.0")
+			clusterObject.Annotations = map[string]string{
+				"testAnnotationKey": "testAnnotationValue",
+			}
+			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(result.Annotations).To(Equal(clusterObject.Annotations))
+		})
 		It("should have a priority class name added to the node", func() {
 			var clusterObject = ClusterDescWithVersion("1.3.0")
 			var nodePool = opsterv1.NodePool{
