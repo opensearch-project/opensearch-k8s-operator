@@ -310,6 +310,20 @@ rules:
   - patch
   - update
 - apiGroups:
+    - opensearch.opster.io
+  resources:
+    - ismpolicies/status
+  verbs:
+    - get
+    - patch
+    - update
+- apiGroups:
+    - opensearch.opster.io
+  resources:
+    - ismpolicies/finalizers
+  verbs:
+    - update
+- apiGroups:
   - opensearch.opster.io
   resources:
   - opensearchusers
@@ -321,6 +335,18 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+    - opensearch.opster.io
+  resources:
+    - ismpolicies
+  verbs:
+    - create
+    - delete
+    - get
+    - list
+    - patch
+    - update
+    - watch
 - apiGroups:
   - opensearch.opster.io
   resources:

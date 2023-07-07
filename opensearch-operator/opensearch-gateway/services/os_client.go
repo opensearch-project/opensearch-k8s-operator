@@ -4,8 +4,10 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -66,6 +68,7 @@ func WithTransport(transport http.RoundTripper) OsClusterClientOption {
 func NewOsClusterClient(clusterUrl string, username string, password string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
 	options := OsClusterClientOptions{}
 	options.apply(opts...)
+	fmt.Println("Details clusterUrl", clusterUrl)
 
 	config := opensearch.Config{
 		Transport: func() http.RoundTripper {
@@ -83,6 +86,7 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 
 	client, err := NewOsClusterClientFromConfig(config)
 	if err != nil {
+		fmt.Println("error is there inside NewOsClusterClientFromConfig")
 		return nil, err
 	}
 
@@ -101,9 +105,11 @@ func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, e
 	if err == nil && pingRes.StatusCode == 200 {
 		mainPageResponse, err := MainPage(client)
 		if err == nil {
+			fmt.Println("No error while ping")
 			service.MainPage = mainPageResponse
 		}
 	}
+	fmt.Println("error is", err)
 	return service, err
 }
 
@@ -307,6 +313,68 @@ func (client *OsClusterClient) PutSecurityResource(ctx context.Context, resource
 func (client *OsClusterClient) DeleteSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
 	return doHTTPDelete(ctx, client.client, path)
+}
+
+// GetSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+func (client *OsClusterClient) GetISMConfig(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(resource, name)
+	return doHTTPGet(ctx, client.client, path)
+}
+
+// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+func (client *OsClusterClient) PutISMConfig(ctx context.Context, resource, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(resource, name)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+func (client *OsClusterClient) UpdateISMConfig(ctx context.Context, resource, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathUpdateISM(resource, name, seqnumber, primterm)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+func (client *OsClusterClient) DeleteISMConfig(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(resource, name)
+	return doHTTPDelete(ctx, client.client, path)
+}
+
+// generateAPIPath generates a URI PATH for a specific resource endpoint and name
+// For example: resource = internalusers, name = example
+// URI PATH = '_plugins/_security/api/internalusers/example'
+func generateAPIPathISM(resource, name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("policies")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
+// generateAPIPath generates a URI PATH for a specific resource endpoint and name
+// For example: resource = internalusers, name = example
+// URI PATH = '_plugins/_security/api/internalusers/example'
+func generateAPIPathUpdateISM(resource, name string, seqno, primaryterm int) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name) + len("?if_seq_no=") + len(strconv.Itoa(seqno)) + len("&if_primary_term=") + len(strconv.Itoa(primaryterm)))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("policies")
+	path.WriteString("/")
+	path.WriteString(name)
+	path.WriteString("?if_seq_no=")
+	path.WriteString(strconv.Itoa(seqno))
+	path.WriteString("&if_primary_term=")
+	path.WriteString(strconv.Itoa(primaryterm))
+	return path
 }
 
 // generateAPIPath generates a URI PATH for a specific resource endpoint and name
