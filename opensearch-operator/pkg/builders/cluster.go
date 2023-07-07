@@ -28,6 +28,7 @@ const (
 	defaultMonitoringPlugin              = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation     = "securityconfig/checksum"
 	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
+	kubectlLastAppliedAnnotation         = "kubectl.kubernetes.io/last-applied-configuration"
 )
 
 func NewSTSForNodePool(
@@ -357,11 +358,23 @@ func NewSTSForNodePool(
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
 
+	// Copy the annotations of cr to sts
+	stsAnnotations := make(map[string]string)
+	if cr.Annotations != nil {
+		for k, v := range cr.Annotations {
+			// KubectlLastAppliedAnnotation in cr is meaningless for sts
+			if k != kubectlLastAppliedAnnotation {
+				stsAnnotations[k] = v
+			}
+		}
+	}
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-" + node.Component,
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        cr.Name + "-" + node.Component,
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: stsAnnotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &node.Replicas,
