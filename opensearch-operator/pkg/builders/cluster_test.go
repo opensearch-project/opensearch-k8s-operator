@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
@@ -284,6 +285,88 @@ var _ = Describe("Builders", func() {
 			var expected *string = nil
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
+		})
+		It("should set jvm to half of memory request when memory request is set and jvm are not provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("2Gi"),
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+		It("should set jvm to half of memory request when memory request is fraction and jvm are not provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("1.5Gi"),
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx768M -Xms768M -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+
+		It("should set jvm to half of memory request when memory request is set in G and jvm are not provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("2G"),
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx953M -Xms953M -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+		It("should set jvm to default when memory request and jvm are not provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx512M -Xms512M -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+		It("should set NodePool.Jvm as jvm when it jvm is provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Jvm: "-Xmx1024M -Xms1024M",
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
+			}))
+		})
+		It("should set NodePool.jvm as jvm when jvm and memory request are provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			var nodePool = opsterv1.NodePool{
+				Jvm: "-Xmx1024M -Xms1024M",
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("2Gi"),
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
+			}))
 		})
 	})
 
