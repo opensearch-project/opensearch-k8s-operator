@@ -169,7 +169,7 @@ func NewSTSForNodePool(
 		//vendor ="elasticsearch"
 	}
 
-	jvm := helpers.GetJvmHeapSize(node)
+	jvm := helpers.GetJvmHeapSize(&node)
 
 	// If node role `search` defined add required experimental flag if version less than 2.7
 	if helpers.ContainsString(selectedRoles, "search") && helpers.CompareVersions(cr.Spec.General.Version, "2.7.0") {
