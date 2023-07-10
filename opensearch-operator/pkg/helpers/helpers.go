@@ -361,7 +361,7 @@ func CompareVersions(v1 string, v2 string) bool {
 	return err == nil && ver1.LessThan(ver2)
 }
 
-func GetJvmHeapSize(nodePool *opsterv1.NodePool) string {
+func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
 
 	if nodePool.Jvm == "" {
