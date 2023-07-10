@@ -1,19 +1,18 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+// +kubebuilder:object:root=true
+// +kubebuilder:resource:shortName=ismp;ismpolicy
 type ISMPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-
-	Spec ISMPolicySpec `json:"spec,omitempty"`
+	Spec              ISMPolicySpec `json:"spec,omitempty"`
 }
 
 type ISMPolicySpec struct {
