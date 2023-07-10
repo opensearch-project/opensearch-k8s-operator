@@ -14,7 +14,6 @@ import (
 	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -366,21 +365,17 @@ func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 
 	if nodePool.Jvm == "" {
 		memoryLimit := nodePool.Resources.Requests.Memory()
-		nodePoolMemorySize, _ := resource.ParseQuantity(memoryLimit.String())
 
 		// Memory request is not present
-		if nodePoolMemorySize.IsZero() {
-			maximumJavaHeapSize, initialJavaHeapSize := "512M", "512M"
-			return fmt.Sprintf(jvmHeapSizeTemplate, maximumJavaHeapSize, initialJavaHeapSize)
+		if memoryLimit.IsZero() {
+			return fmt.Sprintf(jvmHeapSizeTemplate, "512M", "512M")
 		}
 
-		// Java heap size is set to half of the memory request
-		memoryRequestInt64, _ := nodePoolMemorySize.AsInt64()
-		memoryRequestQty := resource.NewQuantity(memoryRequestInt64/2, resource.BinarySI)
-		megabytes := float64(memoryRequestQty.Value() / 1024.0 / 1024.0)
+		// Set Java Heap size to half of the node pool memory size
+		megabytes := float64((memoryLimit.Value() / 2) / 1024.0 / 1024.0)
 
-		maximumJavaHeapSize, initialJavaHeapSize := fmt.Sprintf("%vM", megabytes), fmt.Sprintf("%vM", megabytes)
-		return fmt.Sprintf(jvmHeapSizeTemplate, maximumJavaHeapSize, initialJavaHeapSize)
+		heapSize := fmt.Sprintf("%vM", megabytes)
+		return fmt.Sprintf(jvmHeapSizeTemplate, heapSize, heapSize)
 	}
 
 	return nodePool.Jvm
