@@ -15,6 +15,7 @@ type ISMPolicy struct {
 	Spec              ISMPolicySpec `json:"spec,omitempty"`
 }
 
+// ISMPolicySpec is the specification for the ISM policy for OS.
 type ISMPolicySpec struct {
 	// The default starting state for each index that uses this policy.
 	DefaultState string `json:"default_state"`
