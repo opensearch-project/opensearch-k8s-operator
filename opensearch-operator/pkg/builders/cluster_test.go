@@ -358,7 +358,7 @@ var _ = Describe("Builders", func() {
 				Jvm: "-Xmx1024M -Xms1024M",
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceMemory: resource.MustParse("4Gi"),
 					},
 				},
 			}
