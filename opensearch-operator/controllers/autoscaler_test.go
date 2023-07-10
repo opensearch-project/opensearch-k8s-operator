@@ -18,7 +18,7 @@ var _ = Describe("Cluster Reconciler", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "autoscaler-test-autoscaler"
-		namespace   = clusterName
+		namespace   = "default"
 		timeout     = time.Second * 30
 		interval    = time.Second * 1
 	)
@@ -30,6 +30,7 @@ var _ = Describe("Cluster Reconciler", func() {
 
 	When("Creating a Autoscaler CRD instance", func() {
 		It("Should create the autoscaler if ns exists", func() {
+			Expect(k8sClient.Create(context.Background(), &Autoscaler)).To(Succeed())
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{
 					Name:      clusterName,
@@ -38,5 +39,4 @@ var _ = Describe("Cluster Reconciler", func() {
 			}, timeout, interval).Should(Succeed())
 		})
 	})
-
 })
