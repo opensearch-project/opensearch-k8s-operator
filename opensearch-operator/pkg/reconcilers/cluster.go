@@ -18,6 +18,7 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/metrics"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,6 +34,7 @@ type ClusterReconciler struct {
 	reconciler.ResourceReconciler
 	ctx               context.Context
 	recorder          record.EventRecorder
+	queryEvaluator    metrics.ScalingQueryEvaluator
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
@@ -42,6 +44,7 @@ func NewClusterReconciler(
 	client client.Client,
 	ctx context.Context,
 	recorder record.EventRecorder,
+	queryEvaluator metrics.ScalingQueryEvaluator,
 	reconcilerContext *ReconcilerContext,
 	instance *opsterv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
@@ -56,6 +59,7 @@ func NewClusterReconciler(
 			)...),
 		ctx:               ctx,
 		recorder:          recorder,
+		queryEvaluator:    queryEvaluator,
 		reconcilerContext: reconcilerContext,
 		instance:          instance,
 		logger:            log.FromContext(ctx),
@@ -369,7 +373,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				scaleTime, err := helpers.EvalScalingTime(nodePool.Component, r.instance)
 				if err == nil && scaleTime {
 					//do scaling comparisons
-					scalingDecision, err := helpers.EvalScalingRules(&nodePool, autoscalerPolicy, r.instance)
+					scalingDecision, err := helpers.EvalScalingRules(r.queryEvaluator, &nodePool, autoscalerPolicy, r.instance)
 					if err != nil {
 						r.logger.Error(err, "Failed to make a scaling decision")
 						annotations := map[string]string{"cluster-name": r.instance.GetName()}

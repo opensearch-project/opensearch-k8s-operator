@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"opensearch.opster.io/pkg/metrics"
 	"path/filepath"
 	"testing"
 
@@ -58,11 +59,15 @@ var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 var cancel context.CancelFunc
+var mockQueryEvaluator *metrics.MockQueryEvaluator
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
-	RunSpecs(t, "Controller Suite")
+	suiteConfig, reporterConfig := GinkgoConfiguration()
+	reporterConfig.Verbose = true
+
+	RunSpecs(t, "Controller Suite", suiteConfig, reporterConfig)
 
 }
 
@@ -103,12 +108,16 @@ var _ = BeforeSuite(func() {
 		HealthProbeBindAddress: fmt.Sprintf(":%d", ports[1]),
 	})
 	Expect(err).ToNot(HaveOccurred())
+
+	mockQueryEvaluator = &metrics.MockQueryEvaluator{}
+
 	//scheme.AddToScheme()
 	err = (&OpenSearchClusterReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: scheme.Scheme,
 		//	Instance: &OpensearchCluster,
-		Recorder: record.NewFakeRecorder(20),
+		Recorder:       record.NewFakeRecorder(20),
+		QueryEvaluator: mockQueryEvaluator,
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())
 
