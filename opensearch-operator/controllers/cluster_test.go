@@ -36,6 +36,7 @@ var _ = Describe("Cluster Reconciler", func() {
 	)
 	var (
 		OpensearchCluster      = ComposeOpensearchCrd(clusterName, namespace)
+		Autoscaler             = ComposeAutoscalerCrd(clusterName, namespace)
 		service                = corev1.Service{}
 		preUpgradeStatusLength int
 	)
@@ -345,6 +346,35 @@ var _ = Describe("Cluster Reconciler", func() {
 				}
 				return OpensearchCluster.Status.Version == "2.0.0"
 			}, timeout, interval).Should(BeTrue())
+		})
+	})
+
+	When("Creating a Autoscaler CRD instance", func() {
+		It("Should create the autoscaler if ns exists", func() {
+			Expect(k8sClient.Create(context.Background(), &Autoscaler)).To(Succeed())
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      clusterName,
+					Namespace: namespace,
+				}, &Autoscaler)
+			}, timeout, interval).Should(Succeed())
+		})
+
+		It("Should scale up data nodes", func() {
+			expectedReplicas := int32(7)
+
+			mockQueryEvaluator.SetResponse(true, nil)
+
+			Eventually(func() *int32 {
+				sts := &appsv1.StatefulSet{}
+				if err := k8sClient.Get(context.Background(), types.NamespacedName{
+					Namespace: OpensearchCluster.Namespace,
+					Name:      clusterName + "-" + "nodes",
+				}, sts); err != nil {
+					return nil
+				}
+				return sts.Spec.Replicas
+			}, time.Minute*2, interval).Should(Equal(&expectedReplicas))
 		})
 	})
 

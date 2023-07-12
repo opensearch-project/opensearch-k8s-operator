@@ -18,6 +18,7 @@ package main
 
 import (
 	"flag"
+	"opensearch.opster.io/pkg/metrics"
 	"os"
 
 	"opensearch.opster.io/controllers"
@@ -84,9 +85,10 @@ func main() {
 	}
 
 	if err = (&controllers.OpenSearchClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("containerset-controller"),
+		Client:         mgr.GetClient(),
+		Scheme:         mgr.GetScheme(),
+		Recorder:       mgr.GetEventRecorderFor("containerset-controller"),
+		QueryEvaluator: metrics.NewQueryEvaluator(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchCluster")
 		os.Exit(1)

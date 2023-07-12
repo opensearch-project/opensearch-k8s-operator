@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"opensearch.opster.io/pkg/metrics"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -43,9 +44,10 @@ import (
 // OpenSearchClusterReconciler reconciles a OpenSearchCluster object
 type OpenSearchClusterReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Instance *opsterv1.OpenSearchCluster
+	Scheme         *runtime.Scheme
+	Recorder       record.EventRecorder
+	QueryEvaluator metrics.ScalingQueryEvaluator
+	Instance       *opsterv1.OpenSearchCluster
 	logr.Logger
 	Autoscaler *opsterv1.Autoscaler
 }
@@ -189,6 +191,7 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		r.Client,
 		ctx,
 		r.Recorder,
+		metrics.NewQueryEvaluator(),
 		&reconcilerContext,
 		r.Instance,
 	)
@@ -275,6 +278,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		r.Client,
 		ctx,
 		r.Recorder,
+		r.QueryEvaluator,
 		&reconcilerContext,
 		r.Instance,
 	)
