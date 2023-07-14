@@ -344,6 +344,14 @@ spec:
           - "data"
 ```
 
+If `jvm` is not provided then the java heap size will be set to half of
+`resources.requests.memory` which is the recommend value for data nodes
+
+If `jvm` is not provided and `resources.requests.memory` does not exist
+then value will be `-Xmx512M -Xms512M`.
+
+We don't support dynamic values depending on the node type for now.
+
 ### Deal with `max virtual memory areas vm.max_map_count` errors
 
 OpenSearch requires the Linux kernel `vm.max_map_count` option [to be set to at least 262144](https://opensearch.org/docs/1.0/opensearch/install/important-settings/). You can either set this yourself on the Kubernetes hosts using sysctl or you can let the operator take care of it by adding the following option to your cluster spec:

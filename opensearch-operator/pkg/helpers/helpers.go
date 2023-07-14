@@ -359,3 +359,24 @@ func CompareVersions(v1 string, v2 string) bool {
 	ver2, _ := version.NewVersion(v2)
 	return err == nil && ver1.LessThan(ver2)
 }
+
+func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
+	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
+
+	if nodePool.Jvm == "" {
+		memoryLimit := nodePool.Resources.Requests.Memory()
+
+		// Memory request is not present
+		if memoryLimit.IsZero() {
+			return fmt.Sprintf(jvmHeapSizeTemplate, "512M", "512M")
+		}
+
+		// Set Java Heap size to half of the node pool memory size
+		megabytes := float64((memoryLimit.Value() / 2) / 1024.0 / 1024.0)
+
+		heapSize := fmt.Sprintf("%vM", megabytes)
+		return fmt.Sprintf(jvmHeapSizeTemplate, heapSize, heapSize)
+	}
+
+	return nodePool.Jvm
+}

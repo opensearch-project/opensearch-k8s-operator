@@ -487,7 +487,7 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>string</td>
         <td>JVM args. Use this to define heap size (recommendation: Set to half of memory request)</td>
         <td>false</td>
-        <td>-Xmx512M -Xms512M</td>
+        <td>Half of `resources.requests.memory` if jvm is not set. Fallback value is `-Xmx512M -Xms512M` if neither `resources.requests.memory` nor jvm are set.</td>
       </tr><tr>
       </tr><tr>
         <td><b>Affinity</b></td>
