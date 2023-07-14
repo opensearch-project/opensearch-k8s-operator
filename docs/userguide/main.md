@@ -100,7 +100,6 @@ manager:
   #    value: somevalue
 ```
 
-
 ## Configuring OpenSearch
 
 The main job of the operator is to deploy and manage OpenSearch clusters. As such it offers a wide range of options to configure clusters.
@@ -311,8 +310,7 @@ If you only want to load some keys from a secret or rename the existing keys, yo
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
 
-
-### SmartScaler 
+### SmartScaler
 
 What is SmartScaler?
 
