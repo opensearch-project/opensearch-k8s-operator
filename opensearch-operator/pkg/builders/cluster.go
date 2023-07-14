@@ -359,9 +359,10 @@ func NewSTSForNodePool(
 
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-" + node.Component,
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        cr.Name + "-" + node.Component,
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &node.Replicas,
