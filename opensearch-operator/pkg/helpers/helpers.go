@@ -382,6 +382,7 @@ func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) polic
 		},
 	}
 	return newpdb
+}
 
 func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
