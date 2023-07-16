@@ -100,7 +100,6 @@ manager:
   #    value: somevalue
 ```
 
-
 ## Configuring OpenSearch
 
 The main job of the operator is to deploy and manage OpenSearch clusters. As such it offers a wide range of options to configure clusters.
@@ -311,8 +310,7 @@ If you only want to load some keys from a secret or rename the existing keys, yo
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
 
-
-### SmartScaler 
+### SmartScaler
 
 What is SmartScaler?
 
@@ -343,6 +341,14 @@ spec:
         roles:
           - "data"
 ```
+
+If `jvm` is not provided then the java heap size will be set to half of
+`resources.requests.memory` which is the recommend value for data nodes
+
+If `jvm` is not provided and `resources.requests.memory` does not exist
+then value will be `-Xmx512M -Xms512M`.
+
+We don't support dynamic values depending on the node type for now.
 
 ### Deal with `max virtual memory areas vm.max_map_count` errors
 

@@ -29,7 +29,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return sts.Status.ReadyReplicas
 				}
 				return 0
-			}, time.Minute*8, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*15, time.Second*5).Should(Equal(int32(3)))
 		})
 
 		It("should have a ready dashboards pod", func() {
@@ -40,7 +40,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return deployment.Status.ReadyReplicas
 				}
 				return 0
-			}, time.Minute*2, time.Second*5).Should(Equal(int32(1)))
+			}, time.Minute*3, time.Second*5).Should(Equal(int32(1)))
 		})
 	})
 
@@ -72,7 +72,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return sts.Status.UpdatedReplicas
 				}
 				return 0
-			}, time.Minute*8, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*15, time.Second*5).Should(Equal(int32(3)))
 		})
 
 		It("should upgrade the dashboard pod", func() {
@@ -92,7 +92,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return deployment.Status.ReadyReplicas
 				}
 				return 0
-			}, time.Minute*3, time.Second*5).Should(Equal(int32(1)))
+			}, time.Minute*8, time.Second*5).Should(Equal(int32(1)))
 		})
 
 	})

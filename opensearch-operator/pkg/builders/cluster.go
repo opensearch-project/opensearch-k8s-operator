@@ -169,12 +169,7 @@ func NewSTSForNodePool(
 		//vendor ="elasticsearch"
 	}
 
-	var jvm string
-	if node.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
-	} else {
-		jvm = node.Jvm
-	}
+	jvm := helpers.CalculateJvmHeapSize(&node)
 
 	// If node role `search` defined add required experimental flag if version less than 2.7
 	if helpers.ContainsString(selectedRoles, "search") && helpers.CompareVersions(cr.Spec.General.Version, "2.7.0") {
@@ -359,9 +354,10 @@ func NewSTSForNodePool(
 
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-" + node.Component,
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        cr.Name + "-" + node.Component,
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &node.Replicas,
