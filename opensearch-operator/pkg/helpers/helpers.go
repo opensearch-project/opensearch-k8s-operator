@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/apimachinery/pkg/types"
 	policyv1 "k8s.io/api/policy/v1"
 
 	"reflect"
 	"sort"
 	"time"
-	"github.com/samber/lo"
+
+	batchv1 "k8s.io/api/batch/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/hashicorp/go-version"
 	appsv1 "k8s.io/api/apps/v1"
@@ -26,8 +26,6 @@ import (
 const (
 	stsUpdateWaitTime = 30
 	updateStepTime    = 3
-	stsRevisionLabel = "controller-revision-hash"
-
 )
 
 func ContainsString(slice []string, s string) bool {
@@ -189,8 +187,9 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 	return diff
 }
 
-// Count the number of PVCs created for the given NodePool
-func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
+// Count the number of pods running and ready and not terminating for a given nodePool
+func CountRunningPodsForNodePool(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
+	// Constrict selector from labels
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
 	if err != nil {
 		return 0, err
@@ -201,11 +200,27 @@ func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opst
 	}
 	selector := labels.NewSelector()
 	selector = selector.Add(*clusterReq, *componentReq)
-	list := corev1.PersistentVolumeClaimList{}
+	// List pods matching selector
+	list := corev1.PodList{}
 	if err := k8sClient.List(ctx, &list, &client.ListOptions{LabelSelector: selector}); err != nil {
 		return 0, err
 	}
-	return len(list.Items), nil
+	// Count pods that are ready
+	var numReadyPods = 0
+	for _, pod := range list.Items {
+		// If DeletionTimestamp is set the pod is terminating
+		var podReady = pod.ObjectMeta.DeletionTimestamp == nil
+		// Count the pod as not ready if one of its containers is not running or not ready
+		for _, container := range pod.Status.ContainerStatuses {
+			if !container.Ready || container.State.Running == nil {
+				podReady = false
+			}
+		}
+		if podReady {
+			numReadyPods += 1
+		}
+	}
+	return numReadyPods, nil
 }
 
 // Count the number of PVCs created for the given NodePool
@@ -226,7 +241,6 @@ func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opst
 	}
 	return len(list.Items), nil
 }
-
 
 // Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
 func WaitForSTSDelete(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet) error {
@@ -369,6 +383,7 @@ func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) polic
 	}
 	return newpdb
 }
+
 func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
 
@@ -388,40 +403,5 @@ func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	}
 
 	return nodePool.Jvm
-}
 
-func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
-	componentStatus := opsterv1.ComponentStatus{
-		Component: "Upgrader",
-	}
-	_, found := FindFirstPartial(status.ComponentsStatus, componentStatus, GetByComponent)
-	return found
-}
-func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
-	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
-}
-
-func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, sts *appsv1.StatefulSet) (string, error) {
-	replicas := lo.FromPtrOr(sts.Spec.Replicas, 1)
-	// Handle the simple case
-	if replicas == sts.Status.UpdatedReplicas+sts.Status.CurrentReplicas {
-		ordinal := replicas - 1 - sts.Status.UpdatedReplicas
-		return ReplicaHostName(*sts, ordinal), nil
-	}
-	// If there are potentially mixed revisions we need to check each pod
-	for i := replicas - 1; i >= 0; i-- {
-		podName := ReplicaHostName(*sts, i)
-		pod := &corev1.Pod{}
-		if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: sts.Namespace}, pod); err != nil {
-			return "", err
-		}
-		podRevision, ok := pod.Labels[stsRevisionLabel]
-		if !ok {
-			return "", fmt.Errorf("pod %s has no revision label", podName)
-		}
-		if podRevision != sts.Status.UpdateRevision {
-			return podName, nil
-		}
-	}
-	return "", errors.New("unable to calculate the working pod for rolling restart")
 }
