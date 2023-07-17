@@ -324,7 +324,7 @@ func CompareVersions(v1 string, v2 string) bool {
 	return err == nil && ver1.LessThan(ver2)
 }
 
-func GetAutoscalingPolicy(k8sClient client.Client, nodePool *opsterv1.NodePool, instance *opsterv1.OpenSearchCluster) (*opsterv1.Autoscaler, error) {
+func GetAutoscalingPolicy(ctx context.Context, k8sClient client.Client, nodePool *opsterv1.NodePool, instance *opsterv1.OpenSearchCluster) (*opsterv1.Autoscaler, error) {
 	var policy string
 	//if a cluster level policy is defined, default to that over nodepool
 	if instance.Spec.General.AutoScaler.ClusterAutoScalePolicy != "" {
@@ -337,7 +337,7 @@ func GetAutoscalingPolicy(k8sClient client.Client, nodePool *opsterv1.NodePool, 
 		return nil, nil
 	}
 	autoscaler := &opsterv1.Autoscaler{}
-	err := k8sClient.Get(context.TODO(), types.NamespacedName{
+	err := k8sClient.Get(ctx, types.NamespacedName{
 		Name:      policy,
 		Namespace: instance.Namespace,
 	}, autoscaler)
@@ -349,13 +349,19 @@ func GetAutoscalingPolicy(k8sClient client.Client, nodePool *opsterv1.NodePool, 
 
 func EvalScalingTime(component string, instance *opsterv1.OpenSearchCluster) (bool, error) {
 	autoscaleStatus := instance.Status.Scaler
+	//check if scaleTimeout is missing, default to 10m if it is.
+	var scaleTimeout string
+	if instance.Spec.General.AutoScaler.ScaleTimeout == "" {
+		scaleTimeout = "10m"
+	} else {
+		scaleTimeout = instance.Spec.General.AutoScaler.ScaleTimeout
+	}
 	//get duration; if empty invalid format string defaults to 0s
-	// TODO missing default?
-	duration, err := time.ParseDuration(instance.Spec.General.AutoScaler.ScaleTimeout)
+	duration, err := time.ParseDuration(scaleTimeout)
 	if err != nil {
 		return false, fmt.Errorf("Unable to parse scaleTimeout: %v", err)
 	}
-	//if the cluster has existed longer than the scaleInterval
+	//if the cluster has existed longer than the scaleInterval; UTC used to match OS cluster creation timestamp
 	if time.Now().UTC().After(instance.CreationTimestamp.Add(duration)) {
 		//if the key exists in the map
 		if existingLastScaleTime, ok := autoscaleStatus[component]; ok {
@@ -412,10 +418,9 @@ func EvalScalingRules(queryEvaluator metrics.ScalingQueryEvaluator, nodePool *op
 				scaleCount++
 			}
 			//if the current replicas is greater than the defined nodePool replicas, scale down
-			// TODO why?
-			//if instance.Status.Scaler[nodePool.Component].Replicas > nodePool.Replicas {
-			//	scaleCount--
-			//}
+			if instance.Status.Scaler[nodePool.Component].Replicas > nodePool.Replicas && rule.Behavior.ScaleDown.MaxReplicas != 0 {
+				scaleCount--
+			}
 		}
 	}
 	return scaleCount, nil

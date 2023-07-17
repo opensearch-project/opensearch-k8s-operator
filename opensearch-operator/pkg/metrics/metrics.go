@@ -43,15 +43,12 @@ func (r *prometheusQueryEvaluator) Eval(ctx context.Context, prometheusUrl strin
 	} else {
 		//if all values a true set ruleEval, else break out of the itemloop and check the next rule
 		for _, vector := range result.(model.Vector) {
-			if vector.Value == 1 {
-				return true, nil
-			} else {
+			if vector.Value != 1 {
 				return false, nil
 			}
 		}
+		return true, nil
 	}
-
-	return false, nil
 }
 
 func NewPrometheusClientXX(prometheusEndpoint string) (v1.API, error) {
