@@ -15,6 +15,7 @@ require (
 	github.com/opensearch-project/opensearch-go v1.1.0
 	github.com/phayes/freeport v0.0.0-20220201140144-74d24b5ae9f5
 	github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring v0.61.1
+	go.uber.org/zap v1.24.0
 	k8s.io/api v0.27.2
 	k8s.io/apiextensions-apiserver v0.27.2
 	k8s.io/apimachinery v0.27.2
@@ -70,7 +71,6 @@ require (
 	github.com/wayneashleyberry/terminal-dimensions v1.1.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	go.uber.org/zap v1.24.0 // indirect
 	golang.org/x/net v0.10.0 // indirect
 	golang.org/x/oauth2 v0.5.0 // indirect
 	golang.org/x/sys v0.8.0 // indirect
