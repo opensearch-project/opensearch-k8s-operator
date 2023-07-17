@@ -343,6 +343,23 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 	}
 
+	// Now set the desired replicas to be the existing replicas
+	// This will allow the scaler reconciler to function correctly
+	sts.Spec.Replicas = existing.Spec.Replicas
+
+	// Don't update env vars on non data nodes while an upgrade is in progress
+	// as we don't want uncontrolled restarts while we're doing an upgrade
+	if r.instance.Status.Version != "" &&
+		r.instance.Status.Version != r.instance.Spec.General.Version &&
+		!helpers.HasDataRole(&nodePool) {
+		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
+	}
+
+	result, err = r.ReconcileResource(sts, reconciler.StatePresent)
+	if err != nil {
+		return result, err
+	}
+
 	//add scaling logic
 	//initialize status replicas for nodePools
 	if r.instance.Status.Scaler == nil {
@@ -360,104 +377,92 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				return r.Status().Update(r.ctx, r.instance)
 			})
 			if err != nil {
-				r.logger.Info("Failed to initialize scaler status for cluster[" + r.instance.Name + "].")
+				r.logger.Error(err, fmt.Sprintf("Failed to initialize scaler status for cluster[%s].", r.instance.Name))
+				return result, err
+			}
+		}
+	}
+
+	//if autoscaling is enabled and nodePool doesn't contain masters/manager nodes
+	if r.instance.Spec.General.AutoScaler.Enable && !helpers.HasManagerRole(&nodePool) {
+		//if an autoscale policy is defined
+		autoscalerPolicy, err := helpers.GetAutoscalingPolicy(r.ctx, r.Client, &nodePool, r.instance)
+		if err != nil {
+			return result, err
+		}
+
+		if autoscalerPolicy != nil {
+			//evaluate lastScaleTime
+			scaleTime, err := helpers.EvalScalingTime(nodePool.Component, r.instance)
+			if err != nil {
+				return result, err
+			}
+
+			if scaleTime {
+				//do scaling comparisons
+				scalingDecision, err := helpers.EvalScalingRules(r.queryEvaluator, &nodePool, autoscalerPolicy, r.instance)
+				if err != nil {
+					r.logger.Error(err, "Failed to make a scaling decision")
+					annotations := map[string]string{"cluster-name": r.instance.GetName()}
+					r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Autoscaler", "Failed to make a scaling decision")
+					return result, err
+				}
+
+				//scale only if a non-zero scaling decision is made and we aren't in a state where scaling failed
+				if scalingDecision > 0 && r.instance.Status.Scaler[nodePool.Component].Replicas == *existing.Spec.Replicas {
+					annotations := map[string]string{"cluster-name": r.instance.GetName()}
+					r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Autoscaler", "Scale up action - Scaling %s", nodePool.Component)
+					//scale up one and set scale time
+					err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+						if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+							return err
+						}
+						r.instance.Status.Scaler[nodePool.Component].Replicas++
+						r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
+						return r.Status().Update(r.ctx, r.instance)
+					})
+					if err != nil {
+						r.logger.Error(err, "Failed to update cluster status")
+						return result, err
+					}
+				}
+				if scalingDecision < 0 && r.instance.Status.Scaler[nodePool.Component].Replicas == *existing.Spec.Replicas {
+					annotations := map[string]string{"cluster-name": r.instance.GetName()}
+					r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Autoscaler", "Scale down action - Scaling %s", nodePool.Component)
+					//scale down 1 and set scaleTime
+					err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+						if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+							return err
+						}
+						r.instance.Status.Scaler[nodePool.Component].Replicas--
+						r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
+						return r.Status().Update(r.ctx, r.instance)
+					})
+					if err != nil {
+						r.logger.Error(err, "Failed to update cluster status")
+						return result, err
+					}
+				}
 			}
 		}
 	} else {
-		//if autoscaling is enabled and nodePool doesn't contain masters/manager nodes
-		if r.instance.Spec.General.AutoScaler.Enable && !helpers.HasManagerRole(&nodePool) {
-			//if an autoscale policy is defined
-			autoscalerPolicy, err := helpers.GetAutoscalingPolicy(r.Client, &nodePool, r.instance)
-			if autoscalerPolicy != nil {
-				//evaluate lastScaleTime
-				scaleTime, err := helpers.EvalScalingTime(nodePool.Component, r.instance)
-				if err == nil && scaleTime {
-					//do scaling comparisons
-					scalingDecision, err := helpers.EvalScalingRules(r.queryEvaluator, &nodePool, autoscalerPolicy, r.instance)
-					if err != nil {
-						r.logger.Error(err, "Failed to make a scaling decision")
-						annotations := map[string]string{"cluster-name": r.instance.GetName()}
-						r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Autoscaler", "Failed to make a scaling decision")
-					} else {
-						//scale only if a non-zero scaling decision is made and we aren't in a state where scaling failed
-						if scalingDecision > 0 && r.instance.Status.Scaler[nodePool.Component].Replicas == *existing.Spec.Replicas {
-							annotations := map[string]string{"cluster-name": r.instance.GetName()}
-							r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Autoscaler", "Scale up action - Scaling %s", nodePool.Component)
-							//scale up one and set scale time
-							err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-								if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-									return err
-								}
-								r.instance.Status.Scaler[nodePool.Component].Replicas++
-								r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
-								return r.Status().Update(r.ctx, r.instance)
-							})
-							if err != nil {
-								r.logger.Error(err, "Failed to update cluster status")
-							}
-						}
-						if scalingDecision < 0 && r.instance.Status.Scaler[nodePool.Component].Replicas == *existing.Spec.Replicas {
-							annotations := map[string]string{"cluster-name": r.instance.GetName()}
-							r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Autoscaler", "Scale down action - Scaling %s", nodePool.Component)
-							//scale down 1 and set scaleTime
-							r.instance.Status.Scaler[nodePool.Component].Replicas--
-							r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
-							err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-								if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-									return err
-								}
-								r.instance.Status.Scaler[nodePool.Component].Replicas--
-								r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
-								return r.Status().Update(r.ctx, r.instance)
-							})
-							if err != nil {
-								r.logger.Error(err, "Failed to update cluster status")
-							}
-						}
-					}
-				} else {
-					if err != nil {
-						r.logger.Error(err, "Failed to evaluate lastScaledTime for autoscaler")
-					}
+		//if autoscaling is not controlling replicas, update the status replicas with nodePool replicas in case they change.
+		if nodePool.Replicas != r.instance.Status.Scaler[nodePool.Component].Replicas {
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+					return err
 				}
-			} else {
-				if err != nil {
-					annotations := map[string]string{"cluster-name": r.instance.GetName()}
-					r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Autoscaler", "Notice - Autoscale enabled but no policy found")
-				}
-			}
-		} else {
-			//if autoscaling is not controlling replicas, update the status replicas with nodePool replicas in case they change.
-			if nodePool.Replicas != r.instance.Status.Scaler[nodePool.Component].Replicas {
-				err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-					if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-						return err
-					}
-					r.instance.Status.Scaler[nodePool.Component].Replicas = nodePool.Replicas
-					r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
-					return r.Status().Update(r.ctx, r.instance)
-				})
-				if err != nil {
-					r.logger.Info("Failed to update cluster status")
-				}
+				r.instance.Status.Scaler[nodePool.Component].Replicas = nodePool.Replicas
+				r.instance.Status.Scaler[nodePool.Component].LastScaleTime = metav1.Now()
+				return r.Status().Update(r.ctx, r.instance)
+			})
+			if err != nil {
+				r.logger.Info("Failed to update cluster status")
 			}
 		}
 	}
 
-	// Now set the desired replicas to be the existing replicas
-	// This will allow the scaler reconciler to function correctly
-	sts.Spec.Replicas = existing.Spec.Replicas
-
-	// Don't update env vars on non data nodes while an upgrade is in progress
-	// as we don't want uncontrolled restarts while we're doing an upgrade
-	if r.instance.Status.Version != "" &&
-		r.instance.Status.Version != r.instance.Spec.General.Version &&
-		!helpers.HasDataRole(&nodePool) {
-		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
-	}
-
-	// Finally we enforce the desired state
-	return r.ReconcileResource(sts, reconciler.StatePresent)
+	return result, nil
 }
 
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {

@@ -1198,7 +1198,7 @@ Once an autoscaling policy is defined, it is simply a matter of referencing it f
 The cluster spec contains an autoscaler section where the following parameters are required:
 1. **Enable** - A boolean to enable or disable autoscaling.
 2. **PrometheusEndpoint** - The required Prometheus endpoint where cluster metrics are being stored.
-3. **ScaleTimeout** - The amount of time to wait between taking scaling actions.
+3. **ScaleTimeout** - The amount of time to wait between taking scaling actions. Default is 10m.
 4. The **autoscale policy** name.(This can be defined at a cluster level via `clusterAutoScalePolicy` or a nodepool level via `autoScalePolicy` depending on your needs.)
 
 For example, to apply the previous example policy: 
