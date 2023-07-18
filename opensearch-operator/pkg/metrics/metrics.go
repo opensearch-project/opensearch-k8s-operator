@@ -11,8 +11,6 @@ import (
 )
 
 type ScalingQueryEvaluator interface {
-	// TODO should provider / builder be used to get rid of prometheusUrl?
-
 	Eval(ctx context.Context, prometheusUrl string, query string) (bool, error)
 }
 
@@ -37,11 +35,9 @@ func (r *prometheusQueryEvaluator) Eval(ctx context.Context, prometheusUrl strin
 		return false, fmt.Errorf("Warnings received: %v", err)
 	}
 
-	// Check the result type and iterate over the data
 	if result.Type() != model.ValVector {
 		return false, fmt.Errorf("Prometheus result type not a Vector: %v", err)
 	} else {
-		//if all values a true set ruleEval, else break out of the itemloop and check the next rule
 		for _, vector := range result.(model.Vector) {
 			if vector.Value != 1 {
 				return false, nil

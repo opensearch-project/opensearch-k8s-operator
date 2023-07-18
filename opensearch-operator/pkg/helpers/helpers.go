@@ -326,13 +326,10 @@ func CompareVersions(v1 string, v2 string) bool {
 
 func GetAutoscalingPolicy(ctx context.Context, k8sClient client.Client, nodePool *opsterv1.NodePool, instance *opsterv1.OpenSearchCluster) (*opsterv1.Autoscaler, error) {
 	var policy string
-	//if a cluster level policy is defined, default to that over nodepool
 	if instance.Spec.General.AutoScaler.ClusterAutoScalePolicy != "" {
 		policy = instance.Spec.General.AutoScaler.ClusterAutoScalePolicy
-		//if a nodePool level policy is defined
 	} else if nodePool.AutoScalePolicy != "" {
 		policy = nodePool.AutoScalePolicy
-		//if no policy is defined, continue running and warn the user
 	} else {
 		return nil, nil
 	}
@@ -349,50 +346,39 @@ func GetAutoscalingPolicy(ctx context.Context, k8sClient client.Client, nodePool
 
 func EvalScalingTime(component string, instance *opsterv1.OpenSearchCluster) (bool, error) {
 	autoscaleStatus := instance.Status.Scaler
-	//check if scaleTimeout is missing, default to 10m if it is.
 	var scaleTimeout string
 	if instance.Spec.General.AutoScaler.ScaleTimeout == "" {
 		scaleTimeout = "10m"
 	} else {
 		scaleTimeout = instance.Spec.General.AutoScaler.ScaleTimeout
 	}
-	//get duration; if empty invalid format string defaults to 0s
 	duration, err := time.ParseDuration(scaleTimeout)
 	if err != nil {
-		return false, fmt.Errorf("Unable to parse scaleTimeout: %v", err)
+		return false, fmt.Errorf("unable to parse scaleTimeout: %v", err)
 	}
-	//if the cluster has existed longer than the scaleInterval; UTC used to match OS cluster creation timestamp
 	if time.Now().UTC().After(instance.CreationTimestamp.Add(duration)) {
-		//if the key exists in the map
 		if existingLastScaleTime, ok := autoscaleStatus[component]; ok {
 			targetTime := existingLastScaleTime.LastScaleTime.Add(duration)
-			//if now is after the lastScaleTime + duration
 			if time.Now().UTC().After(targetTime) {
 				return true, nil
 			}
 		} else {
-			//scaling allowed
 			return true, nil
 		}
 	}
-	//scaling not allowed
 	return false, nil
 }
 
 func EvalScalingRules(queryEvaluator metrics.ScalingQueryEvaluator, nodePool *opsterv1.NodePool, autoscalerPolicy *opsterv1.Autoscaler, instance *opsterv1.OpenSearchCluster) (int32, error) {
 	scaleCount := int32(0)
 	for r, rule := range autoscalerPolicy.Spec.Rules {
-		//if the rule and nodetype do not match, break to the next ruleEval
 		if !ContainsString(nodePool.Roles, rule.NodeRole) {
 			break
 		}
-		//if the rule is disabled go on to the next rule eval
 		if !rule.Behavior.Enable {
 			continue
 		}
-		//if the ruleSet ever evaluates to false the scaling decision will not occur
 		ruleEval := false
-		//iterate through items for the relevant nodeRole type
 		for _, item := range rule.Items {
 			query, err := buildPrometheusQuery(item, instance.Name, nodePool.Component)
 			if err != nil {
@@ -407,17 +393,13 @@ func EvalScalingRules(queryEvaluator metrics.ScalingQueryEvaluator, nodePool *op
 				break
 			}
 		}
-		//if any ruleset evals to true, we are going to scale;
 		if ruleEval {
-			//if max replicas are set for both scalingActions then we know there is a problem with the config
 			if rule.Behavior.ScaleUp.MaxReplicas != 0 && rule.Behavior.ScaleDown.MaxReplicas != 0 {
 				return 0, fmt.Errorf("Both scaleUp and scaleDown logic enabled for rule[%v] in %v autoscaler policy. ", r, autoscalerPolicy.Name)
 			}
-			//if the current replicas is less than the defined MaxReplicas, scale up
 			if instance.Status.Scaler[nodePool.Component].Replicas < rule.Behavior.ScaleUp.MaxReplicas {
 				scaleCount++
 			}
-			//if the current replicas is greater than the defined nodePool replicas, scale down
 			if instance.Status.Scaler[nodePool.Component].Replicas > nodePool.Replicas && rule.Behavior.ScaleDown.MaxReplicas != 0 {
 				scaleCount--
 			}
@@ -429,7 +411,6 @@ func EvalScalingRules(queryEvaluator metrics.ScalingQueryEvaluator, nodePool *op
 func buildPrometheusQuery(item opsterv1.Item, instanceName string, nodeComponent string) (string, error) {
 	query := item.Metric
 	nodeMatcher := "node=~\"" + instanceName + "-" + nodeComponent + "-[0-9]+$\""
-	//build nodeMatcher string
 	if item.QueryOptions.LabelMatchers != nil {
 		for i, labelMatcher := range item.QueryOptions.LabelMatchers {
 			if i == 0 {
@@ -441,20 +422,17 @@ func buildPrometheusQuery(item opsterv1.Item, instanceName string, nodeComponent
 	} else {
 		query = query + "{" + nodeMatcher + "}"
 	}
-	//add time interval if exists; a function wrapper must exist
 	if &item.QueryOptions.Interval != nil && &item.QueryOptions.Function != nil {
 		query = query + "[" + item.QueryOptions.Interval + "]"
 	} else {
 		return "", fmt.Errorf("A function wrapper is required when using intervals for Prometheus query. ")
 	}
-	//add func wrapper if exists
 	if &item.QueryOptions.Function != nil {
 		query = item.QueryOptions.Function + "(" + query + ")"
 	}
 	if item.QueryOptions.AggregateEvaluation {
 		query = "avg(" + query + ")"
 	}
-	//do boolean threshold comparison
 	query = query + " " + item.Operator + "bool " + item.Threshold
 	return query, nil
 }

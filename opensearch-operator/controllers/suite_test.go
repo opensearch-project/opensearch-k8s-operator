@@ -111,11 +111,9 @@ var _ = BeforeSuite(func() {
 
 	mockQueryEvaluator = &metrics.MockQueryEvaluator{}
 
-	//scheme.AddToScheme()
 	err = (&OpenSearchClusterReconciler{
-		Client: k8sManager.GetClient(),
-		Scheme: scheme.Scheme,
-		//	Instance: &OpensearchCluster,
+		Client:         k8sManager.GetClient(),
+		Scheme:         scheme.Scheme,
 		Recorder:       record.NewFakeRecorder(20),
 		QueryEvaluator: mockQueryEvaluator,
 	}).SetupWithManager(k8sManager)

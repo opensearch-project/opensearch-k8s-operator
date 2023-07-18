@@ -360,8 +360,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		return result, err
 	}
 
-	//add scaling logic
-	//initialize status replicas for nodePools
+	//autoscaling logic
 	if r.instance.Status.Scaler == nil {
 		autoscalerStatus := map[string]*opsterv1.ScaleStatus{}
 		for _, nodePool := range r.instance.Spec.NodePools {
@@ -383,23 +382,19 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 	}
 
-	//if autoscaling is enabled and nodePool doesn't contain masters/manager nodes
 	if r.instance.Spec.General.AutoScaler.Enable && !helpers.HasManagerRole(&nodePool) {
-		//if an autoscale policy is defined
 		autoscalerPolicy, err := helpers.GetAutoscalingPolicy(r.ctx, r.Client, &nodePool, r.instance)
 		if err != nil {
 			return result, err
 		}
 
 		if autoscalerPolicy != nil {
-			//evaluate lastScaleTime
 			scaleTime, err := helpers.EvalScalingTime(nodePool.Component, r.instance)
 			if err != nil {
 				return result, err
 			}
 
 			if scaleTime {
-				//do scaling comparisons
 				scalingDecision, err := helpers.EvalScalingRules(r.queryEvaluator, &nodePool, autoscalerPolicy, r.instance)
 				if err != nil {
 					r.logger.Error(err, "Failed to make a scaling decision")
@@ -408,11 +403,9 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 					return result, err
 				}
 
-				//scale only if a non-zero scaling decision is made and we aren't in a state where scaling failed
 				if scalingDecision > 0 && r.instance.Status.Scaler[nodePool.Component].Replicas == *existing.Spec.Replicas {
 					annotations := map[string]string{"cluster-name": r.instance.GetName()}
 					r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Autoscaler", "Scale up action - Scaling %s", nodePool.Component)
-					//scale up one and set scale time
 					err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 						if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 							return err
@@ -429,7 +422,6 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				if scalingDecision < 0 && r.instance.Status.Scaler[nodePool.Component].Replicas == *existing.Spec.Replicas {
 					annotations := map[string]string{"cluster-name": r.instance.GetName()}
 					r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Autoscaler", "Scale down action - Scaling %s", nodePool.Component)
-					//scale down 1 and set scaleTime
 					err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 						if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 							return err
@@ -446,7 +438,6 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			}
 		}
 	} else {
-		//if autoscaling is not controlling replicas, update the status replicas with nodePool replicas in case they change.
 		if nodePool.Replicas != r.instance.Status.Scaler[nodePool.Component].Replicas {
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {

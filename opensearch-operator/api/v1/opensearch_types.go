@@ -107,6 +107,7 @@ type ConfMgmt struct {
 	SmartScaler bool `json:"smartScaler,omitempty"`
 }
 
+// AutoScalingConfig defines autoscaling configurations
 type AutoScalingConfig struct {
 	Enable                 bool   `json:"enable,omitempty"`
 	ClusterAutoScalePolicy string `json:"clusterAutoScalePolicy,omitempty"`

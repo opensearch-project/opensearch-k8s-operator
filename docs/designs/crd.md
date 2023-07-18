@@ -654,6 +654,51 @@ Monitoring TLS configuration options
 </table>
 
 <h3 id="GeneralConfig">
+  Autoscaler
+</h3>
+
+Autoscaler defines Opensearch autoscaling configuration
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>enable</b></td>
+        <td>bool</td>
+        <td>Define if to enable autoscaling for that cluster</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>prometheusEndpoint</b></td>
+        <td>string</td>
+        <td>A prometheus URL endpoint that monitoring metrics from the OS cluster are sent to.</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>scaleTimeout</b></td>
+        <td>string</td>
+        <td>This interval limits how often the cluster will attempt an automatic scaling action. Notation should follow [prometheus time duration standards](https://prometheus.io/docs/prometheus/latest/querying/basics/#time-durations).</td>
+        <td>false</td>
+        <td>10m</td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>clusterAutoScalePolicy</b></td>
+        <td>string</td>
+        <td>Optional to define an autoscaling policy at the cluster level instead of nodePool.</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
+      </tr><tr>
+</table>
+
+<h3 id="GeneralConfig">
   Keystore
 </h3>
 
