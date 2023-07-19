@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
 
-	"github.com/banzaicloud/k8s-objectmatcher/patch"
-	"github.com/banzaicloud/operator-tools/pkg/reconciler"
+	"github.com/cisco-open/k8s-objectmatcher/patch"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -79,7 +80,17 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	} else {
 		serviceMonitor := builders.NewServiceMonitor(r.instance)
-		result.Combine(r.ReconcileResource(serviceMonitor, reconciler.StateAbsent))
+		res, err := r.ReconcileResource(serviceMonitor, reconciler.StateAbsent)
+		if err != nil {
+			if strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs: monitoring.coreos.com/v1") {
+				r.logger.Info("ServiceMonitor crd not found, skipping deletion")
+			} else {
+				result.Combine(res, err)
+			}
+		} else {
+			result.Combine(res, err)
+		}
+
 	}
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.Client.Scheme()))
