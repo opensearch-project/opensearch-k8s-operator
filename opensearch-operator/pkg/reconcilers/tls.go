@@ -5,12 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Masterminds/semver"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
@@ -75,6 +79,10 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 	}
+	if r.reconcileAdminCert() {
+		res, err := r.handleAdminCertificate()
+		return lo.FromPtrOr(res, ctrl.Result{}), err
+	}
 
 	return ctrl.Result{}, nil
 }
@@ -96,30 +104,33 @@ func (r *TLSReconciler) handleTransport() error {
 			return err
 		}
 	}
-	err := r.handleAdminCertificate()
-	return err
+	return nil
 }
 
-func (r *TLSReconciler) handleAdminCertificate() error {
+func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
+	//TODO: This should be refactored in the API - https://github.com/Opster/opensearch-k8s-operator/issues/569
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
 	clusterName := r.instance.Name
 
+	var res *ctrl.Result
+	var certDN string
 	if tlsConfig.Generate {
 		ca, err := r.getCACert()
 		if err != nil {
-			return err
+			return nil, err
 		}
-		err = r.createAdminSecret(ca)
+		res, err = r.createAdminSecret(ca)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		r.reconcilerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"CN=admin,OU=%s\"]", clusterName))
-		return nil
+		certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
+
+	} else {
+		certDN = strings.Join(tlsConfig.AdminDn, "\",\"")
 	}
 
-	adminDn := strings.Join(tlsConfig.AdminDn, "\",\"")
-	r.reconcilerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"%s\"]", adminDn))
-	return nil
+	r.reconcilerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"%s\"]", certDN))
+	return res, nil
 }
 
 func (r *TLSReconciler) securityChangeVersion() bool {
@@ -136,22 +147,27 @@ func (r *TLSReconciler) securityChangeVersion() bool {
 	return newVersionConstraint.Check(version)
 }
 
-func (r *TLSReconciler) adminCAProvided() bool {
+func (r *TLSReconciler) adminCAName() string {
 	if r.securityChangeVersion() {
-		return r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name != ""
+		return r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name
 	}
-	return r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != ""
+	return r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name
+}
+
+func (r *TLSReconciler) reconcileAdminCert() bool {
+	if r.securityChangeVersion() {
+		return r.instance.Spec.Security.Tls.Http != nil && r.instance.Spec.Security.Tls.Transport != nil
+	}
+	return r.instance.Spec.Security.Tls.Transport != nil
+}
+
+func (r *TLSReconciler) adminCAProvided() bool {
+	return r.adminCAName() != ""
 }
 
 func (r *TLSReconciler) providedCAForAdminCert() (tls.Cert, error) {
-	if r.securityChangeVersion() {
-		return r.providedCaCert(
-			r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name,
-			r.instance.Namespace,
-		)
-	}
 	return r.providedCaCert(
-		r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name,
+		r.adminCAName(),
 		r.instance.Namespace,
 	)
 }
@@ -163,7 +179,56 @@ func (r *TLSReconciler) getCACert() (tls.Cert, error) {
 	return util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
 }
 
-func (r *TLSReconciler) createAdminSecret(ca tls.Cert) error {
+func (r *TLSReconciler) shouldCreateAdminCert(ca tls.Cert) (bool, error) {
+	secret := &corev1.Secret{}
+	err := r.Get(r.ctx, types.NamespacedName{
+		Name:      r.adminSecretName(),
+		Namespace: r.instance.Namespace,
+	}, secret)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			r.logger.Info("admin cert does not exist, creating")
+			return true, nil
+		}
+		return false, err
+	}
+
+	data, ok := secret.Data[corev1.TLSCertKey]
+	if !ok {
+		return true, nil
+	}
+
+	validator, err := tls.NewCertValidater(data, tls.WithExpiryThreshold(5*24*time.Hour))
+	if err != nil {
+		return false, err
+	}
+
+	if validator.IsExpiringSoon() {
+		r.logger.Info("admin cert is expiring soon, recreating")
+		return true, nil
+	}
+
+	verified, err := validator.IsSignedByCA(ca)
+	if err != nil {
+		return false, err
+	}
+
+	if !verified {
+		r.logger.Info("admin cert is not signed by CA, recreating")
+	}
+
+	return !verified, nil
+}
+
+func (r *TLSReconciler) createAdminSecret(ca tls.Cert) (*ctrl.Result, error) {
+	createCert, err := r.shouldCreateAdminCert(ca)
+	if err != nil {
+		return nil, fmt.Errorf("failed to determine if admin cert should be created: %w", err)
+	}
+	if !createCert {
+		return nil, nil
+	}
+
 	adminCert, err := ca.CreateAndSignCertificate("admin", r.instance.Name, nil)
 	if err != nil {
 		r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
@@ -174,7 +239,7 @@ func (r *TLSReconciler) createAdminSecret(ca tls.Cert) error {
 			"Security",
 			"Failed to create admin certificate",
 		)
-		return err
+		return nil, err
 	}
 	adminSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -185,9 +250,9 @@ func (r *TLSReconciler) createAdminSecret(ca tls.Cert) error {
 		Data: adminCert.SecretData(ca),
 	}
 	if err := ctrl.SetControllerReference(r.instance, adminSecret, r.Client.Scheme()); err != nil {
-		return err
+		return nil, err
 	}
-	return client.IgnoreAlreadyExists(r.Create(r.ctx, adminSecret))
+	return r.ReconcileResource(adminSecret, reconciler.StatePresent)
 }
 
 func (r *TLSReconciler) adminSecretName() string {
