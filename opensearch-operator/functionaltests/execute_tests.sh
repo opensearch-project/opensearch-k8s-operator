@@ -6,12 +6,18 @@ k3d cluster create $CLUSTER_NAME --agents 2 --kubeconfig-switch-context=false --
 k3d kubeconfig get $CLUSTER_NAME > kubeconfig
 export KUBECONFIG=$(pwd)/kubeconfig
 
+## Pre-pull opensearch images
+docker pull opensearchproject/opensearch:1.3.0
+docker pull opensearchproject/opensearch:2.3.0
+
 ## Build controller docker image
 cd ..
 make docker-build
 
 ## Import controller docker image
 k3d image import -c $CLUSTER_NAME controller:latest
+k3d image import -c $CLUSTER_NAME opensearchproject/opensearch:1.3.0
+k3d image import -c $CLUSTER_NAME opensearchproject/opensearch:2.3.0
 
 ## Install helm chart
 helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
