@@ -72,7 +72,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return sts.Status.UpdatedReplicas
 				}
 				return 0
-			}, time.Minute*30, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*20, time.Second*5).Should(Equal(int32(3)))
 		})
 
 		It("should upgrade the dashboard pod", func() {

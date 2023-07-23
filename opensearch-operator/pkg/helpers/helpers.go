@@ -115,6 +115,13 @@ func GetByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.Comp
 	return right, false
 }
 
+func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
+	if left.Component == right.Component {
+		return left, true
+	}
+	return right, false
+}
+
 func MergeConfigs(left map[string]string, right map[string]string) map[string]string {
 	if left == nil {
 		return right
@@ -379,4 +386,12 @@ func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	}
 
 	return nodePool.Jvm
+}
+
+func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
+	componentStatus := opsterv1.ComponentStatus{
+		Component: "Upgrader",
+	}
+	_, found := FindFirstPartial(status.ComponentsStatus, componentStatus, GetByComponent)
+	return found
 }
