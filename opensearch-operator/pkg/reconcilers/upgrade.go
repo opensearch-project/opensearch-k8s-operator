@@ -9,6 +9,7 @@ import (
 	"github.com/Masterminds/semver"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -295,7 +296,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		r.logger.Info("only 2 data nodes and drain is set, some shards may not drain")
 	}
 
-	if sts.Status.ReadyReplicas < sts.Status.Replicas {
+	if sts.Status.ReadyReplicas < lo.FromPtrOr(sts.Spec.Replicas, 1) {
 		r.logger.Info("Waiting for all pods to be ready")
 		return nil
 	}
@@ -338,7 +339,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		})
 	}
 
-	workingPod := builders.WorkingPodForRollingRestart(sts)
+	workingPod := helpers.WorkingPodForRollingRestart(r.ctx, r.Client, sts)
 
 	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {

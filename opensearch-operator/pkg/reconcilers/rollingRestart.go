@@ -166,7 +166,7 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 		}, nil
 	}
 
-	workingPod := builders.WorkingPodForRollingRestart(sts)
+	workingPod := helpers.WorkingPodForRollingRestart(r.ctx, r.Client, sts)
 
 	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {

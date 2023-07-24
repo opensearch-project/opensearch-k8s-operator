@@ -69,10 +69,12 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 			Eventually(func() int32 {
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-masters", Namespace: namespace}, &sts)
 				if err == nil {
+					GinkgoWriter.Printf("%+v\n", sts.Status)
 					return sts.Status.UpdatedReplicas
 				}
+				GinkgoWriter.Println(err)
 				return 0
-			}, time.Minute*20, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*15, time.Second*5).Should(Equal(int32(3)))
 		})
 
 		It("should upgrade the dashboard pod", func() {

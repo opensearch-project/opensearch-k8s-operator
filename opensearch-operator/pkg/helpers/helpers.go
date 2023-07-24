@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/hashicorp/go-version"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,6 +25,8 @@ import (
 const (
 	stsUpdateWaitTime = 30
 	updateStepTime    = 3
+
+	stsRevisionLabel = "controller-revision-hash"
 )
 
 func ContainsString(slice []string, s string) bool {
@@ -394,4 +397,31 @@ func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
 	}
 	_, found := FindFirstPartial(status.ComponentsStatus, componentStatus, GetByComponent)
 	return found
+}
+func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
+	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
+}
+
+func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, sts *appsv1.StatefulSet) string {
+	// Handle the simple case
+	if lo.FromPtrOr(sts.Spec.Replicas, 1) == sts.Status.UpdatedReplicas+sts.Status.CurrentReplicas {
+		ordinal := lo.FromPtrOr(sts.Spec.Replicas, 1) - 1 - sts.Status.UpdatedReplicas
+		return ReplicaHostName(*sts, ordinal)
+	}
+	// If there are potentially mixed revisions we need to check each pod
+	for i := lo.FromPtrOr(sts.Spec.Replicas, 1) - 1; i >= 0; i-- {
+		podName := ReplicaHostName(*sts, i)
+		pod := &corev1.Pod{}
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: sts.Namespace}, pod); err != nil {
+			continue
+		}
+		podRevision, ok := pod.Labels[stsRevisionLabel]
+		if !ok {
+			continue
+		}
+		if podRevision != sts.Status.UpdateRevision {
+			return podName
+		}
+	}
+	panic("bug: unable to calculate the working pod for rolling restart")
 }
