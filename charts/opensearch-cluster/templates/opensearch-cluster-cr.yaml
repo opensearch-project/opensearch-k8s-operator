@@ -243,9 +243,9 @@ spec:
           accessModes:
             {{  toYaml $val.persistence.pvc.accessModes | nindent 10 }}
           {{- end }}
-       {{- else if eq (len $val.persistence.emptyDir) 0 }}
+        {{- else if eq (len $val.persistence.emptyDir) 0 }}
         emptyDir: {}
-       {{- end }}
+        {{- end }}
      {{- end }}
       {{- if $val.additionalConfig }}
       additionalConfig:
