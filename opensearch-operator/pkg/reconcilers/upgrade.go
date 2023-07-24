@@ -295,6 +295,11 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		r.logger.Info("only 2 data nodes and drain is set, some shards may not drain")
 	}
 
+	if sts.Status.ReadyReplicas < sts.Status.Replicas {
+		r.logger.Info("Waiting for all pods to be ready")
+		return nil
+	}
+
 	ready, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
 	if err != nil {
 		r.logger.Error(err, "Could not check opensearch cluster status")
