@@ -147,35 +147,35 @@ func createClusterSettingsAllocationEnable(enable ClusterSettingsAllocation) res
 	}}
 }
 
-func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bool, error) {
+func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bool, string, error) {
 	health, err := service.GetHealth()
 	if err != nil {
-		return false, err
+		return false, "failed to fetch health", err
 	}
 
 	if health.Status == "green" {
-		return true, nil
+		return true, "", nil
 	}
 
 	if drainNodes {
-		return false, nil
+		return false, "cluster is not green and drain nodes is enabled", nil
 	}
 
 	flatSettings, err := service.GetFlatClusterSettings()
 	if err != nil {
-		return false, err
+		return false, "could not fetch cluster settings", err
 	}
 
 	if flatSettings.Transient.ClusterRoutingAllocationEnable == string(ClusterSettingsAllocationAll) {
-		return false, nil
+		return false, "waiting for health to be green", nil
 	}
 
 	// Set shard routing to all
 	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationAll); err != nil {
-		return false, err
+		return false, "failed to set shard allocation", err
 	}
 
-	return false, nil
+	return false, "enabled shard allocation", nil
 }
 
 func ReactivateShardAllocation(service *OsClusterClient) error {

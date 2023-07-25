@@ -4907,6 +4907,10 @@ spec:
                   properties:
                     component:
                       type: string
+                    conditions:
+                      items:
+                        type: string
+                      type: array
                     description:
                       type: string
                     status:

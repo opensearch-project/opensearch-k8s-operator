@@ -48,7 +48,7 @@ func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 
 func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	for idx, v := range ssSlice {
-		if v == ss {
+		if ComponentStatusEqual(v, ss) {
 			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
 		}
 	}
@@ -58,6 +58,10 @@ func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSl
 	removedSlice := RemoveIt(remove, ssSlice)
 	fullSliced := append(removedSlice, add)
 	return fullSliced
+}
+
+func ComponentStatusEqual(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) bool {
+	return left.Component == right.Component && left.Description == right.Description && left.Status == right.Status
 }
 
 func FindFirstPartial(
@@ -402,26 +406,26 @@ func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
 }
 
-func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, sts *appsv1.StatefulSet) string {
+func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, sts *appsv1.StatefulSet) (string, error) {
 	// Handle the simple case
 	if lo.FromPtrOr(sts.Spec.Replicas, 1) == sts.Status.UpdatedReplicas+sts.Status.CurrentReplicas {
 		ordinal := lo.FromPtrOr(sts.Spec.Replicas, 1) - 1 - sts.Status.UpdatedReplicas
-		return ReplicaHostName(*sts, ordinal)
+		return ReplicaHostName(*sts, ordinal), nil
 	}
 	// If there are potentially mixed revisions we need to check each pod
 	for i := lo.FromPtrOr(sts.Spec.Replicas, 1) - 1; i >= 0; i-- {
 		podName := ReplicaHostName(*sts, i)
 		pod := &corev1.Pod{}
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: sts.Namespace}, pod); err != nil {
-			continue
+			return "", err
 		}
 		podRevision, ok := pod.Labels[stsRevisionLabel]
 		if !ok {
-			continue
+			return "", fmt.Errorf("pod %s has no revision label", podName)
 		}
 		if podRevision != sts.Status.UpdateRevision {
-			return podName
+			return podName, nil
 		}
 	}
-	panic("bug: unable to calculate the working pod for rolling restart")
+	return "", errors.New("unable to calculate the working pod for rolling restart")
 }
