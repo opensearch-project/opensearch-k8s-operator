@@ -407,13 +407,14 @@ func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 }
 
 func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, sts *appsv1.StatefulSet) (string, error) {
+	replicas := lo.FromPtrOr(sts.Spec.Replicas, 1)
 	// Handle the simple case
-	if lo.FromPtrOr(sts.Spec.Replicas, 1) == sts.Status.UpdatedReplicas+sts.Status.CurrentReplicas {
-		ordinal := lo.FromPtrOr(sts.Spec.Replicas, 1) - 1 - sts.Status.UpdatedReplicas
+	if replicas == sts.Status.UpdatedReplicas+sts.Status.CurrentReplicas {
+		ordinal := replicas - 1 - sts.Status.UpdatedReplicas
 		return ReplicaHostName(*sts, ordinal), nil
 	}
 	// If there are potentially mixed revisions we need to check each pod
-	for i := lo.FromPtrOr(sts.Spec.Replicas, 1) - 1; i >= 0; i-- {
+	for i := replicas - 1; i >= 0; i-- {
 		podName := ReplicaHostName(*sts, i)
 		pod := &corev1.Pod{}
 		if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: sts.Namespace}, pod); err != nil {

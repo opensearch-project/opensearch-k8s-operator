@@ -31,8 +31,6 @@ jobs:
           ## Build controller docker image
           make docker-build
 
-          ## Pre-pull opensearch images
-
           ## Import controller docker image
           k3d image import -c $CLUSTER_NAME controller:latest
 
