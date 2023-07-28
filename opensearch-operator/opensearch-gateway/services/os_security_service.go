@@ -14,11 +14,12 @@ import (
 
 const (
 	K8sAttributeField = "k8s-uid"
-	ROLES             = "roles"
-	INTERNALUSERS     = "internalusers"
-	ROLESMAPPING      = "rolesmapping"
-	ACTIONGROUPS      = "actiongroups"
-	TENANTS           = "tenants"
+	
+	ROLES         = "roles"
+	INTERNALUSERS = "internalusers"
+	ROLESMAPPING  = "rolesmapping"
+	ACTIONGROUPS  = "actiongroups"
+	TENANTS       = "tenants"
 )
 
 func ShouldUpdateUser(
@@ -111,9 +112,7 @@ func CreateOrUpdateUser(
 	username string,
 	user requests.User,
 ) error {
-	userjson := opensearchutil.NewJSONReader(user)
-	fmt.Println("user json", userjson)
-	resp, err := service.PutSecurityResource(ctx, INTERNALUSERS, username, userjson)
+	resp, err := service.PutSecurityResource(ctx, INTERNALUSERS, username, opensearchutil.NewJSONReader(user))
 	if err != nil {
 		return err
 	}

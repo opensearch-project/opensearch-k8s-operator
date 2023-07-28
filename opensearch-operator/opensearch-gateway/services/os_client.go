@@ -4,14 +4,12 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"k8s.io/utils/pointer"
@@ -68,8 +66,6 @@ func WithTransport(transport http.RoundTripper) OsClusterClientOption {
 func NewOsClusterClient(clusterUrl string, username string, password string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
 	options := OsClusterClientOptions{}
 	options.apply(opts...)
-	fmt.Println("Details clusterUrl", clusterUrl)
-
 	config := opensearch.Config{
 		Transport: func() http.RoundTripper {
 			if options.transport != nil {
@@ -86,7 +82,6 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 
 	client, err := NewOsClusterClientFromConfig(config)
 	if err != nil {
-		fmt.Println("error is there inside NewOsClusterClientFromConfig")
 		return nil, err
 	}
 
@@ -105,11 +100,9 @@ func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, e
 	if err == nil && pingRes.StatusCode == 200 {
 		mainPageResponse, err := MainPage(client)
 		if err == nil {
-			fmt.Println("No error while ping")
 			service.MainPage = mainPageResponse
 		}
 	}
-	fmt.Println("error is", err)
 	return service, err
 }
 

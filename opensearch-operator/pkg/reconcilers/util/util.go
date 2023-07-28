@@ -216,7 +216,6 @@ func CreateClientForCluster(
 	}
 
 	if transport == nil {
-		fmt.Println("transport is nil")
 		osClient, err = services.NewOsClusterClient(
 			OpensearchClusterURL(cluster),
 			username,
