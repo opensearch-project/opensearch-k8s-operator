@@ -111,6 +111,14 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
+	// Skip a rolling restart if the cluster hasn't finished initializing
+	if !r.instance.Status.Initialized {
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 10 * time.Second,
+		}, nil
+	}
+
 	if err := r.updateStatus(statusInProgress); err != nil {
 		return ctrl.Result{Requeue: true}, err
 	}
@@ -155,7 +163,7 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 		lg.Info("only 2 data nodes and drain is set, some shards may not drain")
 	}
 
-	ready, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
+	ready, _, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -166,7 +174,10 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 		}, nil
 	}
 
-	workingPod := builders.WorkingPodForRollingRestart(sts)
+	workingPod, err := helpers.WorkingPodForRollingRestart(r.ctx, r.Client, sts)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 
 	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {

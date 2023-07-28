@@ -246,7 +246,8 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Detect cluster failure and initiate parallel recovery
-	if helpers.ParallelRecoveryMode() && (nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
+	if helpers.ParallelRecoveryMode() &&
+		(nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
 		// This logic only works if the STS uses PVCs
 		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
 		if existing.Status.CurrentRevision == "" {
@@ -262,7 +263,8 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		} else {
 			// A failure is assumed if n PVCs exist but less than n-1 pods (one missing pod is allowed for rolling restart purposes)
 			// We can assume the cluster is in a failure state and cannot recover on its own
-			if pvcCount >= int(nodePool.Replicas) && existing.Status.ReadyReplicas < nodePool.Replicas-1 {
+			if !helpers.UpgradeInProgress(r.instance.Status) &&
+				pvcCount >= int(nodePool.Replicas) && existing.Status.ReadyReplicas < nodePool.Replicas-1 {
 				r.logger.Info(fmt.Sprintf("Detected recovery situation for nodepool %s: PVC count: %d, replicas: %d. Recreating STS with parallel mode", nodePool.Component, pvcCount, existing.Status.Replicas))
 				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 					// Switch to Parallel to jumpstart the cluster

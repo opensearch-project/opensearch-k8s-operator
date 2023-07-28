@@ -29,6 +29,11 @@ type Cert interface {
 	CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error)
 }
 
+type CertValidater interface {
+	IsExpiringSoon() bool
+	IsSignedByCA(ca Cert) (bool, error)
+}
+
 // Dummy struct so that PKI interface can be implemented for easier mocking in tests
 type PkiImpl struct {
 }
@@ -210,4 +215,57 @@ func calculateExtension(commonName string, dnsNames []string) (pkix.Extension, e
 		Value:    rawByte,
 	}
 	return san, nil
+}
+
+type implCertValidater struct {
+	implCertValidaterOptions
+	cert *x509.Certificate
+}
+
+type implCertValidaterOptions struct {
+	expiryThreshold time.Duration
+}
+
+type ImplCertValidaterOption func(*implCertValidaterOptions)
+
+func (o *implCertValidaterOptions) apply(opts ...ImplCertValidaterOption) {
+	for _, opt := range opts {
+		opt(o)
+	}
+}
+
+func WithExpiryThreshold(expiryThreshold time.Duration) ImplCertValidaterOption {
+	return func(o *implCertValidaterOptions) {
+		o.expiryThreshold = expiryThreshold
+	}
+}
+
+func NewCertValidater(pemData []byte, opts ...ImplCertValidaterOption) (CertValidater, error) {
+	var o implCertValidaterOptions
+	o.apply(opts...)
+
+	block, _ := pem.Decode(pemData)
+
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, err
+	}
+	return &implCertValidater{
+		implCertValidaterOptions: o,
+		cert:                     cert,
+	}, nil
+}
+
+func (i *implCertValidater) IsExpiringSoon() bool {
+	return time.Now().After(i.cert.NotAfter.Add(i.expiryThreshold * -1))
+}
+
+func (i *implCertValidater) IsSignedByCA(ca Cert) (bool, error) {
+	block, _ := pem.Decode(ca.CertData())
+	caCert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return false, err
+	}
+
+	return bytes.Equal(i.cert.RawIssuer, caCert.RawSubject), nil
 }

@@ -151,7 +151,7 @@ func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePo
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas++
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
+	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start increaseing node %s on %s ", lastReplicaNodeName, nodePoolGroupName)
 	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
@@ -167,7 +167,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas--
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
+	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start to decreaseing node %s on %s ", lastReplicaNodeName, nodePoolGroupName)
 	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
@@ -221,7 +221,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		return err
 	}
 	// -----  Now start remove node ------
-	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
+	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
 
 	excluded, err := services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if err != nil {
@@ -268,7 +268,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	lastReplicaNodeName := builders.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
+	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
 	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
 	if err != nil {
 		return err
@@ -346,7 +346,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished os client for scaling ")
 
 	workingOrdinal := pointer.Int32Deref(sts.Spec.Replicas, 1) - 1
-	lastReplicaNodeName := builders.ReplicaHostName(sts, workingOrdinal)
+	lastReplicaNodeName := helpers.ReplicaHostName(sts, workingOrdinal)
 	_, err = services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
