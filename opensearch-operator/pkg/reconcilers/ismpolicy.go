@@ -130,7 +130,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
 	}
 
-	// Check policy state to make sure we don't touch preexisting roles
+	// Check ism policy state to make sure we don't touch preexisting ism policy
 	if r.instance.Status.ExistingISMPolicy == nil {
 		var exists bool
 		exists, retErr = PolicyExists(r.ctx, r.osClient, r.instance.Spec.PolicyID)
@@ -335,9 +335,9 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 					}
 				}
 
-				var forcem *requests.ForceMerge
+				var forceMerge *requests.ForceMerge
 				if action.ForceMerge != nil {
-					forcem = &requests.ForceMerge{MaxNumSegments: action.ForceMerge.MaxNumSegments}
+					forceMerge = &requests.ForceMerge{MaxNumSegments: action.ForceMerge.MaxNumSegments}
 				}
 				var alloc *requests.Allocation
 				if action.Allocation != nil {
@@ -395,7 +395,7 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 					Shrink:        shrink,
 					Snapshot:      snapshot,
 					Allocation:    alloc,
-					ForceMerge:    forcem,
+					ForceMerge:    forceMerge,
 					Rollover:      rollover,
 					IndexPriority: indexPri,
 					Timeout:       timeOut,
@@ -406,17 +406,16 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 			transitions := make([]requests.Transition, 0, len(state.Transitions))
 			for _, transition := range state.Transitions {
 				conditions := requests.Condition{}
-
-				if transition.Conditions.MinDocCount > 0 {
+				if transition.Conditions.MinDocCount != nil {
 					conditions.MinDocCount = transition.Conditions.MinDocCount
 				}
-				if transition.Conditions.MinIndexAge != "" {
+				if transition.Conditions.MinIndexAge != nil {
 					conditions.MinIndexAge = transition.Conditions.MinIndexAge
 				}
-				if transition.Conditions.MinSize != "" {
+				if transition.Conditions.MinSize != nil {
 					conditions.MinSize = transition.Conditions.MinSize
 				}
-				if transition.Conditions.MinRolloverAge != "" {
+				if transition.Conditions.MinRolloverAge != nil {
 					conditions.MinRolloverAge = transition.Conditions.MinRolloverAge
 				}
 				if transition.Conditions.Cron != nil {

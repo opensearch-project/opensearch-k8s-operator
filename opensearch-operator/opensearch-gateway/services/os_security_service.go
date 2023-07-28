@@ -14,12 +14,11 @@ import (
 
 const (
 	K8sAttributeField = "k8s-uid"
-	
-	ROLES         = "roles"
-	INTERNALUSERS = "internalusers"
-	ROLESMAPPING  = "rolesmapping"
-	ACTIONGROUPS  = "actiongroups"
-	TENANTS       = "tenants"
+	ROLES             = "roles"
+	INTERNALUSERS     = "internalusers"
+	ROLESMAPPING      = "rolesmapping"
+	ACTIONGROUPS      = "actiongroups"
+	TENANTS           = "tenants"
 )
 
 func ShouldUpdateUser(

@@ -4,16 +4,16 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"github.com/opensearch-project/opensearch-go"
+	"github.com/opensearch-project/opensearch-go/opensearchapi"
+	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"io"
+	"k8s.io/utils/pointer"
 	"net/http"
+	"opensearch.opster.io/opensearch-gateway/responses"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/opensearch-project/opensearch-go/opensearchapi"
-	"github.com/opensearch-project/opensearch-go/opensearchutil"
-	"k8s.io/utils/pointer"
-	"opensearch.opster.io/opensearch-gateway/responses"
 )
 
 const (
@@ -308,33 +308,33 @@ func (client *OsClusterClient) DeleteSecurityResource(ctx context.Context, resou
 	return doHTTPDelete(ctx, client.client, path)
 }
 
-// GetSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+// GetISMConfig performs an HTTP GET request to OS to get the ISM policy resource specified by name
 func (client *OsClusterClient) GetISMConfig(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPathISM(resource, name)
 	return doHTTPGet(ctx, client.client, path)
 }
 
-// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+// PutISMConfig performs an HTTP PUT request to OS to create the ISM policy resource specified by name
 func (client *OsClusterClient) PutISMConfig(ctx context.Context, resource, name string, body io.Reader) (*opensearchapi.Response, error) {
 	path := generateAPIPathISM(resource, name)
 	return doHTTPPut(ctx, client.client, path, body)
 }
 
-// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+// UpdateISMConfig performs an HTTP PUT request to OS to update the ISM policy resource specified by name
 func (client *OsClusterClient) UpdateISMConfig(ctx context.Context, resource, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
 	path := generateAPIPathUpdateISM(resource, name, seqnumber, primterm)
 	return doHTTPPut(ctx, client.client, path, body)
 }
 
-// PutSecurityResource performs an HTTP PUT request to OS to create/update the security resource specified by name
+// DeleteISMConfig performs an HTTP DELETE request to OS to delete the ISM policy resource specified by name
 func (client *OsClusterClient) DeleteISMConfig(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPathISM(resource, name)
 	return doHTTPDelete(ctx, client.client, path)
 }
 
-// generateAPIPath generates a URI PATH for a specific resource endpoint and name
-// For example: resource = internalusers, name = example
-// URI PATH = '_plugins/_security/api/internalusers/example'
+// generateAPIPathISM generates a URI PATH for a specific resource endpoint and name
+// For example: resource = _ism, name = example
+// URI PATH = '_plugins/_ism/policies/example'
 func generateAPIPathISM(resource, name string) strings.Builder {
 	var path strings.Builder
 	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name))
@@ -349,9 +349,9 @@ func generateAPIPathISM(resource, name string) strings.Builder {
 	return path
 }
 
-// generateAPIPath generates a URI PATH for a specific resource endpoint and name
-// For example: resource = internalusers, name = example
-// URI PATH = '_plugins/_security/api/internalusers/example'
+// generateAPIPathUpdateISM generates a URI PATH for ISM policy resource endpoint and name
+// For example: resource = _ism, name = example, seq_no = 7, primary_term = 1
+// URI PATH = '_plugins/_ism/policies/example?if_seq_no=7&if_primary_term=1'
 func generateAPIPathUpdateISM(resource, name string, seqno, primaryterm int) strings.Builder {
 	var path strings.Builder
 	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name) + len("?if_seq_no=") + len(strconv.Itoa(seqno)) + len("&if_primary_term=") + len(strconv.Itoa(primaryterm)))
