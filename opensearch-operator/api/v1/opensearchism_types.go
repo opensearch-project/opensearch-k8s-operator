@@ -54,10 +54,21 @@ type ISMPolicySpec struct {
 
 type ErrorNotification struct {
 	// The destination URL.
-	Destination string `json:"destination,omitempty"`
-	Channel     string `json:"channel,omitempty"`
+	Destination *Destination `json:"destination,omitempty"`
+	Channel     string       `json:"channel,omitempty"`
 	// The text of the message
 	MessageTemplate *MessageTemplate `json:"message_template,omitempty"`
+}
+
+type Destination struct {
+	Slack         *DestinationURL `json:"slack,omitempty"`
+	Amazon        *DestinationURL `json:"amazon,omitempty"`
+	Chime         *DestinationURL `json:"chime,omitempty"`
+	CustomWebhook *DestinationURL `json:"custom_webhook,omitempty"`
+}
+
+type DestinationURL struct {
+	URL string `json:"url,omitempty"`
 }
 
 type MessageTemplate struct {
@@ -82,6 +93,7 @@ type State struct {
 
 // Actions are the steps that the policy sequentially executes on entering a specific state.
 type Action struct {
+	Alias *Alias `json:"alias,omitempty"`
 	// Allocate the index to a node with a specific attribute set
 	Allocation *Allocation `json:"allocation,omitempty"`
 	// Closes the managed index.
@@ -114,6 +126,26 @@ type Action struct {
 	Snapshot *Snapshot `json:"snapshot,omitempty"`
 	// The timeout period for the action.
 	Timeout *string `json:"timeout,omitempty"`
+}
+
+type Alias struct {
+	// Allocate the index to a node with a specified attribute.
+	Actions []AliasAction `json:"actions"`
+}
+type AliasAction struct {
+	Add    *AliasDetails `json:"add,omitempty"`
+	Remove *AliasDetails `json:"remove,omitempty"`
+}
+
+type AliasDetails struct {
+	// The name of the index that the alias points to.
+	Index string `json:"index"`
+	// The name of the alias.
+	Alias *string `json:"alias,omitempty"`
+	// Limit search to an associated shard value
+	Routing *string `json:"routing,omitempty"`
+	// Specify the index that accepts any write operations to the alias.
+	IsWriteIndex *string `json:"is_write_index,omitempty"`
 }
 
 type Allocation struct {

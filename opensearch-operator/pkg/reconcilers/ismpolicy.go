@@ -239,9 +239,32 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 		Description:  r.instance.Spec.Description,
 	}
 	if r.instance.Spec.ErrorNotification != nil {
+		dest := requests.Destination{}
+		if r.instance.Spec.ErrorNotification.Destination != nil {
+			if r.instance.Spec.ErrorNotification.Destination.Amazon != nil {
+				dest.Amazon = &requests.DestinationURL{
+					URL: r.instance.Spec.ErrorNotification.Destination.Amazon.URL,
+				}
+			}
+			if r.instance.Spec.ErrorNotification.Destination.Chime != nil {
+				dest.Chime = &requests.DestinationURL{
+					URL: r.instance.Spec.ErrorNotification.Destination.Chime.URL,
+				}
+			}
+			if r.instance.Spec.ErrorNotification.Destination.Slack != nil {
+				dest.Slack = &requests.DestinationURL{
+					URL: r.instance.Spec.ErrorNotification.Destination.Slack.URL,
+				}
+			}
+			if r.instance.Spec.ErrorNotification.Destination.CustomWebhook != nil {
+				dest.CustomWebhook = &requests.DestinationURL{
+					URL: r.instance.Spec.ErrorNotification.Destination.CustomWebhook.URL,
+				}
+			}
+		}
 		policy.ErrorNotification = &requests.ErrorNotification{
 			Channel:         r.instance.Spec.ErrorNotification.Channel,
-			Destination:     r.instance.Spec.ErrorNotification.Destination,
+			Destination:     &dest,
 			MessageTemplate: &requests.MessageTemplate{Source: r.instance.Spec.ErrorNotification.MessageTemplate.Source}}
 	}
 
@@ -265,6 +288,34 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 				var closea *requests.Close
 				if action.Close != nil {
 					closea = &requests.Close{}
+				}
+				var alias *requests.Alias
+				if action.Alias != nil {
+					alias = &requests.Alias{}
+					for _, aliasAction := range action.Alias.Actions {
+						aliasActions := make([]requests.AliasAction, 0, len(action.Alias.Actions))
+						if aliasAction.Add != nil {
+							aliasActions = append(aliasActions, requests.AliasAction{
+								Add: &requests.AliasDetails{
+									Index:        aliasAction.Add.Index,
+									Alias:        aliasAction.Add.Alias,
+									Routing:      aliasAction.Add.Routing,
+									IsWriteIndex: aliasAction.Add.IsWriteIndex,
+								},
+							})
+						}
+						if aliasAction.Remove != nil {
+							aliasActions = append(aliasActions, requests.AliasAction{
+								Remove: &requests.AliasDetails{
+									Index:        aliasAction.Remove.Index,
+									Alias:        aliasAction.Remove.Alias,
+									Routing:      aliasAction.Remove.Routing,
+									IsWriteIndex: aliasAction.Remove.IsWriteIndex,
+								},
+							})
+
+						}
+					}
 				}
 				var rollover *requests.Rollover
 				if action.Rollover != nil {
@@ -401,6 +452,7 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 					Timeout:       timeOut,
 					ReadOnly:      readOnly,
 					ReadWrite:     readWrite,
+					Alias:         alias,
 				})
 			}
 			transitions := make([]requests.Transition, 0, len(state.Transitions))
