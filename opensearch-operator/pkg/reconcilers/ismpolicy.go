@@ -174,7 +174,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	}
 	resp, retErr := r.osClient.GetISMConfig(r.ctx, ismResource, r.instance.Spec.PolicyID)
 	if retErr != nil {
-		reason = "failed to get policy status from Opensearch API"
+		reason = "failed to get policy from Opensearch API"
 		r.logger.Error(retErr, reason)
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 		return
@@ -200,7 +200,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		r.logger.V(1).Info(fmt.Sprintf("policy %s not found, creating.", r.instance.Spec.PolicyID))
 		retErr = r.CreateISMPolicy(r.ctx, *ismpolicy)
 		if retErr != nil {
-			reason = "failed to get policy status from Opensearch API"
+			reason = "failed to create ism policy"
 			r.logger.Error(retErr, reason)
 			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 			return
@@ -210,7 +210,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	}
 	shouldUpdate, retErr := ShouldUpdateISMPolicy(r.ctx, *ismpolicy, ismResponse)
 	if retErr != nil {
-		reason = "failed to get policy status from Opensearch API"
+		reason = "failed to compare the policies"
 		r.logger.Error(retErr, reason)
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 		return
@@ -290,32 +290,36 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 					closea = &requests.Close{}
 				}
 				var alias *requests.Alias
+
 				if action.Alias != nil {
 					alias = &requests.Alias{}
-					for _, aliasAction := range action.Alias.Actions {
-						aliasActions := make([]requests.AliasAction, 0, len(action.Alias.Actions))
-						if aliasAction.Add != nil {
-							aliasActions = append(aliasActions, requests.AliasAction{
-								Add: &requests.AliasDetails{
-									Index:        aliasAction.Add.Index,
-									Alias:        aliasAction.Add.Alias,
-									Routing:      aliasAction.Add.Routing,
-									IsWriteIndex: aliasAction.Add.IsWriteIndex,
-								},
-							})
-						}
-						if aliasAction.Remove != nil {
-							aliasActions = append(aliasActions, requests.AliasAction{
-								Remove: &requests.AliasDetails{
-									Index:        aliasAction.Remove.Index,
-									Alias:        aliasAction.Remove.Alias,
-									Routing:      aliasAction.Remove.Routing,
-									IsWriteIndex: aliasAction.Remove.IsWriteIndex,
-								},
-							})
+					aliasActions := make([]requests.AliasAction, 0, len(action.Alias.Actions))
 
+					for _, aliasAction := range action.Alias.Actions {
+						newAction := requests.AliasAction{}
+						newAliasDetails := requests.AliasDetails{}
+
+						copyAliasDetails := func(src *opsterv1.AliasDetails) {
+							newAliasDetails.Alias = src.Alias
+							newAliasDetails.Index = src.Index
+							newAliasDetails.IsWriteIndex = src.IsWriteIndex
+							newAliasDetails.Routing = src.Routing
 						}
+
+						if aliasAction.Add != nil {
+							copyAliasDetails(aliasAction.Add)
+							newAction.Add = &newAliasDetails
+						}
+
+						if aliasAction.Remove != nil {
+							copyAliasDetails(aliasAction.Remove)
+							newAction.Remove = &newAliasDetails
+						}
+
+						aliasActions = append(aliasActions, newAction)
 					}
+
+					alias.Actions = aliasActions
 				}
 				var rollover *requests.Rollover
 				if action.Rollover != nil {

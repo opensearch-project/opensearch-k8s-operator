@@ -107,7 +107,7 @@ type AliasAction struct {
 
 type AliasDetails struct {
 	// The name of the index that the alias points to.
-	Index string `json:"index"`
+	Index *string `json:"index,omitempty"`
 	// The name of the alias.
 	Alias *string `json:"alias,omitempty"`
 	// Limit search to an associated shard value
