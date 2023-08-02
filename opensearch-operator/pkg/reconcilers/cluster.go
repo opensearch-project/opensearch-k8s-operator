@@ -303,22 +303,23 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		if err != nil {
 			return result, err
 		}
-	} else {
-		// if pdb is not enabled and pdb resource exist, deleting it
-		nsn := types.NamespacedName{
-			Namespace: r.instance.Namespace,
-			Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
-		}
-		if err = r.Get(r.ctx, nsn, &pdb); err == nil {
-			opts := client.DeleteOptions{}
-			r.logger.Info("Deleting pdb" + pdb.Name)
-			if err = r.Delete(r.ctx, sts, &opts); err != nil {
-				r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
-				return &ctrl.Result{Requeue: true}, err
-			}
-
-		}
 	}
+	//} else {
+	//	// if pdb is not enabled and pdb resource exist, deleting it
+	//	nsn := types.NamespacedName{
+	//		Namespace: r.instance.Namespace,
+	//		Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
+	//	}
+	//	if err = r.Get(r.ctx, nsn, &pdb); err == nil {
+	//		opts := client.DeleteOptions{}
+	//		r.logger.Info("Deleting pdb" + pdb.Name)
+	//		if err = r.Delete(r.ctx, sts, &opts); err != nil {
+	//			r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
+	//			return &ctrl.Result{Requeue: true}, err
+	//		}
+	//
+	//	}
+	//}
 	// Handle PVC resizing
 
 	//Default is PVC, or explicit check for PersistenceSource as PVC
