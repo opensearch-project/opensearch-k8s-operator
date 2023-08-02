@@ -287,11 +287,10 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Habdle PDB
+	pdb := policy.PodDisruptionBudget{}
 
 	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
 
-		pdb := policy.PodDisruptionBudget{}
-		//newpdb := v1.PodDisruptionBudget{}
 		// Check if it already exist
 		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
 			r.logger.Info(" Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
@@ -300,12 +299,25 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 		pdb = helpers.ComposePDB(*r.instance, nodePool)
 
-		result, err = r.ReconcileResource(&pdb, reconciler.StateCreated)
+		result, err = r.ReconcileResource(&pdb, reconciler.StatePresent)
 		if err != nil {
 			return result, err
 		}
-	}
+	} else {
+		// if pdb is not enabled and pdb resource exist, deleting it
+		nsn := types.NamespacedName{
+			Namespace: r.instance.Namespace,
+			Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
+		}
+		if err := r.Get(r.ctx, nsn, &pdb); err == nil {
+			opts := client.DeleteOptions{}
+			r.logger.Info("Deleting pdb" + pdb.Name)
+			if err = r.Delete(r.ctx, sts, &opts); err != nil {
+				r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
+			}
 
+		}
+	}
 	// Handle PVC resizing
 
 	//Default is PVC, or explicit check for PersistenceSource as PVC
