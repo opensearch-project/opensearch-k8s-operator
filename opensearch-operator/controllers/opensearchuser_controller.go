@@ -30,7 +30,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
@@ -90,7 +89,7 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-func (r *OpensearchUserReconciler) handleSecretEvent(secret client.Object) []reconcile.Request {
+func (r *OpensearchUserReconciler) handleSecretEvent(_ context.Context, secret client.Object) []reconcile.Request {
 	reconcileRequests := []reconcile.Request{}
 
 	if secret == nil {
@@ -126,7 +125,7 @@ func (r *OpensearchUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&opsterv1.OpenSearchCluster{}).
 		// Get notified when password backing secret changes
 		Watches(
-			&source.Kind{Type: &corev1.Secret{}},
+			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.handleSecretEvent),
 		).
 		Complete(r)

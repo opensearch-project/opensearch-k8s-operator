@@ -304,9 +304,10 @@ type OpenSearchCluster struct {
 }
 
 type ComponentStatus struct {
-	Component   string `json:"component,omitempty"`
-	Status      string `json:"status,omitempty"`
-	Description string `json:"description,omitempty"`
+	Component   string   `json:"component,omitempty"`
+	Status      string   `json:"status,omitempty"`
+	Description string   `json:"description,omitempty"`
+	Conditions  []string `json:"conditions,omitempty"`
 }
 
 // +kubebuilder:object:root=true

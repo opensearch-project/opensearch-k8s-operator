@@ -14,6 +14,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 
 	"github.com/hashicorp/go-version"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -26,6 +27,8 @@ import (
 const (
 	stsUpdateWaitTime = 30
 	updateStepTime    = 3
+
+	stsRevisionLabel = "controller-revision-hash"
 )
 
 func ContainsString(slice []string, s string) bool {
@@ -47,7 +50,7 @@ func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 
 func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	for idx, v := range ssSlice {
-		if v == ss {
+		if ComponentStatusEqual(v, ss) {
 			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
 		}
 	}
@@ -57,6 +60,10 @@ func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSl
 	removedSlice := RemoveIt(remove, ssSlice)
 	fullSliced := append(removedSlice, add)
 	return fullSliced
+}
+
+func ComponentStatusEqual(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) bool {
+	return left.Component == right.Component && left.Description == right.Description && left.Status == right.Status
 }
 
 func FindFirstPartial(
@@ -112,6 +119,13 @@ func UsernameAndPassword(ctx context.Context, k8sClient client.Client, cr *opste
 
 func GetByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
 	if left.Description == right.Description && left.Component == right.Component {
+		return left, true
+	}
+	return right, false
+}
+
+func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
+	if left.Component == right.Component {
 		return left, true
 	}
 	return right, false
@@ -404,4 +418,40 @@ func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 
 	return nodePool.Jvm
 
+}
+
+func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
+	componentStatus := opsterv1.ComponentStatus{
+		Component: "Upgrader",
+	}
+	_, found := FindFirstPartial(status.ComponentsStatus, componentStatus, GetByComponent)
+	return found
+}
+func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
+	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
+}
+
+func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, sts *appsv1.StatefulSet) (string, error) {
+	replicas := lo.FromPtrOr(sts.Spec.Replicas, 1)
+	// Handle the simple case
+	if replicas == sts.Status.UpdatedReplicas+sts.Status.CurrentReplicas {
+		ordinal := replicas - 1 - sts.Status.UpdatedReplicas
+		return ReplicaHostName(*sts, ordinal), nil
+	}
+	// If there are potentially mixed revisions we need to check each pod
+	for i := replicas - 1; i >= 0; i-- {
+		podName := ReplicaHostName(*sts, i)
+		pod := &corev1.Pod{}
+		if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: sts.Namespace}, pod); err != nil {
+			return "", err
+		}
+		podRevision, ok := pod.Labels[stsRevisionLabel]
+		if !ok {
+			return "", fmt.Errorf("pod %s has no revision label", podName)
+		}
+		if podRevision != sts.Status.UpdateRevision {
+			return podName, nil
+		}
+	}
+	return "", errors.New("unable to calculate the working pod for rolling restart")
 }

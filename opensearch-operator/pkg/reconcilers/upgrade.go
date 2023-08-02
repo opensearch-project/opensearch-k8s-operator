@@ -7,8 +7,9 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
-	"github.com/banzaicloud/operator-tools/pkg/reconciler"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -67,6 +68,15 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Spec.General.Version == r.instance.Status.Version {
 		return ctrl.Result{}, nil
 	}
+
+	// Skip an upgrade if the cluster hasn't finished initializing
+	if !r.instance.Status.Initialized {
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 10 * time.Second,
+		}, nil
+	}
+
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
 	// If version validation fails log a warning and do nothing
@@ -279,6 +289,7 @@ func (r *UpgradeReconciler) findNextPool(pools []opsterv1.NodePool) (opsterv1.No
 }
 
 func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
+	var conditions []string
 	// Fetch the STS
 	stsName := builders.StsName(r.instance, &pool)
 	sts := &appsv1.StatefulSet{}
@@ -295,19 +306,32 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		r.logger.Info("only 2 data nodes and drain is set, some shards may not drain")
 	}
 
-	ready, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
+	if sts.Status.ReadyReplicas < lo.FromPtrOr(sts.Spec.Replicas, 1) {
+		r.logger.Info("Waiting for all pods to be ready")
+		conditions = append(conditions, "Waiting for all pods to be ready")
+		r.setComponentConditions(conditions, pool.Component)
+		return nil
+	}
+
+	ready, condition, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
 	if err != nil {
 		r.logger.Error(err, "Could not check opensearch cluster status")
+		conditions = append(conditions, "Could not check opensearch cluster status")
+		r.setComponentConditions(conditions, pool.Component)
 		return err
 	}
 	if !ready {
 		r.logger.Info("Cluster is not ready for next pod to restart")
+		conditions = append(conditions, condition)
+		r.setComponentConditions(conditions, pool.Component)
 		return nil
 	}
 
+	conditions = append(conditions, "preparing for pod delete")
+
 	// Work around for https://github.com/kubernetes/kubernetes/issues/73492
 	// If upgrade on this node pool is complete update status and return
-	if sts.Status.UpdatedReplicas == sts.Status.Replicas {
+	if sts.Status.UpdatedReplicas == lo.FromPtrOr(sts.Spec.Replicas, 1) {
 		if err = services.ReactivateShardAllocation(r.osClient); err != nil {
 			return err
 		}
@@ -333,13 +357,22 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		})
 	}
 
-	workingPod := builders.WorkingPodForRollingRestart(sts)
+	workingPod, err := helpers.WorkingPodForRollingRestart(r.ctx, r.Client, sts)
+	if err != nil {
+		conditions = append(conditions, "Could not find working pod")
+		r.setComponentConditions(conditions, pool.Component)
+		return err
+	}
 
 	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
+		conditions = append(conditions, "Could not prepare pod for delete")
+		r.setComponentConditions(conditions, pool.Component)
 		return err
 	}
 	if !ready {
+		conditions = append(conditions, "Waiting for node to drain")
+		r.setComponentConditions(conditions, pool.Component)
 		return nil
 	}
 
@@ -350,8 +383,13 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		},
 	})
 	if err != nil {
+		conditions = append(conditions, "Could not delete pod")
+		r.setComponentConditions(conditions, pool.Component)
 		return err
 	}
+
+	conditions = append(conditions, fmt.Sprintf("Deleted pod %s", workingPod))
+	r.setComponentConditions(conditions, pool.Component)
 
 	// If we are draining nodes remove the exclusion after the pod is deleted
 	if r.instance.Spec.General.DrainDataNodes {
@@ -360,4 +398,34 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 	}
 
 	return nil
+}
+
+func (r *UpgradeReconciler) setComponentConditions(conditions []string, component string) {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+			return err
+		}
+		currentStatus := opsterv1.ComponentStatus{
+			Component:   "Upgrader",
+			Status:      "Upgrading",
+			Description: component,
+		}
+		componentStatus, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, currentStatus, helpers.GetByDescriptionAndGroup)
+		newStatus := opsterv1.ComponentStatus{
+			Component:   "Upgrader",
+			Status:      "Upgrading",
+			Description: component,
+			Conditions:  conditions,
+		}
+		if found {
+			conditions = append(componentStatus.Conditions, conditions...)
+		}
+
+		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, newStatus, r.instance.Status.ComponentsStatus)
+
+		return r.Status().Update(r.ctx, r.instance)
+	})
+	if err != nil {
+		r.logger.Error(err, "Could not update status")
+	}
 }
