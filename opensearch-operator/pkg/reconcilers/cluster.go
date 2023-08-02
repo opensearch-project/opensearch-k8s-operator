@@ -328,6 +328,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			r.logger.Info("Deleting pdb" + pdb.Name)
 			if err = r.Delete(r.ctx, sts, &opts); err != nil {
 				r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
+				return &ctrl.Result{Requeue: true}, err
 			}
 
 		}
