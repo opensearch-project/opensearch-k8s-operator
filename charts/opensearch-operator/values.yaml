@@ -3,7 +3,11 @@ fullnameOverride: ""
 
 nodeSelector: {}
 tolerations: []
+securityContext:
+  runAsNonRoot: true
 manager:
+  securityContext:
+    allowPrivilegeEscalation: false
   extraEnv: []
   resources:
     limits:
@@ -62,6 +66,8 @@ serviceAccount:
 
 kubeRbacProxy:
   enable: true
+  securityContext:
+    # allowPrivilegeEscalation: false
   resources:
     limits:
       cpu: 50m

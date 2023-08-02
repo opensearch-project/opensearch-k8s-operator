@@ -9,6 +9,10 @@ spec:
     httpPort: 9200
     vendor: opensearch
     serviceName: deploy-and-upgrade
+    additionalConfig: 
+      cluster.routing.allocation.disk.watermark.low: 500m
+      cluster.routing.allocation.disk.watermark.high: 300m
+      cluster.routing.allocation.disk.watermark.flood_stage: 100m
   confMgmt:
     smartScaler: true
   dashboards:

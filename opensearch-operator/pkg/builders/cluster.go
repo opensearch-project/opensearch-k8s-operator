@@ -169,12 +169,7 @@ func NewSTSForNodePool(
 		//vendor ="elasticsearch"
 	}
 
-	var jvm string
-	if node.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
-	} else {
-		jvm = node.Jvm
-	}
+	jvm := helpers.CalculateJvmHeapSize(&node)
 
 	// If node role `search` defined add required experimental flag if version less than 2.7
 	if helpers.ContainsString(selectedRoles, "search") && helpers.CompareVersions(cr.Spec.General.Version, "2.7.0") {
@@ -359,9 +354,10 @@ func NewSTSForNodePool(
 
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-" + node.Component,
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        cr.Name + "-" + node.Component,
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
 			Replicas: &node.Replicas,
@@ -864,21 +860,12 @@ func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string
 	return cr.Name + "-" + nodePool.Component
 }
 
-func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
-	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
-}
-
 func DiscoveryServiceName(cr *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-discovery", cr.Name)
 }
 
 func BootstrapPodName(cr *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-bootstrap-0", cr.Name)
-}
-
-func WorkingPodForRollingRestart(sts *appsv1.StatefulSet) string {
-	ordinal := pointer.Int32Deref(sts.Spec.Replicas, 1) - 1 - sts.Status.UpdatedReplicas
-	return ReplicaHostName(*sts, ordinal)
 }
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
