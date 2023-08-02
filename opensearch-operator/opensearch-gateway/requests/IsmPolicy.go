@@ -113,7 +113,7 @@ type AliasDetails struct {
 	// Limit search to an associated shard value
 	Routing *string `json:"routing,omitempty"`
 	// Specify the index that accepts any write operations to the alias.
-	IsWriteIndex *string `json:"is_write_index,omitempty"`
+	IsWriteIndex *bool `json:"is_write_index,omitempty"`
 }
 
 type Allocation struct {

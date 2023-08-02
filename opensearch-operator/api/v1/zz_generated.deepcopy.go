@@ -226,7 +226,7 @@ func (in *AliasDetails) DeepCopyInto(out *AliasDetails) {
 	}
 	if in.IsWriteIndex != nil {
 		in, out := &in.IsWriteIndex, &out.IsWriteIndex
-		*out = new(string)
+		*out = new(bool)
 		**out = **in
 	}
 }

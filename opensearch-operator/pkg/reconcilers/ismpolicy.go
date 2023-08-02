@@ -516,12 +516,6 @@ func ShouldUpdateISMPolicy(ctx context.Context, newPolicy, existingPolicy reques
 
 func (r *IsmPolicyReconciler) CreateISMPolicy(ctx context.Context, ismpolicy requests.Policy) error {
 	spec := opensearchutil.NewJSONReader(ismpolicy)
-	jsonData, err := json.MarshalIndent(ismpolicy, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshaling struct to JSON:", err)
-	}
-	jsonString := string(jsonData)
-	fmt.Println("NewPolicy", jsonString)
 	resp, err := r.osClient.PutISMConfig(r.ctx, ismResource, r.instance.Spec.PolicyID, spec)
 	if err != nil {
 		return err
@@ -535,12 +529,6 @@ func (r *IsmPolicyReconciler) CreateISMPolicy(ctx context.Context, ismpolicy req
 
 func (r *IsmPolicyReconciler) UpdateISMPolicy(ctx context.Context, ismpolicy requests.Policy, seqno, primterm *int) error {
 	spec := opensearchutil.NewJSONReader(ismpolicy)
-	jsonData, err := json.MarshalIndent(ismpolicy, "", "  ")
-	if err != nil {
-		fmt.Println("Error marshaling struct to JSON:", err)
-	}
-	jsonString := string(jsonData)
-	fmt.Println(jsonString)
 	resp, err := r.osClient.UpdateISMConfig(r.ctx, ismResource, r.instance.Spec.PolicyID, *seqno, *primterm, spec)
 	if err != nil {
 		return err

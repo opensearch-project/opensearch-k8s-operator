@@ -40,13 +40,13 @@ type ISMPolicy struct {
 type ISMPolicySpec struct {
 	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster,omitempty"`
 	// The default starting state for each index that uses this policy.
-	DefaultState string `json:"default_state"`
+	DefaultState string `json:"defaultState"`
 	// A human-readable description of the policy.
 	Description       string             `json:"description"`
-	ErrorNotification *ErrorNotification `json:"error_notification,omitempty"`
+	ErrorNotification *ErrorNotification `json:"errorNotification,omitempty"`
 	// Specify an ISM template pattern that matches the index to apply the policy.
-	ISMTemplate *ISMTemplate `json:"ism_template,omitempty"`
-	PolicyID    string       `json:"policy_id,omitempty"`
+	ISMTemplate *ISMTemplate `json:"ismTemplate,omitempty"`
+	PolicyID    string       `json:"policyId,omitempty"`
 	// The time the policy was last updated.
 	// The states that you define in the policy.
 	States []State `json:"states"`
@@ -57,14 +57,14 @@ type ErrorNotification struct {
 	Destination *Destination `json:"destination,omitempty"`
 	Channel     string       `json:"channel,omitempty"`
 	// The text of the message
-	MessageTemplate *MessageTemplate `json:"message_template,omitempty"`
+	MessageTemplate *MessageTemplate `json:"messageTemplate,omitempty"`
 }
 
 type Destination struct {
 	Slack         *DestinationURL `json:"slack,omitempty"`
 	Amazon        *DestinationURL `json:"amazon,omitempty"`
 	Chime         *DestinationURL `json:"chime,omitempty"`
-	CustomWebhook *DestinationURL `json:"custom_webhook,omitempty"`
+	CustomWebhook *DestinationURL `json:"customWebhook,omitempty"`
 }
 
 type DestinationURL struct {
@@ -77,7 +77,7 @@ type MessageTemplate struct {
 
 type ISMTemplate struct {
 	// Index patterns on which this policy has to be applied
-	IndexPatterns []string `json:"index_patterns"`
+	IndexPatterns []string `json:"indexPatterns"`
 	// Priority of the template, defaults to 0
 	Priority int `json:"priority,omitempty"`
 }
@@ -101,19 +101,19 @@ type Action struct {
 	// Deletes a managed index.
 	Delete *Delete `json:"delete,omitempty"`
 	// Reduces the number of Lucene segments by merging the segments of individual shards.
-	ForceMerge *ForceMerge `json:"force_merge,omitempty"`
+	ForceMerge *ForceMerge `json:"forceMerge,omitempty"`
 	// Set the priority for the index in a specific state.
-	IndexPriority *IndexPriority `json:"index_priority,omitempty"`
+	IndexPriority *IndexPriority `json:"indexPriority,omitempty"`
 	//Name          string        `json:"name,omitempty"`
 	Notification *Notification `json:"notification,omitempty"`
 	// Opens a managed index.
 	Open *Open `json:"open,omitempty"`
 	// Sets a managed index to be read only.
-	ReadOnly *string `json:"read_only,omitempty"`
+	ReadOnly *string `json:"readOnly,omitempty"`
 	// Sets a managed index to be writeable.
-	ReadWrite *string `json:"read_write,omitempty"`
+	ReadWrite *string `json:"readWrite,omitempty"`
 	// Sets the number of replicas to assign to an index.
-	ReplicaCount *ReplicaCount `json:"replica_count,omitempty"`
+	ReplicaCount *ReplicaCount `json:"replicaCount,omitempty"`
 	// The retry configuration for the action.
 	Retry *Retry `json:"retry,omitempty"`
 	// Rolls an alias over to a new index when the managed index meets one of the rollover conditions.
@@ -139,13 +139,13 @@ type AliasAction struct {
 
 type AliasDetails struct {
 	// The name of the index that the alias points to.
-	Index *string `json:"index"`
+	Index *string `json:"index,omitempty"`
 	// The name of the alias.
 	Alias *string `json:"alias,omitempty"`
 	// Limit search to an associated shard value
 	Routing *string `json:"routing,omitempty"`
 	// Specify the index that accepts any write operations to the alias.
-	IsWriteIndex *string `json:"is_write_index,omitempty"`
+	IsWriteIndex *bool `json:"isWriteIndex,omitempty"`
 }
 
 type Allocation struct {
@@ -156,7 +156,7 @@ type Allocation struct {
 	// Don’t allocate the index to a node with any of the specified attributes.
 	Require string `json:"require"`
 	// Wait for the policy to execute before allocating the index to a node with a specified attribute.
-	WaitFor string `json:"wait_for"`
+	WaitFor string `json:"waitFor"`
 }
 
 type Close struct{}
@@ -165,7 +165,7 @@ type Delete struct{}
 
 type ForceMerge struct {
 	// The number of segments to reduce the shard to.
-	MaxNumSegments int64 `json:"max_num_segments"`
+	MaxNumSegments int64 `json:"maxNumSegments"`
 }
 
 type IndexPriority struct {
@@ -175,13 +175,13 @@ type IndexPriority struct {
 
 type Notification struct {
 	Destination     string          `json:"destination"`
-	MessageTemplate MessageTemplate `json:"message_template"`
+	MessageTemplate MessageTemplate `json:"messageTemplate"`
 }
 
 type Open struct{}
 
 type ReplicaCount struct {
-	NumberOfReplicas int64 `json:"number_of_replicas"`
+	NumberOfReplicas int64 `json:"numberOfReplicas"`
 }
 
 type Retry struct {
@@ -195,28 +195,28 @@ type Retry struct {
 
 type Rollover struct {
 	// The minimum number of documents required to roll over the index.
-	MinDocCount *int64 `json:"min_doc_count,omitempty"`
+	MinDocCount *int64 `json:"minDocCount,omitempty"`
 	// The minimum age required to roll over the index.
-	MinIndexAge *string `json:"min_index_age,omitempty"`
+	MinIndexAge *string `json:"minIndexAge,omitempty"`
 	// The minimum storage size of a single primary shard required to roll over the index.
-	MinPrimaryShardSize *string `json:"min_primary_shard_size,omitempty"`
+	MinPrimaryShardSize *string `json:"minPrimaryShardSize,omitempty"`
 	// The minimum size of the total primary shard storage (not counting replicas) required to roll over the index.
-	MinSize *string `json:"min_size,omitempty"`
+	MinSize *string `json:"minSize,omitempty"`
 }
 
 type Rollup struct{}
 
 type Shrink struct {
 	// If true, executes the shrink action even if there are no replicas.
-	ForceUnsafe *bool `json:"force_unsafe,omitempty"`
+	ForceUnsafe *bool `json:"forceUnsafe,omitempty"`
 	// The maximum size in bytes of a shard for the target index.
-	MaxShardSize *string `json:"max_shard_size"`
+	MaxShardSize *string `json:"maxShardSize"`
 	// The maximum number of primary shards in the shrunken index.
-	NumNewShards *int `json:"num_new_shards,omitempty"`
+	NumNewShards *int `json:"numNewShards,omitempty"`
 	// Percentage of the number of original primary shards to shrink.
-	PercentageOfSourceShards *int64 `json:"percentage_of_source_shards,omitempty"`
+	PercentageOfSourceShards *int64 `json:"percentageOfSourceShards,omitempty"`
 	// The name of the shrunken index.
-	TargetIndexNameTemplate *string `json:"target_index_name_template,omitempty"`
+	TargetIndexNameTemplate *string `json:"targetIndexNameTemplate,omitempty"`
 }
 
 type Snapshot struct {
@@ -230,20 +230,20 @@ type Transition struct {
 	// conditions for the transition.
 	Conditions Condition `json:"conditions"`
 	// The name of the state to transition to if the conditions are met.
-	StateName string `json:"state_name"`
+	StateName string `json:"stateName"`
 }
 
 type Condition struct {
 	// The cron job that triggers the transition if no other transition happens first.
 	Cron *Cron `json:"cron,omitempty"`
 	// The minimum document count of the index required to transition.
-	MinDocCount *int64 `json:"min_doc_count,omitempty"`
+	MinDocCount *int64 `json:"MinDocCount,omitempty"`
 	// The minimum age of the index required to transition.
-	MinIndexAge *string `json:"min_index_age,omitempty"`
+	MinIndexAge *string `json:"MinIndexAge,omitempty"`
 	// The minimum age required after a rollover has occurred to transition to the next state.
-	MinRolloverAge *string `json:"min_rollover_age,omitempty"`
+	MinRolloverAge *string `json:"MinRolloverAge,omitempty"`
 	// The minimum size of the total primary shard storage (not counting replicas) required to transition.
-	MinSize *string `json:"min_size,omitempty"`
+	MinSize *string `json:"minSize,omitempty"`
 }
 
 type Cron struct {
