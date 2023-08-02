@@ -314,8 +314,9 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		pdb = helpers.ComposePDB(*r.instance, nodePool)
 
 		result, err = r.ReconcileResource(&pdb, reconciler.StatePresent)
-		//	if err != nil {
-		//	return result, err
+		if err != nil {
+			return result, err
+		}
 	}
 	//} else {
 	//	// if pdb is not enabled and pdb resource exist, deleting it
