@@ -237,11 +237,11 @@ type Condition struct {
 	// The cron job that triggers the transition if no other transition happens first.
 	Cron *Cron `json:"cron,omitempty"`
 	// The minimum document count of the index required to transition.
-	MinDocCount *int64 `json:"MinDocCount,omitempty"`
+	MinDocCount *int64 `json:"minDocCount,omitempty"`
 	// The minimum age of the index required to transition.
-	MinIndexAge *string `json:"MinIndexAge,omitempty"`
+	MinIndexAge *string `json:"minIndexAge,omitempty"`
 	// The minimum age required after a rollover has occurred to transition to the next state.
-	MinRolloverAge *string `json:"MinRolloverAge,omitempty"`
+	MinRolloverAge *string `json:"minRolloverAge,omitempty"`
 	// The minimum size of the total primary shard storage (not counting replicas) required to transition.
 	MinSize *string `json:"minSize,omitempty"`
 }
