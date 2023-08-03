@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -313,27 +314,37 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 		pdb = helpers.ComposePDB(*r.instance, nodePool)
 
-		result, err = r.ReconcileResource(&pdb, reconciler.StatePresent)
+		result, err = r.ReconcileResource(&pdb, reconciler.StateCreated)
 		if err != nil {
 			return result, err
 		}
+	} else {
+		// if pdb is not enabled and pdb resource exist, deleting it
+		nsn := types.NamespacedName{
+			Namespace: r.instance.Namespace,
+			Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
+		}
+		if err = r.Get(r.ctx, nsn, &pdb); err == nil {
+			r.logger.Info("Deleting pdb" + pdb.Name)
+			// remove our finalizer from the resource and update it.
+			controllerutil.RemoveFinalizer(&pdb, "Opster")
+			if err = r.Update(r.ctx, &pdb); err != nil {
+				r.logger.Info("Tried to remove Finalizer from" + pdb.Name + "but got an  error")
+				return &ctrl.Result{}, err
+			}
+			err = r.Delete(r.ctx, &policy.PodDisruptionBudget{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
+					Namespace: r.instance.Namespace,
+				},
+			})
+			if err != nil {
+				r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
+				return &ctrl.Result{}, err
+			}
+
+		}
 	}
-	//} else {
-	//	// if pdb is not enabled and pdb resource exist, deleting it
-	//	nsn := types.NamespacedName{
-	//		Namespace: r.instance.Namespace,
-	//		Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
-	//	}
-	//	if err = r.Get(r.ctx, nsn, &pdb); err == nil {
-	//		opts := client.DeleteOptions{}
-	//		r.logger.Info("Deleting pdb" + pdb.Name)
-	//		if err = r.Delete(r.ctx, sts, &opts); err != nil {
-	//			r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
-	//			return &ctrl.Result{Requeue: true}, err
-	//		}
-	//
-	//	}
-	//}
 	// Handle PVC resizing
 
 	//Default is PVC, or explicit check for PersistenceSource as PVC
