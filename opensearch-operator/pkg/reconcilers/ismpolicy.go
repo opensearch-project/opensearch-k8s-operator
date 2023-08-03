@@ -300,7 +300,7 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 						newAliasDetails := requests.AliasDetails{}
 
 						copyAliasDetails := func(src *opsterv1.AliasDetails) {
-							newAliasDetails.Alias = src.Alias
+							newAliasDetails.Aliases = src.Aliases
 							newAliasDetails.Index = src.Index
 							newAliasDetails.IsWriteIndex = src.IsWriteIndex
 							newAliasDetails.Routing = src.Routing

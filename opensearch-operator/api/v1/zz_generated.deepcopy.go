@@ -214,10 +214,10 @@ func (in *AliasDetails) DeepCopyInto(out *AliasDetails) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Alias != nil {
-		in, out := &in.Alias, &out.Alias
-		*out = new(string)
-		**out = **in
+	if in.Aliases != nil {
+		in, out := &in.Aliases, &out.Aliases
+		*out = make([]string, len(*in))
+		copy(*out, *in)
 	}
 	if in.Routing != nil {
 		in, out := &in.Routing, &out.Routing

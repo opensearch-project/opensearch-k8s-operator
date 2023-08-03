@@ -141,7 +141,7 @@ type AliasDetails struct {
 	// The name of the index that the alias points to.
 	Index *string `json:"index,omitempty"`
 	// The name of the alias.
-	Alias *string `json:"alias,omitempty"`
+	Aliases []string `json:"aliases,omitempty"`
 	// Limit search to an associated shard value
 	Routing *string `json:"routing,omitempty"`
 	// Specify the index that accepts any write operations to the alias.
