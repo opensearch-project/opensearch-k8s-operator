@@ -1201,6 +1201,49 @@ spec:
         serverName: "testserver.test.local"
         insecureSkipVerify: true
   # ...
+
+### Managing ISM policies with kubernetes resources
+
+The operator provides custom kubernetes resource that allow you to create/update/manage ism policy resource as kubernetes objects.
+
+#### OpenSearch ISM policy
+
+It is possible to manage Opensearch ISM policy in Kubernetes with the operator. The operator will not modify policies that already exist. You can create an example policy as follows:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: ISMPolicy
+metadata:
+   name: sample-policy
+spec:
+   opensearchCluster:
+      name: my-first-cluster
+   description: Sample policy
+   policyId: sample-policy
+   defaultState: hot
+   states:
+      - name: hot
+        actions:
+           - replicaCount:
+                numberOfReplicas: 4
+        transitions:
+           - stateName: warm
+             conditions:
+                minIndexAge: "10d"
+      - name: warm
+        actions:
+           - replicaCount:
+                numberOfReplicas: 2
+        transitions:
+           - stateName: delete
+             conditions:
+                minIndexAge: "30d"
+      - name: delete
+        actions:
+           - delete: {}
+```
+
+The namespace of the `ISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in.
 ```
 
 ## Managing index and component templates
