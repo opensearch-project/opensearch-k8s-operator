@@ -4,16 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	batchv1 "k8s.io/api/batch/v1"
 	policyv1 "k8s.io/api/policy/v1"
-
+	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	"sort"
 	"time"
 
-	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/apimachinery/pkg/types"
-
-	"github.com/hashicorp/go-version"
+	version "github.com/hashicorp/go-version"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -417,7 +415,6 @@ func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	}
 
 	return nodePool.Jvm
-
 }
 
 func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
