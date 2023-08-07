@@ -27,6 +27,9 @@ spec:
     smartScaler: true
   nodePools:
     - component: masters
+      pdb:
+        enablePDB: true
+        minAvailable: 3
       replicas: 3
       diskSize: "30Gi"
       nodeSelector:

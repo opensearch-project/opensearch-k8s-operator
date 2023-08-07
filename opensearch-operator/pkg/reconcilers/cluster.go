@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
-
 	batchv1 "k8s.io/api/batch/v1"
+	v1 "k8s.io/api/policy/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
+	"strings"
 
 	"github.com/cisco-open/k8s-objectmatcher/patch"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
@@ -171,6 +171,7 @@ func (r *ClusterReconciler) ReconcileSnapshotRepoConfig(username string) (*ctrl.
 		if err != nil {
 			return &ctrl.Result{}, err
 		}
+
 		// Make sure job is completely deleted (when r.Delete returns deletion sometimes is not yet complete)
 		_, err = r.ReconcileResource(&job, reconciler.StateAbsent)
 		if err != nil {
@@ -299,7 +300,74 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 	}
 
-	// Handle volume resizing, but only if we are using PVCs
+	// Habdle PDB
+	needToUpdate := false
+	// Check if it needed
+	if nodePool.Pdb.EnablePDB {
+
+		pdb := v1.PodDisruptionBudget{}
+		newpdb := v1.PodDisruptionBudget{}
+		// Check if it already exist
+		if err = r.Get(r.ctx, client.ObjectKey{Name: r.instance.Name + "-" + nodePool.Component + "-pdb", Namespace: r.instance.Namespace}, &pdb); err == nil {
+			// IF the resource exist, start to check if there is any changes in the configurations
+			if pdb.Spec.MaxUnavailable != nil {
+				if pdb.Spec.MaxUnavailable.IntVal != nodePool.Pdb.MaxUnavailable.IntVal {
+					pdb.Spec.MaxUnavailable.IntVal = nodePool.Pdb.MaxUnavailable.IntVal
+					needToUpdate = true
+				}
+			}
+			if pdb.Spec.MinAvailable != nil {
+				if pdb.Spec.MinAvailable.IntVal != nodePool.Pdb.MinAvailable.IntVal {
+					pdb.Spec.MinAvailable.IntVal = nodePool.Pdb.MinAvailable.IntVal
+					needToUpdate = true
+				}
+			}
+			// Update configuration and requeue
+			if needToUpdate {
+				r.logger.Info("Updating PDB ")
+				if err = r.Update(r.ctx, &pdb); err != nil {
+					return result, err
+				}
+			}
+		} else {
+
+			// If it not exists , build && create it but before check that all the parameters are provided
+			if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
+				r.logger.Info(" Aborting PodDisruptionBudget creation - Please provided one parameter (MinAvailable OR MaxUnavailable) in order to create PodDisruptionBudget resource")
+
+			} else {
+				// If all details are proveided, build and create PDB
+				matchLabels := map[string]string{
+					helpers.ClusterLabel:  r.instance.Name,
+					helpers.NodePoolLabel: nodePool.Component,
+				}
+				// Build the PDB resource
+				newpdb = v1.PodDisruptionBudget{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
+						Namespace: r.instance.Namespace,
+					},
+					Spec: v1.PodDisruptionBudgetSpec{
+						MinAvailable: nodePool.Pdb.MinAvailable,
+						Selector: &metav1.LabelSelector{
+							MatchLabels: matchLabels,
+						},
+						MaxUnavailable: nodePool.Pdb.MaxUnavailable,
+					},
+				}
+				// Create the PDB resource
+				err = r.Create(r.ctx, &newpdb)
+				if err != nil {
+					return result, err
+				}
+			}
+
+		}
+	}
+
+	// Handle PVC resizing
+
+	//Default is PVC, or explicit check for PersistenceSource as PVC
 	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
 		if nodePool.DiskSize == "" { // Default case
 			nodePool.DiskSize = builders.DefaultDiskSize
