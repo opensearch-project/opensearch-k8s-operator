@@ -4,12 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
-<<<<<<< HEAD
-=======
-	batchv1 "k8s.io/api/batch/v1"
 	policyv1 "k8s.io/api/policy/v1"
-	"k8s.io/apimachinery/pkg/types"
->>>>>>> 2977313 (fix after sebastian's review)
+
 	"reflect"
 	"sort"
 	"time"
@@ -17,7 +13,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	version "github.com/hashicorp/go-version"
+	"github.com/hashicorp/go-version"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -380,9 +376,6 @@ func CompareVersions(v1 string, v2 string) bool {
 	return err == nil && ver1.LessThan(ver2)
 }
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
 func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) policyv1.PodDisruptionBudget {
 	matchLabels := map[string]string{
 		ClusterLabel:  cr.Name,
@@ -405,7 +398,6 @@ func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) polic
 	return newpdb
 }
 
->>>>>>> 07be50a (fix and add PDB to chart)
 func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
 
@@ -425,6 +417,7 @@ func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	}
 
 	return nodePool.Jvm
+
 }
 
 func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
@@ -461,26 +454,4 @@ func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, s
 		}
 	}
 	return "", errors.New("unable to calculate the working pod for rolling restart")
-=======
-func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) policyv1.PodDisruptionBudget {
-	matchLabels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: nodepool.Component,
-	}
-	newpdb := policyv1.PodDisruptionBudget{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:       cr.Name + "-" + nodepool.Component + "-pdb",
-			Namespace:  cr.Namespace,
-			Finalizers: cr.Finalizers,
-		},
-		Spec: policyv1.PodDisruptionBudgetSpec{
-			MinAvailable: nodepool.Pdb.MinAvailable,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: matchLabels,
-			},
-			MaxUnavailable: nodepool.Pdb.MaxUnavailable,
-		},
-	}
-	return newpdb
->>>>>>> 2977313 (fix after sebastian's review)
 }
