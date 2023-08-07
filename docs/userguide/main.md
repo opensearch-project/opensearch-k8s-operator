@@ -1202,13 +1202,13 @@ spec:
         insecureSkipVerify: true
   # ...
 
-### Managing ISM policies with kubernetes resources
+### Managing ISM policies with Kubernetes resources
 
-The operator provides custom kubernetes resource that allow you to create/update/manage ism policy resource as kubernetes objects.
+The operator provides a custom Kubernetes resource that allow you to create/update/manage ISM policies using Kubernetes objects.
 
 #### OpenSearch ISM policy
 
-It is possible to manage Opensearch ISM policy in Kubernetes with the operator. The operator will not modify policies that already exist. You can create an example policy as follows:
+It is possible to manage OpenSearch ISM policies in Kubernetes with the operator. The operator will not modify policies that already exist. You can create an example policy as follows:
 
 ```yaml
 apiVersion: opensearch.opster.io/v1
