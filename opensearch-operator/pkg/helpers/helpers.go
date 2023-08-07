@@ -381,6 +381,31 @@ func CompareVersions(v1 string, v2 string) bool {
 }
 
 <<<<<<< HEAD
+<<<<<<< HEAD
+=======
+func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) policyv1.PodDisruptionBudget {
+	matchLabels := map[string]string{
+		ClusterLabel:  cr.Name,
+		NodePoolLabel: nodepool.Component,
+	}
+	newpdb := policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:       cr.Name + "-" + nodepool.Component + "-pdb",
+			Namespace:  cr.Namespace,
+			Finalizers: cr.Finalizers,
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MinAvailable: nodepool.Pdb.MinAvailable,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: matchLabels,
+			},
+			MaxUnavailable: nodepool.Pdb.MaxUnavailable,
+		},
+	}
+	return newpdb
+}
+
+>>>>>>> 07be50a (fix and add PDB to chart)
 func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
 
