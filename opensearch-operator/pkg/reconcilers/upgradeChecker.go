@@ -5,8 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/banzaicloud/k8s-objectmatcher/patch"
-	"github.com/banzaicloud/operator-tools/pkg/reconciler"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"io"
 	appsv1 "k8s.io/api/apps/v1"
@@ -23,23 +22,19 @@ import (
 	"time"
 )
 
+type Response struct {
+	Result bool `json:"result"`
+}
+
 type UpgradeCheckerReconciler struct {
-	client.Client
 	reconciler.ResourceReconciler
-	ctx context.Context //if !isTimeToRunFunction() {
-	//	r.logger.Info("No the time for UpgardeChecker")
-	//	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
-	//	return results.Result, nil
-	//}
-	pki               tls.PKI
+	client.Client
+	ctx               context.Context
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
-}
-
-type Response struct {
-	Result bool `json:"result"`
+	pki               tls.PKI
 }
 
 func NewUpgradeCheckerReconciler(
@@ -53,16 +48,13 @@ func NewUpgradeCheckerReconciler(
 	return &UpgradeCheckerReconciler{
 		Client: client,
 		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(
-				opts,
-				reconciler.WithPatchCalculateOptions(patch.IgnoreVolumeClaimTemplateTypeMetaAndStatus(), patch.IgnoreStatusFields()),
-				reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "UpgradeChecker")),
-			)...),
+			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "upgradeChecker")))...),
 		ctx:               ctx,
-		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
+		recorder:          recorder,
 		instance:          instance,
 		logger:            log.FromContext(ctx),
+		pki:               tls.NewPKI(),
 	}
 }
 
@@ -77,23 +69,23 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 	requeue := false
 	var err error
 	var Builtjson []byte
-	results := reconciler.CombinedResult{}
+	result := reconciler.CombinedResult{}
 
 	if !isTimeToRunFunction() {
 		r.logger.Info("No the time for UpgardeChecker")
-		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
-		return results.Result, nil
+		result.Combine(&ctrl.Result{Requeue: requeue}, nil)
+		return result.Result, nil
 	}
 
 	r.logger.Info("started UpgardeChecker")
 	Builtjson, err = r.BuildJSONPayload()
 	if err != nil {
-		results.Combine(&ctrl.Result{Requeue: requeue}, err)
-		return results.Result, results.Err
+		result.Combine(&ctrl.Result{Requeue: requeue}, err)
+		return result.Result, result.Err
 	}
 	if err != nil {
-		results.Combine(&ctrl.Result{Requeue: requeue}, err)
-		return results.Result, results.Err
+		result.Combine(&ctrl.Result{Requeue: requeue}, err)
+		return result.Result, result.Err
 	}
 
 	serverURL := "http://upgrade-chcker-dev.opster.co/operator-usage"
@@ -102,21 +94,21 @@ func (r *UpgradeCheckerReconciler) Reconcile() (ctrl.Result, error) {
 	// if err != nil so I didnt got a response
 	if err != nil {
 		fmt.Println("Failed to send JSON payload:", err)
-		results.Combine(&ctrl.Result{Requeue: requeue}, err)
-		return results.Result, results.Err
+		result.Combine(&ctrl.Result{Requeue: requeue}, err)
+		return result.Result, result.Err
 	}
 
 	// if respnse == nil and no error so the Operator is Up to date (cause the server is not returning anything when the Version is latest).
 	if response && err == nil {
 		// Operator is up to date
-		results.Combine(&ctrl.Result{Requeue: requeue}, nil)
-		return results.Result, results.Err
+		result.Combine(&ctrl.Result{Requeue: requeue}, nil)
+		return result.Result, result.Err
 	}
 
 	// Log for the client, you are not up to date
 	r.logger.Info("Notice - Your Operator deployment is not up to date, follow the instructions on ArtifactHUB.io page https://artifacthub.io/packages/helm/opensearch-operator/opensearch-operator ")
-	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
-	return results.Result, results.Err
+	result.Combine(&ctrl.Result{Requeue: requeue}, nil)
+	return result.Result, result.Err
 }
 
 func isTimeToRunFunction() bool {

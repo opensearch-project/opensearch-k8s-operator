@@ -29,8 +29,7 @@ const (
 	stsUpdateWaitTime        = 30
 	updateStepTime           = 3
 	UpgradeCheckerCharsCount = 15
-	stsRevisionLabel = "controller-revision-hash"
-
+	stsRevisionLabel         = "controller-revision-hash"
 )
 
 func ContainsString(slice []string, s string) bool {

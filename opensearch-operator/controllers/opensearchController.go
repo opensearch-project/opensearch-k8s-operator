@@ -343,12 +343,13 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 						if envVar.Value == "true" {
 
 							componentReconcilers = []reconcilers.ComponentReconciler{
-								upgradeChecker.Reconcile,
+								//	upgradeChecker.Reconcile,
 								tls.Reconcile,
 								securityconfig.Reconcile,
 								config.Reconcile,
 								cluster.Reconcile,
 								scaler.Reconcile,
+								upgradeChecker.Reconcile,
 								dashboards.Reconcile,
 								upgrade.Reconcile,
 								restart.Reconcile,
@@ -374,6 +375,19 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 					}
 				}
 			}
+		}
+	}
+
+	if componentReconcilers == nil {
+		componentReconcilers = []reconcilers.ComponentReconciler{
+			tls.Reconcile,
+			securityconfig.Reconcile,
+			config.Reconcile,
+			cluster.Reconcile,
+			scaler.Reconcile,
+			dashboards.Reconcile,
+			upgrade.Reconcile,
+			restart.Reconcile,
 		}
 	}
 
