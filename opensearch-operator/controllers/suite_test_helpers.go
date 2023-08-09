@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"strings"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -175,8 +176,14 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			},
 			NodePools: []opsterv1.NodePool{{
 				Component: "master",
-				Replicas:  3,
-				DiskSize:  "32Gi",
+				Pdb: &opsterv1.PdbConfig{
+					Enable: true,
+					MinAvailable: &intstr.IntOrString{
+						IntVal: 3,
+					},
+				},
+				Replicas: 3,
+				DiskSize: "32Gi",
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),

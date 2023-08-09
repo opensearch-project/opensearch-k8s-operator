@@ -4422,6 +4422,21 @@ spec:
                       additionalProperties:
                         type: string
                       type: object
+                    pdb:
+                      properties:
+                        enable:
+                          type: boolean
+                        maxUnavailable:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
+                        minAvailable:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
+                      type: object
                     persistence:
                       description: PersistencConfig defines options for data persistence
                       properties:
