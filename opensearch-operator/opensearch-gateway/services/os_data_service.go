@@ -255,6 +255,9 @@ func GetExistingSystemIndices(service *OsClusterClient) ([]string, error) {
 	return existing, nil
 }
 
+// continueRestartWithYellowHealth allows upgrades and rolling restarts to continue when the cluster is yellow
+// if the yellow status is caused by the .opensearch-observability index.  This is a new index that is created
+// on upgrade and will be yellow until at least 2 data nodes are upgraded.
 func continueRestartWithYellowHealth(health responses.ClusterHealthResponse) bool {
 	if health.Status != "yellow" {
 		return false
