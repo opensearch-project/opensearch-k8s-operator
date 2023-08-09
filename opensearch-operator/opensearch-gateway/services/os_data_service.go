@@ -157,6 +157,10 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 		return true, "", nil
 	}
 
+	if continueRestartWithYellowHealth(health) {
+		return true, "", nil
+	}
+
 	if drainNodes {
 		return false, "cluster is not green and drain nodes is enabled", nil
 	}
@@ -249,4 +253,21 @@ func GetExistingSystemIndices(service *OsClusterClient) ([]string, error) {
 	}
 
 	return existing, nil
+}
+
+func continueRestartWithYellowHealth(health responses.ClusterHealthResponse) bool {
+	if health.Status != "yellow" {
+		return false
+	}
+
+	if health.RelocatingShards > 0 || health.InitializingShards > 0 || health.UnassignedShards > 1 {
+		return false
+	}
+
+	observabilityIndex, ok := health.Indices[".opensearch-observability"]
+	if !ok {
+		return false
+	}
+
+	return observabilityIndex.Status == "yellow"
 }
