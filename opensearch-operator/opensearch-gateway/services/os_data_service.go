@@ -157,6 +157,10 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 		return true, "", nil
 	}
 
+	if continueRestartWithYellowHealth(health) {
+		return true, "", nil
+	}
+
 	if drainNodes {
 		return false, "cluster is not green and drain nodes is enabled", nil
 	}
@@ -249,4 +253,24 @@ func GetExistingSystemIndices(service *OsClusterClient) ([]string, error) {
 	}
 
 	return existing, nil
+}
+
+// continueRestartWithYellowHealth allows upgrades and rolling restarts to continue when the cluster is yellow
+// if the yellow status is caused by the .opensearch-observability index.  This is a new index that is created
+// on upgrade and will be yellow until at least 2 data nodes are upgraded.
+func continueRestartWithYellowHealth(health responses.ClusterHealthResponse) bool {
+	if health.Status != "yellow" {
+		return false
+	}
+
+	if health.RelocatingShards > 0 || health.InitializingShards > 0 || health.UnassignedShards > 1 {
+		return false
+	}
+
+	observabilityIndex, ok := health.Indices[".opensearch-observability"]
+	if !ok {
+		return false
+	}
+
+	return observabilityIndex.Status == "yellow"
 }
