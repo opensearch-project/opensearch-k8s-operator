@@ -240,6 +240,8 @@ type AdditionalVolume struct {
 	Secret *corev1.SecretVolumeSource `json:"secret,omitempty"`
 	// ConfigMap to use to populate the volume
 	ConfigMap *corev1.ConfigMapVolumeSource `json:"configMap,omitempty"`
+	// EmptyDir to use to populate the volume
+	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }

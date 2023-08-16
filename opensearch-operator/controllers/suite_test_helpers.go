@@ -124,6 +124,12 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 						RestartPods: false,
 					},
 					{
+						Name:        "test-emptydir",
+						Path:        "/tmp/",
+						EmptyDir:    &corev1.EmptyDirVolumeSource{},
+						RestartPods: false,
+					},
+					{
 						Name: "test-cm",
 						Path: "/opt/test-cm",
 						ConfigMap: &corev1.ConfigMapVolumeSource{

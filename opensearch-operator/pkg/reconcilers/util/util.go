@@ -98,6 +98,7 @@ func CreateAdditionalVolumes(
 	namesIndex := map[string]int{}
 
 	for i, volumeConfig := range volumeConfigs {
+		readOnly := true
 		if volumeConfig.ConfigMap != nil {
 			retVolumes = append(retVolumes, corev1.Volume{
 				Name: volumeConfig.Name,
@@ -114,13 +115,22 @@ func CreateAdditionalVolumes(
 				},
 			})
 		}
+		if volumeConfig.EmptyDir != nil {
+			readOnly = false
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					EmptyDir: volumeConfig.EmptyDir,
+				},
+			})
+		}
 		if volumeConfig.RestartPods {
 			namesIndex[volumeConfig.Name] = i
 			names = append(names, volumeConfig.Name)
 		}
 		retVolumeMounts = append(retVolumeMounts, corev1.VolumeMount{
 			Name:      volumeConfig.Name,
-			ReadOnly:  true,
+			ReadOnly:  readOnly,
 			MountPath: volumeConfig.Path,
 		})
 	}
