@@ -59,7 +59,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 		}
 
 		// Sleep for cache to start
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * 100)
 		// Set up prereq-objects
 		ns = &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{

@@ -1171,3 +1171,66 @@ spec:
         insecureSkipVerify: true
   # ...
 ```
+
+## Managing index and component templates
+
+The operator provides the OpensearchIndexTemplate and OpensearchComponentTemplate CRDs, which is used for managing index and component templates respectively.
+
+The two CRD specifications attempts to be as close as possible to what the OpenSearch API expects, with some changes from snake_case to camelCase.
+The fields that have been changed, is `index_patterns` to `indexPatterns` (OpensearchIndexTemplate only), `composed_of` to `composedOf` (OpensearchIndexTemplate only), `allow_auto_create` to `allowAutoCreate` (OpensearchComponentTemplate only), and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
+
+The following example creates a component template for setting the number of shards and replicas, together with specifying a specific time format for documents:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchComponentTemplate
+metadata:
+  name: sample-component-template
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+
+  template: # required
+    aliases: # optional
+      my_alias: {}
+    settings: # optional
+      number_of_shards: 2
+      number_of_replicas: 1
+    mappings: # optional
+      properties:
+        timestamp:
+          type: date
+          format: yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis
+        value:
+          type: double
+  version: 1 # optional
+  allowAutoCreate: false # optional
+  _meta: # optional
+    description: example description
+```
+
+The following index template makes use of the above component template (see `composedOf`) for all indices which follows the `logs-2020-01-*` index pattern:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchIndexTemplate
+metadata:
+  name: sample-index-template
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  
+  name: logs_template # name of the index template - defaults to metadata.name. Can't be updated in-place
+
+  indexPatterns: # required index patterns
+    - "logs-2020-01-*"
+  composedOf: # optional
+    - sample-component-template
+  priority: 100 # optional
+
+  template: {} # optional
+  version: 1 # optional
+  _meta: {} # optional
+```
+
+Note: the `.spec.name` is immutable, meaning that it cannot be changed after the resources have been deployed to a Kubernetes cluster

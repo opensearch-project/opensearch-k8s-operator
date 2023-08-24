@@ -153,6 +153,22 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchActionGroup")
 		os.Exit(1)
 	}
+	if err = (&controllers.OpensearchIndexTemplateReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("indextemplate-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchIndexTemplate")
+		os.Exit(1)
+	}
+	if err = (&controllers.OpensearchComponentTemplateReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("componenttemplate-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchComponentTemplate")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

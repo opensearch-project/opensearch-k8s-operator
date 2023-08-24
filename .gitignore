@@ -24,3 +24,6 @@ opensearch-operator/functionaltests/kubeconfig
 
 # Macos files
 .DS_Store
+
+# Ignore direnv file
+.envrc

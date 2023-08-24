@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -21,32 +22,40 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("tenant reconciler", func() {
+var _ = Describe("componenttemplate reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
-		reconciler *TenantReconciler
-		instance   *opsterv1.OpensearchTenant
+		reconciler *ComponentTemplateReconciler
+		instance   *opsterv1.OpensearchComponentTemplate
 		recorder   *record.FakeRecorder
 
 		// Objects
-		ns      *corev1.Namespace
-		cluster *opsterv1.OpenSearchCluster
+		ns         *corev1.Namespace
+		cluster    *opsterv1.OpenSearchCluster
+		clusterUrl string
 	)
 
 	BeforeEach(func() {
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opsterv1.OpensearchTenant{
+		instance = &opsterv1.OpensearchComponentTemplate{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-tenant",
-				Namespace: "test-tenant",
+				Name:      "test-componenttemplate",
+				Namespace: "test-componenttemplate",
 				UID:       "testuid",
 			},
-			Spec: opsterv1.OpensearchTenantSpec{
+			Spec: opsterv1.OpensearchComponentTemplateSpec{
 				OpensearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
-				Description: "test-description",
+				Name: "my-template",
+				Template: opsterv1.OpensearchIndexSpec{
+					Settings: &apiextensionsv1.JSON{},
+					Mappings: &apiextensionsv1.JSON{},
+					Aliases:  make(map[string]opsterv1.OpensearchIndexAliasSpec),
+				},
+				Version: 0,
+				Meta:    &apiextensionsv1.JSON{},
 			},
 		}
 
@@ -55,7 +64,7 @@ var _ = Describe("tenant reconciler", func() {
 		// Set up prereq-objects
 		ns = &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-tenant",
+				Name: "test-componenttemplate",
 			},
 		}
 		Expect(func() error {
@@ -68,10 +77,11 @@ var _ = Describe("tenant reconciler", func() {
 			}
 			return nil
 		}()).To(Succeed())
+
 		cluster = &opsterv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
-				Namespace: "test-tenant",
+				Namespace: "test-componenttemplate",
 			},
 			Spec: opsterv1.ClusterSpec{
 				General: opsterv1.GeneralConfig{
@@ -88,6 +98,8 @@ var _ = Describe("tenant reconciler", func() {
 				},
 			},
 		}
+		clusterUrl = fmt.Sprintf("https://%s.%s.svc.cluster.local:9200/", cluster.Spec.General.ServiceName, cluster.Namespace)
+
 		Expect(func() error {
 			err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), &opsterv1.OpenSearchCluster{})
 			if err != nil {
@@ -101,7 +113,7 @@ var _ = Describe("tenant reconciler", func() {
 	})
 
 	JustBeforeEach(func() {
-		reconciler = NewTenantReconciler(
+		reconciler = NewComponentTemplateReconciler(
 			context.Background(),
 			k8sClient,
 			recorder,
@@ -116,6 +128,7 @@ var _ = Describe("tenant reconciler", func() {
 			instance.Spec.OpensearchRef.Name = "doesnotexist"
 			recorder = record.NewFakeRecorder(1)
 		})
+
 		It("should wait for the cluster to exist", func() {
 			go func() {
 				defer GinkgoRecover()
@@ -139,6 +152,7 @@ var _ = Describe("tenant reconciler", func() {
 			instance.Status.ManagedCluster = &uid
 			recorder = record.NewFakeRecorder(1)
 		})
+
 		It("should error", func() {
 			go func() {
 				defer GinkgoRecover()
@@ -151,7 +165,7 @@ var _ = Describe("tenant reconciler", func() {
 				events = append(events, msg)
 			}
 			Expect(len(events)).To(Equal(1))
-			Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s cannot change the cluster an tenant refers to", opensearchRefMismatch)))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s cannot change the cluster a component template refers to", opensearchRefMismatch)))
 		})
 	})
 
@@ -159,6 +173,7 @@ var _ = Describe("tenant reconciler", func() {
 		BeforeEach(func() {
 			recorder = record.NewFakeRecorder(1)
 		})
+
 		It("should wait for the cluster to be running", func() {
 			go func() {
 				defer GinkgoRecover()
@@ -193,28 +208,19 @@ var _ = Describe("tenant reconciler", func() {
 
 			transport.RegisterResponder(
 				http.MethodGet,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 			)
-
 			transport.RegisterResponder(
 				http.MethodHead,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Once(failMessage),
 			)
 		})
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingTenant = pointer.Bool(true)
+				instance.Status.ExistingComponentTemplate = pointer.Bool(true)
 			})
 
 			It("should do nothing", func() {
@@ -226,39 +232,21 @@ var _ = Describe("tenant reconciler", func() {
 		When("existing status is nil", func() {
 			var localExtraCalls = 4
 			BeforeEach(func() {
-				tenantRequest := requests.Tenant{
-					Description: "test-description",
-				}
 				recorder = record.NewFakeRecorder(1)
 				transport.RegisterResponder(
 					http.MethodGet,
-					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
-					),
+					clusterUrl,
 					httpmock.NewStringResponder(200, "OK").Times(4, failMessage),
 				)
 				transport.RegisterResponder(
 					http.MethodHead,
-					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
-					),
+					clusterUrl,
 					httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 				)
 				transport.RegisterResponder(
-					http.MethodGet,
-					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
-						instance.Name,
-					),
-					httpmock.NewJsonResponderOrPanic(200, responses.GetTenantResponse{
-						instance.Name: tenantRequest,
-					}).Then(
+					http.MethodHead,
+					fmt.Sprintf("%s_component_template/my-template", clusterUrl),
+					httpmock.NewJsonResponderOrPanic(200, "OK").Then(
 						httpmock.NewStringResponder(404, "does not exist"),
 					).Then(
 						httpmock.NewNotFoundResponder(failMessage),
@@ -289,8 +277,9 @@ var _ = Describe("tenant reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingTenant = pointer.Bool(true)
+				instance.Status.ExistingComponentTemplate = pointer.Bool(true)
 			})
+
 			It("should do nothing", func() {
 				_, err := reconciler.Reconcile()
 				Expect(err).ToNot(HaveOccurred())
@@ -299,63 +288,75 @@ var _ = Describe("tenant reconciler", func() {
 
 		When("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingTenant = pointer.Bool(false)
+				instance.Status.ExistingComponentTemplate = pointer.Bool(false)
 			})
 
-			When("tenant exists in opensearch and is the same", func() {
+			When("componenttemplate exists in opensearch and is the same", func() {
 				BeforeEach(func() {
-					tenantRequest := requests.Tenant{
-						Description: "test-description",
+					response := responses.GetComponentTemplatesResponse{
+						ComponentTemplates: make([]responses.ComponentTemplate, 1),
 					}
+					response.ComponentTemplates[0] = responses.ComponentTemplate{
+						Name: "my-template",
+						ComponentTemplate: requests.ComponentTemplate{
+							Template: requests.Index{
+								Settings: &apiextensionsv1.JSON{},
+								Mappings: &apiextensionsv1.JSON{},
+								Aliases:  make(map[string]requests.IndexAlias),
+							},
+							Version: 0,
+							Meta:    &apiextensionsv1.JSON{},
+						},
+					}
+
 					transport.RegisterResponder(
 						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-							instance.Name,
-						),
-						httpmock.NewJsonResponderOrPanic(200, responses.GetTenantResponse{
-							instance.Name: tenantRequest,
-						}).Once(failMessage),
+						fmt.Sprintf("%s_component_template/my-template", clusterUrl),
+						httpmock.NewJsonResponderOrPanic(200, response).Once(failMessage),
 					)
 				})
+
 				It("should do nothing", func() {
 					_, err := reconciler.Reconcile()
 					Expect(err).ToNot(HaveOccurred())
 					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
 				})
 			})
-			When("tenant exists in opensearch and is not the same", func() {
+
+			When("componenttemplate exists in opensearch and is not the same", func() {
 				BeforeEach(func() {
 					recorder = record.NewFakeRecorder(1)
-					tenantRequest := requests.Tenant{
-						Description: "some-other-description",
+
+					response := responses.GetComponentTemplatesResponse{
+						ComponentTemplates: make([]responses.ComponentTemplate, 1),
 					}
+					response.ComponentTemplates[0] = responses.ComponentTemplate{
+						Name: "my-template",
+						ComponentTemplate: requests.ComponentTemplate{
+							Template: requests.Index{
+								Settings: &apiextensionsv1.JSON{},
+								Mappings: &apiextensionsv1.JSON{},
+								Aliases:  make(map[string]requests.IndexAlias),
+							},
+							Version: 100,
+							Meta:    &apiextensionsv1.JSON{},
+						},
+					}
+
+					componentTemplateUrl := fmt.Sprintf("%s_component_template/my-template", clusterUrl)
 					transport.RegisterResponder(
 						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-							instance.Name,
-						),
-						httpmock.NewJsonResponderOrPanic(200, responses.GetTenantResponse{
-							instance.Name: tenantRequest,
-						}).Once(failMessage),
+						componentTemplateUrl,
+						httpmock.NewJsonResponderOrPanic(200, response).Once(failMessage),
 					)
 					transport.RegisterResponder(
 						http.MethodPut,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-							instance.Name,
-						),
+						componentTemplateUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 				})
-				It("should update the tenant", func() {
+
+				It("should update the componenttemplate", func() {
 					go func() {
 						defer GinkgoRecover()
 						defer close(recorder.Events)
@@ -369,34 +370,51 @@ var _ = Describe("tenant reconciler", func() {
 						events = append(events, msg)
 					}
 					Expect(len(events)).To(Equal(1))
-					Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s tenant updated in opensearch", opensearchAPIUpdated)))
+					Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s component template updated in opensearch", opensearchAPIUpdated)))
 				})
 			})
-			When("tenant doesn't exist in opensearch", func() {
+
+			When("indextemplate exists in opensearch but the name has changed", func() {
 				BeforeEach(func() {
 					recorder = record.NewFakeRecorder(1)
+
+					instance.Status.ComponentTemplateName = "my-template" // old template name
+					instance.Spec.Name = "new-template"                   // new template name
+				})
+
+				It("should fail", func() {
+					go func() {
+						defer GinkgoRecover()
+						defer close(recorder.Events)
+						_, err := reconciler.Reconcile()
+						Expect(err).To(HaveOccurred())
+					}()
+					var events []string
+					for msg := range recorder.Events {
+						events = append(events, msg)
+					}
+					Expect(len(events)).To(Equal(1))
+					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s cannot change the component template name", opensearchComponentTemplateNameMismatch)))
+				})
+			})
+
+			When("componenttemplate doesn't exist in opensearch", func() {
+				BeforeEach(func() {
+					recorder = record.NewFakeRecorder(1)
+					componentTemplateUrl := fmt.Sprintf("%s_component_template/my-template", clusterUrl)
 					transport.RegisterResponder(
 						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-							instance.Name,
-						),
+						componentTemplateUrl,
 						httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
 					)
 					transport.RegisterResponder(
 						http.MethodPut,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-							instance.Name,
-						),
+						componentTemplateUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 				})
-				It("should create the tenant", func() {
+
+				It("should create the componenttemplate", func() {
 					go func() {
 						defer GinkgoRecover()
 						defer close(recorder.Events)
@@ -410,7 +428,7 @@ var _ = Describe("tenant reconciler", func() {
 						events = append(events, msg)
 					}
 					Expect(len(events)).To(Equal(1))
-					Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s tenant updated in opensearch", opensearchAPIUpdated)))
+					Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s component template updated in opensearch", opensearchAPIUpdated)))
 				})
 			})
 		})
@@ -425,7 +443,7 @@ var _ = Describe("tenant reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingTenant = pointer.Bool(true)
+				instance.Status.ExistingComponentTemplate = pointer.Bool(true)
 			})
 			It("should do nothing and exit", func() {
 				Expect(reconciler.Delete()).To(Succeed())
@@ -434,7 +452,7 @@ var _ = Describe("tenant reconciler", func() {
 
 		Context("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingTenant = pointer.Bool(false)
+				instance.Status.ExistingComponentTemplate = pointer.Bool(false)
 			})
 
 			When("cluster does not exist", func() {
@@ -446,84 +464,58 @@ var _ = Describe("tenant reconciler", func() {
 				})
 			})
 
-			When("tenant does not exist", func() {
+			When("componenttemplate does not exist", func() {
 				BeforeEach(func() {
 					transport.RegisterResponder(
 						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 					)
 					transport.RegisterResponder(
 						http.MethodHead,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 					transport.RegisterResponder(
-						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-							instance.Name,
-						),
+						http.MethodHead,
+						fmt.Sprintf("%s_component_template/my-template", clusterUrl),
 						httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
 					)
 				})
+
 				It("should do nothing and exit", func() {
 					Expect(reconciler.Delete()).To(Succeed())
 					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + 1))
 				})
 			})
-			When("tenant does exist", func() {
+
+			When("componenttemplate does exist", func() {
 				BeforeEach(func() {
+					componentTemplateUrl := fmt.Sprintf("%s_component_template/my-template", clusterUrl)
+
 					transport.RegisterResponder(
 						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 					)
 					transport.RegisterResponder(
 						http.MethodHead,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 					transport.RegisterResponder(
-						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-							instance.Name,
-						),
+						http.MethodHead,
+						componentTemplateUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 					transport.RegisterResponder(
 						http.MethodDelete,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/tenants/%s",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-							instance.Name,
-						),
+						componentTemplateUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 				})
-				It("should delete the tenant", func() {
+
+				It("should delete the componenttemplate", func() {
 					Expect(reconciler.Delete()).To(Succeed())
 					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + 1))
 				})
