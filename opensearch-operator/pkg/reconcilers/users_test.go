@@ -4,22 +4,23 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/mocks/opensearch.opster.io/pkg/reconcilers/k8s"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/responses"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/helpers"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("users reconciler", func() {
@@ -28,14 +29,15 @@ var _ = Describe("users reconciler", func() {
 		reconciler *UserReconciler
 		instance   *opsterv1.OpensearchUser
 		recorder   *record.FakeRecorder
+		mockClient *k8s.MockK8sClient
 
 		// Objects
-		ns       *corev1.Namespace
 		password *corev1.Secret
 		cluster  *opsterv1.OpenSearchCluster
 	)
 
 	BeforeEach(func() {
+		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		instance = &opsterv1.OpensearchUser{
@@ -56,44 +58,15 @@ var _ = Describe("users reconciler", func() {
 				},
 			},
 		}
-
-		// Sleep for cache to start
-		time.Sleep(time.Second)
-		// Set up prereq-objects
-		ns = &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-user",
-			},
-		}
-		Expect(func() error {
-			err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(ns), &corev1.Namespace{})
-			if err != nil {
-				if k8serrors.IsNotFound(err) {
-					return k8sClient.Create(context.Background(), ns)
-				}
-				return err
-			}
-			return nil
-		}()).To(Succeed())
 		password = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-password",
 				Namespace: "test-user",
 			},
-			StringData: map[string]string{
-				"password": "testpassword",
+			Data: map[string][]byte{
+				"password": []byte("testpassword"),
 			},
 		}
-		Expect(func() error {
-			err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(password), &corev1.Secret{})
-			if err != nil {
-				if k8serrors.IsNotFound(err) {
-					return k8sClient.Create(context.Background(), password)
-				}
-				return err
-			}
-			return nil
-		}()).To(Succeed())
 		cluster = &opsterv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
@@ -102,6 +75,7 @@ var _ = Describe("users reconciler", func() {
 			Spec: opsterv1.ClusterSpec{
 				General: opsterv1.GeneralConfig{
 					ServiceName: "test-cluster",
+					HttpPort:    9200,
 				},
 				NodePools: []opsterv1.NodePool{
 					{
@@ -114,32 +88,25 @@ var _ = Describe("users reconciler", func() {
 				},
 			},
 		}
-		Expect(func() error {
-			err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), &opsterv1.OpenSearchCluster{})
-			if err != nil {
-				if k8serrors.IsNotFound(err) {
-					return k8sClient.Create(context.Background(), cluster)
-				}
-				return err
-			}
-			return nil
-		}()).To(Succeed())
 	})
 
 	JustBeforeEach(func() {
-		reconciler = NewUserReconciler(
-			context.Background(),
-			k8sClient,
-			recorder,
-			instance,
-			WithOSClientTransport(transport),
-			WithUpdateStatus(false),
-		)
+		options := ReconcilerOptions{}
+		options.apply(WithOSClientTransport(transport), WithUpdateStatus(false))
+		reconciler = &UserReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			ReconcilerOptions: options,
+			recorder:          recorder,
+			instance:          instance,
+			logger:            log.FromContext(context.Background()),
+		}
 	})
 
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
 			instance.Spec.OpensearchRef.Name = "doesnotexist"
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should wait for the cluster to exist", func() {
@@ -161,6 +128,7 @@ var _ = Describe("users reconciler", func() {
 	When("cluster is not ready", func() {
 		BeforeEach(func() {
 			recorder = record.NewFakeRecorder(1)
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 		})
 		It("should wait for the cluster to be running", func() {
 			go func() {
@@ -181,17 +149,9 @@ var _ = Describe("users reconciler", func() {
 	Context("cluster is ready", func() {
 		extraContextCalls := 1
 		BeforeEach(func() {
-			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), cluster)).To(Succeed())
 			cluster.Status.Phase = opsterv1.PhaseRunning
 			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
-			Expect(k8sClient.Status().Update(context.Background(), cluster)).To(Succeed())
-			Eventually(func() string {
-				err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), cluster)
-				if err != nil {
-					return "failed"
-				}
-				return cluster.Status.Phase
-			}).Should(Equal(opsterv1.PhaseRunning))
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 
 			transport.RegisterResponder(
 				http.MethodGet,
@@ -218,9 +178,16 @@ var _ = Describe("users reconciler", func() {
 			Context("password key does not exist", func() {
 				BeforeEach(func() {
 					instance.Spec.PasswordFrom.Key = "badkey"
+					mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 					recorder = record.NewFakeRecorder(1)
 				})
 				It("should send the appropriate error", func() {
+					var createdSecret *corev1.Secret
+					mockClient.On("CreateSecret", mock.Anything).
+						Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+							createdSecret = secret
+							return &ctrl.Result{}, nil
+						})
 					go func() {
 						defer GinkgoRecover()
 						defer close(recorder.Events)
@@ -231,6 +198,7 @@ var _ = Describe("users reconciler", func() {
 					for msg := range recorder.Events {
 						events = append(events, msg)
 					}
+					Expect(createdSecret).ToNot(BeNil())
 					Expect(len(events)).To(Equal(1))
 					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s key badkey does not exist in secret", passwordError)))
 				})
@@ -238,6 +206,7 @@ var _ = Describe("users reconciler", func() {
 			Context("secret does not exist", func() {
 				BeforeEach(func() {
 					instance.Spec.PasswordFrom.Name = "badsecret"
+					mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(corev1.Secret{}, NotFoundError())
 					recorder = record.NewFakeRecorder(1)
 				})
 				It("should send the appropriate error", func() {
@@ -259,6 +228,7 @@ var _ = Describe("users reconciler", func() {
 
 		When("user exists with UID in opensearch", func() {
 			BeforeEach(func() {
+				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				userRequest := requests.User{
 					Attributes: map[string]string{
 						services.K8sAttributeField: "testuid",
@@ -276,17 +246,27 @@ var _ = Describe("users reconciler", func() {
 						instance.Name: userRequest,
 					}).Once(failMessage),
 				)
+				recorder = record.NewFakeRecorder(1)
 			})
 
 			It("should do nothing", func() {
+				var createdSecret *corev1.Secret
+				mockClient.On("CreateSecret", mock.Anything).
+					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+						createdSecret = secret
+						return &ctrl.Result{}, nil
+					})
+				defer close(recorder.Events)
 				_, err := reconciler.Reconcile()
 				Expect(err).ToNot(HaveOccurred())
 				// Confirm all responders have been called
+				Expect(createdSecret).ToNot(BeNil())
 				Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
 			})
 		})
 		When("user exists without UID in opensearch", func() {
 			BeforeEach(func() {
+				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				userRequest := requests.User{}
 				recorder = record.NewFakeRecorder(1)
 				transport.RegisterResponder(
@@ -303,6 +283,12 @@ var _ = Describe("users reconciler", func() {
 				)
 			})
 			It("should error", func() {
+				var createdSecret *corev1.Secret
+				mockClient.On("CreateSecret", mock.Anything).
+					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+						createdSecret = secret
+						return &ctrl.Result{}, nil
+					})
 				go func() {
 					defer GinkgoRecover()
 					defer close(recorder.Events)
@@ -315,12 +301,14 @@ var _ = Describe("users reconciler", func() {
 				for msg := range recorder.Events {
 					events = append(events, msg)
 				}
+				Expect(createdSecret).ToNot(BeNil())
 				Expect(len(events)).To(Equal(1))
 				Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s failed to get user status from Opensearch API", opensearchAPIError)))
 			})
 		})
 		When("user exists and is different", func() {
 			BeforeEach(func() {
+				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				userRequest := requests.User{
 					Attributes: map[string]string{
 						services.K8sAttributeField: "testuid",
@@ -354,6 +342,12 @@ var _ = Describe("users reconciler", func() {
 				)
 			})
 			It("should update the user", func() {
+				var createdSecret *corev1.Secret
+				mockClient.On("CreateSecret", mock.Anything).
+					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+						createdSecret = secret
+						return &ctrl.Result{}, nil
+					})
 				go func() {
 					defer GinkgoRecover()
 					defer close(recorder.Events)
@@ -366,38 +360,35 @@ var _ = Describe("users reconciler", func() {
 				for msg := range recorder.Events {
 					events = append(events, msg)
 				}
+				Expect(createdSecret).ToNot(BeNil())
 				Expect(len(events)).To(Equal(1))
 				Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s user updated in opensearch", opensearchAPIUpdated)))
 			})
 			It("should update the secret with opensearch annotations", func() {
-				go func() {
-					defer GinkgoRecover()
-					defer close(recorder.Events)
-					_, err := reconciler.Reconcile()
-					Expect(err).ToNot(HaveOccurred())
-				}()
+				var createdSecret *corev1.Secret
+				mockClient.On("CreateSecret", mock.Anything).
+					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+						createdSecret = secret
+						return &ctrl.Result{}, nil
+					})
+				defer close(recorder.Events)
+				_, err := reconciler.Reconcile()
+				Expect(err).ToNot(HaveOccurred())
 
-				Eventually(func() bool {
-					secret := &corev1.Secret{}
+				annotations := createdSecret.GetAnnotations()
 
-					err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(password), secret)
-					Expect(err).ToNot(HaveOccurred())
-					Expect(secret).ToNot(BeNil())
+				actualName := annotations[helpers.OsUserNameAnnotation]
+				actualNamespace := annotations[helpers.OsUserNamespaceAnnotation]
 
-					annotations := secret.GetAnnotations()
-
-					actualName := annotations[helpers.OsUserNameAnnotation]
-					actualNamespace := annotations[helpers.OsUserNamespaceAnnotation]
-
-					expectedName := "test-user"
-					expectedNamespace := "test-user"
-
-					return actualName == expectedName && actualNamespace == expectedNamespace
-				}).Should(BeTrue())
+				expectedName := "test-user"
+				expectedNamespace := "test-user"
+				Expect(actualName).To(Equal(expectedName))
+				Expect(actualNamespace).To(Equal(expectedNamespace))
 			})
 		})
 		When("user does not exist", func() {
 			BeforeEach(func() {
+				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				recorder = record.NewFakeRecorder(1)
 				transport.RegisterResponder(
 					http.MethodGet,
@@ -421,6 +412,12 @@ var _ = Describe("users reconciler", func() {
 				)
 			})
 			It("should create the user", func() {
+				var createdSecret *corev1.Secret
+				mockClient.On("CreateSecret", mock.Anything).
+					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+						createdSecret = secret
+						return &ctrl.Result{}, nil
+					})
 				go func() {
 					defer GinkgoRecover()
 					defer close(recorder.Events)
@@ -433,6 +430,7 @@ var _ = Describe("users reconciler", func() {
 				for msg := range recorder.Events {
 					events = append(events, msg)
 				}
+				Expect(createdSecret).ToNot(BeNil())
 				Expect(len(events)).To(Equal(1))
 				Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s user updated in opensearch", opensearchAPIUpdated)))
 			})
@@ -466,6 +464,7 @@ var _ = Describe("users reconciler", func() {
 		When("the opensearch cluster does not exist", func() {
 			BeforeEach(func() {
 				instance.Spec.OpensearchRef.Name = "doesnotexist"
+				mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
 			})
 			It("should do nothing", func() {
 				Expect(reconciler.Delete()).To(Succeed())
@@ -473,6 +472,7 @@ var _ = Describe("users reconciler", func() {
 		})
 		When("the user does not exist", func() {
 			BeforeEach(func() {
+				mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
@@ -492,6 +492,7 @@ var _ = Describe("users reconciler", func() {
 		})
 		When("the user exists without a UID", func() {
 			BeforeEach(func() {
+				mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 				userRequest := requests.User{}
 				transport.RegisterResponder(
 					http.MethodGet,
@@ -514,6 +515,7 @@ var _ = Describe("users reconciler", func() {
 		})
 		When("the user exists with correct UID", func() {
 			BeforeEach(func() {
+				mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 				userRequest := requests.User{
 					Attributes: map[string]string{
 						services.K8sAttributeField: "testuid",

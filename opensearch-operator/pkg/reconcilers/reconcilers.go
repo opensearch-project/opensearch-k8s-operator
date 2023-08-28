@@ -1,15 +1,14 @@
 package reconcilers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
 	"k8s.io/client-go/tools/record"
 
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/util/retry"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/reconcilers/k8s"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -125,16 +124,12 @@ func (c *ReconcilerContext) replaceNodePoolHash(newConfig NodePoolHash) {
 }
 
 func UpdateComponentStatus(
-	ctx context.Context,
-	k8sClient client.Client,
-	instance *opsterv1.OpenSearchCluster,
+	k8sClient k8s.K8sClient,
+	cluster *opsterv1.OpenSearchCluster,
 	status *opsterv1.ComponentStatus,
 ) error {
 	if status != nil {
-		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(instance), instance); err != nil {
-				return err
-			}
+		return k8sClient.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(cluster), func(instance *opsterv1.OpenSearchCluster) {
 			found := false
 			for idx, value := range instance.Status.ComponentsStatus {
 				if value.Component == status.Component {
@@ -146,7 +141,6 @@ func UpdateComponentStatus(
 			if !found {
 				instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, *status)
 			}
-			return k8sClient.Status().Update(ctx, instance)
 		})
 	}
 	return nil

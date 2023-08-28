@@ -14,12 +14,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
+	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/k8s"
 	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -54,14 +56,14 @@ func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetS
 	}
 }
 
-func ReadOrGenerateCaCert(pki tls.PKI, k8sClient client.Client, ctx context.Context, instance *opsterv1.OpenSearchCluster) (tls.Cert, error) {
+func ReadOrGenerateCaCert(pki tls.PKI, k8sClient k8s.K8sClient, instance *opsterv1.OpenSearchCluster) (tls.Cert, error) {
 	namespace := instance.Namespace
 	clusterName := instance.Name
 	secretName := clusterName + "-ca"
-	logger := log.FromContext(ctx)
-	caSecret := corev1.Secret{}
+	logger := log.FromContext(k8sClient.Context())
 	var ca tls.Cert
-	if err := k8sClient.Get(ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
+	caSecret, err := k8sClient.GetSecret(secretName, namespace)
+	if err != nil {
 		// Generate CA cert and put it into secret
 		ca, err = pki.GenerateCA(clusterName)
 		if err != nil {
@@ -72,7 +74,7 @@ func ReadOrGenerateCaCert(pki tls.PKI, k8sClient client.Client, ctx context.Cont
 		if err := ctrl.SetControllerReference(instance, &caSecret, k8sClient.Scheme()); err != nil {
 			return ca, err
 		}
-		if err := k8sClient.Create(ctx, &caSecret); err != nil {
+		if _, err := k8sClient.CreateSecret(&caSecret); err != nil {
 			logger.Error(err, "Failed to store CA in secret")
 			return ca, err
 		}
@@ -83,8 +85,7 @@ func ReadOrGenerateCaCert(pki tls.PKI, k8sClient client.Client, ctx context.Cont
 }
 
 func CreateAdditionalVolumes(
-	ctx context.Context,
-	k8sClient client.Client,
+	k8sClient k8s.K8sClient,
 	namespace string,
 	volumeConfigs []opsterv1.AdditionalVolume,
 ) (
@@ -93,7 +94,7 @@ func CreateAdditionalVolumes(
 	retData []byte,
 	returnErr error,
 ) {
-	lg := log.FromContext(ctx)
+	lg := log.FromContext(k8sClient.Context())
 	var names []string
 	namesIndex := map[string]int{}
 
@@ -139,11 +140,8 @@ func CreateAdditionalVolumes(
 	for _, name := range names {
 		volumeConfig := volumeConfigs[namesIndex[name]]
 		if volumeConfig.ConfigMap != nil {
-			cm := &corev1.ConfigMap{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      volumeConfig.ConfigMap.Name,
-				Namespace: namespace,
-			}, cm); err != nil {
+			cm, err := k8sClient.GetConfigMap(volumeConfig.ConfigMap.Name, namespace)
+			if err != nil {
 				if k8serrors.IsNotFound(err) {
 					lg.V(1).Error(err, "failed to find configMap for additional volume")
 					continue
@@ -163,11 +161,8 @@ func CreateAdditionalVolumes(
 		}
 
 		if volumeConfig.Secret != nil {
-			secret := &corev1.Secret{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      volumeConfig.Secret.SecretName,
-				Namespace: namespace,
-			}, secret); err != nil {
+			secret, err := k8sClient.GetSecret(volumeConfig.Secret.SecretName, namespace)
+			if err != nil {
 				if k8serrors.IsNotFound(err) {
 					lg.V(1).Error(err, "failed to find secret for additional volume")
 					continue
@@ -201,15 +196,15 @@ func OpensearchClusterURL(cluster *opsterv1.OpenSearchCluster) string {
 }
 
 func CreateClientForCluster(
+	k8sClient k8s.K8sClient,
 	ctx context.Context,
-	k8sClient client.Client,
 	cluster *opsterv1.OpenSearchCluster,
 	transport http.RoundTripper,
 ) (*services.OsClusterClient, error) {
 	lg := log.FromContext(ctx)
 	var osClient *services.OsClusterClient
 
-	username, password, err := helpers.UsernameAndPassword(ctx, k8sClient, cluster)
+	username, password, err := helpers.UsernameAndPassword(k8sClient, cluster)
 	if err != nil {
 		lg.Error(err, "failed to fetch opensearch credentials")
 		return nil, err
@@ -237,19 +232,18 @@ func CreateClientForCluster(
 }
 
 func FetchOpensearchCluster(
+	k8sClient k8s.K8sClient,
 	ctx context.Context,
-	k8sClient client.Client,
 	ref types.NamespacedName,
 ) (*opsterv1.OpenSearchCluster, error) {
-	cluster := &opsterv1.OpenSearchCluster{}
-	err := k8sClient.Get(ctx, ref, cluster)
+	cluster, err := k8sClient.GetOpenSearchCluster(ref.Name, ref.Namespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil, nil
 		}
 		return nil, err
 	}
-	return cluster, nil
+	return &cluster, nil
 }
 
 // Generates a checksum of binary data using the SHA1 algorithm.
@@ -262,4 +256,17 @@ func GetSha1Sum(data []byte) (string, error) {
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int32 {
+	count := int32(0)
+	for _, nodePool := range cr.Spec.NodePools {
+		if helpers.HasDataRole(&nodePool) {
+			sts, err := k8sClient.GetStatefulSet(builders.StsName(cr, &nodePool), cr.Namespace)
+			if err == nil {
+				count = count + pointer.Int32Deref(sts.Spec.Replicas, 1)
+			}
+		}
+	}
+	return count
 }

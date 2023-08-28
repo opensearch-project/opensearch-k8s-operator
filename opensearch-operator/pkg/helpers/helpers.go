@@ -1,24 +1,19 @@
 package helpers
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"time"
 
-	batchv1 "k8s.io/api/batch/v1"
-	"k8s.io/apimachinery/pkg/types"
-
 	"github.com/hashicorp/go-version"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/reconcilers/k8s"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -96,11 +91,11 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	return val, ok
 }
 
-func UsernameAndPassword(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) (string, string, error) {
+func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (string, string, error) {
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
 		// Read credentials from secret
-		credentialsSecret := corev1.Secret{}
-		if err := k8sClient.Get(ctx, client.ObjectKey{Name: cr.Spec.Security.Config.AdminCredentialsSecret.Name, Namespace: cr.Namespace}, &credentialsSecret); err != nil {
+		credentialsSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
+		if err != nil {
 			return "", "", err
 		}
 		username, usernameExists := credentialsSecret.Data["username"]
@@ -200,7 +195,7 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 }
 
 // Count the number of pods running and ready and not terminating for a given nodePool
-func CountRunningPodsForNodePool(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
+func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
 	// Constrict selector from labels
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
 	if err != nil {
@@ -213,8 +208,8 @@ func CountRunningPodsForNodePool(ctx context.Context, k8sClient client.Client, c
 	selector := labels.NewSelector()
 	selector = selector.Add(*clusterReq, *componentReq)
 	// List pods matching selector
-	list := corev1.PodList{}
-	if err := k8sClient.List(ctx, &list, &client.ListOptions{LabelSelector: selector}); err != nil {
+	list, err := k8sClient.ListPods(&client.ListOptions{LabelSelector: selector})
+	if err != nil {
 		return 0, err
 	}
 	// Count pods that are ready
@@ -236,7 +231,7 @@ func CountRunningPodsForNodePool(ctx context.Context, k8sClient client.Client, c
 }
 
 // Count the number of PVCs created for the given NodePool
-func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
+func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
 	if err != nil {
 		return 0, err
@@ -247,23 +242,20 @@ func CountPVCsForNodePool(ctx context.Context, k8sClient client.Client, cr *opst
 	}
 	selector := labels.NewSelector()
 	selector = selector.Add(*clusterReq, *componentReq)
-	list := corev1.PersistentVolumeClaimList{}
-	if err := k8sClient.List(ctx, &list, &client.ListOptions{LabelSelector: selector}); err != nil {
+	list, err := k8sClient.ListPVCs(&client.ListOptions{LabelSelector: selector})
+	if err != nil {
 		return 0, err
 	}
 	return len(list.Items), nil
 }
 
 // Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
-func WaitForSTSDelete(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet) error {
-	opts := client.DeleteOptions{}
-	client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
-	if err := k8sClient.Delete(ctx, obj, &opts); err != nil {
+func WaitForSTSDelete(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) error {
+	if err := k8sClient.DeleteStatefulSet(obj, true); err != nil {
 		return err
 	}
 	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		existing := appsv1.StatefulSet{}
-		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
+		_, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
 		if err != nil {
 			return nil
 		}
@@ -273,10 +265,9 @@ func WaitForSTSDelete(ctx context.Context, k8sClient client.Client, obj *appsv1.
 }
 
 // Wait for max 30s until a STS has at least the given number of replicas
-func WaitForSTSReplicas(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet, replicas int32) error {
+func WaitForSTSReplicas(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet, replicas int32) error {
 	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		existing := appsv1.StatefulSet{}
-		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
+		existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
 		if err == nil {
 			if existing.Status.Replicas >= replicas {
 				return nil
@@ -288,10 +279,9 @@ func WaitForSTSReplicas(ctx context.Context, k8sClient client.Client, obj *appsv
 }
 
 // Wait for max 30s until a STS has a normal status (CurrentRevision != "")
-func WaitForSTSStatus(ctx context.Context, k8sClient client.Client, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
+func WaitForSTSStatus(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
 	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		existing := appsv1.StatefulSet{}
-		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(obj), &existing)
+		existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
 		if err == nil {
 			if existing.Status.CurrentRevision != "" {
 				return &existing, nil
@@ -303,48 +293,32 @@ func WaitForSTSStatus(ctx context.Context, k8sClient client.Client, obj *appsv1.
 }
 
 // GetSTSForNodePool returns the corresponding sts for a given nodePool and cluster name
-func GetSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) (*appsv1.StatefulSet, error) {
-	sts := &appsv1.StatefulSet{}
+func GetSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) (*appsv1.StatefulSet, error) {
 	stsName := clusterName + "-" + nodePool.Component
-
-	err := k8sClient.Get(ctx, types.NamespacedName{Name: stsName, Namespace: clusterNamespace}, sts)
-
-	return sts, err
+	existing, err := k8sClient.GetStatefulSet(stsName, clusterNamespace)
+	return &existing, err
 }
 
 // DeleteSTSForNodePool deletes the sts for the corresponding nodePool
-func DeleteSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
+func DeleteSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
 
-	sts, err := GetSTSForNodePool(ctx, k8sClient, nodePool, clusterName, clusterNamespace)
+	sts, err := GetSTSForNodePool(k8sClient, nodePool, clusterName, clusterNamespace)
 	if err != nil {
 		return err
 	}
 
-	opts := client.DeleteOptions{}
-	// Add this so pods of the sts are deleted as well, otherwise they would remain as orphaned pods
-	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
-
-	err = k8sClient.Delete(ctx, sts, &opts)
-
-	return err
+	return k8sClient.DeleteStatefulSet(sts, false)
 }
 
 // DeleteSecurityUpdateJob deletes the securityconfig update job
-func DeleteSecurityUpdateJob(ctx context.Context, k8sClient client.Client, clusterName, clusterNamespace string) error {
+func DeleteSecurityUpdateJob(k8sClient k8s.K8sClient, clusterName, clusterNamespace string) error {
 	jobName := clusterName + "-securityconfig-update"
-	job := batchv1.Job{}
-	err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: clusterNamespace}, &job)
-
+	job, err := k8sClient.GetJob(jobName, clusterNamespace)
 	if err != nil {
 		return err
 	}
 
-	opts := client.DeleteOptions{}
-	// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
-	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
-	err = k8sClient.Delete(ctx, &job, &opts)
-
-	return err
+	return k8sClient.DeleteJob(&job)
 }
 
 func HasDataRole(nodePool *opsterv1.NodePool) bool {
@@ -406,7 +380,7 @@ func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
 }
 
-func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, sts *appsv1.StatefulSet) (string, error) {
+func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
 	replicas := lo.FromPtrOr(sts.Spec.Replicas, 1)
 	// Handle the simple case
 	if replicas == sts.Status.UpdatedReplicas+sts.Status.CurrentReplicas {
@@ -416,8 +390,8 @@ func WorkingPodForRollingRestart(ctx context.Context, k8sClient client.Client, s
 	// If there are potentially mixed revisions we need to check each pod
 	for i := replicas - 1; i >= 0; i-- {
 		podName := ReplicaHostName(*sts, i)
-		pod := &corev1.Pod{}
-		if err := k8sClient.Get(ctx, types.NamespacedName{Name: podName, Namespace: sts.Namespace}, pod); err != nil {
+		pod, err := k8sClient.GetPod(podName, sts.Namespace)
+		if err != nil {
 			return "", err
 		}
 		podRevision, ok := pod.Labels[stsRevisionLabel]

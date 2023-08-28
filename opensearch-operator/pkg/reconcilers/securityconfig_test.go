@@ -4,16 +4,36 @@ import (
 	"context"
 	"time"
 
+	"opensearch.opster.io/mocks/opensearch.opster.io/pkg/reconcilers/k8s"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes/scheme"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 )
+
+func newSecurityconfigReconciler(
+	client *k8s.MockK8sClient,
+	ctx context.Context,
+	reconcilerContext *ReconcilerContext,
+	instance *opsterv1.OpenSearchCluster,
+) *SecurityconfigReconciler {
+	return &SecurityconfigReconciler{
+		client:            client,
+		reconcilerContext: reconcilerContext,
+		recorder:          &helpers.MockEventRecorder{},
+		instance:          instance,
+		logger:            log.FromContext(ctx),
+	}
+}
 
 var _ = Describe("Securityconfig Reconciler", func() {
 
@@ -25,28 +45,28 @@ var _ = Describe("Securityconfig Reconciler", func() {
 	)
 
 	When("When Reconciling the securityconfig reconciler with no securityconfig provided in the spec", func() {
-		It("should not do anything ", func() {
+		It("should not do anything", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
 
 			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
-			underTest := NewSecurityconfigReconciler(
-				k8sClient,
+			underTest := newSecurityconfigReconciler(
+				mockClient,
 				context.Background(),
-				&helpers.MockEventRecorder{},
 				&reconcilerContext,
 				&spec,
 			)
 			result, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.IsZero()).To(BeTrue())
-
 		})
 	})
 
 	When("When Reconciling the securityconfig reconciler with securityconfig secret configured but not available", func() {
 		It("should trigger a requeue", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -58,12 +78,12 @@ var _ = Describe("Securityconfig Reconciler", func() {
 						},
 					},
 				}}
+			mockClient.EXPECT().GetSecret("foobar", clusterName).Return(corev1.Secret{}, NotFoundError())
 
 			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
-			underTest := NewSecurityconfigReconciler(
-				k8sClient,
+			underTest := newSecurityconfigReconciler(
+				mockClient,
 				context.Background(),
-				&helpers.MockEventRecorder{},
 				&reconcilerContext,
 				&spec,
 			)
@@ -76,23 +96,30 @@ var _ = Describe("Securityconfig Reconciler", func() {
 
 	When("When Reconciling the securityconfig reconciler with securityconfig secret configured and available and tls configured", func() {
 		It("should start an update job only apply ymls present in secret", func() {
-			// Create namespace and secrets first
-			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
 			securityConfigSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
 				Type:       corev1.SecretType("Opaque"),
-				StringData: map[string]string{
-					"config.yml":         "foobar",
-					"internal_users.yml": "bar",
+				Data: map[string][]byte{
+					"config.yml":         []byte("foobar"),
+					"internal_users.yml": []byte("bar"),
 					// Invalid yml in secret should not throw an error
-					"invalid.yml": "foo",
+					"invalid.yml": []byte("foo"),
 					// Empty contents for a yml should be ignored
-					"action_groups.yml": "",
+					"action_groups.yml": []byte(""),
 				},
 			}
-			err := k8sClient.Create(context.Background(), securityConfigSecret)
-			Expect(err).ToNot(HaveOccurred())
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(*securityConfigSecret, nil)
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -116,25 +143,18 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			}
 
 			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
-			underTest := NewSecurityconfigReconciler(
-				k8sClient,
+			underTest := newSecurityconfigReconciler(
+				mockClient,
 				context.Background(),
-				&helpers.MockEventRecorder{},
 				&reconcilerContext,
 				&spec,
 			)
-			_, err = underTest.Reconcile()
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
-			job := batchv1.Job{}
-			// Should not throw an error as the update job should exist
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
+			job := *createdJob
 
 			actualCmdArg := job.Spec.Template.Spec.Containers[0].Args[0]
-
 			// Verify that expected files were present in the command
 			Expect(actualCmdArg).To(ContainSubstring("config.yml"))
 			Expect(actualCmdArg).To(ContainSubstring("internal_users.yml"))
@@ -149,25 +169,24 @@ var _ = Describe("Securityconfig Reconciler", func() {
 
 	When("When Reconciling the securityconfig reconciler with both securityconfig and admin secret configured and available but no tls configured", func() {
 		It("should start an update job", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			var clusterName = "securityconfig-withadminsecret"
-			// Create namespace and secrets first
-			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 
-			adminCertSecret := &corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "admin-cert", Namespace: clusterName},
-				Type:       corev1.SecretType("Opaque"),
-				Data:       map[string][]byte{},
-			}
-			err := k8sClient.Create(context.Background(), adminCertSecret)
-			Expect(err).ToNot(HaveOccurred())
-
-			securityConfigSecret := &corev1.Secret{
+			securityConfigSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
 				Type:       corev1.SecretType("Opaque"),
 				Data:       map[string][]byte{},
 			}
-			err = k8sClient.Create(context.Background(), securityConfigSecret)
-			Expect(err).ToNot(HaveOccurred())
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
+			mockClient.EXPECT().GetJob("securityconfig-withadminsecret-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -184,36 +203,22 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				}}
 
 			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
-			underTest := NewSecurityconfigReconciler(
-				k8sClient,
+			underTest := newSecurityconfigReconciler(
+				mockClient,
 				context.Background(),
-				&helpers.MockEventRecorder{},
 				&reconcilerContext,
 				&spec,
 			)
-			_, err = underTest.Reconcile()
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
-
-			job := batchv1.Job{}
-			// Should not throw an error as the update job should exist
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
+			Expect(createdJob).ToNot(BeNil())
 		})
 	})
 
 	When("When Reconciling the securityconfig reconciler with securityconfig secret but no adminSecret configured", func() {
 		It("should not start an update job", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			var clusterName = "securityconfig-noadminsecret"
-			// Create namespace and secret first
-			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
-			configSecret := corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig", Namespace: clusterName},
-				StringData: map[string]string{"config.yml": "foobar"},
-			}
-			err := k8sClient.Create(context.Background(), &configSecret)
-			Expect(err).ToNot(HaveOccurred())
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -227,28 +232,23 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				}}
 
 			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
-			underTest := NewSecurityconfigReconciler(
-				k8sClient,
+			underTest := newSecurityconfigReconciler(
+				mockClient,
 				context.Background(),
-				&helpers.MockEventRecorder{},
 				&reconcilerContext,
 				&spec,
 			)
-			_, err = underTest.Reconcile()
+			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
-
-			job := batchv1.Job{}
-			// Should throw an error as the update job should not exist
-			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)).To(HaveOccurred())
-
+			// Note: Not creating the update job is verified implicitly because the test would fail if any of the mock methods are called
 		})
 	})
 
 	When("When Reconciling the securityconfig reconciler with no securityconfig secret but tls configured", func() {
 		It("should start an update job and apply all yml files", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			var clusterName = "no-securityconfig-tls-configured"
-			// Create namespace and secret first
-			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
+
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -263,23 +263,25 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					},
 				}}
 
+			mockClient.EXPECT().GetJob("no-securityconfig-tls-configured-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
+
 			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
-			underTest := NewSecurityconfigReconciler(
-				k8sClient,
+			underTest := newSecurityconfigReconciler(
+				mockClient,
 				context.Background(),
-				&helpers.MockEventRecorder{},
 				&reconcilerContext,
 				&spec,
 			)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
-
-			job := batchv1.Job{}
-			// Should not throw an error as the update job should exist
-			Eventually(func() bool {
-				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)
-				return err == nil
-			}, timeout, interval).Should(BeTrue())
+			Expect(createdJob).ToNot(BeNil())
 
 			cmdArg := `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
 chmod +x $ADMIN;
@@ -291,7 +293,8 @@ until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd 
 do
 sleep 20;
 done;`
-			Expect(job.Spec.Template.Spec.Containers[0].Args[0]).To(Equal(cmdArg))
+
+			Expect(createdJob.Spec.Template.Spec.Containers[0].Args[0]).To(Equal(cmdArg))
 		})
 	})
 })

@@ -3,19 +3,21 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/reconcilers/k8s"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"time"
 )
 
 const (
@@ -23,7 +25,7 @@ const (
 )
 
 type TenantReconciler struct {
-	client.Client
+	client k8s.K8sClient
 	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
@@ -34,8 +36,8 @@ type TenantReconciler struct {
 }
 
 func NewTenantReconciler(
-	ctx context.Context,
 	client client.Client,
+	ctx context.Context,
 	recorder record.EventRecorder,
 	instance *opsterv1.OpensearchTenant,
 	opts ...ReconcilerOption,
@@ -43,7 +45,7 @@ func NewTenantReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &TenantReconciler{
-		Client:            client,
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "tenant"))),
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
@@ -61,34 +63,30 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			r.instance.Status.Reason = reason
+		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+			instance := object.(*opsterv1.OpensearchTenant)
+			instance.Status.Reason = reason
 			if retErr != nil {
-				r.instance.Status.State = opsterv1.OpensearchTenantError
+				instance.Status.State = opsterv1.OpensearchTenantError
 			}
 			// Requeue after is 10 seconds if waiting for OpenSearch cluster
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchTenantPending
+				instance.Status.State = opsterv1.OpensearchTenantPending
 			}
 			// Requeue is after 30 seconds for normal reconciliation after creation/update
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchTenantCreated
+				instance.Status.State = opsterv1.OpensearchTenantCreated
 			}
 			if reason == opensearchTenantExists {
-				r.instance.Status.State = opsterv1.OpensearchTenantIgnored
+				instance.Status.State = opsterv1.OpensearchTenantIgnored
 			}
-			return r.Status().Update(r.ctx, r.instance)
 		})
-
 		if err != nil {
 			r.logger.Error(err, "failed to update status")
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -119,12 +117,9 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
-			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ManagedCluster = &r.cluster.UID
-				return r.Status().Update(r.ctx, r.instance)
+			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchTenant)
+				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -146,7 +141,7 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		return
 	}
 
-	r.osClient, retErr = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, retErr = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if retErr != nil {
 		reason = "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
@@ -164,12 +159,9 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			return
 		}
 		if pointer.BoolDeref(r.updateStatus, true) {
-			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ExistingTenant = &exists
-				return r.Status().Update(r.ctx, r.instance)
+			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchTenant)
+				instance.Status.ExistingTenant = &exists
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -231,7 +223,7 @@ func (r *TenantReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -244,7 +236,7 @@ func (r *TenantReconciler) Delete() error {
 		return nil
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}

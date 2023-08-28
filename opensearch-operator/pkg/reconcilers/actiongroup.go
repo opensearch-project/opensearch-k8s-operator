@@ -3,19 +3,21 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"time"
+
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
+	"opensearch.opster.io/pkg/reconcilers/k8s"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"time"
 )
 
 const (
@@ -23,7 +25,7 @@ const (
 )
 
 type ActionGroupReconciler struct {
-	client.Client
+	client k8s.K8sClient
 	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
@@ -34,8 +36,8 @@ type ActionGroupReconciler struct {
 }
 
 func NewActionGroupReconciler(
-	ctx context.Context,
 	client client.Client,
+	ctx context.Context,
 	recorder record.EventRecorder,
 	instance *opsterv1.OpensearchActionGroup,
 	opts ...ReconcilerOption,
@@ -43,9 +45,9 @@ func NewActionGroupReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &ActionGroupReconciler{
-		Client:            client,
-		ReconcilerOptions: options,
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "actiongroup"))),
 		ctx:               ctx,
+		ReconcilerOptions: options,
 		recorder:          recorder,
 		instance:          instance,
 		logger:            log.FromContext(ctx).WithValues("reconciler", "actiongroup"),
@@ -61,32 +63,28 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		}
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			r.instance.Status.Reason = reason
+		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+			instance := object.(*opsterv1.OpensearchActionGroup)
+			instance.Status.Reason = reason
 			if retErr != nil {
-				r.instance.Status.State = opsterv1.OpensearchActionGroupError
+				instance.Status.State = opsterv1.OpensearchActionGroupError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchActionGroupPending
+				instance.Status.State = opsterv1.OpensearchActionGroupPending
 			}
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchActionGroupCreated
+				instance.Status.State = opsterv1.OpensearchActionGroupCreated
 			}
 			if reason == opensearchActionGroupExists {
-				r.instance.Status.State = opsterv1.OpensearchActionGroupIgnored
+				instance.Status.State = opsterv1.OpensearchActionGroupIgnored
 			}
-			return r.Status().Update(r.ctx, r.instance)
 		})
-
 		if err != nil {
 			r.logger.Error(err, "failed to update status")
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -117,12 +115,9 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		}
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
-			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ManagedCluster = &r.cluster.UID
-				return r.Status().Update(r.ctx, r.instance)
+			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchActionGroup)
+				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -144,7 +139,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		return
 	}
 
-	r.osClient, retErr = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, retErr = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if retErr != nil {
 		reason = "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
@@ -162,12 +157,9 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 			return
 		}
 		if pointer.BoolDeref(r.updateStatus, true) {
-			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ExistingActionGroup = &exists
-				return r.Status().Update(r.ctx, r.instance)
+			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchActionGroup)
+				instance.Status.ExistingActionGroup = &exists
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -237,7 +229,7 @@ func (r *ActionGroupReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -250,7 +242,7 @@ func (r *ActionGroupReconciler) Delete() error {
 		return nil
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}

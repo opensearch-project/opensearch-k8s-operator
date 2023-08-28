@@ -57,8 +57,8 @@ func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	roleReconciler := reconcilers.NewRoleReconciler(
-		ctx,
 		r.Client,
+		ctx,
 		r.Recorder,
 		r.Instance,
 	)

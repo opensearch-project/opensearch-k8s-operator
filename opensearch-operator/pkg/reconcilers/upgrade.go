@@ -10,16 +10,14 @@ import (
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
 	"opensearch.opster.io/pkg/helpers"
+	"opensearch.opster.io/pkg/reconcilers/k8s"
 	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -33,8 +31,7 @@ var (
 )
 
 type UpgradeReconciler struct {
-	client.Client
-	reconciler.ResourceReconciler
+	client            k8s.K8sClient
 	ctx               context.Context
 	osClient          *services.OsClusterClient
 	recorder          record.EventRecorder
@@ -52,9 +49,7 @@ func NewUpgradeReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *UpgradeReconciler {
 	return &UpgradeReconciler{
-		Client: client,
-		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "upgrade")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "upgrade")))...),
 		ctx:               ctx,
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
@@ -88,7 +83,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 
 	var err error
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.instance, nil)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -100,13 +95,9 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	switch currentStatus.Status {
 	case "Pending":
 		// Set it to upgrading and requeue
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			currentStatus.Status = "Upgrading"
-			r.instance.Status.ComponentsStatus = append(r.instance.Status.ComponentsStatus, currentStatus)
-			return r.Status().Update(r.ctx, r.instance)
+			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, currentStatus)
 		})
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", currentStatus.Description)
 		return ctrl.Result{
@@ -121,22 +112,18 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		}, err
 	case "Finished":
 		// Cleanup status after successful upgrade
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			r.instance.Status.Version = r.instance.Spec.General.Version
-			for _, pool := range r.instance.Spec.NodePools {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+			instance.Status.Version = instance.Spec.General.Version
+			for _, pool := range instance.Spec.NodePools {
 				componentStatus := opsterv1.ComponentStatus{
 					Component:   "Upgrader",
 					Description: pool.Component,
 				}
-				currentStatus, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndGroup)
+				currentStatus, found := helpers.FindFirstPartial(instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndGroup)
 				if found {
-					r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
+					instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 				}
 			}
-			return r.Status().Update(r.ctx, r.instance)
 		})
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade - NewVersion: %s", r.instance.Status.Version)
 		return ctrl.Result{}, err
@@ -290,18 +277,15 @@ func (r *UpgradeReconciler) findNextPool(pools []opsterv1.NodePool) (opsterv1.No
 
 func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 	var conditions []string
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	// Fetch the STS
 	stsName := builders.StsName(r.instance, &pool)
-	sts := &appsv1.StatefulSet{}
-	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	if err := r.Get(r.ctx, types.NamespacedName{
-		Name:      stsName,
-		Namespace: r.instance.Namespace,
-	}, sts); err != nil {
+	sts, err := r.client.GetStatefulSet(stsName, r.instance.Namespace)
+	if err != nil {
 		return err
 	}
 
-	dataCount := builders.DataNodesCount(r.ctx, r.Client, r.instance)
+	dataCount := util.DataNodesCount(r.client, r.instance)
 	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {
 		r.logger.Info("only 2 data nodes and drain is set, some shards may not drain")
 	}
@@ -337,10 +321,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade of node pool '%s'", pool.Component)
 
-		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
+		return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			currentStatus := opsterv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgrading",
@@ -351,13 +332,11 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 				Status:      "Upgraded",
 				Description: pool.Component,
 			}
-			r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-
-			return r.Status().Update(r.ctx, r.instance)
+			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 		})
 	}
 
-	workingPod, err := helpers.WorkingPodForRollingRestart(r.ctx, r.Client, sts)
+	workingPod, err := helpers.WorkingPodForRollingRestart(r.client, &sts)
 	if err != nil {
 		conditions = append(conditions, "Could not find working pod")
 		r.setComponentConditions(conditions, pool.Component)
@@ -376,7 +355,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		return nil
 	}
 
-	err = r.Delete(r.ctx, &corev1.Pod{
+	err = r.client.DeletePod(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workingPod,
 			Namespace: sts.Namespace,
@@ -401,16 +380,14 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 }
 
 func (r *UpgradeReconciler) setComponentConditions(conditions []string, component string) {
-	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-			return err
-		}
+
+	err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 		currentStatus := opsterv1.ComponentStatus{
 			Component:   "Upgrader",
 			Status:      "Upgrading",
 			Description: component,
 		}
-		componentStatus, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, currentStatus, helpers.GetByDescriptionAndGroup)
+		componentStatus, found := helpers.FindFirstPartial(instance.Status.ComponentsStatus, currentStatus, helpers.GetByDescriptionAndGroup)
 		newStatus := opsterv1.ComponentStatus{
 			Component:   "Upgrader",
 			Status:      "Upgrading",
@@ -421,9 +398,7 @@ func (r *UpgradeReconciler) setComponentConditions(conditions []string, componen
 			conditions = append(componentStatus.Conditions, conditions...)
 		}
 
-		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, newStatus, r.instance.Status.ComponentsStatus)
-
-		return r.Status().Update(r.ctx, r.instance)
+		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, newStatus, instance.Status.ComponentsStatus)
 	})
 	if err != nil {
 		r.logger.Error(err, "Could not update status")

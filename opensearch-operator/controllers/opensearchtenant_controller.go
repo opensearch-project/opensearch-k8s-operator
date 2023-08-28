@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -39,8 +40,8 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	tenantReconciler := reconcilers.NewTenantReconciler(
-		ctx,
 		r.Client,
+		ctx,
 		r.Recorder,
 		r.Instance,
 	)

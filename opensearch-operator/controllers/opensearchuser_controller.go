@@ -62,8 +62,8 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	userReconciler := reconcilers.NewUserReconciler(
-		ctx,
 		r.Client,
+		ctx,
 		r.Recorder,
 		r.Instance,
 	)
