@@ -221,6 +221,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>Snapshot Repo settings</td>
         <td>false</td>
         <td> - </td>
+      </tr><tr>
+        <td><b>additionalVolumes</b></td>
+        <td>[]object</td>
+        <td>List of additional volume mounts</td>
+        <td>false</td>
+        <td>-</td>
       </tr>
 </table>
 
@@ -676,3 +682,51 @@ Every Keystore Value defines a secret to pull secrets from.
       </tr>
     </tbody>
 </table>
+
+<h3 id="GeneralConfig">
+  AdditionalVolume
+</h3>
+
+AdditionalVolume object define additional volume and volumeMount
+<table>
+  <tbody>
+    <tr>
+      <td><b>name</b></td>
+      <td>string</td>
+      <td>Defines name for additional volume</td>
+      <td>true</td>
+      <td>-</td>
+    </tr><tr>
+      <td><b>path</b></td>
+      <td>string</td>
+      <td>Defines mount path for additional volume</td>
+      <td>true</td>
+      <td>-</td>
+    </tr><tr>
+      <td><b>restartPods</b></td>
+      <td>bool</td>
+      <td>Defines if pod should restar or not in case of change in VolumeSource object</td>
+      <td>false</td>
+      <td>false</td>
+    </tr><tr>
+      <td><b>emptyDir</b></td>
+      <td>corev1.EmptyDirVolumeSource</td>
+      <td>Defines emptyDir object to be mouted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr><tr>
+      <td><b>configMap</b></td>
+      <td>corev1.ConfigMapVolumeSource</td>
+      <td>Defines ConfgMap object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr><tr>
+      <td><b>secret</b></td>
+      <td>corev1.SecretVolumeSource</td>
+      <td>Defines Secret object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr>
+  </tbody>
+</table>
+

@@ -29,6 +29,7 @@ Features:
 - [x] Cluster configurations and nodes' settings updates.
 - [x] Operator Monitoring, with Prometheus and Grafana.
 - [ ] Auto scaler based on usage, load, and resources.
+- [ ] Ability to deploy data prepper solutions (logstash).
 
 A full roadmap is available in the [Development plan](./docs/designs/dev-plan.md).
 
