@@ -3,7 +3,6 @@ package reconcilers
 import (
 	"context"
 	"strings"
-	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -41,8 +40,6 @@ var _ = Describe("Configuration Controller", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "configuration-test"
-		timeout     = time.Second * 10
-		interval    = time.Second * 1
 	)
 
 	Context("When Reconciling the configuration controller with no configuration snippets", func() {

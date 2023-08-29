@@ -2,7 +2,6 @@ package reconcilers
 
 import (
 	"context"
-	"time"
 
 	"opensearch.opster.io/mocks/opensearch.opster.io/pkg/reconcilers/k8s"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -40,8 +39,6 @@ var _ = Describe("Securityconfig Reconciler", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "securityconfig"
-		timeout     = time.Second * 10
-		interval    = time.Second * 1
 	)
 
 	When("When Reconciling the securityconfig reconciler with no securityconfig provided in the spec", func() {
