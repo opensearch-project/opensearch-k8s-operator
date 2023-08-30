@@ -4,11 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
-	policy "k8s.io/api/policy/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"opensearch.opster.io/pkg/reconcilers/util"
 
 	"github.com/cisco-open/k8s-objectmatcher/patch"
@@ -301,50 +300,12 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 	}
 
-	// Habdle PDB
-	pdb := policy.PodDisruptionBudget{}
-
-	if nodePool.Pdb != nil && nodePool.Pdb.EnablePDB {
-
-		// Check if it already exist
-		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
-			r.logger.Info(" Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
-			return result, err
-
-		}
-		pdb = helpers.ComposePDB(*r.instance, nodePool)
-
-		result, err = r.ReconcileResource(&pdb, reconciler.StateCreated)
-		if err != nil {
-			return result, err
-		}
-	} else {
-		// if pdb is not enabled and pdb resource exist, deleting it
-		nsn := types.NamespacedName{
-			Namespace: r.instance.Namespace,
-			Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
-		}
-		if err = r.Get(r.ctx, nsn, &pdb); err == nil {
-			r.logger.Info("Deleting pdb" + pdb.Name)
-			// remove our finalizer from the resource and update it.
-			controllerutil.RemoveFinalizer(&pdb, "Opster")
-			if err = r.Update(r.ctx, &pdb); err != nil {
-				r.logger.Info("Tried to remove Finalizer from" + pdb.Name + "but got an  error")
-				return &ctrl.Result{}, err
-			}
-			err = r.Delete(r.ctx, &policy.PodDisruptionBudget{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      r.instance.Name + "-" + nodePool.Component + "-pdb",
-					Namespace: r.instance.Namespace,
-				},
-			})
-			if err != nil {
-				r.logger.Info("Tried to delete" + pdb.Name + "but got an  error")
-				return &ctrl.Result{}, err
-			}
-
-		}
+	// Handle PodDisruptionBudget
+	result, err = r.handlePDB(&nodePool)
+	if err != nil {
+		return result, err
 	}
+
 	// Handle PVC resizing
 
 	//Default is PVC, or explicit check for PersistenceSource as PVC
@@ -521,4 +482,33 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 	}
 
 	return &ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result, error) {
+	pdb := policyv1.PodDisruptionBudget{}
+
+	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
+		// Check if provided parameters are valid
+		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
+			r.logger.Info("Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
+			return &ctrl.Result{}, fmt.Errorf("please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
+
+		}
+		pdb = helpers.ComposePDB(r.instance, nodePool)
+		if err := ctrl.SetControllerReference(r.instance, &pdb, r.Client.Scheme()); err != nil {
+			return &ctrl.Result{}, err
+		}
+
+		return r.ReconcileResource(&pdb, reconciler.StatePresent)
+	} else {
+		// Make sure any existing PDB is removed if the feature is not enabled
+		pdb = policyv1.PodDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       r.instance.Name + "-" + nodePool.Component + "-pdb",
+				Namespace:  r.instance.Namespace,
+				Finalizers: r.instance.Finalizers,
+			},
+		}
+		return r.ReconcileResource(&pdb, reconciler.StateAbsent)
+	}
 }

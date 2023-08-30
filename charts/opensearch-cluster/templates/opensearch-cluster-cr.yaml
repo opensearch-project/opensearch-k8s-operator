@@ -48,6 +48,15 @@ spec:
     keystore:
       {{ toYaml .Values.opensearchCluster.general.keystore |  nindent 6 }}
     {{- end }}
+    {{- if .Values.opensearchCluster.general.command}}
+    command: {{ .Values.opensearchCluster.general.command | quote }}
+    {{- end }}
+    {{- if .Values.opensearchCluster.general.setVMMaxMapCount }}
+    setVMMaxMapCount: {{ .Values.opensearchCluster.general.setVMMaxMapCount }}
+    {{- end }}
+    {{- if .Values.opensearchCluster.general.drainDataNodes }}
+    drainDataNodes: {{ .Values.opensearchCluster.general.drainDataNodes }}
+    {{- end }}
     {{- if .Values.opensearchCluster.general.securityContext }}
     securityContext:
       {{ toYaml .Values.opensearchCluster.general.securityContext | nindent 6}}
@@ -164,6 +173,9 @@ spec:
   {{- end }}
   {{- if .Values.opensearchCluster.confMgmt }}
   confMgmt:
+    {{- if .Values.opensearchCluster.confMgmt.smartScaler }}
+    smartScaler: {{ .Values.opensearchCluster.confMgmt.smartScaler }}
+    {{- end }}
   {{- end }}
   nodePools:
   {{- range $key,$val := .Values.opensearchCluster.nodePools }}
@@ -171,7 +183,7 @@ spec:
       replicas: {{ $val.replicas }}
       {{- if  $val.pdb }}
       pdb: # Add pdb configuration
-        {{ toYaml  $val.pdb | nindent 8 }}
+        {{- toYaml $val.pdb | nindent 8 }}
       {{- end }}
       diskSize: {{ $val.diskSize | quote }}
       {{- if $val.jvm }}

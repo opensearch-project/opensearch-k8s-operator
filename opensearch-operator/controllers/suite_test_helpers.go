@@ -2,8 +2,9 @@ package controllers
 
 import (
 	"context"
-	"k8s.io/apimachinery/pkg/util/intstr"
 	"strings"
+
+	"k8s.io/apimachinery/pkg/util/intstr"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -183,7 +184,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			NodePools: []opsterv1.NodePool{{
 				Component: "master",
 				Pdb: &opsterv1.PdbConfig{
-					EnablePDB: true,
+					Enable: true,
 					MinAvailable: &intstr.IntOrString{
 						IntVal: 3,
 					},

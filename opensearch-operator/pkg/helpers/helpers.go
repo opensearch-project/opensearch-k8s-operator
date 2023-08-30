@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	batchv1 "k8s.io/api/batch/v1"
-	policyv1 "k8s.io/api/policy/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"reflect"
 	"sort"
 	"time"
+
+	batchv1 "k8s.io/api/batch/v1"
+	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/apimachinery/pkg/types"
 
 	version "github.com/hashicorp/go-version"
 	"github.com/samber/lo"
@@ -374,7 +375,7 @@ func CompareVersions(v1 string, v2 string) bool {
 	return err == nil && ver1.LessThan(ver2)
 }
 
-func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) policyv1.PodDisruptionBudget {
+func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) policyv1.PodDisruptionBudget {
 	matchLabels := map[string]string{
 		ClusterLabel:  cr.Name,
 		NodePoolLabel: nodepool.Component,
@@ -386,11 +387,11 @@ func ComposePDB(cr opsterv1.OpenSearchCluster, nodepool opsterv1.NodePool) polic
 			Finalizers: cr.Finalizers,
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
-			MinAvailable: nodepool.Pdb.MinAvailable,
+			MinAvailable:   nodepool.Pdb.MinAvailable,
+			MaxUnavailable: nodepool.Pdb.MaxUnavailable,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: matchLabels,
 			},
-			MaxUnavailable: nodepool.Pdb.MaxUnavailable,
 		},
 	}
 	return newpdb
@@ -415,7 +416,6 @@ func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	}
 
 	return nodePool.Jvm
-
 }
 
 func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
