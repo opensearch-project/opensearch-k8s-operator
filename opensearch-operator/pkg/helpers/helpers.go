@@ -382,9 +382,8 @@ func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) pol
 	}
 	newpdb := policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:       cr.Name + "-" + nodepool.Component + "-pdb",
-			Namespace:  cr.Namespace,
-			Finalizers: cr.Finalizers,
+			Name:      cr.Name + "-" + nodepool.Component + "-pdb",
+			Namespace: cr.Namespace,
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			MinAvailable:   nodepool.Pdb.MinAvailable,
