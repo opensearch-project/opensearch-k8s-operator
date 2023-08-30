@@ -134,6 +134,12 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 						},
 						RestartPods: true,
 					},
+					{
+						Name:        "test-emptydir",
+						Path:        "/tmp/",
+						EmptyDir:    &corev1.EmptyDirVolumeSource{},
+						RestartPods: false,
+					},
 				},
 			},
 			ConfMgmt: opsterv1.ConfMgmt{
@@ -179,9 +185,6 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Pdb: &opsterv1.PdbConfig{
 					EnablePDB: true,
 					MinAvailable: &intstr.IntOrString{
-						IntVal: 3,
-					},
-					MaxUnavailable: &intstr.IntOrString{
 						IntVal: 3,
 					},
 				},

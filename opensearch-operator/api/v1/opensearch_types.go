@@ -60,7 +60,7 @@ type GeneralConfig struct {
 }
 
 type PdbConfig struct {
-	Enable         bool                `json:"enable,omitempty"`
+	EnablePDB      bool                `json:"enable,omitempty"`
 	MinAvailable   *intstr.IntOrString `json:"minAvailable,omitempty"`
 	MaxUnavailable *intstr.IntOrString `json:"maxUnavailable,omitempty"`
 }

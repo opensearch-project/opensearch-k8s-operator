@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	"strings"
 
 	batchv1 "k8s.io/api/batch/v1"
 	policy "k8s.io/api/policy/v1"
