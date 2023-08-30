@@ -181,6 +181,10 @@ spec:
   {{- range $key,$val := .Values.opensearchCluster.nodePools }}
     - component: {{ $val.component }}
       replicas: {{ $val.replicas }}
+      {{- if  $val.pdb }}
+      pdb: # Add pdb configuration
+        {{- toYaml $val.pdb | nindent 8 }}
+      {{- end }}
       diskSize: {{ $val.diskSize | quote }}
       {{- if $val.jvm }}
       jvm: {{ $val.jvm | quote }}

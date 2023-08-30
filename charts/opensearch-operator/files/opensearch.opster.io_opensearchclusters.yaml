@@ -2739,6 +2739,7 @@ spec:
                       properties:
                         emptyDir:
                           description: emptyDir to use to populate the volume
+                          type: object
                           properties:
                             sizeLimit:
                               description: Total amount of local storage required for this EmptyDir volume
@@ -2746,7 +2747,6 @@ spec:
                             medium:
                               description: hat type of storage medium should back this directory
                               type: string
-                          type: object
                         configMap:
                           description: ConfigMap to use to populate the volume
                           properties:
@@ -4441,6 +4441,21 @@ spec:
                     nodeSelector:
                       additionalProperties:
                         type: string
+                      type: object
+                    pdb:
+                      properties:
+                        enable:
+                          type: boolean
+                        maxUnavailable:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
+                        minAvailable:
+                          anyOf:
+                          - type: integer
+                          - type: string
+                          x-kubernetes-int-or-string: true
                       type: object
                     persistence:
                       description: PersistencConfig defines options for data persistence

@@ -4,6 +4,8 @@ import (
 	"context"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/util/intstr"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -124,12 +126,6 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 						RestartPods: false,
 					},
 					{
-						Name:        "test-emptydir",
-						Path:        "/tmp/",
-						EmptyDir:    &corev1.EmptyDirVolumeSource{},
-						RestartPods: false,
-					},
-					{
 						Name: "test-cm",
 						Path: "/opt/test-cm",
 						ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -138,6 +134,12 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 							},
 						},
 						RestartPods: true,
+					},
+					{
+						Name:        "test-emptydir",
+						Path:        "/tmp/",
+						EmptyDir:    &corev1.EmptyDirVolumeSource{},
+						RestartPods: false,
 					},
 				},
 			},
@@ -181,8 +183,14 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			},
 			NodePools: []opsterv1.NodePool{{
 				Component: "master",
-				Replicas:  3,
-				DiskSize:  "32Gi",
+				Pdb: &opsterv1.PdbConfig{
+					Enable: true,
+					MinAvailable: &intstr.IntOrString{
+						IntVal: 3,
+					},
+				},
+				Replicas: 3,
+				DiskSize: "32Gi",
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),

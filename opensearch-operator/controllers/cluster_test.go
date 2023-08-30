@@ -6,16 +6,18 @@ import (
 	"sync"
 	"time"
 
-	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	policyv1 "k8s.io/api/policy/v1"
 
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -350,6 +352,16 @@ var _ = Describe("Cluster Reconciler", func() {
 				}
 				return OpensearchCluster.Status.Version == "2.0.0"
 			}, timeout, interval).Should(BeTrue())
+		})
+		It("should create a pdb resource", func() {
+			pdb := policyv1.PodDisruptionBudget{}
+			Eventually(func() bool {
+				if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: clusterName + "-master-pdb", Namespace: OpensearchCluster.Namespace}, &pdb); err != nil {
+					return false
+				}
+				return true
+			}, timeout, interval).Should(BeTrue())
+			Expect(*pdb.Spec.MinAvailable).To(Equal(intstr.FromInt(3)))
 		})
 	})
 

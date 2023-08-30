@@ -804,6 +804,33 @@ manager:
       value: "true"
 ```
 
+### PodDisruptionBudget
+
+The PDB (Pod Disruption Budget) is a Kubernetes resource that helps ensure the high availability of applications by defining the acceptable disruption level during maintenance or unexpected events.
+It specifies the minimum number of pods that must remain available to maintain the desired level of service.
+The PDB definition is unique for every nodePool.
+You must provide either `minAvailable` or `maxUnavailable` to configure PDB, but not both.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      pdb:
+        enable: true
+        minAvailable: 3
+    - component: datas
+      replicas: 7
+      diskSize: "100Gi"
+      pdb:
+        enable: true
+        maxUnavailable: 2
+```
+
 ### Exposing OpenSearch Dashboards
 
 If you want to expose the Dashboards instance of your cluster for users/services outside of your Kubernetes cluster, the recommended way is to do this via ingress.
