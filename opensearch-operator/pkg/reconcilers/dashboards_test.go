@@ -23,7 +23,7 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo..
 
 func newDashboardsReconciler(spec *opsterv1.OpenSearchCluster) (ReconcilerContext, *DashboardsReconciler) {
-	reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+	reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, spec, spec.Spec.NodePools)
 	underTest := NewDashboardsReconciler(
 		k8sClient,
 		context.Background(),
@@ -140,7 +140,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewDashboardsReconciler(
 				k8sClient,
 				context.Background(),
@@ -208,7 +208,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewDashboardsReconciler(
 				k8sClient,
 				context.Background(),
@@ -267,7 +267,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewDashboardsReconciler(
 				k8sClient,
 				context.Background(),
@@ -323,7 +323,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			err := k8sClient.Create(context.Background(), &ns)
 			Expect(err).ToNot(HaveOccurred())
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewDashboardsReconciler(
 				k8sClient,
 				context.Background(),
@@ -419,7 +419,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			})
 		})
 		It("mount the volumes in the deployment", func() {
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, spec, spec.Spec.NodePools)
 			underTest := NewDashboardsReconciler(
 				k8sClient,
 				context.Background(),

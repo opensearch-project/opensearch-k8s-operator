@@ -163,7 +163,7 @@ func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Context) (ctrl.Result, error) {
 	r.Logger.Info("Deleting resources")
 	// Run through all sub controllers to delete existing objects
-	reconcilerContext := reconcilers.NewReconcilerContext(r.Instance.Spec.NodePools)
+	reconcilerContext := reconcilers.NewReconcilerContext(r.Recorder, r.Instance, r.Instance.Spec.NodePools)
 
 	tls := reconcilers.NewTLSReconciler(
 		r.Client,
@@ -249,7 +249,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 	}
 
 	// Run through all sub controllers to create or update all needed objects
-	reconcilerContext := reconcilers.NewReconcilerContext(r.Instance.Spec.NodePools)
+	reconcilerContext := reconcilers.NewReconcilerContext(r.Recorder, r.Instance, r.Instance.Spec.NodePools)
 
 	tls := reconcilers.NewTLSReconciler(
 		r.Client,
