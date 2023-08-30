@@ -310,6 +310,14 @@ If you only want to load some keys from a secret or rename the existing keys, yo
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
 
+### SmartScaler
+
+What is SmartScaler?
+
+SmartScaler is a mechanism built into the Operator that enables nodes to be safely removed from the cluster. When a node is being removed from a cluster, the safe drain process ensures that all of its data is transferred to other nodes in the cluster before the node is taken offline. This prevents any data loss or corruption that could occur if the node were simply shut down or disconnected without first transferring its data to other nodes.
+
+During the safe drain process, the node being removed is marked as "draining", which means that it will no longer receive any new requests. Instead, it will only process outstanding requests until its workload has been completed. Once all requests have been processed, the node will begin transferring its data to other nodes in the cluster. The safe drain process will continue until all data has been transferred and the node is no longer part of the cluster. Only after that, the OMC will turn down the node.
+
 ### Set Java heap size
 
 To configure the amount of memory allocated to the OpenSearch nodes, configure the heap size using the JVM args. This operation is expected to have no downtime and the cluster should be operational.
@@ -333,6 +341,14 @@ spec:
         roles:
           - "data"
 ```
+
+If `jvm` is not provided then the java heap size will be set to half of
+`resources.requests.memory` which is the recommend value for data nodes
+
+If `jvm` is not provided and `resources.requests.memory` does not exist
+then value will be `-Xmx512M -Xms512M`.
+
+We don't support dynamic values depending on the node type for now.
 
 ### Deal with `max virtual memory areas vm.max_map_count` errors
 
@@ -678,7 +694,7 @@ spec:
 
 ### Additional Volumes
 
-Sometimes it is neccessary to mount ConfigMaps or Secrets into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`.  The format is as follows:
+Sometimes it is neccessary to mount ConfigMaps, Secrets or emptyDir into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`.  The format is as follows:
 
 ```yaml
 spec:
@@ -689,6 +705,9 @@ spec:
       configMap:
         name: config-map-name
       restartPods: true #set this to true to restart the pods when the content of the configMap changes
+    - name: temp
+      path: /tmp
+      emptyDir: {}
   dashboards:
     additionalVolumes:
     - name: example-secret
@@ -1086,7 +1105,6 @@ spec:
           MaxUnavailable: 2 
 ```
 ```
-
 
 
 ### Custom Admin User
