@@ -402,6 +402,7 @@ func GenerateSecretString() (string, error) {
 	secretString = secretString[:UpgradeCheckerCharsCount]
 
 	return secretString, nil
+}
 
 func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) policyv1.PodDisruptionBudget {
 	matchLabels := map[string]string{
@@ -422,7 +423,6 @@ func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) pol
 		},
 	}
 	return newpdb
-
 }
 
 func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
@@ -453,6 +453,7 @@ func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
 	_, found := FindFirstPartial(status.ComponentsStatus, componentStatus, GetByComponent)
 	return found
 }
+
 func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
 }
