@@ -48,6 +48,15 @@ spec:
     keystore:
       {{ toYaml .Values.opensearchCluster.general.keystore |  nindent 6 }}
     {{- end }}
+    {{- if .Values.opensearchCluster.general.command}}
+    command: {{ .Values.opensearchCluster.general.command | quote }}
+    {{- end }}
+    {{- if .Values.opensearchCluster.general.setVMMaxMapCount }}
+    setVMMaxMapCount: {{ .Values.opensearchCluster.general.setVMMaxMapCount }}
+    {{- end }}
+    {{- if .Values.opensearchCluster.general.drainDataNodes }}
+    drainDataNodes: {{ .Values.opensearchCluster.general.drainDataNodes }}
+    {{- end }}
     {{- if .Values.opensearchCluster.general.securityContext }}
     securityContext:
       {{ toYaml .Values.opensearchCluster.general.securityContext | nindent 6}}
@@ -165,17 +174,24 @@ spec:
   {{- if .Values.opensearchCluster.confMgmt }}
   confMgmt:
     {{- if .Values.opensearchCluster.confMgmt.smartScaler }}
-    smartScaler: .Values.opensearchCluster.confMgmt.smartScaler
+    smartScaler: {{ .Values.opensearchCluster.confMgmt.smartScaler }}
     {{- end }}
   {{- end }}
   nodePools:
   {{- range $key,$val := .Values.opensearchCluster.nodePools }}
     - component: {{ $val.component }}
       replicas: {{ $val.replicas }}
+      {{- if  $val.pdb }}
+      pdb: # Add pdb configuration
+        {{- toYaml $val.pdb | nindent 8 }}
+      {{- end }}
       diskSize: {{ $val.diskSize | quote }}
-      {{- if $val.NodeSelector }}
+      {{- if $val.jvm }}
+      jvm: {{ $val.jvm | quote }}
+      {{- end }}
+      {{- if $val.nodeSelector }}
       nodeSelector:
-        {{- toYaml $val.NodeSelector | nindent 8 }}
+        {{- toYaml $val.nodeSelector | nindent 8 }}
       {{- end }}
       {{- if  $val.labels }}
       labels: # Add any extra labels as key-value pairs here
@@ -231,9 +247,9 @@ spec:
           accessModes:
             {{  toYaml $val.persistence.pvc.accessModes | nindent 10 }}
           {{- end }}
-       {{- else if eq (len $val.persistence.emptyDir) 0 }}
-       emptyDir: {}
-       {{- end }}
+        {{- else if eq (len $val.persistence.emptyDir) 0 }}
+        emptyDir: {}
+        {{- end }}
      {{- end }}
       {{- if $val.additionalConfig }}
       additionalConfig:

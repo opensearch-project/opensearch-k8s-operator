@@ -1,0 +1,70 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+  namespace: default
+spec:
+  general:
+    version: "2.3.0"
+    httpPort: 9200
+    vendor: opensearch
+    serviceName: my-cluster
+    monitoring:
+     enable: true
+  dashboards:
+    version: "2.3.0"
+    enable: true
+    replicas: 1
+    resources:
+      requests:
+         memory: "1Gi"
+         cpu: "500m"
+      limits:
+         memory: "1Gi"
+         cpu: "500m"
+  confMgmt:
+    smartScaler: true
+  nodePools:
+    - component: masters
+      pdb:
+        enable: true
+        minAvailable: 1
+      replicas: 3
+      diskSize: "30Gi"
+      nodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "cluster_manager"
+        - "data"
+    - component: nodes
+      replicas: 3
+      diskSize: "30Gi"
+      nodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "data"
+    - component: coordinators
+      replicas: 3
+      diskSize: "30Gi"
+      nodeSelector:
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "500m"
+         limits:
+            memory: "2Gi"
+            cpu: "500m"
+      roles:
+        - "ingest"

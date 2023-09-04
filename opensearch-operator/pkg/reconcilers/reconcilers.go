@@ -66,7 +66,7 @@ type NodePoolHash struct {
 	ConfigHash string
 }
 
-func NewReconcilerContext(nodepools []opsterv1.NodePool) ReconcilerContext {
+func NewReconcilerContext(recorder record.EventRecorder, instance *opsterv1.OpenSearchCluster, nodepools []opsterv1.NodePool) ReconcilerContext {
 	var nodePoolHashes []NodePoolHash
 	for _, nodepool := range nodepools {
 		nodePoolHashes = append(nodePoolHashes, NodePoolHash{
@@ -77,6 +77,8 @@ func NewReconcilerContext(nodepools []opsterv1.NodePool) ReconcilerContext {
 		NodePoolHashes:   nodePoolHashes,
 		OpenSearchConfig: make(map[string]string),
 		DashboardsConfig: make(map[string]string),
+		recorder:         recorder,
+		instance:         instance,
 	}
 }
 
@@ -84,19 +86,17 @@ func (c *ReconcilerContext) AddConfig(key string, value string) {
 	_, exists := c.OpenSearchConfig[key]
 	if exists {
 		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
-		//	c.recorder.Event(c.instance, "Warning", "Config", fmt.Sprintf("Notice - Config key '%s' already exists. Will be overwrittenn\", key)", key))
+		c.recorder.Eventf(c.instance, "Warning", "ConfigDuplicateKey", "Config key '%s' already exists in opensearch config. Will be overwritten", key)
 	}
-	//	c.recorder.Event(c.instance, "Normal", "Config", fmt.Sprintf("Strating to add '%s' config", key))
 	c.OpenSearchConfig[key] = value
 }
 
 func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 	_, exists := c.DashboardsConfig[key]
 	if exists {
-		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
-		c.recorder.AnnotatedEventf(c.instance, map[string]string{"cluster-name": c.instance.GetName()}, "Warning", "Config", "Notice - Config key '%s' already exists in dashboard config. Will be overwritten\", key)", key)
+		fmt.Printf("Warning: Dashboards Config key '%s' already exists. Will be overwritten\n", key)
+		c.recorder.Eventf(c.instance, "Warning", "ConfigDuplicateKey", "Config key '%s' already exists in dashboards config. Will be overwritten", key)
 	}
-	//c.recorder.Event(c.instance, "Normal", "Config", fmt.Sprintf("Strating to add '%s' dashboard config", key))
 	c.DashboardsConfig[key] = value
 
 }

@@ -118,10 +118,12 @@ func MainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	return response, err
 }
 
-func (client *OsClusterClient) GetHealth() (responses.CatHealthResponse, error) {
-	req := opensearchapi.ClusterHealthRequest{}
+func (client *OsClusterClient) GetHealth() (responses.ClusterHealthResponse, error) {
+	req := opensearchapi.ClusterHealthRequest{
+		Level: "indices",
+	}
 	catNodesRes, err := req.Do(context.Background(), client.client)
-	var response responses.CatHealthResponse
+	var response responses.ClusterHealthResponse
 	if err == nil {
 		defer catNodesRes.Body.Close()
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)

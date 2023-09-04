@@ -12,9 +12,10 @@ import (
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
+	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/types"
 
-	"github.com/hashicorp/go-version"
+	version "github.com/hashicorp/go-version"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -401,6 +402,27 @@ func GenerateSecretString() (string, error) {
 	secretString = secretString[:UpgradeCheckerCharsCount]
 
 	return secretString, nil
+
+func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) policyv1.PodDisruptionBudget {
+	matchLabels := map[string]string{
+		ClusterLabel:  cr.Name,
+		NodePoolLabel: nodepool.Component,
+	}
+	newpdb := policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name + "-" + nodepool.Component + "-pdb",
+			Namespace: cr.Namespace,
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MinAvailable:   nodepool.Pdb.MinAvailable,
+			MaxUnavailable: nodepool.Pdb.MaxUnavailable,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: matchLabels,
+			},
+		},
+	}
+	return newpdb
+
 }
 
 func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {

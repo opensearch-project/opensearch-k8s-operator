@@ -694,7 +694,7 @@ spec:
 
 ### Additional Volumes
 
-Sometimes it is neccessary to mount ConfigMaps or Secrets into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`.  The format is as follows:
+Sometimes it is neccessary to mount ConfigMaps, Secrets or emptyDir into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`.  The format is as follows:
 
 ```yaml
 spec:
@@ -705,6 +705,9 @@ spec:
       configMap:
         name: config-map-name
       restartPods: true #set this to true to restart the pods when the content of the configMap changes
+    - name: temp
+      path: /tmp
+      emptyDir: {}
   dashboards:
     additionalVolumes:
     - name: example-secret
@@ -799,6 +802,33 @@ manager:
   extraEnv:
     - name: SKIP_INIT_CONTAINER
       value: "true"
+```
+
+### PodDisruptionBudget
+
+The PDB (Pod Disruption Budget) is a Kubernetes resource that helps ensure the high availability of applications by defining the acceptable disruption level during maintenance or unexpected events.
+It specifies the minimum number of pods that must remain available to maintain the desired level of service.
+The PDB definition is unique for every nodePool.
+You must provide either `minAvailable` or `maxUnavailable` to configure PDB, but not both.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      pdb:
+        enable: true
+        minAvailable: 3
+    - component: datas
+      replicas: 7
+      diskSize: "100Gi"
+      pdb:
+        enable: true
+        maxUnavailable: 2
 ```
 
 ### Exposing OpenSearch Dashboards
