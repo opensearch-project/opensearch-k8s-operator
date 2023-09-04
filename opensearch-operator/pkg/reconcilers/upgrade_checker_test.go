@@ -3,9 +3,11 @@ package reconcilers
 import (
 	"encoding/xml"
 	"fmt"
-
+	. "github.com/onsi/ginkgo/v2"
+	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
 	"io"
 	"log"
 	"net/http"
@@ -16,6 +18,40 @@ import (
 type ServerClient interface {
 	SendJSON(jsonData []byte) (bool, error)
 }
+
+var _ = Describe("SendJSONToServer", func() {
+	var (
+		mockClient *MockServerClient
+	)
+
+	BeforeEach(func() {
+		mockClient = new(MockServerClient)
+	})
+
+	It("should return true for the latest version", func() {
+
+		print("INSIDE OF mock")
+		mockClient.On("SendJSON", mock.Anything).Return(true, nil)
+
+		latestVersion, err := FetchLatestVersion("https://artifacthub.io/api/v1/packages/helm/opensearch-operator/opensearch-operator/feed/rss")
+		if err != nil {
+			fmt.Printf("Error fetching latest version: %v\n", err)
+			return
+		}
+		result := SendJSONToServer(mockClient, latestVersion)
+
+		Expect(result).To(BeTrue())
+	})
+
+	It("should return false for a specific version", func() {
+		mockClient.On("SendJSON", mock.Anything).Return(false, nil)
+
+		result := SendJSONToServer(mockClient, "1.0.0")
+
+		Expect(result).To(BeFalse())
+	})
+
+})
 
 type MockServerClient struct {
 	mock.Mock
