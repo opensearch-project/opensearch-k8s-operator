@@ -10,6 +10,12 @@ To get all the capabilities of the Operator with a UI, you can use the free [Ops
 
 The Operator can be easily installed using helm on any CNCF-certified Kubernetes cluster. Please refer to the [User Guide](./docs/userguide/main.md) for installation instructions.
 
+## Roadmap
+
+- Auto-Scaler.
+- OpenShift support.
+- Data-prepper support.
+
 ## Current feature list
 
 Features:
@@ -28,10 +34,7 @@ Features:
 - [x] Scaling nodes' disks - increase disk size.
 - [x] Cluster configurations and nodes' settings updates.
 - [x] Operator Monitoring, with Prometheus and Grafana.
-- [ ] Auto scaler based on usage, load, and resources.
-- [ ] Ability to deploy data prepper solutions (logstash).
 
-A full roadmap is available in the [Development plan](./docs/designs/dev-plan.md).
 
 ## Installation
 

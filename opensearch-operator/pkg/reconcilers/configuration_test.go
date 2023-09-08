@@ -66,7 +66,7 @@ var _ = Describe("Configuration Controller", func() {
 				},
 			}
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 
 			underTest := newConfigurationReconciler(
 				mockClient,
@@ -113,7 +113,7 @@ var _ = Describe("Configuration Controller", func() {
 					return &ctrl.Result{}, nil
 				})
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 
 			underTest := newConfigurationReconciler(
 				mockClient,

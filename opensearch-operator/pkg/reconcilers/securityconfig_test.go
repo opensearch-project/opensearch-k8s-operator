@@ -11,6 +11,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/helpers"
 
@@ -48,7 +49,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
 				mockClient,
 				context.Background(),
@@ -77,7 +78,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				}}
 			mockClient.EXPECT().GetSecret("foobar", clusterName).Return(corev1.Secret{}, NotFoundError())
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
 				mockClient,
 				context.Background(),
@@ -139,7 +140,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				},
 			}
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
 				mockClient,
 				context.Background(),
@@ -199,7 +200,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					},
 				}}
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
 				mockClient,
 				context.Background(),
@@ -228,7 +229,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					},
 				}}
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
 				mockClient,
 				context.Background(),
@@ -269,7 +270,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					return &ctrl.Result{}, nil
 				})
 
-			reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
 				mockClient,
 				context.Background(),

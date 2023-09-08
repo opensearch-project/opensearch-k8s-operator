@@ -23,7 +23,7 @@ import (
 )
 
 func newDashboardsReconciler(k8sClient *k8s.MockK8sClient, spec *opsterv1.OpenSearchCluster) (ReconcilerContext, *DashboardsReconciler) {
-	reconcilerContext := NewReconcilerContext(spec.Spec.NodePools)
+	reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, spec, spec.Spec.NodePools)
 	underTest := &DashboardsReconciler{
 		client:            k8sClient,
 		reconcilerContext: &reconcilerContext,

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	policyv1 "k8s.io/api/policy/v1"
 	"opensearch.opster.io/pkg/reconcilers/k8s"
 	"opensearch.opster.io/pkg/reconcilers/util"
 
@@ -14,6 +15,7 @@ import (
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/pkg/builders"
@@ -280,6 +282,15 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}
 	}
 
+	// Handle PodDisruptionBudget
+	result, err = r.handlePDB(&nodePool)
+	if err != nil {
+		return result, err
+	}
+
+	// Handle PVC resizing
+
+	//Default is PVC, or explicit check for PersistenceSource as PVC
 	// Handle volume resizing, but only if we are using PVCs
 	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
 		if nodePool.DiskSize == "" { // Default case
@@ -445,4 +456,33 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 	}
 
 	return &ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result, error) {
+	pdb := policyv1.PodDisruptionBudget{}
+
+	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
+		// Check if provided parameters are valid
+		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
+			r.logger.Info("Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
+			return &ctrl.Result{}, fmt.Errorf("please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
+
+		}
+		pdb = helpers.ComposePDB(r.instance, nodePool)
+		if err := ctrl.SetControllerReference(r.instance, &pdb, r.client.Scheme()); err != nil {
+			return &ctrl.Result{}, err
+		}
+
+		return r.client.ReconcileResource(&pdb, reconciler.StatePresent)
+	} else {
+		// Make sure any existing PDB is removed if the feature is not enabled
+		pdb = policyv1.PodDisruptionBudget{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:       r.instance.Name + "-" + nodePool.Component + "-pdb",
+				Namespace:  r.instance.Namespace,
+				Finalizers: r.instance.Finalizers,
+			},
+		}
+		return r.client.ReconcileResource(&pdb, reconciler.StateAbsent)
+	}
 }

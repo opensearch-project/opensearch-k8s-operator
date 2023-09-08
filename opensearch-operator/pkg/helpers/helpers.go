@@ -7,9 +7,12 @@ import (
 	"sort"
 	"time"
 
-	"github.com/hashicorp/go-version"
+	policyv1 "k8s.io/api/policy/v1"
+
+	version "github.com/hashicorp/go-version"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
 	opsterv1 "opensearch.opster.io/api/v1"
@@ -346,6 +349,27 @@ func CompareVersions(v1 string, v2 string) bool {
 	ver1, err := version.NewVersion(v1)
 	ver2, _ := version.NewVersion(v2)
 	return err == nil && ver1.LessThan(ver2)
+}
+
+func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) policyv1.PodDisruptionBudget {
+	matchLabels := map[string]string{
+		ClusterLabel:  cr.Name,
+		NodePoolLabel: nodepool.Component,
+	}
+	newpdb := policyv1.PodDisruptionBudget{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      cr.Name + "-" + nodepool.Component + "-pdb",
+			Namespace: cr.Namespace,
+		},
+		Spec: policyv1.PodDisruptionBudgetSpec{
+			MinAvailable:   nodepool.Pdb.MinAvailable,
+			MaxUnavailable: nodepool.Pdb.MaxUnavailable,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: matchLabels,
+			},
+		},
+	}
+	return newpdb
 }
 
 func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
