@@ -75,6 +75,11 @@ docker-build: generate fmt vet ## Build docker image with the manager.
 	go install opensearch.opster.io/pkg/helpers
 	DOCKER_BUILDKIT=1 docker build -t ${IMG} .
 
+docker-build-oracle: generate fmt vet ## Build docker image with the manager.
+	go install opensearch.opster.io/pkg/builders
+	go install opensearch.opster.io/pkg/helpers
+	DOCKER_BUILDKIT=1 docker build -t ${IMG} -f Dockerfile.oracle .
+
 docker-build-multiarch: ## Build docker image with the manager for all supported architectures
 	go install opensearch.opster.io/pkg/builders
 	go install opensearch.opster.io/pkg/helpers
