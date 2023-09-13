@@ -13,6 +13,7 @@ import (
 	"github.com/cisco-open/k8s-objectmatcher/patch"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -311,55 +312,9 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	//Default is PVC, or explicit check for PersistenceSource as PVC
 	// Handle volume resizing, but only if we are using PVCs
 	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
-		if nodePool.DiskSize == "" { // Default case
-			nodePool.DiskSize = builders.DefaultDiskSize
-		}
-
-		existingDisk := *existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage()
-		nodePoolDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
+		err := r.maybeUpdateVolumes(existing, nodePool)
 		if err != nil {
-			r.logger.Error(err, fmt.Sprintf("Invalid diskSize '%s' for nodepool %s", nodePool.DiskSize, nodePool.Component))
 			return result, err
-		}
-
-		if existingDisk.Equal(nodePoolDiskSize) {
-			r.logger.Info("The existing disk size " + existingDisk.String() + " is same as passed in disk size " + nodePoolDiskSize.String())
-		} else {
-			r.logger.Info("Disk sizes differ for nodePool %s: current: %s, desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
-			annotations := map[string]string{"cluster-name": r.instance.GetName()}
-			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
-			// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
-			r.logger.Info("Deleting statefulset while orphaning pods " + existing.Name)
-			opts := client.DeleteOptions{}
-			client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
-			if err := r.Delete(r.ctx, existing, &opts); err != nil {
-				r.logger.Info("Failed to delete statefulset" + existing.Name)
-				return result, err
-			}
-
-			// Identify the PVC for each statefulset pod and patch with the new size
-			for i := 0; i < int(*existing.Spec.Replicas); i++ {
-				clusterName := r.instance.Name
-				claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
-				var pvc corev1.PersistentVolumeClaim
-				nsn := types.NamespacedName{
-					Namespace: existing.Namespace,
-					Name:      claimName,
-				}
-				if err := r.Get(r.ctx, nsn, &pvc); err != nil {
-					r.logger.Info("Failed to get pvc" + pvc.Name)
-					return result, err
-				}
-
-				pvc.Spec.Resources.Requests["storage"] = nodePoolDiskSize
-
-				if err := r.Update(r.ctx, &pvc); err != nil {
-					r.logger.Error(err, fmt.Sprintf("Failed to resize statefulset pvc %s", pvc.Name))
-					r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
-					return result, err
-				}
-			}
-			// STS will be recreated by the normal reconcile below
 		}
 	}
 
@@ -511,4 +466,73 @@ func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result
 		}
 		return r.ReconcileResource(&pdb, reconciler.StateAbsent)
 	}
+}
+
+func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opsterv1.NodePool) error {
+	if nodePool.DiskSize == "" { // Default case
+		nodePool.DiskSize = builders.DefaultDiskSize
+	}
+
+	// If we are changing from ephemeral storage to persistent
+	// just delete the statefulset and let it be recreated
+	if len(existing.Spec.VolumeClaimTemplates) < 1 {
+		if err := r.deleteSTSWithOrphan(existing); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	existingDisk := lo.FromPtr(existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage())
+	nodePoolDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
+	if err != nil {
+		r.logger.Error(err, fmt.Sprintf("Invalid diskSize '%s' for nodepool %s", nodePool.DiskSize, nodePool.Component))
+		return err
+	}
+
+	if existingDisk.Equal(nodePoolDiskSize) {
+		r.logger.Info("The existing disk size " + existingDisk.String() + " is same as passed in disk size " + nodePoolDiskSize.String())
+		return nil
+	}
+	r.logger.Info("Disk sizes differ for nodePool %s: current: %s, desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
+	// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
+	if err := r.deleteSTSWithOrphan(existing); err != nil {
+		return err
+	}
+
+	// Identify the PVC for each statefulset pod and patch with the new size
+	for i := 0; i < int(lo.FromPtrOr(existing.Spec.Replicas, 1)); i++ {
+		clusterName := r.instance.Name
+		claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
+		var pvc corev1.PersistentVolumeClaim
+		nsn := types.NamespacedName{
+			Namespace: existing.Namespace,
+			Name:      claimName,
+		}
+		if err := r.Get(r.ctx, nsn, &pvc); err != nil {
+			r.logger.Info("Failed to get pvc" + pvc.Name)
+			return err
+		}
+
+		pvc.Spec.Resources.Requests["storage"] = nodePoolDiskSize
+
+		if err := r.Update(r.ctx, &pvc); err != nil {
+			r.logger.Error(err, fmt.Sprintf("Failed to resize statefulset pvc %s", pvc.Name))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) error {
+	r.logger.Info("Deleting statefulset while orphaning pods " + existing.Name)
+	opts := client.DeleteOptions{}
+	client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
+	if err := r.Delete(r.ctx, existing, &opts); err != nil {
+		r.logger.Info("Failed to delete statefulset" + existing.Name)
+		return err
+	}
+	return nil
 }
