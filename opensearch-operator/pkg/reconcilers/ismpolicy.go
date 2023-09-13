@@ -2,10 +2,8 @@ package reconcilers
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/go-logr/logr"
-	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
@@ -14,7 +12,6 @@ import (
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/reconcilers/util"
-	"reflect"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -23,7 +20,6 @@ import (
 
 const (
 	ismPolicyExists = "ism policy already exists in Opensearch"
-	ismResource     = "_ism"
 )
 
 type IsmPolicyReconciler struct {
@@ -90,7 +86,15 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 			r.logger.Error(err, "failed to update status")
 		}
 	}()
-
+	// Check cluster ref has not changed
+	if r.instance.Status.ManagedCluster != nil {
+		if *r.instance.Status.ManagedCluster != r.cluster.UID {
+			reason = "cannot change the cluster a role refers to"
+			retErr = fmt.Errorf("%s", reason)
+			r.recorder.Event(r.instance, "Warning", opensearchRefMismatch, reason)
+			return
+		}
+	}
 	var err error
 	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
@@ -133,7 +137,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	// Check ism policy state to make sure we don't touch preexisting ism policy
 	if r.instance.Status.ExistingISMPolicy == nil {
 		var exists bool
-		exists, retErr = PolicyExists(r.ctx, r.osClient, r.instance.Spec.PolicyID)
+		exists, retErr = services.PolicyExists(r.ctx, r.osClient, r.instance.Spec.PolicyID)
 		if retErr != nil {
 			reason = "failed to get policy status from Opensearch API"
 			r.logger.Error(retErr, reason)
@@ -172,33 +176,16 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 		return
 	}
-	resp, retErr := r.osClient.GetISMConfig(r.ctx, ismResource, r.instance.Spec.PolicyID)
+	resp, retErr := services.GetPolicy(r.ctx, r.osClient, r.instance.Spec.PolicyID)
 	if retErr != nil {
 		reason = "failed to get policy from Opensearch API"
 		r.logger.Error(retErr, reason)
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 		return
 	}
-	defer resp.Body.Close()
-
-	if resp.IsError() && resp.StatusCode != 404 {
-		reason = "failed to get policy from Opensearch API"
-		return
-	}
-
-	ismResponse := requests.Policy{}
-	err = json.NewDecoder(resp.Body).Decode(&ismResponse)
-	if err != nil {
-		return
-	}
-	priterm := ismResponse.PrimaryTerm
-	seqno := ismResponse.SequenceNumber
-	// Reset
-	ismResponse.PrimaryTerm = nil
-	ismResponse.SequenceNumber = nil
 	if resp.StatusCode == 404 {
 		r.logger.V(1).Info(fmt.Sprintf("policy %s not found, creating.", r.instance.Spec.PolicyID))
-		retErr = r.CreateISMPolicy(r.ctx, *ismpolicy)
+		retErr = services.CreateISMPolicy(r.ctx, r.osClient, *ismpolicy, r.instance.Spec.PolicyID)
 		if retErr != nil {
 			reason = "failed to create ism policy"
 			r.logger.Error(retErr, reason)
@@ -208,7 +195,16 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "policy created in opensearch")
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
-	shouldUpdate, retErr := ShouldUpdateISMPolicy(r.ctx, *ismpolicy, ismResponse)
+	ismResponse, err := services.GetPolicyFromResponse(r.ctx, resp)
+	if err != nil {
+		return
+	}
+	priterm := ismResponse.PrimaryTerm
+	seqno := ismResponse.SequenceNumber
+	// Reset
+	ismResponse.PrimaryTerm = nil
+	ismResponse.SequenceNumber = nil
+	shouldUpdate, retErr := services.ShouldUpdateISMPolicy(r.ctx, *ismpolicy, *ismResponse)
 	if retErr != nil {
 		reason = "failed to compare the policies"
 		r.logger.Error(retErr, reason)
@@ -221,7 +217,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
 
-	retErr = r.UpdateISMPolicy(r.ctx, *ismpolicy, seqno, priterm)
+	retErr = services.UpdateISMPolicy(r.ctx, r.osClient, *ismpolicy, seqno, priterm, r.instance.Spec.PolicyID)
 	if retErr != nil {
 		reason = "failed to update ism policy with Opensearch API"
 		r.logger.Error(retErr, reason)
@@ -489,61 +485,15 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 	}
 	return &ismPolicy, nil
 }
-func PolicyExists(ctx context.Context, service *services.OsClusterClient, policyName string) (bool, error) {
-	resp, err := service.GetISMConfig(ctx, ismResource, policyName)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode == 404 {
-		return false, nil
-	} else if resp.IsError() {
-		return false, fmt.Errorf("response from API is %s", resp.Status())
-	}
-	return true, nil
-}
-func ShouldUpdateISMPolicy(ctx context.Context, newPolicy, existingPolicy requests.Policy) (bool, error) {
-	if reflect.DeepEqual(newPolicy, existingPolicy) {
-		return false, nil
-	}
-	lg := log.FromContext(ctx).WithValues("os_service", "policy")
-	lg.V(1).Info(fmt.Sprintf("existing policy: %+v", existingPolicy))
-	lg.V(1).Info(fmt.Sprintf("new policy: %+v", newPolicy))
-	lg.Info("policy exists and requires update")
-	return true, nil
-}
-
-func (r *IsmPolicyReconciler) CreateISMPolicy(ctx context.Context, ismpolicy requests.Policy) error {
-	spec := opensearchutil.NewJSONReader(ismpolicy)
-	resp, err := r.osClient.PutISMConfig(r.ctx, ismResource, r.instance.Spec.PolicyID, spec)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.IsError() {
-		return fmt.Errorf("failed to create ism policy: %s", resp.String())
-	}
-	return nil
-}
-
-func (r *IsmPolicyReconciler) UpdateISMPolicy(ctx context.Context, ismpolicy requests.Policy, seqno, primterm *int) error {
-	spec := opensearchutil.NewJSONReader(ismpolicy)
-	resp, err := r.osClient.UpdateISMConfig(r.ctx, ismResource, r.instance.Spec.PolicyID, *seqno, *primterm, spec)
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-	if resp.IsError() {
-		return fmt.Errorf("Failed to create ism policy: %s", resp.String())
-	}
-	return nil
-}
 
 // Delete ISM policy from the OS cluster
 func (r *IsmPolicyReconciler) Delete() error {
 	// If we have never successfully reconciled we can just exit
 	if r.instance.Status.ExistingISMPolicy == nil {
+		return nil
+	}
+	if *r.instance.Status.ExistingISMPolicy {
+		r.logger.Info("policy was pre-existing; not deleting")
 		return nil
 	}
 	var err error
@@ -563,13 +513,9 @@ func (r *IsmPolicyReconciler) Delete() error {
 	if err != nil {
 		return err
 	}
-	resp, err := r.osClient.DeleteISMConfig(r.ctx, ismResource, r.instance.Spec.PolicyID)
+	err = services.DeleteISMPolicy(r.ctx, r.osClient, r.instance.Spec.PolicyID)
 	if err != nil {
 		return err
-	}
-	defer resp.Body.Close()
-	if resp.IsError() {
-		return fmt.Errorf("Failed to delete ism policy: %s", resp.String())
 	}
 	return nil
 }

@@ -47,7 +47,6 @@ type ISMPolicySpec struct {
 	// Specify an ISM template pattern that matches the index to apply the policy.
 	ISMTemplate *ISMTemplate `json:"ismTemplate,omitempty"`
 	PolicyID    string       `json:"policyId,omitempty"`
-	// The time the policy was last updated.
 	// The states that you define in the policy.
 	States []State `json:"states"`
 }

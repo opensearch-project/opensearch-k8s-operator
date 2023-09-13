@@ -20,6 +20,7 @@ const (
 	headerContentType = "Content-Type"
 
 	jsonContentHeader = "application/json"
+	ismResource       = "_ism"
 )
 
 var (
@@ -309,26 +310,26 @@ func (client *OsClusterClient) DeleteSecurityResource(ctx context.Context, resou
 }
 
 // GetISMConfig performs an HTTP GET request to OS to get the ISM policy resource specified by name
-func (client *OsClusterClient) GetISMConfig(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
-	path := generateAPIPathISM(resource, name)
+func (client *OsClusterClient) GetISMConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(ismResource, name)
 	return doHTTPGet(ctx, client.client, path)
 }
 
 // PutISMConfig performs an HTTP PUT request to OS to create the ISM policy resource specified by name
-func (client *OsClusterClient) PutISMConfig(ctx context.Context, resource, name string, body io.Reader) (*opensearchapi.Response, error) {
-	path := generateAPIPathISM(resource, name)
+func (client *OsClusterClient) PutISMConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(ismResource, name)
 	return doHTTPPut(ctx, client.client, path, body)
 }
 
 // UpdateISMConfig performs an HTTP PUT request to OS to update the ISM policy resource specified by name
-func (client *OsClusterClient) UpdateISMConfig(ctx context.Context, resource, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
-	path := generateAPIPathUpdateISM(resource, name, seqnumber, primterm)
+func (client *OsClusterClient) UpdateISMConfig(ctx context.Context, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathUpdateISM(ismResource, name, seqnumber, primterm)
 	return doHTTPPut(ctx, client.client, path, body)
 }
 
 // DeleteISMConfig performs an HTTP DELETE request to OS to delete the ISM policy resource specified by name
-func (client *OsClusterClient) DeleteISMConfig(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
-	path := generateAPIPathISM(resource, name)
+func (client *OsClusterClient) DeleteISMConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(ismResource, name)
 	return doHTTPDelete(ctx, client.client, path)
 }
 
