@@ -479,6 +479,16 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			lg.Error(err, "Failed to update cluster status")
 			return &ctrl.Result{Requeue: true}, err
 		}
+
+		// Also Delete OSD deployment so .kibana index can be recreated when cluster is started again
+		if r.instance.Spec.Dashboards.Enable {
+			err := helpers.DeleteOSDDeployment(r.ctx, r.Client, clusterName, clusterNamespace)
+			if err != nil {
+				lg.Error(err, "Failed to delete OSD pod")
+				return &ctrl.Result{Requeue: true}, err
+			}
+			// OSD deployment will be recreated normally through the reconcile cycle
+		}
 	}
 
 	return &ctrl.Result{}, nil
