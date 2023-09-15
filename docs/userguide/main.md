@@ -598,9 +598,9 @@ nodePools:
 
 ### Security Context for pods and containers
 
-You can set the security context for the Opensearch pods and the Dashboard pod. This is useful when you want to define privilege and access control settings for a Pod or Container. To specify security settings for Pods, include the `podSecurityContext` field and for Containers, include the `securityContext` field.
+You can set the security context for the Opensearch pods and the Dashboard pod. This is useful when you want to define privilege and access control settings for a Pod or Container. To specify security settings for Pods, include the `podSecurityContext` field and for containers, include the `securityContext` field.
 
-The structure is the same for both Opensearch pods and the Dashboard pod:
+The structure is the same for both Opensearch pods (in `spec.general`) and the Dashboard pod (in `spec.dashboards`):
 
 ```yaml
 spec:
@@ -622,6 +622,10 @@ spec:
         - ALL
       privileged: false
 ```
+
+The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions and does not use any defined securityContext. If your kubernetes environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches an init container with root.
+
+Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods (with the same limitations for the init containers).
 
 ### Labels or Annotations on OpenSearch nodes
 
