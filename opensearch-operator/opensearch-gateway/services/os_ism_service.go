@@ -3,14 +3,16 @@ package services
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"reflect"
 
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+var ErrNotFound = errors.New("Policy not found")
 
 // ShouldUpdateISMPolicy checks if the passed policy is same as existing or needs update
 func ShouldUpdateISMPolicy(ctx context.Context, newPolicy, existingPolicy requests.Policy) (bool, error) {
@@ -40,12 +42,27 @@ func PolicyExists(ctx context.Context, service *OsClusterClient, policyName stri
 }
 
 // GetPolicy fetches the passed policy
-func GetPolicy(ctx context.Context, service *OsClusterClient, policyName string) (*opensearchapi.Response, error) {
+func GetPolicy(ctx context.Context, service *OsClusterClient, policyName string) (*requests.Policy, error) {
 	resp, err := service.GetISMConfig(ctx, policyName)
 	if err != nil {
 		return nil, err
 	}
-	return resp, nil
+	defer resp.Body.Close()
+	if resp.StatusCode == 404 {
+		return nil, ErrNotFound
+
+	} else if resp.IsError() {
+		return nil, fmt.Errorf("response from API is %s", resp.Status())
+	}
+	ismResponse := requests.Policy{}
+	if resp != nil && resp.Body != nil {
+		err := json.NewDecoder(resp.Body).Decode(&ismResponse)
+		if err != nil {
+			return nil, err
+		}
+		return &ismResponse, nil
+	}
+	return nil, fmt.Errorf("response is empty")
 }
 
 // CreateISMPolicy creates the passed policy
@@ -89,15 +106,15 @@ func DeleteISMPolicy(ctx context.Context, service *OsClusterClient, policyName s
 	return nil
 }
 
-// GetPolicyFromResponse extracts the policy from the response
-func GetPolicyFromResponse(ctx context.Context, resp *opensearchapi.Response) (*requests.Policy, error) {
-	ismResponse := requests.Policy{}
-	if resp != nil && resp.Body != nil {
-		err := json.NewDecoder(resp.Body).Decode(&ismResponse)
-		if err != nil {
-			return nil, err
-		}
-		return &ismResponse, nil
-	}
-	return nil, fmt.Errorf("response is empty")
-}
+//// GetPolicyFromResponse extracts the policy from the response
+//func GetPolicyFromResponse(ctx context.Context, resp *opensearchapi.Response) (*requests.Policy, error) {
+//	ismResponse := requests.Policy{}
+//	if resp != nil && resp.Body != nil {
+//		err := json.NewDecoder(resp.Body).Decode(&ismResponse)
+//		if err != nil {
+//			return nil, err
+//		}
+//		return &ismResponse, nil
+//	}
+//	return nil, fmt.Errorf("response is empty")
+//}

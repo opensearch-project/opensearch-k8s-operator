@@ -1206,9 +1206,7 @@ spec:
 
 The operator provides a custom Kubernetes resource that allow you to create/update/manage ISM policies using Kubernetes objects.
 
-#### OpenSearch ISM policy
-
-It is possible to manage OpenSearch ISM policies in Kubernetes with the operator. The operator will not modify policies that already exist. You can create an example policy as follows:
+It is possible to manage OpenSearch ISM policies in Kubernetes with the operator. Fields in the CRD directly maps to the OpenSearch ISM Policy structure. The operator will not modify policies that already exist. You can create an example policy as follows:
 
 ```yaml
 apiVersion: opensearch.opster.io/v1
@@ -1243,7 +1241,7 @@ spec:
            - delete: {}
 ```
 
-The namespace of the `ISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in.
+The namespace of the `ISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in. `policyId` is an optional field, and if not provided `metadata.name` is used as the default.
 ```
 
 ## Managing index and component templates

@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
@@ -86,15 +87,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 			r.logger.Error(err, "failed to update status")
 		}
 	}()
-	// Check cluster ref has not changed
-	if r.instance.Status.ManagedCluster != nil {
-		if *r.instance.Status.ManagedCluster != r.cluster.UID {
-			reason = "cannot change the cluster a role refers to"
-			retErr = fmt.Errorf("%s", reason)
-			r.recorder.Event(r.instance, "Warning", opensearchRefMismatch, reason)
-			return
-		}
-	}
+
 	var err error
 	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
@@ -115,6 +108,15 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 			RequeueAfter: 10 * time.Second,
 		}
 		return
+	}
+	// Check cluster ref has not changed
+	if r.instance.Status.ManagedCluster != nil {
+		if *r.instance.Status.ManagedCluster != r.cluster.UID {
+			reason = "cannot change the cluster a role refers to"
+			retErr = fmt.Errorf("%s", reason)
+			r.recorder.Event(r.instance, "Warning", opensearchRefMismatch, reason)
+			return
+		}
 	}
 	// Check cluster is ready
 	if r.cluster.Status.Phase != opsterv1.PhaseRunning {
@@ -176,14 +178,14 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 		return
 	}
-	resp, retErr := services.GetPolicy(r.ctx, r.osClient, r.instance.Spec.PolicyID)
-	if retErr != nil {
+	ismResponse, retErr := services.GetPolicy(r.ctx, r.osClient, r.instance.Spec.PolicyID)
+	if retErr != nil && retErr != services.ErrNotFound {
 		reason = "failed to get policy from Opensearch API"
 		r.logger.Error(retErr, reason)
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 		return
 	}
-	if resp.StatusCode == 404 {
+	if errors.Is(retErr, services.ErrNotFound) {
 		r.logger.V(1).Info(fmt.Sprintf("policy %s not found, creating.", r.instance.Spec.PolicyID))
 		retErr = services.CreateISMPolicy(r.ctx, r.osClient, *ismpolicy, r.instance.Spec.PolicyID)
 		if retErr != nil {
@@ -195,7 +197,6 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "policy created in opensearch")
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
-	ismResponse, err := services.GetPolicyFromResponse(r.ctx, resp)
 	if err != nil {
 		return
 	}
