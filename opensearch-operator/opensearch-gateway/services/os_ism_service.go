@@ -105,16 +105,3 @@ func DeleteISMPolicy(ctx context.Context, service *OsClusterClient, policyName s
 	}
 	return nil
 }
-
-//// GetPolicyFromResponse extracts the policy from the response
-//func GetPolicyFromResponse(ctx context.Context, resp *opensearchapi.Response) (*requests.Policy, error) {
-//	ismResponse := requests.Policy{}
-//	if resp != nil && resp.Body != nil {
-//		err := json.NewDecoder(resp.Body).Decode(&ismResponse)
-//		if err != nil {
-//			return nil, err
-//		}
-//		return &ismResponse, nil
-//	}
-//	return nil, fmt.Errorf("response is empty")
-//}
