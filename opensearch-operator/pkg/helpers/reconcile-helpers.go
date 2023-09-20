@@ -130,8 +130,7 @@ func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bo
 
 	if len(pluginsList) > 0 {
 		mainCommand = append(mainCommand, "/bin/bash", "-c")
-		for index, plugin := range pluginsList {
-			fmt.Println(index, plugin)
+		for _, plugin := range pluginsList {
 			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
 		}
 
