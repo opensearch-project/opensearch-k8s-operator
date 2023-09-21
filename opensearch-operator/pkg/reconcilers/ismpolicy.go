@@ -135,7 +135,10 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		reason := "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
 	}
-
+	// If PolicyID not provided explicitly, use metadata.name by default
+	if r.instance.Spec.PolicyID == "" {
+		r.instance.Spec.PolicyID = r.instance.Name
+	}
 	// Check ism policy state to make sure we don't touch preexisting ism policy
 	if r.instance.Status.ExistingISMPolicy == nil {
 		var exists bool
@@ -178,6 +181,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 		return
 	}
+
 	ismResponse, retErr := services.GetPolicy(r.ctx, r.osClient, r.instance.Spec.PolicyID)
 	if retErr != nil && retErr != services.ErrNotFound {
 		reason = "failed to get policy from Opensearch API"
@@ -218,6 +222,11 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
 
+	if r.instance.Spec.PolicyID != ismResponse.PolicyID {
+		reason = "can't change PolicyID"
+		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
+		return
+	}
 	retErr = services.UpdateISMPolicy(r.ctx, r.osClient, *ismpolicy, seqno, priterm, r.instance.Spec.PolicyID)
 	if retErr != nil {
 		reason = "failed to update ism policy with Opensearch API"

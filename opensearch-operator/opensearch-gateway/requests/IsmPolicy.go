@@ -1,6 +1,7 @@
 package requests
 
 type Policy struct {
+	PolicyID       string    `json:"_id,omitempty"`
 	PrimaryTerm    *int      `json:"_primary_term,omitempty"`
 	SequenceNumber *int      `json:"_seq_no,omitempty"`
 	Policy         ISMPolicy `json:"policy"`
