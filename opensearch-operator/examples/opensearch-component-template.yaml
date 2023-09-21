@@ -1,0 +1,27 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchComponentTemplate
+metadata:
+  name: sample-component-template
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+
+  template: # required
+    aliases: # optional
+      my_alias:
+        isWriteIndex: false
+        index:
+    settings: # optional
+      number_of_shards: 2
+      number_of_replicas: 1
+    mappings: # optional
+      properties:
+        timestamp:
+          type: date
+          format: yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis
+        value:
+          type: double
+  version: 1 # optional
+  allowAutoCreate: false # optional
+  _meta: # optional
+    description: example description

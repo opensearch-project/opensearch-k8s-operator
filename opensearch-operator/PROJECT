@@ -40,4 +40,22 @@ resources:
   kind: OpensearchUserRoleBinding
   path: opensearch.opster.io/api/v1
   version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opster
+  kind: OpensearchIndexTemplate
+  path: opensearch.opster.io/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opster
+  kind: OpensearchComponentTemplate
+  path: opensearch.opster.io/api/v1
+  version: v1
 version: "3"

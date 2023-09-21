@@ -3,6 +3,9 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
+
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -12,12 +15,10 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
-	"net/http"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/responses"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"time"
 )
 
 var _ = Describe("actiongroup reconciler", func() {
@@ -54,7 +55,7 @@ var _ = Describe("actiongroup reconciler", func() {
 		}
 
 		// Sleep for cache to start
-		time.Sleep(time.Second)
+		time.Sleep(time.Millisecond * 100)
 		// Set up prereq-objects
 		ns = &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
