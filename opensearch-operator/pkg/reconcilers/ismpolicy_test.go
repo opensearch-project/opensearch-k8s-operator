@@ -316,7 +316,7 @@ var _ = Describe("ism policy reconciler", func() {
 					recorder = record.NewFakeRecorder(1)
 					policyRequest := requests.ISMPolicy{
 						DefaultState: "policy",
-						Description:  "policy-test",
+						Description:  "test-policy",
 					}
 					transport.RegisterResponder(
 						http.MethodGet,
@@ -330,6 +330,7 @@ var _ = Describe("ism policy reconciler", func() {
 							Policy:         policyRequest,
 							SequenceNumber: seqno,
 							PrimaryTerm:    seqno,
+							PolicyID:       "test-policy",
 						}).Once(failMessage),
 					)
 					transport.RegisterResponder(
@@ -350,7 +351,7 @@ var _ = Describe("ism policy reconciler", func() {
 						_, err := reconciler.Reconcile()
 						Expect(err).ToNot(HaveOccurred())
 						// Confirm all responders have been called
-						Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + 1 + extraContextCalls))
+						Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
 					}()
 					var events []string
 					for msg := range recorder.Events {
