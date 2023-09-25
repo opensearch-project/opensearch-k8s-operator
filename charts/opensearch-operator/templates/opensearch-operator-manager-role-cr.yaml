@@ -20,6 +20,7 @@ rules:
   - apps
   resources:
   - statefulsets
+  - statefulsets/status
   verbs:
   - create
   - delete
