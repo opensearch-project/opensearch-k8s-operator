@@ -3,4 +3,10 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: {{ include "opensearch-operator.serviceAccountName" . }}
+{{- if .Values.manager.imagePullSecrets }}
+imagePullSecrets:
+{{- range .Values.manager.imagePullSecrets }}
+  - name: {{ . }}
+{{- end }}
+{{- end }}
 {{- end -}}

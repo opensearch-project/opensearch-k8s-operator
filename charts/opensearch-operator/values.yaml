@@ -46,6 +46,10 @@ manager:
     tag: ""
     pullPolicy: "Always"
 
+  ## Optional array of imagePullSecrets containing private registry credentials
+  imagePullSecrets: []
+  # - secretName
+
   dnsBase: cluster.local
 
   # Log level of the operator. Possible values: debug, info, warn, error
