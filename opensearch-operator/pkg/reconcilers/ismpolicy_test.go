@@ -350,7 +350,7 @@ var _ = Describe("ism policy reconciler", func() {
 						_, err := reconciler.Reconcile()
 						Expect(err).ToNot(HaveOccurred())
 						// Confirm all responders have been called
-						Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
+						Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + 1 + extraContextCalls))
 					}()
 					var events []string
 					for msg := range recorder.Events {
