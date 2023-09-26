@@ -48,7 +48,7 @@ manager:
 
   ## Optional array of imagePullSecrets containing private registry credentials
   imagePullSecrets: []
-  # - secretName
+  # - name: secretName
 
   dnsBase: cluster.local
 
