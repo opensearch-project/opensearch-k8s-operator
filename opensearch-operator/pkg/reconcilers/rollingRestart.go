@@ -64,31 +64,36 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		lg.V(1).Info("Upgrade in progress, skipping rolling restart")
 		return ctrl.Result{}, nil
 	}
-
 	status := r.findStatus()
 	var pendingUpdate bool
-	// Check that all data nodes are ready before doing work
-	// Also check if there are pending updates
+	// Check that all nodes are ready before doing work
+	// Also check if there are pending updates for all nodes.
 	for _, nodePool := range r.instance.Spec.NodePools {
-		if helpers.HasDataRole(&nodePool) {
-			sts := &appsv1.StatefulSet{}
-			if err := r.Get(r.ctx, types.NamespacedName{
-				Name:      builders.StsName(r.instance, &nodePool),
-				Namespace: r.instance.Namespace,
-			}, sts); err != nil {
+		sts := &appsv1.StatefulSet{}
+		if err := r.Get(r.ctx, types.NamespacedName{
+			Name:      builders.StsName(r.instance, &nodePool),
+			Namespace: r.instance.Namespace,
+		}, sts); err != nil {
+			return ctrl.Result{}, err
+		}
+		if sts.Status.UpdateRevision != "" &&
+			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			pendingUpdate = true
+			break
+		} else if sts.Status.UpdateRevision != "" &&
+			sts.Status.CurrentRevision != sts.Status.UpdateRevision {
+			// If all pods in sts are updated to spec.replicas but current version is not updated.
+			sts.Status.CurrentRevision = sts.Status.UpdateRevision
+			err := r.Status().Update(r.ctx, sts)
+			if err != nil {
 				return ctrl.Result{}, err
 			}
-			if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
-				return ctrl.Result{
-					Requeue:      true,
-					RequeueAfter: 10 * time.Second,
-				}, nil
-			}
-
-			if sts.Status.UpdateRevision != "" &&
-				sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
-				pendingUpdate = true
-			}
+		}
+		if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: 10 * time.Second,
+			}, nil
 		}
 	}
 
@@ -132,7 +137,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// Restart statefulset pod.  Order is not important so we just pick the first we find
+	// Restart StatefulSet pod.  Order is not important So we just pick the first we find
 	for _, nodePool := range r.instance.Spec.NodePools {
 		sts := &appsv1.StatefulSet{}
 		if err := r.Get(r.ctx, types.NamespacedName{
@@ -141,13 +146,18 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}, sts); err != nil {
 			return ctrl.Result{}, err
 		}
-		// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
-		if sts.Status.ReadyReplicas == pointer.Int32Deref(sts.Spec.Replicas, 1) &&
-			sts.Status.UpdateRevision != "" &&
+		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
-			if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.ctx, r.Client, r.instance, &nodePool); err == nil {
-				if numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
+			// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
+			if sts.Status.ReadyReplicas == pointer.Int32Deref(sts.Spec.Replicas, 1) {
+				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.ctx, r.Client, r.instance, &nodePool); err == nil && numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
+					lg.V(1).Info("Rolling restart of the StatefulSet ", sts.Name)
 					return r.restartStatefulSetPod(sts)
+				}
+			} else { // Check if there is any crashed pod. Delete it if there is any update in sts.
+				err = helpers.DeleteStuckPodWithOlderRevision(r.ctx, r.Client, sts)
+				if err != nil {
+					return ctrl.Result{}, err
 				}
 			}
 		}
@@ -178,7 +188,6 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-
 	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		return ctrl.Result{}, err

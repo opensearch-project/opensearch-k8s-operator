@@ -20,6 +20,7 @@ rules:
   - apps
   resources:
   - statefulsets
+  - statefulsets/status
   verbs:
   - create
   - delete
@@ -175,6 +176,58 @@ rules:
   - opensearch.opster.io
   resources:
   - opensearchclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchcomponenttemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchcomponenttemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchcomponenttemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchindextemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchindextemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchindextemplates/status
   verbs:
   - get
   - patch

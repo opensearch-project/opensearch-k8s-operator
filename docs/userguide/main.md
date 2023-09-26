@@ -598,9 +598,9 @@ nodePools:
 
 ### Security Context for pods and containers
 
-You can set the security context for the Opensearch pods and the Dashboard pod. This is useful when you want to define privilege and access control settings for a Pod or Container. To specify security settings for Pods, include the `podSecurityContext` field and for Containers, include the `securityContext` field.
+You can set the security context for the Opensearch pods and the Dashboard pod. This is useful when you want to define privilege and access control settings for a Pod or Container. To specify security settings for Pods, include the `podSecurityContext` field and for containers, include the `securityContext` field.
 
-The structure is the same for both Opensearch pods and the Dashboard pod:
+The structure is the same for both Opensearch pods (in `spec.general`) and the Dashboard pod (in `spec.dashboards`):
 
 ```yaml
 spec:
@@ -622,6 +622,10 @@ spec:
         - ALL
       privileged: false
 ```
+
+The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions and does not use any defined securityContext. If your kubernetes environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches an init container with root.
+
+Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods (with the same limitations for the init containers).
 
 ### Labels or Annotations on OpenSearch nodes
 
@@ -1198,3 +1202,66 @@ spec:
         insecureSkipVerify: true
   # ...
 ```
+
+## Managing index and component templates
+
+The operator provides the OpensearchIndexTemplate and OpensearchComponentTemplate CRDs, which is used for managing index and component templates respectively.
+
+The two CRD specifications attempts to be as close as possible to what the OpenSearch API expects, with some changes from snake_case to camelCase.
+The fields that have been changed, is `index_patterns` to `indexPatterns` (OpensearchIndexTemplate only), `composed_of` to `composedOf` (OpensearchIndexTemplate only), `allow_auto_create` to `allowAutoCreate` (OpensearchComponentTemplate only), and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
+
+The following example creates a component template for setting the number of shards and replicas, together with specifying a specific time format for documents:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchComponentTemplate
+metadata:
+  name: sample-component-template
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+
+  template: # required
+    aliases: # optional
+      my_alias: {}
+    settings: # optional
+      number_of_shards: 2
+      number_of_replicas: 1
+    mappings: # optional
+      properties:
+        timestamp:
+          type: date
+          format: yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis
+        value:
+          type: double
+  version: 1 # optional
+  allowAutoCreate: false # optional
+  _meta: # optional
+    description: example description
+```
+
+The following index template makes use of the above component template (see `composedOf`) for all indices which follows the `logs-2020-01-*` index pattern:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchIndexTemplate
+metadata:
+  name: sample-index-template
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  
+  name: logs_template # name of the index template - defaults to metadata.name. Can't be updated in-place
+
+  indexPatterns: # required index patterns
+    - "logs-2020-01-*"
+  composedOf: # optional
+    - sample-component-template
+  priority: 100 # optional
+
+  template: {} # optional
+  version: 1 # optional
+  _meta: {} # optional
+```
+
+Note: the `.spec.name` is immutable, meaning that it cannot be changed after the resources have been deployed to a Kubernetes cluster
