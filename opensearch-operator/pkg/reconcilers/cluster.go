@@ -424,6 +424,16 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			return &ctrl.Result{Requeue: true}, err
 		}
 
+		// Also Delete Dashboards deployment so .kibana index can be recreated when cluster is started again
+		if r.instance.Spec.Dashboards.Enable {
+			err := helpers.DeleteDashboardsDeployment(r.ctx, r.Client, clusterName, clusterNamespace)
+			if err != nil {
+				lg.Error(err, "Failed to delete OSD pod")
+				return &ctrl.Result{Requeue: true}, err
+			}
+			// Dashboards deployment will be recreated normally through the reconcile cycle
+		}
+
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
 				return err
@@ -433,16 +443,6 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 		}); err != nil {
 			lg.Error(err, "Failed to update cluster status")
 			return &ctrl.Result{Requeue: true}, err
-		}
-
-		// Also Delete OSD deployment so .kibana index can be recreated when cluster is started again
-		if r.instance.Spec.Dashboards.Enable {
-			err := helpers.DeleteOSDDeployment(r.ctx, r.Client, clusterName, clusterNamespace)
-			if err != nil {
-				lg.Error(err, "Failed to delete OSD pod")
-				return &ctrl.Result{Requeue: true}, err
-			}
-			// OSD deployment will be recreated normally through the reconcile cycle
 		}
 	}
 
