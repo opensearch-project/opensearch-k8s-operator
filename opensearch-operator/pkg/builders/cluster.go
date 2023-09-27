@@ -492,15 +492,26 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 		helpers.NodePoolLabel: nodePool.Component,
 	}
 
+	annotations := make(map[string]string)
+
+	for key, value := range cr.Spec.General.Annotations {
+		annotations[key] = value
+	}
+
+	for key, value := range nodePool.Annotations {
+		annotations[key] = value
+	}
+
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component),
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component),
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "None",
