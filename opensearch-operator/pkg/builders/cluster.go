@@ -529,7 +529,9 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 	}
 }
 
-func NewServiceForCR(cr *opsterv1.OpenSearchCluster, configChecksum string) *corev1.Service {
+func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+
+	var configChecksum string
 
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
