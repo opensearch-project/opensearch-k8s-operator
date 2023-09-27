@@ -408,20 +408,14 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 	// Then delete the securityconfig job and set cluster initialized to false
 	// This will cause the bootstrap pod to run again and security indices to be initialized again
 	if readyDataNodes == 0 || readyMasterNodes < (totalMasterNodes+1)/2 {
-		lg.Info("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace)
-		lg.Info("Deleting all sts and securityconfig job to re-create cluster")
+		lg.Info(fmt.Sprintf("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace))
+		lg.Info("Deleting all sts, dashboards and securityconfig job to re-create cluster")
 		for _, nodePool := range r.instance.Spec.NodePools {
 			err := helpers.DeleteSTSForNodePool(r.ctx, r.Client, nodePool, clusterName, clusterNamespace)
 			if err != nil {
 				lg.Error(err, fmt.Sprintf("Failed to delete sts for nodePool %s", nodePool.Component))
 				return &ctrl.Result{Requeue: true}, err
 			}
-		}
-
-		err := helpers.DeleteSecurityUpdateJob(r.ctx, r.Client, clusterName, clusterNamespace)
-		if err != nil {
-			lg.Error(err, "Failed to delete security update job")
-			return &ctrl.Result{Requeue: true}, err
 		}
 
 		// Also Delete Dashboards deployment so .kibana index can be recreated when cluster is started again
@@ -442,6 +436,14 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			return r.Status().Update(r.ctx, r.instance)
 		}); err != nil {
 			lg.Error(err, "Failed to update cluster status")
+			return &ctrl.Result{Requeue: true}, err
+		}
+
+		// Delete the job after setting initialized to false
+		// So the pod is not created with partial config commands
+		err := helpers.DeleteSecurityUpdateJob(r.ctx, r.Client, clusterName, clusterNamespace)
+		if err != nil {
+			lg.Error(err, "Failed to delete security update job")
 			return &ctrl.Result{Requeue: true}, err
 		}
 	}
