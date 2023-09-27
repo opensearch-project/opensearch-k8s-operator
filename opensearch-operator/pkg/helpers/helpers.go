@@ -325,9 +325,21 @@ func DeleteSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool
 	// Add this so pods of the sts are deleted as well, otherwise they would remain as orphaned pods
 	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
 
-	err = k8sClient.Delete(ctx, sts, &opts)
+	if err = k8sClient.Delete(ctx, sts, &opts); err != nil {
+		return err
+	}
 
-	return err
+	// Wait for the STS to be deleted
+	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
+		existing := appsv1.StatefulSet{}
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(sts), &existing)
+		if err != nil {
+			return nil
+		}
+		time.Sleep(time.Second * updateStepTime)
+	}
+
+	return fmt.Errorf("failed to delete STS for nodepool %s", nodePool.Component)
 }
 
 // DeleteSecurityUpdateJob deletes the securityconfig update job
@@ -479,4 +491,20 @@ func GetPodWithOlderRevision(ctx context.Context, k8sClient client.Client, sts *
 		}
 	}
 	return nil, nil
+}
+
+// DeleteDashboardsDeployment deletes the OSD deployment along with all its pods
+func DeleteDashboardsDeployment(ctx context.Context, k8sClient client.Client, clusterName, clusterNamespace string) error {
+	deploy := appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName + "-dashboards",
+			Namespace: clusterNamespace,
+		},
+	}
+	opts := client.DeleteOptions{}
+	// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
+	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+	err := k8sClient.Delete(ctx, &deploy, &opts)
+
+	return err
 }
