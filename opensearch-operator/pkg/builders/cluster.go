@@ -531,15 +531,9 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 
-	var configChecksum string
-
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
-	annotations := map[string]string{
-		ConfigurationChecksumAnnotation: configChecksum,
-	}
-
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -549,7 +543,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			Name:        cr.Spec.General.ServiceName,
 			Namespace:   cr.Namespace,
 			Labels:      labels,
-			Annotations: annotations,
+			Annotations: cr.Spec.General.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
