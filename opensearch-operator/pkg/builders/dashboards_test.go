@@ -64,18 +64,15 @@ var _ = Describe("Builders", func() {
 			clusterName := "dashboards-add-service-type-load-balancer"
 			sourceRanges := []string{"10.0.0.0/24"}
 			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      clusterName,
-					Namespace: clusterName,
-					UID:       "dummyuid",
-					Annotations: map[string]string{
-						"testAnnotationKey": "testAnnotationValue",
-					},
-				},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
 					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
+						Annotations: map[string]string{
+							"testAnnotationKey":  "testValue",
+							"testAnnotationKey2": "testValue2",
+						},
 						Service: opsterv1.DashboardsServiceSpec{
 							Type:                     "LoadBalancer",
 							LoadBalancerSourceRanges: sourceRanges,
@@ -86,7 +83,8 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
 			Expect(result.Spec.LoadBalancerSourceRanges).To(Equal(sourceRanges))
 			Expect(result.Annotations).To(Equal(map[string]string{
-				"testAnnotationKey": "testAnnotationValue",
+				"testAnnotationKey":  "testValue",
+				"testAnnotationKey2": "testValue2",
 			}))
 		})
 	})
