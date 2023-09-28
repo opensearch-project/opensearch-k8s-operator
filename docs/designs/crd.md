@@ -176,6 +176,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>string</td>
         <td></td>
       </tr><tr>
+        <td><b>annotations</b></td>
+        <td>map[string]string</td>
+        <td>Adds support for annotations in services</td>
+        <td>false</td>
+        <td></td>
+      </tr><tr>
         <td><b>labels</b></td>
         <td>map[string]string</td>
         <td>add user defined labels to nodePool</td>
