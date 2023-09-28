@@ -657,6 +657,33 @@ var _ = Describe("Builders", func() {
 				"testAnnotationKey2": "testValue2",
 			}))
 		})
+
+		It("should populate the NewHeadlessServiceForNodePool function with ", func() {
+			clusterName := "opensearch"
+			var nodePool = opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Annotations: map[string]string{
+					"testAnnotationKey": "testValue",
+				},
+			}
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: clusterName,
+						Annotations: map[string]string{
+							"testAnnotationKey2": "testValue2",
+						},
+					},
+				}}
+			var result = NewHeadlessServiceForNodePool(&spec, &nodePool)
+			Expect(result.Annotations).To(Equal(map[string]string{
+				"testAnnotationKey":  "testValue",
+				"testAnnotationKey2": "testValue2",
+			}))
+		})
 	})
 
 })
