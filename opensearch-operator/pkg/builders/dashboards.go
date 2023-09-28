@@ -224,7 +224,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			Name:        cr.Spec.General.ServiceName + "-dashboards",
 			Namespace:   cr.Namespace,
 			Labels:      labels,
-			Annotations: cr.Spec.General.Annotations,
+			Annotations: cr.Spec.Dashboards.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			// Type does not need to be checked for a nil value as ClusterIP is set as the default in the CRD
