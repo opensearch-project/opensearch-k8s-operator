@@ -504,7 +504,20 @@ func DeleteDashboardsDeployment(ctx context.Context, k8sClient client.Client, cl
 	opts := client.DeleteOptions{}
 	// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
 	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
-	err := k8sClient.Delete(ctx, &deploy, &opts)
+	if err := k8sClient.Delete(ctx, &deploy, &opts); err != nil {
+		return err
+	}
 
-	return err
+	// Wait for Dashboards deploy to delete
+	// We can use the same waiting time for sts as both have same termination grace period
+	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
+		existing := appsv1.Deployment{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterName + "-dashboards", Namespace: clusterNamespace}, &existing)
+		if err != nil {
+			return nil
+		}
+		time.Sleep(time.Second * updateStepTime)
+	}
+
+	return fmt.Errorf("failed to delete dashboards deployment for cluster %s", clusterName)
 }
