@@ -16,6 +16,7 @@ import (
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -318,6 +319,9 @@ func DeleteSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool
 
 	sts, err := GetSTSForNodePool(ctx, k8sClient, nodePool, clusterName, clusterNamespace)
 	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 
@@ -349,6 +353,9 @@ func DeleteSecurityUpdateJob(ctx context.Context, k8sClient client.Client, clust
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: clusterNamespace}, &job)
 
 	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 
@@ -493,18 +500,41 @@ func GetPodWithOlderRevision(ctx context.Context, k8sClient client.Client, sts *
 	return nil, nil
 }
 
+func GetDashboardsDeployment(ctx context.Context, k8sClient client.Client, clusterName, clusterNamespace string) (*appsv1.Deployment, error) {
+	deploy := appsv1.Deployment{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: clusterName + "-dashboards", Namespace: clusterNamespace}, &deploy)
+
+	return &deploy, err
+}
+
 // DeleteDashboardsDeployment deletes the OSD deployment along with all its pods
 func DeleteDashboardsDeployment(ctx context.Context, k8sClient client.Client, clusterName, clusterNamespace string) error {
-	deploy := appsv1.Deployment{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      clusterName + "-dashboards",
-			Namespace: clusterNamespace,
-		},
+	deploy, err := GetDashboardsDeployment(ctx, k8sClient, clusterName, clusterNamespace)
+
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return err
 	}
+
 	opts := client.DeleteOptions{}
 	// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
 	client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
-	err := k8sClient.Delete(ctx, &deploy, &opts)
+	if err := k8sClient.Delete(ctx, deploy, &opts); err != nil {
+		return err
+	}
 
-	return err
+	// Wait for Dashboards deploy to delete
+	// We can use the same waiting time for sts as both have same termination grace period
+	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
+		existing := appsv1.Deployment{}
+		err := k8sClient.Get(ctx, client.ObjectKeyFromObject(deploy), &existing)
+		if err != nil {
+			return nil
+		}
+		time.Sleep(time.Second * updateStepTime)
+	}
+
+	return fmt.Errorf("failed to delete dashboards deployment for cluster %s", clusterName)
 }
