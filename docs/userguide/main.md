@@ -631,6 +631,8 @@ Note that the bootstrap pod started during initial cluster setup uses the same (
 
 You can add additional labels or annotations on the nodepool configuration. This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint:
 
+In addition, annotations can also be configured globally using the `spec.general.annotations` field in the Kubernetes specification. These annotations are not only limited to the node pool but also extend to Kubernetes services, providing flexibility and additional information to enhance the Kubernetes environment.
+
 ```yaml
 spec:
   nodePools:

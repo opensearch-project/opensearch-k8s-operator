@@ -43,6 +43,8 @@ type GeneralConfig struct {
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	// Adds support for annotations in services
+	Annotations      map[string]string `json:"annotations,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
