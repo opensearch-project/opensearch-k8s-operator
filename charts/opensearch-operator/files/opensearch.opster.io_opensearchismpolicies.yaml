@@ -5,17 +5,17 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: ismpolicies.opensearch.opster.io
+  name: opensearchismpolicies.opensearch.opster.io
 spec:
   group: opensearch.opster.io
   names:
-    kind: ISMPolicy
-    listKind: ISMPolicyList
-    plural: ismpolicies
+    kind: OpenSearchISMPolicy
+    listKind: OpenSearchISMPolicyList
+    plural: opensearchismpolicies
     shortNames:
     - ismp
     - ismpolicy
-    singular: ismpolicy
+    singular: opensearchismpolicy
   scope: Namespaced
   versions:
   - name: v1
@@ -423,6 +423,8 @@ spec:
                   UUIDs.  Because we don't ONLY use UUIDs, this is an alias to string.  Being
                   a type captures intent and helps make sure that UIDs and names do
                   not get conflated.
+                type: string
+              policyId:
                 type: string
               reason:
                 type: string
