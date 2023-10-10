@@ -21,6 +21,7 @@ type OpensearchISMPolicyStatus struct {
 	Reason            string                   `json:"reason,omitempty"`
 	ExistingISMPolicy *bool                    `json:"existingISMPolicy,omitempty"`
 	ManagedCluster    *types.UID               `json:"managedCluster,omitempty"`
+	PolicyId          string                   `json:"policyId,omitempty"`
 }
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
@@ -29,15 +30,15 @@ type OpensearchISMPolicyStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=ismp;ismpolicy
 // +kubebuilder:subresource:status
-type ISMPolicy struct {
+type OpenSearchISMPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              ISMPolicySpec             `json:"spec,omitempty"`
+	Spec              OpenSearchISMPolicySpec   `json:"spec,omitempty"`
 	Status            OpensearchISMPolicyStatus `json:"status,omitempty"`
 }
 
 // ISMPolicySpec is the specification for the ISM policy for OS.
-type ISMPolicySpec struct {
+type OpenSearchISMPolicySpec struct {
 	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster,omitempty"`
 	// The default starting state for each index that uses this policy.
 	DefaultState string `json:"defaultState"`
@@ -257,9 +258,9 @@ type Cron struct {
 type ISMPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []ISMPolicy `json:"items"`
+	Items           []OpenSearchISMPolicy `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&ISMPolicy{}, &ISMPolicyList{})
+	SchemeBuilder.Register(&OpenSearchISMPolicy{}, &ISMPolicyList{})
 }

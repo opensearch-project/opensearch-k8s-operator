@@ -26,7 +26,7 @@ var _ = Describe("ism policy reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *IsmPolicyReconciler
-		instance   *opsterv1.ISMPolicy
+		instance   *opsterv1.OpenSearchISMPolicy
 		recorder   *record.FakeRecorder
 
 		// Objects
@@ -37,14 +37,14 @@ var _ = Describe("ism policy reconciler", func() {
 	BeforeEach(func() {
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opsterv1.ISMPolicy{
+		instance = &opsterv1.OpenSearchISMPolicy{
 
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-policy",
 				Namespace: "test-policy",
 				UID:       types.UID("testuid"),
 			},
-			Spec: opsterv1.ISMPolicySpec{
+			Spec: opsterv1.OpenSearchISMPolicySpec{
 				PolicyID: "test-policy",
 				OpensearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",

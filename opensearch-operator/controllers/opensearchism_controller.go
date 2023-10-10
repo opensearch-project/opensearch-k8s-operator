@@ -18,7 +18,7 @@ type OpensearchISMPolicyReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opsterv1.ISMPolicy
+	Instance *opsterv1.OpenSearchISMPolicy
 	logr.Logger
 }
 
@@ -31,7 +31,7 @@ type OpensearchISMPolicyReconciler struct {
 func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("tenant", req.NamespacedName)
 	r.Logger.Info("Reconciling OpensearchISMPolicy")
-	r.Instance = &opsterv1.ISMPolicy{}
+	r.Instance = &opsterv1.OpenSearchISMPolicy{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -66,7 +66,7 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpensearchISMPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.ISMPolicy{}).
+		For(&opsterv1.OpenSearchISMPolicy{}).
 		Owns(&opsterv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }
