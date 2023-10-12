@@ -283,11 +283,6 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 		lg.Info(fmt.Sprintf("Group-%s . draining node %s", nodePoolGroupName, lastReplicaNodeName))
 		return err
 	}
-	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
-	if !success {
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Group-%s . node %s node is empty but node is still excluded from allocation", nodePoolGroupName, lastReplicaNodeName)
-		return err
-	}
 
 	componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
@@ -310,7 +305,7 @@ func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult
 	if err := r.Client.List(
 		r.ctx,
 		stsList,
-		client.InNamespace(r.instance.Name),
+		client.InNamespace(r.instance.Namespace),
 		client.MatchingLabels{helpers.ClusterLabel: r.instance.Name},
 	); err != nil {
 		result.Combine(&ctrl.Result{}, err)
