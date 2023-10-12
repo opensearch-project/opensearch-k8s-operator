@@ -305,7 +305,7 @@ func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult
 	if err := r.Client.List(
 		r.ctx,
 		stsList,
-		client.InNamespace(r.instance.Name),
+		client.InNamespace(r.instance.Namespace),
 		client.MatchingLabels{helpers.ClusterLabel: r.instance.Name},
 	); err != nil {
 		result.Combine(&ctrl.Result{}, err)
