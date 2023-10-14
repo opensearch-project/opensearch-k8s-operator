@@ -940,6 +940,7 @@ func NewSnapshotRepoconfigUpdateJob(
 						Name:            "snapshotrepoconfig",
 						Image:           image.GetImage(),
 						ImagePullPolicy: image.GetImagePullPolicy(),
+						Resources:       instance.Spec.InitHelper.Resources,
 						Command:         []string{"/bin/bash", "-c"},
 						Args:            []string{snapshotCmd},
 						VolumeMounts:    volumeMounts,
