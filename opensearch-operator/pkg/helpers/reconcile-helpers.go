@@ -100,10 +100,11 @@ func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageS
 	return false
 }
 
-// Function to help identify httpPort and securityconfigPath for 1.x and 2.x OpenSearch Operator.
-func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, string) {
+// Function to help identify httpPort, securityConfigPort and securityConfigPath for 1.x and 2.x OpenSearch Operator.
+func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
 	var httpPort int32
-	var securityconfigPath string
+	var securityConfigPort int32
+	var securityConfigPath string
 	versionPassed, _ := version.NewVersion(instance.Spec.General.Version)
 	constraints, _ := version.NewConstraint(">= 2.0")
 	if constraints.Check(versionPassed) {
@@ -112,12 +113,18 @@ func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, string) {
 		} else {
 			httpPort = 9200
 		}
-		securityconfigPath = "/usr/share/opensearch/config/opensearch-security"
+		securityConfigPort = httpPort
+		securityConfigPath = "/usr/share/opensearch/config/opensearch-security"
 	} else {
-		httpPort = 9300
-		securityconfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
+		if instance.Spec.General.HttpPort > 0 {
+			httpPort = instance.Spec.General.HttpPort
+		} else {
+			httpPort = 9200
+		}
+		securityConfigPort = 9300
+		securityConfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
 	}
-	return httpPort, securityconfigPath
+	return httpPort, securityConfigPort, securityConfigPath
 }
 
 func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool, entrypoint string) []string {
