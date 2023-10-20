@@ -6,10 +6,13 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	batchv1 "k8s.io/api/batch/v1"
 	policyv1 "k8s.io/api/policy/v1"
-	"opensearch.opster.io/pkg/reconcilers/util"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/cisco-open/k8s-objectmatcher/patch"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
@@ -21,9 +24,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -68,7 +68,7 @@ func NewClusterReconciler(
 }
 
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
-	//lg := log.FromContext(r.ctx)
+	// lg := log.FromContext(r.ctx)
 	result := reconciler.CombinedResult{}
 	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
 	if err != nil {
@@ -313,7 +313,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Handle PVC resizing
 
-	//Default is PVC, or explicit check for PersistenceSource as PVC
+	// Default is PVC, or explicit check for PersistenceSource as PVC
 	// Handle volume resizing, but only if we are using PVCs
 	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
 		err := r.maybeUpdateVolumes(existing, nodePool)
@@ -345,7 +345,6 @@ func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 
 // isEmptyDirCluster returns true only if every nodePool is using emptyDir
 func (r *ClusterReconciler) isEmptyDirCluster() bool {
-
 	for _, nodePool := range r.instance.Spec.NodePools {
 		if nodePool.Persistence == nil {
 			return false

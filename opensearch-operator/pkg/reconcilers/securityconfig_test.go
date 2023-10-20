@@ -4,11 +4,11 @@ import (
 	"context"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -16,7 +16,6 @@ import (
 )
 
 var _ = Describe("Securityconfig Reconciler", func() {
-
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "securityconfig"
@@ -28,7 +27,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		It("should not do anything ", func() {
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
+				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}},
+			}
 
 			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewSecurityconfigReconciler(
@@ -41,7 +41,6 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			result, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.IsZero()).To(BeTrue())
-
 		})
 	})
 
@@ -57,7 +56,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 							AdminSecret:          corev1.LocalObjectReference{Name: "admin"},
 						},
 					},
-				}}
+				},
+			}
 
 			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewSecurityconfigReconciler(
@@ -149,7 +149,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 
 	When("When Reconciling the securityconfig reconciler with both securityconfig and admin secret configured and available but no tls configured", func() {
 		It("should start an update job", func() {
-			var clusterName = "securityconfig-withadminsecret"
+			clusterName := "securityconfig-withadminsecret"
 			// Create namespace and secrets first
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 
@@ -181,7 +181,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 							AdminSecret:          corev1.LocalObjectReference{Name: "admin-cert"},
 						},
 					},
-				}}
+				},
+			}
 
 			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewSecurityconfigReconciler(
@@ -205,7 +206,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 
 	When("When Reconciling the securityconfig reconciler with securityconfig secret but no adminSecret configured", func() {
 		It("should not start an update job", func() {
-			var clusterName = "securityconfig-noadminsecret"
+			clusterName := "securityconfig-noadminsecret"
 			// Create namespace and secret first
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 			configSecret := corev1.Secret{
@@ -224,7 +225,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig"},
 						},
 					},
-				}}
+				},
+			}
 
 			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewSecurityconfigReconciler(
@@ -240,13 +242,12 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			job := batchv1.Job{}
 			// Should throw an error as the update job should not exist
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-securityconfig-update", Namespace: clusterName}, &job)).To(HaveOccurred())
-
 		})
 	})
 
 	When("When Reconciling the securityconfig reconciler with no securityconfig secret but tls configured", func() {
 		It("should start an update job and apply all yml files", func() {
-			var clusterName = "no-securityconfig-tls-configured"
+			clusterName := "no-securityconfig-tls-configured"
 			// Create namespace and secret first
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 			spec := opsterv1.OpenSearchCluster{
@@ -261,7 +262,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 							Transport: &opsterv1.TlsConfigTransport{Generate: true},
 						},
 					},
-				}}
+				},
+			}
 
 			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := NewSecurityconfigReconciler(

@@ -4,13 +4,13 @@ import (
 	"context"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -98,7 +98,6 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 		})
 
 		It("should upgrade the dashboard pod", func() {
-
 			deployment := appsv1.Deployment{}
 			Eventually(func() string {
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-dashboards", Namespace: namespace}, &deployment)
@@ -116,7 +115,6 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 				return 0
 			}, time.Minute*8, time.Second*5).Should(Equal(int32(1)))
 		})
-
 	})
 
 	AfterAll(func() {

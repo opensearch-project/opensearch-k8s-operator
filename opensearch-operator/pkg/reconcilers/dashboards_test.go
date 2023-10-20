@@ -5,11 +5,11 @@ import (
 	"strings"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers/util"
 
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
@@ -61,7 +61,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 							TlsCertificateConfig: opsterv1.TlsCertificateConfig{Secret: corev1.LocalObjectReference{Name: secretName}},
 						},
 					},
-				}}
+				},
+			}
 
 			_, underTest := newDashboardsReconciler(&spec)
 			_, err := underTest.Reconcile()
@@ -89,7 +90,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 							Generate: true,
 						},
 					},
-				}}
+				},
+			}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
@@ -131,7 +133,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 						Enable:                      true,
 						OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: credentialsSecret},
 					},
-				}}
+				},
+			}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
@@ -199,7 +202,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 							"some-key": testConfig,
 						},
 					},
-				}}
+				},
+			}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
@@ -258,7 +262,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 							},
 						},
 					},
-				}}
+				},
+			}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
@@ -314,7 +319,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 							ImagePullPolicy: &imagePullPolicy,
 						},
 					},
-				}}
+				},
+			}
 			ns := corev1.Namespace{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: clusterName,
@@ -373,7 +379,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 						},
 					},
 				},
-			}}
+			},
+		}
 		ns := &corev1.Namespace{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: clusterName,

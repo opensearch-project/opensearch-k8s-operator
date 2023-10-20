@@ -29,8 +29,8 @@ import (
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/phayes/freeport"
-	opsterv1 "opensearch.opster.io/api/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -59,10 +59,12 @@ import (
 Now, let's go through the code generated.
 */
 
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
-var cancel context.CancelFunc
+var (
+	cfg       *rest.Config
+	k8sClient client.Client
+	testEnv   *envtest.Environment
+	cancel    context.CancelFunc
+)
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -70,7 +72,6 @@ func TestAPIs(t *testing.T) {
 }
 
 var _ = BeforeSuite(func() {
-
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	ports, err := freeport.GetFreePorts(2)
 	Expect(err).NotTo(HaveOccurred())
@@ -122,8 +123,8 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	err = opsterv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	//err = prometheus.AddToScheme(scheme.Scheme)
-	//Expect(err).NotTo(HaveOccurred())
+	// err = prometheus.AddToScheme(scheme.Scheme)
+	// Expect(err).NotTo(HaveOccurred())
 
 	err = monitoring.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
@@ -147,7 +148,6 @@ var _ = BeforeSuite(func() {
 
 	k8sClient = k8sManager.GetClient()
 	Expect(k8sClient).ToNot(BeNil())
-
 })
 
 var _ = AfterSuite(func() {
