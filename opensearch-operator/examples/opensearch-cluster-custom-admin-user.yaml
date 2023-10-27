@@ -24,6 +24,8 @@ spec:
       http:
         generate: true
   dashboards:
+    opensearchCredentialsSecret:
+      name: admin-credentials-secret
     version: "2.2.1"
     enable: true
     replicas: 2

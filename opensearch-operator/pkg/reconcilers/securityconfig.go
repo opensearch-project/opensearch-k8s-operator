@@ -171,9 +171,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	// securityconfig secret was not passed, build the command to apply all yml files
 	if !r.instance.Status.Initialized || len(cmdArg) == 0 {
 		clusterHostName := BuildClusterSvcHostName(r.instance)
-		httpPort, securityconfigPath := helpers.VersionCheck(r.instance)
+		httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(r.instance)
 		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort) +
-			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, httpPort)
+			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
 	}
 
 	r.logger.Info("Starting securityconfig update job")
@@ -201,7 +201,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 // securityconfig secret. yml files which are not present in the secret are not applied/updated
 func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, log logr.Logger) string {
 	clusterHostName := BuildClusterSvcHostName(instance)
-	httpPort, securityconfigPath := helpers.VersionCheck(instance)
+	httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(instance)
 
 	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort)
 
@@ -227,7 +227,7 @@ func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, lo
 		// Even if the field was removed from the yaml file it was applied from
 		// Instead it sets it to an empty value
 		if string(secret.Data[k]) != "" {
-			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, httpPort)
+			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, securityConfigPort)
 		}
 	}
 
@@ -283,7 +283,7 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.Ope
 	for k := range secret.Data {
 		keys = append(keys, k)
 	}
-	_, securityconfigPath := helpers.VersionCheck(instance)
+	_, _, securityconfigPath := helpers.VersionCheck(instance)
 	sort.Strings(keys)
 	for _, k := range keys {
 		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, corev1.VolumeMount{

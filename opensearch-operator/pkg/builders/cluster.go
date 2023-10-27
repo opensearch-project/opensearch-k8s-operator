@@ -896,7 +896,7 @@ func NewSnapshotRepoconfigUpdateJob(
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
-	httpPort, _ := helpers.VersionCheck(instance)
+	httpPort, _, _ := helpers.VersionCheck(instance)
 	dns := DnsOfService(instance)
 	var snapshotCmd string
 	for _, repository := range instance.Spec.General.SnapshotRepositories {
