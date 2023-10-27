@@ -82,8 +82,10 @@ kubeRbacProxy:
 
   livenessProbe:
     failureThreshold: 3
-    tcpSocket:
-      port: 8443
+    httpGet:
+      path: /healthz
+      port: 10443
+      scheme: HTTPS
     periodSeconds: 15
     successThreshold: 1
     timeoutSeconds: 3
@@ -91,8 +93,10 @@ kubeRbacProxy:
 
   readinessProbe:
     failureThreshold: 3
-    tcpSocket:
-      port: 8443
+    httpGet:
+      path: /healthz
+      port: 10443
+      scheme: HTTPS
     periodSeconds: 15
     successThreshold: 1
     timeoutSeconds: 3
@@ -100,4 +104,4 @@ kubeRbacProxy:
 
   image:
     repository: "gcr.io/kubebuilder/kube-rbac-proxy"
-    tag: "v0.12.0"
+    tag: "v0.15.0"
