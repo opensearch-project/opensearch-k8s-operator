@@ -107,20 +107,17 @@ func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
 	var securityConfigPath string
 	versionPassed, _ := version.NewVersion(instance.Spec.General.Version)
 	constraints, _ := version.NewConstraint(">= 2.0")
+
+	if instance.Spec.General.HttpPort > 0 {
+		httpPort = instance.Spec.General.HttpPort
+	} else {
+		httpPort = 9200
+	}
+
 	if constraints.Check(versionPassed) {
-		if instance.Spec.General.HttpPort > 0 {
-			httpPort = instance.Spec.General.HttpPort
-		} else {
-			httpPort = 9200
-		}
 		securityConfigPort = httpPort
 		securityConfigPath = "/usr/share/opensearch/config/opensearch-security"
 	} else {
-		if instance.Spec.General.HttpPort > 0 {
-			httpPort = instance.Spec.General.HttpPort
-		} else {
-			httpPort = 9200
-		}
 		securityConfigPort = 9300
 		securityConfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
 	}

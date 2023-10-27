@@ -1,10 +1,9 @@
-package helpers_test
+package helpers
 
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 )
 
 var _ = DescribeTable("versionCheck reconciler",
@@ -18,7 +17,7 @@ var _ = DescribeTable("versionCheck reconciler",
 			},
 		}
 
-		actualHttpPort, actualSecurityConfigPort, actualConfigPath := helpers.VersionCheck(instance)
+		actualHttpPort, actualSecurityConfigPort, actualConfigPath := VersionCheck(instance)
 
 		Expect(actualHttpPort).To(Equal(expectedHttpPort))
 		Expect(actualSecurityConfigPort).To(Equal(expectedSecurityConfigPort))
