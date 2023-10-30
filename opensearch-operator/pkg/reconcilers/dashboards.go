@@ -166,7 +166,6 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}
 		volumeMounts = append(volumeMounts, mount)
 	} else {
-		r.logger.Info("Using externally provided certificates for Dashboard Cluster")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Notice - using externally provided certificates for Dashboard Cluster")
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.TlsCertificateConfig.Secret.Name}}}
 		volumes = append(volumes, volume)

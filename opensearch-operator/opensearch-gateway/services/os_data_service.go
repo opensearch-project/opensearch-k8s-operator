@@ -354,9 +354,8 @@ func ShouldUpdateIndexTemplate(
 	}
 
 	lg := log.FromContext(ctx)
-	lg.V(1).Info(fmt.Sprintf("existing index template: %#v", indexTemplateResponse.IndexTemplate))
-	lg.V(1).Info(fmt.Sprintf("new index template: %#v", indexTemplate))
-	lg.Info("index template requires update")
+	lg.Info("OpenSearch Index template requires update")
+
 	return true, nil
 }
 
@@ -466,9 +465,8 @@ func ShouldUpdateComponentTemplate(
 	}
 
 	lg := log.FromContext(ctx)
-	lg.V(1).Info(fmt.Sprintf("existing component template: %#v", componentTemplateResponse.ComponentTemplate))
-	lg.V(1).Info(fmt.Sprintf("new component template: %#v", componentTemplate))
-	lg.Info("component template requires update")
+	lg.Info("OpenSearch Component template requires update")
+
 	return true, nil
 }
 

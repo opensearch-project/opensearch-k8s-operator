@@ -303,7 +303,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 
 	dataCount := builders.DataNodesCount(r.ctx, r.Client, r.instance)
 	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {
-		r.logger.Info("only 2 data nodes and drain is set, some shards may not drain")
+		r.logger.Info("Only 2 data nodes and drain is set, some shards may not drain")
 	}
 
 	if sts.Status.ReadyReplicas < lo.FromPtrOr(sts.Spec.Replicas, 1) {
@@ -321,7 +321,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		return err
 	}
 	if !ready {
-		r.logger.Info("Cluster is not ready for next pod to restart")
+		r.logger.Info(fmt.Sprintf("Cluster is not ready for next pod to restart because %s", condition))
 		conditions = append(conditions, condition)
 		r.setComponentConditions(conditions, pool.Component)
 		return nil

@@ -174,7 +174,7 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 	lg := log.FromContext(r.ctx).WithValues("reconciler", "restart")
 	dataCount := builders.DataNodesCount(r.ctx, r.Client, r.instance)
 	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {
-		lg.Info("only 2 data nodes and drain is set, some shards may not drain")
+		lg.Info("Only 2 data nodes and drain is set, some shards may not drain")
 	}
 
 	ready, message, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
