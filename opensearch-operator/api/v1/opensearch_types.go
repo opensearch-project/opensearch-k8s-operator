@@ -44,7 +44,7 @@ type GeneralConfig struct {
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
-	Annotations      map[string]string `json:"annotations,omitempty"`
+	Annotations map[string]string `json:"annotations,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
@@ -246,6 +246,8 @@ type AdditionalVolume struct {
 	Name string `json:"name"`
 	// Path in the container to mount the volume at. Required.
 	Path string `json:"path"`
+	// SubPath of the referenced volume to mount.
+	SubPath string `json:"subPath,omitempty"`
 	// Secret to use populate the volume
 	Secret *corev1.SecretVolumeSource `json:"secret,omitempty"`
 	// ConfigMap to use to populate the volume

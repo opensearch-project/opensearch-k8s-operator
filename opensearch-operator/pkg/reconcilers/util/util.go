@@ -5,15 +5,13 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"net/http"
-	"sort"
-
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
+	"net/http"
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/helpers"
@@ -21,6 +19,8 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sort"
+	"strings"
 )
 
 func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
@@ -128,10 +128,18 @@ func CreateAdditionalVolumes(
 			namesIndex[volumeConfig.Name] = i
 			names = append(names, volumeConfig.Name)
 		}
+
+		subPath := ""
+		// SubPaths are only supported for ConfigMaps and Secrets
+		if volumeConfig.ConfigMap != nil || volumeConfig.Secret != nil {
+			subPath = strings.TrimSpace(volumeConfig.SubPath)
+		}
+
 		retVolumeMounts = append(retVolumeMounts, corev1.VolumeMount{
 			Name:      volumeConfig.Name,
 			ReadOnly:  readOnly,
 			MountPath: volumeConfig.Path,
+			SubPath:   subPath,
 		})
 	}
 	sort.Strings(names)
