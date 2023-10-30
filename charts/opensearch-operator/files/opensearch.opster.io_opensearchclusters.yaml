@@ -1212,6 +1212,9 @@ spec:
                                 the pod''s namespace to use. More info: https://kubernetes.io/docs/concepts/storage/volumes#secret'
                               type: string
                           type: object
+                        subPath:
+                          description: SubPath of the referenced volume to mount.
+                          type: string
                       required:
                       - name
                       - path
@@ -2922,11 +2925,19 @@ spec:
                                 the pod''s namespace to use. More info: https://kubernetes.io/docs/concepts/storage/volumes#secret'
                               type: string
                           type: object
+                        subPath:
+                          description: SubPath of the referenced volume to mount.
+                          type: string
                       required:
                       - name
                       - path
                       type: object
                     type: array
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Adds support for annotations in services
+                    type: object
                   command:
                     type: string
                   defaultRepo:
