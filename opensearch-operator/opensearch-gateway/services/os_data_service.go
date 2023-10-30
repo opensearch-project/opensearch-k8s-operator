@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/go-logr/logr"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/responses"
@@ -204,7 +205,7 @@ func ReactivateShardAllocation(service *OsClusterClient) error {
 	return nil
 }
 
-func PreparePodForDelete(service *OsClusterClient, podName string, drainNode bool, nodeCount int32) (bool, error) {
+func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, error) {
 	if drainNode {
 		// If we are draining nodes then drain the working node
 		_, err := AppendExcludeNodeHost(service, podName)
@@ -212,7 +213,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			return false, err
 		}
 
-		// If there are only 2 data nodes only check for system indics
+		// If there are only 2 data nodes only check for system indices
 		if nodeCount == 2 {
 			systemIndices, err := GetExistingSystemIndices(service)
 			if err != nil {
@@ -223,6 +224,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			if err != nil {
 				return false, err
 			}
+			lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
 			return !systemPrimaries, nil
 		}
 
@@ -232,6 +234,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			return false, err
 		}
 		// If the node isn't empty requeue to wait for shards to drain
+		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
 		return !nodeNotEmpty, nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
@@ -351,9 +354,8 @@ func ShouldUpdateIndexTemplate(
 	}
 
 	lg := log.FromContext(ctx)
-	lg.V(1).Info(fmt.Sprintf("existing index template: %#v", indexTemplateResponse.IndexTemplate))
-	lg.V(1).Info(fmt.Sprintf("new index template: %#v", indexTemplate))
-	lg.Info("index template requires update")
+	lg.Info("OpenSearch Index template requires update")
+
 	return true, nil
 }
 
@@ -463,9 +465,8 @@ func ShouldUpdateComponentTemplate(
 	}
 
 	lg := log.FromContext(ctx)
-	lg.V(1).Info(fmt.Sprintf("existing component template: %#v", componentTemplateResponse.ComponentTemplate))
-	lg.V(1).Info(fmt.Sprintf("new component template: %#v", componentTemplate))
-	lg.Info("component template requires update")
+	lg.Info("OpenSearch Component template requires update")
+
 	return true, nil
 }
 

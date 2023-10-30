@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
@@ -58,14 +59,17 @@ func NewRollingRestartReconciler(
 
 func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	lg := log.FromContext(r.ctx).WithValues("reconciler", "restart")
+
 	// We should never get to this while an upgrade is in progress
 	// but put a defensive check in
 	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
 		lg.V(1).Info("Upgrade in progress, skipping rolling restart")
 		return ctrl.Result{}, nil
 	}
+
 	status := r.findStatus()
 	var pendingUpdate bool
+
 	// Check that all nodes are ready before doing work
 	// Also check if there are pending updates for all nodes.
 	for _, nodePool := range r.instance.Spec.NodePools {
@@ -151,7 +155,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 			// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
 			if sts.Status.ReadyReplicas == pointer.Int32Deref(sts.Spec.Replicas, 1) {
 				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.ctx, r.Client, r.instance, &nodePool); err == nil && numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
-					lg.V(1).Info("Rolling restart of the StatefulSet ", sts.Name)
+					lg.Info(fmt.Sprintf("Starting rolling restart of the StatefulSet %s", sts.Name))
 					return r.restartStatefulSetPod(sts)
 				}
 			} else { // Check if there is any crashed pod. Delete it if there is any update in sts.
@@ -170,14 +174,15 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 	lg := log.FromContext(r.ctx).WithValues("reconciler", "restart")
 	dataCount := builders.DataNodesCount(r.ctx, r.Client, r.instance)
 	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {
-		lg.Info("only 2 data nodes and drain is set, some shards may not drain")
+		lg.Info("Only 2 data nodes and drain is set, some shards may not drain")
 	}
 
-	ready, _, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
+	ready, message, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !ready {
+		lg.Info(fmt.Sprintf("Couldn't proceed with rolling restart for Statefulset %s because %s", sts.Name, message))
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 10 * time.Second,
@@ -188,7 +193,9 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 	if err != nil {
 		return ctrl.Result{}, err
 	}
-	ready, err = services.PreparePodForDelete(r.osClient, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
+
+	lg.Info(fmt.Sprintf("Preparing to restart pod %s", workingPod))
+	ready, err = services.PreparePodForDelete(r.osClient, lg, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

@@ -236,7 +236,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
 	if _, exists := existing.Spec.Selector.MatchLabels["opensearch.role"]; exists {
-		r.logger.Info("deleting statefulset while orphaning pods to fix labels " + existing.Name)
+		r.logger.Info(fmt.Sprintf("Deleting statefulset %s while orphaning pods to fix labels", existing.Name))
 		if err := helpers.WaitForSTSDelete(r.ctx, r.Client, existing); err != nil {
 			r.logger.Error(err, "Failed to delete Statefulset for nodePool "+nodePool.Component)
 			return result, err
@@ -502,10 +502,10 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 	}
 
 	if existingDisk.Equal(nodePoolDiskSize) {
-		r.logger.Info("The existing disk size " + existingDisk.String() + " is same as passed in disk size " + nodePoolDiskSize.String())
 		return nil
 	}
-	r.logger.Info("Disk sizes differ for nodePool %s: current: %s, desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
+
+	r.logger.Info("Disk sizes differ for nodePool %s, Current: %s, Desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
 	// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
