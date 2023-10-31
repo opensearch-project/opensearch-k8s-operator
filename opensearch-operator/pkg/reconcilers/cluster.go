@@ -133,6 +133,11 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		})
 		result.CombineErr(err)
 	}
+
+	// Update the cluster health and available nodes in the status
+	result.CombineErr(r.UpdateClusterHealth())
+	result.CombineErr(r.UpdateAvailableNodes())
+
 	if r.instance.Spec.General.SnapshotRepositories != nil && len(r.instance.Spec.General.SnapshotRepositories) > 0 {
 		// Calculate checksum and check for changes
 		result.Combine(r.ReconcileSnapshotRepoConfig(username))
@@ -547,4 +552,32 @@ func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) er
 		return err
 	}
 	return nil
+}
+
+func (r *ClusterReconciler) UpdateClusterHealth() error {
+	health := util.GetClusterHealth(r.ctx, r.Client, r.instance)
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+			return err
+		}
+		r.instance.Status.Health = health
+		return r.Status().Update(r.ctx, r.instance)
+	})
+
+	return err
+}
+
+func (r *ClusterReconciler) UpdateAvailableNodes() error {
+	availableNodes := util.GetAvailableOpenSearchNodes(r.ctx, r.Client, r.instance)
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+			return err
+		}
+		r.instance.Status.AvailableNodes = availableNodes
+		return r.Status().Update(r.ctx, r.instance)
+	})
+
+	return err
 }

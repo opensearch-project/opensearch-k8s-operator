@@ -237,9 +237,6 @@ func CreateClientForCluster(
 			services.WithTransport(transport),
 		)
 	}
-	if err != nil {
-		lg.Error(err, "failed to create client")
-	}
 
 	return osClient, err
 }
@@ -270,4 +267,46 @@ func GetSha1Sum(data []byte) (string, error) {
 	}
 
 	return hex.EncodeToString(hasher.Sum(nil)), nil
+}
+
+// GetClusterHealth returns the health of OpenSearch cluster
+func GetClusterHealth(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) opsterv1.OpenSearchHealth {
+	osClient, err := CreateClientForCluster(ctx, k8sClient, cluster, nil)
+
+	if err != nil {
+		return opsterv1.OpenSearchUnknownHealth
+	}
+
+	healthResponse, err := osClient.GetClusterHealth()
+
+	if err != nil {
+		return opsterv1.OpenSearchUnknownHealth
+	}
+
+	return opsterv1.OpenSearchHealth(healthResponse.Status)
+}
+
+// GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
+func GetAvailableOpenSearchNodes(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) int32 {
+	clusterName := cluster.Name
+	clusterNamespace := cluster.Namespace
+
+	previousAvailableNodes := cluster.Status.AvailableNodes
+	var availableNodes int32
+
+	for _, nodePool := range cluster.Spec.NodePools {
+		var sts *appsv1.StatefulSet
+		var err error
+
+		sts, err = helpers.GetSTSForNodePool(ctx, k8sClient, nodePool, clusterName, clusterNamespace)
+		if err != nil {
+			return previousAvailableNodes
+		}
+
+		if sts != nil {
+			availableNodes += sts.Status.ReadyReplicas
+		}
+	}
+
+	return availableNodes
 }
