@@ -343,6 +343,13 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 			(*out)[key] = val
 		}
 	}
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
+	}
 	if in.PluginsList != nil {
 		in, out := &in.PluginsList, &out.PluginsList
 		*out = make([]string, len(*in))
