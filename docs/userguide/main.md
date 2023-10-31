@@ -708,6 +708,7 @@ spec:
     additionalVolumes:
     - name: example-configmap
       path: /path/to/mount/volume
+      #subPath: mykey # Add this to mount only a specific key of the configmap/secret
       configMap:
         name: config-map-name
       restartPods: true #set this to true to restart the pods when the content of the configMap changes
