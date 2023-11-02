@@ -6,11 +6,11 @@ A resource is an endpoint in the Kubernetes API that stores a collection of API 
 A [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) is an extension of the Kubernetes API, many core Kubernetes functions are now built using custom resources, making Kubernetes more modular.
 Cluster admins can update custom resources independently of the cluster itself. Once a custom resource is installed, users can create and access its objects using kubectl, just as they do for built-in resources like Pods.
 
-The CustomResourceDefinition API resource allows you to define custom resources. Defining a CRD object creates a new custom resource with a name and schema that you specify. The Kubernetes API serves and handles the storage of your custom resource. Every resource is build from `KGV` that stands for Group Version Resource and this is what drives the Kubernetes API Server structure. 
+The CustomResourceDefinition API resource allows you to define custom resources. Defining a CRD object creates a new custom resource with a name and schema that you specify. The Kubernetes API serves and handles the storage of your custom resource. Every resource is build from `KGV` that stands for Group Version Resource and this is what drives the Kubernetes API Server structure.
 The `OpensearchCLuster` CRD is representing an Opensearch cluster.
 
-
 Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.opster.io` and version `v1`.
+
 <table>
     <thead>
         <tr>
@@ -52,8 +52,6 @@ Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.opster.io` an
 <h3 id="OpensearchClusterSPec">
   OpensearchCluster.spec
 </h3>
-
-
 
 ClusterSpec defines the desired state of OpensearchCluster
 
@@ -109,13 +107,11 @@ ClusterSpec defines the desired state of OpensearchCluster
       </tr>
 </table>
 
-
-
 <h3 id="GeneralConfig">
   GeneralConfig
 </h3>
 
-GeneralConfig defines global Opensearch cluster configuration 
+GeneralConfig defines global Opensearch cluster configuration
 
 <table>
     <thead>
@@ -225,6 +221,13 @@ GeneralConfig defines global Opensearch cluster configuration
         <td><b>snapshotRepositories</b></td>
         <td>[]SnapshotRepoConfig</td>
         <td>Snapshot Repo settings</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+      </tr><tr>
+        <td><b>snapshot</b></td>
+        <td><a href="#SnapshotConfig">SnapshotConfig</a></td>
+        <td>Snapshot settings</td>
         <td>false</td>
         <td> - </td>
       </tr><tr>
@@ -431,12 +434,11 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
     </tr><tr>
 </table>
 
-
 <h3 id="GeneralConfig">
   NodePools
 </h3>
 
-Every NodePool is defining different Opensearch Nodes StatefulSet 
+Every NodePool is defining different Opensearch Nodes StatefulSet
 
 <table>
     <thead>
@@ -570,7 +572,7 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
       </tr><tr>
         <td><b>resources</b></td>
         <td>corev1.ResourceRequirements</td>
-        <td>Define initcontainer resorces</td>
+        <td>Define init containers and snapshot config update job resource requirements</td>
         <td>false</td>
         <td>-</td>
       </tr><tr>
@@ -669,7 +671,8 @@ Monitoring TLS configuration options
   Keystore
 </h3>
 
-Every Keystore Value defines a secret to pull secrets from. 
+Every Keystore Value defines a secret to pull secrets from.
+
 <table>
     <tbody>
       <tr>
@@ -694,6 +697,7 @@ Every Keystore Value defines a secret to pull secrets from.
 </h3>
 
 AdditionalVolume object define additional volume and volumeMount
+
 <table>
   <tbody>
     <tr>
@@ -741,4 +745,3 @@ AdditionalVolume object define additional volume and volumeMount
     </tr>
   </tbody>
 </table>
-
