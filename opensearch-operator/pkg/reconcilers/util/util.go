@@ -5,6 +5,8 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -270,16 +272,18 @@ func GetSha1Sum(data []byte) (string, error) {
 }
 
 // GetClusterHealth returns the health of OpenSearch cluster
-func GetClusterHealth(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) opsterv1.OpenSearchHealth {
+func GetClusterHealth(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) opsterv1.OpenSearchHealth {
 	osClient, err := CreateClientForCluster(ctx, k8sClient, cluster, nil)
 
 	if err != nil {
+		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))
 		return opsterv1.OpenSearchUnknownHealth
 	}
 
 	healthResponse, err := osClient.GetClusterHealth()
 
 	if err != nil {
+		lg.Error(err, "Failed to get OpenSearch health status")
 		return opsterv1.OpenSearchUnknownHealth
 	}
 
@@ -287,7 +291,7 @@ func GetClusterHealth(ctx context.Context, k8sClient client.Client, cluster *ops
 }
 
 // GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
-func GetAvailableOpenSearchNodes(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) int32 {
+func GetAvailableOpenSearchNodes(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) int32 {
 	clusterName := cluster.Name
 	clusterNamespace := cluster.Namespace
 
@@ -300,6 +304,7 @@ func GetAvailableOpenSearchNodes(ctx context.Context, k8sClient client.Client, c
 
 		sts, err = helpers.GetSTSForNodePool(ctx, k8sClient, nodePool, clusterName, clusterNamespace)
 		if err != nil {
+			lg.V(1).Info(fmt.Sprintf("Failed to get statefulsets for nodepool %s: %v", nodePool.Component, err))
 			return previousAvailableNodes
 		}
 
