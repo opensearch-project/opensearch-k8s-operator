@@ -133,6 +133,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		})
 		result.CombineErr(err)
 	}
+
 	if r.instance.Spec.General.SnapshotRepositories != nil && len(r.instance.Spec.General.SnapshotRepositories) > 0 {
 		// Calculate checksum and check for changes
 		result.Combine(r.ReconcileSnapshotRepoConfig(username))
@@ -142,6 +143,9 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	if r.isEmptyDirCluster() {
 		result.Combine(r.checkForEmptyDirRecovery())
 	}
+
+	// Update the CR status to reflect the current OpenSearch health and nodes
+	result.CombineErr(r.UpdateClusterStatus())
 
 	return result.Result, result.Err
 }
@@ -547,4 +551,21 @@ func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) er
 		return err
 	}
 	return nil
+}
+
+// UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
+func (r *ClusterReconciler) UpdateClusterStatus() error {
+	health := util.GetClusterHealth(r.ctx, r.Client, r.instance, r.logger)
+	availableNodes := util.GetAvailableOpenSearchNodes(r.ctx, r.Client, r.instance, r.logger)
+
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
+			return err
+		}
+		r.instance.Status.Health = health
+		r.instance.Status.AvailableNodes = availableNodes
+		return r.Status().Update(r.ctx, r.instance)
+	})
+
+	return err
 }

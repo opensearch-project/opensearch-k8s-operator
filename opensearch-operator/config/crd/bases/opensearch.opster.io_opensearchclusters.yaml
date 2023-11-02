@@ -19,6 +19,13 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .status.health
+      name: health
+      type: string
+    - description: Available nodes
+      jsonPath: .status.availableNodes
+      name: nodes
+      type: integer
     - description: Opensearch version
       jsonPath: .status.version
       name: version
@@ -4978,6 +4985,10 @@ spec:
           status:
             description: ClusterStatus defines the observed state of Es
             properties:
+              availableNodes:
+                description: AvailableNodes is the number of available instances.
+                format: int32
+                type: integer
               componentsStatus:
                 items:
                   properties:
@@ -4993,6 +5004,10 @@ spec:
                       type: string
                   type: object
                 type: array
+              health:
+                description: OpenSearchHealth is the health of the cluster as returned
+                  by the health API.
+                type: string
               initialized:
                 type: boolean
               phase:
