@@ -3,8 +3,13 @@ package util
 import (
 	"context"
 	"crypto/sha1"
+	cryptotls "crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"sort"
+	"strings"
 
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
@@ -13,16 +18,14 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
-	"net/http"
+	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
+
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/helpers"
 	"opensearch.opster.io/pkg/tls"
-	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sort"
-	"strings"
 )
 
 func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
@@ -219,28 +222,68 @@ func CreateClientForCluster(
 	lg := log.FromContext(ctx)
 	var osClient *services.OsClusterClient
 
-	username, password, err := helpers.UsernameAndPassword(ctx, k8sClient, cluster)
+	tr, err := buildTransport(ctx, k8sClient, cluster)
 	if err != nil {
-		lg.Error(err, "failed to fetch opensearch credentials")
+		lg.Error(err, "failed to build admin certs")
 		return nil, err
 	}
 
-	if transport == nil {
+	if tr == nil {
 		osClient, err = services.NewOsClusterClient(
 			OpensearchClusterURL(cluster),
-			username,
-			password,
 		)
 	} else {
 		osClient, err = services.NewOsClusterClient(
 			OpensearchClusterURL(cluster),
-			username,
-			password,
-			services.WithTransport(transport),
+			services.WithTransport(tr),
 		)
 	}
 
 	return osClient, err
+}
+
+func buildTransport(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) (http.RoundTripper, error) {
+	if cluster.Spec.Security == nil {
+		return nil, nil
+	}
+
+	secretNamespace := cluster.Namespace
+	adminCertSecretName := cluster.Name + "-admin-cert"
+
+	if cluster.Spec.Security.Config != nil && cluster.Spec.Security.Config.AdminSecret.Name != "" {
+		adminCertSecretName = cluster.Spec.Security.Config.AdminSecret.Name
+	}
+
+	adminCertSecret := &corev1.Secret{}
+	err := k8sClient.Get(ctx, types.NamespacedName{Name: adminCertSecretName, Namespace: secretNamespace}, adminCertSecret)
+
+	if err != nil {
+		return nil, err
+	}
+
+	caCrtPEM := adminCertSecret.Data["ca.crt"]
+	tlsCrtPEM := adminCertSecret.Data["tls.crt"]
+	tlsKeyPEM := adminCertSecret.Data["tls.key"]
+
+	// Parse CA certificate
+	caCert := x509.NewCertPool()
+	if !caCert.AppendCertsFromPEM(caCrtPEM) {
+		return nil, err
+	}
+
+	// load tls certificates
+	clientCert, err := cryptotls.X509KeyPair(tlsCrtPEM, tlsKeyPEM)
+	if err != nil {
+		return nil, err
+	}
+
+	return &http.Transport{
+		TLSClientConfig: &cryptotls.Config{
+			RootCAs:            caCert,                              // Set the CA certificate
+			Certificates:       []cryptotls.Certificate{clientCert}, // Set the client certificate and key
+			InsecureSkipVerify: false,                               // Set to false for server certificate verification
+		},
+	}, nil
 }
 
 func FetchOpensearchCluster(

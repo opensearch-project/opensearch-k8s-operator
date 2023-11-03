@@ -8,6 +8,7 @@ import (
 	"k8s.io/utils/pointer"
 	"opensearch.opster.io/opensearch-gateway/services"
 	"opensearch.opster.io/pkg/builders"
+	"opensearch.opster.io/pkg/reconcilers/util"
 
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
@@ -187,11 +188,8 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if !smartDecrease {
 		return false, err
 	}
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
-	if err != nil {
-		return true, err
-	}
-	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
+
+	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "WARN", "failed to remove node exclude", "Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName)
@@ -209,13 +207,9 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 
 func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	if err != nil {
-		return err
-	}
 
-	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
+	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client for scaling")
@@ -270,12 +264,8 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
-	if err != nil {
-		return err
-	}
 
-	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
+	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
 	if err != nil {
 		return err
 	}
@@ -330,12 +320,8 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	}
 
 	// Gracefully remove nodes
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
-	if err != nil {
-		return nil, err
-	}
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	clusterClient, err := services.NewOsClusterClient(builders.URLForCluster(r.instance), username, password)
+	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client")

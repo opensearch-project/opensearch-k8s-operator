@@ -63,7 +63,7 @@ func WithTransport(transport http.RoundTripper) OsClusterClientOption {
 	}
 }
 
-func NewOsClusterClient(clusterUrl string, username string, password string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
+func NewOsClusterClient(clusterUrl string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
 	options := OsClusterClientOptions{}
 	options.apply(opts...)
 
@@ -77,8 +77,6 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 			}
 		}(),
 		Addresses: []string{clusterUrl},
-		Username:  username,
-		Password:  password,
 	}
 
 	client, err := NewOsClusterClientFromConfig(config)
