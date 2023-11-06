@@ -28,6 +28,8 @@ import (
 	"opensearch.opster.io/pkg/tls"
 )
 
+var GetTransport = buildHttpTransport
+
 func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
 	field_env := helpers.GetField(from_env, text)
 	field_env_int_ptr, ok := field_env.(*int32)
@@ -221,7 +223,7 @@ func CreateClientForCluster(
 	lg := log.FromContext(ctx)
 	var osClient *services.OsClusterClient
 
-	transport, err := buildHttpTransport(ctx, k8sClient, cluster)
+	transport, err := GetTransport(ctx, k8sClient, cluster)
 	if err != nil {
 		lg.Error(err, "failed to build admin certs")
 		return nil, err

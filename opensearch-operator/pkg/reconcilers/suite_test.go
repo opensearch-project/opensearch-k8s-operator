@@ -31,6 +31,7 @@ import (
 
 	"github.com/phayes/freeport"
 	opsterv1 "opensearch.opster.io/api/v1"
+	"opensearch.opster.io/pkg/reconcilers/util"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -66,6 +67,12 @@ var cancel context.CancelFunc
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
+
+	transportFunc := util.GetTransport
+	defer func() {
+		util.GetTransport = transportFunc
+	}()
+
 	RunSpecs(t, "Reconciler Suite")
 }
 

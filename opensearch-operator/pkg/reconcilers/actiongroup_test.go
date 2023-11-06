@@ -18,6 +18,7 @@ import (
 	opsterv1 "opensearch.opster.io/api/v1"
 	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/responses"
+	"opensearch.opster.io/pkg/reconcilers/util"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -35,6 +36,9 @@ var _ = Describe("actiongroup reconciler", func() {
 
 	BeforeEach(func() {
 		transport = httpmock.NewMockTransport()
+		util.GetTransport = func(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) (http.RoundTripper, error) {
+			return transport, nil
+		}
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		instance = &opsterv1.OpensearchActionGroup{
 			ObjectMeta: metav1.ObjectMeta{

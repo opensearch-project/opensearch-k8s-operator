@@ -24,20 +24,22 @@ package controllers
 import (
 	"context"
 	"fmt"
-	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	"net/http"
 	"path/filepath"
 	"testing"
 
+	"github.com/jarcoal/httpmock"
 	"github.com/phayes/freeport"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	opsterv1 "opensearch.opster.io/api/v1"
-
-	ctrl "sigs.k8s.io/controller-runtime"
+	"opensearch.opster.io/pkg/reconcilers/util"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/record"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/envtest"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
@@ -58,9 +60,22 @@ var cfg *rest.Config
 var k8sClient client.Client
 var testEnv *envtest.Environment
 var cancel context.CancelFunc
+var transport *httpmock.MockTransport
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
+
+	transport = httpmock.NewMockTransport()
+	transportFunc := util.GetTransport
+	util.GetTransport = func(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) (http.RoundTripper, error) {
+		return transport, nil
+	}
+
+	transport.RegisterNoResponder(httpmock.NewStringResponder(200, "OK"))
+
+	defer func() {
+		util.GetTransport = transportFunc
+	}()
 
 	RunSpecs(t, "Controller Suite")
 

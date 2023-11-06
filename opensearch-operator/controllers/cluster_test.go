@@ -86,7 +86,6 @@ var _ = Describe("Cluster Reconciler", func() {
 
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
-
 		})
 
 		It("should create a ServiceMonitor for the cluster", func() {
