@@ -217,32 +217,31 @@ func CreateClientForCluster(
 	ctx context.Context,
 	k8sClient client.Client,
 	cluster *opsterv1.OpenSearchCluster,
-	transport http.RoundTripper,
 ) (*services.OsClusterClient, error) {
 	lg := log.FromContext(ctx)
 	var osClient *services.OsClusterClient
 
-	tr, err := buildTransport(ctx, k8sClient, cluster)
+	transport, err := buildHttpTransport(ctx, k8sClient, cluster)
 	if err != nil {
 		lg.Error(err, "failed to build admin certs")
 		return nil, err
 	}
 
-	if tr == nil {
+	if transport == nil {
 		osClient, err = services.NewOsClusterClient(
 			OpensearchClusterURL(cluster),
 		)
 	} else {
 		osClient, err = services.NewOsClusterClient(
 			OpensearchClusterURL(cluster),
-			services.WithTransport(tr),
+			services.WithTransport(transport),
 		)
 	}
 
 	return osClient, err
 }
 
-func buildTransport(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) (http.RoundTripper, error) {
+func buildHttpTransport(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) (http.RoundTripper, error) {
 	if cluster.Spec.Security == nil {
 		return nil, nil
 	}
@@ -316,7 +315,7 @@ func GetSha1Sum(data []byte) (string, error) {
 
 // GetClusterHealth returns the health of OpenSearch cluster
 func GetClusterHealth(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) opsterv1.OpenSearchHealth {
-	osClient, err := CreateClientForCluster(ctx, k8sClient, cluster, nil)
+	osClient, err := CreateClientForCluster(ctx, k8sClient, cluster)
 
 	if err != nil {
 		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))

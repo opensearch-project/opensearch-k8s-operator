@@ -189,7 +189,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 		return false, err
 	}
 
-	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "WARN", "failed to remove node exclude", "Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName)
@@ -209,7 +209,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
-	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client for scaling")
@@ -265,7 +265,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
 
-	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance)
 	if err != nil {
 		return err
 	}
@@ -321,7 +321,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 
 	// Gracefully remove nodes
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+	clusterClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client")

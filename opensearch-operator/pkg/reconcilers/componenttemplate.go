@@ -147,7 +147,7 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		return
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster)
 	if err != nil {
 		reason = "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
@@ -259,7 +259,7 @@ func (r *ComponentTemplateReconciler) Delete() error {
 		return nil
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster)
 	if err != nil {
 		return err
 	}

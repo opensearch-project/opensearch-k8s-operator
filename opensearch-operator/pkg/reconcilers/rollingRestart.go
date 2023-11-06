@@ -104,7 +104,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	if !pendingUpdate {
 		// Check if we had a restart running that is finished so that we can reactivate shard allocation
 		if status != nil && status.Status == statusInProgress {
-			osClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+			osClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance)
 			if err != nil {
 				return ctrl.Result{Requeue: true}, err
 			}
@@ -136,7 +136,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	// If there is work to do create an Opensearch Client
 	var err error
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance)
 	if err != nil {
 		return ctrl.Result{}, err
 	}

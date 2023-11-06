@@ -88,7 +88,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 
 	var err error
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
