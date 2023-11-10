@@ -4,22 +4,23 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"io"
-	"net/http"
-	"strings"
-	"time"
-
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"io"
 	"k8s.io/utils/pointer"
+	"net/http"
 	"opensearch.opster.io/opensearch-gateway/responses"
+	"strconv"
+	"strings"
+	"time"
 )
 
 const (
 	headerContentType = "Content-Type"
 
 	jsonContentHeader = "application/json"
+	ismResource       = "_ism"
 )
 
 var (
@@ -66,7 +67,6 @@ func WithTransport(transport http.RoundTripper) OsClusterClientOption {
 func NewOsClusterClient(clusterUrl string, username string, password string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
 	options := OsClusterClientOptions{}
 	options.apply(opts...)
-
 	config := opensearch.Config{
 		Transport: func() http.RoundTripper {
 			if options.transport != nil {
@@ -307,6 +307,68 @@ func (client *OsClusterClient) PutSecurityResource(ctx context.Context, resource
 func (client *OsClusterClient) DeleteSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
 	return doHTTPDelete(ctx, client.client, path)
+}
+
+// GetISMConfig performs an HTTP GET request to OS to get the ISM policy resource specified by name
+func (client *OsClusterClient) GetISMConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(ismResource, name)
+	return doHTTPGet(ctx, client.client, path)
+}
+
+// PutISMConfig performs an HTTP PUT request to OS to create the ISM policy resource specified by name
+func (client *OsClusterClient) PutISMConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(ismResource, name)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// UpdateISMConfig performs an HTTP PUT request to OS to update the ISM policy resource specified by name
+func (client *OsClusterClient) UpdateISMConfig(ctx context.Context, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathUpdateISM(ismResource, name, seqnumber, primterm)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// DeleteISMConfig performs an HTTP DELETE request to OS to delete the ISM policy resource specified by name
+func (client *OsClusterClient) DeleteISMConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathISM(ismResource, name)
+	return doHTTPDelete(ctx, client.client, path)
+}
+
+// generateAPIPathISM generates a URI PATH for a specific resource endpoint and name
+// For example: resource = _ism, name = example
+// URI PATH = '_plugins/_ism/policies/example'
+func generateAPIPathISM(resource, name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("policies")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
+// generateAPIPathUpdateISM generates a URI PATH for ISM policy resource endpoint and name
+// For example: resource = _ism, name = example, seq_no = 7, primary_term = 1
+// URI PATH = '_plugins/_ism/policies/example?if_seq_no=7&if_primary_term=1'
+func generateAPIPathUpdateISM(resource, name string, seqno, primaryterm int) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name) + len("?if_seq_no=") + len(strconv.Itoa(seqno)) + len("&if_primary_term=") + len(strconv.Itoa(primaryterm)))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("policies")
+	path.WriteString("/")
+	path.WriteString(name)
+	path.WriteString("?if_seq_no=")
+	path.WriteString(strconv.Itoa(seqno))
+	path.WriteString("&if_primary_term=")
+	path.WriteString(strconv.Itoa(primaryterm))
+	return path
 }
 
 // generateAPIPath generates a URI PATH for a specific resource endpoint and name

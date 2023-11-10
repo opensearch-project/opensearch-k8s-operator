@@ -129,6 +129,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchRole")
 		os.Exit(1)
 	}
+	if err = (&controllers.OpensearchISMPolicyReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("ism-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchISM")
+		os.Exit(1)
+	}
 	if err = (&controllers.OpensearchTenantReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
