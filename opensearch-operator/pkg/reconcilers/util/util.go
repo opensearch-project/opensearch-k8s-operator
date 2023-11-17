@@ -5,11 +5,16 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-
 	"net/http"
 	"sort"
 	"strings"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,12 +23,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
 	"k8s.io/utils/pointer"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/opensearch-gateway/services"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers/k8s"
-	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -258,7 +257,6 @@ func FetchOpensearchCluster(
 func GetSha1Sum(data []byte) (string, error) {
 	hasher := sha1.New()
 	_, err := hasher.Write(data)
-
 	if err != nil {
 		return "", err
 	}
@@ -282,14 +280,12 @@ func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int
 // GetClusterHealth returns the health of OpenSearch cluster
 func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) opsterv1.OpenSearchHealth {
 	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, nil)
-
 	if err != nil {
 		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))
 		return opsterv1.OpenSearchUnknownHealth
 	}
 
 	healthResponse, err := osClient.GetClusterHealth()
-
 	if err != nil {
 		lg.Error(err, "Failed to get OpenSearch health status")
 		return opsterv1.OpenSearchUnknownHealth

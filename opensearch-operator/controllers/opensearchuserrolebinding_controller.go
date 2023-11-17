@@ -27,8 +27,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/reconcilers"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
 // OpensearchUserRoleBindingReconciler reconciles a OpensearchUserRoleBinding object

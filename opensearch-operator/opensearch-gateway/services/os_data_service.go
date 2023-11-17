@@ -7,11 +7,11 @@ import (
 	"reflect"
 	"strings"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/go-logr/logr"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
-	"opensearch.opster.io/opensearch-gateway/requests"
-	"opensearch.opster.io/opensearch-gateway/responses"
-	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -77,7 +77,7 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 		return false, err
 	}
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
-	var valAsString = nodeNameToExclude
+	valAsString := nodeNameToExclude
 	if ok && val != "" {
 		// Test whether name is already excluded
 		var found bool

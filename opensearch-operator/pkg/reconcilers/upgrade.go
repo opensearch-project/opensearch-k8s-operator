@@ -7,18 +7,18 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/opensearch-gateway/services"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers/k8s"
-	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -88,7 +88,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	//Fetch the working nodepool
+	// Fetch the working nodepool
 	nodePool, currentStatus := r.findNextNodePoolForUpgrade()
 
 	// Work on the current nodepool as appropriate

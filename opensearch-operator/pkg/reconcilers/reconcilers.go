@@ -6,9 +6,9 @@ import (
 
 	"k8s.io/client-go/tools/record"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	corev1 "k8s.io/api/core/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/reconcilers/k8s"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -97,7 +97,6 @@ func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 		c.recorder.Eventf(c.instance, "Warning", "ConfigDuplicateKey", "Config key '%s' already exists in dashboards config. Will be overwritten", key)
 	}
 	c.DashboardsConfig[key] = value
-
 }
 
 // fetchNodePoolHash gets the hash of the config for a specific node pool

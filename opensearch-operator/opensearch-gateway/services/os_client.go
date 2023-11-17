@@ -4,16 +4,17 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"github.com/opensearch-project/opensearch-go"
-	"github.com/opensearch-project/opensearch-go/opensearchapi"
-	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"io"
-	"k8s.io/utils/pointer"
 	"net/http"
-	"opensearch.opster.io/opensearch-gateway/responses"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/opensearch-project/opensearch-go"
+	"github.com/opensearch-project/opensearch-go/opensearchapi"
+	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"k8s.io/utils/pointer"
 )
 
 const (
@@ -23,22 +24,20 @@ const (
 	ismResource       = "_ism"
 )
 
-var (
-	AdditionalSystemIndices = []string{
-		".opendistro-alerting-config",
-		".opendistro-alerting-alert*",
-		".opendistro-anomaly-results*",
-		".opendistro-anomaly-detector*",
-		".opendistro-anomaly-checkpoints",
-		".opendistro-anomaly-detection-state",
-		".opendistro-reports-*",
-		".opendistro-notifications-*",
-		".opendistro-notebooks",
-		".opensearch-observability",
-		".opendistro-asynchronous-search-response*",
-		".replication-metadata-store",
-	}
-)
+var AdditionalSystemIndices = []string{
+	".opendistro-alerting-config",
+	".opendistro-alerting-alert*",
+	".opendistro-anomaly-results*",
+	".opendistro-anomaly-detector*",
+	".opendistro-anomaly-checkpoints",
+	".opendistro-anomaly-detection-state",
+	".opendistro-reports-*",
+	".opendistro-notifications-*",
+	".opendistro-notebooks",
+	".opensearch-observability",
+	".opendistro-asynchronous-search-response*",
+	".replication-metadata-store",
+}
 
 type OsClusterClient struct {
 	OsClusterClientOptions

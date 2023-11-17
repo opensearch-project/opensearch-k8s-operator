@@ -7,6 +7,8 @@ import (
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,8 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -39,7 +39,7 @@ func NewSTSForNodePool(
 	volumeMounts []corev1.VolumeMount,
 	extraConfig map[string]string,
 ) *appsv1.StatefulSet {
-	//To make sure disksize is not passed as empty
+	// To make sure disksize is not passed as empty
 	var disksize string
 	if len(node.DiskSize) == 0 {
 		disksize = DefaultDiskSize
@@ -166,7 +166,7 @@ func NewSTSForNodePool(
 		//	vendor = "opensearchproject/opensearch"
 	} else {
 		panic("vendor=elasticsearch not implemented")
-		//vendor ="elasticsearch"
+		// vendor ="elasticsearch"
 	}
 
 	jvm := helpers.CalculateJvmHeapSize(&node)
@@ -329,20 +329,20 @@ func NewSTSForNodePool(
 				`
 				#!/usr/bin/env bash
 				set -euo pipefail
-	  
+
 				/usr/share/opensearch/bin/opensearch-keystore create
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
 				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i"
 				done
-	  
+
 				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
 				if [ ! -z ${PASSWORD+x} ]; then
 				  echo 'Adding env $PASSWORD to keystore as key bootstrap.password'
 				  echo "$PASSWORD" | /usr/share/opensearch/bin/opensearch-keystore add -x bootstrap.password
 				fi
-	  
+
 				cp -a /usr/share/opensearch/config/opensearch.keystore /tmp/keystore/
 				`,
 			},
@@ -486,6 +486,7 @@ func NewSTSForNodePool(
 
 	return sts
 }
+
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel:  cr.Name,
@@ -541,7 +542,6 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 }
 
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
-
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -972,7 +972,6 @@ func NewSecurityconfigUpdateJob(
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
-
 	// Dummy node spec required to resolve image
 	node := opsterv1.NodePool{
 		Component: "securityconfig",
@@ -1045,7 +1044,6 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 }
 
 func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
-
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -1112,7 +1110,8 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 				helpers.ClusterLabel,
 			},
 			Endpoints: []monitoring.Endpoint{
-				{Port: "http",
+				{
+					Port:            "http",
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
 					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapeInterval),
@@ -1127,5 +1126,4 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 			NamespaceSelector: namespaceSelector,
 		},
 	}
-
 }

@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"reflect"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
-	"opensearch.opster.io/opensearch-gateway/requests"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -50,7 +50,6 @@ func GetPolicy(ctx context.Context, service *OsClusterClient, policyName string)
 	defer resp.Body.Close()
 	if resp.StatusCode == 404 {
 		return nil, ErrNotFound
-
 	} else if resp.IsError() {
 		return nil, fmt.Errorf("response from API is %s", resp.Status())
 	}

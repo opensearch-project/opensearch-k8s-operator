@@ -4,13 +4,13 @@ import (
 	"context"
 	"strings"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/mocks/opensearch.opster.io/pkg/reconcilers/k8s"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -56,7 +56,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 							TlsCertificateConfig: opsterv1.TlsCertificateConfig{Secret: corev1.LocalObjectReference{Name: secretName}},
 						},
 					},
-				}}
+				},
+			}
 
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).

@@ -6,7 +6,7 @@ domain: opensearch.opster.io
 layout:
 - go.kubebuilder.io/v3
 projectName: opensearch-operator
-repo: opensearch.opster.io
+repo: github.com/Opster/opensearch-k8s-operator/opensearch-operator
 resources:
 - api:
     crdVersion: v1

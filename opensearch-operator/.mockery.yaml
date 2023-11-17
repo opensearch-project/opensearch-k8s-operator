@@ -1,5 +1,5 @@
 with-expecter: true
 packages:
-    opensearch.opster.io/pkg/reconcilers/k8s:
+    github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s:
         interfaces:
             K8sClient:

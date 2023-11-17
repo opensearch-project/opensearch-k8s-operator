@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"os"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -56,129 +56,128 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 }
 
 var _ = Describe("Builders", func() {
-
 	When("Constructing a STS for a NodePool", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
 		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
 			Expect(len(result.Spec.InitContainers)).To(Equal(1))
 		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
 			Expect(len(result.Spec.InitContainers)).To(Equal(0))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
 		It("should only use valid roles", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "cluster_manager,ingest",
 			}))
 		})
 		It("should convert the master role", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"master"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "cluster_manager",
 			}))
 		})
 		It("should convert the cluster_manager role", func() {
-			var clusterObject = ClusterDescWithVersion("1.3.0")
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithVersion("1.3.0")
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "master",
 			}))
 		})
 		It("should have annotations added to node", func() {
-			var clusterObject = ClusterDescWithVersion("1.3.0")
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithVersion("1.3.0")
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 				Annotations: map[string]string{
 					"testAnnotationKey": "testAnnotationValue",
 				},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
 				ConfigurationChecksumAnnotation: "foobar",
 				"testAnnotationKey":             "testAnnotationValue",
 			}))
 		})
 		It("should have annotations added to sts", func() {
-			var clusterObject = ClusterDescWithVersion("1.3.0")
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithVersion("1.3.0")
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 				Annotations: map[string]string{
 					"testAnnotationKey": "testAnnotationValue",
 				},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Annotations).To(Equal(map[string]string{
 				ConfigurationChecksumAnnotation: "foobar",
 				"testAnnotationKey":             "testAnnotationValue",
 			}))
 		})
 		It("should have a priority class name added to the node", func() {
-			var clusterObject = ClusterDescWithVersion("1.3.0")
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithVersion("1.3.0")
+			nodePool := opsterv1.NodePool{
 				Component:         "masters",
 				Roles:             []string{"cluster_manager"},
 				PriorityClassName: "default",
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.PriorityClassName).To(Equal("default"))
 		})
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
 			clusterObject.Spec.General.DefaultRepo = &customRepository
-			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
 		})
 		It("should use InitHelper.Image as InitHelper image if configured", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			customImage := "mycustomrepo.cr/custombusybox:1.2.3"
 			clusterObject.Spec.InitHelper = opsterv1.InitHelperConfig{
 				ImageSpec: &opsterv1.ImageSpec{
 					Image: &customImage,
 				},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/custombusybox:1.2.3"))
 		})
 		It("should use defaults when no custom image is configured for InitHelper image", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			var result = NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("public.ecr.aws/opsterio/busybox:1.27.2-buildx"))
 		})
 		It("should use a custom dns name when env variable is set as cluster url", func() {
@@ -226,12 +225,12 @@ var _ = Describe("Builders", func() {
 		})
 
 		It("should add experimental flag when the node.roles contains search and the version is below 2.7", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "search",
@@ -244,12 +243,12 @@ var _ = Describe("Builders", func() {
 		})
 
 		It("should not add experimental flag when the node.roles contains search and the version is 2.7 or above", func() {
-			var clusterObject = ClusterDescWithVersion("2.7.0")
-			var nodePool = opsterv1.NodePool{
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
-			var result = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "search",
@@ -272,10 +271,10 @@ var _ = Describe("Builders", func() {
 				Privileged:               pointer.Bool(false),
 				AllowPrivilegeEscalation: pointer.Bool(false),
 			}
-			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.Spec.General.PodSecurityContext = podSecurityContext
 			clusterObject.Spec.General.SecurityContext = securityContext
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -287,13 +286,14 @@ var _ = Describe("Builders", func() {
 		})
 		It("should use default storageclass if not specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{PVC: &opsterv1.PVCSource{
-					AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
-				},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
+					PVC: &opsterv1.PVCSource{
+						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					},
 				}},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
@@ -304,7 +304,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set jvm to half of memory request when memory request is set and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("2Gi"),
@@ -319,7 +319,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set jvm to half of memory request when memory request is fraction and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("1.5Gi"),
@@ -335,7 +335,7 @@ var _ = Describe("Builders", func() {
 
 		It("should set jvm to half of memory request when memory request is set in G and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("2G"),
@@ -350,7 +350,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set jvm to default when memory request and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{}
+			nodePool := opsterv1.NodePool{}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
@@ -359,7 +359,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set NodePool.Jvm as jvm when it jvm is provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Jvm: "-Xmx1024M -Xms1024M",
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
@@ -370,7 +370,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set NodePool.jvm as jvm when jvm and memory request are provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Jvm: "-Xmx1024M -Xms1024M",
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
@@ -392,7 +392,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.ObjectMeta.Namespace = "snapshot"
 			clusterObject.Spec.General.ServiceName = "snapshotservice"
 
-			var snapshotRepoSettings = map[string]string{"bucket": "opensearch-s3-snapshot", "region": "us-east-1", "base_path": "os-snapshot"}
+			snapshotRepoSettings := map[string]string{"bucket": "opensearch-s3-snapshot", "region": "us-east-1", "base_path": "os-snapshot"}
 			snapshotConfig := opsterv1.SnapshotRepoConfig{
 				Name:     "os-snap",
 				Type:     "s3",
@@ -408,10 +408,10 @@ var _ = Describe("Builders", func() {
 
 	When("Constructing a bootstrap pod", func() {
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
-			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
 			clusterObject.Spec.General.DefaultRepo = &customRepository
-			var result = NewBootstrapPod(&clusterObject, nil, nil)
+			result := NewBootstrapPod(&clusterObject, nil, nil)
 			Expect(result.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2-buildx"))
 		})
 
@@ -534,18 +534,18 @@ var _ = Describe("Builders", func() {
 		It("should map all roles based on version", func() {
 			namespaceName := "rolemapping"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
-			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.ObjectMeta.Namespace = namespaceName
 			clusterObject.ObjectMeta.Name = "foobar"
 			clusterObject.Spec.General.ServiceName = "foobar"
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			sts.Status.ReadyReplicas = 2
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
@@ -555,18 +555,18 @@ var _ = Describe("Builders", func() {
 		It("should handle a mapped master role", func() {
 			namespaceName := "rolemapping-v1v2"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
-			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.ObjectMeta.Namespace = namespaceName
 			clusterObject.ObjectMeta.Name = "foobar-v1v2"
 			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"master", "data"},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			sts.Status.ReadyReplicas = 2
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
@@ -576,18 +576,18 @@ var _ = Describe("Builders", func() {
 		It("should handle a v1 master role", func() {
 			namespaceName := "rolemapping-v1"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
-			var clusterObject = ClusterDescWithVersion("1.3.0")
+			clusterObject := ClusterDescWithVersion("1.3.0")
 			clusterObject.ObjectMeta.Namespace = namespaceName
 			clusterObject.ObjectMeta.Name = "foobar-v1"
 			clusterObject.Spec.General.ServiceName = "foobar-v1"
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"master", "data"},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			sts.Status.ReadyReplicas = 2
 			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
@@ -599,18 +599,18 @@ var _ = Describe("Builders", func() {
 		It("it should use the specified startup command", func() {
 			namespaceName := "customcommand"
 			customCommand := "/myentrypoint.sh"
-			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.ObjectMeta.Namespace = namespaceName
 			clusterObject.ObjectMeta.Name = "foobar"
 			clusterObject.Spec.General.Command = customCommand
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
 		})
 	})
@@ -618,21 +618,21 @@ var _ = Describe("Builders", func() {
 	When("Configuring a serviceAccount", func() {
 		It("should set it for all cluster pods and the securityconfig-update job", func() {
 			const serviceAccount = "my-test-serviceaccount"
-			var clusterObject = ClusterDescWithVersion("2.2.1")
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.ObjectMeta.Namespace = "foobar"
 			clusterObject.ObjectMeta.Name = "foobar"
 			clusterObject.Spec.General.ServiceAccount = serviceAccount
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
-			var sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(sts.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
 
-			var job = NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "cmd", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "cmd", nil, nil)
 			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
 		})
 	})
@@ -650,8 +650,9 @@ var _ = Describe("Builders", func() {
 							"testAnnotationKey2": "testValue2",
 						},
 					},
-				}}
-			var result = NewServiceForCR(&spec)
+				},
+			}
+			result := NewServiceForCR(&spec)
 			Expect(result.Annotations).To(Equal(map[string]string{
 				"testAnnotationKey":  "testValue",
 				"testAnnotationKey2": "testValue2",
@@ -660,7 +661,7 @@ var _ = Describe("Builders", func() {
 
 		It("should populate the NewHeadlessServiceForNodePool function with ", func() {
 			clusterName := "opensearch"
-			var nodePool = opsterv1.NodePool{
+			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -677,13 +678,13 @@ var _ = Describe("Builders", func() {
 							"testAnnotationKey2": "testValue2",
 						},
 					},
-				}}
-			var result = NewHeadlessServiceForNodePool(&spec, &nodePool)
+				},
+			}
+			result := NewHeadlessServiceForNodePool(&spec, &nodePool)
 			Expect(result.Annotations).To(Equal(map[string]string{
 				"testAnnotationKey":  "testValue",
 				"testAnnotationKey2": "testValue2",
 			}))
 		})
 	})
-
 })

@@ -1,6 +1,6 @@
 package responses
 
-import "opensearch.opster.io/opensearch-gateway/requests"
+import "github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 
 type GetRoleMappingReponse map[string]requests.RoleMapping
 

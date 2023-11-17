@@ -1,25 +1,21 @@
 package helpers
 
 import (
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"opensearch.opster.io/pkg/tls"
 )
 
 // A simple mock to use whenever a record.EventRecorder is needed for a test
-type MockEventRecorder struct {
-}
+type MockEventRecorder struct{}
 
 func (r *MockEventRecorder) Event(object runtime.Object, eventtype, reason, message string) {
-
 }
 
 func (r *MockEventRecorder) Eventf(object runtime.Object, eventtype, reason, messageFmt string, args ...interface{}) {
-
 }
 
 func (r *MockEventRecorder) AnnotatedEventf(object runtime.Object, annotations map[string]string, eventtype, reason, messageFmt string, args ...interface{}) {
-
 }
 
 func CheckVolumeExists(volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, secretName string, volumeName string) bool {
@@ -45,11 +41,9 @@ func HasKeyWithBytes(data map[string][]byte, key string) bool {
 	return exists
 }
 
-type PkiMock struct {
-}
+type PkiMock struct{}
 
-type CertMock struct {
-}
+type CertMock struct{}
 
 func (cert *CertMock) SecretDataCA() map[string][]byte {
 	return map[string][]byte{

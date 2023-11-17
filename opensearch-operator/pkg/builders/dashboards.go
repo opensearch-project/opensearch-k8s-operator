@@ -5,12 +5,12 @@ import (
 	"sort"
 	"strings"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 )
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
@@ -32,7 +32,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 			},
 		},
 	})
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{Name: "dashboards-config",
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "dashboards-config",
 		MountPath: "/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml",
 		SubPath:   "opensearch_dashboards.yml",
 	})
@@ -208,7 +209,6 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 }
 
 func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
-
 	var port int32 = 5601
 
 	labels := map[string]string{
@@ -230,14 +230,15 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 			// Type does not need to be checked for a nil value as ClusterIP is set as the default in the CRD
 			Type:                     cr.Spec.Dashboards.Service.Type,
 			LoadBalancerSourceRanges: cr.Spec.Dashboards.Service.LoadBalancerSourceRanges,
-			Ports: []corev1.ServicePort{{
-				Name:     "http",
-				Protocol: "TCP",
-				Port:     port,
-				TargetPort: intstr.IntOrString{
-					IntVal: port,
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Protocol: "TCP",
+					Port:     port,
+					TargetPort: intstr.IntOrString{
+						IntVal: port,
+					},
 				},
-			},
 			},
 			Selector: labels,
 		},

@@ -5,16 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/utils/pointer"
-	"opensearch.opster.io/opensearch-gateway/services"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/reconcilers/k8s"
-
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -81,7 +80,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	comp := r.instance.Status.ComponentsStatus
 	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
 
-	var desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
+	desireReplicaDiff := *currentSts.Spec.Replicas - nodePool.Replicas
 	if desireReplicaDiff == 0 {
 		// If a scaling operation was started before for this nodePool
 		if found {
@@ -318,7 +317,6 @@ func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult
 			result.Combine(r.removeStatefulSet(sts))
 		}
 	}
-
 }
 
 func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Result, error) {

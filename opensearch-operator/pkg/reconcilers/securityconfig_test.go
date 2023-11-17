@@ -3,17 +3,17 @@ package reconcilers
 import (
 	"context"
 
-	"opensearch.opster.io/mocks/opensearch.opster.io/pkg/reconcilers/k8s"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -36,7 +36,6 @@ func newSecurityconfigReconciler(
 }
 
 var _ = Describe("Securityconfig Reconciler", func() {
-
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "securityconfig"
@@ -47,7 +46,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}}}
+				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}},
+			}
 
 			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
@@ -198,7 +198,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 							AdminSecret:          corev1.LocalObjectReference{Name: "admin-cert"},
 						},
 					},
-				}}
+				},
+			}
 
 			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
@@ -227,7 +228,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig"},
 						},
 					},
-				}}
+				},
+			}
 
 			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
@@ -259,7 +261,8 @@ var _ = Describe("Securityconfig Reconciler", func() {
 							Transport: &opsterv1.TlsConfigTransport{Generate: true},
 						},
 					},
-				}}
+				},
+			}
 
 			mockClient.EXPECT().GetJob("no-securityconfig-tls-configured-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)

@@ -8,15 +8,15 @@ import (
 	"sort"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers/k8s"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -88,7 +88,6 @@ func NewSecurityconfigReconciler(
 }
 
 func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
-
 	if r.instance.Spec.Security == nil {
 		return ctrl.Result{}, nil
 	}
@@ -109,9 +108,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	//Checking if Security Config values are empty and creates a default-securityconfig secret
+	// Checking if Security Config values are empty and creates a default-securityconfig secret
 	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.SecurityconfigSecret.Name != "" {
-		//Use a user passed value of SecurityconfigSecret name
+		// Use a user passed value of SecurityconfigSecret name
 		configSecretName = r.instance.Spec.Security.Config.SecurityconfigSecret.Name
 		// Wait for secret to be available
 		configSecret, err := r.client.GetSecret(configSecretName, namespace)
@@ -256,6 +255,7 @@ func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
 }
+
 func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret) error {
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, corev1.Volume{
 		Name: "securityconfig",
