@@ -8,11 +8,12 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,7 +26,7 @@ const (
 )
 
 type IndexTemplateReconciler struct {
-	client.Client
+	client k8s.K8sClient
 	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
@@ -45,12 +46,12 @@ func NewIndexTemplateReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &IndexTemplateReconciler{
-		Client:            client,
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "role"))),
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "index template"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", "indextemplate"),
 	}
 }
 
@@ -64,33 +65,30 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 		}
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
-		inErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			r.instance.Status.Reason = reason
+		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+			instance := object.(*opsterv1.OpensearchIndexTemplate)
+			instance.Status.Reason = reason
 			if err != nil {
-				r.instance.Status.State = opsterv1.OpensearchIndexTemplateError
+				instance.Status.State = opsterv1.OpensearchIndexTemplateError
 			}
 			if result.Requeue && result.RequeueAfter == 10*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchIndexTemplatePending
+				instance.Status.State = opsterv1.OpensearchIndexTemplatePending
 			}
 			if err == nil && result.RequeueAfter == 30*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchIndexTemplateCreated
-				r.instance.Status.IndexTemplateName = templateName
+				instance.Status.State = opsterv1.OpensearchIndexTemplateCreated
+				instance.Status.IndexTemplateName = templateName
 			}
 			if reason == opensearchIndexTemplateExists {
-				r.instance.Status.State = opsterv1.OpensearchIndexTemplateIgnored
+				instance.Status.State = opsterv1.OpensearchIndexTemplateIgnored
 			}
-			return r.Status().Update(r.ctx, r.instance)
 		})
 
-		if inErr != nil {
-			r.logger.Error(inErr, "failed to update status")
+		if err != nil {
+			r.logger.Error(err, "failed to update status")
 		}
 	}()
 
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -122,12 +120,9 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 		}
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
-			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ManagedCluster = &r.cluster.UID
-				return r.Status().Update(r.ctx, r.instance)
+			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchIndexTemplate)
+				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if err != nil {
 				reason = fmt.Sprintf("failed to update status: %s", err)
@@ -149,7 +144,7 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 		return
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		reason = "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
@@ -172,12 +167,9 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 			return
 		}
 		if pointer.BoolDeref(r.updateStatus, true) {
-			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ExistingIndexTemplate = &exists
-				return r.Status().Update(r.ctx, r.instance)
+			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchIndexTemplate)
+				instance.Status.ExistingIndexTemplate = &exists
 			})
 			if err != nil {
 				reason = fmt.Sprintf("failed to update status: %s", err)
@@ -248,7 +240,7 @@ func (r *IndexTemplateReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -261,7 +253,7 @@ func (r *IndexTemplateReconciler) Delete() error {
 		return nil
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}

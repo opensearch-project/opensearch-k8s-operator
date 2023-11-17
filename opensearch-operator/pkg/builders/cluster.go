@@ -1043,22 +1043,6 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 	return true
 }
 
-func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) int32 {
-	count := int32(0)
-	for _, nodePool := range cr.Spec.NodePools {
-		if helpers.HasDataRole(&nodePool) {
-			sts := &appsv1.StatefulSet{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      StsName(cr, &nodePool),
-				Namespace: cr.Namespace,
-			}, sts); err == nil {
-				count = count + pointer.Int32Deref(sts.Spec.Replicas, 1)
-			}
-		}
-	}
-	return count
-}
-
 func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,

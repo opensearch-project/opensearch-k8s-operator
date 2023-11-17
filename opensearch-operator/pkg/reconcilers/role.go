@@ -8,11 +8,12 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,7 +25,7 @@ const (
 )
 
 type RoleReconciler struct {
-	client.Client
+	client k8s.K8sClient
 	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
@@ -35,8 +36,8 @@ type RoleReconciler struct {
 }
 
 func NewRoleReconciler(
-	ctx context.Context,
 	client client.Client,
+	ctx context.Context,
 	recorder record.EventRecorder,
 	instance *opsterv1.OpensearchRole,
 	opts ...ReconcilerOption,
@@ -44,7 +45,7 @@ func NewRoleReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &RoleReconciler{
-		Client:            client,
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "role"))),
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
@@ -62,31 +63,28 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			r.instance.Status.Reason = reason
+		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+			instance := object.(*opsterv1.OpensearchRole)
+			instance.Status.Reason = reason
 			if retErr != nil {
-				r.instance.Status.State = opsterv1.OpensearchRoleStateError
+				instance.Status.State = opsterv1.OpensearchRoleStateError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchRoleStatePending
+				instance.Status.State = opsterv1.OpensearchRoleStatePending
 			}
 			if retErr == nil && retResult.Requeue {
-				r.instance.Status.State = opsterv1.OpensearchRoleStateCreated
+				instance.Status.State = opsterv1.OpensearchRoleStateCreated
 			}
 			if reason == opensearchRoleExists {
-				r.instance.Status.State = opsterv1.OpensearchRoleIgnored
+				instance.Status.State = opsterv1.OpensearchRoleIgnored
 			}
-			return r.Status().Update(r.ctx, r.instance)
 		})
 		if err != nil {
 			r.logger.Error(err, "failed to update status")
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -117,12 +115,9 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
-			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ManagedCluster = &r.cluster.UID
-				return r.Status().Update(r.ctx, r.instance)
+			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchRole)
+				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -144,7 +139,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		return
 	}
 
-	r.osClient, retErr = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, retErr = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if retErr != nil {
 		reason = "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
@@ -162,12 +157,9 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			return
 		}
 		if pointer.BoolDeref(r.updateStatus, true) {
-			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ExistingRole = &exists
-				return r.Status().Update(r.ctx, r.instance)
+			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchRole)
+				instance.Status.ExistingRole = &exists
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -243,7 +235,7 @@ func (r *RoleReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -256,7 +248,7 @@ func (r *RoleReconciler) Delete() error {
 		return nil
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}

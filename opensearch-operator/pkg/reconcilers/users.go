@@ -9,12 +9,12 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,7 +22,7 @@ import (
 )
 
 type UserReconciler struct {
-	client.Client
+	client k8s.K8sClient
 	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
@@ -33,8 +33,8 @@ type UserReconciler struct {
 }
 
 func NewUserReconciler(
-	ctx context.Context,
 	client client.Client,
+	ctx context.Context,
 	recorder record.EventRecorder,
 	instance *opsterv1.OpensearchUser,
 	opts ...ReconcilerOption,
@@ -42,7 +42,7 @@ func NewUserReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &UserReconciler{
-		Client:            client,
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "user"))),
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
@@ -61,28 +61,25 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			r.instance.Status.Reason = reason
+		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+			instance := object.(*opsterv1.OpensearchUser)
+			instance.Status.Reason = reason
 			if retErr != nil {
-				r.instance.Status.State = opsterv1.OpensearchUserStateError
+				instance.Status.State = opsterv1.OpensearchUserStateError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchUserStatePending
+				instance.Status.State = opsterv1.OpensearchUserStatePending
 			}
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchUserStateCreated
+				instance.Status.State = opsterv1.OpensearchUserStateCreated
 			}
-			return r.Status().Update(r.ctx, r.instance)
 		})
 		if err != nil {
 			r.logger.Error(err, "failed to update status")
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -113,12 +110,9 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
-			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ManagedCluster = &r.cluster.UID
-				return r.Status().Update(r.ctx, r.instance)
+			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchUser)
+				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -140,7 +134,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		return
 	}
 
-	r.osClient, retErr = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, retErr = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if retErr != nil {
 		reason = "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
@@ -195,7 +189,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 func (r *UserReconciler) Delete() error {
 	var err error
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -208,7 +202,7 @@ func (r *UserReconciler) Delete() error {
 		return nil
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}
@@ -238,11 +232,7 @@ func (r *UserReconciler) Delete() error {
 }
 
 func (r *UserReconciler) managePasswordSecret(username string, namespace string) (string, error) {
-	secret := &corev1.Secret{}
-	err := r.Get(r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.PasswordFrom.Name,
-		Namespace: r.instance.Namespace,
-	}, secret)
+	secret, err := r.client.GetSecret(r.instance.Spec.PasswordFrom.Name, r.instance.Namespace)
 	if err != nil {
 		r.logger.V(1).Error(err, "failed to fetch password secret")
 		r.recorder.Event(r.instance, "Warning", passwordError, "error fetching password secret")
@@ -257,7 +247,7 @@ func (r *UserReconciler) managePasswordSecret(username string, namespace string)
 	secret.Annotations[helpers.OsUserNameAnnotation] = username
 	secret.Annotations[helpers.OsUserNamespaceAnnotation] = namespace
 
-	if err := r.Update(r.ctx, secret); err != nil {
+	if _, err := r.client.CreateSecret(&secret); err != nil {
 		r.logger.V(1).Error(err, "failed to patch opensearch username onto password secret")
 		r.recorder.Event(r.instance, "Warning", passwordError, "error patching opensearch username onto password secret")
 		return "", err

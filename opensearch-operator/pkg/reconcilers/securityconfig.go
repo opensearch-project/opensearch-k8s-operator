@@ -11,12 +11,11 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -64,9 +63,7 @@ var ymlToFileType = map[string]string{
 }
 
 type SecurityconfigReconciler struct {
-	reconciler.ResourceReconciler
-	client.Client
-	ctx               context.Context
+	client            k8s.K8sClient
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
@@ -82,10 +79,7 @@ func NewSecurityconfigReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *SecurityconfigReconciler {
 	return &SecurityconfigReconciler{
-		Client: client,
-		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "securityconfig")))...),
-		ctx:               ctx,
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "securityconfig")))...),
 		reconcilerContext: reconcilerContext,
 		recorder:          recorder,
 		instance:          instance,
@@ -119,8 +113,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		// Use a user passed value of SecurityconfigSecret name
 		configSecretName = r.instance.Spec.Security.Config.SecurityconfigSecret.Name
 		// Wait for secret to be available
-		configSecret := corev1.Secret{}
-		if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
+		configSecret, err := r.client.GetSecret(configSecretName, namespace)
+		if err != nil {
 			if apierrors.IsNotFound(err) {
 				r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName)
@@ -143,8 +137,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.logger.Info("Not passed any SecurityconfigSecret")
 	}
 
-	job := batchv1.Job{}
-	if err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &job); err == nil {
+	job, err := r.client.GetJob(jobName, namespace)
+	if err == nil {
 		value, exists := job.ObjectMeta.Annotations[checksumAnnotation]
 		if exists && value == checksumval {
 			// Nothing to do, current securityconfig already applied
@@ -152,15 +146,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 		// Delete old job
 		r.logger.Info("Deleting old update job")
-		opts := client.DeleteOptions{}
-		// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
-		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
-		err = r.Delete(r.ctx, &job, &opts)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		// Make sure job is completely deleted (when r.Delete returns deletion sometimes is not yet complete)
-		_, err = r.ReconcileResource(&job, reconciler.StateAbsent)
+		err := r.client.DeleteJob(&job)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -189,10 +175,11 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.VolumeMounts,
 	)
 
-	if err := ctrl.SetControllerReference(r.instance, &job, r.Client.Scheme()); err != nil {
+	if err := ctrl.SetControllerReference(r.instance, &job, r.client.Scheme()); err != nil {
 		return ctrl.Result{}, err
 	}
-	_, err := r.ReconcileResource(&job, reconciler.StateCreated)
+
+	_, err = r.client.CreateJob(&job)
 	return ctrl.Result{}, err
 }
 

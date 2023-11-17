@@ -58,8 +58,12 @@ lint:
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: genmocks
+genmocks: mockery
+	$(MOCKERY) --all
+
 .PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests generate fmt vet envtest genmocks ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
@@ -71,13 +75,9 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go --loglevel debug
 
 docker-build: generate fmt vet ## Build docker image with the manager.
-	go install github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders
-	go install github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers
 	DOCKER_BUILDKIT=1 docker build -t ${IMG} .
 
 docker-build-multiarch: ## Build docker image with the manager for all supported architectures
-	go install github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders
-	go install github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers
 	DOCKER_BUILDKIT=1 docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
@@ -113,10 +113,12 @@ $(LOCALBIN):
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+MOCKERY ?= $(LOCALBIN)/mockery
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v4.5.7
 CONTROLLER_TOOLS_VERSION ?= v0.10.0
+MOCKERY_VERSION ?= v2.33.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -128,6 +130,11 @@ $(KUSTOMIZE): $(LOCALBIN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+
+.PHONY: mockery
+mockery: $(MOCKERY) ## Download mockery locally if necessary.
+$(MOCKERY): $(LOCALBIN)
+	test -s $(LOCALBIN)/mockery || GOBIN=$(LOCALBIN) go install github.com/vektra/mockery/v2@$(MOCKERY_VERSION)
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.

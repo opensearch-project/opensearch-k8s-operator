@@ -4,21 +4,21 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
-	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var _ = Describe("actiongroup reconciler", func() {
@@ -29,11 +29,12 @@ var _ = Describe("actiongroup reconciler", func() {
 		recorder   *record.FakeRecorder
 
 		// Objects
-		ns      *corev1.Namespace
-		cluster *opsterv1.OpenSearchCluster
+		cluster    *opsterv1.OpenSearchCluster
+		mockClient *k8s.MockK8sClient
 	)
 
 	BeforeEach(func() {
+		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		instance = &opsterv1.OpensearchActionGroup{
@@ -54,24 +55,6 @@ var _ = Describe("actiongroup reconciler", func() {
 			},
 		}
 
-		// Sleep for cache to start
-		time.Sleep(time.Millisecond * 100)
-		// Set up prereq-objects
-		ns = &corev1.Namespace{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "test-actiongroup",
-			},
-		}
-		Expect(func() error {
-			err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(ns), &corev1.Namespace{})
-			if err != nil {
-				if k8serrors.IsNotFound(err) {
-					return k8sClient.Create(context.Background(), ns)
-				}
-				return err
-			}
-			return nil
-		}()).To(Succeed())
 		cluster = &opsterv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
@@ -80,6 +63,7 @@ var _ = Describe("actiongroup reconciler", func() {
 			Spec: opsterv1.ClusterSpec{
 				General: opsterv1.GeneralConfig{
 					ServiceName: "test-cluster",
+					HttpPort:    9200,
 				},
 				NodePools: []opsterv1.NodePool{
 					{
@@ -92,27 +76,19 @@ var _ = Describe("actiongroup reconciler", func() {
 				},
 			},
 		}
-		Expect(func() error {
-			err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), &opsterv1.OpenSearchCluster{})
-			if err != nil {
-				if k8serrors.IsNotFound(err) {
-					return k8sClient.Create(context.Background(), cluster)
-				}
-				return err
-			}
-			return nil
-		}()).To(Succeed())
 	})
 
 	JustBeforeEach(func() {
-		reconciler = NewActionGroupReconciler(
-			context.Background(),
-			k8sClient,
-			recorder,
-			instance,
-			WithOSClientTransport(transport),
-			WithUpdateStatus(false),
-		)
+		options := ReconcilerOptions{}
+		options.apply(WithOSClientTransport(transport), WithUpdateStatus(false))
+		reconciler = &ActionGroupReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			ReconcilerOptions: options,
+			recorder:          recorder,
+			instance:          instance,
+			logger:            log.FromContext(context.Background()),
+		}
 	})
 
 	When("cluster doesn't exist", func() {
@@ -121,6 +97,7 @@ var _ = Describe("actiongroup reconciler", func() {
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should wait for the cluster to exist", func() {
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
 			go func() {
 				defer GinkgoRecover()
 				defer close(recorder.Events)
@@ -141,6 +118,7 @@ var _ = Describe("actiongroup reconciler", func() {
 		BeforeEach(func() {
 			uid := types.UID("someuid")
 			instance.Status.ManagedCluster = &uid
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should error", func() {
@@ -162,6 +140,7 @@ var _ = Describe("actiongroup reconciler", func() {
 	When("cluster is not ready", func() {
 		BeforeEach(func() {
 			recorder = record.NewFakeRecorder(1)
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 		})
 		It("should wait for the cluster to be running", func() {
 			go func() {
@@ -183,17 +162,9 @@ var _ = Describe("actiongroup reconciler", func() {
 	Context("cluster is ready", func() {
 		extraContextCalls := 1
 		BeforeEach(func() {
-			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), cluster)).To(Succeed())
 			cluster.Status.Phase = opsterv1.PhaseRunning
 			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
-			Expect(k8sClient.Status().Update(context.Background(), cluster)).To(Succeed())
-			Eventually(func() string {
-				err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(cluster), cluster)
-				if err != nil {
-					return "failed"
-				}
-				return cluster.Status.Phase
-			}).Should(Equal(opsterv1.PhaseRunning))
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 
 			transport.RegisterResponder(
 				http.MethodGet,
@@ -456,6 +427,7 @@ var _ = Describe("actiongroup reconciler", func() {
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
 					instance.Spec.OpensearchRef.Name = "doesnotexist"
+					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
 				})
 				It("should do nothing and exit", func() {
 					Expect(reconciler.Delete()).To(Succeed())
@@ -464,6 +436,7 @@ var _ = Describe("actiongroup reconciler", func() {
 
 			When("actiongroup does not exist", func() {
 				BeforeEach(func() {
+					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(
@@ -500,6 +473,7 @@ var _ = Describe("actiongroup reconciler", func() {
 			})
 			When("actiongroup does exist", func() {
 				BeforeEach(func() {
+					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(

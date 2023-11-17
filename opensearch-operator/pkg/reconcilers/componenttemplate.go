@@ -8,11 +8,12 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,7 +26,7 @@ const (
 )
 
 type ComponentTemplateReconciler struct {
-	client.Client
+	client k8s.K8sClient
 	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
@@ -45,12 +46,12 @@ func NewComponentTemplateReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &ComponentTemplateReconciler{
-		Client:            client,
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "role"))),
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "component template"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", "componenttemplate"),
 	}
 }
 
@@ -63,32 +64,29 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		}
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
-		inErr := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			r.instance.Status.Reason = reason
+		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+			instance := object.(*opsterv1.OpensearchComponentTemplate)
+			instance.Status.Reason = reason
 			if err != nil {
-				r.instance.Status.State = opsterv1.OpensearchComponentTemplateError
+				instance.Status.State = opsterv1.OpensearchComponentTemplateError
 			}
 			if result.Requeue && result.RequeueAfter == 10*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchComponentTemplatePending
+				instance.Status.State = opsterv1.OpensearchComponentTemplatePending
 			}
 			if err == nil && result.RequeueAfter == 30*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchComponentTemplateCreated
+				instance.Status.State = opsterv1.OpensearchComponentTemplateCreated
 			}
 			if reason == opensearchComponentTemplateExists {
-				r.instance.Status.State = opsterv1.OpensearchComponentTemplateIgnored
+				instance.Status.State = opsterv1.OpensearchComponentTemplateIgnored
 			}
-			return r.Status().Update(r.ctx, r.instance)
 		})
 
-		if inErr != nil {
-			r.logger.Error(inErr, "failed to update status")
+		if err != nil {
+			r.logger.Error(err, "failed to update status")
 		}
 	}()
 
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -120,12 +118,9 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		}
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
-			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ManagedCluster = &r.cluster.UID
-				return r.Status().Update(r.ctx, r.instance)
+			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchComponentTemplate)
+				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if err != nil {
 				reason = fmt.Sprintf("failed to update status: %s", err)
@@ -147,7 +142,7 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		return
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		reason = "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
@@ -170,12 +165,9 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 			return
 		}
 		if pointer.BoolDeref(r.updateStatus, true) {
-			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ExistingComponentTemplate = &exists
-				return r.Status().Update(r.ctx, r.instance)
+			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchComponentTemplate)
+				instance.Status.ExistingComponentTemplate = &exists
 			})
 			if err != nil {
 				reason = fmt.Sprintf("failed to update status: %s", err)
@@ -246,7 +238,7 @@ func (r *ComponentTemplateReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -259,7 +251,7 @@ func (r *ComponentTemplateReconciler) Delete() error {
 		return nil
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}

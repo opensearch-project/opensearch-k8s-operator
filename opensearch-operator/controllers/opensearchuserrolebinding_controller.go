@@ -57,8 +57,8 @@ func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req
 	}
 
 	userRoleBindingReconciler := reconcilers.NewUserRoleBindingReconciler(
-		ctx,
 		r.Client,
+		ctx,
 		r.Recorder,
 		r.Instance,
 	)

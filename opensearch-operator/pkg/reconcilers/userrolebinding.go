@@ -9,11 +9,12 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,7 +22,7 @@ import (
 )
 
 type UserRoleBindingReconciler struct {
-	client.Client
+	client k8s.K8sClient
 	ReconcilerOptions
 	ctx      context.Context
 	osClient *services.OsClusterClient
@@ -32,8 +33,8 @@ type UserRoleBindingReconciler struct {
 }
 
 func NewUserRoleBindingReconciler(
-	ctx context.Context,
 	client client.Client,
+	ctx context.Context,
 	recorder record.EventRecorder,
 	instance *opsterv1.OpensearchUserRoleBinding,
 	opts ...ReconcilerOption,
@@ -41,12 +42,12 @@ func NewUserRoleBindingReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &UserRoleBindingReconciler{
-		Client:            client,
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "userrolebinding"))),
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "user"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", "userrolebinding"),
 	}
 }
 
@@ -60,31 +61,28 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
-		err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-				return err
-			}
-			r.instance.Status.Reason = reason
+		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+			instance := object.(*opsterv1.OpensearchUserRoleBinding)
+			instance.Status.Reason = reason
 			if retErr != nil {
-				r.instance.Status.State = opsterv1.OpensearchUserRoleBindingStateError
+				instance.Status.State = opsterv1.OpensearchUserRoleBindingStateError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				r.instance.Status.State = opsterv1.OpensearchUserRoleBindingPending
+				instance.Status.State = opsterv1.OpensearchUserRoleBindingPending
 			}
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				r.instance.Status.ProvisionedRoles = r.instance.Spec.Roles
-				r.instance.Status.ProvisionedBackendRoles = r.instance.Spec.BackendRoles
-				r.instance.Status.ProvisionedUsers = r.instance.Spec.Users
-				r.instance.Status.State = opsterv1.OpensearchUserRoleBindingStateCreated
+				instance.Status.ProvisionedRoles = instance.Spec.Roles
+				instance.Status.ProvisionedBackendRoles = instance.Spec.BackendRoles
+				instance.Status.ProvisionedUsers = instance.Spec.Users
+				instance.Status.State = opsterv1.OpensearchUserRoleBindingStateCreated
 			}
-			return r.Status().Update(r.ctx, r.instance)
 		})
 		if err != nil {
 			r.logger.Error(err, "failed to update status")
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -115,12 +113,9 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		}
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
-			retErr = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(r.ctx, client.ObjectKeyFromObject(r.instance), r.instance); err != nil {
-					return err
-				}
-				r.instance.Status.ManagedCluster = &r.cluster.UID
-				return r.Status().Update(r.ctx, r.instance)
+			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
+				instance := object.(*opsterv1.OpensearchUserRoleBinding)
+				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -142,7 +137,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 		return
 	}
 
-	r.osClient, retErr = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, retErr = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if retErr != nil {
 		reason = "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
@@ -214,7 +209,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 
 func (r *UserRoleBindingReconciler) Delete() error {
 	var err error
-	r.cluster, err = util.FetchOpensearchCluster(r.ctx, r.Client, types.NamespacedName{
+	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
@@ -227,7 +222,7 @@ func (r *UserRoleBindingReconciler) Delete() error {
 		return nil
 	}
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.cluster, r.osClientTransport)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.cluster, r.osClientTransport)
 	if err != nil {
 		return err
 	}

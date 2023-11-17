@@ -9,12 +9,12 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -29,8 +29,7 @@ const (
 )
 
 type RollingRestartReconciler struct {
-	client.Client
-	reconciler.ResourceReconciler
+	client            k8s.K8sClient
 	ctx               context.Context
 	osClient          *services.OsClusterClient
 	recorder          record.EventRecorder
@@ -47,9 +46,7 @@ func NewRollingRestartReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *RollingRestartReconciler {
 	return &RollingRestartReconciler{
-		Client: client,
-		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "restart")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "restart")))...),
 		ctx:               ctx,
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
@@ -73,11 +70,8 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	// Check that all nodes are ready before doing work
 	// Also check if there are pending updates for all nodes.
 	for _, nodePool := range r.instance.Spec.NodePools {
-		sts := &appsv1.StatefulSet{}
-		if err := r.Get(r.ctx, types.NamespacedName{
-			Name:      builders.StsName(r.instance, &nodePool),
-			Namespace: r.instance.Namespace,
-		}, sts); err != nil {
+		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
+		if err != nil {
 			return ctrl.Result{}, err
 		}
 		if sts.Status.UpdateRevision != "" &&
@@ -87,11 +81,15 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		} else if sts.Status.UpdateRevision != "" &&
 			sts.Status.CurrentRevision != sts.Status.UpdateRevision {
 			// If all pods in sts are updated to spec.replicas but current version is not updated.
-			sts.Status.CurrentRevision = sts.Status.UpdateRevision
-			err := r.Status().Update(r.ctx, sts)
+			err := r.client.UdateObjectStatus(&sts, func(object client.Object) {
+				instance := object.(*appsv1.StatefulSet)
+				instance.Status.CurrentRevision = sts.Status.UpdateRevision
+			})
 			if err != nil {
+				lg.Error(err, "failed to update status")
 				return ctrl.Result{}, err
 			}
+
 		}
 		if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
 			return ctrl.Result{
@@ -104,7 +102,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	if !pendingUpdate {
 		// Check if we had a restart running that is finished so that we can reactivate shard allocation
 		if status != nil && status.Status == statusInProgress {
-			osClient, err := util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+			osClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, nil)
 			if err != nil {
 				return ctrl.Result{Requeue: true}, err
 			}
@@ -136,30 +134,28 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	// If there is work to do create an Opensearch Client
 	var err error
 
-	r.osClient, err = util.CreateClientForCluster(r.ctx, r.Client, r.instance, nil)
+	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.instance, nil)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 
 	// Restart StatefulSet pod.  Order is not important So we just pick the first we find
+
 	for _, nodePool := range r.instance.Spec.NodePools {
-		sts := &appsv1.StatefulSet{}
-		if err := r.Get(r.ctx, types.NamespacedName{
-			Name:      builders.StsName(r.instance, &nodePool),
-			Namespace: r.instance.Namespace,
-		}, sts); err != nil {
+		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
+		if err != nil {
 			return ctrl.Result{}, err
 		}
 		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
 			// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
 			if sts.Status.ReadyReplicas == pointer.Int32Deref(sts.Spec.Replicas, 1) {
-				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.ctx, r.Client, r.instance, &nodePool); err == nil && numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
+				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.client, r.instance, &nodePool); err == nil && numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
 					lg.Info(fmt.Sprintf("Starting rolling restart of the StatefulSet %s", sts.Name))
-					return r.restartStatefulSetPod(sts)
+					return r.restartStatefulSetPod(&sts)
 				}
 			} else { // Check if there is any crashed pod. Delete it if there is any update in sts.
-				err = helpers.DeleteStuckPodWithOlderRevision(r.ctx, r.Client, sts)
+				err = helpers.DeleteStuckPodWithOlderRevision(r.client, &sts)
 				if err != nil {
 					return ctrl.Result{}, err
 				}
@@ -172,7 +168,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 
 func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet) (ctrl.Result, error) {
 	lg := log.FromContext(r.ctx).WithValues("reconciler", "restart")
-	dataCount := builders.DataNodesCount(r.ctx, r.Client, r.instance)
+	dataCount := util.DataNodesCount(r.client, r.instance)
 	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {
 		lg.Info("Only 2 data nodes and drain is set, some shards may not drain")
 	}
@@ -189,7 +185,7 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 		}, nil
 	}
 
-	workingPod, err := helpers.WorkingPodForRollingRestart(r.ctx, r.Client, sts)
+	workingPod, err := helpers.WorkingPodForRollingRestart(r.client, sts)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -206,7 +202,7 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 		}, nil
 	}
 
-	err = r.Delete(r.ctx, &corev1.Pod{
+	err = r.client.DeletePod(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workingPod,
 			Namespace: sts.Namespace,
@@ -226,7 +222,7 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 }
 
 func (r *RollingRestartReconciler) updateStatus(status string) error {
-	return UpdateComponentStatus(r.ctx, r.Client, r.instance, &opsterv1.ComponentStatus{
+	return UpdateComponentStatus(r.client, r.instance, &opsterv1.ComponentStatus{
 		Component:   componentName,
 		Status:      status,
 		Description: "",
