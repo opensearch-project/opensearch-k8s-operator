@@ -1,10 +1,18 @@
 package services
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"reflect"
 	"strings"
 
+	"github.com/go-logr/logr"
+	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"opensearch.opster.io/opensearch-gateway/requests"
 	"opensearch.opster.io/opensearch-gateway/responses"
 	"opensearch.opster.io/pkg/helpers"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 var ClusterSettingsExcludeBrokenPath = []string{"cluster", "routing", "allocation", "exclude", "_name"}
@@ -197,7 +205,7 @@ func ReactivateShardAllocation(service *OsClusterClient) error {
 	return nil
 }
 
-func PreparePodForDelete(service *OsClusterClient, podName string, drainNode bool, nodeCount int32) (bool, error) {
+func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, error) {
 	if drainNode {
 		// If we are draining nodes then drain the working node
 		_, err := AppendExcludeNodeHost(service, podName)
@@ -205,7 +213,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			return false, err
 		}
 
-		// If there are only 2 data nodes only check for system indics
+		// If there are only 2 data nodes only check for system indices
 		if nodeCount == 2 {
 			systemIndices, err := GetExistingSystemIndices(service)
 			if err != nil {
@@ -216,6 +224,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			if err != nil {
 				return false, err
 			}
+			lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
 			return !systemPrimaries, nil
 		}
 
@@ -225,6 +234,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			return false, err
 		}
 		// If the node isn't empty requeue to wait for shards to drain
+		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
 		return !nodeNotEmpty, nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
@@ -273,4 +283,225 @@ func continueRestartWithYellowHealth(health responses.ClusterHealthResponse) boo
 	}
 
 	return observabilityIndex.Status == "yellow"
+}
+
+// IndexTemplatePath returns a strings.Builder pointing to /_index_template/<templateName>
+func IndexTemplatePath(templateName string) strings.Builder {
+	var path strings.Builder
+	path.Grow(len("/_index_template/") + len(templateName))
+	path.WriteString("/_index_template/")
+	path.WriteString(templateName)
+	return path
+}
+
+// IndexTemplateExists checks if the passed index template already exists or not
+func IndexTemplateExists(ctx context.Context, service *OsClusterClient, templateName string) (bool, error) {
+	path := IndexTemplatePath(templateName)
+	resp, err := doHTTPHead(ctx, service.client, path)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return false, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return true, nil
+}
+
+// ShouldUpdateIndexTemplate checks whether a previously created index template needs an update or not
+func ShouldUpdateIndexTemplate(
+	ctx context.Context,
+	service *OsClusterClient,
+	indexTemplateName string,
+	indexTemplate requests.IndexTemplate,
+) (bool, error) {
+	path := IndexTemplatePath(indexTemplateName)
+	resp, err := doHTTPGet(ctx, service.client, path)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return true, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+
+	indexTemplatesResponse := responses.GetIndexTemplatesResponse{}
+
+	err = json.NewDecoder(resp.Body).Decode(&indexTemplatesResponse)
+	if err != nil {
+		return false, err
+	}
+
+	// we should not be able to get more than one template in the list, but check to make sure
+	if len(indexTemplatesResponse.IndexTemplates) != 1 {
+		return false, fmt.Errorf("found %d index templates which fits the name '%s'", len(indexTemplatesResponse.IndexTemplates), indexTemplateName)
+	}
+
+	indexTemplateResponse := indexTemplatesResponse.IndexTemplates[0]
+
+	// verify the index template name
+	if indexTemplateResponse.Name != indexTemplateName {
+		return false, fmt.Errorf("returned index template named '%s' does not equal the requested name '%s'", indexTemplateResponse.Name, indexTemplateName)
+	}
+	if reflect.DeepEqual(indexTemplate, indexTemplateResponse.IndexTemplate) {
+		return false, nil
+	}
+
+	lg := log.FromContext(ctx)
+	lg.Info("OpenSearch Index template requires update")
+
+	return true, nil
+}
+
+// CreateOrUpdateIndexTemplate creates a new index or updates a pre-existing index template
+func CreateOrUpdateIndexTemplate(
+	ctx context.Context,
+	service *OsClusterClient,
+	indexTemplateName string,
+	indexTemplate requests.IndexTemplate,
+) error {
+	path := IndexTemplatePath(indexTemplateName)
+
+	resp, err := doHTTPPut(ctx, service.client, path, opensearchutil.NewJSONReader(indexTemplate))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("failed to create index template: %s", resp.String())
+	}
+	return nil
+}
+
+// DeleteIndexTemplate deletes a previously created index template
+func DeleteIndexTemplate(ctx context.Context, service *OsClusterClient, indexTemplateName string) error {
+	path := IndexTemplatePath(indexTemplateName)
+	resp, err := doHTTPDelete(ctx, service.client, path)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return nil
+}
+
+// ComponentTemplatePath returns a strings.Builder pointing to /_component_template/<templateName>
+func ComponentTemplatePath(templateName string) strings.Builder {
+	var path strings.Builder
+	path.Grow(len("/_component_template/") + len(templateName))
+	path.WriteString("/_component_template/")
+	path.WriteString(templateName)
+	return path
+}
+
+// ComponentTemplateExists checks if the passed component template already exists or not
+func ComponentTemplateExists(ctx context.Context, service *OsClusterClient, templateName string) (bool, error) {
+	path := ComponentTemplatePath(templateName)
+	resp, err := doHTTPHead(ctx, service.client, path)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return false, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return true, nil
+}
+
+// ShouldUpdateComponentTemplate checks whether a previously created component template needs an update or not
+func ShouldUpdateComponentTemplate(
+	ctx context.Context,
+	service *OsClusterClient,
+	componentTemplateName string,
+	componentTemplate requests.ComponentTemplate,
+) (bool, error) {
+	path := ComponentTemplatePath(componentTemplateName)
+	resp, err := doHTTPGet(ctx, service.client, path)
+	if err != nil {
+		return false, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode == 404 {
+		return true, nil
+	} else if resp.IsError() {
+		return false, fmt.Errorf("response from API is %s", resp.Status())
+	}
+
+	componentTemplatesResponse := responses.GetComponentTemplatesResponse{}
+
+	err = json.NewDecoder(resp.Body).Decode(&componentTemplatesResponse)
+	if err != nil {
+		return false, err
+	}
+
+	// we should not be able to get more than one template in the list, but check to make sure
+	if len(componentTemplatesResponse.ComponentTemplates) != 1 {
+		return false, fmt.Errorf("found %d component templates which fits the name '%s'", len(componentTemplatesResponse.ComponentTemplates), componentTemplateName)
+	}
+
+	componentTemplateResponse := componentTemplatesResponse.ComponentTemplates[0]
+
+	// verify the component template name
+	if componentTemplateResponse.Name != componentTemplateName {
+		return false, fmt.Errorf("returned component template named '%s' does not equal the requested name '%s'", componentTemplateResponse.Name, componentTemplateName)
+	}
+
+	if reflect.DeepEqual(componentTemplate, componentTemplateResponse.ComponentTemplate) {
+		return false, nil
+	}
+
+	lg := log.FromContext(ctx)
+	lg.Info("OpenSearch Component template requires update")
+
+	return true, nil
+}
+
+// CreateOrUpdateComponentTemplate creates a new component or updates a pre-existing component template
+func CreateOrUpdateComponentTemplate(
+	ctx context.Context,
+	service *OsClusterClient,
+	componentTemplateName string,
+	componentTemplate requests.ComponentTemplate,
+) error {
+	path := ComponentTemplatePath(componentTemplateName)
+
+	resp, err := doHTTPPut(ctx, service.client, path, opensearchutil.NewJSONReader(componentTemplate))
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("failed to create component template: %s", resp.String())
+	}
+	return nil
+}
+
+// DeleteComponentTemplate deletes a previously created component template
+func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, componentTemplateName string) error {
+	path := ComponentTemplatePath(componentTemplateName)
+	resp, err := doHTTPDelete(ctx, service.client, path)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("response from API is %s", resp.Status())
+	}
+	return nil
 }

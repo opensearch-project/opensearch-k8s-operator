@@ -12,6 +12,8 @@ import (
 	version "github.com/hashicorp/go-version"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
@@ -307,10 +309,26 @@ func DeleteSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, c
 
 	sts, err := GetSTSForNodePool(k8sClient, nodePool, clusterName, clusterNamespace)
 	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 
-	return k8sClient.DeleteStatefulSet(sts, false)
+	if err := k8sClient.DeleteStatefulSet(sts, false); err != nil {
+		return err
+	}
+
+	// Wait for the STS to actually be deleted
+	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
+		_, err := k8sClient.GetStatefulSet(sts.Name, sts.Namespace)
+		if err != nil {
+			return nil
+		}
+		time.Sleep(time.Second * updateStepTime)
+	}
+
+	return fmt.Errorf("failed to delete STS for nodepool %s", nodePool.Component)
 }
 
 // DeleteSecurityUpdateJob deletes the securityconfig update job
@@ -318,6 +336,9 @@ func DeleteSecurityUpdateJob(k8sClient k8s.K8sClient, clusterName, clusterNamesp
 	jobName := clusterName + "-securityconfig-update"
 	job, err := k8sClient.GetJob(jobName, clusterNamespace)
 	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
 		return err
 	}
 
@@ -405,26 +426,87 @@ func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 }
 
 func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
-	replicas := lo.FromPtrOr(sts.Spec.Replicas, 1)
-	// Handle the simple case
-	if replicas == sts.Status.UpdatedReplicas+sts.Status.CurrentReplicas {
-		ordinal := replicas - 1 - sts.Status.UpdatedReplicas
-		return ReplicaHostName(*sts, ordinal), nil
-	}
 	// If there are potentially mixed revisions we need to check each pod
-	for i := replicas - 1; i >= 0; i-- {
+	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
+	if err != nil {
+		return "", err
+	}
+	if podWithOlderRevision != nil {
+		return podWithOlderRevision.Name, nil
+	}
+	return "", errors.New("unable to calculate the working pod for rolling restart")
+}
+
+// DeleteStuckPodWithOlderRevision deletes the crashed pod only if there is any update in StatefulSet.
+func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) error {
+	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
+	if err != nil {
+		return err
+	}
+	if podWithOlderRevision != nil {
+		for _, container := range podWithOlderRevision.Status.ContainerStatuses {
+			// If any container is getting crashed, restart it by deleting the pod so that new update in sts can take place.
+			if !container.Ready && container.State.Waiting != nil && container.State.Waiting.Reason == "CrashLoopBackOff" {
+				return k8sClient.DeletePod(&corev1.Pod{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      podWithOlderRevision.Name,
+						Namespace: sts.Namespace,
+					},
+				})
+			}
+		}
+	}
+	return nil
+}
+
+// GetPodWithOlderRevision fetches the pod that is not having the updated revision.
+func GetPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (*corev1.Pod, error) {
+	for i := int32(0); i < lo.FromPtrOr(sts.Spec.Replicas, 1); i++ {
 		podName := ReplicaHostName(*sts, i)
 		pod, err := k8sClient.GetPod(podName, sts.Namespace)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 		podRevision, ok := pod.Labels[stsRevisionLabel]
 		if !ok {
-			return "", fmt.Errorf("pod %s has no revision label", podName)
+			return nil, fmt.Errorf("pod %s has no revision label", podName)
 		}
 		if podRevision != sts.Status.UpdateRevision {
-			return podName, nil
+			return &pod, nil
 		}
 	}
-	return "", errors.New("unable to calculate the working pod for rolling restart")
+	return nil, nil
+}
+
+func GetDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNamespace string) (*appsv1.Deployment, error) {
+	deploy, err := k8sClient.GetDeployment(clusterName+"-dashboards", clusterNamespace)
+	return &deploy, err
+}
+
+// DeleteDashboardsDeployment deletes the OSD deployment along with all its pods
+func DeleteDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNamespace string) error {
+	deploy, err := GetDashboardsDeployment(k8sClient, clusterName, clusterNamespace)
+
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+
+	if err := k8sClient.DeleteDeployment(deploy, false); err != nil {
+		return err
+	}
+
+	// Wait for Dashboards deploy to delete
+	// We can use the same waiting time for sts as both have same termination grace period
+	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
+		_, err := k8sClient.GetDeployment(deploy.Name, clusterNamespace)
+		if err != nil {
+			return nil
+		}
+		time.Sleep(time.Second * updateStepTime)
+	}
+
+	return fmt.Errorf("failed to delete dashboards deployment for cluster %s", clusterName)
 }

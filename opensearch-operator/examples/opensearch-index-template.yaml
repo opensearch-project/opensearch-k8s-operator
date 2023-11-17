@@ -1,0 +1,19 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchIndexTemplate
+metadata:
+  name: sample-index-template
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+
+  name: logs_template # name of the index template - defaults to metadata.name
+
+  indexPatterns: # required index patterns
+    - "logs-2020-01-*"
+  composedOf: # optional
+    - sample-component-template
+  priority: 100 # optional
+
+  template: {} # optional
+  version: 1 # optional
+  _meta: {} # optional

@@ -69,6 +69,10 @@ var _ = Describe("Builders", func() {
 					General: opsterv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
+						Annotations: map[string]string{
+							"testAnnotationKey":  "testValue",
+							"testAnnotationKey2": "testValue2",
+						},
 						Service: opsterv1.DashboardsServiceSpec{
 							Type:                     "LoadBalancer",
 							LoadBalancerSourceRanges: sourceRanges,
@@ -78,6 +82,10 @@ var _ = Describe("Builders", func() {
 			var result = NewDashboardsSvcForCr(&spec)
 			Expect(result.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
 			Expect(result.Spec.LoadBalancerSourceRanges).To(Equal(sourceRanges))
+			Expect(result.Annotations).To(Equal(map[string]string{
+				"testAnnotationKey":  "testValue",
+				"testAnnotationKey2": "testValue2",
+			}))
 		})
 	})
 

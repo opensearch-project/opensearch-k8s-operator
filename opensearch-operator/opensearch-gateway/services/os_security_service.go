@@ -64,7 +64,7 @@ func ShouldUpdateUser(
 	}
 
 	lg := log.FromContext(ctx).WithValues("os_service", "security")
-	lg.Info("user requires update")
+	lg.Info("OpenSearch User requires update")
 	return true, nil
 }
 
@@ -181,9 +181,8 @@ func ShouldUpdateRole(
 	}
 
 	lg := log.FromContext(ctx).WithValues("os_service", "security")
-	lg.V(1).Info(fmt.Sprintf("exsiting role: %+v", roleResponse[rolename]))
-	lg.V(1).Info(fmt.Sprintf("new role: %+v", role))
-	lg.Info("role requires update")
+	lg.Info("OpenSearch Role requires update")
+
 	return true, nil
 }
 
@@ -337,9 +336,8 @@ func ShouldUpdateActionGroup(
 	}
 
 	lg := log.FromContext(ctx).WithValues("os_service", "security")
-	lg.V(1).Info(fmt.Sprintf("exsiting actiongroup: %+v", actionGroupResponse[actionGroupName]))
-	lg.V(1).Info(fmt.Sprintf("new actiongroup: %+v", actionGroup))
-	lg.Info("actiongroup requires update")
+	lg.Info("OpenSearch Actiongroup requires update")
+
 	return true, nil
 }
 
@@ -422,9 +420,8 @@ func ShouldUpdateTenant(
 	}
 
 	lg := log.FromContext(ctx).WithValues("os_service", "security")
-	lg.V(1).Info(fmt.Sprintf("exsiting tenant: %+v", tenantResponse[tenantName]))
-	lg.V(1).Info(fmt.Sprintf("new tenant: %+v", tenant))
-	lg.Info("tenant requires update")
+	lg.Info("OpenSearch Tenant requires update")
+
 	return true, nil
 }
 

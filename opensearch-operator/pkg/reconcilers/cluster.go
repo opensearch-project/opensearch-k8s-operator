@@ -13,6 +13,7 @@ import (
 	"github.com/cisco-open/k8s-objectmatcher/patch"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
+	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -122,6 +123,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		})
 		result.CombineErr(err)
 	}
+
 	if r.instance.Spec.General.SnapshotRepositories != nil && len(r.instance.Spec.General.SnapshotRepositories) > 0 {
 		// Calculate checksum and check for changes
 		result.Combine(r.ReconcileSnapshotRepoConfig(username))
@@ -131,6 +133,9 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	if r.isEmptyDirCluster() {
 		result.Combine(r.checkForEmptyDirRecovery())
 	}
+
+	// Update the CR status to reflect the current OpenSearch health and nodes
+	result.CombineErr(r.UpdateClusterStatus())
 
 	return result.Result, result.Err
 }
@@ -216,7 +221,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
 	if _, exists := existing.Spec.Selector.MatchLabels["opensearch.role"]; exists {
-		r.logger.Info("deleting statefulset while orphaning pods to fix labels " + existing.Name)
+		r.logger.Info(fmt.Sprintf("Deleting statefulset %s while orphaning pods to fix labels", existing.Name))
 		if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
 			r.logger.Error(err, "Failed to delete Statefulset for nodePool "+nodePool.Component)
 			return result, err
@@ -293,50 +298,9 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	//Default is PVC, or explicit check for PersistenceSource as PVC
 	// Handle volume resizing, but only if we are using PVCs
 	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
-		if nodePool.DiskSize == "" { // Default case
-			nodePool.DiskSize = builders.DefaultDiskSize
-		}
-
-		existingDisk := *existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage()
-		nodePoolDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
+		err := r.maybeUpdateVolumes(&existing, nodePool)
 		if err != nil {
-			r.logger.Error(err, fmt.Sprintf("Invalid diskSize '%s' for nodepool %s", nodePool.DiskSize, nodePool.Component))
 			return result, err
-		}
-
-		if existingDisk.Equal(nodePoolDiskSize) {
-			r.logger.Info("The existing disk size " + existingDisk.String() + " is same as passed in disk size " + nodePoolDiskSize.String())
-		} else {
-			r.logger.Info("Disk sizes differ for nodePool %s: current: %s, desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
-			annotations := map[string]string{"cluster-name": r.instance.GetName()}
-			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
-			// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
-			r.logger.Info("Deleting statefulset while orphaning pods " + existing.Name)
-			err = r.client.DeleteStatefulSet(&existing, true)
-			if err != nil {
-				r.logger.Info("Failed to delete statefulset" + existing.Name)
-				return result, err
-			}
-
-			// Identify the PVC for each statefulset pod and patch with the new size
-			for i := 0; i < int(*existing.Spec.Replicas); i++ {
-				clusterName := r.instance.Name
-				claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
-				pvc, err := r.client.GetPVC(claimName, existing.Namespace)
-				if err != nil {
-					r.logger.Info("Failed to get pvc" + pvc.Name)
-					return result, err
-				}
-
-				pvc.Spec.Resources.Requests["storage"] = nodePoolDiskSize
-
-				if err := r.client.UpdatePVC(&pvc); err != nil {
-					r.logger.Error(err, fmt.Sprintf("Failed to resize statefulset pvc %s", pvc.Name))
-					r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
-					return result, err
-				}
-			}
-			// STS will be recreated by the normal reconcile below
 		}
 	}
 
@@ -430,8 +394,8 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 	// Then delete the securityconfig job and set cluster initialized to false
 	// This will cause the bootstrap pod to run again and security indices to be initialized again
 	if readyDataNodes == 0 || readyMasterNodes < (totalMasterNodes+1)/2 {
-		lg.Info("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace)
-		lg.Info("Deleting all sts and securityconfig job to re-create cluster")
+		lg.Info(fmt.Sprintf("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace))
+		lg.Info("Deleting all sts, dashboards and securityconfig job to re-create cluster")
 		for _, nodePool := range r.instance.Spec.NodePools {
 			err := helpers.DeleteSTSForNodePool(r.client, nodePool, clusterName, clusterNamespace)
 			if err != nil {
@@ -440,17 +404,29 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			}
 		}
 
-		err := helpers.DeleteSecurityUpdateJob(r.client, clusterName, clusterNamespace)
-		if err != nil {
-			lg.Error(err, "Failed to delete security update job")
-			return &ctrl.Result{Requeue: true}, err
+		// Also Delete Dashboards deployment so .kibana index can be recreated when cluster is started again
+		if r.instance.Spec.Dashboards.Enable {
+			err := helpers.DeleteDashboardsDeployment(r.client, clusterName, clusterNamespace)
+			if err != nil {
+				lg.Error(err, "Failed to delete OSD pod")
+				return &ctrl.Result{Requeue: true}, err
+			}
+			// Dashboards deployment will be recreated normally through the reconcile cycle
 		}
 
-		err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			instance.Status.Initialized = false
 		})
 		if err != nil {
 			lg.Error(err, "Failed to update cluster status")
+			return &ctrl.Result{Requeue: true}, err
+		}
+
+		// Delete the job after setting initialized to false
+		// So the pod is not created with partial config commands
+		err = helpers.DeleteSecurityUpdateJob(r.client, clusterName, clusterNamespace)
+		if err != nil {
+			lg.Error(err, "Failed to delete security update job")
 			return &ctrl.Result{Requeue: true}, err
 		}
 	}
@@ -485,4 +461,78 @@ func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result
 		}
 		return r.client.ReconcileResource(&pdb, reconciler.StateAbsent)
 	}
+}
+
+func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opsterv1.NodePool) error {
+	if nodePool.DiskSize == "" { // Default case
+		nodePool.DiskSize = builders.DefaultDiskSize
+	}
+
+	// If we are changing from ephemeral storage to persistent
+	// just delete the statefulset and let it be recreated
+	if len(existing.Spec.VolumeClaimTemplates) < 1 {
+		if err := r.deleteSTSWithOrphan(existing); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	existingDisk := lo.FromPtr(existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage())
+	nodePoolDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
+	if err != nil {
+		r.logger.Error(err, fmt.Sprintf("Invalid diskSize '%s' for nodepool %s", nodePool.DiskSize, nodePool.Component))
+		return err
+	}
+
+	if existingDisk.Equal(nodePoolDiskSize) {
+		return nil
+	}
+
+	r.logger.Info("Disk sizes differ for nodePool %s, Current: %s, Desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
+	// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
+	if err := r.deleteSTSWithOrphan(existing); err != nil {
+		return err
+	}
+
+	// Identify the PVC for each statefulset pod and patch with the new size
+	for i := 0; i < int(lo.FromPtrOr(existing.Spec.Replicas, 1)); i++ {
+		clusterName := r.instance.Name
+		claimName := fmt.Sprintf("data-%s-%s-%d", clusterName, nodePool.Component, i)
+		pvc, err := r.client.GetPVC(claimName, existing.Namespace)
+		if err != nil {
+			r.logger.Info("Failed to get pvc" + pvc.Name)
+			return err
+		}
+
+		pvc.Spec.Resources.Requests["storage"] = nodePoolDiskSize
+
+		if err := r.client.UpdatePVC(&pvc); err != nil {
+			r.logger.Error(err, fmt.Sprintf("Failed to resize statefulset pvc %s", pvc.Name))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PVC", "Failed to Resize %s/%s", existing.Namespace, existing.Name)
+			return err
+		}
+	}
+	return nil
+}
+
+func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) error {
+	r.logger.Info("Deleting statefulset while orphaning pods " + existing.Name)
+	if err := r.client.DeleteStatefulSet(existing, true); err != nil {
+		r.logger.Info("Failed to delete statefulset" + existing.Name)
+		return err
+	}
+	return nil
+}
+
+// UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
+func (r *ClusterReconciler) UpdateClusterStatus() error {
+	health := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
+	availableNodes := util.GetAvailableOpenSearchNodes(r.client, r.ctx, r.instance, r.logger)
+
+	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		instance.Status.Health = health
+		instance.Status.AvailableNodes = availableNodes
+	})
 }

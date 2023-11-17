@@ -492,15 +492,26 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 		helpers.NodePoolLabel: nodePool.Component,
 	}
 
+	annotations := make(map[string]string)
+
+	for key, value := range cr.Spec.General.Annotations {
+		annotations[key] = value
+	}
+
+	for key, value := range nodePool.Annotations {
+		annotations[key] = value
+	}
+
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component),
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component),
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			ClusterIP: "None",
@@ -534,16 +545,16 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
-
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.General.ServiceName,
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        cr.Spec.General.ServiceName,
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: cr.Spec.General.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -885,7 +896,7 @@ func NewSnapshotRepoconfigUpdateJob(
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
-	httpPort, _ := helpers.VersionCheck(instance)
+	httpPort, _, _ := helpers.VersionCheck(instance)
 	dns := DnsOfService(instance)
 	var snapshotCmd string
 	for _, repository := range instance.Spec.General.SnapshotRepositories {

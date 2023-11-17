@@ -78,6 +78,10 @@ spec:
     additionalConfig:
       {{ toYaml .Values.opensearchCluster.general.additionalConfig | nindent 6 }}
     {{- end }}
+    {{- if .Values.opensearchCluster.general.monitoring }}
+    monitoring:
+      {{ toYaml .Values.opensearchCluster.general.monitoring | nindent 6 }}
+    {{- end }}
   {{- if .Values.opensearchCluster.dashboards }}
   dashboards:
     {{- if .Values.opensearchCluster.dashboards.image }}

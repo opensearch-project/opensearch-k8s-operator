@@ -5,9 +5,12 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+
 	"net/http"
 	"sort"
+	"strings"
 
+	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -129,10 +132,18 @@ func CreateAdditionalVolumes(
 			namesIndex[volumeConfig.Name] = i
 			names = append(names, volumeConfig.Name)
 		}
+
+		subPath := ""
+		// SubPaths are only supported for ConfigMaps and Secrets
+		if volumeConfig.ConfigMap != nil || volumeConfig.Secret != nil {
+			subPath = strings.TrimSpace(volumeConfig.SubPath)
+		}
+
 		retVolumeMounts = append(retVolumeMounts, corev1.VolumeMount{
 			Name:      volumeConfig.Name,
 			ReadOnly:  readOnly,
 			MountPath: volumeConfig.Path,
+			SubPath:   subPath,
 		})
 	}
 	sort.Strings(names)
@@ -224,9 +235,6 @@ func CreateClientForCluster(
 			services.WithTransport(transport),
 		)
 	}
-	if err != nil {
-		lg.Error(err, "failed to create client")
-	}
 
 	return osClient, err
 }
@@ -269,4 +277,49 @@ func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int
 		}
 	}
 	return count
+}
+
+// GetClusterHealth returns the health of OpenSearch cluster
+func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) opsterv1.OpenSearchHealth {
+	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, nil)
+
+	if err != nil {
+		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))
+		return opsterv1.OpenSearchUnknownHealth
+	}
+
+	healthResponse, err := osClient.GetClusterHealth()
+
+	if err != nil {
+		lg.Error(err, "Failed to get OpenSearch health status")
+		return opsterv1.OpenSearchUnknownHealth
+	}
+
+	return opsterv1.OpenSearchHealth(healthResponse.Status)
+}
+
+// GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
+func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) int32 {
+	clusterName := cluster.Name
+	clusterNamespace := cluster.Namespace
+
+	previousAvailableNodes := cluster.Status.AvailableNodes
+	var availableNodes int32
+
+	for _, nodePool := range cluster.Spec.NodePools {
+		var sts *appsv1.StatefulSet
+		var err error
+
+		sts, err = helpers.GetSTSForNodePool(k8sClient, nodePool, clusterName, clusterNamespace)
+		if err != nil {
+			lg.V(1).Info(fmt.Sprintf("Failed to get statefulsets for nodepool %s: %v", nodePool.Component, err))
+			return previousAvailableNodes
+		}
+
+		if sts != nil {
+			availableNodes += sts.Status.ReadyReplicas
+		}
+	}
+
+	return availableNodes
 }

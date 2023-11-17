@@ -27,6 +27,17 @@ const (
 	PhaseRunning = "RUNNING"
 )
 
+// OpenSearchHealth is the health of the cluster as returned by the health API.
+type OpenSearchHealth string
+
+// Possible traffic light states OpenSearch health can have.
+const (
+	OpenSearchRedHealth     OpenSearchHealth = "red"
+	OpenSearchYellowHealth  OpenSearchHealth = "yellow"
+	OpenSearchGreenHealth   OpenSearchHealth = "green"
+	OpenSearchUnknownHealth OpenSearchHealth = "unknown"
+)
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -43,6 +54,8 @@ type GeneralConfig struct {
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	// Adds support for annotations in services
+	Annotations map[string]string `json:"annotations,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
@@ -244,6 +257,8 @@ type AdditionalVolume struct {
 	Name string `json:"name"`
 	// Path in the container to mount the volume at. Required.
 	Path string `json:"path"`
+	// SubPath of the referenced volume to mount.
+	SubPath string `json:"subPath,omitempty"`
 	// Secret to use populate the volume
 	Secret *corev1.SecretVolumeSource `json:"secret,omitempty"`
 	// ConfigMap to use to populate the volume
@@ -288,12 +303,17 @@ type ClusterStatus struct {
 	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
 	Version          string            `json:"version,omitempty"`
 	Initialized      bool              `json:"initialized,omitempty"`
+	// AvailableNodes is the number of available instances.
+	AvailableNodes int32            `json:"availableNodes,omitempty"`
+	Health         OpenSearchHealth `json:"health,omitempty"`
 }
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:shortName=os;opensearch
 // Es is the Schema for the es API
+// +kubebuilder:printcolumn:name="health",type="string",JSONPath=".status.health"
+// +kubebuilder:printcolumn:name="nodes",type="integer",JSONPath=".status.availableNodes",description="Available nodes"
 // +kubebuilder:printcolumn:name="version",type="string",JSONPath=".status.version",description="Opensearch version"
 // +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"

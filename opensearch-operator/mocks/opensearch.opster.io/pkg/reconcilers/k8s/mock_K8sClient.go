@@ -351,6 +351,49 @@ func (_c *MockK8sClient_CreateService_Call) RunAndReturn(run func(*v1.Service) (
 	return _c
 }
 
+// DeleteDeployment provides a mock function with given fields: deployment, orphan
+func (_m *MockK8sClient) DeleteDeployment(deployment *appsv1.Deployment, orphan bool) error {
+	ret := _m.Called(deployment, orphan)
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*appsv1.Deployment, bool) error); ok {
+		r0 = rf(deployment, orphan)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_DeleteDeployment_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteDeployment'
+type MockK8sClient_DeleteDeployment_Call struct {
+	*mock.Call
+}
+
+// DeleteDeployment is a helper method to define mock.On call
+//   - deployment *appsv1.Deployment
+//   - orphan bool
+func (_e *MockK8sClient_Expecter) DeleteDeployment(deployment interface{}, orphan interface{}) *MockK8sClient_DeleteDeployment_Call {
+	return &MockK8sClient_DeleteDeployment_Call{Call: _e.mock.On("DeleteDeployment", deployment, orphan)}
+}
+
+func (_c *MockK8sClient_DeleteDeployment_Call) Run(run func(deployment *appsv1.Deployment, orphan bool)) *MockK8sClient_DeleteDeployment_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*appsv1.Deployment), args[1].(bool))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_DeleteDeployment_Call) Return(_a0 error) *MockK8sClient_DeleteDeployment_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_DeleteDeployment_Call) RunAndReturn(run func(*appsv1.Deployment, bool) error) *MockK8sClient_DeleteDeployment_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteJob provides a mock function with given fields: job
 func (_m *MockK8sClient) DeleteJob(job *batchv1.Job) error {
 	ret := _m.Called(job)

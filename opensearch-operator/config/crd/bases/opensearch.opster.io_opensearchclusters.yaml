@@ -19,6 +19,13 @@ spec:
   scope: Namespaced
   versions:
   - additionalPrinterColumns:
+    - jsonPath: .status.health
+      name: health
+      type: string
+    - description: Available nodes
+      jsonPath: .status.availableNodes
+      name: nodes
+      type: integer
     - description: Opensearch version
       jsonPath: .status.version
       name: version
@@ -1212,6 +1219,9 @@ spec:
                                 the pod''s namespace to use. More info: https://kubernetes.io/docs/concepts/storage/volumes#secret'
                               type: string
                           type: object
+                        subPath:
+                          description: SubPath of the referenced volume to mount.
+                          type: string
                       required:
                       - name
                       - path
@@ -2922,11 +2932,19 @@ spec:
                                 the pod''s namespace to use. More info: https://kubernetes.io/docs/concepts/storage/volumes#secret'
                               type: string
                           type: object
+                        subPath:
+                          description: SubPath of the referenced volume to mount.
+                          type: string
                       required:
                       - name
                       - path
                       type: object
                     type: array
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: Adds support for annotations in services
+                    type: object
                   command:
                     type: string
                   defaultRepo:
@@ -4967,6 +4985,10 @@ spec:
           status:
             description: ClusterStatus defines the observed state of Es
             properties:
+              availableNodes:
+                description: AvailableNodes is the number of available instances.
+                format: int32
+                type: integer
               componentsStatus:
                 items:
                   properties:
@@ -4982,6 +5004,10 @@ spec:
                       type: string
                   type: object
                 type: array
+              health:
+                description: OpenSearchHealth is the health of the cluster as returned
+                  by the health API.
+                type: string
               initialized:
                 type: boolean
               phase:

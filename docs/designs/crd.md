@@ -176,6 +176,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>string</td>
         <td></td>
       </tr><tr>
+        <td><b>annotations</b></td>
+        <td>map[string]string</td>
+        <td>Adds support for annotations in services</td>
+        <td>false</td>
+        <td></td>
+      </tr><tr>
         <td><b>labels</b></td>
         <td>map[string]string</td>
         <td>add user defined labels to nodePool</td>
@@ -683,7 +689,7 @@ Every Keystore Value defines a secret to pull secrets from.
     </tbody>
 </table>
 
-<h3 id="GeneralConfig">
+<h3 id="AdditionalVolume">
   AdditionalVolume
 </h3>
 
@@ -701,6 +707,12 @@ AdditionalVolume object define additional volume and volumeMount
       <td>string</td>
       <td>Defines mount path for additional volume</td>
       <td>true</td>
+      <td>-</td>
+    </tr><tr>
+      <td><b>subPath</b></td>
+      <td>string</td>
+      <td>key of the configmap or secret to use (mounts only that key at the given path), ignored for other volume types</td>
+      <td>false</td>
       <td>-</td>
     </tr><tr>
       <td><b>restartPods</b></td>

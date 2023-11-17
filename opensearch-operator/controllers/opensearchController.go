@@ -141,7 +141,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	case opsterv1.PhaseRunning:
 		return r.reconcilePhaseRunning(ctx)
 	default:
-		r.Logger.Info("NOTHING WILL HAPPEN - DEFAULT")
+		// NOTHING WILL HAPPEN - DEFAULT
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
 }
@@ -218,7 +218,7 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context) (ctrl.Result, error) {
-	r.Logger.Info("start reconcile - Phase: PENDING")
+	r.Logger.Info("Start reconcile - Phase: PENDING")
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 			return err

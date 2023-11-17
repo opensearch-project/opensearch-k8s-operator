@@ -31,6 +31,7 @@ type K8sClient interface {
 	ListStatefulSets(listOptions ...client.ListOption) (appsv1.StatefulSetList, error)
 	GetDeployment(name, namespace string) (appsv1.Deployment, error)
 	CreateDeployment(deployment *appsv1.Deployment) (*ctrl.Result, error)
+	DeleteDeployment(deployment *appsv1.Deployment, orphan bool) error
 	GetService(name, namespace string) (corev1.Service, error)
 	CreateService(svc *corev1.Service) (*ctrl.Result, error)
 	GetOpenSearchCluster(name, namespace string) (opsterv1.OpenSearchCluster, error)
@@ -140,6 +141,18 @@ func (c K8sClientImpl) GetDeployment(name, namespace string) (appsv1.Deployment,
 
 func (c K8sClientImpl) CreateDeployment(deployment *appsv1.Deployment) (*ctrl.Result, error) {
 	return c.ReconcileResource(deployment, reconciler.StatePresent)
+}
+
+func (c K8sClientImpl) DeleteDeployment(deployment *appsv1.Deployment, orphan bool) error {
+	opts := client.DeleteOptions{}
+	if orphan {
+		// Orphan any pods so that they are not deleted
+		client.PropagationPolicy(metav1.DeletePropagationOrphan).ApplyToDelete(&opts)
+	} else {
+		// Add this so pods of the sts are deleted as well, otherwise they would remain as orphaned pods
+		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
+	}
+	return c.Delete(c.ctx, deployment, &opts)
 }
 
 func (c K8sClientImpl) GetService(name, namespace string) (corev1.Service, error) {

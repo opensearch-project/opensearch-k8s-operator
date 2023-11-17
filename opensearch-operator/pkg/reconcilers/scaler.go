@@ -119,8 +119,9 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		if desireReplicaDiff > 0 {
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to scaling")
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
+				lg.Info(fmt.Sprintf("SmartScaler is disabled, removing nodes from nodegroup %s without draining", nodePool.Component))
 				requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
-				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Notice - your SmartScaler is not enable")
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Notice - your SmartScaler is not enabled")
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to decrease node")
 				return requeue, err
 			}
@@ -158,7 +159,7 @@ func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePo
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Failed to add node %s/%s", r.instance.Namespace, r.instance.Name)
 		return true, err
 	}
-	lg.Info(fmt.Sprintf("Group-%s . added node %s", nodePoolGroupName, lastReplicaNodeName))
+	lg.Info(fmt.Sprintf("Group: %s, Added node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Added new node %s", lastReplicaNodeName)
 	return false, nil
 }
@@ -175,7 +176,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 		lg.Error(err, fmt.Sprintf("failed to remove node %s", lastReplicaNodeName))
 		return true, err
 	}
-	lg.Info(fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
+	lg.Info(fmt.Sprintf("Group: %s, Removed node %s", nodePoolGroupName, lastReplicaNodeName))
 	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 	})
@@ -236,7 +237,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 			Description: nodePoolGroupName,
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished to Exclude %s/%s", r.instance.Namespace, r.instance.Name)
-		lg.Info(fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
+		lg.Info(fmt.Sprintf("Group: %s, Excluded node: %s", nodePoolGroupName, lastReplicaNodeName))
 		err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 		})
@@ -255,7 +256,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		Description: nodePoolGroupName,
 	}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start sacle %s/%s from %d to %d", r.instance.Namespace, r.instance.Name, *currentSts.Spec.Replicas, *currentSts.Spec.Replicas-1)
-	lg.Info(fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
+	lg.Info(fmt.Sprintf("Group: %s, Failed to exclude node: %s", nodePoolGroupName, lastReplicaNodeName))
 	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 	})
@@ -283,12 +284,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
 	if nodeNotEmpty {
-		lg.Info(fmt.Sprintf("Group-%s . draining node %s", nodePoolGroupName, lastReplicaNodeName))
-		return err
-	}
-	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
-	if !success {
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Group-%s . node %s node is empty but node is still excluded from allocation", nodePoolGroupName, lastReplicaNodeName)
+		lg.Info(fmt.Sprintf("Group: %s, Waiting for node %s to drain", nodePoolGroupName, lastReplicaNodeName))
 		return err
 	}
 
@@ -297,7 +293,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 		Status:      "Drained",
 		Description: nodePoolGroupName,
 	}
-	lg.Info(fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
+	lg.Info(fmt.Sprintf("Group: %s, Node %s is drained", nodePoolGroupName, lastReplicaNodeName))
 	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 	})
@@ -326,12 +322,14 @@ func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult
 }
 
 func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Result, error) {
+	lg := log.FromContext(r.ctx)
+	lg.Info(fmt.Sprintf("Removing statefulset: %s", sts.Name))
+
 	if !r.instance.Spec.ConfMgmt.SmartScaler {
 		return r.client.ReconcileResource(&sts, reconciler.StateAbsent)
 	}
 
 	// Gracefully remove nodes
-	lg := log.FromContext(r.ctx)
 	username, password, err := helpers.UsernameAndPassword(r.client, r.instance)
 	if err != nil {
 		return nil, err
@@ -361,6 +359,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	}
 
 	if nodeNotEmpty {
+		lg.Info(fmt.Sprintf("Waiting for shards to drain from node %s", lastReplicaNodeName))
 		return &ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,

@@ -129,6 +129,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchRole")
 		os.Exit(1)
 	}
+	if err = (&controllers.OpensearchISMPolicyReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("ism-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchISM")
+		os.Exit(1)
+	}
 	if err = (&controllers.OpensearchTenantReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
@@ -153,6 +161,22 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchActionGroup")
 		os.Exit(1)
 	}
+	if err = (&controllers.OpensearchIndexTemplateReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("indextemplate-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchIndexTemplate")
+		os.Exit(1)
+	}
+	if err = (&controllers.OpensearchComponentTemplateReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("componenttemplate-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchComponentTemplate")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
@@ -164,7 +188,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	setupLog.Info("starting manager")
+	setupLog.Info("Starting manager")
 	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)

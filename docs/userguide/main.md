@@ -598,9 +598,9 @@ nodePools:
 
 ### Security Context for pods and containers
 
-You can set the security context for the Opensearch pods and the Dashboard pod. This is useful when you want to define privilege and access control settings for a Pod or Container. To specify security settings for Pods, include the `podSecurityContext` field and for Containers, include the `securityContext` field.
+You can set the security context for the Opensearch pods and the Dashboard pod. This is useful when you want to define privilege and access control settings for a Pod or Container. To specify security settings for Pods, include the `podSecurityContext` field and for containers, include the `securityContext` field.
 
-The structure is the same for both Opensearch pods and the Dashboard pod:
+The structure is the same for both Opensearch pods (in `spec.general`) and the Dashboard pod (in `spec.dashboards`):
 
 ```yaml
 spec:
@@ -623,9 +623,15 @@ spec:
       privileged: false
 ```
 
+The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions and does not use any defined securityContext. If your kubernetes environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches an init container with root.
+
+Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods (with the same limitations for the init containers).
+
 ### Labels or Annotations on OpenSearch nodes
 
 You can add additional labels or annotations on the nodepool configuration. This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint:
+
+In addition, annotations can also be configured globally using the `spec.general.annotations` field in the Kubernetes specification. These annotations are not only limited to the node pool but also extend to Kubernetes services, providing flexibility and additional information to enhance the Kubernetes environment.
 
 ```yaml
 spec:
@@ -702,6 +708,7 @@ spec:
     additionalVolumes:
     - name: example-configmap
       path: /path/to/mount/volume
+      #subPath: mykey # Add this to mount only a specific key of the configmap/secret
       configMap:
         name: config-map-name
       restartPods: true #set this to true to restart the pods when the content of the configMap changes
@@ -1197,4 +1204,108 @@ spec:
         serverName: "testserver.test.local"
         insecureSkipVerify: true
   # ...
+
+### Managing ISM policies with Kubernetes resources
+
+The operator provides a custom Kubernetes resource that allow you to create/update/manage ISM policies using Kubernetes objects.
+
+It is possible to manage OpenSearch ISM policies in Kubernetes with the operator. Fields in the CRD directly maps to the OpenSearch ISM Policy structure. The operator will not modify policies that already exist. You can create an example policy as follows:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchISMPolicy
+metadata:
+   name: sample-policy
+spec:
+   opensearchCluster:
+      name: my-first-cluster
+   description: Sample policy
+   policyId: sample-policy
+   defaultState: hot
+   states:
+      - name: hot
+        actions:
+           - replicaCount:
+                numberOfReplicas: 4
+        transitions:
+           - stateName: warm
+             conditions:
+                minIndexAge: "10d"
+      - name: warm
+        actions:
+           - replicaCount:
+                numberOfReplicas: 2
+        transitions:
+           - stateName: delete
+             conditions:
+                minIndexAge: "30d"
+      - name: delete
+        actions:
+           - delete: {}
 ```
+
+The namespace of the `OpensearchISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in. `policyId` is an optional field, and if not provided `metadata.name` is used as the default.
+```
+
+## Managing index and component templates
+
+The operator provides the OpensearchIndexTemplate and OpensearchComponentTemplate CRDs, which is used for managing index and component templates respectively.
+
+The two CRD specifications attempts to be as close as possible to what the OpenSearch API expects, with some changes from snake_case to camelCase.
+The fields that have been changed, is `index_patterns` to `indexPatterns` (OpensearchIndexTemplate only), `composed_of` to `composedOf` (OpensearchIndexTemplate only), `allow_auto_create` to `allowAutoCreate` (OpensearchComponentTemplate only), and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
+
+The following example creates a component template for setting the number of shards and replicas, together with specifying a specific time format for documents:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchComponentTemplate
+metadata:
+  name: sample-component-template
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+
+  template: # required
+    aliases: # optional
+      my_alias: {}
+    settings: # optional
+      number_of_shards: 2
+      number_of_replicas: 1
+    mappings: # optional
+      properties:
+        timestamp:
+          type: date
+          format: yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis
+        value:
+          type: double
+  version: 1 # optional
+  allowAutoCreate: false # optional
+  _meta: # optional
+    description: example description
+```
+
+The following index template makes use of the above component template (see `composedOf`) for all indices which follows the `logs-2020-01-*` index pattern:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchIndexTemplate
+metadata:
+  name: sample-index-template
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  
+  name: logs_template # name of the index template - defaults to metadata.name. Can't be updated in-place
+
+  indexPatterns: # required index patterns
+    - "logs-2020-01-*"
+  composedOf: # optional
+    - sample-component-template
+  priority: 100 # optional
+
+  template: {} # optional
+  version: 1 # optional
+  _meta: {} # optional
+```
+
+Note: the `.spec.name` is immutable, meaning that it cannot be changed after the resources have been deployed to a Kubernetes cluster
