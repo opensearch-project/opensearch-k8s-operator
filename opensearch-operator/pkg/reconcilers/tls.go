@@ -8,6 +8,11 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
@@ -16,11 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers/util"
-	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -61,7 +61,6 @@ const (
 )
 
 func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
-
 	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil {
 		r.logger.Info("No security specified. Not doing anything")
 		return ctrl.Result{}, nil
@@ -108,7 +107,7 @@ func (r *TLSReconciler) handleTransport() error {
 }
 
 func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
-	//TODO: This should be refactored in the API - https://github.com/Opster/opensearch-k8s-operator/issues/569
+	// TODO: This should be refactored in the API - https://github.com/Opster/opensearch-k8s-operator/issues/569
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
 	clusterName := r.instance.Name
 
@@ -265,7 +264,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	nodeSecretName := clusterName + "-transport-cert"
 
 	r.logger.Info("Generating certificates", "interface", "transport")
-	//r.recorder.Event(r.instance, "Normal", "Security", "Starting to generating certificates")
+	// r.recorder.Event(r.instance, "Normal", "Security", "Starting to generating certificates")
 
 	var ca tls.Cert
 	var err error
@@ -318,7 +317,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	r.logger.Info("Generating certificates", "interface", "transport")
-	//r.recorder.Event(r.instance, "Normal", "Security", "Start to generating certificates")
+	// r.recorder.Event(r.instance, "Normal", "Security", "Start to generating certificates")
 
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name

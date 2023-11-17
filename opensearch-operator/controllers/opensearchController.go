@@ -20,13 +20,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -37,7 +37,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	opsterv1 "opensearch.opster.io/api/v1"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 // OpenSearchClusterReconciler reconciles a OpenSearchCluster object
@@ -105,7 +105,6 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 				return ctrl.Result{}, err
 			}
 		}
-
 	} else {
 		if helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
 			// our finalizer is present, so lets handle any external dependency
@@ -229,7 +228,6 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 	})
 	if err != nil {
 		return ctrl.Result{}, err
-
 	}
 	return ctrl.Result{Requeue: true}, nil
 }

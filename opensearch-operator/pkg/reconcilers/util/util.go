@@ -5,7 +5,14 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"net/http"
+	"sort"
+	"strings"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	"github.com/go-logr/logr"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -13,16 +20,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
-	"net/http"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/opensearch-gateway/services"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sort"
-	"strings"
 )
 
 func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
@@ -263,7 +263,6 @@ func FetchOpensearchCluster(
 func GetSha1Sum(data []byte) (string, error) {
 	hasher := sha1.New()
 	_, err := hasher.Write(data)
-
 	if err != nil {
 		return "", err
 	}
@@ -274,14 +273,12 @@ func GetSha1Sum(data []byte) (string, error) {
 // GetClusterHealth returns the health of OpenSearch cluster
 func GetClusterHealth(ctx context.Context, k8sClient client.Client, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) opsterv1.OpenSearchHealth {
 	osClient, err := CreateClientForCluster(ctx, k8sClient, cluster, nil)
-
 	if err != nil {
 		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))
 		return opsterv1.OpenSearchUnknownHealth
 	}
 
 	healthResponse, err := osClient.GetClusterHealth()
-
 	if err != nil {
 		lg.Error(err, "Failed to get OpenSearch health status")
 		return opsterv1.OpenSearchUnknownHealth

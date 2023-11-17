@@ -6,11 +6,11 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -95,7 +95,6 @@ func ArrayElementContains(array []string, content string) bool {
 }
 
 func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSearchCluster {
-
 	OpensearchCluster := &opsterv1.OpenSearchCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OpenSearchCluster",
@@ -153,7 +152,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("125m"),
 						corev1.ResourceMemory: resource.MustParse("1Gi"),
-					}},
+					},
+				},
 				Tolerations: []corev1.Toleration{{
 					Effect:   "NoSchedule",
 					Key:      "foo",
@@ -169,7 +169,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("1Gi"),
-					}},
+					},
+				},
 				Tolerations: []corev1.Toleration{{
 					Effect:   "NoSchedule",
 					Key:      "foo",
@@ -195,7 +196,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("2Gi"),
-					}},
+					},
+				},
 				Labels: map[string]string{
 					"role": "master",
 				},
@@ -222,7 +224,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("2Gi"),
-					}},
+					},
+				},
 				Roles: []string{
 					"data",
 				},
@@ -235,7 +238,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
 						corev1.ResourceMemory: resource.MustParse("2Gi"),
-					}},
+					},
+				},
 				Roles: []string{
 					"data",
 					"ingest",
@@ -254,14 +258,14 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			}},
 		},
 		Status: opsterv1.ClusterStatus{
-			ComponentsStatus: []opsterv1.ComponentStatus{{
-				Component:   "",
-				Status:      "",
-				Description: "",
-			},
+			ComponentsStatus: []opsterv1.ComponentStatus{
+				{
+					Component:   "",
+					Status:      "",
+					Description: "",
+				},
 			},
 		},
 	}
 	return *OpensearchCluster
-
 }

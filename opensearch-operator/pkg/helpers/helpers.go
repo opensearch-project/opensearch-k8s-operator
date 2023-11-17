@@ -12,6 +12,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 	"k8s.io/apimachinery/pkg/types"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	version "github.com/hashicorp/go-version"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
@@ -20,7 +21,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
-	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -38,11 +38,9 @@ func ContainsString(slice []string, s string) bool {
 		}
 	}
 	return false
-
 }
 
 func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
-
 	r := reflect.ValueOf(v)
 	f := reflect.Indirect(r).FieldByName(field).Interface()
 	return f
@@ -56,6 +54,7 @@ func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) [
 	}
 	return ssSlice
 }
+
 func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	removedSlice := RemoveIt(remove, ssSlice)
 	fullSliced := append(removedSlice, add)
@@ -190,7 +189,7 @@ func MapClusterRoles(roles []string, version string) []string {
 
 // Get leftSlice strings not in rightSlice
 func DiffSlice(leftSlice, rightSlice []string) []string {
-	//diff := []string{}
+	// diff := []string{}
 	var diff []string
 
 	for _, leftSliceString := range leftSlice {
@@ -220,10 +219,10 @@ func CountRunningPodsForNodePool(ctx context.Context, k8sClient client.Client, c
 		return 0, err
 	}
 	// Count pods that are ready
-	var numReadyPods = 0
+	numReadyPods := 0
 	for _, pod := range list.Items {
 		// If DeletionTimestamp is set the pod is terminating
-		var podReady = pod.ObjectMeta.DeletionTimestamp == nil
+		podReady := pod.ObjectMeta.DeletionTimestamp == nil
 		// Count the pod as not ready if one of its containers is not running or not ready
 		for _, container := range pod.Status.ContainerStatuses {
 			if !container.Ready || container.State.Running == nil {
@@ -316,7 +315,6 @@ func GetSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool op
 
 // DeleteSTSForNodePool deletes the sts for the corresponding nodePool
 func DeleteSTSForNodePool(ctx context.Context, k8sClient client.Client, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
-
 	sts, err := GetSTSForNodePool(ctx, k8sClient, nodePool, clusterName, clusterNamespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -351,7 +349,6 @@ func DeleteSecurityUpdateJob(ctx context.Context, k8sClient client.Client, clust
 	jobName := clusterName + "-securityconfig-update"
 	job := batchv1.Job{}
 	err := k8sClient.Get(ctx, client.ObjectKey{Name: jobName, Namespace: clusterNamespace}, &job)
-
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil
@@ -443,6 +440,7 @@ func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
 	_, found := FindFirstPartial(status.ComponentsStatus, componentStatus, GetByComponent)
 	return found
 }
+
 func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
 }
@@ -510,7 +508,6 @@ func GetDashboardsDeployment(ctx context.Context, k8sClient client.Client, clust
 // DeleteDashboardsDeployment deletes the OSD deployment along with all its pods
 func DeleteDashboardsDeployment(ctx context.Context, k8sClient client.Client, clusterName, clusterNamespace string) error {
 	deploy, err := GetDashboardsDeployment(ctx, k8sClient, clusterName, clusterNamespace)
-
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			return nil

@@ -5,7 +5,7 @@ IMG ?= controller:latest
 ENVTEST_K8S_VERSION = 1.22.0
 PROJECT_PATH=$(CURDIR)
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set) 
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
 else
@@ -71,13 +71,13 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go --loglevel debug
 
 docker-build: generate fmt vet ## Build docker image with the manager.
-	go install opensearch.opster.io/pkg/builders
-	go install opensearch.opster.io/pkg/helpers
+	go install github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders
+	go install github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers
 	DOCKER_BUILDKIT=1 docker build -t ${IMG} .
 
 docker-build-multiarch: ## Build docker image with the manager for all supported architectures
-	go install opensearch.opster.io/pkg/builders
-	go install opensearch.opster.io/pkg/helpers
+	go install github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders
+	go install github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers
 	DOCKER_BUILDKIT=1 docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.

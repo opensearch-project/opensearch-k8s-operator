@@ -1,4 +1,4 @@
-module opensearch.opster.io
+module github.com/Opster/opensearch-k8s-operator/opensearch-operator
 
 go 1.19
 

@@ -1,4 +1,4 @@
-module functionaltests
+module github.com/Opster/opensearch-k8s-operator/functionaltests
 
 go 1.19
 

@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -28,7 +28,6 @@ func newTLSReconciler(spec *opsterv1.OpenSearchCluster) (*ReconcilerContext, *TL
 }
 
 var _ = Describe("TLS Controller", func() {
-
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		timeout  = time.Second * 30
@@ -50,14 +49,15 @@ var _ = Describe("TLS Controller", func() {
 						Transport: &opsterv1.TlsConfigTransport{Generate: true},
 						Http:      &opsterv1.TlsConfigHttp{Generate: true},
 					}},
-				}}
+				},
+			}
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
 			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
-			//fmt.Printf("%s\n", reconcilerContext.OpenSearchConfig)
+			// fmt.Printf("%s\n", reconcilerContext.OpenSearchConfig)
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=tls-test,OU=tls-test\"]"))
@@ -85,7 +85,6 @@ var _ = Describe("TLS Controller", func() {
 				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: httpSecretName, Namespace: clusterName}, &httpSecret)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
-
 		})
 	})
 
@@ -110,7 +109,8 @@ var _ = Describe("TLS Controller", func() {
 							Replicas:  3,
 						},
 					},
-				}}
+				},
+			}
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err := underTest.Reconcile()
@@ -161,7 +161,6 @@ var _ = Describe("TLS Controller", func() {
 				err = k8sClient.Get(context.Background(), client.ObjectKey{Name: httpSecretName, Namespace: clusterName}, &httpSecret)
 				return err == nil
 			}, timeout, interval).Should(BeTrue())
-
 		})
 	})
 
@@ -170,25 +169,27 @@ var _ = Describe("TLS Controller", func() {
 			clusterName := "tls-test-existingsecrets"
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
-						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
-							Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
-							CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
+				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{
+					Tls: &opsterv1.TlsConfig{
+						Transport: &opsterv1.TlsConfigTransport{
+							Generate: false,
+							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+								Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
+								CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
+							},
+							NodesDn: []string{"CN=mycn", "CN=othercn"},
+							AdminDn: []string{"CN=admin1", "CN=admin2"},
 						},
-						NodesDn: []string{"CN=mycn", "CN=othercn"},
-						AdminDn: []string{"CN=admin1", "CN=admin2"},
-					},
-					Http: &opsterv1.TlsConfigHttp{
-						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
-							Secret:   corev1.LocalObjectReference{Name: "cert-http"},
-							CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
+						Http: &opsterv1.TlsConfigHttp{
+							Generate: false,
+							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+								Secret:   corev1.LocalObjectReference{Name: "cert-http"},
+								CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
+							},
 						},
 					},
-				},
-				}}}
+				}},
+			}
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err := underTest.Reconcile()
@@ -217,23 +218,25 @@ var _ = Describe("TLS Controller", func() {
 			clusterName := "tls-test-existingsecretspernode"
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
-						Generate: false,
-						PerNode:  true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
-							Secret: corev1.LocalObjectReference{Name: "my-transport-certs"},
+				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{
+					Tls: &opsterv1.TlsConfig{
+						Transport: &opsterv1.TlsConfigTransport{
+							Generate: false,
+							PerNode:  true,
+							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+								Secret: corev1.LocalObjectReference{Name: "my-transport-certs"},
+							},
+							NodesDn: []string{"CN=mycn", "CN=othercn"},
 						},
-						NodesDn: []string{"CN=mycn", "CN=othercn"},
-					},
-					Http: &opsterv1.TlsConfigHttp{
-						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
-							Secret: corev1.LocalObjectReference{Name: "my-http-certs"},
+						Http: &opsterv1.TlsConfigHttp{
+							Generate: false,
+							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+								Secret: corev1.LocalObjectReference{Name: "my-http-certs"},
+							},
 						},
 					},
-				},
-				}}}
+				}},
+			}
 			Expect(CreateNamespace(k8sClient, clusterName)).Should(Succeed())
 			reconcilerContext, underTest := newTLSReconciler(&spec)
 			_, err := underTest.Reconcile()
@@ -255,22 +258,24 @@ var _ = Describe("TLS Controller", func() {
 			caSecretName := clusterName + "-myca"
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
-						Generate: true,
-						PerNode:  true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
-							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{
+					Tls: &opsterv1.TlsConfig{
+						Transport: &opsterv1.TlsConfigTransport{
+							Generate: true,
+							PerNode:  true,
+							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+								CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+							},
+						},
+						Http: &opsterv1.TlsConfigHttp{
+							Generate: true,
+							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+								CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+							},
 						},
 					},
-					Http: &opsterv1.TlsConfigHttp{
-						Generate: true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
-							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
-						},
-					},
-				},
-				}}}
+				}},
+			}
 			data := map[string][]byte{
 				"ca.crt": []byte("ca.crt"),
 				"ca.key": []byte("ca.key"),
@@ -303,5 +308,4 @@ var _ = Describe("TLS Controller", func() {
 			Expect(value).To(Equal("[\"CN=tls-withca-*,OU=tls-withca\"]"))
 		})
 	})
-
 })

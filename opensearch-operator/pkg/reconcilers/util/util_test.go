@@ -1,14 +1,14 @@
 package util
 
 import (
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
 )
 
 var _ = Describe("Additional volumes", func() {
-	var namespace = "Additional volume test"
+	namespace := "Additional volume test"
 	var volumeConfigs []opsterv1.AdditionalVolume
 
 	BeforeEach(func() {
@@ -25,7 +25,7 @@ var _ = Describe("Additional volumes", func() {
 			volumeConfigs[0].ConfigMap = &v1.ConfigMapVolumeSource{}
 			volumeConfigs[0].SubPath = "c"
 
-			var _, volumeMount, _, _ = CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
+			_, volumeMount, _, _ := CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(Equal("c"))
 		})
@@ -35,7 +35,7 @@ var _ = Describe("Additional volumes", func() {
 		It("subPath is not set", func() {
 			volumeConfigs[0].ConfigMap = &v1.ConfigMapVolumeSource{}
 
-			var _, volumeMount, _, _ = CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
+			_, volumeMount, _, _ := CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 		})
@@ -46,7 +46,7 @@ var _ = Describe("Additional volumes", func() {
 			volumeConfigs[0].Secret = &v1.SecretVolumeSource{}
 			volumeConfigs[0].SubPath = "c"
 
-			var _, volumeMount, _, _ = CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
+			_, volumeMount, _, _ := CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(Equal("c"))
 		})
@@ -56,7 +56,7 @@ var _ = Describe("Additional volumes", func() {
 		It("subPath is not set", func() {
 			volumeConfigs[0].Secret = &v1.SecretVolumeSource{}
 
-			var _, volumeMount, _, _ = CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
+			_, volumeMount, _, _ := CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 		})
@@ -67,7 +67,7 @@ var _ = Describe("Additional volumes", func() {
 			volumeConfigs[0].EmptyDir = &v1.EmptyDirVolumeSource{}
 			volumeConfigs[0].SubPath = "c"
 
-			var _, volumeMount, _, _ = CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
+			_, volumeMount, _, _ := CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 		})
@@ -77,7 +77,7 @@ var _ = Describe("Additional volumes", func() {
 		It("subPath is not set", func() {
 			volumeConfigs[0].EmptyDir = &v1.EmptyDirVolumeSource{}
 
-			var _, volumeMount, _, _ = CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
+			_, volumeMount, _, _ := CreateAdditionalVolumes(ctx, k8sClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 		})

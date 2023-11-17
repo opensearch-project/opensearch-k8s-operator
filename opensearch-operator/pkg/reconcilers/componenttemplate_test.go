@@ -6,6 +6,9 @@ import (
 	"net/http"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -16,9 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/opensearch-gateway/requests"
-	"opensearch.opster.io/opensearch-gateway/responses"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -230,7 +230,7 @@ var _ = Describe("componenttemplate reconciler", func() {
 		})
 
 		When("existing status is nil", func() {
-			var localExtraCalls = 4
+			localExtraCalls := 4
 			BeforeEach(func() {
 				recorder = record.NewFakeRecorder(1)
 				transport.RegisterResponder(
