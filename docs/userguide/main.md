@@ -25,7 +25,7 @@ After you have successfully installed the Operator, you can deploy your first Op
 
 ### Using Helm
 
-OpenSearch cluster can be easily deployed using Helm. Follow the instructions in  [Cluster Chart Guide](./cluster-chart.md) to install the cluster.
+An OpenSearch cluster can be easily deployed using Helm. Follow the instructions in [Cluster Chart Guide](./cluster-chart.md) to install a cluster.
 
 ### Using Custom Object
 
@@ -1245,7 +1245,6 @@ spec:
 ```
 
 The namespace of the `OpensearchISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in. `policyId` is an optional field, and if not provided `metadata.name` is used as the default.
-```
 
 ## Managing index and component templates
 

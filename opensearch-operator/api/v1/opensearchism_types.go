@@ -255,12 +255,12 @@ type Cron struct {
 
 // +kubebuilder:object:root=true
 // ISMPolicyList contains a list of ISMPolicy
-type ISMPolicyList struct {
+type OpenSearchISMPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []OpenSearchISMPolicy `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&OpenSearchISMPolicy{}, &ISMPolicyList{})
+	SchemeBuilder.Register(&OpenSearchISMPolicy{}, &OpenSearchISMPolicyList{})
 }
