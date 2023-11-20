@@ -313,7 +313,7 @@ rules:
 - apiGroups:
     - opensearch.opster.io
   resources:
-    - ismpolicies/status
+    - opensearchismpolicies/status
   verbs:
     - get
     - patch
@@ -321,7 +321,7 @@ rules:
 - apiGroups:
     - opensearch.opster.io
   resources:
-    - ismpolicies/finalizers
+    - opensearchismpolicies/finalizers
   verbs:
     - update
 - apiGroups:
@@ -339,7 +339,7 @@ rules:
 - apiGroups:
     - opensearch.opster.io
   resources:
-    - ismpolicies
+    - opensearchismpolicies
   verbs:
     - create
     - delete
