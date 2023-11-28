@@ -1199,11 +1199,12 @@ spec:
       enable: true # Enable or disable the monitoring plugin
       scrapeInterval: 30s # The scrape interval for Prometheus
       monitoringUserSecret: monitoring-user-secret # Optional, name of a secret with username/password for prometheus to acces the plugin metrics endpoint with, defaults to the admin user
-      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugi
-      tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor
+      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugin
+      tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor, only the following provided options can be set currently
         serverName: "testserver.test.local"
-        insecureSkipVerify: true
+        insecureSkipVerify: true # The operator currently does not allow configuring the ServiceMonitor with certificates, so this needs to be set
   # ...
+```
 
 ### Managing ISM policies with Kubernetes resources
 
