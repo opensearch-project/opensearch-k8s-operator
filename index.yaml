@@ -9,7 +9,7 @@ entries:
     name: opensearch-cluster
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-cluster-2.4.0.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-cluster-2.4.0.tgz
     version: 2.4.0
   opensearch-operator:
   - apiVersion: v2
@@ -20,7 +20,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-2.4.0.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-2.4.0.tgz
     version: 2.4.0
   - apiVersion: v2
     appVersion: 2.3.2
@@ -30,7 +30,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-2.3.2.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-2.3.2.tgz
     version: 2.3.2
   - apiVersion: v2
     appVersion: 2.3.1
@@ -40,7 +40,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-2.3.1.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-2.3.1.tgz
     version: 2.3.1
   - apiVersion: v2
     appVersion: 2.3.0
@@ -50,7 +50,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-2.3.0.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-2.3.0.tgz
     version: 2.3.0
   - apiVersion: v2
     appVersion: 2.2.1
@@ -60,7 +60,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-2.2.1.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-2.2.1.tgz
     version: 2.2.1
   - apiVersion: v2
     appVersion: 2.2.0
@@ -70,7 +70,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-2.2.0.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-2.2.0.tgz
     version: 2.2.0
   - apiVersion: v2
     appVersion: 2.1.1
@@ -80,7 +80,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-2.1.1.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-2.1.1.tgz
     version: 2.1.1
   - apiVersion: v2
     appVersion: 2.1.0
@@ -90,7 +90,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-2.1.0.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-2.1.0.tgz
     version: 2.1.0
   - apiVersion: v2
     appVersion: v2.0.1
@@ -100,7 +100,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://github.com/Opster/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.4/opensearch-operator-2.0.4.tgz
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.4/opensearch-operator-2.0.4.tgz
     version: 2.0.4
   - apiVersion: v2
     appVersion: v2.0.1
@@ -110,7 +110,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://github.com/Opster/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.3/opensearch-operator-2.0.3.tgz
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.3/opensearch-operator-2.0.3.tgz
     version: 2.0.3
   - apiVersion: v2
     appVersion: v2.0.1
@@ -120,7 +120,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://github.com/Opster/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.2/opensearch-operator-2.0.2.tgz
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.2/opensearch-operator-2.0.2.tgz
     version: 2.0.2
   - apiVersion: v2
     appVersion: v2.0.1
@@ -130,7 +130,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://github.com/Opster/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.1/opensearch-operator-2.0.1.tgz
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.1/opensearch-operator-2.0.1.tgz
     version: 2.0.1
   - apiVersion: v2
     appVersion: v2.0
@@ -140,7 +140,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://github.com/Opster/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.0/opensearch-operator-2.0.0.tgz
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-2.0.0/opensearch-operator-2.0.0.tgz
     version: 2.0.0
   - apiVersion: v2
     appVersion: 1.16.0
@@ -150,7 +150,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://github.com/Opster/opensearch-k8s-operator/releases/download/opensearch-operator-1.0.3/opensearch-operator-1.0.3.tgz
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-1.0.3/opensearch-operator-1.0.3.tgz
     version: 1.0.3
   - apiVersion: v2
     appVersion: 1.16.0
@@ -160,7 +160,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://github.com/Opster/opensearch-k8s-operator/releases/download/opensearch-operator-1.0.2/opensearch-operator-1.0.2.tgz
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-1.0.2/opensearch-operator-1.0.2.tgz
     version: 1.0.2
   - apiVersion: v2
     appVersion: 1.16.0
@@ -170,7 +170,7 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://github.com/Opster/opensearch-k8s-operator/releases/download/opensearch-operator-1.0.1/opensearch-operator-1.0.1.tgz
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-1.0.1/opensearch-operator-1.0.1.tgz
     version: 1.0.1
   - apiVersion: v2
     appVersion: 1.16.0
@@ -180,6 +180,6 @@ entries:
     name: opensearch-operator
     type: application
     urls:
-    - https://Opster.github.io/opensearch-k8s-operator/opensearch-operator-0.1.0.tgz
+    - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2023-09-04T09:17:48.748579372Z"
+generated: "2023-12-04T09:17:48.748579372Z"
