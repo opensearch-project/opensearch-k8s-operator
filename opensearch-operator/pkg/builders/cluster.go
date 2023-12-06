@@ -323,6 +323,7 @@ func NewSTSForNodePool(
 			Name:            "keystore",
 			Image:           image.GetImage(),
 			ImagePullPolicy: image.GetImagePullPolicy(),
+			Resources:       resources,
 			Command: []string{
 				"sh",
 				"-c",
@@ -473,6 +474,7 @@ func NewSTSForNodePool(
 			Name:            "init-sysctl",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       resources,
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -671,7 +673,7 @@ func NewBootstrapPod(
 		helpers.ClusterLabel: cr.Name,
 	}
 	resources := cr.Spec.Bootstrap.Resources
-
+	initResources := cr.Spec.InitHelper.Resources
 	var jvm string
 	if cr.Spec.Bootstrap.Jvm == "" {
 		jvm = "-Xmx512M -Xms512M"
@@ -763,6 +765,7 @@ func NewBootstrapPod(
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       initResources,
 			Command:         []string{"sh", "-c"},
 			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 			SecurityContext: &corev1.SecurityContext{
@@ -823,6 +826,7 @@ func NewBootstrapPod(
 			Name:            "init-sysctl",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       initResources,
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -916,6 +920,10 @@ func NewSnapshotRepoconfigUpdateJob(
 	node := opsterv1.NodePool{
 		Component: "snapshotconfig",
 	}
+	resources := instance.Spec.Job.Resources
+	labels := instance.Spec.Job.Labels
+	nodeSelector := instance.Spec.Job.NodeSelector
+	affinity := instance.Spec.Job.Affinity
 	annotations := map[string]string{
 		snapshotRepoConfigChecksumAnnotation: checksum,
 	}
@@ -936,7 +944,7 @@ func NewSnapshotRepoconfigUpdateJob(
 	securityContext := instance.Spec.General.SecurityContext
 
 	return batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
+		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations, Labels: labels},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
@@ -947,6 +955,7 @@ func NewSnapshotRepoconfigUpdateJob(
 						Name:            "snapshotrepoconfig",
 						Image:           image.GetImage(),
 						ImagePullPolicy: image.GetImagePullPolicy(),
+						Resources:       resources,
 						Command:         []string{"/bin/bash", "-c"},
 						Args:            []string{snapshotCmd},
 						VolumeMounts:    volumeMounts,
@@ -956,6 +965,8 @@ func NewSnapshotRepoconfigUpdateJob(
 					RestartPolicy:      corev1.RestartPolicyNever,
 					Volumes:            volumes,
 					SecurityContext:    podSecurityContext,
+					NodeSelector:       nodeSelector,
+					Affinity:           affinity,
 				},
 			},
 		},
@@ -985,7 +996,10 @@ func NewSecurityconfigUpdateJob(
 		Name:      "admin-cert",
 		MountPath: "/certs",
 	})
-
+	resources := instance.Spec.Job.Resources
+	labels := instance.Spec.Job.Labels
+	nodeSelector := instance.Spec.Job.NodeSelector
+	affinity := instance.Spec.Job.Affinity
 	annotations := map[string]string{
 		securityconfigChecksumAnnotation: checksum,
 	}
@@ -997,7 +1011,7 @@ func NewSecurityconfigUpdateJob(
 	podSecurityContext := instance.Spec.General.PodSecurityContext
 
 	return batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
+		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations, Labels: labels},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
@@ -1008,6 +1022,7 @@ func NewSecurityconfigUpdateJob(
 						Name:            "updater",
 						Image:           image.GetImage(),
 						ImagePullPolicy: image.GetImagePullPolicy(),
+						Resources:       resources,
 						Command:         []string{"/bin/bash", "-c"},
 						Args:            []string{cmdArg},
 						VolumeMounts:    volumeMounts,
@@ -1018,6 +1033,8 @@ func NewSecurityconfigUpdateJob(
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ImagePullSecrets:   image.ImagePullSecrets,
 					SecurityContext:    podSecurityContext,
+					NodeSelector:       nodeSelector,
+					Affinity:           affinity,
 				},
 			},
 		},

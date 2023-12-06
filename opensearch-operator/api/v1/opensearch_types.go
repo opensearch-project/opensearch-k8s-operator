@@ -84,6 +84,13 @@ type InitHelperConfig struct {
 	Version    *string                     `json:"version,omitempty"`
 }
 
+type JobConfig struct {
+	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
+	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
+	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
+	Labels       map[string]string           `json:"labels,omitempty"`
+}
+
 type NodePool struct {
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
@@ -293,6 +300,7 @@ type ClusterSpec struct {
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
 	InitHelper InitHelperConfig `json:"initHelper,omitempty"`
+	Job        JobConfig        `json:"job,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Es
