@@ -1,4 +1,4 @@
-![build](https://github.com/opster/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opster/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opster/opensearch-k8s-operator) [![Golang Lint](https://github.com/Opster/opensearch-k8s-operator/actions/workflows/linting.yaml/badge.svg)](https://github.com/Opster/opensearch-k8s-operator/actions/workflows/linting.yaml) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/opensearch-operator)](https://artifacthub.io/packages/search?repo=opensearch-operator)
+![build](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opensearch-project/opensearch-k8s-operator) [![Golang Lint](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/linting.yaml/badge.svg)](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/linting.yaml) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/opensearch-operator)](https://artifacthub.io/packages/search?repo=opensearch-operator)
 
 # OpenSearch Kubernetes Operator
 
@@ -40,7 +40,7 @@ Features:
 
 The Operator can be easily installed using Helm:
 
-1. Add the helm repo: `helm repo add opensearch-operator https://opster.github.io/opensearch-k8s-operator/`
+1. Add the helm repo: `helm repo add opensearch-operator https://opensearch-project.github.io/opensearch-k8s-operator/`
 2. Install the Operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
 
 ## OpenSearch Kubernetes Operator installation & demo video
