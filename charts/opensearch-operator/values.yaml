@@ -9,6 +9,10 @@ manager:
   securityContext:
     allowPrivilegeEscalation: false
   extraEnv: []
+  # 2.12 onwards a custom strong password needs to be provided in order to setup demo admin user.
+  # Cluster will not spin-up without this unless demo config install is disabled.
+  #  - name: OPENSEARCH_INITIAL_ADMIN_PASSWORD
+  #    value: <strong-password>
   resources:
     limits:
       cpu: 200m

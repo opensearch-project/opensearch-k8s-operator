@@ -23,7 +23,7 @@ package services
    const (
    	TestClusterUrl      = "https://localhost:9111"
    	TestClusterUserName = "admin"
-   	TestClusterPassword = "admin"
+   	TestClusterPassword = "<admin password>"
    )
 
    var path = filepath.Join(helpers.GetOperatorRootPath(), "test_resources/docker-compose.yml")
