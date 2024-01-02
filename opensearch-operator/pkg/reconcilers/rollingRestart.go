@@ -135,8 +135,21 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	// Check that all nodes of all pools are ready before doing work
-	for _, sts := range statefulSets {
+	for _, nodePool := range r.instance.Spec.NodePools {
+		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 		if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: 10 * time.Second,
+			}, nil
+		}
+		// CountRunningPodsForNodePool provides a more consistent view of the sts. Status of statefulset
+		// is eventually consistent. Listing pods is more consistent.
+		numReadyPods, err := helpers.CountRunningPodsForNodePool(r.client, r.instance, &nodePool)
+		if err != nil || numReadyPods != int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
 			return ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: 10 * time.Second,
@@ -173,13 +186,9 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}
 		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
-			// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
-			if sts.Status.ReadyReplicas == pointer.Int32Deref(sts.Spec.Replicas, 1) {
-				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.client, r.instance, &nodePool); err == nil && numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
-					lg.Info(fmt.Sprintf("Starting rolling restart of the StatefulSet %s", sts.Name))
-					return r.restartStatefulSetPod(&sts)
-				}
-			}
+
+			lg.Info(fmt.Sprintf("Starting rolling restart of the StatefulSet %s", sts.Name))
+			return r.restartStatefulSetPod(&sts)
 		}
 	}
 
