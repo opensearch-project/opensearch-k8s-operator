@@ -95,12 +95,6 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 			}
 
 		}
-		if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
-			return ctrl.Result{
-				Requeue:      true,
-				RequeueAfter: 10 * time.Second,
-			}, nil
-		}
 	}
 
 	if !pendingUpdate {
@@ -120,6 +114,24 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}
 		lg.V(1).Info("No pods pending restart")
 		return ctrl.Result{}, nil
+	}
+
+	// Check if there is any crashed pod. Delete it if there is any update in sts.
+	any_restarted_pod := false
+	for _, sts := range statefulSets {
+		restared_pod, err := helpers.DeleteStuckPodWithOlderRevision(r.client, &sts)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if restared_pod {
+			any_restarted_pod = true
+		}
+	}
+	if any_restarted_pod {
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 10 * time.Second,
+		}, nil
 	}
 
 	// Check that all nodes of all pools are ready before doing work
@@ -153,8 +165,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// Restart StatefulSet pod.  Order is not important So we just pick the first we find
-
+	// Restart a single pod of a StatefulSet. Order is not important so we just pick the first we find
 	for _, nodePool := range r.instance.Spec.NodePools {
 		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
 		if err != nil {
@@ -167,11 +178,6 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.client, r.instance, &nodePool); err == nil && numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
 					lg.Info(fmt.Sprintf("Starting rolling restart of the StatefulSet %s", sts.Name))
 					return r.restartStatefulSetPod(&sts)
-				}
-			} else { // Check if there is any crashed pod. Delete it if there is any update in sts.
-				err = helpers.DeleteStuckPodWithOlderRevision(r.client, &sts)
-				if err != nil {
-					return ctrl.Result{}, err
 				}
 			}
 		}
