@@ -67,13 +67,17 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	status := r.findStatus()
 	var pendingUpdate bool
 
-	// Check that all nodes are ready before doing work
-	// Also check if there are pending updates for all nodes.
+	statefulSets := []appsv1.StatefulSet{}
 	for _, nodePool := range r.instance.Spec.NodePools {
 		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		statefulSets = append(statefulSets, sts)
+	}
+
+	// Check if there are pending updates for all nodes.
+	for _, sts := range statefulSets {
 		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
 			pendingUpdate = true
@@ -116,6 +120,16 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}
 		lg.V(1).Info("No pods pending restart")
 		return ctrl.Result{}, nil
+	}
+
+	// Check that all nodes of all pools are ready before doing work
+	for _, sts := range statefulSets {
+		if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: 10 * time.Second,
+			}, nil
+		}
 	}
 
 	// Skip a rolling restart if the cluster hasn't finished initializing
