@@ -2,68 +2,68 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: opensearch.opster.io
+domain: opensearch.org
 layout:
 - go.kubebuilder.io/v3
 projectName: opensearch-operator
-repo: github.com/Opster/opensearch-k8s-operator/opensearch-operator
+repo: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator
 resources:
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: opensearch.opster.io
-  group: opster
+  domain: opensearch.org
+  group: opensearch-project
   kind: OpenSearchCluster
-  path: opensearch.opster.io/api/v1
+  path: opensearch.org/api/v1
   version: v1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: opensearch.opster.io
-  group: opster
+  domain: opensearch.org
+  group: opensearch-project
   kind: OpensearchUser
-  path: opensearch.opster.io/api/v1
+  path: opensearch.org/api/v1
   version: v1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: opensearch.opster.io
-  group: opster
+  domain: opensearch.org
+  group: opensearch-project
   kind: OpensearchRole
-  path: opensearch.opster.io/api/v1
+  path: opensearch.org/api/v1
   version: v1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: opensearch.opster.io
-  group: opster
+  domain: opensearch.org
+  group: opensearch-project
   kind: OpensearchUserRoleBinding
-  path: opensearch.opster.io/api/v1
+  path: opensearch.org/api/v1
   version: v1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: opensearch.opster.io
-  group: opster
+  domain: opensearch.org
+  group: opensearch-project
   kind: OpensearchIndexTemplate
-  path: opensearch.opster.io/api/v1
+  path: opensearch.org/api/v1
   version: v1
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
-  domain: opensearch.opster.io
-  group: opster
+  domain: opensearch.org
+  group: opensearch-project
   kind: OpensearchComponentTemplate
-  path: opensearch.opster.io/api/v1
+  path: opensearch.org/api/v1
   version: v1
-- domain: opensearch.opster.io
-  group: opensearch.opster.io
+- domain: opensearch.org
+  group: opensearch.org
   kind: OpensearchISMPolicy
   version: v1
 version: "3"

@@ -8,8 +8,8 @@ import (
 const (
 	DashboardConfigName          = "opensearch_dashboards.yml"
 	DashboardChecksumName        = "checksum/dashboards.yml"
-	ClusterLabel                 = "opster.io/opensearch-cluster"
-	NodePoolLabel                = "opster.io/opensearch-nodepool"
+	ClusterLabel                 = "opensearch.org/opensearch-cluster"
+	NodePoolLabel                = "opensearch.org/opensearch-nodepool"
 	OsUserNameAnnotation         = "opensearchuser/name"
 	OsUserNamespaceAnnotation    = "opensearchuser/namespace"
 	DnsBaseEnvVariable           = "DNS_BASE"
