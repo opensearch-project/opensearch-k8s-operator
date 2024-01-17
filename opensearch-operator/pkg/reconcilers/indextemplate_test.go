@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"net/http"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -26,12 +26,12 @@ var _ = Describe("indextemplate reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *IndexTemplateReconciler
-		instance   *opsterv1.OpensearchIndexTemplate
+		instance   *opensearchv1.OpensearchIndexTemplate
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
 		// Objects
-		cluster    *opsterv1.OpenSearchCluster
+		cluster    *opensearchv1.OpenSearchCluster
 		clusterUrl string
 	)
 
@@ -39,22 +39,22 @@ var _ = Describe("indextemplate reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opsterv1.OpensearchIndexTemplate{
+		instance = &opensearchv1.OpensearchIndexTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-indextemplate",
 				Namespace: "test-indextemplate",
 				UID:       "testuid",
 			},
-			Spec: opsterv1.OpensearchIndexTemplateSpec{
+			Spec: opensearchv1.OpensearchIndexTemplateSpec{
 				OpensearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 				Name:          "my-template",
 				IndexPatterns: []string{"my-logs-*"},
-				Template: opsterv1.OpensearchIndexSpec{
+				Template: opensearchv1.OpensearchIndexSpec{
 					Settings: &apiextensionsv1.JSON{},
 					Mappings: &apiextensionsv1.JSON{},
-					Aliases:  make(map[string]opsterv1.OpensearchIndexAliasSpec),
+					Aliases:  make(map[string]opensearchv1.OpensearchIndexAliasSpec),
 				},
 				ComposedOf: []string{},
 				Priority:   0,
@@ -63,17 +63,17 @@ var _ = Describe("indextemplate reconciler", func() {
 			},
 		}
 
-		cluster = &opsterv1.OpenSearchCluster{
+		cluster = &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
 				Namespace: "test-indextemplate",
 			},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
 					ServiceName: "test-cluster",
 					HttpPort:    9200,
 				},
-				NodePools: []opsterv1.NodePool{
+				NodePools: []opensearchv1.NodePool{
 					{
 						Component: "node",
 						Roles: []string{
@@ -103,7 +103,7 @@ var _ = Describe("indextemplate reconciler", func() {
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
 			instance.Spec.OpensearchRef.Name = "doesnotexist"
-			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
 
@@ -174,8 +174,8 @@ var _ = Describe("indextemplate reconciler", func() {
 	Context("cluster is ready", func() {
 		extraContextCalls := 1
 		BeforeEach(func() {
-			cluster.Status.Phase = opsterv1.PhaseRunning
-			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+			cluster.Status.Phase = opensearchv1.PhaseRunning
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{}
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 
 			transport.RegisterResponder(
@@ -436,7 +436,7 @@ var _ = Describe("indextemplate reconciler", func() {
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
 					instance.Spec.OpensearchRef.Name = "doesnotexist"
-					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
+					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 				It("should do nothing and exit", func() {
 					Expect(reconciler.Delete()).To(Succeed())

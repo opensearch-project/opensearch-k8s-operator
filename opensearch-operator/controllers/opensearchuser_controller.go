@@ -18,7 +18,6 @@ package controllers
 
 import (
 	"context"
-
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -31,9 +30,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
 // OpensearchUserReconciler reconciles a OpensearchUser object
@@ -41,13 +40,13 @@ type OpensearchUserReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opsterv1.OpensearchUser
+	Instance *opensearchv1.OpensearchUser
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchusers,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchusers/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchusers/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchusers,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchusers/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchusers/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -55,7 +54,7 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	r.Logger = log.FromContext(ctx).WithValues("user", req.NamespacedName)
 	r.Logger.Info("Reconciling OpensearchUser")
 
-	r.Instance = &opsterv1.OpensearchUser{}
+	r.Instance = &opensearchv1.OpensearchUser{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -120,9 +119,9 @@ func (r *OpensearchUserReconciler) handleSecretEvent(_ context.Context, secret c
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpensearchUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.OpensearchUser{}).
+		For(&opensearchv1.OpensearchUser{}).
 		// Get notified when opensearch clusters change
-		Owns(&opsterv1.OpenSearchCluster{}).
+		Owns(&opensearchv1.OpenSearchCluster{}).
 		// Get notified when password backing secret changes
 		Watches(
 			&corev1.Secret{},

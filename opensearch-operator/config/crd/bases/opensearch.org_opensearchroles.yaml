@@ -5,22 +5,22 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: opensearchusers.opensearch.opster.io
+  name: opensearchroles.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
-    kind: OpensearchUser
-    listKind: OpensearchUserList
-    plural: opensearchusers
+    kind: OpensearchRole
+    listKind: OpensearchRoleList
+    plural: opensearchroles
     shortNames:
-    - opensearchuser
-    singular: opensearchuser
+    - opensearchrole
+    singular: opensearchrole
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchUser is the Schema for the opensearchusers API
+        description: OpensearchRole is the Schema for the opensearchroles API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -35,19 +35,30 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchUserSpec defines the desired state of OpensearchUser
+            description: OpensearchRoleSpec defines the desired state of OpensearchRole
             properties:
-              attributes:
-                additionalProperties:
-                  type: string
-                type: object
-              backendRoles:
+              clusterPermissions:
                 items:
                   type: string
                 type: array
-              opendistroSecurityRoles:
+              indexPermissions:
                 items:
-                  type: string
+                  properties:
+                    allowedActions:
+                      items:
+                        type: string
+                      type: array
+                    dls:
+                      type: string
+                    fls:
+                      items:
+                        type: string
+                      type: array
+                    indexPatterns:
+                      items:
+                        type: string
+                      type: array
+                  type: object
                 type: array
               opensearchCluster:
                 description: LocalObjectReference contains enough information to let
@@ -59,31 +70,27 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              passwordFrom:
-                description: SecretKeySelector selects a key of a Secret.
-                properties:
-                  key:
-                    description: The key of the secret to select from.  Must be a
-                      valid secret key.
-                    type: string
-                  name:
-                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                      TODO: Add other useful fields. apiVersion, kind, uid?'
-                    type: string
-                  optional:
-                    description: Specify whether the Secret or its key must be defined
-                    type: boolean
-                required:
-                - key
-                type: object
-                x-kubernetes-map-type: atomic
+              tenantPermissions:
+                items:
+                  properties:
+                    allowedActions:
+                      items:
+                        type: string
+                      type: array
+                    tenantPatterns:
+                      items:
+                        type: string
+                      type: array
+                  type: object
+                type: array
             required:
             - opensearchCluster
-            - passwordFrom
             type: object
           status:
-            description: OpensearchUserStatus defines the observed state of OpensearchUser
+            description: OpensearchRoleStatus defines the observed state of OpensearchRole
             properties:
+              existingRole:
+                type: boolean
               managedCluster:
                 description: UID is a type that holds unique ID values, including
                   UUIDs.  Because we don't ONLY use UUIDs, this is an alias to string.  Being

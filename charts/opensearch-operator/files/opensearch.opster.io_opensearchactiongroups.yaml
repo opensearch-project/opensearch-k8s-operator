@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: opensearchactiongroups.opensearch.opster.io
+  name: opensearchactiongroups.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
     kind: OpensearchActionGroup
     listKind: OpensearchActionGroupList

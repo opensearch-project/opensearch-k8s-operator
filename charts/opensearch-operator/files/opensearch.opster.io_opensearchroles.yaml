@@ -5,9 +5,9 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: opensearchroles.opensearch.opster.io
+  name: opensearchroles.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
     kind: OpensearchRole
     listKind: OpensearchRoleList
