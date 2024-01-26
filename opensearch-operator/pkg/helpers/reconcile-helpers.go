@@ -5,15 +5,15 @@ import (
 	"path"
 	"strings"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/hashicorp/go-version"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/utils/pointer"
 )
 
-func ResolveInitHelperImage(cr *opensearchv1.OpenSearchCluster) (result opensearchv1.ImageSpec) {
-	defaultRepo := "public.ecr.aws/opsterio"
-	defaultImage := "busybox"
-	defaultVersion := "1.27.2-buildx"
+func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
+	defaultRepo := "public.ecr.aws/opensearch-project"
+	defaultImage := "opensearch-operator-busybox"
+	defaultVersion := "latest"
 
 	// If a custom InitHelper image is specified, use it.
 	if cr.Spec.InitHelper.ImageSpec != nil {
@@ -36,7 +36,7 @@ func ResolveInitHelperImage(cr *opensearchv1.OpenSearchCluster) (result opensear
 	return
 }
 
-func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (result opensearchv1.ImageSpec) {
+func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (result opsterv1.ImageSpec) {
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch"
 
@@ -61,7 +61,7 @@ func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.Nod
 	return
 }
 
-func ResolveDashboardsImage(cr *opensearchv1.OpenSearchCluster) (result opensearchv1.ImageSpec) {
+func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch-dashboards"
 
@@ -83,7 +83,7 @@ func ResolveDashboardsImage(cr *opensearchv1.OpenSearchCluster) (result opensear
 	return
 }
 
-func useCustomImage(customImageSpec *opensearchv1.ImageSpec, result *opensearchv1.ImageSpec) bool {
+func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageSpec) bool {
 	if customImageSpec != nil {
 		if customImageSpec.ImagePullPolicy != nil {
 			result.ImagePullPolicy = customImageSpec.ImagePullPolicy
@@ -101,7 +101,7 @@ func useCustomImage(customImageSpec *opensearchv1.ImageSpec, result *opensearchv
 }
 
 // Function to help identify httpPort, securityConfigPort and securityConfigPath for 1.x and 2.x OpenSearch Operator.
-func VersionCheck(instance *opensearchv1.OpenSearchCluster) (int32, int32, string) {
+func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
 	var httpPort int32
 	var securityConfigPort int32
 	var securityConfigPath string

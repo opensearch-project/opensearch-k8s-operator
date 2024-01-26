@@ -9,13 +9,13 @@ import (
 	"sort"
 	"strings"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -29,7 +29,7 @@ type ConfigurationReconciler struct {
 	client            k8s.K8sClient
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
-	instance          *opensearchv1.OpenSearchCluster
+	instance          *opsterv1.OpenSearchCluster
 }
 
 func NewConfigurationReconciler(
@@ -37,7 +37,7 @@ func NewConfigurationReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opensearchv1.OpenSearchCluster,
+	instance *opsterv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *ConfigurationReconciler {
 	return &ConfigurationReconciler{
@@ -146,7 +146,7 @@ func (r *ConfigurationReconciler) buildConfigMap(data string) *corev1.ConfigMap 
 	}
 }
 
-func (r *ConfigurationReconciler) createHashForNodePool(nodePool opensearchv1.NodePool, data string, volumeData []byte) (*ctrl.Result, error) {
+func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePool, data string, volumeData []byte) (*ctrl.Result, error) {
 	combinedData := append([]byte(data), volumeData...)
 
 	found, nodePoolHash := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)

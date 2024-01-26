@@ -5,10 +5,10 @@ import (
 	"fmt"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -29,28 +29,28 @@ var _ = Describe("TLS Reconciler", func() {
 		interval    = time.Second * 1
 	)
 	Context("When Creating an OpenSearchCluster with TLS configured", func() {
-		spec := opensearchv1.OpenSearchCluster{
+		spec := opsterv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
-			Spec: opensearchv1.ClusterSpec{
-				General: opensearchv1.GeneralConfig{
+			Spec: opsterv1.ClusterSpec{
+				General: opsterv1.GeneralConfig{
 					ServiceName: clusterName,
 					Version:     "2.0.0",
 				},
-				Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
-					Transport: &opensearchv1.TlsConfigTransport{
+				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+					Transport: &opsterv1.TlsConfigTransport{
 						Generate: true,
 						PerNode:  true,
 					},
-					Http: &opensearchv1.TlsConfigHttp{
+					Http: &opsterv1.TlsConfigHttp{
 						Generate: true,
 					},
 				}},
-				NodePools: []opensearchv1.NodePool{
+				NodePools: []opsterv1.NodePool{
 					{
 						Component:   "masters",
 						Replicas:    3,
 						Roles:       []string{"master", "data"},
-						Persistence: &opensearchv1.PersistenceConfig{PersistenceSource: opensearchv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 					},
 				},
 			},

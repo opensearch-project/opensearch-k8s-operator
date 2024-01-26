@@ -5,23 +5,22 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: opensearchuserrolebindings.opensearch.org
+  name: opensearchroles.opensearch.opster.io
 spec:
-  group: opensearch.org
+  group: opensearch.opster.io
   names:
-    kind: OpensearchUserRoleBinding
-    listKind: OpensearchUserRoleBindingList
-    plural: opensearchuserrolebindings
+    kind: OpensearchRole
+    listKind: OpensearchRoleList
+    plural: opensearchroles
     shortNames:
-    - opensearchuserrolebinding
-    singular: opensearchuserrolebinding
+    - opensearchrole
+    singular: opensearchrole
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings
-          API
+        description: OpensearchRole is the Schema for the opensearchroles API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -36,12 +35,30 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchUserRoleBindingSpec defines the desired state of
-              OpensearchUserRoleBinding
+            description: OpensearchRoleSpec defines the desired state of OpensearchRole
             properties:
-              backendRoles:
+              clusterPermissions:
                 items:
                   type: string
+                type: array
+              indexPermissions:
+                items:
+                  properties:
+                    allowedActions:
+                      items:
+                        type: string
+                      type: array
+                    dls:
+                      type: string
+                    fls:
+                      items:
+                        type: string
+                      type: array
+                    indexPatterns:
+                      items:
+                        type: string
+                      type: array
+                  type: object
                 type: array
               opensearchCluster:
                 description: LocalObjectReference contains enough information to let
@@ -53,40 +70,33 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              roles:
+              tenantPermissions:
                 items:
-                  type: string
-                type: array
-              users:
-                items:
-                  type: string
+                  properties:
+                    allowedActions:
+                      items:
+                        type: string
+                      type: array
+                    tenantPatterns:
+                      items:
+                        type: string
+                      type: array
+                  type: object
                 type: array
             required:
             - opensearchCluster
-            - roles
             type: object
           status:
-            description: OpensearchUserRoleBindingStatus defines the observed state
-              of OpensearchUserRoleBinding
+            description: OpensearchRoleStatus defines the observed state of OpensearchRole
             properties:
+              existingRole:
+                type: boolean
               managedCluster:
                 description: UID is a type that holds unique ID values, including
                   UUIDs.  Because we don't ONLY use UUIDs, this is an alias to string.  Being
                   a type captures intent and helps make sure that UIDs and names do
                   not get conflated.
                 type: string
-              provisionedBackendRoles:
-                items:
-                  type: string
-                type: array
-              provisionedRoles:
-                items:
-                  type: string
-                type: array
-              provisionedUsers:
-                items:
-                  type: string
-                type: array
               reason:
                 type: string
               state:

@@ -110,14 +110,14 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - events
   verbs:
   - create
   - patch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchactiongroups
   verbs:
@@ -129,13 +129,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchactiongroups/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchactiongroups/status
   verbs:
@@ -143,7 +143,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchclusters
   verbs:
@@ -155,13 +155,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchclusters/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchclusters/status
   verbs:
@@ -169,7 +169,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchcomponenttemplates
   verbs:
@@ -181,13 +181,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchcomponenttemplates/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchcomponenttemplates/status
   verbs:
@@ -195,7 +195,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchindextemplates
   verbs:
@@ -207,13 +207,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchindextemplates/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchindextemplates/status
   verbs:
@@ -221,7 +221,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchismpolicies
   verbs:
@@ -233,13 +233,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchismpolicies/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchismpolicies/status
   verbs:
@@ -247,7 +247,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchroles
   verbs:
@@ -259,13 +259,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchroles/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchroles/status
   verbs:
@@ -273,7 +273,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchtenants
   verbs:
@@ -285,13 +285,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchtenants/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchtenants/status
   verbs:
@@ -299,7 +299,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchuserrolebindings
   verbs:
@@ -311,13 +311,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchuserrolebindings/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchuserrolebindings/status
   verbs:
@@ -325,7 +325,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchusers
   verbs:
@@ -337,13 +337,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchusers/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.org
+  - opensearch.opster.io
   resources:
   - opensearchusers/status
   verbs:

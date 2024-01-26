@@ -9,9 +9,9 @@ import (
 
 	policyv1 "k8s.io/api/policy/v1"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	version "github.com/hashicorp/go-version"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -44,7 +44,7 @@ func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 	return f
 }
 
-func RemoveIt(ss opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
+func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	for idx, v := range ssSlice {
 		if ComponentStatusEqual(v, ss) {
 			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
@@ -53,21 +53,21 @@ func RemoveIt(ss opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentS
 	return ssSlice
 }
 
-func Replace(remove opensearchv1.ComponentStatus, add opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
+func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
 	removedSlice := RemoveIt(remove, ssSlice)
 	fullSliced := append(removedSlice, add)
 	return fullSliced
 }
 
-func ComponentStatusEqual(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) bool {
+func ComponentStatusEqual(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) bool {
 	return left.Component == right.Component && left.Description == right.Description && left.Status == right.Status
 }
 
 func FindFirstPartial(
-	arr []opensearchv1.ComponentStatus,
-	item opensearchv1.ComponentStatus,
-	predicator func(opensearchv1.ComponentStatus, opensearchv1.ComponentStatus) (opensearchv1.ComponentStatus, bool),
-) (opensearchv1.ComponentStatus, bool) {
+	arr []opsterv1.ComponentStatus,
+	item opsterv1.ComponentStatus,
+	predicator func(opsterv1.ComponentStatus, opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool),
+) (opsterv1.ComponentStatus, bool) {
 	for i := 0; i < len(arr); i++ {
 		itemInArr, found := predicator(arr[i], item)
 		if found {
@@ -95,7 +95,7 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	return val, ok
 }
 
-func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (string, string, error) {
+func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (string, string, error) {
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
 		// Read credentials from secret
 		credentialsSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
@@ -114,14 +114,14 @@ func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchClu
 	}
 }
 
-func GetByDescriptionAndGroup(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) (opensearchv1.ComponentStatus, bool) {
+func GetByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
 	if left.Description == right.Description && left.Component == right.Component {
 		return left, true
 	}
 	return right, false
 }
 
-func GetByComponent(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) (opensearchv1.ComponentStatus, bool) {
+func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
 	if left.Component == right.Component {
 		return left, true
 	}
@@ -199,7 +199,7 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 }
 
 // Count the number of pods running and ready and not terminating for a given nodePool
-func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
+func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
 	// Constrict selector from labels
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
 	if err != nil {
@@ -235,7 +235,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 }
 
 // Count the number of PVCs created for the given NodePool
-func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
+func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
 	if err != nil {
 		return 0, err
@@ -297,14 +297,14 @@ func WaitForSTSStatus(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) (*appsv1
 }
 
 // GetSTSForNodePool returns the corresponding sts for a given nodePool and cluster name
-func GetSTSForNodePool(k8sClient k8s.K8sClient, nodePool opensearchv1.NodePool, clusterName, clusterNamespace string) (*appsv1.StatefulSet, error) {
+func GetSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) (*appsv1.StatefulSet, error) {
 	stsName := clusterName + "-" + nodePool.Component
 	existing, err := k8sClient.GetStatefulSet(stsName, clusterNamespace)
 	return &existing, err
 }
 
 // DeleteSTSForNodePool deletes the sts for the corresponding nodePool
-func DeleteSTSForNodePool(k8sClient k8s.K8sClient, nodePool opensearchv1.NodePool, clusterName, clusterNamespace string) error {
+func DeleteSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
 	sts, err := GetSTSForNodePool(k8sClient, nodePool, clusterName, clusterNamespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -343,11 +343,11 @@ func DeleteSecurityUpdateJob(k8sClient k8s.K8sClient, clusterName, clusterNamesp
 	return k8sClient.DeleteJob(&job)
 }
 
-func HasDataRole(nodePool *opensearchv1.NodePool) bool {
+func HasDataRole(nodePool *opsterv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "data")
 }
 
-func HasManagerRole(nodePool *opensearchv1.NodePool) bool {
+func HasManagerRole(nodePool *opsterv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
 }
 
@@ -370,7 +370,7 @@ func CompareVersions(v1 string, v2 string) bool {
 	return err == nil && ver1.LessThan(ver2)
 }
 
-func ComposePDB(cr *opensearchv1.OpenSearchCluster, nodepool *opensearchv1.NodePool) policyv1.PodDisruptionBudget {
+func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) policyv1.PodDisruptionBudget {
 	matchLabels := map[string]string{
 		ClusterLabel:  cr.Name,
 		NodePoolLabel: nodepool.Component,
@@ -391,7 +391,7 @@ func ComposePDB(cr *opensearchv1.OpenSearchCluster, nodepool *opensearchv1.NodeP
 	return newpdb
 }
 
-func CalculateJvmHeapSize(nodePool *opensearchv1.NodePool) string {
+func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
 
 	if nodePool.Jvm == "" {
@@ -412,8 +412,8 @@ func CalculateJvmHeapSize(nodePool *opensearchv1.NodePool) string {
 	return nodePool.Jvm
 }
 
-func UpgradeInProgress(status opensearchv1.ClusterStatus) bool {
-	componentStatus := opensearchv1.ComponentStatus{
+func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
+	componentStatus := opsterv1.ComponentStatus{
 		Component: "Upgrader",
 	}
 	_, found := FindFirstPartial(status.ComponentsStatus, componentStatus, GetByComponent)

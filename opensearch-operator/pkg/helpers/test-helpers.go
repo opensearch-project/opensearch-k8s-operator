@@ -1,7 +1,7 @@
 package helpers
 
 import (
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )

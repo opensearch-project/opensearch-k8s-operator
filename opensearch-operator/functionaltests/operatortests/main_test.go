@@ -3,9 +3,9 @@ package operatortests
 import (
 	"testing"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -22,7 +22,7 @@ func TestAPIs(t *testing.T) {
 	}
 	scheme := runtime.NewScheme()
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(opensearchv1.AddToScheme(scheme))
+	utilruntime.Must(opsterv1.AddToScheme(scheme))
 	k8sClient, err = client.New(config, client.Options{
 		Scheme: scheme,
 	})

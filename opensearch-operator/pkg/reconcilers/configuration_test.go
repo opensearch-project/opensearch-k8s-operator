@@ -4,9 +4,9 @@ import (
 	"context"
 	"strings"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -24,7 +24,7 @@ func newConfigurationReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opensearchv1.OpenSearchCluster,
+	instance *opsterv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *ConfigurationReconciler {
 	return &ConfigurationReconciler{
@@ -45,15 +45,15 @@ var _ = Describe("Configuration Controller", func() {
 		It("should not create a configmap ", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: clusterName,
 					UID:       "dummyuid",
 				},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{},
-					NodePools: []opensearchv1.NodePool{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					NodePools: []opsterv1.NodePool{
 						{
 							Component: "test",
 							Roles: []string{
@@ -83,15 +83,15 @@ var _ = Describe("Configuration Controller", func() {
 		It("should create a configmap ", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: clusterName,
 					UID:       "dummyuid",
 				},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{},
-					NodePools: []opensearchv1.NodePool{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					NodePools: []opsterv1.NodePool{
 						{
 							Component: "test",
 							Roles: []string{

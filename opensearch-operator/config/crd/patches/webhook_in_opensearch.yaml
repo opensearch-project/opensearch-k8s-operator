@@ -2,7 +2,7 @@
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
-  name: opensearchcluster.opensearch.org
+  name: opensearchcluster.opensearch.opster.io
 spec:
   conversion:
     strategy: Webhook

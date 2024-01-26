@@ -31,7 +31,7 @@ jobs:
       - name: Prepare helm chart
         run: |
           # Copy CRDs to chart to make sure they are identical
-          cp opensearch-operator/config/crd/bases/opensearch.org_*.yaml charts/opensearch-operator/files/
+          cp opensearch-operator/config/crd/bases/opensearch.opster.io_*.yaml charts/opensearch-operator/files/
           # Set versions in helm chart
           sed -i -e 's/^appVersion:.*/appVersion: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
           sed -i -e 's/^version:.*/version: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
@@ -50,7 +50,7 @@ jobs:
         env:
           RELEASE_VERSION: ${{ inputs.version }}
 
-      - name: Build and Push docker operator image
+      - name: Build and Push docker image
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

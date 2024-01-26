@@ -1,7 +1,7 @@
 #Minimal configuration of a cluster with version 2.6.0 of the operator.
 #This example will stand up a cluster with managers, hot, warm and cold
 #nodes to test hot-warm architectures
-apiVersion: opensearch.org/v1
+apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
   name: my-first-hot-warm-cold-cluster

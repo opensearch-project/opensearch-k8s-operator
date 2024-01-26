@@ -2,9 +2,10 @@ package controllers
 
 import (
 	"context"
+
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -18,13 +19,13 @@ type OpensearchComponentTemplateReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchComponentTemplate
+	Instance *opsterv1.OpensearchComponentTemplate
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchcomponenttemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchcomponenttemplates/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchcomponenttemplates/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -32,7 +33,7 @@ func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, r
 	r.Logger = log.FromContext(ctx).WithValues("componenttemplate", req.NamespacedName)
 	r.Logger.Info("Reconciling OpensearchComponentTemplate")
 
-	r.Instance = &opensearchv1.OpensearchComponentTemplate{}
+	r.Instance = &opsterv1.OpensearchComponentTemplate{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -69,7 +70,7 @@ func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, r
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpensearchComponentTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchComponentTemplate{}).
-		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
+		For(&opsterv1.OpensearchComponentTemplate{}).
+		Owns(&opsterv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }

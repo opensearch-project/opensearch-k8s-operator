@@ -10,7 +10,7 @@ The CustomResourceDefinition API resource allows you to define custom resources.
 The `OpensearchCLuster` CRD is representing an Opensearch cluster.
 
 
-Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.org` and version `v1`.
+Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.opster.io` and version `v1`.
 <table>
     <thead>
         <tr>
@@ -23,7 +23,7 @@ Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.org` and vers
     <tbody><tr>
       <td><b>apiVersion</b></td>
       <td>string</td>
-      <td>opensearch.org/v1</td>
+      <td>opensearch.opster.io/v1</td>
       <td>true</td>
       </tr>
       <tr>
@@ -199,7 +199,7 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>Default image repository to use</td>
       </tr><tr>
         <td><b>keystore</b></td>
-        <td>[]opensearchv1.KeystoreValue</td>
+        <td>[]opsterv1.KeystoreValue</td>
         <td>List of objects that define secret values that will populate the opensearch keystore.</td>
         <td>false</td>
         <td> - </td>
@@ -405,7 +405,7 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>-</td>
       </tr><tr>
         <td><b>service</b></td>
-        <td>opensearchv1.DashboardsService</td>
+        <td>opsterv1.DashboardsService</td>
         <td>Customize dashboard service</td>
         <td>false</td>
         <td>-</td>
@@ -559,7 +559,7 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
         <td>string</td>
         <td>Define InitHelper image</td>
         <td>false</td>
-        <td>public.ecr.aws/opsterio/busybox</td>
+        <td>public.ecr.aws/opensearch-project/opensearch-operator-busybox</td>
       </tr><tr>
       </tr><tr>
         <td><b>imagePullPolicy</b></td>

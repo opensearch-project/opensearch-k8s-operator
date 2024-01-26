@@ -5,22 +5,23 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: opensearchusers.opensearch.org
+  name: opensearchuserrolebindings.opensearch.opster.io
 spec:
-  group: opensearch.org
+  group: opensearch.opster.io
   names:
-    kind: OpensearchUser
-    listKind: OpensearchUserList
-    plural: opensearchusers
+    kind: OpensearchUserRoleBinding
+    listKind: OpensearchUserRoleBindingList
+    plural: opensearchuserrolebindings
     shortNames:
-    - opensearchuser
-    singular: opensearchuser
+    - opensearchuserrolebinding
+    singular: opensearchuserrolebinding
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchUser is the Schema for the opensearchusers API
+        description: OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings
+          API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -35,17 +36,10 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchUserSpec defines the desired state of OpensearchUser
+            description: OpensearchUserRoleBindingSpec defines the desired state of
+              OpensearchUserRoleBinding
             properties:
-              attributes:
-                additionalProperties:
-                  type: string
-                type: object
               backendRoles:
-                items:
-                  type: string
-                type: array
-              opendistroSecurityRoles:
                 items:
                   type: string
                 type: array
@@ -59,30 +53,21 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              passwordFrom:
-                description: SecretKeySelector selects a key of a Secret.
-                properties:
-                  key:
-                    description: The key of the secret to select from.  Must be a
-                      valid secret key.
-                    type: string
-                  name:
-                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                      TODO: Add other useful fields. apiVersion, kind, uid?'
-                    type: string
-                  optional:
-                    description: Specify whether the Secret or its key must be defined
-                    type: boolean
-                required:
-                - key
-                type: object
-                x-kubernetes-map-type: atomic
+              roles:
+                items:
+                  type: string
+                type: array
+              users:
+                items:
+                  type: string
+                type: array
             required:
             - opensearchCluster
-            - passwordFrom
+            - roles
             type: object
           status:
-            description: OpensearchUserStatus defines the observed state of OpensearchUser
+            description: OpensearchUserRoleBindingStatus defines the observed state
+              of OpensearchUserRoleBinding
             properties:
               managedCluster:
                 description: UID is a type that holds unique ID values, including
@@ -90,6 +75,18 @@ spec:
                   a type captures intent and helps make sure that UIDs and names do
                   not get conflated.
                 type: string
+              provisionedBackendRoles:
+                items:
+                  type: string
+                type: array
+              provisionedRoles:
+                items:
+                  type: string
+                type: array
+              provisionedUsers:
+                items:
+                  type: string
+                type: array
               reason:
                 type: string
               state:

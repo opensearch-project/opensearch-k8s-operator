@@ -1,5 +1,5 @@
 {{- if eq .Values.opensearchCluster.enabled true }}
-apiVersion: opensearch.org/v1
+apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
   name: {{ .Values.clusterName | default .Release.Name}}
