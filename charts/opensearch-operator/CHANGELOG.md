@@ -55,7 +55,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 ### Security
 
-[Unreleased]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-2.0.0...HEAD
-[2.0.0]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.3...opensearch-operator-2.0.0
-[1.0.3]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.2...opensearch-operator-1.0.3
-[1.0.2]: https://github.com/Opster/opensearch-k8s-operator/compare/opensearch-operator-1.0.1...opensearch-operator-1.0.2
+[Unreleased]: https://github.com/opensearch-project/opensearch-k8s-operator/compare/opensearch-operator-2.0.0...HEAD
+[2.0.0]: https://github.com/opensearch-project/opensearch-k8s-operator/compare/opensearch-operator-1.0.3...opensearch-operator-2.0.0
+[1.0.3]: https://github.com/opensearch-project/opensearch-k8s-operator/compare/opensearch-operator-1.0.2...opensearch-operator-1.0.3
+[1.0.2]: https://github.com/opensearch-project/opensearch-k8s-operator/compare/opensearch-operator-1.0.1...opensearch-operator-1.0.2

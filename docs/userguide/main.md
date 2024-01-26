@@ -767,7 +767,7 @@ manager:
 
 ### Custom init helper
 
-During cluster initialization the operator uses init containers as helpers. For these containers a busybox image is used ( specifically `public.ecr.aws/opsterio/busybox:1.27.2-buildx`). In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
+During cluster initialization the operator uses init containers as helpers. For these containers a busybox image is used ( specifically `public.ecr.aws/opensearch-project/busybox:latest`). In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
 
 ```yaml
   spec:     

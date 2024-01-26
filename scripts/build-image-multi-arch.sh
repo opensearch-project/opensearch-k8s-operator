@@ -135,4 +135,4 @@ docker ps | grep $BUILDER_NAME
 
 # Build multi-arch images
 PLATFORMS=`echo "${ARCHITECTURE_ARRAY[@]/#/linux/}" | sed 's/x64/amd64/g;s/ /,/g'` && echo PLATFORMS $PLATFORMS
-docker buildx build --platform $PLATFORMS --build-arg VERSION=$VERSION --build-arg BUILD_DATE=`date -u +%Y-%m-%dT%H:%M:%SZ` --build-arg NOTES=$NOTES -t pgodithi/opensearchproject/$PRODUCT:${VERSION} -f $DOCKERFILE . --push
+docker buildx build --platform $PLATFORMS --build-arg VERSION=$VERSION --build-arg BUILD_DATE=`date -u +%Y-%m-%dT%H:%M:%SZ` --build-arg NOTES=$NOTES -t opensearchstaging/$PRODUCT:${VERSION} -f $DOCKERFILE . --push

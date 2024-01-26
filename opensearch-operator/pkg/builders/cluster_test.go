@@ -162,7 +162,7 @@ var _ = Describe("Builders", func() {
 			customRepository := "mycustomrepo.cr"
 			clusterObject.Spec.General.DefaultRepo = &customRepository
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2"))
+			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:latest"))
 		})
 		It("should use InitHelper.Image as InitHelper image if configured", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
@@ -178,7 +178,7 @@ var _ = Describe("Builders", func() {
 		It("should use defaults when no custom image is configured for InitHelper image", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("public.ecr.aws/opensearch-project/opensearch-operator-busybox:latest"))
+			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("docker.io/busybox:latest"))
 		})
 		It("should use a custom dns name when env variable is set as cluster url", func() {
 			customDns := "custom.domain"
@@ -412,7 +412,7 @@ var _ = Describe("Builders", func() {
 			customRepository := "mycustomrepo.cr"
 			clusterObject.Spec.General.DefaultRepo = &customRepository
 			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:1.27.2"))
+			Expect(result.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:latest"))
 		})
 
 		It("should apply the BootstrapNodeConfig to the env variables", func() {
