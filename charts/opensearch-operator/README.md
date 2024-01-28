@@ -10,7 +10,7 @@ The Operator can be easily installed using helm on any CNCF-certified Kubernetes
 
 #### Get Repo Info
 ```
-helm repo add opensearch-operator helm repo add opensearch-charts https://opensearch-project.github.io/opensearch-k8s-operator
+helm repo add opensearch-operator https://opensearch-project.github.io/opensearch-k8s-operator
 helm repo update
 ```
 #### Install Chart
