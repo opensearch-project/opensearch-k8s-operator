@@ -1,4 +1,4 @@
-apiVersion: opensearch.org/v1
+apiVersion: opensearch.opster.io/v1
 kind: OpensearchComponentTemplate
 metadata:
   name: sample-component-template

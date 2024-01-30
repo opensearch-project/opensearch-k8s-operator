@@ -8,14 +8,14 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,7 +29,7 @@ import (
 type TLSReconciler struct {
 	client            k8s.K8sClient
 	reconcilerContext *ReconcilerContext
-	instance          *opensearchv1.OpenSearchCluster
+	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
 	pki               tls.PKI
 	recorder          record.EventRecorder
@@ -39,7 +39,7 @@ func NewTLSReconciler(
 	client client.Client,
 	ctx context.Context,
 	reconcilerContext *ReconcilerContext,
-	instance *opensearchv1.OpenSearchCluster,
+	instance *opsterv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *TLSReconciler {
 	return &TLSReconciler{
@@ -102,7 +102,7 @@ func (r *TLSReconciler) handleTransport() error {
 }
 
 func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
-	// TODO: This should be refactored in the API - https://github.com/opensearch-project/opensearch-k8s-operator/issues/569
+	// TODO: This should be refactored in the API - https://github.com/Opster/opensearch-k8s-operator/issues/569
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
 	clusterName := r.instance.Name
 

@@ -7,7 +7,7 @@ package services
    	. "github.com/onsi/ginkgo"
    	. "github.com/onsi/gomega"
    	"k8s.io/utils/exec"
-   	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+   	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
    	"path/filepath"
    	"sigs.k8s.io/controller-runtime/pkg/envtest/printer"
    	"testing"

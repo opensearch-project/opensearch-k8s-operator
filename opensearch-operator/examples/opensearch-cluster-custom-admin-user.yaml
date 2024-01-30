@@ -1,6 +1,6 @@
 ## Use this example in case you want to deploy your cluster with an admin user with a custom password instead of the default (admin).
 
-apiVersion: opensearch.org/v1
+apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
   name: my-cluster

@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +15,7 @@ import (
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
-func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, annotations map[string]string) *appsv1.Deployment {
+func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, annotations map[string]string) *appsv1.Deployment {
 	var replicas int32 = cr.Spec.Dashboards.Replicas
 	var port int32 = 5601
 	var mode int32 = 420
@@ -175,7 +175,7 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 	}
 }
 
-func NewDashboardsConfigMapForCR(cr *opensearchv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
+func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
 	config["server.name"] = cr.Name + "-dashboards"
 	config["opensearch.ssl.verificationMode"] = "none"
 
@@ -208,7 +208,7 @@ func NewDashboardsConfigMapForCR(cr *opensearchv1.OpenSearchCluster, name string
 	}
 }
 
-func NewDashboardsSvcForCr(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
+func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	var port int32 = 5601
 
 	labels := map[string]string{

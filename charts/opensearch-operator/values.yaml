@@ -41,7 +41,7 @@ manager:
   parallelRecoveryEnabled: true
 
   image:
-    repository: public.ecr.aws/opsterio/opensearch-operator
+    repository: public.ecr.aws/opensearch-project/opensearch-operator
     ## tag default uses appVersion from Chart.yaml, to override specify tag tag: "v1.1"
     tag: ""
     pullPolicy: "Always"

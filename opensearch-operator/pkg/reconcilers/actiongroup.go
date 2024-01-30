@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
@@ -30,8 +30,8 @@ type ActionGroupReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opensearchv1.OpensearchActionGroup
-	cluster  *opensearchv1.OpenSearchCluster
+	instance *opsterv1.OpensearchActionGroup
+	cluster  *opsterv1.OpenSearchCluster
 	logger   logr.Logger
 }
 
@@ -39,7 +39,7 @@ func NewActionGroupReconciler(
 	client client.Client,
 	ctx context.Context,
 	recorder record.EventRecorder,
-	instance *opensearchv1.OpensearchActionGroup,
+	instance *opsterv1.OpensearchActionGroup,
 	opts ...ReconcilerOption,
 ) *ActionGroupReconciler {
 	options := ReconcilerOptions{}
@@ -64,19 +64,19 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opensearchv1.OpensearchActionGroup)
+			instance := object.(*opsterv1.OpensearchActionGroup)
 			instance.Status.Reason = reason
 			if retErr != nil {
-				instance.Status.State = opensearchv1.OpensearchActionGroupError
+				instance.Status.State = opsterv1.OpensearchActionGroupError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				instance.Status.State = opensearchv1.OpensearchActionGroupPending
+				instance.Status.State = opsterv1.OpensearchActionGroupPending
 			}
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				instance.Status.State = opensearchv1.OpensearchActionGroupCreated
+				instance.Status.State = opsterv1.OpensearchActionGroupCreated
 			}
 			if reason == opensearchActionGroupExists {
-				instance.Status.State = opensearchv1.OpensearchActionGroupIgnored
+				instance.Status.State = opsterv1.OpensearchActionGroupIgnored
 			}
 		})
 		if err != nil {
@@ -116,7 +116,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchActionGroup)
+				instance := object.(*opsterv1.OpensearchActionGroup)
 				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
@@ -128,7 +128,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 	}
 
 	// Check cluster is ready
-	if r.cluster.Status.Phase != opensearchv1.PhaseRunning {
+	if r.cluster.Status.Phase != opsterv1.PhaseRunning {
 		r.logger.Info("opensearch cluster is not running, requeueing")
 		reason = "waiting for opensearch cluster status to be running"
 		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
@@ -158,7 +158,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		}
 		if pointer.BoolDeref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchActionGroup)
+				instance := object.(*opsterv1.OpensearchActionGroup)
 				instance.Status.ExistingActionGroup = &exists
 			})
 			if retErr != nil {

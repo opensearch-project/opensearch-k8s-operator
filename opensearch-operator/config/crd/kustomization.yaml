@@ -2,15 +2,15 @@
 # since it depends on service name and namespace that are out of this kustomize package.
 # It should be run by config/default
 resources:
-- bases/opensearch.org_opensearchactiongroups.yaml
-- bases/opensearch.org_opensearchclusters.yaml
-- bases/opensearch.org_opensearchcomponenttemplates.yaml
-- bases/opensearch.org_opensearchindextemplates.yaml
-- bases/opensearch.org_opensearchroles.yaml
-- bases/opensearch.org_opensearchtenants.yaml
-- bases/opensearch.org_opensearchuserrolebindings.yaml
-- bases/opensearch.org_opensearchusers.yaml
-- bases/opensearch.org_opensearchismpolicies.yaml
+- bases/opensearch.opster.io_opensearchactiongroups.yaml
+- bases/opensearch.opster.io_opensearchclusters.yaml
+- bases/opensearch.opster.io_opensearchcomponenttemplates.yaml
+- bases/opensearch.opster.io_opensearchindextemplates.yaml
+- bases/opensearch.opster.io_opensearchroles.yaml
+- bases/opensearch.opster.io_opensearchtenants.yaml
+- bases/opensearch.opster.io_opensearchuserrolebindings.yaml
+- bases/opensearch.opster.io_opensearchusers.yaml
+- bases/opensearch.opster.io_ismpolicies.yaml
 - bases/crd-servicemonitor.yaml
 #+kubebuilder:scaffold:crdkustomizeresource
 

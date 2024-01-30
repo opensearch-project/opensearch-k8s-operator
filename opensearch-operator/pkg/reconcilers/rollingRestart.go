@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -34,7 +34,7 @@ type RollingRestartReconciler struct {
 	osClient          *services.OsClusterClient
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
-	instance          *opensearchv1.OpenSearchCluster
+	instance          *opsterv1.OpenSearchCluster
 }
 
 func NewRollingRestartReconciler(
@@ -42,7 +42,7 @@ func NewRollingRestartReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opensearchv1.OpenSearchCluster,
+	instance *opsterv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *RollingRestartReconciler {
 	return &RollingRestartReconciler{
@@ -222,14 +222,14 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 }
 
 func (r *RollingRestartReconciler) updateStatus(status string) error {
-	return UpdateComponentStatus(r.client, r.instance, &opensearchv1.ComponentStatus{
+	return UpdateComponentStatus(r.client, r.instance, &opsterv1.ComponentStatus{
 		Component:   componentName,
 		Status:      status,
 		Description: "",
 	})
 }
 
-func (r *RollingRestartReconciler) findStatus() *opensearchv1.ComponentStatus {
+func (r *RollingRestartReconciler) findStatus() *opsterv1.ComponentStatus {
 	for _, component := range r.instance.Status.ComponentsStatus {
 		if component.Component == componentName {
 			return &component

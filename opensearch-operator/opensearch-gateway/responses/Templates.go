@@ -1,6 +1,6 @@
 package responses
 
-import "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+import "github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 
 type GetIndexTemplatesResponse struct {
 	IndexTemplates []IndexTemplate `json:"index_templates"`

@@ -4,10 +4,10 @@ import (
 	"context"
 	"strings"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -22,7 +22,7 @@ import (
 	//+kubebuilder:scaffold:imports
 )
 
-func newDashboardsReconciler(k8sClient *k8s.MockK8sClient, spec *opensearchv1.OpenSearchCluster) (ReconcilerContext, *DashboardsReconciler) {
+func newDashboardsReconciler(k8sClient *k8s.MockK8sClient, spec *opsterv1.OpenSearchCluster) (ReconcilerContext, *DashboardsReconciler) {
 	reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, spec, spec.Spec.NodePools)
 	underTest := &DashboardsReconciler{
 		client:            k8sClient,
@@ -44,16 +44,16 @@ var _ = Describe("Dashboards Reconciler", func() {
 			secretName := "my-cert"
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opensearchv1.DashboardsConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
-						Tls: &opensearchv1.DashboardsTlsConfig{
+						Tls: &opsterv1.DashboardsTlsConfig{
 							Enable:               true,
 							Generate:             false,
-							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{Secret: corev1.LocalObjectReference{Name: secretName}},
+							TlsCertificateConfig: opsterv1.TlsCertificateConfig{Secret: corev1.LocalObjectReference{Name: secretName}},
 						},
 					},
 				},
@@ -82,13 +82,13 @@ var _ = Describe("Dashboards Reconciler", func() {
 		It("should create a cert", func() {
 			clusterName := "dashboards-test-generate"
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opensearchv1.DashboardsConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
-						Tls: &opensearchv1.DashboardsTlsConfig{
+						Tls: &opsterv1.DashboardsTlsConfig{
 							Enable:   true,
 							Generate: true,
 						},
@@ -131,11 +131,11 @@ var _ = Describe("Dashboards Reconciler", func() {
 			clusterName := "dashboards-creds"
 			credentialsSecret := clusterName + "-creds"
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opensearchv1.DashboardsConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
 						Enable:                      true,
 						OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: credentialsSecret},
 					},
@@ -184,11 +184,11 @@ var _ = Describe("Dashboards Reconciler", func() {
 			testConfig := "some-config-here"
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opensearchv1.DashboardsConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						AdditionalConfig: map[string]string{
 							"some-key": testConfig,
@@ -229,11 +229,11 @@ var _ = Describe("Dashboards Reconciler", func() {
 		It("should populate the dashboard env vars", func() {
 			clusterName := "dashboards-add-env"
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opensearchv1.DashboardsConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
 						Env: []corev1.EnvVar{
 							{
@@ -275,13 +275,13 @@ var _ = Describe("Dashboards Reconciler", func() {
 			image := "docker.io/my-opensearch-dashboards:custom"
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			imagePullPolicy := corev1.PullAlways
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opensearchv1.DashboardsConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
-						ImageSpec: &opensearchv1.ImageSpec{
+						ImageSpec: &opsterv1.ImageSpec{
 							Image:           &image,
 							ImagePullPolicy: &imagePullPolicy,
 						},
@@ -313,13 +313,13 @@ var _ = Describe("Dashboards Reconciler", func() {
 		It("should mount the volumes in the deployment", func() {
 			clusterName := "dashboards-add-volumes"
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			spec := &opensearchv1.OpenSearchCluster{
+			spec := &opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opensearchv1.DashboardsConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
 						Enable: true,
-						AdditionalVolumes: []opensearchv1.AdditionalVolume{
+						AdditionalVolumes: []opsterv1.AdditionalVolume{
 							{
 								Name: "test-secret",
 								Path: "/opt/test-secret",

@@ -5,7 +5,7 @@ metadata:
   name: opensearchrole-editor-role
 rules:
 - apiGroups:
-  - opensearch.org
+  - opster.opensearch.opster.io
   resources:
   - opensearchroles
   verbs:
@@ -17,7 +17,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.org
+  - opster.opensearch.opster.io
   resources:
   - opensearchroles/status
   verbs:

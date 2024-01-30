@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/pointer"
@@ -31,8 +31,8 @@ type IsmPolicyReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opensearchv1.OpenSearchISMPolicy
-	cluster  *opensearchv1.OpenSearchCluster
+	instance *opsterv1.OpenSearchISMPolicy
+	cluster  *opsterv1.OpenSearchCluster
 	logger   logr.Logger
 }
 
@@ -40,7 +40,7 @@ func NewIsmReconciler(
 	ctx context.Context,
 	client client.Client,
 	recorder record.EventRecorder,
-	instance *opensearchv1.OpenSearchISMPolicy,
+	instance *opsterv1.OpenSearchISMPolicy,
 	opts ...ReconcilerOption,
 ) *IsmPolicyReconciler {
 	options := ReconcilerOptions{}
@@ -65,22 +65,22 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opensearchv1.OpenSearchISMPolicy)
+			instance := object.(*opsterv1.OpenSearchISMPolicy)
 			instance.Status.Reason = reason
 			if retErr != nil {
-				instance.Status.State = opensearchv1.OpensearchISMPolicyError
+				instance.Status.State = opsterv1.OpensearchISMPolicyError
 			}
 			// Requeue after is 10 seconds if waiting for OpenSearch cluster
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				instance.Status.State = opensearchv1.OpensearchISMPolicyPending
+				instance.Status.State = opsterv1.OpensearchISMPolicyPending
 			}
 			// Requeue is after 30 seconds for normal reconciliation after creation/update
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				instance.Status.State = opensearchv1.OpensearchISMPolicyCreated
+				instance.Status.State = opsterv1.OpensearchISMPolicyCreated
 				instance.Status.PolicyId = policyId
 			}
 			if reason == ismPolicyExists {
-				instance.Status.State = opensearchv1.OpensearchISMPolicyIgnored
+				instance.Status.State = opsterv1.OpensearchISMPolicyIgnored
 			}
 		})
 		if err != nil {
@@ -120,7 +120,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	} else {
 		if pointer.BoolDeref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpenSearchISMPolicy)
+				instance := object.(*opsterv1.OpenSearchISMPolicy)
 				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
@@ -131,7 +131,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}
 	}
 	// Check cluster is ready
-	if r.cluster.Status.Phase != opensearchv1.PhaseRunning {
+	if r.cluster.Status.Phase != opsterv1.PhaseRunning {
 		r.logger.Info("opensearch cluster is not running, requeueing")
 		reason = "waiting for opensearch cluster status to be running"
 		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
@@ -165,7 +165,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}
 		if pointer.BoolDeref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpenSearchISMPolicy)
+				instance := object.(*opsterv1.OpenSearchISMPolicy)
 				instance.Status.ExistingISMPolicy = &exists
 			})
 			if retErr != nil {
@@ -320,7 +320,7 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 						newAction := requests.AliasAction{}
 						newAliasDetails := requests.AliasDetails{}
 
-						copyAliasDetails := func(src *opensearchv1.AliasDetails) {
+						copyAliasDetails := func(src *opsterv1.AliasDetails) {
 							newAliasDetails.Aliases = src.Aliases
 							newAliasDetails.Index = src.Index
 							newAliasDetails.IsWriteIndex = src.IsWriteIndex

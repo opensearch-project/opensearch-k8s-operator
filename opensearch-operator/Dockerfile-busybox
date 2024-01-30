@@ -1,2 +1,0 @@
-# A dummy Dockerfile to prepare a multi-arch busybox image used for the init helpers
-FROM busybox:1.27.2

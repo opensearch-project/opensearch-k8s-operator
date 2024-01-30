@@ -13,7 +13,7 @@ The descriptor, provided by the user, is a configuration data structure specifyi
 * Cluster configuration: Configuration of OpenSearch
 * Operator Configuration: Security, Monitoring, Auto Scaling, OpenSearch Dashboard, ...
 
-The descriptor is a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) which effectively is a YAML answering to a schema (called a [Custom Resource Definition](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions)). The operator is bundled with a [schema](../../opensearch-operator/config/crd/bases/opensearch_opensearchclusters.yaml) for this resource which is deployed when deploying this operator. 
+The descriptor is a [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) which effectively is a YAML answering to a schema (called a [Custom Resource Definition](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/#customresourcedefinitions)). The operator is bundled with a [schema](../../opensearch-operator/config/crd/bases/opensearch.opster.io_opensearchclusters.yaml) for this resource which is deployed when deploying this operator. 
 
 Each custom resource answering to that schema (kind: `OpenSearchCluster`) represents a **single** OpenSearch cluster. 
 

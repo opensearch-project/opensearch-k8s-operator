@@ -1,6 +1,6 @@
 #Minimal configuration of a cluster with version 2.X of the operator.
 #Note the replacement of 'master' role with 'cluster_manager' on line 49
-apiVersion: opensearch.org/v1
+apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
   name: my-first-cluster

@@ -8,4 +8,4 @@ webhook:
   port: 9443
 leaderElection:
   leaderElect: true
-  resourceName: a867c7dc.opensearch.org
+  resourceName: a867c7dc.opensearch.opster.io

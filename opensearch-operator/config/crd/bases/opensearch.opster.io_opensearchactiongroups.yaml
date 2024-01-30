@@ -5,22 +5,23 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.10.0
   creationTimestamp: null
-  name: opensearchtenants.opensearch.org
+  name: opensearchactiongroups.opensearch.opster.io
 spec:
-  group: opensearch.org
+  group: opensearch.opster.io
   names:
-    kind: OpensearchTenant
-    listKind: OpensearchTenantList
-    plural: opensearchtenants
+    kind: OpensearchActionGroup
+    listKind: OpensearchActionGroupList
+    plural: opensearchactiongroups
     shortNames:
-    - opensearchtenant
-    singular: opensearchtenant
+    - opensearchactiongroup
+    singular: opensearchactiongroup
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchTenant is the Schema for the opensearchtenants API
+        description: OpensearchActionGroup is the Schema for the opensearchactiongroups
+          API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -35,8 +36,12 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchTenantSpec defines the desired state of OpensearchTenant
+            description: OpensearchActionGroupSpec defines the desired state of OpensearchActionGroup
             properties:
+              allowedActions:
+                items:
+                  type: string
+                type: array
               description:
                 type: string
               opensearchCluster:
@@ -49,13 +54,17 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              type:
+                type: string
             required:
+            - allowedActions
             - opensearchCluster
             type: object
           status:
-            description: OpensearchTenantStatus defines the observed state of OpensearchTenant
+            description: OpensearchActionGroupStatus defines the observed state of
+              OpensearchActionGroup
             properties:
-              existingTenant:
+              existingActionGroup:
                 type: boolean
               managedCluster:
                 description: UID is a type that holds unique ID values, including

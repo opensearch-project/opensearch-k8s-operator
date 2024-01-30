@@ -22,14 +22,14 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/controllers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
 	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -46,7 +46,7 @@ var (
 
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
-	utilruntime.Must(opensearchv1.AddToScheme(scheme))
+	utilruntime.Must(opsterv1.AddToScheme(scheme))
 	utilruntime.Must(monitoring.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -96,7 +96,7 @@ func main() {
 		Port:                   9443,
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "a867c7dc.opensearch.org",
+		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
 		Namespace:              watchNamespace,
 	})
 	if err != nil {

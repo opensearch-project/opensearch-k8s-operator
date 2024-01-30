@@ -4,9 +4,9 @@ import (
 	"context"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -49,7 +49,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 	When("Upgrading the cluster", Ordered, func() {
 		It("should accept the version upgrade", func() {
 			cluster := unstructured.Unstructured{}
-			cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.org", Version: "v1", Kind: "OpenSearchCluster"})
+			cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpenSearchCluster"})
 			Get(&cluster, client.ObjectKey{Name: name, Namespace: namespace}, time.Second*5)
 
 			SetNestedKey(cluster.Object, "2.3.0", "spec", "general", "version")
@@ -86,7 +86,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					} else {
 						GinkgoWriter.Println(err)
 					}
-					cluster := &opensearchv1.OpenSearchCluster{}
+					cluster := &opsterv1.OpenSearchCluster{}
 					k8sClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: namespace}, cluster)
 					GinkgoWriter.Printf("Cluster: %+v\n", cluster.Status)
 

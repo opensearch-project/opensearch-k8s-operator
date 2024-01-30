@@ -117,7 +117,7 @@ All PRs must conform to the following rules:
 * If you make changes to the CRD the CRD YAMLs must be updated (via `make manifests`) and also copied into the helm chart:
 
     ```bash
-        cp opensearch-operator/config/crd/bases/opensearch.org_*.yaml charts/opensearch-operator/files/
+        cp opensearch-operator/config/crd/bases/opensearch.opster.io_*.yaml charts/opensearch-operator/files/
     ```
 
 * Changes to the CRD must be documented in the [CRD reference](./designs/crd.md)

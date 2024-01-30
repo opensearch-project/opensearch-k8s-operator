@@ -20,10 +20,10 @@ import (
 	"context"
 	"time"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
@@ -37,7 +37,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 // OpenSearchClusterReconciler reconciles a OpenSearchCluster object
@@ -45,14 +45,14 @@ type OpenSearchClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpenSearchCluster
+	Instance *opsterv1.OpenSearchCluster
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups="opensearch.org",resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
@@ -76,9 +76,9 @@ type OpenSearchClusterReconciler struct {
 func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("cluster", req.NamespacedName)
 	r.Logger.Info("Reconciling OpenSearchCluster")
-	myFinalizerName := "OpenSearch"
+	myFinalizerName := "Opster"
 
-	r.Instance = &opensearchv1.OpenSearchCluster{}
+	r.Instance = &opsterv1.OpenSearchCluster{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
@@ -131,13 +131,13 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	/// if crd not deleted started phase 1
 	if r.Instance.Status.Phase == "" {
-		r.Instance.Status.Phase = opensearchv1.PhasePending
+		r.Instance.Status.Phase = opsterv1.PhasePending
 	}
 
 	switch r.Instance.Status.Phase {
-	case opensearchv1.PhasePending:
+	case opsterv1.PhasePending:
 		return r.reconcilePhasePending(ctx)
-	case opensearchv1.PhaseRunning:
+	case opsterv1.PhaseRunning:
 		return r.reconcilePhaseRunning(ctx)
 	default:
 		// NOTHING WILL HAPPEN - DEFAULT
@@ -148,7 +148,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpenSearchCluster{}).
+		For(&opsterv1.OpenSearchCluster{}).
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.ConfigMap{}).
@@ -222,8 +222,8 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 			return err
 		}
-		r.Instance.Status.Phase = opensearchv1.PhaseRunning
-		r.Instance.Status.ComponentsStatus = make([]opensearchv1.ComponentStatus, 0)
+		r.Instance.Status.Phase = opsterv1.PhaseRunning
+		r.Instance.Status.ComponentsStatus = make([]opsterv1.ComponentStatus, 0)
 		return r.Status().Update(ctx, r.Instance)
 	})
 	if err != nil {

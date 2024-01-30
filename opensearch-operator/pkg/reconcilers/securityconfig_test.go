@@ -6,9 +6,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -24,7 +24,7 @@ func newSecurityconfigReconciler(
 	client *k8s.MockK8sClient,
 	ctx context.Context,
 	reconcilerContext *ReconcilerContext,
-	instance *opensearchv1.OpenSearchCluster,
+	instance *opsterv1.OpenSearchCluster,
 ) *SecurityconfigReconciler {
 	return &SecurityconfigReconciler{
 		client:            client,
@@ -44,9 +44,9 @@ var _ = Describe("Securityconfig Reconciler", func() {
 	When("When Reconciling the securityconfig reconciler with no securityconfig provided in the spec", func() {
 		It("should not do anything", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec:       opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{}},
+				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}},
 			}
 
 			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
@@ -65,12 +65,12 @@ var _ = Describe("Securityconfig Reconciler", func() {
 	When("When Reconciling the securityconfig reconciler with securityconfig secret configured but not available", func() {
 		It("should trigger a requeue", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{},
-					Security: &opensearchv1.Security{
-						Config: &opensearchv1.SecurityConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					Security: &opsterv1.Security{
+						Config: &opsterv1.SecurityConfig{
 							SecurityconfigSecret: corev1.LocalObjectReference{Name: "foobar"},
 							AdminSecret:          corev1.LocalObjectReference{Name: "admin"},
 						},
@@ -119,23 +119,23 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					return &ctrl.Result{}, nil
 				})
 
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
 						ServiceName: clusterName,
 						Version:     "2.3",
 					},
-					Security: &opensearchv1.Security{
-						Config: &opensearchv1.SecurityConfig{
+					Security: &opsterv1.Security{
+						Config: &opsterv1.SecurityConfig{
 							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig-secret"},
 						},
-						Tls: &opensearchv1.TlsConfig{
-							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+						Tls: &opsterv1.TlsConfig{
+							Transport: &opsterv1.TlsConfigTransport{Generate: true},
 						},
 					},
 				},
-				Status: opensearchv1.ClusterStatus{
+				Status: opsterv1.ClusterStatus{
 					Initialized: true,
 				},
 			}
@@ -186,14 +186,14 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					return &ctrl.Result{}, nil
 				})
 
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
 						Version: "2.3",
 					},
-					Security: &opensearchv1.Security{
-						Config: &opensearchv1.SecurityConfig{
+					Security: &opsterv1.Security{
+						Config: &opsterv1.SecurityConfig{
 							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig-secret"},
 							AdminSecret:          corev1.LocalObjectReference{Name: "admin-cert"},
 						},
@@ -219,12 +219,12 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			var clusterName = "securityconfig-noadminsecret"
 
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{},
-					Security: &opensearchv1.Security{
-						Config: &opensearchv1.SecurityConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					Security: &opsterv1.Security{
+						Config: &opsterv1.SecurityConfig{
 							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig"},
 						},
 					},
@@ -249,16 +249,16 @@ var _ = Describe("Securityconfig Reconciler", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			var clusterName = "no-securityconfig-tls-configured"
 
-			spec := opensearchv1.OpenSearchCluster{
+			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
 						ServiceName: clusterName,
 						Version:     "2.3",
 					},
-					Security: &opensearchv1.Security{
-						Tls: &opensearchv1.TlsConfig{
-							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+					Security: &opsterv1.Security{
+						Tls: &opsterv1.TlsConfig{
+							Transport: &opsterv1.TlsConfigTransport{Generate: true},
 						},
 					},
 				},
