@@ -39,6 +39,7 @@ The basic structure of the code looks like follows:
     * `reconcilers`: Each reconciler deals with one specific aspect of a cluster
     * `tls`: Code specific for certificate management
   * `Dockerfile`: Multi-Architecture Dockerfile for the operator, use with `docker buildx`
+    * The docker base image used is `gcr.io/distroless/static:nonroot` from [distroless](https://github.com/GoogleContainerTools/distroless) which do not contain package managers. To downloads the package source files for operator docker image, click the following [link](https://ci.opensearch.org/ci/dbc/opensearch-operator/operator-debian-source-files.tar.xz).
   * `main.go`: The entrypoint for the operator code. Initializes the runtime and starts the actual controllers
   * `Makefile`: The makefile that contains commands/targets helping with developing the operator
 
