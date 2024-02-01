@@ -36,7 +36,6 @@ pipeline {
         GenericTrigger(
             genericVariables: [
                 [key: 'ref', value: '$.ref'],
-                [key: 'isTag', value: '$.ref_type'],
             ],
             tokenCredentialId: 'jenkins-opensearch-operator-generic-webhook-token',
             causeString: 'A commit was pushed on opensearch-project/opensearch-k8s-operator repository main branch causing this workflow to run',
@@ -119,9 +118,9 @@ pipeline {
                             parameters: [
                                 string(name: 'SOURCE_IMAGES', value: '${OPERATOR_PRODUCT}:${OPERATOR_VERSION}'),
                                 string(name: 'RELEASE_VERSION', value: "${OPERATOR_VERSION}"),
-                                string(name: 'DOCKER_HUB_PROMOTE', value: true),
-                                string(name: 'ECR_PROMOTE', value: true),
-                                string(name: 'TAG_LATEST', value: true)
+                                booleanParam(name: 'DOCKER_HUB_PROMOTE', value: true),
+                                booleanParam(name: 'ECR_PROMOTE', value: true),
+                                booleanParam(name: 'TAG_LATEST', value: true)
                             ]
                     }
                 }
