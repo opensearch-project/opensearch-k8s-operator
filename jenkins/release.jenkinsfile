@@ -81,6 +81,7 @@ pipeline {
 
                     echo("${OPERATOR_PRODUCT}: ${OPERATOR_VERSION}")
 
+                    // Build and push to dockerhub staging repo https://hub.docker.com/r/opensearchstaging/opensearch-operator.
                     dockerBuild: {
                         build job: 'docker-build',
                         parameters: [
@@ -100,6 +101,19 @@ pipeline {
                             ].join(' && ')),
                         ]
                     }
+                    // This is required to copy the operator to staging ECR https://gallery.ecr.aws/opensearchstaging/opensearch-operator repo as the docker-promotion job does not promote to staging ECR.
+                    dockerCopy: {
+                        build job: 'docker-copy',
+                            parameters: [
+                                string(name: 'SOURCE_IMAGE_REGISTRY', value: 'opensearchstaging'),
+                                string(name: 'SOURCE_IMAGE', value: "${OPERATOR_PRODUCT}:${OPERATOR_VERSION}"),
+                                string(name: 'DESTINATION_IMAGE_REGISTRY', value: 'public.ecr.aws/opensearchstaging'),
+                                string(name: 'DESTINATION_IMAGE', value: "${OPERATOR_PRODUCT}:${OPERATOR_VERSION}")
+                            ]
+                    }
+
+                    // Promote to DockerHub Prod https://hub.docker.com/r/opensearchproject/opensearch-operator repo.
+                    // Promote to ECR Prod https://gallery.ecr.aws/opensearchproject/opensearch-operator repo.
                     dockerPromotion: {
                         build job: 'docker-promotion',
                             parameters: [
