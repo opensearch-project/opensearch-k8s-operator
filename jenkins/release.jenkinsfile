@@ -120,7 +120,8 @@ pipeline {
                                 string(name: 'RELEASE_VERSION', value: "${OPERATOR_VERSION}"),
                                 booleanParam(name: 'DOCKER_HUB_PROMOTE', value: true),
                                 booleanParam(name: 'ECR_PROMOTE', value: true),
-                                booleanParam(name: 'TAG_LATEST', value: true)
+                                booleanParam(name: 'TAG_LATEST', value: true),
+                                booleanParam(name: 'TAG_MAJOR_VERSION', value: false)
                             ]
                     }
                 }

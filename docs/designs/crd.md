@@ -559,7 +559,7 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
         <td>string</td>
         <td>Define InitHelper image</td>
         <td>false</td>
-        <td>public.ecr.aws/opensearch-project/opensearch-operator-busybox</td>
+        <td>docker.io/busybox</td>
       </tr><tr>
       </tr><tr>
         <td><b>imagePullPolicy</b></td>
