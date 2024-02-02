@@ -116,7 +116,7 @@ pipeline {
                     dockerPromotion: {
                         build job: 'docker-promotion',
                             parameters: [
-                                string(name: 'SOURCE_IMAGES', value: '${OPERATOR_PRODUCT}:${OPERATOR_VERSION}'),
+                                string(name: 'SOURCE_IMAGES', value: "${OPERATOR_PRODUCT}:${OPERATOR_VERSION}"),
                                 string(name: 'RELEASE_VERSION', value: "${OPERATOR_VERSION}"),
                                 booleanParam(name: 'DOCKER_HUB_PROMOTE', value: true),
                                 booleanParam(name: 'ECR_PROMOTE', value: true),
