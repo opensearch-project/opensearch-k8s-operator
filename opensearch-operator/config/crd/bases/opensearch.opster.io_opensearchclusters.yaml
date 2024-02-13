@@ -4580,9 +4580,6 @@ spec:
                             successThreshold:
                               format: int32
                               type: integer
-                            terminationGracePeriodSeconds:
-                              format: int32
-                              type: integer
                             timeoutSeconds:
                               format: int32
                               type: integer
@@ -4596,12 +4593,6 @@ spec:
                               format: int32
                               type: integer
                             periodSeconds:
-                              format: int32
-                              type: integer
-                            successThreshold:
-                              format: int32
-                              type: integer
-                            terminationGracePeriodSeconds:
                               format: int32
                               type: integer
                             timeoutSeconds:
@@ -4620,9 +4611,6 @@ spec:
                               format: int32
                               type: integer
                             successThreshold:
-                              format: int32
-                              type: integer
-                            terminationGracePeriodSeconds:
                               format: int32
                               type: integer
                             timeoutSeconds:

@@ -85,18 +85,24 @@ type InitHelperConfig struct {
 }
 
 type ProbesConfig struct {
-	Liveness       *ProbeConfig        `json:"liveness,omitempty"`
-	Readiness      *ProbeConfig        `json:"readiness,omitempty"`
-	Startup        *ProbeConfig        `json:"startup,omitempty"`
+	Liveness  *ProbeConfig          `json:"liveness,omitempty"`
+	Readiness *ReadinessProbeConfig `json:"readiness,omitempty"`
+	Startup   *ProbeConfig          `json:"startup,omitempty"`
 }
 
 type ProbeConfig struct {
-	InitialDelaySeconds            int32     `json:"initialDelaySeconds,omitempty"`
-	PeriodSeconds                  int32     `json:"periodSeconds,omitempty"`
-	TimeoutSeconds                 int32     `json:"timeoutSeconds,omitempty"`
-	SuccessThreshold               int32     `json:"successThreshold,omitempty"`
-	FailureThreshold               int32     `json:"failureThreshold,omitempty"`
-	TerminationGracePeriodSeconds  int32     `json:"terminationGracePeriodSeconds,omitempty"`
+	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
+	SuccessThreshold    int32 `json:"successThreshold,omitempty"`
+	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+}
+
+type ReadinessProbeConfig struct {
+	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
+	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
 }
 
 type NodePool struct {
