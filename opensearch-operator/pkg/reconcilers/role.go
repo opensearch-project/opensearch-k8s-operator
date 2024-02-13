@@ -183,6 +183,10 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		ClusterPermissions: r.instance.Spec.ClusterPermissions,
 	}
 
+	if role.ClusterPermissions == nil {
+		role.ClusterPermissions = []string{}
+	}
+
 	if len(r.instance.Spec.IndexPermissions) > 0 {
 		role.IndexPermissions = make([]requests.IndexPermissionSpec, 0, len(r.instance.Spec.IndexPermissions))
 		for _, permission := range r.instance.Spec.IndexPermissions {
