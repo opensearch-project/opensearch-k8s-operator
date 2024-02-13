@@ -424,7 +424,7 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td> - </td>
       </tr>
-    </tr><tr>
+    </tr>
 </table>
 
 
@@ -631,7 +631,7 @@ Monitoring defines Opensearch monitoring configuration
         <td>Tls Configuration <b>See <i>tlsConfig</i> below</b></td>
         <td>false</td>
         <td> - </td>
-     </tr><tr>
+     </tr>
 </table>
 
 <h3 id="GeneralConfig">
@@ -662,7 +662,7 @@ Monitoring TLS configuration options
       <td>Disable target certificate validation</td>
       <td>false</td>
       <td>false</td>
-    </tr><tr>
+    </tr>
   </tbody>
 </table>
 
