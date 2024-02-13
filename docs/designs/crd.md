@@ -197,6 +197,8 @@ GeneralConfig defines global Opensearch cluster configuration
         <td><b>DefaultRepo</b></td>
         <td>string</td>
         <td>Default image repository to use</td>
+        <td></td>
+        <td></td>
       </tr><tr>
         <td><b>keystore</b></td>
         <td>[]opsterv1.KeystoreValue</td>
@@ -281,7 +283,7 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>string</td>
         <td>JVM args. Use this to define heap size</td>
         <td>false</td>
-        <td>-Xmx512M -Xms512M<td>
+        <td>-Xmx512M -Xms512M</td>
       </tr><tr>
         <td><b>additionalConfig</b></td>
         <td>string</td>
@@ -344,13 +346,11 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>false</td>
       </tr><tr>
-      </tr><tr>
         <td><b>env</b></td>
         <td>[]corev1.Env</td>
         <td>add user defined environment variables to dashboard app</td>
         <td>false</td>
         <td> - </td>
-      </tr><tr>
       </tr><tr>
         <td><b>image</b></td>
         <td>string</td>
@@ -358,13 +358,11 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td> - </td>
       </tr><tr>
-      </tr><tr>
         <td><b>imagePullPolicy</b></td>
         <td>corev1.PullPolicy</td>
         <td>Define Opensearch-dashboards image pull policy</td>
         <td>false</td>
         <td> - </td>
-      </tr><tr>
       </tr><tr>
         <td><b>imagePullSecrets</b></td>
         <td>corev1.LocalObjectReference</td>
@@ -389,14 +387,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>Adds affinity to dashboard pods</td>
         <td>false</td>
         <td>-</td>
-      </tr>
       </tr><tr>
         <td><b>labels</b></td>
         <td>map[string]string</td>
         <td>Adds labels to dashboard pods</td>
         <td>false</td>
         <td>-</td>
-      </tr><tr>
       </tr><tr>
         <td><b>annotations</b></td>
         <td>map[string]string</td>
@@ -624,13 +620,11 @@ Monitoring defines Opensearch monitoring configuration
         <td>false</td>
         <td>30s</td>
       </tr><tr>
-      </tr><tr>
         <td><b>pluginURL</b></td>
         <td>string</td>
         <td>Define offline link to Aiven Plugin</td>
         <td>false</td>
         <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
-      </tr><tr>
       </tr><tr>
         <td><b>tlsConfig</b></td>
         <td>map[]</td>
@@ -657,17 +651,17 @@ Monitoring TLS configuration options
       </tr>
   </thead>
   <tbody><tr>
-    <td><b>serverName</b></td>
-    <td>string</td>
-    <td>Used to verify the hostname for the targets</td>
-    <td>false</td>
-    <td></td>
+      <td><b>serverName</b></td>
+      <td>string</td>
+      <td>Used to verify the hostname for the targets</td>
+      <td>false</td>
+      <td></td>
     </tr><tr>
-    <td><b>insecureSkipVerify</b></td>
-    <td>bool</td>
-    <td>Disable target certificate validation</td>
-    <td>false</td>
-    <td>false</td>
+      <td><b>insecureSkipVerify</b></td>
+      <td>bool</td>
+      <td>Disable target certificate validation</td>
+      <td>false</td>
+      <td>false</td>
     </tr><tr>
   </tbody>
 </table>
