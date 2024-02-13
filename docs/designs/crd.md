@@ -536,6 +536,13 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td>-</td>
       </tr><tr>
+      </tr><tr>
+        <td><b>probes</b></td>
+        <td>ProbesConfig</td>
+        <td>Updates the probes timeouts and thresholds config</td>
+        <td>false</td>
+        <td>-</td>
+      </tr>
 </table>
 
 <h3 id="InitHelperConfig">
@@ -742,3 +749,131 @@ AdditionalVolume object define additional volume and volumeMount
   </tbody>
 </table>
 
+<h3 id="ProbesConfig">
+  ProbesConfig
+</h3>
+
+ProbesConfig defines per nodepool probes thresholds and timeouts instead of defaults
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>liveness</b></td>
+        <td>ProbeConfig</td>
+        <td>Update liveness probe thresholds and timeouts</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>readiness</b></td>
+        <td>ReadinessProbeConfig</td>
+        <td>Update readiness probe thresholds and timeouts</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>startup</b></td>
+        <td>ProbeConfig</td>
+        <td>Update startup probe thresholds and timeouts</td>
+        <td>false</td>
+        <td> - </td>
+      </tr>
+</table>
+
+<h3 id="ProbeConfig">
+  ProbeConfig
+</h3>
+
+ProbeConfig defines per probe thresholds and timeouts instead of defaults
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>initialDelaySeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's initialDelaySeconds</td>
+        <td>false</td>
+        <td> 10 </td>
+      </tr><tr>
+        <td><b>periodSeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's periodSeconds</td>
+        <td>false</td>
+        <td> 20 </td>
+      </tr><tr>
+        <td><b>timeoutSeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's timeoutSeconds</td>
+        <td>false</td>
+        <td> 5 </td>
+      </tr><tr>
+        <td><b>successThreshold</b></td>
+        <td>int32</td>
+        <td>Update probe's successThreshold</td>
+        <td>false</td>
+        <td> 1 </td>
+      </tr><tr>
+        <td><b>failureThreshold</b></td>
+        <td>int32</td>
+        <td>Update probe's failureThreshold</td>
+        <td>false</td>
+        <td> 10 </td>
+      </tr>
+</table>
+
+<h3 id="ReadinessProbeConfig">
+  ReadinessProbeConfig
+</h3>
+
+ReadinessProbeConfig defines per probe thresholds and timeouts instead of defaults
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>initialDelaySeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's initialDelaySeconds</td>
+        <td>false</td>
+        <td> 60 </td>
+      </tr><tr>
+        <td><b>periodSeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's periodSeconds</td>
+        <td>false</td>
+        <td> 30 </td>
+      </tr><tr>
+        <td><b>timeoutSeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's timeoutSeconds</td>
+        <td>false</td>
+        <td> 30 </td>
+      </tr><tr>
+        <td><b>failureThreshold</b></td>
+        <td>int32</td>
+        <td>Update probe's failureThreshold</td>
+        <td>false</td>
+        <td> 5 </td>
+      </tr>
+</table>
