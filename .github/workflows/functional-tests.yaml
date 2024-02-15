@@ -13,7 +13,7 @@ jobs:
           go-version: '1.19'
       - uses: nolar/setup-k3d-k3s@v1
         with:
-          version: v1.22
+          version: v1
           k3d-name: opensearch-operator-tests
           k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -52,7 +52,7 @@ jobs:
           go-version: '1.19'
       - uses: nolar/setup-k3d-k3s@v1
         with:
-          version: v1.22
+          version: v1
           k3d-name: opensearch-operator-tests
           k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
