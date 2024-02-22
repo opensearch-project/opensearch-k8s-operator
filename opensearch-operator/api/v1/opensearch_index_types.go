@@ -4,6 +4,16 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
+type OpensearchDatastreamTimestampFieldSpec struct {
+	// Name of the field that are used for the DataStream
+	Name string `json:"name"`
+}
+
+type OpensearchDatastreamSpec struct {
+	// TimestampField for dataStream
+	TimestampField OpensearchDatastreamTimestampFieldSpec `json:"timestamp_field,omitempty"`
+}
+
 // Describes the specs of an index
 type OpensearchIndexSpec struct {
 	// Configuration options for the index
