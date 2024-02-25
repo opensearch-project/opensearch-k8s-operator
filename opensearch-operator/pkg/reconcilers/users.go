@@ -155,14 +155,6 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		Attributes:              r.instance.Spec.Attributes,
 	}
 
-	if user.OpendistroSecurityRoles == nil {
-		user.OpendistroSecurityRoles = []string{}
-	}
-
-	if user.BackendRoles == nil {
-		user.BackendRoles = []string{}
-	}
-
 	// Instantiate the map first
 	if user.Attributes == nil {
 		user.Attributes = map[string]string{
