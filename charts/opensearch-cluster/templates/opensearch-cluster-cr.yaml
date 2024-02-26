@@ -259,6 +259,10 @@ spec:
       additionalConfig:
         {{ toYaml $val.additionalConfig | nindent 8 }}
       {{- end }}
+      {{- if $val.probes }}
+      probes:
+        {{ toYaml $val.probes | nindent 8 }}
+      {{- end }}
   {{- end }}
   {{- if .Values.opensearchCluster.security }}
   security:

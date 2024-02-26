@@ -84,6 +84,27 @@ type InitHelperConfig struct {
 	Version    *string                     `json:"version,omitempty"`
 }
 
+type ProbesConfig struct {
+	Liveness  *ProbeConfig          `json:"liveness,omitempty"`
+	Readiness *ReadinessProbeConfig `json:"readiness,omitempty"`
+	Startup   *ProbeConfig          `json:"startup,omitempty"`
+}
+
+type ProbeConfig struct {
+	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
+	SuccessThreshold    int32 `json:"successThreshold,omitempty"`
+	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+}
+
+type ReadinessProbeConfig struct {
+	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
+	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+}
+
 type NodePool struct {
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
@@ -102,6 +123,7 @@ type NodePool struct {
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
+	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence

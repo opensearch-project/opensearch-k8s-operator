@@ -4564,6 +4564,60 @@ spec:
                       type: object
                     priorityClassName:
                       type: string
+                    probes:
+                      properties:
+                        liveness:
+                          properties:
+                            failureThreshold:
+                              format: int32
+                              type: integer
+                            initialDelaySeconds:
+                              format: int32
+                              type: integer
+                            periodSeconds:
+                              format: int32
+                              type: integer
+                            successThreshold:
+                              format: int32
+                              type: integer
+                            timeoutSeconds:
+                              format: int32
+                              type: integer
+                          type: object
+                        readiness:
+                          properties:
+                            failureThreshold:
+                              format: int32
+                              type: integer
+                            initialDelaySeconds:
+                              format: int32
+                              type: integer
+                            periodSeconds:
+                              format: int32
+                              type: integer
+                            timeoutSeconds:
+                              format: int32
+                              type: integer
+                          type: object
+                        startup:
+                          properties:
+                            failureThreshold:
+                              format: int32
+                              type: integer
+                            initialDelaySeconds:
+                              format: int32
+                              type: integer
+                            periodSeconds:
+                              format: int32
+                              type: integer
+                            successThreshold:
+                              format: int32
+                              type: integer
+                            timeoutSeconds:
+                              format: int32
+                              type: integer
+                          type: object
+                      type: object
                     replicas:
                       format: int32
                       type: integer

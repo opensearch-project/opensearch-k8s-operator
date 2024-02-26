@@ -687,4 +687,114 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 	})
+
+	When("Using custom probe timeouts and thresholds for OpenSearch startup", func() {
+		It("should have default probes timeouts and thresholds", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.InitialDelaySeconds).To(Equal(int32(10)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.TimeoutSeconds).To(Equal(int32(5)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(int32(20)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.SuccessThreshold).To(Equal(int32(1)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold).To(Equal(int32(10)))
+
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.InitialDelaySeconds).To(Equal(int32(10)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(5)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(20)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.SuccessThreshold).To(Equal(int32(1)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.FailureThreshold).To(Equal(int32(10)))
+
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(60)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(5)))
+		})
+
+		It("should have use probes timeouts and thresholds as in given config only for single value change", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+				Probes: &opsterv1.ProbesConfig{
+					Liveness: &opsterv1.ProbeConfig{
+						FailureThreshold: 15,
+					},
+					Startup: &opsterv1.ProbeConfig{
+						FailureThreshold: 11,
+					},
+					Readiness: &opsterv1.ReadinessProbeConfig{
+						FailureThreshold: 9,
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.InitialDelaySeconds).To(Equal(int32(10)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.TimeoutSeconds).To(Equal(int32(5)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(int32(20)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.SuccessThreshold).To(Equal(int32(1)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold).To(Equal(int32(15)))
+
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.InitialDelaySeconds).To(Equal(int32(10)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(5)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(20)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.SuccessThreshold).To(Equal(int32(1)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.FailureThreshold).To(Equal(int32(11)))
+
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(60)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
+		})
+
+		It("should have use probes timeouts and thresholds as in given config only for all values changed", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+				Probes: &opsterv1.ProbesConfig{
+					Liveness: &opsterv1.ProbeConfig{
+						InitialDelaySeconds: 12,
+						TimeoutSeconds:      6,
+						PeriodSeconds:       25,
+						SuccessThreshold:    2,
+						FailureThreshold:    15,
+					},
+					Startup: &opsterv1.ProbeConfig{
+						InitialDelaySeconds: 14,
+						TimeoutSeconds:      7,
+						PeriodSeconds:       27,
+						SuccessThreshold:    3,
+						FailureThreshold:    11,
+					},
+					Readiness: &opsterv1.ReadinessProbeConfig{
+						InitialDelaySeconds: 65,
+						TimeoutSeconds:      34,
+						PeriodSeconds:       33,
+						FailureThreshold:    9,
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.InitialDelaySeconds).To(Equal(int32(12)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.TimeoutSeconds).To(Equal(int32(6)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.PeriodSeconds).To(Equal(int32(25)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.SuccessThreshold).To(Equal(int32(2)))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold).To(Equal(int32(15)))
+
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.InitialDelaySeconds).To(Equal(int32(14)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(7)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(27)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.SuccessThreshold).To(Equal(int32(3)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.FailureThreshold).To(Equal(int32(11)))
+
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(65)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(34)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(33)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
+		})
+	})
 })
