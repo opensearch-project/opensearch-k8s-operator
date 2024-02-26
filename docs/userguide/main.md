@@ -169,6 +169,8 @@ For security reasons, encryption is required for communication with the OpenSear
 
 Depending on your requirements, the Operator offers two ways of managing TLS certificates. You can either supply your own certificates, or the Operator will generate its own CA and sign certificates for all nodes using that CA. The second option is recommended, unless you want to directly expose your OpenSearch cluster outside your Kubernetes cluster, or your organization has rules about using self-signed certificates for internal communication.
 
+> :warning: **Clusters with operator-generated certificates will stop working after 1 year**: Make sure you have tested certificate renewals in your cluster before putting it in production!
+
 TLS certificates are used in three places, and each can be configured independently.
 
 #### Node Transport
