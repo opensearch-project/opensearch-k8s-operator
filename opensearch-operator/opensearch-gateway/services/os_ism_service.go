@@ -5,9 +5,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
-
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -16,7 +16,7 @@ var ErrNotFound = errors.New("Policy not found")
 
 // ShouldUpdateISMPolicy checks if the passed policy is same as existing or needs update
 func ShouldUpdateISMPolicy(ctx context.Context, newPolicy, existingPolicy requests.Policy) (bool, error) {
-	if reflect.DeepEqual(newPolicy, existingPolicy) {
+	if cmp.Equal(newPolicy, existingPolicy, cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 	lg := log.FromContext(ctx).WithValues("os_service", "policy")

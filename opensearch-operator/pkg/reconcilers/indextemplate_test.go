@@ -52,7 +52,9 @@ var _ = Describe("indextemplate reconciler", func() {
 				Name:          "my-template",
 				IndexPatterns: []string{"my-logs-*"},
 				Template: opsterv1.OpensearchIndexSpec{
-					Settings: &apiextensionsv1.JSON{},
+					Settings: &apiextensionsv1.JSON{
+						Raw: []byte(`{"index":{"number_of_replicas":"1","number_of_shards":"5","refresh_interval":"60s"}}`),
+					},
 					Mappings: &apiextensionsv1.JSON{},
 					Aliases:  make(map[string]opsterv1.OpensearchIndexAliasSpec),
 				},
@@ -273,7 +275,9 @@ var _ = Describe("indextemplate reconciler", func() {
 						IndexTemplate: requests.IndexTemplate{
 							IndexPatterns: []string{"my-logs-*"},
 							Template: requests.Index{
-								Settings: &apiextensionsv1.JSON{},
+								Settings: &apiextensionsv1.JSON{
+									Raw: []byte(`{"index":{"refresh_interval":"60s","number_of_shards":"5","number_of_replicas":"1"}}`),
+								},
 								Mappings: &apiextensionsv1.JSON{},
 								Aliases:  make(map[string]requests.IndexAlias),
 							},
@@ -310,7 +314,9 @@ var _ = Describe("indextemplate reconciler", func() {
 						IndexTemplate: requests.IndexTemplate{
 							IndexPatterns: []string{"my-logs-*"},
 							Template: requests.Index{
-								Settings: &apiextensionsv1.JSON{},
+								Settings: &apiextensionsv1.JSON{
+									Raw: []byte(`{"index":{"refresh_interval":"60s","number_of_shards":"5","number_of_replicas":"1"}}`),
+								},
 								Mappings: &apiextensionsv1.JSON{},
 								Aliases:  make(map[string]requests.IndexAlias),
 							},

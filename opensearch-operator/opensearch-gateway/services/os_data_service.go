@@ -4,7 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"strings"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
@@ -349,7 +350,22 @@ func ShouldUpdateIndexTemplate(
 	if indexTemplateResponse.Name != indexTemplateName {
 		return false, fmt.Errorf("returned index template named '%s' does not equal the requested name '%s'", indexTemplateResponse.Name, indexTemplateName)
 	}
-	if reflect.DeepEqual(indexTemplate, indexTemplateResponse.IndexTemplate) {
+
+	if indexTemplateResponse.IndexTemplate.Template.Settings != nil {
+		indexTemplateResponse.IndexTemplate.Template.Settings, err = helpers.SortedJsonKeys(indexTemplateResponse.IndexTemplate.Template.Settings)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if indexTemplateResponse.IndexTemplate.Template.Mappings != nil {
+		indexTemplateResponse.IndexTemplate.Template.Mappings, err = helpers.SortedJsonKeys(indexTemplateResponse.IndexTemplate.Template.Mappings)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if cmp.Equal(indexTemplate, indexTemplateResponse.IndexTemplate, cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 
@@ -460,7 +476,7 @@ func ShouldUpdateComponentTemplate(
 		return false, fmt.Errorf("returned component template named '%s' does not equal the requested name '%s'", componentTemplateResponse.Name, componentTemplateName)
 	}
 
-	if reflect.DeepEqual(componentTemplate, componentTemplateResponse.ComponentTemplate) {
+	if cmp.Equal(componentTemplate, componentTemplateResponse.ComponentTemplate, cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 

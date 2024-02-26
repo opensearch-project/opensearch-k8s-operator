@@ -1,8 +1,10 @@
 package helpers
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"reflect"
 	"sort"
 	"time"
@@ -147,6 +149,22 @@ func SortedKeys(input map[string]string) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+// SortedJsonKeys helps to sort JSON object keys
+// E.g. if API returns unsorted JSON object like this: {"resp": {"b": "2", "a": "1"}}
+// this function could sort it and return {"resp": {"a": "1", "b": "2"}}
+// This is useful for comparing Opensearch CRD objects and API responses
+func SortedJsonKeys(obj *apiextensionsv1.JSON) (*apiextensionsv1.JSON, error) {
+	m := make(map[string]interface{})
+	if err := json.Unmarshal(obj.Raw, &m); err != nil {
+		return nil, err
+	}
+	rawBytes, err := json.Marshal(m)
+	if err != nil {
+		return nil, err
+	}
+	return &apiextensionsv1.JSON{Raw: rawBytes}, err
 }
 
 func ResolveClusterManagerRole(ver string) string {
