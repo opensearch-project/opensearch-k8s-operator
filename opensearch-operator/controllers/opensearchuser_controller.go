@@ -53,7 +53,7 @@ type OpensearchUserReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("user", req.NamespacedName)
-	r.Logger.Info("Reconciling OpensearchUser")
+	r.Logger.V(4).Info("Reconciling OpensearchUser")
 
 	r.Instance = &opsterv1.OpensearchUser{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)

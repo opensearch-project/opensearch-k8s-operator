@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
-
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -59,7 +59,7 @@ func ShouldUpdateUser(
 		return false, fmt.Errorf("kubernetes resource conflict; uids don't match")
 	}
 
-	if reflect.DeepEqual(user, userResponse[username]) {
+	if cmp.Equal(user, userResponse[username], cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 
@@ -176,7 +176,7 @@ func ShouldUpdateRole(
 		return false, err
 	}
 
-	if reflect.DeepEqual(role, roleResponse[rolename]) {
+	if cmp.Equal(role, roleResponse[rolename], cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 
@@ -331,7 +331,7 @@ func ShouldUpdateActionGroup(
 		return false, err
 	}
 
-	if reflect.DeepEqual(actionGroup, actionGroupResponse[actionGroupName]) {
+	if cmp.Equal(actionGroup, actionGroupResponse[actionGroupName], cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 
@@ -415,7 +415,7 @@ func ShouldUpdateTenant(
 		return false, err
 	}
 
-	if reflect.DeepEqual(tenant, tenantResponse[tenantName]) {
+	if cmp.Equal(tenant, tenantResponse[tenantName], cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 
