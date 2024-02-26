@@ -1,9 +1,9 @@
 {{- $labels := include "opensearch-cluster.labels" . }}
 {{- $clusterName := .Values.cluster.name | default (include "opensearch-cluster.name" .) }}
-{{- range .Values.users }}
+{{- range .Values.ismPolicies }}
 ---
 apiVersion: opensearch.opster.io/v1
-kind: OpensearchUser
+kind: OpenSearchISMPolicy
 metadata:
   name: {{ .name }}
   {{- with $.Values.cluster.annotations }}
@@ -11,15 +11,20 @@ metadata:
   {{- end }}
   labels: {{ $labels | nindent 4 }}
 spec:
+  defaultState: {{ .defaultState }}
+  description: {{ .description }}
+  {{- with .states }}
+  states: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .errorNotification }}
+  errorNotification: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .ismTemplate }}
+  ismTemplate: {{ . | toYaml | nindent 4 }}
+  {{- end }}
   opensearchCluster:
     name: {{ $clusterName }}
-  passwordFrom:
-    name: {{ .secretName }}
-    key: {{ .secretKey }}
-  {{- with .backendRoles }}
-  backendRoles: {{ . | toYaml | nindent 4 }}
-  {{- end }}
-  {{- with .opendistroSecurityRoles }}
-  opendistroSecurityRoles: {{ . | toYaml | nindent 4 }}
+  {{- with .policyId }}
+  policyId: {{ . }}
   {{- end }}
 {{- end }}

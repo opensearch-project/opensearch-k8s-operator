@@ -1,5 +1,5 @@
 {{- $labels := include "opensearch-cluster.labels" . }}
-{{- $clusterName := include "opensearch-cluster.name" . }}
+{{- $clusterName := .Values.cluster.name | default (include "opensearch-cluster.name" .) }}
 {{- range .Values.roles }}
 ---
 apiVersion: opensearch.opster.io/v1
