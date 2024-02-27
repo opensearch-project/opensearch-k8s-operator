@@ -290,9 +290,10 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 	}
 
 	if r.instance.Spec.ISMTemplate != nil {
-		policy.ISMTemplate = &requests.ISMTemplate{}
-		policy.ISMTemplate.IndexPatterns = r.instance.Spec.ISMTemplate.IndexPatterns
-		policy.ISMTemplate.Priority = r.instance.Spec.ISMTemplate.Priority
+		ismTemplate := &requests.ISMTemplate{}
+		ismTemplate.IndexPatterns = r.instance.Spec.ISMTemplate.IndexPatterns
+		ismTemplate.Priority = r.instance.Spec.ISMTemplate.Priority
+		policy.ISMTemplate = append(policy.ISMTemplate, *ismTemplate)
 	}
 
 	if len(r.instance.Spec.States) > 0 {
