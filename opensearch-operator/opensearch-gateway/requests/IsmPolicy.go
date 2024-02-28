@@ -15,7 +15,7 @@ type ISMPolicy struct {
 	Description       string             `json:"description"`
 	ErrorNotification *ErrorNotification `json:"error_notification,omitempty"`
 	// Specify an ISM template pattern that matches the index to apply the policy.
-	ISMTemplate *ISMTemplate `json:"ism_template,omitempty"`
+	ISMTemplate []ISMTemplate `json:"ism_template,omitempty"`
 	// The time the policy was last updated.
 	// The states that you define in the policy.
 	States []State `json:"states"`
