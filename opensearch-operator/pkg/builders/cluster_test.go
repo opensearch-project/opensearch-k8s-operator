@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"reflect"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -55,7 +56,139 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 	}
 }
 
+func ClusterDescWithInitHelperResources() opsterv1.OpenSearchCluster {
+	return opsterv1.OpenSearchCluster{
+		Spec: opsterv1.ClusterSpec{
+			General: opsterv1.GeneralConfig{
+				SetVMMaxMapCount: true,
+				Keystore: []opsterv1.KeystoreValue{
+					{},
+				},
+			},
+
+			InitHelper: opsterv1.InitHelperConfig{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceCPU:    resource.MustParse("2"),
+					},
+				},
+			},
+		},
+	}
+}
+
+func ClusterDescWithJobConfig() opsterv1.OpenSearchCluster {
+	return opsterv1.OpenSearchCluster{
+		Spec: opsterv1.ClusterSpec{
+			General: opsterv1.GeneralConfig{
+				Version: "2.2.1",
+			},
+			Job: opsterv1.JobConfig{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
+						corev1.ResourceCPU:    resource.MustParse("1"),
+					},
+					Limits: corev1.ResourceList{
+						corev1.ResourceMemory: resource.MustParse("2Gi"),
+						corev1.ResourceCPU:    resource.MustParse("2"),
+					},
+				},
+				Labels:       map[string]string{"type": "opensearch-job"},
+				NodeSelector: map[string]string{"nodeName": "node1"},
+				Affinity: &corev1.Affinity{
+					NodeAffinity: &corev1.NodeAffinity{
+						RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+							NodeSelectorTerms: []corev1.NodeSelectorTerm{
+								{
+									MatchExpressions: []corev1.NodeSelectorRequirement{
+										{
+											Key:      "key",
+											Operator: corev1.NodeSelectorOpIn,
+											Values:   []string{"value"},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+}
+
+// todo NewBootstrapPod  resource 858 line 919 line
 var _ = Describe("Builders", func() {
+	When("Build initContainers with resource", func() {
+		expectResource := corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+				corev1.ResourceCPU:    resource.MustParse("1"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("2Gi"),
+				corev1.ResourceCPU:    resource.MustParse("2"),
+			},
+		}
+		It("should have initcontainer resources as inithelper resources set", func() {
+			clusterObject := ClusterDescWithInitHelperResources()
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(reflect.DeepEqual(result.Spec.Template.Spec.InitContainers[0].Resources, expectResource)).To(BeTrue())
+			Expect(reflect.DeepEqual(result.Spec.Template.Spec.InitContainers[1].Resources, expectResource)).To(BeTrue())
+			Expect(reflect.DeepEqual(result.Spec.Template.Spec.InitContainers[2].Resources, expectResource)).To(BeTrue())
+		})
+		It("should have initcontainer resources as inithelper resources set", func() {
+			clusterObject := ClusterDescWithInitHelperResources()
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(reflect.DeepEqual(result.Spec.InitContainers[0].Resources, expectResource)).To(BeTrue())
+			Expect(reflect.DeepEqual(result.Spec.InitContainers[1].Resources, expectResource)).To(BeTrue())
+		})
+	})
+	When("Reconcile Job config set", func() {
+		expectResource := corev1.ResourceRequirements{
+			Requests: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("1Gi"),
+				corev1.ResourceCPU:    resource.MustParse("1"),
+			},
+			Limits: corev1.ResourceList{
+				corev1.ResourceMemory: resource.MustParse("2Gi"),
+				corev1.ResourceCPU:    resource.MustParse("2"),
+			},
+		}
+		expectLabels := map[string]string{"type": "opensearch-job"}
+		expectNodeSelector := map[string]string{"nodeName": "node1"}
+		expectAffinity := &corev1.Affinity{
+			NodeAffinity: &corev1.NodeAffinity{
+				RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+					NodeSelectorTerms: []corev1.NodeSelectorTerm{
+						{
+							MatchExpressions: []corev1.NodeSelectorRequirement{
+								{
+									Key:      "key",
+									Operator: corev1.NodeSelectorOpIn,
+									Values:   []string{"value"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+		It("should Securityconfig Update Job set config as jobConfig set", func() {
+			clusterObject := ClusterDescWithJobConfig()
+			result := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "", "", nil, nil)
+			Expect(reflect.DeepEqual(result.Spec.Template.Spec.Containers[0].Resources, expectResource)).To(BeTrue())
+			Expect(reflect.DeepEqual(result.ObjectMeta.Labels, expectLabels)).To(BeTrue())
+			Expect(reflect.DeepEqual(result.Spec.Template.Spec.NodeSelector, expectNodeSelector)).To(BeTrue())
+			Expect(reflect.DeepEqual(result.Spec.Template.Spec.Affinity, expectAffinity)).To(BeTrue())
+		})
+	})
 	When("Constructing a STS for a NodePool", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")

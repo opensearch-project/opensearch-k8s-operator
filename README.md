@@ -32,6 +32,7 @@ Features:
 - [x] Scaling nodes' disks - increase disk size.
 - [x] Cluster configurations and nodes' settings updates.
 - [x] Operator Monitoring, with Prometheus and Grafana.
+- [x] Namespace ResourceQuota support.
 
 
 ## Installation
