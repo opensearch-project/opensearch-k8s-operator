@@ -986,7 +986,7 @@ Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure d
 
 ## User and role management
 
-An important part of any OpenSearch cluster is the user and role management to give users access to the cluster (via the opensearch-security plugin). By default the operator will use the included demo securityconfig with default users (see [internal_users.yml](https://github.com/opensearch-project/security/blob/main/securityconfig/internal_users.yml) for a list of users). For any production installation you should swap that out with your own configuration.
+An important part of any OpenSearch cluster is the user and role management to give users access to the cluster (via the opensearch-security plugin). By default the operator will use the included demo securityconfig with default users (see [internal_users.yml](https://github.com/opensearch-project/security/blob/main/config/internal_users.yml) for a list of users). For any production installation you should swap that out with your own configuration.
 There are two ways to do that with the operator:
 
 * Defining your own securityconfig
