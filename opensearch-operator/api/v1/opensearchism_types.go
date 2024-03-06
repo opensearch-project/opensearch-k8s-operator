@@ -210,7 +210,7 @@ type Shrink struct {
 	// If true, executes the shrink action even if there are no replicas.
 	ForceUnsafe *bool `json:"forceUnsafe,omitempty"`
 	// The maximum size in bytes of a shard for the target index.
-	MaxShardSize *string `json:"maxShardSize"`
+	MaxShardSize *string `json:"maxShardSize,omitempty"`
 	// The maximum number of primary shards in the shrunken index.
 	NumNewShards *int `json:"numNewShards,omitempty"`
 	// Percentage of the number of original primary shards to shrink.
