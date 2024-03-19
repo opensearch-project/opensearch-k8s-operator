@@ -11,6 +11,7 @@ type IndexPermissionSpec struct {
 	DocumentLevelSecurity string   `json:"dls,omitempty"`
 	FieldLevelSecurity    []string `json:"fls,omitempty"`
 	AllowedActions        []string `json:"allowed_actions,omitempty"`
+	MaskedFields          []string `json:"masked_fields,omitempty"`
 }
 
 type TenantPermissionsSpec struct {

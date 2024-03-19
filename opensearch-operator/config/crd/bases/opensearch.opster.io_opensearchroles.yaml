@@ -62,6 +62,10 @@ spec:
                       items:
                         type: string
                       type: array
+                    maskedFields:
+                      items:
+                        type: string
+                      type: array
                   type: object
                 type: array
               opensearchCluster:
