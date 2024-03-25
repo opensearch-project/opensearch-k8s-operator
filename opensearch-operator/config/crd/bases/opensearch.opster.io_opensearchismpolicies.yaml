@@ -326,8 +326,6 @@ spec:
                               targetIndexNameTemplate:
                                 description: The name of the shrunken index.
                                 type: string
-                            required:
-                            - maxShardSize
                             type: object
                           snapshot:
                             description: Back up your cluster’s indexes and state
