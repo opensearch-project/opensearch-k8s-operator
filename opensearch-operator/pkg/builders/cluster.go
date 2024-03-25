@@ -23,11 +23,10 @@ import (
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
 const (
-	ConfigurationChecksumAnnotation      = "opster.io/config"
-	DefaultDiskSize                      = "30Gi"
-	defaultMonitoringPlugin              = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
-	securityconfigChecksumAnnotation     = "securityconfig/checksum"
-	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
+	ConfigurationChecksumAnnotation  = "opster.io/config"
+	DefaultDiskSize                  = "30Gi"
+	defaultMonitoringPlugin          = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
+	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
 func NewSTSForNodePool(
@@ -976,80 +975,6 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 		}
 	}
 	return false
-}
-
-func NewSnapshotRepoconfigUpdateJob(
-	instance *opsterv1.OpenSearchCluster,
-	jobName string,
-	namespace string,
-	checksum string,
-	volumes []corev1.Volume,
-	volumeMounts []corev1.VolumeMount,
-) batchv1.Job {
-	httpPort, _, _ := helpers.VersionCheck(instance)
-	dns := DnsOfService(instance)
-	var snapshotCmd string
-	for _, repository := range instance.Spec.General.SnapshotRepositories {
-		var snapshotSettings string
-
-		// Sort keys to have a stable order
-		keys := helpers.SortedKeys(repository.Settings)
-		for _, settingsKey := range keys {
-			snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, repository.Settings[settingsKey])
-		}
-		snapshotSettings = strings.TrimRight(snapshotSettings, " ,")
-		snapshotCmd += fmt.Sprintf("curl --fail-with-body -s -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://%s.svc.cluster.local:%v/_snapshot/%s?pretty -H \"Content-Type: application/json\" -d %c{\"type\": \"%s\", \"settings\": {%s}}%c; ", dns, fmt.Sprint(httpPort), repository.Name, '\'', repository.Type, snapshotSettings, '\'')
-	}
-	terminationGracePeriodSeconds := int64(5)
-	backoffLimit := int32(0)
-
-	node := opsterv1.NodePool{
-		Component: "snapshotconfig",
-	}
-	annotations := map[string]string{
-		snapshotRepoConfigChecksumAnnotation: checksum,
-	}
-	image := helpers.ResolveImage(instance, &node)
-
-	volumes = append(volumes, corev1.Volume{
-		Name: "admin-credentials",
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{SecretName: fmt.Sprintf("%s-admin-password", instance.Name)},
-		},
-	})
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{
-		Name:      "admin-credentials",
-		MountPath: "/mnt/admin-credentials",
-	})
-
-	podSecurityContext := instance.Spec.General.PodSecurityContext
-	securityContext := instance.Spec.General.SecurityContext
-
-	return batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
-		Spec: batchv1.JobSpec{
-			BackoffLimit: &backoffLimit,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Name: jobName},
-				Spec: corev1.PodSpec{
-					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
-					Containers: []corev1.Container{{
-						Name:            "snapshotrepoconfig",
-						Image:           image.GetImage(),
-						ImagePullPolicy: image.GetImagePullPolicy(),
-						Command:         []string{"/bin/bash", "-c"},
-						Args:            []string{snapshotCmd},
-						VolumeMounts:    volumeMounts,
-						SecurityContext: securityContext,
-					}},
-					ServiceAccountName: instance.Spec.General.ServiceAccount,
-					RestartPolicy:      corev1.RestartPolicyNever,
-					Volumes:            volumes,
-					SecurityContext:    podSecurityContext,
-				},
-			},
-		},
-	}
 }
 
 func NewSecurityconfigUpdateJob(

@@ -364,11 +364,9 @@ spec:
 
 This will configure an init container for each opensearch pod that executes the needed `sysctl` command. By default the init container uses a busybox image. If you want to change that (for example to use an image from a private registry), see [Custom init helper](#custom-init-helper).
 
-### Configuring Snapshot Repo (BETA)
+### Configuring Snapshot Repositories
 
-This feature is Currently in BETA, you can configure the snapshot repo settings for the OpenSearch cluster through the operator. Using `snapshotRepositories` settings you can configure multiple snapshot repos. Once the snapshot repo is configured a user can create custom `_ism` policies through dashboard to backup the in indexes.
-
-Note: BETA flagged Features in a release are experimental. Therefore, we do not recommend the use of configuring snapshot repo in a production environment. For updates on the progress of snapshot/restore, or if you want leave feedback/contribute that could help improve the feature, please refer to the issue on [GitHub](https://github.com/opensearch-project/opensearch-k8s-operator/issues/278).
+You can configure the snapshot repositories for the OpenSearch cluster through the operator. Using `general.snapshotRepositories` settings you can configure multiple snapshot repositories. Once the snapshot repository is configured a user can create custom `_ism` policies through dashboard to backup indexes.
 
 ```yaml
 spec:
@@ -390,7 +388,7 @@ spec:
 
 #### Prerequisites for Configuring Snapshot Repo
 
-Before applying the setting `snapshotRepositories` to the operator, please ensure the following prerequisites are met.
+Before configuring `snapshotRepositories` for a cluster, please ensure the following prerequisites are met:
 
 1. The right cloud provider native plugins are installed. For example:
 
@@ -400,9 +398,7 @@ Before applying the setting `snapshotRepositories` to the operator, please ensur
         pluginsList: ["repository-s3"]
     ```
 
-2. Ensure the cluster is fully healthy before applying the `snapshotRepositories` settings to the custom resource. Note: For the BETA you cannot add the settings if the cluster is not yet provisioned and healthy, otherwise the configuration of the repositories will fail.
-
-3. The required roles/permissions for the backend cloud are pre-created. Example: Following is the AWS IAM role added for kubernetes nodes so that snapshots can be published to `opensearch-s3-snapshot` s3 bucket.
+2. The required roles/permissions for the backend cloud are pre-created. An example AWS IAM role added for kubernetes nodes so that snapshots can be published to the `opensearch-s3-snapshot` s3 bucket:
 
     ```json
     {

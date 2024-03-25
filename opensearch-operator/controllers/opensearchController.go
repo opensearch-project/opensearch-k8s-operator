@@ -304,6 +304,12 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		&reconcilerContext,
 		r.Instance,
 	)
+	snapshotrepository := reconcilers.NewSnapshotRepositoryReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		r.Instance,
+	)
 
 	componentReconcilers := []reconcilers.ComponentReconciler{
 		tls.Reconcile,
@@ -314,6 +320,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		dashboards.Reconcile,
 		upgrade.Reconcile,
 		restart.Reconcile,
+		snapshotrepository.Reconcile,
 	}
 	for _, rec := range componentReconcilers {
 		result, err := rec()

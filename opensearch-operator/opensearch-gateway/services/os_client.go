@@ -332,6 +332,30 @@ func (client *OsClusterClient) DeleteISMConfig(ctx context.Context, name string)
 	return doHTTPDelete(ctx, client.client, path)
 }
 
+// performs an HTTP GET request to OS to get the snapshot repository specified by name
+func (client *OsClusterClient) GetSnapshotRepository(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotRepository(name)
+	return doHTTPGet(ctx, client.client, path)
+}
+
+// performs an HTTP PUT request to OS to create the snapshot repository specified by name
+func (client *OsClusterClient) CreateSnapshotRepository(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotRepository(name)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// performs an HTTP PUT request to OS to update the snapshot repository specified by name
+func (client *OsClusterClient) UpdateSnapshotRepository(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotRepository(name)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// DeleteISMConfig performs an HTTP DELETE request to OS to delete the ISM policy resource specified by name
+func (client *OsClusterClient) DeleteSnapshotRepository(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotRepository(name)
+	return doHTTPDelete(ctx, client.client, path)
+}
+
 // generateAPIPathISM generates a URI PATH for a specific resource endpoint and name
 // For example: resource = _ism, name = example
 // URI PATH = '_plugins/_ism/policies/example'
@@ -384,6 +408,17 @@ func generateAPIPath(resource, name string) strings.Builder {
 	path.WriteString("api")
 	path.WriteString("/")
 	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
+// generates a URI PATH for a given snapshot repository name
+func generateAPIPathSnapshotRepository(name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_snapshot") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_snapshot")
 	path.WriteString("/")
 	path.WriteString(name)
 	return path
