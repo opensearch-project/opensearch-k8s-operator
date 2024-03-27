@@ -48,6 +48,9 @@ type OpensearchIndexTemplateSpec struct {
 	// Array of wildcard expressions used to match the names of indices during creation
 	IndexPatterns []string `json:"indexPatterns"`
 
+	// The dataStream config that should be applied
+	DataStream *OpensearchDatastreamSpec `json:"dataStream,omitempty"`
+
 	// The template that should be applied
 	Template OpensearchIndexSpec `json:"template,omitempty"`
 
