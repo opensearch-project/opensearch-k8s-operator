@@ -40,10 +40,6 @@ spec:
               _meta:
                 description: Optional user metadata about the component template
                 x-kubernetes-preserve-unknown-fields: true
-              allowAutoCreate:
-                description: If true, then indices can be automatically created using
-                  this template
-                type: boolean
               name:
                 description: The name of the component template. Defaults to metadata.name
                 type: string
