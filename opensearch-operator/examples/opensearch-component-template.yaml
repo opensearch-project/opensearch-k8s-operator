@@ -22,6 +22,5 @@ spec:
         value:
           type: double
   version: 1 # optional
-  allowAutoCreate: false # optional
   _meta: # optional
     description: example description

@@ -51,9 +51,6 @@ type OpensearchComponentTemplateSpec struct {
 	// Version number used to manage the component template externally
 	Version int `json:"version,omitempty"`
 
-	// If true, then indices can be automatically created using this template
-	AllowAutoCreate bool `json:"allowAutoCreate,omitempty"`
-
 	// Optional user metadata about the component template
 	Meta *apiextensionsv1.JSON `json:"_meta,omitempty"`
 }

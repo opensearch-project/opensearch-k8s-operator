@@ -26,9 +26,8 @@ func TranslateIndexTemplateToRequest(spec v1.OpensearchIndexTemplateSpec) reques
 // TranslateComponentTemplateToRequest rewrites the CRD format to the gateway format
 func TranslateComponentTemplateToRequest(spec v1.OpensearchComponentTemplateSpec) requests.ComponentTemplate {
 	request := requests.ComponentTemplate{
-		AllowAutoCreate: spec.AllowAutoCreate,
-		Template:        TranslateIndexToRequest(spec.Template),
-		Version:         spec.Version,
+		Template: TranslateIndexToRequest(spec.Template),
+		Version:  spec.Version,
 	}
 	if spec.Meta.Size() > 0 {
 		request.Meta = spec.Meta

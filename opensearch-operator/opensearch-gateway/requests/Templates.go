@@ -12,10 +12,9 @@ type IndexTemplate struct {
 }
 
 type ComponentTemplate struct {
-	Template        Index                 `json:"template"`
-	Version         int                   `json:"version,omitempty"`
-	AllowAutoCreate bool                  `json:"allow_auto_create,omitempty"`
-	Meta            *apiextensionsv1.JSON `json:"_meta,omitempty"`
+	Template Index                 `json:"template"`
+	Version  int                   `json:"version,omitempty"`
+	Meta     *apiextensionsv1.JSON `json:"_meta,omitempty"`
 }
 
 type Index struct {

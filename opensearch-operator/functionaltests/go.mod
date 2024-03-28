@@ -1,6 +1,6 @@
 module github.com/Opster/opensearch-k8s-operator/functionaltests
 
-go 1.19
+go 1.22
 
 require (
 	github.com/onsi/ginkgo/v2 v2.9.5
