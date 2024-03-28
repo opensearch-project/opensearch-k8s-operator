@@ -86,6 +86,10 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		}
 	}()
 
+	if r.instance.Spec.AllowAutoCreate {
+		r.recorder.Event(r.instance, "Warning", opensearchAPIUpdated, "OpenSearch Component Index template does not support allow_auto_create")
+	}
+
 	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
 		Namespace: r.instance.Namespace,

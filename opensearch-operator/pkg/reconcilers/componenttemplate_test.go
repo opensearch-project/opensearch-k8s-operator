@@ -121,6 +121,28 @@ var _ = Describe("componenttemplate reconciler", func() {
 		})
 	})
 
+	When("when allow_auto_create exists", func() {
+		BeforeEach(func() {
+			recorder = record.NewFakeRecorder(1)
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
+			instance.Spec.AllowAutoCreate = true
+		})
+		It("should throw a opensearchAPIUpdated event", func() {
+			go func() {
+				defer GinkgoRecover()
+				defer close(recorder.Events)
+				result, err := reconciler.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(result.Requeue).To(BeTrue())
+			}()
+			var events []string
+			for msg := range recorder.Events {
+				events = append(events, msg)
+			}
+			Expect(len(events)).To(Equal(2))
+		})
+	})
+
 	When("cluster doesn't match status", func() {
 		BeforeEach(func() {
 			uid := types.UID("someuid")

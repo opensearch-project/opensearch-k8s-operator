@@ -1283,7 +1283,7 @@ The namespace of the `OpensearchISMPolicy` must be the namespace the OpenSearch 
 The operator provides the OpensearchIndexTemplate and OpensearchComponentTemplate CRDs, which is used for managing index and component templates respectively.
 
 The two CRD specifications attempts to be as close as possible to what the OpenSearch API expects, with some changes from snake_case to camelCase.
-The fields that have been changed, is `index_patterns` to `indexPatterns` (OpensearchIndexTemplate only), `composed_of` to `composedOf` (OpensearchIndexTemplate only), `allow_auto_create` to `allowAutoCreate` (OpensearchComponentTemplate only), and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
+The fields that have been changed, is `index_patterns` to `indexPatterns` (OpensearchIndexTemplate only), `composed_of` to `composedOf` (OpensearchIndexTemplate only) and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
 
 The following example creates a component template for setting the number of shards and replicas, together with specifying a specific time format for documents:
 
@@ -1310,7 +1310,6 @@ spec:
         value:
           type: double
   version: 1 # optional
-  allowAutoCreate: false # optional
   _meta: # optional
     description: example description
 ```
