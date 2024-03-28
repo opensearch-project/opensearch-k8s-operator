@@ -650,6 +650,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 				{
 					Name:     "http",
 					Protocol: "TCP",
+					AppProtocol: "HTTPS",
 					Port:     cr.Spec.General.HttpPort,
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.HttpPort,
