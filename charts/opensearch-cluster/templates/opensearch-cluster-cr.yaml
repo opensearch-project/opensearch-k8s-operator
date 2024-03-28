@@ -197,6 +197,10 @@ spec:
       nodeSelector:
         {{- toYaml $val.nodeSelector | nindent 8 }}
       {{- end }}
+      {{- if $val.affinity }}
+      affinity:
+        {{- toYaml $val.affinity | nindent 8 }}
+      {{- end }}
       {{- if  $val.labels }}
       labels: # Add any extra labels as key-value pairs here
         {{ toYaml  $val.labels | nindent 8 }}
