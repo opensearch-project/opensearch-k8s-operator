@@ -455,16 +455,17 @@ func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSe
 }
 
 // DeleteStuckPodWithOlderRevision deletes the crashed pod only if there is any update in StatefulSet.
-func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) error {
+// Return true if a pod was restarded
+func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (bool, error) {
 	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if podWithOlderRevision != nil {
 		for _, container := range podWithOlderRevision.Status.ContainerStatuses {
 			// If any container is getting crashed, restart it by deleting the pod so that new update in sts can take place.
 			if !container.Ready && container.State.Waiting != nil && container.State.Waiting.Reason == "CrashLoopBackOff" {
-				return k8sClient.DeletePod(&corev1.Pod{
+				return true, k8sClient.DeletePod(&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podWithOlderRevision.Name,
 						Namespace: sts.Namespace,
@@ -473,7 +474,7 @@ func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.Statef
 			}
 		}
 	}
-	return nil
+	return false, nil
 }
 
 // GetPodWithOlderRevision fetches the pod that is not having the updated revision.
