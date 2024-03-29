@@ -126,6 +126,16 @@ var _ = Describe("Cluster Reconciler", func() {
 
 			// check if tlsConfig is not defined in the CRD declaration the ServiceMonitor not deploy that part of the config
 			// Expect(sm.Spec.Endpoints[0].TLSConfig).To(BeNil())
+
+			// check if the ServiceMonitor is using the General.Monitoring.label from the CRD declaration
+			Expect(func() bool {
+				for k, v := range OpensearchCluster.Spec.General.Monitoring.Labels {
+					if sm.Labels[k] != v {
+						return false
+					}
+				}
+				return true
+			}()).Should(BeTrue())
 		})
 	})
 
