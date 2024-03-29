@@ -106,7 +106,14 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 		},
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
-				Monitoring:  opsterv1.MonitoringConfig{Enable: true, ScrapeInterval: "35s", TLSConfig: &opsterv1.MonitoringConfigTLS{InsecureSkipVerify: true, ServerName: "foo.bar"}},
+				Monitoring: opsterv1.MonitoringConfig{
+					Enable:         true,
+					ScrapeInterval: "35s",
+					TLSConfig:      &opsterv1.MonitoringConfigTLS{InsecureSkipVerify: true, ServerName: "foo.bar"},
+					Labels: map[string]string{
+						"foo": "bar",
+					},
+				},
 				HttpPort:    9200,
 				Vendor:      "opensearch",
 				Version:     "2.0.0",
