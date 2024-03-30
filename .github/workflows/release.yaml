@@ -11,13 +11,14 @@ jobs:
     name: Release
     steps:
       - name: Checkout
-        uses: actions/checkout@v2.3.4
+        uses: actions/checkout@v4
       - name: Setup go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.22.1'
+          go-version-file: 'go.work'
+          cache: false
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v2
+        uses: docker/setup-buildx-action@v3
       - name: set Env
         id: github-ver
         run: |
@@ -31,9 +32,9 @@ jobs:
           sed -i -e 's/^version:.*/version: '$RELEASE_VERSION'/' charts/opensearch-cluster/Chart.yaml
 
       - name: Install Helm
-        uses: azure/setup-helm@v1
+        uses: azure/setup-helm@v4
         with:
-          version: v3.8.1
+          version: v3.14.3
 
       - name: Publish helm chart
         uses: stefanprodan/helm-gh-pages@master
@@ -42,12 +43,23 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create Release
+        uses: softprops/action-gh-release@v2
         id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tag_name: ${{ github.ref }}
-          release_name: ${{ github.ref }}
           draft: true
           prerelease: false
+          token: ${{ secrets.GITHUB_TOKEN }}
+          tag_name: ${{ github.ref }}
+          name: ${{ github.ref }}
+
+      # actions/create-release is unmaintained, see https://github.com/actions/create-release
+      # - name: Create Release
+      #   id: create_release
+      #   uses: actions/create-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     tag_name: ${{ github.ref }}
+      #     release_name: ${{ github.ref }}
+      #     draft: true
+      #     prerelease: false

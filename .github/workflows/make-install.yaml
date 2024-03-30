@@ -1,0 +1,30 @@
+name: Make install
+on: [pull_request]
+
+jobs:
+  make-install:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Setup go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+          cache: false
+      - uses: nolar/setup-k3d-k3s@v1
+        with:
+          version: v1
+          k3d-name: opensearch-operator-tests
+          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: make-install
+        run: |
+          set -e
+          export CLUSTER_NAME=opensearch-operator-tests
+          ## Check disk to avoid failed shard assignments due to watermarking
+          df -h
+          cd opensearch-operator
+          
+          make build manifests
+          make install
