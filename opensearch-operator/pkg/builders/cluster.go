@@ -1014,7 +1014,7 @@ func NewSecurityconfigUpdateJob(
 	image := helpers.ResolveImage(instance, &node)
 	securityContext := instance.Spec.General.SecurityContext
 	podSecurityContext := instance.Spec.General.PodSecurityContext
-
+	resources := instance.Spec.Security.GetConfig().GetUpdateJob().Resources
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
 		Spec: batchv1.JobSpec{
@@ -1027,6 +1027,7 @@ func NewSecurityconfigUpdateJob(
 						Name:            "updater",
 						Image:           image.GetImage(),
 						ImagePullPolicy: image.GetImagePullPolicy(),
+						Resources:       resources,
 						Command:         []string{"/bin/bash", "-c"},
 						Args:            []string{cmdArg},
 						VolumeMounts:    volumeMounts,
