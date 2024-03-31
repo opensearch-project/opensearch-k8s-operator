@@ -412,6 +412,7 @@ func NewSTSForNodePool(
 			Name:            "keystore",
 			Image:           image.GetImage(),
 			ImagePullPolicy: image.GetImagePullPolicy(),
+			Resources:       resources,
 			Command: []string{
 				"sh",
 				"-c",
@@ -562,6 +563,7 @@ func NewSTSForNodePool(
 			Name:            "init-sysctl",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       resources,
 			Command: []string{
 				"sysctl",
 				"-w",
@@ -852,6 +854,7 @@ func NewBootstrapPod(
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       cr.Spec.InitHelper.Resources,
 			Command:         []string{"sh", "-c"},
 			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 			SecurityContext: &corev1.SecurityContext{
@@ -912,6 +915,7 @@ func NewBootstrapPod(
 			Name:            "init-sysctl",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       cr.Spec.InitHelper.Resources,
 			Command: []string{
 				"sysctl",
 				"-w",
