@@ -1245,7 +1245,7 @@ It is possible to manage OpenSearch ISM policies in Kubernetes with the operator
 
 ```yaml
 apiVersion: opensearch.opster.io/v1
-kind: OpensearchISMPolicy
+kind: OpenSearchISMPolicy
 metadata:
    name: sample-policy
 spec:
@@ -1276,7 +1276,7 @@ spec:
            - delete: {}
 ```
 
-The namespace of the `OpensearchISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in. `policyId` is an optional field, and if not provided `metadata.name` is used as the default.
+The namespace of the `OpenSearchISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in. `policyId` is an optional field, and if not provided `metadata.name` is used as the default.
 
 ## Managing index and component templates
 
