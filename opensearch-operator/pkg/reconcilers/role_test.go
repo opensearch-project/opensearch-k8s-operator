@@ -58,6 +58,9 @@ var _ = Describe("roles reconciler", func() {
 						AllowedActions: []string{
 							"index",
 						},
+						MaskedFields: []string{
+							"ipaddress",
+						},
 					},
 				},
 			},
@@ -221,6 +224,9 @@ var _ = Describe("roles reconciler", func() {
 							AllowedActions: []string{
 								"index",
 							},
+							MaskedFields: []string{
+								"ipaddress",
+							},
 						},
 					},
 					TenantPermissions: make([]requests.TenantPermissionsSpec, 0),
@@ -312,6 +318,9 @@ var _ = Describe("roles reconciler", func() {
 								AllowedActions: []string{
 									"index",
 								},
+								MaskedFields: []string{
+									"ipaddress",
+								},
 							},
 						},
 						TenantPermissions: make([]requests.TenantPermissionsSpec, 0),
@@ -349,6 +358,9 @@ var _ = Describe("roles reconciler", func() {
 								},
 								AllowedActions: []string{
 									"index",
+								},
+								MaskedFields: []string{
+									"ipaddress",
 								},
 							},
 						},
