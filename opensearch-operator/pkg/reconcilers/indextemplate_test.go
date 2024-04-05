@@ -62,6 +62,7 @@ var _ = Describe("indextemplate reconciler", func() {
 				Priority:   0,
 				Version:    0,
 				Meta:       &apiextensionsv1.JSON{},
+				DataStream: &opsterv1.OpensearchDatastreamSpec{TimestampField: opsterv1.OpensearchDatastreamTimestampFieldSpec{Name: "@mytimestamp"}},
 			},
 		}
 
@@ -285,6 +286,7 @@ var _ = Describe("indextemplate reconciler", func() {
 							Priority:   0,
 							Version:    0,
 							Meta:       &apiextensionsv1.JSON{},
+							DataStream: &requests.Datastream{TimestampField: &requests.DatastreamTimestampFieldSpec{Name: "@mytimestamp"}},
 						},
 					}
 
