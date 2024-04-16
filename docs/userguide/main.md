@@ -698,7 +698,7 @@ spec:
 
 ### Additional Volumes
 
-Sometimes it is neccessary to mount ConfigMaps, Secrets or emptyDir into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`.  The format is as follows:
+Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir or CSI volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
 
 ```yaml
 spec:
@@ -713,6 +713,14 @@ spec:
     - name: temp
       path: /tmp
       emptyDir: {}
+    - name: example-csi-volume
+      path: /path/to/mount/volume
+      #subPath: "subpath" # Add this to mount the CSI volume at a specific subpath
+      csi:
+        driver: csi-driver-name
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: example-secret-provider-class  
   dashboards:
     additionalVolumes:
     - name: example-secret

@@ -88,4 +88,47 @@ var _ = Describe("Additional volumes", func() {
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 		})
 	})
+
+	When("CSI volume is added", func() {
+		It("Should have CSIVolumeSource fields", func() {
+			readOnly := true
+			volumeConfigs[0].CSI = &v1.CSIVolumeSource{
+				Driver:   "testDriver",
+				ReadOnly: &readOnly,
+				VolumeAttributes: map[string]string{
+					"secretProviderClass": "testSecretProviderClass",
+				},
+				NodePublishSecretRef: &v1.LocalObjectReference{
+					Name: "testSecret",
+				},
+			}
+
+			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].CSI.Driver).To(Equal("testDriver"))
+			Expect(*volume[0].CSI.ReadOnly).Should(BeTrue())
+			Expect(volume[0].CSI.VolumeAttributes["secretProviderClass"]).To(Equal("testSecretProviderClass"))
+			Expect(volume[0].CSI.NodePublishSecretRef.Name).To(Equal("testSecret"))
+		})
+	})
+
+	When("CSI volume is added with subPath", func() {
+		It("Should have the subPath", func() {
+			volumeConfigs[0].CSI = &v1.CSIVolumeSource{}
+			volumeConfigs[0].SubPath = "c"
+
+			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].SubPath).To(Equal("c"))
+		})
+	})
+
+	When("CSI volume is added without subPath", func() {
+		It("Should not have the subPath", func() {
+			volumeConfigs[0].CSI = &v1.CSIVolumeSource{}
+
+			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
 })
