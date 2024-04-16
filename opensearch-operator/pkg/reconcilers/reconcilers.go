@@ -1,15 +1,14 @@
 package reconcilers
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 
 	"k8s.io/client-go/tools/record"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/util/retry"
-	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
@@ -98,7 +97,6 @@ func (c *ReconcilerContext) AddDashboardsConfig(key string, value string) {
 		c.recorder.Eventf(c.instance, "Warning", "ConfigDuplicateKey", "Config key '%s' already exists in dashboards config. Will be overwritten", key)
 	}
 	c.DashboardsConfig[key] = value
-
 }
 
 // fetchNodePoolHash gets the hash of the config for a specific node pool
@@ -125,16 +123,12 @@ func (c *ReconcilerContext) replaceNodePoolHash(newConfig NodePoolHash) {
 }
 
 func UpdateComponentStatus(
-	ctx context.Context,
-	k8sClient client.Client,
-	instance *opsterv1.OpenSearchCluster,
+	k8sClient k8s.K8sClient,
+	cluster *opsterv1.OpenSearchCluster,
 	status *opsterv1.ComponentStatus,
 ) error {
 	if status != nil {
-		return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(instance), instance); err != nil {
-				return err
-			}
+		return k8sClient.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(cluster), func(instance *opsterv1.OpenSearchCluster) {
 			found := false
 			for idx, value := range instance.Status.ComponentsStatus {
 				if value.Component == status.Component {
@@ -146,7 +140,6 @@ func UpdateComponentStatus(
 			if !found {
 				instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, *status)
 			}
-			return k8sClient.Status().Update(ctx, instance)
 		})
 	}
 	return nil

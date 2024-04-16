@@ -9,27 +9,24 @@ import (
 	"sort"
 	"strings"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
-	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/opensearch-gateway/services"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers/util"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type ConfigurationReconciler struct {
-	reconciler.ResourceReconciler
-	client.Client
-	ctx               context.Context
+	client            k8s.K8sClient
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
@@ -44,10 +41,7 @@ func NewConfigurationReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *ConfigurationReconciler {
 	return &ConfigurationReconciler{
-		Client: client,
-		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "configuration")))...),
-		ctx:               ctx,
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "configuration")))...),
 		reconcilerContext: reconcilerContext,
 		recorder:          recorder,
 		instance:          instance,
@@ -90,11 +84,11 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 	if r.reconcilerContext.OpenSearchConfig != nil && len(r.reconcilerContext.OpenSearchConfig) != 0 {
 		cm := r.buildConfigMap(data)
-		if err := ctrl.SetControllerReference(r.instance, cm, r.Client.Scheme()); err != nil {
+		if err := ctrl.SetControllerReference(r.instance, cm, r.client.Scheme()); err != nil {
 			return ctrl.Result{}, err
 		}
 
-		result.Combine(r.ReconcileResource(cm, reconciler.StatePresent))
+		result.Combine(r.client.CreateConfigMap(cm))
 		if result.Err != nil {
 			return result.Result, result.Err
 		}
@@ -121,8 +115,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 	// Generate additional volumes
 	addVolumes, addVolumeMounts, addVolumeData, err := util.CreateAdditionalVolumes(
-		r.ctx,
-		r.Client,
+		r.client,
 		r.instance.Namespace,
 		r.instance.Spec.General.AdditionalVolumes,
 	)
@@ -169,11 +162,7 @@ func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePo
 	// data nodes will be picked up by the rolling restarter, or the upgrade
 	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
 		if !helpers.HasDataRole(&nodePool) {
-			sts := &appsv1.StatefulSet{}
-			err := r.Get(r.ctx, types.NamespacedName{
-				Name:      builders.StsName(r.instance, &nodePool),
-				Namespace: r.instance.Namespace,
-			}, sts)
+			sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
 			if k8serrors.IsNotFound(err) {
 				nodePoolHash.ConfigHash = generateHash(combinedData)
 			} else if err != nil {
@@ -187,7 +176,6 @@ func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePo
 	}
 
 	r.reconcilerContext.replaceNodePoolHash(nodePoolHash)
-
 	return nil, nil
 }
 

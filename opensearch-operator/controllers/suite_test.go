@@ -24,12 +24,13 @@ package controllers
 import (
 	"context"
 	"fmt"
-	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"path/filepath"
 	"testing"
 
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/phayes/freeport"
-	opsterv1 "opensearch.opster.io/api/v1"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 
@@ -54,20 +55,20 @@ import (
 Now, let's go through the code generated.
 */
 
-var cfg *rest.Config
-var k8sClient client.Client
-var testEnv *envtest.Environment
-var cancel context.CancelFunc
+var (
+	cfg       *rest.Config
+	k8sClient client.Client
+	testEnv   *envtest.Environment
+	cancel    context.CancelFunc
+)
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
 
 	RunSpecs(t, "Controller Suite")
-
 }
 
 var _ = BeforeSuite(func() {
-
 	logf.SetLogger(zap.New(zap.WriteTo(GinkgoWriter), zap.UseDevMode(true)))
 	ports, err := freeport.GetFreePorts(2)
 	Expect(err).NotTo(HaveOccurred())
@@ -103,7 +104,7 @@ var _ = BeforeSuite(func() {
 		HealthProbeBindAddress: fmt.Sprintf(":%d", ports[1]),
 	})
 	Expect(err).ToNot(HaveOccurred())
-	//scheme.AddToScheme()
+	// scheme.AddToScheme()
 	err = (&OpenSearchClusterReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: scheme.Scheme,
@@ -120,7 +121,6 @@ var _ = BeforeSuite(func() {
 
 	k8sClient = k8sManager.GetClient()
 	Expect(k8sClient).ToNot(BeNil())
-
 })
 
 var _ = AfterSuite(func() {

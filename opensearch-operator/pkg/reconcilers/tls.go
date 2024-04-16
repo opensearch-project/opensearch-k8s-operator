@@ -8,28 +8,26 @@ import (
 	"time"
 
 	"github.com/Masterminds/semver"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers/util"
-	"opensearch.opster.io/pkg/tls"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type TLSReconciler struct {
-	reconciler.ResourceReconciler
-	client.Client
-	ctx               context.Context
+	client            k8s.K8sClient
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
 	logger            logr.Logger
@@ -45,10 +43,7 @@ func NewTLSReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *TLSReconciler {
 	return &TLSReconciler{
-		Client: client,
-		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "tls")))...),
-		ctx:               ctx,
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "tls")))...),
 		reconcilerContext: reconcilerContext,
 		instance:          instance,
 		logger:            log.FromContext(ctx),
@@ -61,7 +56,6 @@ const (
 )
 
 func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
-
 	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil {
 		r.logger.Info("No security specified. Not doing anything")
 		return ctrl.Result{}, nil
@@ -108,7 +102,7 @@ func (r *TLSReconciler) handleTransport() error {
 }
 
 func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
-	//TODO: This should be refactored in the API - https://github.com/Opster/opensearch-k8s-operator/issues/569
+	// TODO: This should be refactored in the API - https://github.com/Opster/opensearch-k8s-operator/issues/569
 	tlsConfig := r.instance.Spec.Security.Tls.Transport
 	clusterName := r.instance.Name
 
@@ -176,15 +170,11 @@ func (r *TLSReconciler) getCACert() (tls.Cert, error) {
 	if r.adminCAProvided() {
 		return r.providedCAForAdminCert()
 	}
-	return util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+	return util.ReadOrGenerateCaCert(r.pki, r.client, r.instance)
 }
 
 func (r *TLSReconciler) shouldCreateAdminCert(ca tls.Cert) (bool, error) {
-	secret := &corev1.Secret{}
-	err := r.Get(r.ctx, types.NamespacedName{
-		Name:      r.adminSecretName(),
-		Namespace: r.instance.Namespace,
-	}, secret)
+	secret, err := r.client.GetSecret(r.adminSecretName(), r.instance.Namespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
 			r.logger.Info("admin cert does not exist, creating")
@@ -249,10 +239,10 @@ func (r *TLSReconciler) createAdminSecret(ca tls.Cert) (*ctrl.Result, error) {
 		Type: corev1.SecretTypeTLS,
 		Data: adminCert.SecretData(ca),
 	}
-	if err := ctrl.SetControllerReference(r.instance, adminSecret, r.Client.Scheme()); err != nil {
+	if err := ctrl.SetControllerReference(r.instance, adminSecret, r.client.Scheme()); err != nil {
 		return nil, err
 	}
-	return r.ReconcileResource(adminSecret, reconciler.StatePresent)
+	return r.client.CreateSecret(adminSecret)
 }
 
 func (r *TLSReconciler) adminSecretName() string {
@@ -265,22 +255,22 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	nodeSecretName := clusterName + "-transport-cert"
 
 	r.logger.Info("Generating certificates", "interface", "transport")
-	//r.recorder.Event(r.instance, "Normal", "Security", "Starting to generating certificates")
+	// r.recorder.Event(r.instance, "Normal", "Security", "Starting to generating certificates")
 
 	var ca tls.Cert
 	var err error
 	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
 		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 	} else {
-		ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+		ca, err = util.ReadOrGenerateCaCert(r.pki, r.client, r.instance)
 	}
 	if err != nil {
 		return err
 	}
 
 	// Generate node cert, sign it and put it into secret
-	nodeSecret := corev1.Secret{}
-	if err := r.Get(r.ctx, client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
+	nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
+	if err != nil {
 		// Generate node cert and put it into secret
 		dnsNames := []string{
 			clusterName,
@@ -294,10 +284,11 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			return err
 		}
 		nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
-		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
+		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
 			return err
 		}
-		if err := r.Create(r.ctx, &nodeSecret); err != nil {
+		_, err = r.client.CreateSecret(&nodeSecret)
+		if err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
 		}
@@ -318,7 +309,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	r.logger.Info("Generating certificates", "interface", "transport")
-	//r.recorder.Event(r.instance, "Normal", "Security", "Start to generating certificates")
+	// r.recorder.Event(r.instance, "Normal", "Security", "Start to generating certificates")
 
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
@@ -329,15 +320,15 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
 		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
 	} else {
-		ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+		ca, err = util.ReadOrGenerateCaCert(r.pki, r.client, r.instance)
 	}
 	if err != nil {
 		return err
 	}
 
-	nodeSecret := corev1.Secret{}
+	nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
 	exists := true
-	if err := r.Get(r.ctx, client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
+	if err != nil {
 		nodeSecret.Data = make(map[string][]byte)
 		nodeSecret.ObjectMeta = metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}
 		exists = false
@@ -406,15 +397,17 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 		}
 	}
 	if exists {
-		if err := r.Update(r.ctx, &nodeSecret); err != nil {
+		_, err = r.client.CreateSecret(&nodeSecret)
+		if err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
 		}
 	} else {
-		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
+		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
 			return err
 		}
-		if err := r.Create(r.ctx, &nodeSecret); err != nil {
+		_, err = r.client.CreateSecret(&nodeSecret)
+		if err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
 		}
@@ -487,15 +480,15 @@ func (r *TLSReconciler) handleHttp() error {
 		if tlsConfig.TlsCertificateConfig.CaSecret.Name != "" {
 			ca, err = r.providedCaCert(tlsConfig.TlsCertificateConfig.CaSecret.Name, namespace)
 		} else {
-			ca, err = util.ReadOrGenerateCaCert(r.pki, r.Client, r.ctx, r.instance)
+			ca, err = util.ReadOrGenerateCaCert(r.pki, r.client, r.instance)
 		}
 		if err != nil {
 			return err
 		}
 
 		// Generate node cert, sign it and put it into secret
-		nodeSecret := corev1.Secret{}
-		if err := r.Get(r.ctx, client.ObjectKey{Name: nodeSecretName, Namespace: namespace}, &nodeSecret); err != nil {
+		nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
+		if err != nil {
 			// Generate node cert and put it into secret
 			dnsNames := []string{
 				clusterName,
@@ -513,10 +506,11 @@ func (r *TLSReconciler) handleHttp() error {
 				return err
 			}
 			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
-			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.Client.Scheme()); err != nil {
+			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
 				return err
 			}
-			if err := r.Create(r.ctx, &nodeSecret); err != nil {
+			_, err = r.client.CreateSecret(&nodeSecret)
+			if err != nil {
 				r.logger.Error(err, "Failed to store node certificate in secret", "interface", "http")
 				//		r.recorder.Event(r.instance, "Warning", "Security", "Failed to store node http certificate in secret")
 				return err
@@ -552,8 +546,8 @@ func (r *TLSReconciler) handleHttp() error {
 
 func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls.Cert, error) {
 	var ca tls.Cert
-	caSecret := corev1.Secret{}
-	if err := r.Get(r.ctx, client.ObjectKey{Name: secretName, Namespace: namespace}, &caSecret); err != nil {
+	caSecret, err := r.client.GetSecret(secretName, namespace)
+	if err != nil {
 		return ca, err
 	}
 	data := caSecret.Data

@@ -5,23 +5,22 @@ import (
 	"fmt"
 	"time"
 
-	"k8s.io/utils/pointer"
-	"opensearch.opster.io/opensearch-gateway/services"
-	"opensearch.opster.io/pkg/builders"
-
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
+	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 type ScalerReconciler struct {
-	client.Client
-	reconciler.ResourceReconciler
+	client            k8s.K8sClient
 	ctx               context.Context
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
@@ -37,9 +36,7 @@ func NewScalerReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *ScalerReconciler {
 	return &ScalerReconciler{
-		Client: client,
-		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "scaler")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "scaler")))...),
 		ctx:               ctx,
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
@@ -69,9 +66,9 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	lg := log.FromContext(r.ctx)
 	namespace := r.instance.Namespace
 	sts_name := builders.StsName(r.instance, nodePool)
-	currentSts := appsv1.StatefulSet{}
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	if err := r.Get(r.ctx, client.ObjectKey{Name: sts_name, Namespace: namespace}, &currentSts); err != nil {
+	currentSts, err := r.client.GetStatefulSet(sts_name, namespace)
+	if err != nil {
 		return false, err
 	}
 
@@ -83,19 +80,20 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	comp := r.instance.Status.ComponentsStatus
 	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
 
-	var desireReplicaDiff = *currentSts.Spec.Replicas - nodePool.Replicas
+	desireReplicaDiff := *currentSts.Spec.Replicas - nodePool.Replicas
 	if desireReplicaDiff == 0 {
 		// If a scaling operation was started before for this nodePool
 		if found {
-			if currentSts.Status.ReadyReplicas != nodePool.Replicas {
-				// Change the status to waiting while the pods are coming up or getting deleted
-				componentStatus.Status = "Waiting"
-				r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-			} else {
-				// Scaling operation is completed, remove the status
-				r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
-			}
-			err := r.Status().Update(r.ctx, r.instance)
+			err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+				if currentSts.Status.ReadyReplicas != nodePool.Replicas {
+					// Change the status to waiting while the pods are coming up or getting deleted
+					componentStatus.Status = "Waiting"
+					instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+				} else {
+					// Scaling operation is completed, remove the status
+					instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
+				}
+			})
 			if err != nil {
 				lg.Error(err, "failed to update status")
 				return false, err
@@ -108,8 +106,9 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	// Also the status is set to 'Running' if it fails to exclude node for some reason
 	if !found || currentStatus.Status == "Running" {
 		// Change the status to running, to indicate that a scaling operation for this nodePool has started
-		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-		err := r.Status().Update(r.ctx, r.instance)
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+		})
 		if err != nil {
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to update status")
 			lg.Error(err, "failed to update status")
@@ -119,8 +118,9 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		if desireReplicaDiff > 0 {
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to scaling")
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
+				lg.Info(fmt.Sprintf("SmartScaler is disabled, removing nodes from nodegroup %s without draining", nodePool.Component))
 				requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
-				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Notice - your SmartScaler is not enable")
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Notice - your SmartScaler is not enabled")
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to decrease node")
 				return requeue, err
 			}
@@ -153,12 +153,12 @@ func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePo
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start increaseing node %s on %s ", lastReplicaNodeName, nodePoolGroupName)
-	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
+	_, err := r.client.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Failed to add node %s/%s", r.instance.Namespace, r.instance.Name)
 		return true, err
 	}
-	lg.Info(fmt.Sprintf("Group-%s . added node %s", nodePoolGroupName, lastReplicaNodeName))
+	lg.Info(fmt.Sprintf("Group: %s, Added node %s", nodePoolGroupName, lastReplicaNodeName))
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Added new node %s", lastReplicaNodeName)
 	return false, nil
 }
@@ -169,15 +169,16 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start to decreaseing node %s on %s ", lastReplicaNodeName, nodePoolGroupName)
-	_, err := r.ReconcileResource(&currentSts, reconciler.StatePresent)
+	_, err := r.client.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Failed to remove node - Group-%s . Failed to remove node %s", nodePoolGroupName, lastReplicaNodeName)
 		lg.Error(err, fmt.Sprintf("failed to remove node %s", lastReplicaNodeName))
 		return true, err
 	}
-	lg.Info(fmt.Sprintf("Group-%s . removed node %s", nodePoolGroupName, lastReplicaNodeName))
-	r.instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
-	err = r.Status().Update(r.ctx, r.instance)
+	lg.Info(fmt.Sprintf("Group: %s, Removed node %s", nodePoolGroupName, lastReplicaNodeName))
+	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+	})
 	if err != nil {
 		lg.Error(err, "failed to update status")
 		return false, err
@@ -186,7 +187,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	if !smartDecrease {
 		return false, err
 	}
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.client, r.instance)
 	if err != nil {
 		return true, err
 	}
@@ -208,7 +209,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 
 func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.client, r.instance)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	if err != nil {
 		return err
@@ -235,9 +236,10 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 			Description: nodePoolGroupName,
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished to Exclude %s/%s", r.instance.Namespace, r.instance.Name)
-		lg.Info(fmt.Sprintf("Group-%s .excluded node %s", nodePoolGroupName, lastReplicaNodeName))
-		r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-		err = r.Status().Update(r.ctx, r.instance)
+		lg.Info(fmt.Sprintf("Group: %s, Excluded node: %s", nodePoolGroupName, lastReplicaNodeName))
+		err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+		})
 		if err != nil {
 			lg.Error(err, "failed to update status")
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to update operator status")
@@ -253,9 +255,10 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		Description: nodePoolGroupName,
 	}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start sacle %s/%s from %d to %d", r.instance.Namespace, r.instance.Name, *currentSts.Spec.Replicas, *currentSts.Spec.Replicas-1)
-	lg.Info(fmt.Sprintf("Group-%s . Failed to exclude node %s", nodePoolGroupName, lastReplicaNodeName))
-	r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-	err = r.Status().Update(r.ctx, r.instance)
+	lg.Info(fmt.Sprintf("Group: %s, Failed to exclude node: %s", nodePoolGroupName, lastReplicaNodeName))
+	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+	})
 	if err != nil {
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName)
 		lg.Error(err, "failed to update status")
@@ -269,7 +272,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.client, r.instance)
 	if err != nil {
 		return err
 	}
@@ -280,12 +283,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
 	if nodeNotEmpty {
-		lg.Info(fmt.Sprintf("Group-%s . draining node %s", nodePoolGroupName, lastReplicaNodeName))
-		return err
-	}
-	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
-	if !success {
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Group-%s . node %s node is empty but node is still excluded from allocation", nodePoolGroupName, lastReplicaNodeName)
+		lg.Info(fmt.Sprintf("Group: %s, Waiting for node %s to drain", nodePoolGroupName, lastReplicaNodeName))
 		return err
 	}
 
@@ -294,9 +292,10 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 		Status:      "Drained",
 		Description: nodePoolGroupName,
 	}
-	lg.Info(fmt.Sprintf("Group-%s .node %s node is drained", nodePoolGroupName, lastReplicaNodeName))
-	r.instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
-	err = r.Status().Update(r.ctx, r.instance)
+	lg.Info(fmt.Sprintf("Group: %s, Node %s is drained", nodePoolGroupName, lastReplicaNodeName))
+	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+	})
 	if err != nil {
 		lg.Error(err, "failed to update status")
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to update operator status")
@@ -306,13 +305,9 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 }
 
 func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult) {
-	stsList := &appsv1.StatefulSetList{}
-	if err := r.Client.List(
-		r.ctx,
-		stsList,
-		client.InNamespace(r.instance.Name),
-		client.MatchingLabels{helpers.ClusterLabel: r.instance.Name},
-	); err != nil {
+	stsList, err := r.client.ListStatefulSets(client.InNamespace(r.instance.Name),
+		client.MatchingLabels{helpers.ClusterLabel: r.instance.Name})
+	if err != nil {
 		result.Combine(&ctrl.Result{}, err)
 		return
 	}
@@ -322,17 +317,18 @@ func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult
 			result.Combine(r.removeStatefulSet(sts))
 		}
 	}
-
 }
 
 func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Result, error) {
+	lg := log.FromContext(r.ctx)
+	lg.Info(fmt.Sprintf("Removing statefulset: %s", sts.Name))
+
 	if !r.instance.Spec.ConfMgmt.SmartScaler {
-		return r.ReconcileResource(&sts, reconciler.StateAbsent)
+		return r.client.ReconcileResource(&sts, reconciler.StateAbsent)
 	}
 
 	// Gracefully remove nodes
-	lg := log.FromContext(r.ctx)
-	username, password, err := helpers.UsernameAndPassword(r.ctx, r.Client, r.instance)
+	username, password, err := helpers.UsernameAndPassword(r.client, r.instance)
 	if err != nil {
 		return nil, err
 	}
@@ -361,6 +357,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	}
 
 	if nodeNotEmpty {
+		lg.Info(fmt.Sprintf("Waiting for shards to drain from node %s", lastReplicaNodeName))
 		return &ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
@@ -368,7 +365,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	}
 
 	if workingOrdinal == 0 {
-		result, err := r.ReconcileResource(&sts, reconciler.StateAbsent)
+		result, err := r.client.ReconcileResource(&sts, reconciler.StateAbsent)
 		if err != nil {
 			return result, err
 		}
@@ -380,7 +377,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	}
 
 	sts.Spec.Replicas = &workingOrdinal
-	result, err := r.ReconcileResource(&sts, reconciler.StatePresent)
+	result, err := r.client.ReconcileResource(&sts, reconciler.StatePresent)
 	if err != nil {
 		return result, err
 	}

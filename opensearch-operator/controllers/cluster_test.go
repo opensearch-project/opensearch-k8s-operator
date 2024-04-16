@@ -8,6 +8,8 @@ import (
 
 	policyv1 "k8s.io/api/policy/v1"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -18,8 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
 )
@@ -28,7 +28,6 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var _ = Describe("Cluster Reconciler", func() {
-
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "cluster-test-cluster"
@@ -86,7 +85,6 @@ var _ = Describe("Cluster Reconciler", func() {
 
 		It("should apply the cluster instance successfully", func() {
 			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
-
 		})
 
 		It("should create a ServiceMonitor for the cluster", func() {
@@ -106,12 +104,15 @@ var _ = Describe("Cluster Reconciler", func() {
 			// check if the ServiceMonitor is using the Admin secret for basicAuth
 
 			Expect(sm.Spec.Endpoints[0].BasicAuth).Should(BeEquivalentTo(
-				&monitoring.BasicAuth{Username: corev1.SecretKeySelector{
-					LocalObjectReference: corev1.LocalObjectReference{Name: OpensearchCluster.Name + "-admin-password"},
-					Key:                  "username"},
+				&monitoring.BasicAuth{
+					Username: corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{Name: OpensearchCluster.Name + "-admin-password"},
+						Key:                  "username",
+					},
 					Password: corev1.SecretKeySelector{
 						LocalObjectReference: corev1.LocalObjectReference{Name: OpensearchCluster.Name + "-admin-password"},
-						Key:                  "password"},
+						Key:                  "password",
+					},
 				}))
 
 			// check if the ServiceMonitor is using the interval from the CRD declaration
@@ -125,7 +126,6 @@ var _ = Describe("Cluster Reconciler", func() {
 
 			// check if tlsConfig is not defined in the CRD declaration the ServiceMonitor not deploy that part of the config
 			// Expect(sm.Spec.Endpoints[0].TLSConfig).To(BeNil())
-
 		})
 	})
 

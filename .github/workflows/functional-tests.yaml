@@ -6,14 +6,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Setup go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.19'
+          go-version-file: 'go.work'
+          cache: false
       - uses: nolar/setup-k3d-k3s@v1
         with:
-          version: v1.22
+          version: v1
           k3d-name: opensearch-operator-tests
           k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -45,14 +46,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       - name: Setup go
-        uses: actions/setup-go@v3
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.19'
+          go-version-file: 'go.work'
+          cache: false
       - uses: nolar/setup-k3d-k3s@v1
         with:
-          version: v1.22
+          version: v1
           k3d-name: opensearch-operator-tests
           k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -8,16 +8,15 @@ import (
 	"sort"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
-	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -64,9 +63,7 @@ var ymlToFileType = map[string]string{
 }
 
 type SecurityconfigReconciler struct {
-	reconciler.ResourceReconciler
-	client.Client
-	ctx               context.Context
+	client            k8s.K8sClient
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opsterv1.OpenSearchCluster
@@ -82,10 +79,7 @@ func NewSecurityconfigReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *SecurityconfigReconciler {
 	return &SecurityconfigReconciler{
-		Client: client,
-		ResourceReconciler: reconciler.NewReconcilerWith(client,
-			append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "securityconfig")))...),
-		ctx:               ctx,
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "securityconfig")))...),
 		reconcilerContext: reconcilerContext,
 		recorder:          recorder,
 		instance:          instance,
@@ -94,7 +88,6 @@ func NewSecurityconfigReconciler(
 }
 
 func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
-
 	if r.instance.Spec.Security == nil {
 		return ctrl.Result{}, nil
 	}
@@ -115,13 +108,13 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
-	//Checking if Security Config values are empty and creates a default-securityconfig secret
+	// Checking if Security Config values are empty and creates a default-securityconfig secret
 	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.SecurityconfigSecret.Name != "" {
-		//Use a user passed value of SecurityconfigSecret name
+		// Use a user passed value of SecurityconfigSecret name
 		configSecretName = r.instance.Spec.Security.Config.SecurityconfigSecret.Name
 		// Wait for secret to be available
-		configSecret := corev1.Secret{}
-		if err := r.Get(r.ctx, client.ObjectKey{Name: configSecretName, Namespace: namespace}, &configSecret); err != nil {
+		configSecret, err := r.client.GetSecret(configSecretName, namespace)
+		if err != nil {
 			if apierrors.IsNotFound(err) {
 				r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName)
@@ -144,8 +137,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.logger.Info("Not passed any SecurityconfigSecret")
 	}
 
-	job := batchv1.Job{}
-	if err := r.Get(r.ctx, client.ObjectKey{Name: jobName, Namespace: namespace}, &job); err == nil {
+	job, err := r.client.GetJob(jobName, namespace)
+	if err == nil {
 		value, exists := job.ObjectMeta.Annotations[checksumAnnotation]
 		if exists && value == checksumval {
 			// Nothing to do, current securityconfig already applied
@@ -153,15 +146,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 		// Delete old job
 		r.logger.Info("Deleting old update job")
-		opts := client.DeleteOptions{}
-		// Add this so pods of the job are deleted as well, otherwise they would remain as orphaned pods
-		client.PropagationPolicy(metav1.DeletePropagationForeground).ApplyToDelete(&opts)
-		err = r.Delete(r.ctx, &job, &opts)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		// Make sure job is completely deleted (when r.Delete returns deletion sometimes is not yet complete)
-		_, err = r.ReconcileResource(&job, reconciler.StateAbsent)
+		err := r.client.DeleteJob(&job)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -171,9 +156,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	// securityconfig secret was not passed, build the command to apply all yml files
 	if !r.instance.Status.Initialized || len(cmdArg) == 0 {
 		clusterHostName := BuildClusterSvcHostName(r.instance)
-		httpPort, securityconfigPath := helpers.VersionCheck(r.instance)
+		httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(r.instance)
 		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort) +
-			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, httpPort)
+			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
 	}
 
 	r.logger.Info("Starting securityconfig update job")
@@ -190,10 +175,11 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.VolumeMounts,
 	)
 
-	if err := ctrl.SetControllerReference(r.instance, &job, r.Client.Scheme()); err != nil {
+	if err := ctrl.SetControllerReference(r.instance, &job, r.client.Scheme()); err != nil {
 		return ctrl.Result{}, err
 	}
-	_, err := r.ReconcileResource(&job, reconciler.StateCreated)
+
+	_, err = r.client.CreateJob(&job)
 	return ctrl.Result{}, err
 }
 
@@ -201,7 +187,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 // securityconfig secret. yml files which are not present in the secret are not applied/updated
 func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, log logr.Logger) string {
 	clusterHostName := BuildClusterSvcHostName(instance)
-	httpPort, securityconfigPath := helpers.VersionCheck(instance)
+	httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(instance)
 
 	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort)
 
@@ -227,7 +213,7 @@ func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, lo
 		// Even if the field was removed from the yaml file it was applied from
 		// Instead it sets it to an empty value
 		if string(secret.Data[k]) != "" {
-			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, httpPort)
+			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, securityConfigPort)
 		}
 	}
 
@@ -269,6 +255,7 @@ func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
 }
+
 func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret) error {
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, corev1.Volume{
 		Name: "securityconfig",
@@ -283,7 +270,7 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.Ope
 	for k := range secret.Data {
 		keys = append(keys, k)
 	}
-	_, securityconfigPath := helpers.VersionCheck(instance)
+	_, _, securityconfigPath := helpers.VersionCheck(instance)
 	sort.Strings(keys)
 	for _, k := range keys {
 		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, corev1.VolumeMount{

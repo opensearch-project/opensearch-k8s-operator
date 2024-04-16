@@ -1,14 +1,15 @@
 package helpers
 
 import (
-	v1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/opensearch-gateway/requests"
+	v1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 )
 
 // TranslateIndexTemplateToRequest rewrites the CRD format to the gateway format
 func TranslateIndexTemplateToRequest(spec v1.OpensearchIndexTemplateSpec) requests.IndexTemplate {
 	request := requests.IndexTemplate{
 		IndexPatterns: spec.IndexPatterns,
+		DataStream:    TranslateDatastreamToRequest(spec.DataStream),
 		Template:      TranslateIndexToRequest(spec.Template),
 		Priority:      spec.Priority,
 		Version:       spec.Version,
@@ -26,15 +27,27 @@ func TranslateIndexTemplateToRequest(spec v1.OpensearchIndexTemplateSpec) reques
 // TranslateComponentTemplateToRequest rewrites the CRD format to the gateway format
 func TranslateComponentTemplateToRequest(spec v1.OpensearchComponentTemplateSpec) requests.ComponentTemplate {
 	request := requests.ComponentTemplate{
-		AllowAutoCreate: spec.AllowAutoCreate,
-		Template:        TranslateIndexToRequest(spec.Template),
-		Version:         spec.Version,
+		Template: TranslateIndexToRequest(spec.Template),
+		Version:  spec.Version,
 	}
 	if spec.Meta.Size() > 0 {
 		request.Meta = spec.Meta
 	}
 
 	return request
+}
+
+// TranslateDatastreamToRequest rewrites the CRD format to the gateway format
+func TranslateDatastreamToRequest(spec *v1.OpensearchDatastreamSpec) *requests.Datastream {
+	if spec == nil {
+		return nil
+	}
+	request := requests.Datastream{}
+	if spec.TimestampField.Name != "" {
+		request.TimestampField = &requests.DatastreamTimestampFieldSpec{Name: spec.TimestampField.Name}
+	}
+
+	return &request
 }
 
 // TranslateIndexToRequest rewrites the CRD format to the gateway format

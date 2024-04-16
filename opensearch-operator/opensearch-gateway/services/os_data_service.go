@@ -4,13 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"reflect"
+	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"strings"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/go-logr/logr"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
-	"opensearch.opster.io/opensearch-gateway/requests"
-	"opensearch.opster.io/opensearch-gateway/responses"
-	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -76,7 +78,7 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 		return false, err
 	}
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
-	var valAsString = nodeNameToExclude
+	valAsString := nodeNameToExclude
 	if ok && val != "" {
 		// Test whether name is already excluded
 		var found bool
@@ -204,7 +206,7 @@ func ReactivateShardAllocation(service *OsClusterClient) error {
 	return nil
 }
 
-func PreparePodForDelete(service *OsClusterClient, podName string, drainNode bool, nodeCount int32) (bool, error) {
+func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, error) {
 	if drainNode {
 		// If we are draining nodes then drain the working node
 		_, err := AppendExcludeNodeHost(service, podName)
@@ -212,7 +214,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			return false, err
 		}
 
-		// If there are only 2 data nodes only check for system indics
+		// If there are only 2 data nodes only check for system indices
 		if nodeCount == 2 {
 			systemIndices, err := GetExistingSystemIndices(service)
 			if err != nil {
@@ -223,6 +225,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			if err != nil {
 				return false, err
 			}
+			lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
 			return !systemPrimaries, nil
 		}
 
@@ -232,6 +235,7 @@ func PreparePodForDelete(service *OsClusterClient, podName string, drainNode boo
 			return false, err
 		}
 		// If the node isn't empty requeue to wait for shards to drain
+		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
 		return !nodeNotEmpty, nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
@@ -346,14 +350,28 @@ func ShouldUpdateIndexTemplate(
 	if indexTemplateResponse.Name != indexTemplateName {
 		return false, fmt.Errorf("returned index template named '%s' does not equal the requested name '%s'", indexTemplateResponse.Name, indexTemplateName)
 	}
-	if reflect.DeepEqual(indexTemplate, indexTemplateResponse.IndexTemplate) {
+
+	if indexTemplateResponse.IndexTemplate.Template.Settings != nil {
+		indexTemplateResponse.IndexTemplate.Template.Settings, err = helpers.SortedJsonKeys(indexTemplateResponse.IndexTemplate.Template.Settings)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if indexTemplateResponse.IndexTemplate.Template.Mappings != nil {
+		indexTemplateResponse.IndexTemplate.Template.Mappings, err = helpers.SortedJsonKeys(indexTemplateResponse.IndexTemplate.Template.Mappings)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if cmp.Equal(indexTemplate, indexTemplateResponse.IndexTemplate, cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 
 	lg := log.FromContext(ctx)
-	lg.V(1).Info(fmt.Sprintf("existing index template: %#v", indexTemplateResponse.IndexTemplate))
-	lg.V(1).Info(fmt.Sprintf("new index template: %#v", indexTemplate))
-	lg.Info("index template requires update")
+	lg.Info("OpenSearch Index template requires update")
+
 	return true, nil
 }
 
@@ -458,14 +476,13 @@ func ShouldUpdateComponentTemplate(
 		return false, fmt.Errorf("returned component template named '%s' does not equal the requested name '%s'", componentTemplateResponse.Name, componentTemplateName)
 	}
 
-	if reflect.DeepEqual(componentTemplate, componentTemplateResponse.ComponentTemplate) {
+	if cmp.Equal(componentTemplate, componentTemplateResponse.ComponentTemplate, cmpopts.EquateEmpty()) {
 		return false, nil
 	}
 
 	lg := log.FromContext(ctx)
-	lg.V(1).Info(fmt.Sprintf("existing component template: %#v", componentTemplateResponse.ComponentTemplate))
-	lg.V(1).Info(fmt.Sprintf("new component template: %#v", componentTemplate))
-	lg.Info("component template requires update")
+	lg.Info("OpenSearch Component template requires update")
+
 	return true, nil
 }
 

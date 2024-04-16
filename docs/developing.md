@@ -4,7 +4,7 @@ This page provides information how to develop changes for the operator code. Ple
 
 ## Needed environment and tools
 
-The operator is developed in Go, as such you need a current Go toolkit (for Linux most distributions provide packages, otherwise get it from the [go homepage](https://go.dev/)). Please use version 1.19 (at least 1.18 is required) as this version is used by the CI pipelines. You also need an editor/IDE, ideally with Go support. We recommend either [VS Code](https://code.visualstudio.com/) with the official Go extension or [GoLand](https://www.jetbrains.com/go/).
+The operator is developed in Go, as such you need a current Go toolkit (for Linux most distributions provide packages, otherwise get it from the [go homepage](https://go.dev/)). Please use version 1.22.1 as this version is used by the CI pipelines. You also need an editor/IDE, ideally with Go support. We recommend either [VS Code](https://code.visualstudio.com/) with the official Go extension or [GoLand](https://www.jetbrains.com/go/).
 
 Additional tools you will need:
 
@@ -39,6 +39,7 @@ The basic structure of the code looks like follows:
     * `reconcilers`: Each reconciler deals with one specific aspect of a cluster
     * `tls`: Code specific for certificate management
   * `Dockerfile`: Multi-Architecture Dockerfile for the operator, use with `docker buildx`
+    * The docker base image used is `gcr.io/distroless/static:nonroot` from [distroless](https://github.com/GoogleContainerTools/distroless) which do not contain package managers. To downloads the package source files for operator docker image, click the following [link](https://ci.opensearch.org/ci/dbc/opensearch-operator/operator-debian-source-files.tar.xz).
   * `main.go`: The entrypoint for the operator code. Initializes the runtime and starts the actual controllers
   * `Makefile`: The makefile that contains commands/targets helping with developing the operator
 
@@ -66,7 +67,7 @@ Every change you make must be backed by a unittest. Even if it is only a very si
 
 In Go tests sit alongside the normal code in separate files suffixed `_test.go`. Our policy is to have a test file for each implementation file (e.g. the configuration reconciler in `configuration.go` has a corresponding test file `configuration_test.go`).
 
-For writing tests we use the [ginkgo](https://github.com/onsi/ginkgo) and [gomega](https://github.com/onsi/gomega) libraries to make structuring tests and checking assertions easier.
+For writing tests we use the [ginkgo](https://github.com/onsi/ginkgo) and [gomega](https://github.com/onsi/gomega) libraries to make structuring tests and checking assertions easier. Additionally we use [mockery](https://vektra.github.io/mockery/latest/) to automatically generate mocks (interfaces for which mocks should be generated must be configured in `.mockery.yaml`).
 
 We use a mixture of unit tests (testing functions in isolation) and integration tests (testing a part of the system and its interaction). For the integration tests we use [envtest](https://book.kubebuilder.io/reference/envtest.html) to provide a kubernetes control plane API. Note that this does not provide a fully functional kubernetes cluster, only the API (so for example if you create a statefulset, no pods will actually be created). Envtest makes it easier to test the interaction between components and kubernetes without having to mock the entire kubernetes API.
 Ideally each big feature or reconciler should have one integration test to check overall functionality and a number of unit tests for specifics and logic edge cases.

@@ -20,13 +20,13 @@ import (
 	"context"
 	"time"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
-	"opensearch.opster.io/pkg/builders"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers"
 
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -37,7 +37,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	opsterv1 "opensearch.opster.io/api/v1"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 // OpenSearchClusterReconciler reconciles a OpenSearchCluster object
@@ -61,8 +61,10 @@ type OpenSearchClusterReconciler struct {
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;create;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create;update;patch
+//+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -105,7 +107,6 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 				return ctrl.Result{}, err
 			}
 		}
-
 	} else {
 		if helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
 			// our finalizer is present, so lets handle any external dependency
@@ -141,7 +142,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	case opsterv1.PhaseRunning:
 		return r.reconcilePhaseRunning(ctx)
 	default:
-		r.Logger.Info("NOTHING WILL HAPPEN - DEFAULT")
+		// NOTHING WILL HAPPEN - DEFAULT
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 	}
 }
@@ -218,7 +219,7 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context) (ctrl.Result, error) {
-	r.Logger.Info("start reconcile - Phase: PENDING")
+	r.Logger.Info("Start reconcile - Phase: PENDING")
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 			return err
@@ -229,7 +230,6 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 	})
 	if err != nil {
 		return ctrl.Result{}, err
-
 	}
 	return ctrl.Result{Requeue: true}, nil
 }
@@ -306,6 +306,12 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		&reconcilerContext,
 		r.Instance,
 	)
+	snapshotrepository := reconcilers.NewSnapshotRepositoryReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		r.Instance,
+	)
 
 	componentReconcilers := []reconcilers.ComponentReconciler{
 		tls.Reconcile,
@@ -316,6 +322,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		dashboards.Reconcile,
 		upgrade.Reconcile,
 		restart.Reconcile,
+		snapshotrepository.Reconcile,
 	}
 	for _, rec := range componentReconcilers {
 		result, err := rec()

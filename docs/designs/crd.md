@@ -197,6 +197,8 @@ GeneralConfig defines global Opensearch cluster configuration
         <td><b>DefaultRepo</b></td>
         <td>string</td>
         <td>Default image repository to use</td>
+        <td></td>
+        <td></td>
       </tr><tr>
         <td><b>keystore</b></td>
         <td>[]opsterv1.KeystoreValue</td>
@@ -281,7 +283,7 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>string</td>
         <td>JVM args. Use this to define heap size</td>
         <td>false</td>
-        <td>-Xmx512M -Xms512M<td>
+        <td>-Xmx512M -Xms512M</td>
       </tr><tr>
         <td><b>additionalConfig</b></td>
         <td>string</td>
@@ -344,13 +346,11 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>false</td>
       </tr><tr>
-      </tr><tr>
         <td><b>env</b></td>
         <td>[]corev1.Env</td>
         <td>add user defined environment variables to dashboard app</td>
         <td>false</td>
         <td> - </td>
-      </tr><tr>
       </tr><tr>
         <td><b>image</b></td>
         <td>string</td>
@@ -358,13 +358,11 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td> - </td>
       </tr><tr>
-      </tr><tr>
         <td><b>imagePullPolicy</b></td>
         <td>corev1.PullPolicy</td>
         <td>Define Opensearch-dashboards image pull policy</td>
         <td>false</td>
         <td> - </td>
-      </tr><tr>
       </tr><tr>
         <td><b>imagePullSecrets</b></td>
         <td>corev1.LocalObjectReference</td>
@@ -389,14 +387,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>Adds affinity to dashboard pods</td>
         <td>false</td>
         <td>-</td>
-      </tr>
       </tr><tr>
         <td><b>labels</b></td>
         <td>map[string]string</td>
         <td>Adds labels to dashboard pods</td>
         <td>false</td>
         <td>-</td>
-      </tr><tr>
       </tr><tr>
         <td><b>annotations</b></td>
         <td>map[string]string</td>
@@ -428,7 +424,7 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td> - </td>
       </tr>
-    </tr><tr>
+    </tr>
 </table>
 
 
@@ -536,6 +532,13 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td>-</td>
       </tr><tr>
+      </tr><tr>
+        <td><b>probes</b></td>
+        <td>ProbesConfig</td>
+        <td>Updates the probes timeouts and thresholds config</td>
+        <td>false</td>
+        <td>-</td>
+      </tr>
 </table>
 
 <h3 id="InitHelperConfig">
@@ -559,7 +562,7 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
         <td>string</td>
         <td>Define InitHelper image</td>
         <td>false</td>
-        <td>public.ecr.aws/opsterio/busybox</td>
+        <td>docker.io/busybox</td>
       </tr><tr>
       </tr><tr>
         <td><b>imagePullPolicy</b></td>
@@ -617,20 +620,18 @@ Monitoring defines Opensearch monitoring configuration
         <td>false</td>
         <td>30s</td>
       </tr><tr>
-      </tr><tr>
         <td><b>pluginURL</b></td>
         <td>string</td>
         <td>Define offline link to Aiven Plugin</td>
         <td>false</td>
         <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
       </tr><tr>
-      </tr><tr>
         <td><b>tlsConfig</b></td>
         <td>map[]</td>
         <td>Tls Configuration <b>See <i>tlsConfig</i> below</b></td>
         <td>false</td>
         <td> - </td>
-     </tr><tr>
+     </tr>
 </table>
 
 <h3 id="GeneralConfig">
@@ -650,18 +651,18 @@ Monitoring TLS configuration options
       </tr>
   </thead>
   <tbody><tr>
-    <td><b>serverName</b></td>
-    <td>string</td>
-    <td>Used to verify the hostname for the targets</td>
-    <td>false</td>
-    <td></td>
+      <td><b>serverName</b></td>
+      <td>string</td>
+      <td>Used to verify the hostname for the targets</td>
+      <td>false</td>
+      <td></td>
     </tr><tr>
-    <td><b>insecureSkipVerify</b></td>
-    <td>bool</td>
-    <td>Disable target certificate validation</td>
-    <td>false</td>
-    <td>false</td>
-    </tr><tr>
+      <td><b>insecureSkipVerify</b></td>
+      <td>bool</td>
+      <td>Disable target certificate validation</td>
+      <td>false</td>
+      <td>false</td>
+    </tr>
   </tbody>
 </table>
 
@@ -689,7 +690,7 @@ Every Keystore Value defines a secret to pull secrets from.
     </tbody>
 </table>
 
-<h3 id="GeneralConfig">
+<h3 id="AdditionalVolume">
   AdditionalVolume
 </h3>
 
@@ -707,6 +708,12 @@ AdditionalVolume object define additional volume and volumeMount
       <td>string</td>
       <td>Defines mount path for additional volume</td>
       <td>true</td>
+      <td>-</td>
+    </tr><tr>
+      <td><b>subPath</b></td>
+      <td>string</td>
+      <td>key of the configmap or secret to use (mounts only that key at the given path), ignored for other volume types</td>
+      <td>false</td>
       <td>-</td>
     </tr><tr>
       <td><b>restartPods</b></td>
@@ -736,3 +743,131 @@ AdditionalVolume object define additional volume and volumeMount
   </tbody>
 </table>
 
+<h3 id="ProbesConfig">
+  ProbesConfig
+</h3>
+
+ProbesConfig defines per nodepool probes thresholds and timeouts instead of defaults
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>liveness</b></td>
+        <td>ProbeConfig</td>
+        <td>Update liveness probe thresholds and timeouts</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>readiness</b></td>
+        <td>ReadinessProbeConfig</td>
+        <td>Update readiness probe thresholds and timeouts</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>startup</b></td>
+        <td>ProbeConfig</td>
+        <td>Update startup probe thresholds and timeouts</td>
+        <td>false</td>
+        <td> - </td>
+      </tr>
+</table>
+
+<h3 id="ProbeConfig">
+  ProbeConfig
+</h3>
+
+ProbeConfig defines per probe thresholds and timeouts instead of defaults
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>initialDelaySeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's initialDelaySeconds</td>
+        <td>false</td>
+        <td> 10 </td>
+      </tr><tr>
+        <td><b>periodSeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's periodSeconds</td>
+        <td>false</td>
+        <td> 20 </td>
+      </tr><tr>
+        <td><b>timeoutSeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's timeoutSeconds</td>
+        <td>false</td>
+        <td> 5 </td>
+      </tr><tr>
+        <td><b>successThreshold</b></td>
+        <td>int32</td>
+        <td>Update probe's successThreshold</td>
+        <td>false</td>
+        <td> 1 </td>
+      </tr><tr>
+        <td><b>failureThreshold</b></td>
+        <td>int32</td>
+        <td>Update probe's failureThreshold</td>
+        <td>false</td>
+        <td> 10 </td>
+      </tr>
+</table>
+
+<h3 id="ReadinessProbeConfig">
+  ReadinessProbeConfig
+</h3>
+
+ReadinessProbeConfig defines per probe thresholds and timeouts instead of defaults
+
+<table>
+    <thead>
+        <tr>
+            <th>Name</th>
+            <th>Type</th>
+            <th>Description</th>
+            <th>Required</th>
+            <th>default</th>
+        </tr>
+    </thead>
+    <tbody><tr>
+        <td><b>initialDelaySeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's initialDelaySeconds</td>
+        <td>false</td>
+        <td> 60 </td>
+      </tr><tr>
+        <td><b>periodSeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's periodSeconds</td>
+        <td>false</td>
+        <td> 30 </td>
+      </tr><tr>
+        <td><b>timeoutSeconds</b></td>
+        <td>int32</td>
+        <td>Update probe's timeoutSeconds</td>
+        <td>false</td>
+        <td> 30 </td>
+      </tr><tr>
+        <td><b>failureThreshold</b></td>
+        <td>int32</td>
+        <td>Update probe's failureThreshold</td>
+        <td>false</td>
+        <td> 5 </td>
+      </tr>
+</table>

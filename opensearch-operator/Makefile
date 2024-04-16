@@ -2,10 +2,10 @@
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
-ENVTEST_K8S_VERSION = 1.22.0
+ENVTEST_K8S_VERSION = 1.27
 PROJECT_PATH=$(CURDIR)
 
-# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set) 
+# Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
 else
@@ -52,14 +52,18 @@ fmt: ## Run go fmt against code.
 
 .PHONY: lint
 lint:
-	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v1.48-alpine golangci-lint run -E gofmt --deadline=3m --skip-dirs=opensearch-gateway/responses
+	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v1.57-alpine golangci-lint run -E gofmt --timeout=3m --exclude-dirs=opensearch-gateway/responses
 
 .PHONY: vet
 vet: ## Run go vet against code.
 	go vet ./...
 
+.PHONY: genmocks
+genmocks: mockery
+	$(MOCKERY) --all
+
 .PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests generate fmt vet envtest genmocks ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test ./... -coverprofile cover.out
 
 ##@ Build
@@ -71,13 +75,9 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go --loglevel debug
 
 docker-build: generate fmt vet ## Build docker image with the manager.
-	go install opensearch.opster.io/pkg/builders
-	go install opensearch.opster.io/pkg/helpers
 	DOCKER_BUILDKIT=1 docker build -t ${IMG} .
 
 docker-build-multiarch: ## Build docker image with the manager for all supported architectures
-	go install opensearch.opster.io/pkg/builders
-	go install opensearch.opster.io/pkg/helpers
 	DOCKER_BUILDKIT=1 docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
@@ -113,10 +113,12 @@ $(LOCALBIN):
 KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
+MOCKERY ?= $(LOCALBIN)/mockery
 
 ## Tool Versions
-KUSTOMIZE_VERSION ?= v4.5.7
-CONTROLLER_TOOLS_VERSION ?= v0.10.0
+KUSTOMIZE_VERSION ?= v5.3.0
+CONTROLLER_TOOLS_VERSION ?= v0.14.0
+MOCKERY_VERSION ?= v2.42.1
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -128,6 +130,11 @@ $(KUSTOMIZE): $(LOCALBIN)
 controller-gen: $(CONTROLLER_GEN) ## Download controller-gen locally if necessary.
 $(CONTROLLER_GEN): $(LOCALBIN)
 	test -s $(LOCALBIN)/controller-gen || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-tools/cmd/controller-gen@$(CONTROLLER_TOOLS_VERSION)
+
+.PHONY: mockery
+mockery: $(MOCKERY) ## Download mockery locally if necessary.
+$(MOCKERY): $(LOCALBIN)
+	test -s $(LOCALBIN)/mockery || GOBIN=$(LOCALBIN) go install github.com/vektra/mockery/v2@$(MOCKERY_VERSION)
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.

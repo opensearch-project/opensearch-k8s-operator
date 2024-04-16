@@ -31,9 +31,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
-	"opensearch.opster.io/pkg/reconcilers"
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
 // OpensearchUserReconciler reconciles a OpensearchUser object
@@ -53,7 +53,7 @@ type OpensearchUserReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("user", req.NamespacedName)
-	r.Logger.Info("Reconciling OpensearchUser")
+	r.Logger.V(4).Info("Reconciling OpensearchUser")
 
 	r.Instance = &opsterv1.OpensearchUser{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
@@ -62,8 +62,8 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	}
 
 	userReconciler := reconcilers.NewUserReconciler(
-		ctx,
 		r.Client,
+		ctx,
 		r.Recorder,
 		r.Instance,
 	)

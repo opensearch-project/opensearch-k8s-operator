@@ -7,6 +7,8 @@ import (
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,19 +17,16 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
 const (
-	ConfigurationChecksumAnnotation      = "opster.io/config"
-	DefaultDiskSize                      = "30Gi"
-	defaultMonitoringPlugin              = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
-	securityconfigChecksumAnnotation     = "securityconfig/checksum"
-	snapshotRepoConfigChecksumAnnotation = "snapshotrepoconfig/checksum"
+	ConfigurationChecksumAnnotation  = "opster.io/config"
+	DefaultDiskSize                  = "30Gi"
+	defaultMonitoringPlugin          = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
+	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
 func NewSTSForNodePool(
@@ -39,7 +38,7 @@ func NewSTSForNodePool(
 	volumeMounts []corev1.VolumeMount,
 	extraConfig map[string]string,
 ) *appsv1.StatefulSet {
-	//To make sure disksize is not passed as empty
+	// To make sure disksize is not passed as empty
 	var disksize string
 	if len(node.DiskSize) == 0 {
 		disksize = DefaultDiskSize
@@ -166,7 +165,7 @@ func NewSTSForNodePool(
 		//	vendor = "opensearchproject/opensearch"
 	} else {
 		panic("vendor=elasticsearch not implemented")
-		//vendor ="elasticsearch"
+		// vendor ="elasticsearch"
 	}
 
 	jvm := helpers.CalculateJvmHeapSize(&node)
@@ -179,12 +178,102 @@ func NewSTSForNodePool(
 	// Supress repeated log messages about a deprecated format for the publish address
 	jvm += " -Dopensearch.transport.cname_in_publish_address=true"
 
-	probe := corev1.Probe{
-		PeriodSeconds:       20,
-		TimeoutSeconds:      5,
-		FailureThreshold:    10,
-		SuccessThreshold:    1,
-		InitialDelaySeconds: 10,
+	startupProbePeriodSeconds := int32(20)
+	startupProbeTimeoutSeconds := int32(5)
+	startupProbeFailureThreshold := int32(10)
+	startupProbeSuccessThreshold := int32(1)
+	startupProbeInitialDelaySeconds := int32(10)
+
+	readinessProbePeriodSeconds := int32(30)
+	readinessProbeTimeoutSeconds := int32(30)
+	readinessProbeFailureThreshold := int32(5)
+	readinessProbeInitialDelaySeconds := int32(60)
+
+	livenessProbePeriodSeconds := int32(20)
+	livenessProbeTimeoutSeconds := int32(5)
+	livenessProbeFailureThreshold := int32(10)
+	livenessProbeSuccessThreshold := int32(1)
+	livenessProbeInitialDelaySeconds := int32(10)
+
+	if node.Probes != nil {
+		if node.Probes.Liveness != nil {
+			if node.Probes.Liveness.InitialDelaySeconds > 0 {
+				livenessProbeInitialDelaySeconds = node.Probes.Liveness.InitialDelaySeconds
+			}
+
+			if node.Probes.Liveness.PeriodSeconds > 0 {
+				livenessProbePeriodSeconds = node.Probes.Liveness.PeriodSeconds
+			}
+
+			if node.Probes.Liveness.TimeoutSeconds > 0 {
+				livenessProbeTimeoutSeconds = node.Probes.Liveness.TimeoutSeconds
+			}
+
+			if node.Probes.Liveness.FailureThreshold > 0 {
+				livenessProbeFailureThreshold = node.Probes.Liveness.FailureThreshold
+			}
+
+			if node.Probes.Liveness.SuccessThreshold > 0 {
+				livenessProbeSuccessThreshold = node.Probes.Liveness.SuccessThreshold
+			}
+		}
+
+		if node.Probes.Startup != nil {
+			if node.Probes.Startup.InitialDelaySeconds > 0 {
+				startupProbeInitialDelaySeconds = node.Probes.Startup.InitialDelaySeconds
+			}
+
+			if node.Probes.Startup.PeriodSeconds > 0 {
+				startupProbePeriodSeconds = node.Probes.Startup.PeriodSeconds
+			}
+
+			if node.Probes.Startup.TimeoutSeconds > 0 {
+				startupProbeTimeoutSeconds = node.Probes.Startup.TimeoutSeconds
+			}
+
+			if node.Probes.Startup.FailureThreshold > 0 {
+				startupProbeFailureThreshold = node.Probes.Startup.FailureThreshold
+			}
+
+			if node.Probes.Startup.SuccessThreshold > 0 {
+				startupProbeSuccessThreshold = node.Probes.Startup.SuccessThreshold
+			}
+		}
+
+		if node.Probes.Readiness != nil {
+			if node.Probes.Readiness.InitialDelaySeconds > 0 {
+				readinessProbeInitialDelaySeconds = node.Probes.Readiness.InitialDelaySeconds
+			}
+
+			if node.Probes.Readiness.PeriodSeconds > 0 {
+				readinessProbePeriodSeconds = node.Probes.Readiness.PeriodSeconds
+			}
+
+			if node.Probes.Readiness.TimeoutSeconds > 0 {
+				readinessProbeTimeoutSeconds = node.Probes.Readiness.TimeoutSeconds
+			}
+
+			if node.Probes.Readiness.FailureThreshold > 0 {
+				readinessProbeFailureThreshold = node.Probes.Readiness.FailureThreshold
+			}
+		}
+	}
+
+	livenessProbe := corev1.Probe{
+		PeriodSeconds:       livenessProbePeriodSeconds,
+		TimeoutSeconds:      livenessProbeTimeoutSeconds,
+		FailureThreshold:    livenessProbeFailureThreshold,
+		SuccessThreshold:    livenessProbeSuccessThreshold,
+		InitialDelaySeconds: livenessProbeInitialDelaySeconds,
+		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
+	}
+
+	startupProbe := corev1.Probe{
+		PeriodSeconds:       startupProbePeriodSeconds,
+		TimeoutSeconds:      startupProbeTimeoutSeconds,
+		FailureThreshold:    startupProbeFailureThreshold,
+		SuccessThreshold:    startupProbeSuccessThreshold,
+		InitialDelaySeconds: startupProbeInitialDelaySeconds,
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
@@ -193,10 +282,10 @@ func NewSTSForNodePool(
 
 	curlCmd := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
-		InitialDelaySeconds: 60,
-		PeriodSeconds:       30,
-		FailureThreshold:    5,
-		TimeoutSeconds:      30,
+		InitialDelaySeconds: readinessProbeInitialDelaySeconds,
+		PeriodSeconds:       readinessProbePeriodSeconds,
+		FailureThreshold:    readinessProbeFailureThreshold,
+		TimeoutSeconds:      readinessProbeTimeoutSeconds,
 		ProbeHandler: corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
 				Command: []string{
@@ -329,20 +418,20 @@ func NewSTSForNodePool(
 				`
 				#!/usr/bin/env bash
 				set -euo pipefail
-	  
+
 				/usr/share/opensearch/bin/opensearch-keystore create
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
 				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i"
 				done
-	  
+
 				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
 				if [ ! -z ${PASSWORD+x} ]; then
 				  echo 'Adding env $PASSWORD to keystore as key bootstrap.password'
 				  echo "$PASSWORD" | /usr/share/opensearch/bin/opensearch-keystore add -x bootstrap.password
 				fi
-	  
+
 				cp -a /usr/share/opensearch/config/opensearch.keystore /tmp/keystore/
 				`,
 			},
@@ -426,8 +515,8 @@ func NewSTSForNodePool(
 									ContainerPort: 9300,
 								},
 							},
-							StartupProbe:    &probe,
-							LivenessProbe:   &probe,
+							StartupProbe:    &startupProbe,
+							LivenessProbe:   &livenessProbe,
 							ReadinessProbe:  &readinessProbe,
 							VolumeMounts:    volumeMounts,
 							SecurityContext: securityContext,
@@ -486,6 +575,7 @@ func NewSTSForNodePool(
 
 	return sts
 }
+
 func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel:  cr.Name,
@@ -541,7 +631,6 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 }
 
 func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
-
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -888,80 +977,6 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 	return false
 }
 
-func NewSnapshotRepoconfigUpdateJob(
-	instance *opsterv1.OpenSearchCluster,
-	jobName string,
-	namespace string,
-	checksum string,
-	volumes []corev1.Volume,
-	volumeMounts []corev1.VolumeMount,
-) batchv1.Job {
-	httpPort, _ := helpers.VersionCheck(instance)
-	dns := DnsOfService(instance)
-	var snapshotCmd string
-	for _, repository := range instance.Spec.General.SnapshotRepositories {
-		var snapshotSettings string
-
-		// Sort keys to have a stable order
-		keys := helpers.SortedKeys(repository.Settings)
-		for _, settingsKey := range keys {
-			snapshotSettings += fmt.Sprintf("\"%s\": \"%s\" , ", settingsKey, repository.Settings[settingsKey])
-		}
-		snapshotSettings = strings.TrimRight(snapshotSettings, " ,")
-		snapshotCmd += fmt.Sprintf("curl --fail-with-body -s -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" -X PUT https://%s.svc.cluster.local:%v/_snapshot/%s?pretty -H \"Content-Type: application/json\" -d %c{\"type\": \"%s\", \"settings\": {%s}}%c; ", dns, fmt.Sprint(httpPort), repository.Name, '\'', repository.Type, snapshotSettings, '\'')
-	}
-	terminationGracePeriodSeconds := int64(5)
-	backoffLimit := int32(0)
-
-	node := opsterv1.NodePool{
-		Component: "snapshotconfig",
-	}
-	annotations := map[string]string{
-		snapshotRepoConfigChecksumAnnotation: checksum,
-	}
-	image := helpers.ResolveImage(instance, &node)
-
-	volumes = append(volumes, corev1.Volume{
-		Name: "admin-credentials",
-		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{SecretName: fmt.Sprintf("%s-admin-password", instance.Name)},
-		},
-	})
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{
-		Name:      "admin-credentials",
-		MountPath: "/mnt/admin-credentials",
-	})
-
-	podSecurityContext := instance.Spec.General.PodSecurityContext
-	securityContext := instance.Spec.General.SecurityContext
-
-	return batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
-		Spec: batchv1.JobSpec{
-			BackoffLimit: &backoffLimit,
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Name: jobName},
-				Spec: corev1.PodSpec{
-					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
-					Containers: []corev1.Container{{
-						Name:            "snapshotrepoconfig",
-						Image:           image.GetImage(),
-						ImagePullPolicy: image.GetImagePullPolicy(),
-						Command:         []string{"/bin/bash", "-c"},
-						Args:            []string{snapshotCmd},
-						VolumeMounts:    volumeMounts,
-						SecurityContext: securityContext,
-					}},
-					ServiceAccountName: instance.Spec.General.ServiceAccount,
-					RestartPolicy:      corev1.RestartPolicyNever,
-					Volumes:            volumes,
-					SecurityContext:    podSecurityContext,
-				},
-			},
-		},
-	}
-}
-
 func NewSecurityconfigUpdateJob(
 	instance *opsterv1.OpenSearchCluster,
 	jobName string,
@@ -972,7 +987,6 @@ func NewSecurityconfigUpdateJob(
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
-
 	// Dummy node spec required to resolve image
 	node := opsterv1.NodePool{
 		Component: "securityconfig",
@@ -1044,29 +1058,19 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 	return true
 }
 
-func DataNodesCount(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) int32 {
-	count := int32(0)
-	for _, nodePool := range cr.Spec.NodePools {
-		if helpers.HasDataRole(&nodePool) {
-			sts := &appsv1.StatefulSet{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      StsName(cr, &nodePool),
-				Namespace: cr.Namespace,
-			}, sts); err == nil {
-				count = count + pointer.Int32Deref(sts.Spec.Replicas, 1)
-			}
-		}
-	}
-	return count
-}
-
 func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
-
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
 	selector := metav1.LabelSelector{
 		MatchLabels: labels,
+		// Needed so only the pool-specific service is matched, otherwise there would be double scraping
+		MatchExpressions: []metav1.LabelSelectorRequirement{
+			{
+				Key:      helpers.NodePoolLabel,
+				Operator: metav1.LabelSelectorOpExists,
+			},
+		},
 	}
 
 	namespaceSelector := monitoring.NamespaceSelector{
@@ -1128,7 +1132,8 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 				helpers.ClusterLabel,
 			},
 			Endpoints: []monitoring.Endpoint{
-				{Port: "http",
+				{
+					Port:            "http",
 					TargetPort:      nil,
 					Path:            "/_prometheus/metrics",
 					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapeInterval),
@@ -1143,5 +1148,4 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 			NamespaceSelector: namespaceSelector,
 		},
 	}
-
 }

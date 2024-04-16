@@ -5,11 +5,11 @@ import (
 
 	"k8s.io/utils/pointer"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	opsterv1 "opensearch.opster.io/api/v1"
 )
 
 var _ = Describe("Builders", func() {
@@ -27,8 +27,9 @@ var _ = Describe("Builders", func() {
 							"testAnnotationKey2": "testValue2",
 						},
 					},
-				}}
-			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
 				"testAnnotationKey":  "testValue",
 				"testAnnotationKey2": "testValue2",
@@ -49,8 +50,9 @@ var _ = Describe("Builders", func() {
 							"testLabelKey2": "testValue2",
 						},
 					},
-				}}
-			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Labels).To(Equal(map[string]string{
 				"opensearch.cluster.dashboards": clusterName,
 				"testLabelKey":                  "testValue",
@@ -78,8 +80,9 @@ var _ = Describe("Builders", func() {
 							LoadBalancerSourceRanges: sourceRanges,
 						},
 					},
-				}}
-			var result = NewDashboardsSvcForCr(&spec)
+				},
+			}
+			result := NewDashboardsSvcForCr(&spec)
 			Expect(result.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
 			Expect(result.Spec.LoadBalancerSourceRanges).To(Equal(sourceRanges))
 			Expect(result.Annotations).To(Equal(map[string]string{
@@ -105,7 +108,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			installCmd := fmt.Sprintf(
 				"./bin/opensearch-dashboards-plugin install '%s' && ./bin/opensearch-dashboards-plugin install '%s' && ./opensearch-dashboards-docker-entrypoint.sh",
 				pluginA,
@@ -145,7 +148,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
@@ -166,7 +169,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			var result = NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccountName))
 		})
 	})

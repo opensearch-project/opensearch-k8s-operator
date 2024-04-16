@@ -2,7 +2,6 @@
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  creationTimestamp: null
   name: manager-role
 rules:
 - apiGroups:
@@ -76,6 +75,18 @@ rules:
 - apiGroups:
   - ""
   resources:
+  - persistentvolumeclaims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - ""
+  resources:
   - pods
   verbs:
   - create
@@ -101,6 +112,18 @@ rules:
   - ""
   resources:
   - services
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - monitoring.coreos.com
+  resources:
+  - servicemonitors
   verbs:
   - create
   - delete
@@ -216,6 +239,32 @@ rules:
   - opensearch.opster.io
   resources:
   - opensearchindextemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchismpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchismpolicies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchismpolicies/status
   verbs:
   - get
   - patch

@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
@@ -12,7 +13,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/pointer"
-	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
 )
@@ -21,7 +21,6 @@ import (
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
 var _ = Describe("Scaler Reconciler", func() {
-
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "cluster-test-nodes"
@@ -193,5 +192,4 @@ var _ = Describe("Scaler Reconciler", func() {
 			}
 		})
 	})
-
 })

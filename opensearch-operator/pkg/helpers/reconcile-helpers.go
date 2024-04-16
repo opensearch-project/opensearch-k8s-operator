@@ -5,15 +5,15 @@ import (
 	"path"
 	"strings"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/hashicorp/go-version"
 	"k8s.io/utils/pointer"
-	opsterv1 "opensearch.opster.io/api/v1"
 )
 
 func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
-	defaultRepo := "public.ecr.aws/opsterio"
+	defaultRepo := "docker.io"
 	defaultImage := "busybox"
-	defaultVersion := "1.27.2-buildx"
+	defaultVersion := "latest"
 
 	// If a custom InitHelper image is specified, use it.
 	if cr.Spec.InitHelper.ImageSpec != nil {
@@ -100,24 +100,28 @@ func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageS
 	return false
 }
 
-// Function to help identify httpPort and securityconfigPath for 1.x and 2.x OpenSearch Operator.
-func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, string) {
+// Function to help identify httpPort, securityConfigPort and securityConfigPath for 1.x and 2.x OpenSearch Operator.
+func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
 	var httpPort int32
-	var securityconfigPath string
+	var securityConfigPort int32
+	var securityConfigPath string
 	versionPassed, _ := version.NewVersion(instance.Spec.General.Version)
 	constraints, _ := version.NewConstraint(">= 2.0")
-	if constraints.Check(versionPassed) {
-		if instance.Spec.General.HttpPort > 0 {
-			httpPort = instance.Spec.General.HttpPort
-		} else {
-			httpPort = 9200
-		}
-		securityconfigPath = "/usr/share/opensearch/config/opensearch-security"
+
+	if instance.Spec.General.HttpPort > 0 {
+		httpPort = instance.Spec.General.HttpPort
 	} else {
-		httpPort = 9300
-		securityconfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
+		httpPort = 9200
 	}
-	return httpPort, securityconfigPath
+
+	if constraints.Check(versionPassed) {
+		securityConfigPort = httpPort
+		securityConfigPath = "/usr/share/opensearch/config/opensearch-security"
+	} else {
+		securityConfigPort = 9300
+		securityConfigPath = "/usr/share/opensearch/plugins/opensearch-security/securityconfig"
+	}
+	return httpPort, securityConfigPort, securityConfigPath
 }
 
 func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool, entrypoint string) []string {

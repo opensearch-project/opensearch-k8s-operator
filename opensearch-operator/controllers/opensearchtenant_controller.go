@@ -2,11 +2,12 @@ package controllers
 
 import (
 	"context"
+
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
-	opsterv1 "opensearch.opster.io/api/v1"
-	"opensearch.opster.io/pkg/reconcilers"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -39,8 +40,8 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	}
 
 	tenantReconciler := reconcilers.NewTenantReconciler(
-		ctx,
 		r.Client,
+		ctx,
 		r.Recorder,
 		r.Instance,
 	)

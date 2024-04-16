@@ -3,19 +3,17 @@ package operatortests
 import (
 	"testing"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/clientcmd"
-	opsterv1 "opensearch.opster.io/api/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var (
-	k8sClient client.Client
-)
+var k8sClient client.Client
 
 func TestAPIs(t *testing.T) {
 	config, err := clientcmd.BuildConfigFromFlags("", "../kubeconfig")
