@@ -76,7 +76,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.initHelper.imagePullPolicy | string | `"IfNotPresent"` | initHelper image pull policy |
 | cluster.initHelper.imagePullSecrets | list | `[]` | initHelper image pull secret |
 | cluster.initHelper.resources | object | `{}` | initHelper pod cpu and memory resources |
-| cluster.initHelper.version | float | `1.36` | initHelper version |
+| cluster.initHelper.version | string | `"1.36"` | initHelper version |
 | cluster.labels | object | `{}` | OpenSearchCluster labels |
 | cluster.name | string | `""` | OpenSearchCluster name, by default release name is used |
 | cluster.nodePools | list | `[{"component":"masters","diskSize":"30Gi","replicas":3,"resources":{"limits":{"cpu":"500m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"2Gi"}},"roles":["master","data"]}]` | Opensearch nodes configuration |
