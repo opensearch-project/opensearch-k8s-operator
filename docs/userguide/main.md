@@ -928,6 +928,48 @@ spec:
           failureThreshold: 5
 ```
 
+### Configuring Resource Limits/Requests
+
+In addition to the information provided in the previous sections on how to specify resource requirements for the node pools, it is also possible to specify resources for all entities created by the operator for more advanced use cases.
+
+The operator generates many pods via resources such as jobs, stateful sets, replica sets, and others, which utilize InitContainers. The following configuration allows you to specify a default resources config for all InitContainer.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  initHelper:
+    resources:
+      requests:
+        memory: "50Mi"
+        cpu: "50m"
+      limits:
+        memory: "200Mi"
+        cpu: "200m"
+```
+
+You can also configure the resources for the security update job as shown below.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  security:
+    config:
+      updateJob:
+        resources:
+          limits:
+            cpu: "100m"
+            memory: "100Mi"
+          requests:
+            cpu: "100m"
+            memory: "100Mi"
+```
+
+Please note that the examples provided here do not reflect actual resource requirements. You may need to conduct further testing to properly adjust the resources based on your specific needs.
+
 ## Cluster operations
 
 The operator contains several features that automate management tasks that might be needed during the cluster lifecycle. The different available options are documented here.

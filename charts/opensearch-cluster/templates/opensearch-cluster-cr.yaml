@@ -134,8 +134,8 @@ spec:
         {{- if .Values.opensearchCluster.dashboards.resources.limits.cpu }}
         cpu: {{ .Values.opensearchCluster.dashboards.resources.limits.cpu }}
         {{- end }}
-        {{- end }}
-        {{- end }}
+      {{- end }}
+    {{- end }}
     {{- if .Values.opensearchCluster.dashboards.tls }}
     tls:
       {{- if .Values.opensearchCluster.dashboards.tls.enable }}
@@ -279,6 +279,30 @@ spec:
       {{- if .Values.opensearchCluster.security.config.securityConfigSecret }}
       securityConfigSecret:
         name: {{ .Values.opensearchCluster.security.config.securityConfigSecret.name }}
+      {{- end }}
+      {{- if .Values.opensearchCluster.security.config.updateJob }}
+      updateJob:
+        {{- if .Values.opensearchCluster.security.config.updateJob.resources }}
+        resources:
+          {{- if .Values.opensearchCluster.security.config.updateJob.resources.requests }}
+          requests:
+            {{- if .Values.opensearchCluster.security.config.updateJob.resources.requests.memory }}
+            memory: {{ .Values.opensearchCluster.security.config.updateJob.resources.requests.memory }}
+            {{- end }}
+            {{- if .Values.opensearchCluster.security.config.updateJob.resources.requests.cpu }}
+            cpu: {{ .Values.opensearchCluster.security.config.updateJob.resources.requests.cpu }}
+            {{- end }}
+          {{- end }}
+          {{- if .Values.opensearchCluster.security.config.updateJob.resources.limits }}
+          limits:
+          {{- if .Values.opensearchCluster.security.config.updateJob.resources.limits.memory }}
+            memory: {{ .Values.opensearchCluster.security.config.updateJob.resources.limits.memory }}
+            {{- end }}
+            {{- if .Values.opensearchCluster.security.config.updateJob.resources.limits.cpu }}
+            cpu: {{ .Values.opensearchCluster.security.config.updateJob.resources.limits.cpu }}
+            {{- end }}
+          {{- end }}
+        {{- end }}
       {{- end }}
     {{- end }}
     {{- if .Values.opensearchCluster.security.tls }}
