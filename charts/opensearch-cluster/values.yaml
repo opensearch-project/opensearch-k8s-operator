@@ -235,7 +235,7 @@ cluster:
     resources: {}
 
     # -- initHelper version
-    version: 1.36
+    version: "1.36"
 
   # -- Opensearch nodes configuration
   nodePools:
