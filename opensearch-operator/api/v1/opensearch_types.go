@@ -266,6 +266,12 @@ type SecurityConfig struct {
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
+	UpdateJob              SecurityUpdateJobConfig     `json:"updateJob,omitempty"`
+}
+
+// Specific configs for the SecurityConfig update job
+type SecurityUpdateJobConfig struct {
+	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
 }
 
 type ImageSpec struct {
@@ -380,4 +386,25 @@ func (s ImageSpec) GetImage() string {
 		return ""
 	}
 	return *s.Image
+}
+
+func (s *Security) GetConfig() *SecurityConfig {
+	if s == nil {
+		return nil
+	}
+	return s.Config
+}
+
+func (s *Security) GetTls() *TlsConfig {
+	if s == nil {
+		return nil
+	}
+	return s.Tls
+}
+
+func (sc *SecurityConfig) GetUpdateJob() SecurityUpdateJobConfig {
+	if sc == nil {
+		return SecurityUpdateJobConfig{}
+	}
+	return sc.UpdateJob
 }
