@@ -672,22 +672,31 @@ Monitoring TLS configuration options
 
 Every Keystore Value defines a secret to pull secrets from. 
 <table>
-    <tbody>
-      <tr>
-        <td><b>secret</b></td>
-        <td>corev1.LocalObjectReference</td>
-        <td>Define secret that contains key value pairs</td>
-        <td>true</td>
-        <td>-</td>
-      </tr>
-      <tr>
-        <td><b>keyMappings</b></td>
-        <td>map</td>
-        <td>Define key mappings from secret to keystore entry. Example: "old: new" creates a keystore entry "new" with the value from the secret entry "old". When a map is provided, only the specified keys are loaded from the secret, so use "key: key" to load a key that should not be renamed.</td>
-        <td>false</td>
-        <td>-</td>
-      </tr>
-    </tbody>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Required</th>
+      <th>default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>secret</b></td>
+      <td>corev1.LocalObjectReference</td>
+      <td>Define secret that contains key value pairs</td>
+      <td>true</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><b>keyMappings</b></td>
+      <td>map</td>
+      <td>Define key mappings from secret to keystore entry. Example: "old: new" creates a keystore entry "new" with the value from the secret entry "old". When a map is provided, only the specified keys are loaded from the secret, so use "key: key" to load a key that should not be renamed.</td>
+      <td>false</td>
+      <td>-</td>
+    </tr>
+  </tbody>
 </table>
 
 <h3 id="AdditionalVolume">
@@ -696,6 +705,15 @@ Every Keystore Value defines a secret to pull secrets from.
 
 AdditionalVolume object define additional volume and volumeMount
 <table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Required</th>
+      <th>default</th>
+    </tr>
+  </thead>
   <tbody>
     <tr>
       <td><b>name</b></td>
@@ -737,6 +755,12 @@ AdditionalVolume object define additional volume and volumeMount
       <td><b>secret</b></td>
       <td>corev1.SecretVolumeSource</td>
       <td>Defines Secret object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr><tr>
+      <td><b>csi</b></td>
+      <td>corev1.CSIVolumeSource</td>
+      <td>Defines the CSI object to be mounted</td>
       <td>false</td>
       <td>-</td>
     </tr>
