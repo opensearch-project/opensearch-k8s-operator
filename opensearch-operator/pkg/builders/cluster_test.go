@@ -777,4 +777,73 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
 		})
 	})
+	
+	When("Configuring InitHelper Resources", func() {
+		It("should propagate Resources to all init containers", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.InitHelper = opsterv1.InitHelperConfig{
+				Resources: corev1.ResourceRequirements{
+					Limits: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("1"),
+						corev1.ResourceMemory: resource.MustParse("1Gi"),
+					},
+					Requests: corev1.ResourceList{
+						corev1.ResourceCPU:    resource.MustParse("500m"),
+						corev1.ResourceMemory: resource.MustParse("512Mi"),
+					},
+				},
+			}
+			nodePoolSts := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			for _, container := range nodePoolSts.Spec.Template.Spec.InitContainers {
+				Expect(container.Resources).To(Equal(clusterObject.Spec.InitHelper.Resources))
+			}
+			bootstrapPod := NewBootstrapPod(&clusterObject, nil, nil)
+			for _, container := range bootstrapPod.Spec.InitContainers {
+				Expect(container.Resources).To(Equal(clusterObject.Spec.InitHelper.Resources))
+			}
+		})
+	})
+
+	When("Configuring Security Config UpdateJob Resources", func() {
+		It("should propagate Resources to the Security Config UpdateJob", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Config: &opsterv1.SecurityConfig{
+					UpdateJob: opsterv1.SecurityUpdateJobConfig{
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("1"),
+								corev1.ResourceMemory: resource.MustParse("1Gi"),
+							},
+							Requests: corev1.ResourceList{
+								corev1.ResourceCPU:    resource.MustParse("500m"),
+								corev1.ResourceMemory: resource.MustParse("512Mi"),
+							},
+						},
+					},
+				},
+			}
+
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
+		})
+
+		It("should propagate Resources to the Security Config UpdateJob if partially configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Config: &opsterv1.SecurityConfig{
+					UpdateJob: opsterv1.SecurityUpdateJobConfig{
+						Resources: corev1.ResourceRequirements{
+							Limits: corev1.ResourceList{
+								corev1.ResourceCPU: resource.MustParse("1"),
+							},
+						},
+					},
+				},
+			}
+
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
+		})
+	})
 })

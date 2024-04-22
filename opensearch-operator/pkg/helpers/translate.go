@@ -9,6 +9,7 @@ import (
 func TranslateIndexTemplateToRequest(spec v1.OpensearchIndexTemplateSpec) requests.IndexTemplate {
 	request := requests.IndexTemplate{
 		IndexPatterns: spec.IndexPatterns,
+		DataStream:    TranslateDatastreamToRequest(spec.DataStream),
 		Template:      TranslateIndexToRequest(spec.Template),
 		Priority:      spec.Priority,
 		Version:       spec.Version,
@@ -34,6 +35,19 @@ func TranslateComponentTemplateToRequest(spec v1.OpensearchComponentTemplateSpec
 	}
 
 	return request
+}
+
+// TranslateDatastreamToRequest rewrites the CRD format to the gateway format
+func TranslateDatastreamToRequest(spec *v1.OpensearchDatastreamSpec) *requests.Datastream {
+	if spec == nil {
+		return nil
+	}
+	request := requests.Datastream{}
+	if spec.TimestampField.Name != "" {
+		request.TimestampField = &requests.DatastreamTimestampFieldSpec{Name: spec.TimestampField.Name}
+	}
+
+	return &request
 }
 
 // TranslateIndexToRequest rewrites the CRD format to the gateway format
