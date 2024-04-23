@@ -426,7 +426,9 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 				}
 				var indexPri *requests.IndexPriority
 				if action.IndexPriority != nil {
-					indexPri.Priority = action.IndexPriority.Priority
+					indexPri = &requests.IndexPriority{
+						Priority: action.IndexPriority.Priority,
+					}
 				}
 				var snapshot *requests.Snapshot
 				if action.Snapshot != nil {
