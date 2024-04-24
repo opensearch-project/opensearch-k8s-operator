@@ -294,6 +294,8 @@ type AdditionalVolume struct {
 	ConfigMap *corev1.ConfigMapVolumeSource `json:"configMap,omitempty"`
 	// EmptyDir to use to populate the volume
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
+	// CSI object to use to populate the volume
+	CSI *corev1.CSIVolumeSource `json:"csi,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }
