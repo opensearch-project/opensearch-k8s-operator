@@ -30,6 +30,12 @@ var (
 	ErrUnexpectedStatus = errors.New("unexpected upgrade status")
 )
 
+const (
+	componentNameUpgrader   = "Upgrader"
+	upgradeStatusPending    = "Pending"
+	upgradeStatusInProgress = "Upgrading"
+)
+
 type UpgradeReconciler struct {
 	client            k8s.K8sClient
 	ctx               context.Context
@@ -93,10 +99,10 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 
 	// Work on the current nodepool as appropriate
 	switch currentStatus.Status {
-	case "Pending":
+	case upgradeStatusPending:
 		// Set it to upgrading and requeue
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
-			currentStatus.Status = "Upgrading"
+			currentStatus.Status = upgradeStatusInProgress
 			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, currentStatus)
 		})
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", currentStatus.Description)
@@ -104,7 +110,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
 		}, err
-	case "Upgrading":
+	case upgradeStatusInProgress:
 		err := r.doNodePoolUpgrade(nodePool)
 		return ctrl.Result{
 			Requeue:      true,
@@ -116,16 +122,16 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			instance.Status.Version = instance.Spec.General.Version
 			for _, pool := range instance.Spec.NodePools {
 				componentStatus := opsterv1.ComponentStatus{
-					Component:   "Upgrader",
+					Component:   componentNameUpgrader,
 					Description: pool.Component,
 				}
-				currentStatus, found := helpers.FindFirstPartial(instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndGroup)
+				currentStatus, found := helpers.FindFirstPartial(instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndComponent)
 				if found {
 					instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 				}
 			}
 		})
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade - NewVersion: %s", r.instance.Status.Version)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade - NewVersion: %s", r.instance.Spec.General.Version)
 		return ctrl.Result{}, err
 	default:
 		// We should never get here so return an error
@@ -190,35 +196,35 @@ func (r *UpgradeReconciler) findNextNodePoolForUpgrade() (opsterv1.NodePool, ops
 	pool, found := r.findInProgress(dataNodes)
 	if found {
 		return pool, opsterv1.ComponentStatus{
-			Component:   "Upgrader",
+			Component:   componentNameUpgrader,
 			Description: pool.Component,
-			Status:      "Upgrading",
+			Status:      upgradeStatusInProgress,
 		}
 	}
 	// Pick the first unworked on node next
 	pool, found = r.findNextPool(dataNodes)
 	if found {
 		return pool, opsterv1.ComponentStatus{
-			Component:   "Upgrader",
+			Component:   componentNameUpgrader,
 			Description: pool.Component,
-			Status:      "Pending",
+			Status:      upgradeStatusPending,
 		}
 	}
 	// Next do the same for any nodes that are data and master
 	pool, found = r.findInProgress(dataAndMasterNodes)
 	if found {
 		return pool, opsterv1.ComponentStatus{
-			Component:   "Upgrader",
+			Component:   componentNameUpgrader,
 			Description: pool.Component,
-			Status:      "Upgrading",
+			Status:      upgradeStatusInProgress,
 		}
 	}
 	pool, found = r.findNextPool(dataAndMasterNodes)
 	if found {
 		return pool, opsterv1.ComponentStatus{
-			Component:   "Upgrader",
+			Component:   componentNameUpgrader,
 			Description: pool.Component,
-			Status:      "Pending",
+			Status:      upgradeStatusPending,
 		}
 	}
 
@@ -226,23 +232,23 @@ func (r *UpgradeReconciler) findNextNodePoolForUpgrade() (opsterv1.NodePool, ops
 	pool, found = r.findInProgress(otherNodes)
 	if found {
 		return pool, opsterv1.ComponentStatus{
-			Component:   "Upgrader",
+			Component:   componentNameUpgrader,
 			Description: pool.Component,
-			Status:      "Upgrading",
+			Status:      upgradeStatusInProgress,
 		}
 	}
 	pool, found = r.findNextPool(otherNodes)
 	if found {
 		return pool, opsterv1.ComponentStatus{
-			Component:   "Upgrader",
+			Component:   componentNameUpgrader,
 			Description: pool.Component,
-			Status:      "Pending",
+			Status:      upgradeStatusPending,
 		}
 	}
 
 	// If we get here all nodes should be upgraded
 	return opsterv1.NodePool{}, opsterv1.ComponentStatus{
-		Component: "Upgrade",
+		Component: componentNameUpgrader,
 		Status:    "Finished",
 	}
 }
@@ -250,11 +256,11 @@ func (r *UpgradeReconciler) findNextNodePoolForUpgrade() (opsterv1.NodePool, ops
 func (r *UpgradeReconciler) findInProgress(pools []opsterv1.NodePool) (opsterv1.NodePool, bool) {
 	for _, nodePool := range pools {
 		componentStatus := opsterv1.ComponentStatus{
-			Component:   "Upgrader",
+			Component:   componentNameUpgrader,
 			Description: nodePool.Component,
 		}
-		currentStatus, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndGroup)
-		if found && currentStatus.Status == "Upgrading" {
+		currentStatus, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndComponent)
+		if found && currentStatus.Status == upgradeStatusInProgress {
 			return nodePool, true
 		}
 	}
@@ -264,10 +270,10 @@ func (r *UpgradeReconciler) findInProgress(pools []opsterv1.NodePool) (opsterv1.
 func (r *UpgradeReconciler) findNextPool(pools []opsterv1.NodePool) (opsterv1.NodePool, bool) {
 	for _, nodePool := range pools {
 		componentStatus := opsterv1.ComponentStatus{
-			Component:   "Upgrader",
+			Component:   componentNameUpgrader,
 			Description: nodePool.Component,
 		}
-		_, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndGroup)
+		_, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndComponent)
 		if !found {
 			return nodePool, true
 		}
@@ -323,12 +329,12 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 
 		return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			currentStatus := opsterv1.ComponentStatus{
-				Component:   "Upgrader",
-				Status:      "Upgrading",
+				Component:   componentNameUpgrader,
+				Status:      upgradeStatusInProgress,
 				Description: pool.Component,
 			}
 			componentStatus := opsterv1.ComponentStatus{
-				Component:   "Upgrader",
+				Component:   componentNameUpgrader,
 				Status:      "Upgraded",
 				Description: pool.Component,
 			}
@@ -383,14 +389,14 @@ func (r *UpgradeReconciler) setComponentConditions(conditions []string, componen
 
 	err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 		currentStatus := opsterv1.ComponentStatus{
-			Component:   "Upgrader",
-			Status:      "Upgrading",
+			Component:   componentNameUpgrader,
+			Status:      upgradeStatusInProgress,
 			Description: component,
 		}
-		componentStatus, found := helpers.FindFirstPartial(instance.Status.ComponentsStatus, currentStatus, helpers.GetByDescriptionAndGroup)
+		componentStatus, found := helpers.FindFirstPartial(instance.Status.ComponentsStatus, currentStatus, helpers.GetByDescriptionAndComponent)
 		newStatus := opsterv1.ComponentStatus{
-			Component:   "Upgrader",
-			Status:      "Upgrading",
+			Component:   componentNameUpgrader,
+			Status:      upgradeStatusInProgress,
 			Description: component,
 			Conditions:  conditions,
 		}
@@ -398,7 +404,7 @@ func (r *UpgradeReconciler) setComponentConditions(conditions []string, componen
 			conditions = append(componentStatus.Conditions, conditions...)
 		}
 
-		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, newStatus, instance.Status.ComponentsStatus)
+		instance.Status.ComponentsStatus = helpers.Replace(componentStatus, newStatus, instance.Status.ComponentsStatus)
 	})
 	if err != nil {
 		r.logger.Error(err, "Could not update status")

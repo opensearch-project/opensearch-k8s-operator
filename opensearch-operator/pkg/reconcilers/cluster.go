@@ -200,7 +200,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		} else {
 			// A failure is assumed if n PVCs exist but less than n-1 pods (one missing pod is allowed for rolling restart purposes)
 			// We can assume the cluster is in a failure state and cannot recover on its own
-			if !helpers.UpgradeInProgress(r.instance.Status) &&
+			if !helpers.IsUpgradeInProgress(r.instance.Status) &&
 				pvcCount >= int(nodePool.Replicas) && existing.Status.ReadyReplicas < nodePool.Replicas-1 {
 				r.logger.Info(fmt.Sprintf("Detected recovery situation for nodepool %s: PVC count: %d, replicas: %d. Recreating STS with parallel mode", nodePool.Component, pvcCount, existing.Status.Replicas))
 				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
@@ -301,7 +301,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			Description: nodePool.Component,
 		}
 		comp := r.instance.Status.ComponentsStatus
-		_, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
+		_, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndComponent)
 
 		if found {
 			return &ctrl.Result{}, nil
