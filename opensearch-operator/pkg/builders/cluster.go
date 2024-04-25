@@ -1122,11 +1122,18 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		tlsconfig = nil
 	}
 
+	monitorLabel := map[string]string{
+		helpers.ClusterLabel: cr.Name,
+	}
+	for k, v := range cr.Spec.General.Monitoring.Labels {
+		monitorLabel[k] = v
+	}
+
 	return &monitoring.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-monitor",
 			Namespace: cr.Namespace,
-			Labels:    labels,
+			Labels:    monitorLabel,
 		},
 		Spec: monitoring.ServiceMonitorSpec{
 			JobLabel: cr.Name + "-monitor",

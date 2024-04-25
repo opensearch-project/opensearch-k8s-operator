@@ -155,6 +155,7 @@ type MonitoringConfig struct {
 	ScrapeInterval       string               `json:"scrapeInterval,omitempty"`
 	PluginURL            string               `json:"pluginUrl,omitempty"`
 	TLSConfig            *MonitoringConfigTLS `json:"tlsConfig,omitempty"`
+	Labels               map[string]string    `json:"labels,omitempty"`
 }
 
 type MonitoringConfigTLS struct {

@@ -608,6 +608,12 @@ Monitoring defines Opensearch monitoring configuration
         <td>true</td>
         <td>-</td>
       </tr><tr>
+        <td><b>labels</b></td>
+        <td>map[string]string</td>
+        <td>Add LabelsSelector to ServiceMonitor</td>
+        <td>false</td>
+        <td>-</td>
+      </tr><tr>
         <td><b>monitoringUserSecret</b></td>
         <td>[]string</td>
         <td>Define from which user the monitor will run (Getting Secret name, the secret should contain 'username':'password' fileds).</td>

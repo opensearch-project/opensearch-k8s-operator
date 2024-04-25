@@ -2903,6 +2903,10 @@ spec:
                     properties:
                       enable:
                         type: boolean
+                      labels:
+                        additionalProperties:
+                          type: string
+                        type: object
                       monitoringUserSecret:
                         type: string
                       pluginUrl:
