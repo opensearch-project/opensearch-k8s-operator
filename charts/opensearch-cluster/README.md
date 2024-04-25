@@ -41,7 +41,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.dashboards.tls.generate | bool | `true` | generate certificate, if false secret must be provided |
 | cluster.dashboards.tls.secret | string | `nil` | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |
 | cluster.dashboards.tolerations | list | `[]` | dashboards pod tolerations |
-| cluster.dashboards.version | string | `"2.8.0"` | dashboards version |
+| cluster.dashboards.version | string | `"2.3.0"` | dashboards version |
 | cluster.general.additionalConfig | object | `{}` | Extra items to add to the opensearch.yml |
 | cluster.general.additionalVolumes | list | `[]` | Additional volumes to mount to all pods in the cluster. Supported volume types configMap, emptyDir, secret (with default Kubernetes configuration schema) |
 | cluster.general.drainDataNodes | bool | `true` | Controls whether to drain data notes on rolling restart operations |
@@ -62,7 +62,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.general.setVMMaxMapCount | bool | `true` | Enable setVMMaxMapCount. OpenSearch requires the Linux kernel vm.max_map_count option to be set to at least 262144 |
 | cluster.general.snapshotRepositories | list | `[]` | Opensearch snapshot repositories configuration |
 | cluster.general.vendor | string | `"Opensearch"` |  |
-| cluster.general.version | string | `"2.8.0"` | Opensearch version |
+| cluster.general.version | string | `"2.3.0"` | Opensearch version |
 | cluster.ingress.dashboards.annotations | object | `{}` | dashboards ingress annotations |
 | cluster.ingress.dashboards.className | string | `""` | Ingress class name |
 | cluster.ingress.dashboards.enabled | bool | `false` | Enable ingress for dashboards service |

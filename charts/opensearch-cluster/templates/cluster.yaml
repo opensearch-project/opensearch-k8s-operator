@@ -1,9 +1,9 @@
-{{- $name := .Values.cluster.name | default (include "opensearch-cluster.name" .) }}
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
 ---
 apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
-  name: {{ $name }}
+  name: {{ $clusterName }}
   {{- with .Values.cluster.annotations }}
   annotations: {{ . | toYaml | nindent 4 }}
   {{- end }}
@@ -24,7 +24,7 @@ spec:
   general:
     {{- . | toYaml | nindent 4 }}
     image: {{ .image }}:{{ .version }}
-    serviceName: {{ .serviceName | default $name }}
+    serviceName: {{ .serviceName | default $clusterName }}
   {{- end }}
   {{- with .Values.cluster.initHelper }}
   initHelper: {{ . | toYaml | nindent 4 }}
