@@ -5,14 +5,16 @@ import (
 	"fmt"
 	"os"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/pointer"
+
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -777,7 +779,7 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
 		})
 	})
-	
+
 	When("Configuring InitHelper Resources", func() {
 		It("should propagate Resources to all init containers", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
@@ -844,6 +846,28 @@ var _ = Describe("Builders", func() {
 
 			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
+		})
+	})
+
+	When("Configuring statefulset UpdateStrategy", func() {
+		It("Without configuring UpdateStrategy, use the default value", func() {
+			defaultUpdateStrategy := appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.OnDeleteStatefulSetStrategyType,
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePoolSts := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
+			Expect(nodePoolSts.Spec.UpdateStrategy).To(Equal(defaultUpdateStrategy))
+		})
+		It("configuring NodePool UpdateStrategy,", func() {
+			setUpdateStrategy := appsv1.StatefulSetUpdateStrategy{
+				Type: appsv1.RollingUpdateStatefulSetStrategyType,
+			}
+			nodePool := opsterv1.NodePool{
+				UpdateStrategy: &setUpdateStrategy,
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePoolSts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(nodePoolSts.Spec.UpdateStrategy).To(Equal(setUpdateStrategy))
 		})
 	})
 })

@@ -6,9 +6,6 @@ import (
 	"strings"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
-
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -18,6 +15,9 @@ import (
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 )
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
@@ -455,9 +455,14 @@ func NewSTSForNodePool(
 				MatchLabels: matchLabels,
 			},
 			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
-			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
-				Type: appsv1.OnDeleteStatefulSetStrategyType,
-			},
+			UpdateStrategy: func() appsv1.StatefulSetUpdateStrategy {
+				if node.UpdateStrategy != nil {
+					return *node.UpdateStrategy
+				}
+				return appsv1.StatefulSetUpdateStrategy{
+					Type: appsv1.OnDeleteStatefulSetStrategyType,
+				}
+			}(),
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels:      labels,
