@@ -252,10 +252,10 @@ spec:
                             type: object
                           readOnly:
                             description: Sets a managed index to be read only.
-                            type: string
+                            type: object
                           readWrite:
                             description: Sets a managed index to be writeable.
-                            type: string
+                            type: object
                           replicaCount:
                             description: Sets the number of replicas to assign to
                               an index.
@@ -349,7 +349,8 @@ spec:
                             - snapshot
                             type: object
                           timeout:
-                            description: The timeout period for the action.
+                            description: The timeout period for the action. Accepts
+                              time units for minutes, hours, and days.
                             type: string
                         type: object
                       type: array

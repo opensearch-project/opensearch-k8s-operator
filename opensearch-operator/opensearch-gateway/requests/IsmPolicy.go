@@ -78,9 +78,9 @@ type Action struct {
 	// Opens a managed index.
 	Open *Open `json:"open,omitempty"`
 	// Sets a managed index to be read only.
-	ReadOnly *string `json:"read_only,omitempty"`
+	ReadOnly *ReadOnly `json:"read_only,omitempty"`
 	// Sets a managed index to be writeable.
-	ReadWrite *string `json:"read_write,omitempty"`
+	ReadWrite *ReadWrite `json:"read_write,omitempty"`
 	// Sets the number of replicas to assign to an index.
 	ReplicaCount *ReplicaCount `json:"replica_count,omitempty"`
 	// The retry configuration for the action.
@@ -129,6 +129,10 @@ type Allocation struct {
 }
 
 type Close struct{}
+
+type ReadOnly struct{}
+
+type ReadWrite struct{}
 
 type Delete struct{}
 
