@@ -68,6 +68,8 @@ spec:
         {{- end }}
         securityContext:
 {{- toYaml .Values.manager.securityContext | nindent 10 }}
+        volumeMounts:
+{{- toYaml .Values.manager.extraVolumeMounts | nindent 10 }}
       nodeSelector:
 {{- toYaml .Values.nodeSelector | nindent 8 }}
       tolerations:
@@ -80,3 +82,5 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "opensearch-operator.serviceAccountName" . }}
       terminationGracePeriodSeconds: 10
+      volumes:
+{{- toYaml .Values.manager.extraVolumes | nindent 8 }}

@@ -9,6 +9,18 @@ manager:
   securityContext:
     allowPrivilegeEscalation: false
   extraEnv: []
+
+  # Specify extra volumes to provide to the Pod
+  # - name: extras
+  #   emptyDir: {}
+  extraVolumes: []
+
+  # Specify where to mount the above extraVolumes
+  # - name: extras
+  #   mountPath: /usr/share/extras
+  #   readOnly: true
+  extraVolumeMounts: []
+  
   resources:
     limits:
       cpu: 200m
