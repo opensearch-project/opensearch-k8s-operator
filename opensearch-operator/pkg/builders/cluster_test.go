@@ -777,7 +777,7 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
 		})
 	})
-	
+
 	When("Configuring InitHelper Resources", func() {
 		It("should propagate Resources to all init containers", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")

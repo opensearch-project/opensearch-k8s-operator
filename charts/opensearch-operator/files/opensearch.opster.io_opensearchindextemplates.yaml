@@ -54,7 +54,7 @@ spec:
               dataStream:
                 description: The dataStream config that should be applied
                 properties:
-                  timestamp_field:
+                  timestampField:
                     description: TimestampField for dataStream
                     properties:
                       name:
