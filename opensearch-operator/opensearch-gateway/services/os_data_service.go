@@ -476,6 +476,20 @@ func ShouldUpdateComponentTemplate(
 		return false, fmt.Errorf("returned component template named '%s' does not equal the requested name '%s'", componentTemplateResponse.Name, componentTemplateName)
 	}
 
+	if componentTemplateResponse.ComponentTemplate.Template.Settings != nil {
+		componentTemplateResponse.ComponentTemplate.Template.Settings, err = helpers.SortedJsonKeys(componentTemplateResponse.ComponentTemplate.Template.Settings)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if componentTemplateResponse.ComponentTemplate.Template.Mappings != nil {
+		componentTemplateResponse.ComponentTemplate.Template.Mappings, err = helpers.SortedJsonKeys(componentTemplateResponse.ComponentTemplate.Template.Mappings)
+		if err != nil {
+			return false, err
+		}
+	}
+
 	if cmp.Equal(componentTemplate, componentTemplateResponse.ComponentTemplate, cmpopts.EquateEmpty()) {
 		return false, nil
 	}
