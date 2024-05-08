@@ -770,6 +770,13 @@ AdditionalVolume object define additional volume and volumeMount
       <td>false</td>
       <td>-</td>
     </tr>
+    </tr><tr>
+      <td><b>projected</b></td>
+      <td>corev1.ProjectedVolumeSource</td>
+      <td>Defines the Projected object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr>
   </tbody>
 </table>
 

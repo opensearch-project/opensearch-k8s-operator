@@ -185,6 +185,7 @@ var _ = Describe("Cluster Reconciler", func() {
 								"test-secret",
 								"test-cm",
 								"test-emptydir",
+								"test-projected-token",
 							),
 						)),
 						HaveMatchingVolume(And(
@@ -198,6 +199,10 @@ var _ = Describe("Cluster Reconciler", func() {
 						HaveMatchingVolume(And(
 							HaveName("test-emptydir"),
 							HaveVolumeSource("EmptyDir"),
+						)),
+						HaveMatchingVolume(And(
+							HaveName("test-projected-token"),
+							HaveVolumeSource("Projected"),
 						)),
 					))
 				}(nodePool)
