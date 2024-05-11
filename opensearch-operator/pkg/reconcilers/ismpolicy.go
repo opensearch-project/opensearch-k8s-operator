@@ -146,7 +146,12 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	if err != nil {
 		reason := "error creating opensearch client"
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, err
+		retResult = ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 30 * time.Second,
+		}
+		retErr = err
+		return
 	}
 
 	// If PolicyID not provided explicitly, use metadata.name by default
