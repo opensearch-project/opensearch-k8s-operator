@@ -296,6 +296,8 @@ type AdditionalVolume struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 	// CSI object to use to populate the volume
 	CSI *corev1.CSIVolumeSource `json:"csi,omitempty"`
+	// Projected object to use to populate the volume
+	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }

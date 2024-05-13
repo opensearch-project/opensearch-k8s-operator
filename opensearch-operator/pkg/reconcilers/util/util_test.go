@@ -131,4 +131,51 @@ var _ = Describe("Additional volumes", func() {
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 		})
 	})
+
+	When("Projected volume is added", func() {
+		It("Should have ProjectedVolumeSource fields", func() {
+			volumeConfigs[0].Projected = &v1.ProjectedVolumeSource{
+				Sources: []v1.VolumeProjection{},
+			}
+
+			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].Projected.Sources).To(BeEmpty())
+		})
+	})
+
+	When("Projected volume is added with a ServiceAccountToken source", func() {
+		It("Should have Path set on the volume source", func() {
+			volumeConfigs[0].Projected = &v1.ProjectedVolumeSource{
+				Sources: []v1.VolumeProjection{{
+					ServiceAccountToken: &v1.ServiceAccountTokenProjection{
+						Path: "token",
+					},
+				}},
+			}
+
+			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].Projected.Sources[0].ServiceAccountToken.Path).To(Equal("token"))
+		})
+	})
+
+	When("Projected volume is added with subPath", func() {
+		It("Should have the subPath", func() {
+			volumeConfigs[0].Projected = &v1.ProjectedVolumeSource{}
+			volumeConfigs[0].SubPath = "c"
+
+			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].SubPath).To(Equal("c"))
+		})
+	})
+
+	When("Projected volume is added without subPath", func() {
+		It("Should not have the subPath", func() {
+			volumeConfigs[0].Projected = &v1.ProjectedVolumeSource{}
+
+			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
 })

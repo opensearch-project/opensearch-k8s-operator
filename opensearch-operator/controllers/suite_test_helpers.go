@@ -114,11 +114,12 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 						"foo": "bar",
 					},
 				},
-				HttpPort:    9200,
-				Vendor:      "opensearch",
-				Version:     "2.0.0",
-				ServiceName: "es-svc",
-				PluginsList: []string{"http://foo-plugin-1.0.0"},
+				HttpPort:       9200,
+				Vendor:         "opensearch",
+				Version:        "2.0.0",
+				ServiceName:    "es-svc",
+				ServiceAccount: "default",
+				PluginsList:    []string{"http://foo-plugin-1.0.0"},
 				AdditionalConfig: map[string]string{
 					"foo": "bar",
 				},
@@ -145,6 +146,18 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 						Name:        "test-emptydir",
 						Path:        "/tmp/",
 						EmptyDir:    &corev1.EmptyDirVolumeSource{},
+						RestartPods: false,
+					},
+					{
+						Name: "test-projected-token",
+						Path: "/opt/test-projected",
+						Projected: &corev1.ProjectedVolumeSource{
+							Sources: []corev1.VolumeProjection{{
+								ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+									Path: "token",
+								},
+							}},
+						},
 						RestartPods: false,
 					},
 				},
