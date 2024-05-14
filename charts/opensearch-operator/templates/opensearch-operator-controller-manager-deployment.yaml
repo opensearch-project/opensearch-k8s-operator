@@ -63,6 +63,8 @@ spec:
           value: {{ .Values.manager.dnsBase }}
         - name: PARALLEL_RECOVERY_ENABLED
           value: "{{ .Values.manager.parallelRecoveryEnabled }}"
+        - name: PPROF_ENDPOINTS_ENABLED
+          value: "{{ .Values.manager.pprofEndpointsEnabled }}"
         {{- if .Values.manager.extraEnv }}
         {{- toYaml .Values.manager.extraEnv | nindent 8 }}
         {{- end }}
