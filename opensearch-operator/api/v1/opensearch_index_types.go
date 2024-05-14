@@ -11,7 +11,7 @@ type OpensearchDatastreamTimestampFieldSpec struct {
 
 type OpensearchDatastreamSpec struct {
 	// TimestampField for dataStream
-	TimestampField OpensearchDatastreamTimestampFieldSpec `json:"timestampField,omitempty"`
+	TimestampField OpensearchDatastreamTimestampFieldSpec `json:"timestamp_field,omitempty"`
 }
 
 // Describes the specs of an index
