@@ -39,6 +39,9 @@ manager:
 
   # Set this to false to disable the experimental parallel recovery in case you are experiencing problems
   parallelRecoveryEnabled: true
+  # Set this to true to enable the standard go pprof endpoints on port 6060 (https://pkg.go.dev/net/http/pprof)
+  # Should only be used for debugging purposes
+  pprofEndpointsEnabled: false
 
   image:
     repository: opensearchproject/opensearch-operator
