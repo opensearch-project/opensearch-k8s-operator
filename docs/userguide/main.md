@@ -1221,14 +1221,14 @@ type: Opaque
 data:
   # admin
   username: YWRtaW4=
-  # admin123
-  password: YWRtaW4xMjM=
+  # 0penS3@rch!
+  password: MHBlblMzQHJjaCE=
 ```
 
 Then you have to create your own securityconfig and store it in a secret (`securityconfig-secret` in this example). You can take a look at [securityconfig-secret.yaml](../../opensearch-operator/examples/securityconfig-secret.yaml) for how such a secret should look like.
 Make sure that the password hash of the admin user corresponds to the password you stored in the `admin-credentials-secret`.
 
-Notice that inside `securityconfig-secret` You must edit the `hash` of the admin user before creating the secret. if you have python 3.x installed on your machine you can use the following command to hash your password: `python -c 'import bcrypt; print(bcrypt.hashpw("admin123".encode("utf-8"), bcrypt.gensalt(12, prefix=b"2a")).decode("utf-8"))'`
+Notice that inside `securityconfig-secret` You must edit the `hash` of the admin user before creating the secret. if you have python 3.x installed on your machine you can use the following command to hash your password: `python -c 'import bcrypt; print(bcrypt.hashpw("0penS3@rch!".encode("utf-8"), bcrypt.gensalt(12, prefix=b"2a")).decode("utf-8"))'`
 
 ```yaml
   internal_users.yml: |-

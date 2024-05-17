@@ -29,7 +29,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil, "")
 			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
 				"testAnnotationKey":  "testValue",
 				"testAnnotationKey2": "testValue2",
@@ -52,7 +52,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil, "")
 			Expect(result.Spec.Template.Labels).To(Equal(map[string]string{
 				"opensearch.cluster.dashboards": clusterName,
 				"testLabelKey":                  "testValue",
@@ -108,7 +108,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil, "")
 			installCmd := fmt.Sprintf(
 				"./bin/opensearch-dashboards-plugin install '%s' && ./bin/opensearch-dashboards-plugin install '%s' && ./opensearch-dashboards-docker-entrypoint.sh",
 				pluginA,
@@ -148,7 +148,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil, "")
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
@@ -169,7 +169,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil, "")
 			Expect(result.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccountName))
 		})
 	})

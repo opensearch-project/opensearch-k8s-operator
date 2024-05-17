@@ -30,13 +30,13 @@ const (
 )
 
 func NewSTSForNodePool(
-	username string,
 	cr *opsterv1.OpenSearchCluster,
 	node opsterv1.NodePool,
 	configChecksum string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 	extraConfig map[string]string,
+	envVars []corev1.EnvVar,
 ) *appsv1.StatefulSet {
 	// To make sure disksize is not passed as empty
 	var disksize string
@@ -466,41 +466,13 @@ func NewSTSForNodePool(
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Env: []corev1.EnvVar{
-								{
-									Name:  "cluster.initial_master_nodes",
-									Value: BootstrapPodName(cr),
-								},
-								{
-									Name:  "discovery.seed_hosts",
-									Value: DiscoveryServiceName(cr),
-								},
-								{
-									Name:  "cluster.name",
-									Value: cr.Name,
-								},
-								{
-									Name:  "network.bind_host",
-									Value: "0.0.0.0",
-								},
-								{
-									// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-									Name:      "network.publish_host",
-									ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
-								},
-								{
-									Name:  "OPENSEARCH_JAVA_OPTS",
-									Value: jvm,
-								},
-								{
-									Name:  "node.roles",
-									Value: strings.Join(selectedRoles, ","),
-								},
-								{
-									Name:  "http.port",
-									Value: fmt.Sprint(cr.Spec.General.HttpPort),
-								},
-							},
+							Env: append(envVars, corev1.EnvVar{
+								Name:  "OPENSEARCH_JAVA_OPTS",
+								Value: jvm,
+							}, corev1.EnvVar{
+								Name:  "node.roles",
+								Value: strings.Join(selectedRoles, ","),
+							}),
 							Name:            "opensearch",
 							Command:         mainCommand,
 							Image:           image.GetImage(),
@@ -757,6 +729,7 @@ func NewBootstrapPod(
 	cr *opsterv1.OpenSearchCluster,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
+	envVars []corev1.EnvVar,
 ) *corev1.Pod {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
@@ -798,41 +771,13 @@ func NewBootstrapPod(
 	podSecurityContext := cr.Spec.General.PodSecurityContext
 	securityContext := cr.Spec.General.SecurityContext
 
-	env := []corev1.EnvVar{
-		{
-			Name:  "cluster.initial_master_nodes",
-			Value: BootstrapPodName(cr),
-		},
-		{
-			Name:  "discovery.seed_hosts",
-			Value: DiscoveryServiceName(cr),
-		},
-		{
-			Name:  "cluster.name",
-			Value: cr.Name,
-		},
-		{
-			Name:  "network.bind_host",
-			Value: "0.0.0.0",
-		},
-		{
-			// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-			Name:      "network.publish_host",
-			ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
-		},
-		{
-			Name:  "OPENSEARCH_JAVA_OPTS",
-			Value: jvm,
-		},
-		{
-			Name:  "node.roles",
-			Value: masterRole,
-		},
-		{
-			Name:  "http.port",
-			Value: fmt.Sprint(cr.Spec.General.HttpPort),
-		},
-	}
+	env := append(envVars, corev1.EnvVar{
+		Name:  "OPENSEARCH_JAVA_OPTS",
+		Value: jvm,
+	}, corev1.EnvVar{
+		Name:  "node.roles",
+		Value: masterRole,
+	})
 
 	// Append additional config to env vars, use General.AdditionalConfig by default, overwrite with Bootstrap.AdditionalConfig
 	extraConfig := cr.Spec.General.AdditionalConfig
@@ -979,6 +924,47 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 		}
 	}
 	return false
+}
+
+func CommonEnvVars(cr *opsterv1.OpenSearchCluster, passwordSecretName string) []corev1.EnvVar {
+	return []corev1.EnvVar{
+		{
+			Name:  "cluster.initial_master_nodes",
+			Value: BootstrapPodName(cr),
+		},
+		{
+			Name:  "discovery.seed_hosts",
+			Value: DiscoveryServiceName(cr),
+		},
+		{
+			Name:  "cluster.name",
+			Value: cr.Name,
+		},
+		{
+			Name:  "network.bind_host",
+			Value: "0.0.0.0",
+		},
+		{
+			// Make OpenSearch announce its hostname instead of IP so that certificates using the hostname can be verified
+			Name: "network.publish_host",
+			ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{
+				APIVersion: "v1",
+				FieldPath:  "metadata.name",
+			}},
+		},
+		{
+			Name: "OPENSEARCH_INITIAL_ADMIN_PASSWORD",
+			ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: corev1.LocalObjectReference{Name: passwordSecretName},
+				Key:                  "password",
+				Optional:             pointer.Bool(false),
+			}},
+		},
+		{
+			Name:  "http.port",
+			Value: fmt.Sprint(cr.Spec.General.HttpPort),
+		},
+	}
 }
 
 func NewSecurityconfigUpdateJob(

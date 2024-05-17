@@ -112,7 +112,9 @@ func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster
 		return string(username), string(password), nil
 	} else {
 		// Use default demo credentials
-		return "admin", "admin", nil
+		// minimum 8 character password and must contain at least one uppercase letter,
+		// one lowercase letter, one digit, and one special character
+		return "admin", "0penS3@rch!", nil
 	}
 }
 
