@@ -110,6 +110,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 				lg.V(1).Info("Restart complete. Reactivating shard allocation")
 				return ctrl.Result{Requeue: true}, err
 			}
+			r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Normal", "RollingRestart", "Rolling restart completed")
 			if err = r.updateStatus(statusFinished); err != nil {
 				return ctrl.Result{Requeue: true}, err
 			}
@@ -129,7 +130,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	if err := r.updateStatus(statusInProgress); err != nil {
 		return ctrl.Result{Requeue: true}, err
 	}
-	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Normal", "RollingRestart", "Starting to rolling restart")
+	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Normal", "RollingRestart", "Starting rolling restart")
 
 	// If there is work to do create an Opensearch Client
 	var err error

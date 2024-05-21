@@ -13,7 +13,6 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
@@ -21,11 +20,9 @@ import (
 
 func newConfigurationReconciler(
 	client *k8s.MockK8sClient,
-	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
 	instance *opsterv1.OpenSearchCluster,
-	opts ...reconciler.ResourceReconcilerOption,
 ) *ConfigurationReconciler {
 	return &ConfigurationReconciler{
 		client:            client,
@@ -69,7 +66,6 @@ var _ = Describe("Configuration Controller", func() {
 
 			underTest := newConfigurationReconciler(
 				mockClient,
-				context.Background(),
 				&helpers.MockEventRecorder{},
 				&reconcilerContext,
 				&spec,
@@ -116,7 +112,6 @@ var _ = Describe("Configuration Controller", func() {
 
 			underTest := newConfigurationReconciler(
 				mockClient,
-				context.Background(),
 				&helpers.MockEventRecorder{},
 				&reconcilerContext,
 				&spec,

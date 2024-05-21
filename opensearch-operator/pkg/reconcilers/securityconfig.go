@@ -162,7 +162,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	r.logger.Info("Starting securityconfig update job")
-	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting to securityconfig update job")
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting securityconfig update job")
 
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,
