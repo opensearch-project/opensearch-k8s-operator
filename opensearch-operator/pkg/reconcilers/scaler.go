@@ -78,7 +78,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		Description: nodePool.Component,
 	}
 	comp := r.instance.Status.ComponentsStatus
-	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndGroup)
+	currentStatus, found := helpers.FindFirstPartial(comp, componentStatus, helpers.GetByDescriptionAndComponent)
 
 	desireReplicaDiff := *currentSts.Spec.Replicas - nodePool.Replicas
 	if desireReplicaDiff == 0 {

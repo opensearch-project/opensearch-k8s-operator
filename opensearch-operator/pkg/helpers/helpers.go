@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"reflect"
 	"sort"
 	"time"
+
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
 	policyv1 "k8s.io/api/policy/v1"
 
@@ -79,6 +80,22 @@ func FindFirstPartial(
 	return item, false
 }
 
+func FindAllPartial(
+	arr []opsterv1.ComponentStatus,
+	item opsterv1.ComponentStatus,
+	predicator func(opsterv1.ComponentStatus, opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool),
+) []opsterv1.ComponentStatus {
+	var result []opsterv1.ComponentStatus
+
+	for i := 0; i < len(arr); i++ {
+		itemInArr, found := predicator(arr[i], item)
+		if found {
+			result = append(result, itemInArr)
+		}
+	}
+	return result
+}
+
 func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	mobj, ok := obj.(map[string]interface{})
 	if !ok {
@@ -116,7 +133,7 @@ func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster
 	}
 }
 
-func GetByDescriptionAndGroup(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
+func GetByDescriptionAndComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
 	if left.Description == right.Description && left.Component == right.Component {
 		return left, true
 	}
@@ -430,12 +447,21 @@ func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
 	return nodePool.Jvm
 }
 
-func UpgradeInProgress(status opsterv1.ClusterStatus) bool {
+func IsUpgradeInProgress(status opsterv1.ClusterStatus) bool {
 	componentStatus := opsterv1.ComponentStatus{
 		Component: "Upgrader",
 	}
-	_, found := FindFirstPartial(status.ComponentsStatus, componentStatus, GetByComponent)
-	return found
+	foundStatus := FindAllPartial(status.ComponentsStatus, componentStatus, GetByComponent)
+	inProgress := false
+
+	// check all statuses if any of the nodepools are still in progress or pending
+	for i := 0; i < len(foundStatus); i++ {
+		if foundStatus[i].Status != "Upgraded" && foundStatus[i].Status != "Finished" {
+			inProgress = true
+		}
+	}
+
+	return inProgress
 }
 
 func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
