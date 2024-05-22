@@ -436,7 +436,8 @@ func NewSTSForNodePool(
 				cp -a /usr/share/opensearch/config/opensearch.keystore /tmp/keystore/
 				`,
 			},
-			VolumeMounts: initContainerVolumeMounts,
+			VolumeMounts:    initContainerVolumeMounts,
+			SecurityContext: securityContext,
 		}
 
 		initContainers = append(initContainers, keystoreInitContainer)
