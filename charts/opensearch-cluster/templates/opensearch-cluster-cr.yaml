@@ -83,6 +83,10 @@ spec:
       {{ toYaml .Values.opensearchCluster.general.monitoring | nindent 6 }}
     {{- end }}
   {{- if .Values.opensearchCluster.dashboards }}
+    {{- if .Values.opensearchCluster.general.snapshotRepositories }}
+    snapshotRepositories:
+      {{- toYaml .Values.opensearchCluster.general.snapshotRepositories | nindent 6 }}
+    {{- end }}
   dashboards:
     {{- if .Values.opensearchCluster.dashboards.image }}
     image: {{ .Values.opensearchCluster.dashboards.image | quote }}
