@@ -19,13 +19,13 @@ spec:
     httpPort: 9200
     setVMMaxMapCount: true
     serviceName: my-first-hot-warm-cold-cluster
-    version: 2.6.0
+    version: 2.14.0
     drainDataNodes: true
   dashboards:
     tls:
       enable: true
       generate: true
-    version: 2.6.0
+    version: 2.14.0
     enable: true
     replicas: 1
     resources:

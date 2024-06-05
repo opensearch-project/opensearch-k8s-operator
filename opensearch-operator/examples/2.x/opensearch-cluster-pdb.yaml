@@ -5,14 +5,14 @@ metadata:
   namespace: default
 spec:
   general:
-    version: "2.3.0"
+    version: 2.14.0
     httpPort: 9200
     vendor: opensearch
     serviceName: my-cluster
     monitoring:
      enable: true
   dashboards:
-    version: "2.3.0"
+    version: 2.14.0
     enable: true
     replicas: 1
     resources:
