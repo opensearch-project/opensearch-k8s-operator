@@ -218,7 +218,12 @@ type Condition struct {
 	// The minimum size of the total primary shard storage (not counting replicas) required to transition.
 	MinSize *string `json:"min_size,omitempty"`
 }
+
 type Cron struct {
+	CronDetails *CronDetails `json:"cron"`
+}
+
+type CronDetails struct {
 	// The cron expression that triggers the transition.
 	Expression string `json:"expression"`
 	// The timezone that triggers the transition.

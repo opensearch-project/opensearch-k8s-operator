@@ -251,6 +251,11 @@ type Condition struct {
 }
 
 type Cron struct {
+	// A wrapper for the cron job that triggers the transition if no other transition happens first. This wrapper is here to adhere to the OpenSearch API.
+	CronDetails *CronDetails `json:"cron"`
+}
+
+type CronDetails struct {
 	// The cron expression that triggers the transition.
 	Expression string `json:"expression"`
 	// The timezone that triggers the transition.

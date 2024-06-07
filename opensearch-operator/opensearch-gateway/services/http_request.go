@@ -2,11 +2,12 @@ package services
 
 import (
 	"context"
-	"github.com/opensearch-project/opensearch-go"
-	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"io"
 	"net/http"
 	"strings"
+
+	"github.com/opensearch-project/opensearch-go"
+	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
 
 // doHTTPGet performs a HTTP GET request

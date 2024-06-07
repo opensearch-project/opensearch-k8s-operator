@@ -219,9 +219,6 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "policy created in opensearch")
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, retErr
 	}
-	if err != nil {
-		return
-	}
 	priterm := existingPolicy.PrimaryTerm
 	seqno := existingPolicy.SequenceNumber
 	// Reset
@@ -505,8 +502,12 @@ func (r *IsmPolicyReconciler) CreateISMPolicyRequest() (*requests.Policy, error)
 					conditions.MinRolloverAge = transition.Conditions.MinRolloverAge
 				}
 				if transition.Conditions.Cron != nil {
-					conditions.Cron.Expression = transition.Conditions.Cron.Expression
-					conditions.Cron.Timezone = transition.Conditions.Cron.Timezone
+					conditions.Cron = &requests.Cron{
+						CronDetails: &requests.CronDetails{
+							Expression: transition.Conditions.Cron.CronDetails.Expression,
+							Timezone:   transition.Conditions.Cron.CronDetails.Timezone,
+						},
+					}
 				}
 				statename := transition.StateName
 				transitions = append(transitions, requests.Transition{Conditions: conditions, StateName: statename})
