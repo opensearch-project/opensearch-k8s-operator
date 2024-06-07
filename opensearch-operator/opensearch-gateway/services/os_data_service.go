@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"strings"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
@@ -96,9 +97,7 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 		valAsString = strings.Join(valArr, ",")
 	}
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
-	if err == nil {
-		_, err = service.PutClusterSettings(settings)
-	}
+	_, err = service.PutClusterSettings(settings)
 	return err == nil, err
 }
 
@@ -114,9 +113,7 @@ func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	valAsString := strings.ReplaceAll(val.(string), nodeNameToExclude, "")
 	valAsString = strings.ReplaceAll(valAsString, ",,", ",")
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
-	if err == nil {
-		_, err = service.PutClusterSettings(settings)
-	}
+	_, err = service.PutClusterSettings(settings)
 	return err == nil, err
 }
 

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -12,7 +13,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var ErrNotFound = errors.New("Policy not found")
+var ErrNotFound = errors.New("policy not found")
 
 // ShouldUpdateISMPolicy checks if the passed policy is same as existing or needs update
 func ShouldUpdateISMPolicy(ctx context.Context, newPolicy, existingPolicy requests.Policy) (bool, error) {
@@ -87,7 +88,7 @@ func UpdateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy re
 	}
 	defer resp.Body.Close()
 	if resp.IsError() {
-		return fmt.Errorf("Failed to create ism policy: %s", resp.String())
+		return fmt.Errorf("failed to create ism policy: %s", resp.String())
 	}
 	return nil
 }
@@ -100,7 +101,7 @@ func DeleteISMPolicy(ctx context.Context, service *OsClusterClient, policyName s
 	}
 	defer resp.Body.Close()
 	if resp.IsError() {
-		return fmt.Errorf("Failed to delete ism policy: %s", resp.String())
+		return fmt.Errorf("failed to delete ism policy: %s", resp.String())
 	}
 	return nil
 }
