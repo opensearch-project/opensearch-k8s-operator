@@ -108,3 +108,9 @@ kubeRbacProxy:
   image:
     repository: "gcr.io/kubebuilder/kube-rbac-proxy"
     tag: "v0.15.0"
+
+## If this is set to true, RoleBindings will be used instead of ClusterRoleBindings, inorder to restrict ClusterRoles
+## to the namespace where the operator and OpenSearch cluster are in. In that case, specify the namespace where they
+## are in in manager.watchNamespace field.
+## If false, ClusterRoleBindings will be used
+useRoleBindings: false
