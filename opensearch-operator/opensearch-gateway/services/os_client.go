@@ -73,6 +73,10 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 			}
 			return &http.Transport{
 				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				// These options are needed as otherwise connections would be kept and leak memory
+				// Connection reuse is not really possible due to each reconcile run being independent
+				DisableKeepAlives: true,
+				MaxIdleConns:      1,
 			}
 		}(),
 		Addresses: []string{clusterUrl},
