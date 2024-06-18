@@ -21,7 +21,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var seqno *int = new(int)
 var _ = Describe("ism policy reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
@@ -176,7 +175,7 @@ var _ = Describe("ism policy reconciler", func() {
 		When("existing status is nil", func() {
 			var localExtraCalls = 4
 			BeforeEach(func() {
-				policyRequest := requests.ISMPolicy{
+				policyRequest := requests.ISMPolicySpec{
 					DefaultState: "abc",
 					Description:  "test",
 				}
@@ -208,7 +207,7 @@ var _ = Describe("ism policy reconciler", func() {
 						cluster.Namespace,
 						instance.Name,
 					),
-					httpmock.NewJsonResponderOrPanic(200, responses.GetISMPoliciesResponse{
+					httpmock.NewJsonResponderOrPanic(200, responses.GetISMPolicyResponse{
 						Policy: policyRequest,
 					}).Then(
 						httpmock.NewStringResponder(404, "does not exist"),
@@ -256,7 +255,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 			When("policy exists in opensearch and is the same", func() {
 				BeforeEach(func() {
-					policyRequest := requests.ISMPolicy{
+					policyRequest := requests.ISMPolicySpec{
 						DefaultState: "",
 						Description:  "",
 					}
@@ -268,10 +267,8 @@ var _ = Describe("ism policy reconciler", func() {
 							cluster.Namespace,
 							instance.Name,
 						),
-						httpmock.NewJsonResponderOrPanic(200, responses.GetISMPoliciesResponse{
-							Policy:         policyRequest,
-							SequenceNumber: seqno,
-							PrimaryTerm:    seqno,
+						httpmock.NewJsonResponderOrPanic(200, responses.GetISMPolicyResponse{
+							Policy: policyRequest,
 						}).Once(failMessage),
 					)
 				})
@@ -284,7 +281,7 @@ var _ = Describe("ism policy reconciler", func() {
 			When("policy exists in opensearch and is not the same", func() {
 				BeforeEach(func() {
 					recorder = record.NewFakeRecorder(1)
-					policyRequest := requests.ISMPolicy{
+					policyRequest := requests.ISMPolicySpec{
 						DefaultState: "policy",
 						Description:  "test-policy",
 					}
@@ -296,11 +293,9 @@ var _ = Describe("ism policy reconciler", func() {
 							cluster.Namespace,
 							instance.Name,
 						),
-						httpmock.NewJsonResponderOrPanic(200, responses.GetISMPoliciesResponse{
-							Policy:         policyRequest,
-							SequenceNumber: seqno,
-							PrimaryTerm:    seqno,
-							PolicyID:       "test-policy",
+						httpmock.NewJsonResponderOrPanic(200, responses.GetISMPolicyResponse{
+							Policy:   policyRequest,
+							PolicyID: "test-policy",
 						}).Once(failMessage),
 					)
 					transport.RegisterResponder(

@@ -151,9 +151,9 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 		return
 	}
 
-	templateName = r.instance.Name
-	if r.instance.Spec.Name != "" {
-		templateName = r.instance.Spec.Name
+	templateName = r.instance.Spec.Name
+	if templateName != "" {
+		templateName = r.instance.Name
 	}
 
 	// Check index template state to make sure we don't touch preexisting index templates
@@ -173,6 +173,7 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 			})
 			if err != nil {
 				reason = fmt.Sprintf("failed to update status: %s", err)
+				// r.logger.Error(retErr, reason) should this be added?
 				r.recorder.Event(r.instance, "Warning", statusError, reason)
 				return
 			}

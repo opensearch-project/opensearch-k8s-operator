@@ -1,14 +1,11 @@
 package requests
 
-type Policy struct {
-	PolicyID       string    `json:"_id,omitempty"`
-	PrimaryTerm    *int      `json:"_primary_term,omitempty"`
-	SequenceNumber *int      `json:"_seq_no,omitempty"`
-	Policy         ISMPolicy `json:"policy"`
+type ISMPolicy struct {
+	Policy ISMPolicySpec `json:"policy"`
 }
 
 // ISMPolicySpec is the specification for the ISM policy for OS.
-type ISMPolicy struct {
+type ISMPolicySpec struct {
 	// The default starting state for each index that uses this policy.
 	DefaultState string `json:"default_state"`
 	// A human-readable description of the policy.
