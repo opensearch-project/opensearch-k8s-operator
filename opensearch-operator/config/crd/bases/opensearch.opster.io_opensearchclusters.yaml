@@ -4849,6 +4849,14 @@ spec:
                               type: string
                           type: object
                       type: object
+                    podManagementPolicy:
+                      default: OrderedReady
+                      description: PodManagementPolicyType defines the policy for
+                        creating pods under a stateful set.
+                      enum:
+                      - OrderedReady
+                      - Parallel
+                      type: string
                     priorityClassName:
                       type: string
                     probes:
