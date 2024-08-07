@@ -67,12 +67,7 @@ spec:
     {{- end}}
     {{- if .Values.opensearchCluster.general.additionalVolumes }}
     additionalVolumes:
-  {{- range $key, $val := .Values.opensearchCluster.general.additionalVolumes }}
-      - name: {{ $val.name }}
-        path: {{ $val.path }}
-        secret:
-          secretName: {{ $val.secret.secretName }}
-  {{- end -}}
+      {{ toYaml .Values.opensearchCluster.general.additionalVolumes | nindent 6 }}
     {{- end }}
     {{- if .Values.opensearchCluster.general.additionalConfig }}
     additionalConfig:
@@ -167,12 +162,7 @@ spec:
     {{- end}}
     {{- if .Values.opensearchCluster.dashboards.additionalVolumes }}
     additionalVolumes:
-    {{- range $key,$val := .Values.opensearchCluster.dashboards.additionalVolumes }}
-    - name: {{ $val.name }}
-      path: {{ $val.path }}
-      secret:
-        secretName: {{ $val.secretName.name }}
-    {{- end }}
+      {{ toYaml .Values.opensearchCluster.dashboards.additionalVolumes | nindent 6 }}
     {{- end }}
     {{- if .Values.opensearchCluster.dashboards.additionalConfig }}
     additionalConfig:
