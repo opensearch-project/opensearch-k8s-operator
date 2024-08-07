@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -106,8 +107,12 @@ type ReadinessProbeConfig struct {
 }
 
 type NodePool struct {
-	Component                 string                            `json:"component"`
-	Replicas                  int32                             `json:"replicas"`
+	Component string `json:"component"`
+	Replicas  int32  `json:"replicas"`
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=OrderedReady;Parallel
+	// +kubebuilder:default:=OrderedReady
+	PodManagementPolicy       appsv1.PodManagementPolicyType    `json:"podManagementPolicy,omitempty"`
 	DiskSize                  string                            `json:"diskSize,omitempty"`
 	Resources                 corev1.ResourceRequirements       `json:"resources,omitempty"`
 	Jvm                       string                            `json:"jvm,omitempty"`
