@@ -42,6 +42,23 @@ func ClusterDescWithKeystoreSecret(secretName string, keyMappings map[string]str
 	}
 }
 
+func ClusterDescWithBootstrapKeystoreSecret(secretName string, keyMappings map[string]string) opsterv1.OpenSearchCluster {
+	return opsterv1.OpenSearchCluster{
+		Spec: opsterv1.ClusterSpec{
+			Bootstrap: opsterv1.BootstrapConfig{
+				Keystore: []opsterv1.KeystoreValue{
+					{
+						Secret: corev1.LocalObjectReference{
+							Name: secretName,
+						},
+						KeyMappings: keyMappings,
+					},
+				},
+			},
+		},
+	}
+}
+
 func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, bootstrapAdditionalConfig map[string]string) opsterv1.OpenSearchCluster {
 	return opsterv1.OpenSearchCluster{
 		Spec: opsterv1.ClusterSpec{
@@ -447,6 +464,77 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  mockKey2,
 				Value: mockBootstrapConfig[mockKey2],
+			}))
+		})
+		It("should properly setup the main command when installing plugins", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			pluginA := "some-plugin"
+			pluginB := "another-plugin"
+
+			clusterObject.Spec.Bootstrap.PluginsList = []string{pluginA, pluginB}
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			installCmd := fmt.Sprintf(
+				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
+				pluginA,
+				pluginB,
+			)
+
+			expected := []string{
+				"/bin/bash",
+				"-c",
+				installCmd,
+			}
+
+			actual := result.Spec.Containers[0].Command
+
+			Expect(expected).To(Equal(actual))
+		})
+	})
+
+	When("Constructing a bootstrap pod with Keystore Values", func() {
+		It("should create a proper initContainer", func() {
+			mockSecretName := "some-secret"
+			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, nil)
+
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(result.Spec.InitContainers[1].VolumeMounts).To(ContainElements([]corev1.VolumeMount{
+				{
+					Name:      "keystore",
+					MountPath: "/tmp/keystore",
+				},
+				{
+					Name:      "keystore-" + mockSecretName,
+					MountPath: "/tmp/keystoreSecrets/" + mockSecretName,
+				},
+			}))
+		})
+
+		It("should mount the prefilled keystore into the opensearch container", func() {
+			mockSecretName := "some-secret"
+			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, nil)
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(result.Spec.Containers[0].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+				Name:      "keystore",
+				MountPath: "/usr/share/opensearch/config/opensearch.keystore",
+				SubPath:   "opensearch.keystore",
+			}))
+		})
+
+		It("should properly rename secret keys when key mappings are given", func() {
+			mockSecretName := "some-secret"
+			oldKey := "old-key"
+			newKey := "new-key"
+
+			keyMappings := map[string]string{
+				oldKey: newKey,
+			}
+			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, keyMappings)
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(result.Spec.InitContainers[1].VolumeMounts).To(ContainElement(corev1.VolumeMount{
+				Name:      "keystore-" + mockSecretName,
+				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
+				SubPath:   oldKey,
 			}))
 		})
 	})

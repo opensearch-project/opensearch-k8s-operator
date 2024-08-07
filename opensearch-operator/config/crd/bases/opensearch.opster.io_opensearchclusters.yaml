@@ -839,10 +839,35 @@ spec:
                     type: object
                   jvm:
                     type: string
+                  keystore:
+                    items:
+                      properties:
+                        keyMappings:
+                          additionalProperties:
+                            type: string
+                          description: Key mappings from secret to keystore keys
+                          type: object
+                        secret:
+                          description: Secret containing key value pairs
+                          properties:
+                            name:
+                              description: |-
+                                Name of the referent.
+                                More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                TODO: Add other useful fields. apiVersion, kind, uid?
+                              type: string
+                          type: object
+                          x-kubernetes-map-type: atomic
+                      type: object
+                    type: array
                   nodeSelector:
                     additionalProperties:
                       type: string
                     type: object
+                  pluginsList:
+                    items:
+                      type: string
+                    type: array
                   resources:
                     description: ResourceRequirements describes the compute resource
                       requirements.
