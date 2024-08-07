@@ -91,7 +91,12 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 		annotations[helpers.DashboardChecksumName] = sha1sum
 	}
 
-	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations)
+	username, password, err := helpers.UsernameAndPassword(r.client, r.instance)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	passwordSecret := builders.PasswordSecret(r.instance, username, password).Name
+	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations, passwordSecret)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.client.Scheme()))
 	result.Combine(r.client.CreateDeployment(deployment))
 
