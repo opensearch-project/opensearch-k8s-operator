@@ -29,24 +29,7 @@ spec:
     {{- end }}
     {{- if .Values.opensearchCluster.initHelper.resources }}
     resources:
-      {{- if .Values.opensearchCluster.initHelper.resources.requests }}
-      requests:
-        {{- if .Values.opensearchCluster.initHelper.resources.requests.memory }}
-        memory: {{ .Values.opensearchCluster.initHelper.resources.requests.memory }}
-        {{- end }}
-        {{- if .Values.opensearchCluster.initHelper.resources.requests.cpu }}
-        cpu: {{ .Values.opensearchCluster.initHelper.resources.requests.cpu }}
-        {{- end }}
-      {{- end }}
-      {{- if .Values.opensearchCluster.initHelper.resources.limits }}
-      limits:
-        {{- if .Values.opensearchCluster.initHelper.resources.limits.memory }}
-        memory: {{ .Values.opensearchCluster.initHelper.resources.limits.memory }}
-        {{- end }}
-        {{- if .Values.opensearchCluster.initHelper.resources.limits.cpu }}
-        cpu: {{ .Values.opensearchCluster.initHelper.resources.limits.cpu }}
-        {{- end }}
-      {{- end }}
+      {{- toYaml .Values.opensearchCluster.initHelper.resources | nindent 6 }}
     {{- end }}
   {{- end }}
   general:
