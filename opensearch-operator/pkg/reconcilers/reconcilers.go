@@ -14,13 +14,15 @@ import (
 )
 
 const (
-	opensearchPending     = "OpensearchPending"
-	opensearchError       = "OpensearchError"
-	opensearchAPIError    = "OpensearchAPIError"
-	opensearchRefMismatch = "OpensearchRefMismatch"
-	opensearchAPIUpdated  = "OpensearchAPIUpdated"
-	passwordError         = "PasswordError"
-	statusError           = "StatusUpdateError"
+	opensearchPending             = "OpensearchPending"
+	opensearchError               = "OpensearchError"
+	opensearchAPIError            = "OpensearchAPIError"
+	opensearchRefMismatch         = "OpensearchRefMismatch"
+	opensearchAPIUpdated          = "OpensearchAPIUpdated"
+	opensearchAPIUnchanged        = "OpensearchAPIUnchanged"
+	opensearchCustomResourceError = "OpensearchCustomResourceError"
+	passwordError                 = "PasswordError"
+	statusError                   = "StatusUpdateError"
 )
 
 type ComponentReconciler func() (reconcile.Result, error)
