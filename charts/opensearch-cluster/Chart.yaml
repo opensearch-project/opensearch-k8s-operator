@@ -2,5 +2,9 @@ apiVersion: v2
 name: opensearch-cluster
 description: A Helm chart for OpenSearch Cluster
 type: application
-version: 2.6.0
-appVersion: 2.6.0
+
+## The opensearch-cluster Helm Chart version
+version: 2.6.1
+
+## The operator version
+appVersion: 2.6.1
