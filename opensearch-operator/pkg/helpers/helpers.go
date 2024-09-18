@@ -247,7 +247,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearc
 	selector := labels.NewSelector()
 	selector = selector.Add(*clusterReq, *componentReq)
 	// List pods matching selector
-	list, err := k8sClient.ListPods(&client.ListOptions{LabelSelector: selector})
+	list, err := k8sClient.ListPods(&client.ListOptions{Namespace: cr.Namespace, LabelSelector: selector})
 	if err != nil {
 		return 0, err
 	}
@@ -281,7 +281,7 @@ func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluste
 	}
 	selector := labels.NewSelector()
 	selector = selector.Add(*clusterReq, *componentReq)
-	list, err := k8sClient.ListPVCs(&client.ListOptions{LabelSelector: selector})
+	list, err := k8sClient.ListPVCs(&client.ListOptions{Namespace: cr.Namespace, LabelSelector: selector})
 	if err != nil {
 		return 0, err
 	}
