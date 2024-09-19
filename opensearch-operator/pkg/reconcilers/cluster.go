@@ -182,8 +182,9 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	}
 
 	// Detect cluster failure and initiate parallel recovery
+	// Unless PodManagementPolicy is already set as "Parallel" while cluster creation
 	if helpers.ParallelRecoveryMode() &&
-		(nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
+		(nodePool.PodManagementPolicy != appsv1.ParallelPodManagement && (nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil)) {
 		// This logic only works if the STS uses PVCs
 		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
 		if existing.Status.CurrentRevision == "" {
