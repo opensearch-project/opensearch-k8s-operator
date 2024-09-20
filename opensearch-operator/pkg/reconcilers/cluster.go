@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	corev1 "k8s.io/api/core/v1"
 	"strings"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
@@ -95,7 +96,9 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
 
-	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
+	commonEnvVars := builders.CommonEnvVars(r.instance, passwordSecret.Name)
+
+	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts, commonEnvVars)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
 	if r.instance.Status.Initialized {
 		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
@@ -108,7 +111,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.CombineErr(ctrl.SetControllerReference(r.instance, headlessService, r.client.Scheme()))
 		result.Combine(r.client.ReconcileResource(headlessService, reconciler.StatePresent))
 
-		result.Combine(r.reconcileNodeStatefulSet(nodePool, username))
+		result.Combine(r.reconcileNodeStatefulSet(nodePool, commonEnvVars))
 	}
 
 	// if Version isn't set we set it now to check for upgrades later.
@@ -130,7 +133,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
+func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, envVars []corev1.EnvVar) (*ctrl.Result, error) {
 	found, nodePoolConfig := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
 
 	// If config hasn't been set up for the node pool requeue
@@ -143,13 +146,13 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	extraConfig := helpers.MergeConfigs(r.instance.Spec.General.AdditionalConfig, nodePool.AdditionalConfig)
 
 	sts := builders.NewSTSForNodePool(
-		username,
 		r.instance,
 		nodePool,
 		nodePoolConfig.ConfigHash,
 		r.reconcilerContext.Volumes,
 		r.reconcilerContext.VolumeMounts,
 		extraConfig,
+		envVars,
 	)
 	if err := ctrl.SetControllerReference(r.instance, sts, r.client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
