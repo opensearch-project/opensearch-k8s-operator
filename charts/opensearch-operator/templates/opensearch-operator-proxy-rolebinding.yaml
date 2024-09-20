@@ -1,8 +1,8 @@
-{{- if not .Values.useRoleBindings }}
+{{- if .Values.useRoleBindings }}
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: {{ include "opensearch-operator.fullname" . }}-{{ .Release.Namespace }}-proxy-rolebinding
+  name: {{ include "opensearch-operator.fullname" . }}-{{ .Release.Namespace }}-proxy
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
