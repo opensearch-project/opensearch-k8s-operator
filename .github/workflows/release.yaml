@@ -24,24 +24,6 @@ jobs:
         run: |
           echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
 
-      - name: Make sure helm chart has correct versions
-        run: |
-          sed -i -e 's/^appVersion:.*/appVersion: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
-          sed -i -e 's/^version:.*/version: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
-          sed -i -e 's/^appVersion:.*/appVersion: '$RELEASE_VERSION'/' charts/opensearch-cluster/Chart.yaml
-          sed -i -e 's/^version:.*/version: '$RELEASE_VERSION'/' charts/opensearch-cluster/Chart.yaml
-
-      - name: Install Helm
-        uses: azure/setup-helm@v4
-        with:
-          version: v3.14.3
-
-      - name: Publish helm chart
-        uses: stefanprodan/helm-gh-pages@master
-        with:
-          charts_dir: charts/
-          token: ${{ secrets.GITHUB_TOKEN }}
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         id: create_release
