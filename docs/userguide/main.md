@@ -255,7 +255,7 @@ Directly exposing the node HTTP port outside the Kubernetes cluster is not recom
 
 ### Adding plugins
 
-You can extend the functionality of OpenSearch via [plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#available-plugins). Commonly used ones are snapshot repository plugins for external backups (e.g. to AWS S3 or Azure Blog Storage). The operator has support to automatically install such plugins during setup.
+You can extend the functionality of OpenSearch via [plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#available-plugins). Commonly used ones are snapshot repository plugins for external backups (e.g. to AWS S3 or Azure Blob Storage). The operator has support to automatically install such plugins during setup.
 
 To install a plugin for opensearch add it to the list under `general.pluginsList`:
 
