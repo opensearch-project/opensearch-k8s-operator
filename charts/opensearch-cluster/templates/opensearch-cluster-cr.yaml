@@ -27,6 +27,10 @@ spec:
     imagePullSecrets:
       {{ toYaml .Values.opensearchCluster.initHelper.imagePullSecrets | nindent 6 }}
     {{- end }}
+    {{- if .Values.opensearchCluster.initHelper.resources }}
+    resources:
+      {{- toYaml .Values.opensearchCluster.initHelper.resources | nindent 6 }}
+    {{- end }}
   {{- end }}
   general:
     {{- if .Values.opensearchCluster.general.version }}

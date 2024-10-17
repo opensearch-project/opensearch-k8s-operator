@@ -27,6 +27,17 @@ opensearchCluster:
       limits:
         memory: "1Gi"
         cpu: "500m"
+  initHelper:
+    imagePullSecrets: []
+    # - registryKeySecretName
+    imagePullPolicy: IfNotPresent
+    resources: {}
+    # requests:
+    #   memory: "1Gi"
+    #   cpu: "500m"
+    # limits:
+    #   memory: "1Gi"
+    #   cpu: "500m"
   nodePools:
     - component: masters
       diskSize: "30Gi"

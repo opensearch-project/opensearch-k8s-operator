@@ -124,7 +124,7 @@ spec:
     nodePools:
       - component: masters
         replicas: 3  # The number of replicas
-        diskSize: "30Gi" # The disk size to use 
+        diskSize: "30Gi" # The disk size to use
         resources: # The resource requests and limits for that nodepool
           requests:
             memory: "2Gi"
@@ -221,7 +221,7 @@ If you provide your own node certificates you must also provide an admin cert th
 spec:
   security:
     config:
-      adminSecret: 
+      adminSecret:
         name: my-first-cluster-admin-cert # The secret must have keys tls.crt and tls.key
 ```
 
@@ -255,7 +255,7 @@ Directly exposing the node HTTP port outside the Kubernetes cluster is not recom
 
 ### Adding plugins
 
-You can extend the functionality of OpenSearch via [plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#available-plugins). Commonly used ones are snapshot repository plugins for external backups (e.g. to AWS S3 or Azure Blog Storage). The operator has support to automatically install such plugins during setup.
+You can extend the functionality of OpenSearch via [plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#available-plugins). Commonly used ones are snapshot repository plugins for external backups (e.g. to AWS S3 or Azure Blob Storage). The operator has support to automatically install such plugins during setup.
 
 To install a plugin for opensearch add it to the list under `general.pluginsList`:
 
@@ -277,6 +277,14 @@ To install a plugin for opensearch dashboards add it to the list under `dashboar
     pluginsList:
       - sample-plugin-name
 ```
+
+To install a plugin for the bootstrap pod add it to the list under `bootstrap.pluginsList`:
+
+```yaml
+  bootstrap:
+    pluginsList: ["repository-s3"]
+```
+
 
 Please note:
 
@@ -322,6 +330,18 @@ If you only want to load some keys from a secret or rename the existing keys, yo
 ```
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
+
+To populate the keystore of the boostrap pod add the secrets under the `bootstrap.keystore` section:
+
+```yaml
+  bootstrap:
+    # ...
+    keystore:
+    - secret:
+        name: credentials
+    - secret:
+        name: some-other-secret
+```
 
 ### SmartScaler
 
@@ -382,7 +402,7 @@ You can configure the snapshot repositories for the OpenSearch cluster through t
 ```yaml
 spec:
   general:
-    snapshotRepositories: 
+    snapshotRepositories:
         - name: my_s3_repository_1
           type: s3
           settings:
@@ -737,7 +757,7 @@ spec:
       projected:
         sources:
           serviceAccountToken:
-            path: "token"    
+            path: "token"
   dashboards:
     additionalVolumes:
     - name: example-secret
@@ -775,7 +795,7 @@ spec:
       env:
         - name: MY_ENV_VAR
           value: "myvalue"
-        # the other options are supported here as well 
+        # the other options are supported here as well
 ```
 
 ### Custom cluster domain name
@@ -793,7 +813,7 @@ manager:
 During cluster initialization the operator uses init containers as helpers. For these containers a busybox image is used ( specifically `docker.io/busybox:latest`). In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
 
 ```yaml
-  spec:     
+  spec:
     initHelper:
       # You can either only specify the version
       version: "1.27.2-buildcustom"
@@ -1393,7 +1413,7 @@ metadata:
 spec:
   opensearchCluster:
     name: my-first-cluster
-  
+
   name: logs_template # name of the index template - defaults to metadata.name. Can't be updated in-place
 
   indexPatterns: # required index patterns

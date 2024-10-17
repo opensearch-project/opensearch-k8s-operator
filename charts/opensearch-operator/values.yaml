@@ -74,7 +74,11 @@ serviceAccount:
 kubeRbacProxy:
   enable: true
   securityContext:
-    # allowPrivilegeEscalation: false
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   resources:
     limits:
       cpu: 50m
