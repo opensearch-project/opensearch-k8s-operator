@@ -1,10 +1,13 @@
 nameOverride: ""
 fullnameOverride: ""
 
+podAnnotations: {}
+podLabels: {}
 nodeSelector: {}
 tolerations: []
 securityContext:
   runAsNonRoot: true
+priorityClassName: ""
 manager:
   securityContext:
     allowPrivilegeEscalation: false
