@@ -1,8 +1,8 @@
 nameOverride: ""
 fullnameOverride: ""
 
-annotations: {}
-labels: {}
+podAnnotations: {}
+podLabels: {}
 nodeSelector: {}
 tolerations: []
 securityContext:

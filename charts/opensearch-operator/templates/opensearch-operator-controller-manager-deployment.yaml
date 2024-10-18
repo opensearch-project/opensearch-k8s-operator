@@ -13,10 +13,10 @@ spec:
     metadata:
       labels:
         control-plane: controller-manager
-        {{- with .Values.labels }}
+        {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
-      {{- with .Values.annotations }}
+      {{- with .Values.podAnnotations }}
       annotations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
