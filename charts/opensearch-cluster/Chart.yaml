@@ -4,7 +4,7 @@ description: A Helm chart for OpenSearch Cluster
 type: application
 
 ## The opensearch-cluster Helm Chart version
-version: 2.6.1
+version: 2.7.0
 
 ## The operator version
-appVersion: 2.6.1
+appVersion: 2.7.0
