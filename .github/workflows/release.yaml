@@ -12,13 +12,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+ 
       - name: Setup go
         uses: actions/setup-go@v5
         with:
           go-version-file: 'go.work'
           cache: false
+ 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+
       - name: set Env
         id: github-ver
         run: |
@@ -29,15 +34,21 @@ jobs:
           sed -i -e 's/^appVersion:.*/appVersion: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
           sed -i -e 's/^version:.*/version: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
 
+      - name: Configure Git
+        run: |
+          git config user.name "$GITHUB_ACTOR"
+          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+
       - name: Install Helm
         uses: azure/setup-helm@v4
-        with:
-          version: v3.14.3
+        env:
+          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Run chart-releaser for opensearch-operator
         uses: helm/chart-releaser-action@v1.6.0
         with:
-          charts_dir: charts/opensearch-operator
+          skip_existing: true
+          mark_as_latest: false
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
