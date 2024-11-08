@@ -11,6 +11,22 @@ spec:
     additionalConfig:
       {{ toYaml .Values.opensearchCluster.bootstrap.additionalConfig | nindent 6 }}
     {{- end }}
+    {{- if .Values.opensearchCluster.bootstrap.resources }}
+    affinity:
+      {{ toYaml .Values.opensearchCluster.bootstrap.affinity | nindent 6 }}
+    {{- end }}
+    {{- if .Values.opensearchCluster.bootstrap.resources }}
+    jvm:
+      {{ toYaml .Values.opensearchCluster.bootstrap.jvm | nindent 6 }}
+    {{- end }}
+    {{- if .Values.opensearchCluster.bootstrap.resources }}
+    nodeSelector:
+      {{ toYaml .Values.opensearchCluster.bootstrap.nodeSelector | nindent 6 }}
+    {{- end }}
+    {{- if .Values.opensearchCluster.bootstrap.resources }}
+    resources:
+      {{ toYaml .Values.opensearchCluster.bootstrap.resources | nindent 6 }}
+    {{- end }}
   {{- end }}
   {{- if .Values.opensearchCluster.initHelper }}
   initHelper:
