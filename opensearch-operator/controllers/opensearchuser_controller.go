@@ -90,29 +90,48 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 func (r *OpensearchUserReconciler) handleSecretEvent(_ context.Context, secret client.Object) []reconcile.Request {
-	reconcileRequests := []reconcile.Request{}
+	var reconcileRequests []reconcile.Request
 
 	if secret == nil {
 		return reconcileRequests
 	}
 
-	// Only check secrets with Opensearch User Annotations
+	// Only check secrets with OsUserNamespaceAnnotation and (optional) OsUserNameAnnotation
 	annotations := secret.GetAnnotations()
 
-	name, nameOk := annotations[helpers.OsUserNameAnnotation]
 	namespace, namespaceOk := annotations[helpers.OsUserNamespaceAnnotation]
 
-	if !nameOk || !namespaceOk {
+	if !namespaceOk {
 		return reconcileRequests
 	}
 
-	// Trigger reconcile for according OpenSearchUser
-	reconcileRequests = append(reconcileRequests, reconcile.Request{
-		NamespacedName: types.NamespacedName{
-			Name:      string(name),
-			Namespace: string(namespace),
-		},
-	})
+	name, nameOk := annotations[helpers.OsUserNameAnnotation]
+
+	if nameOk {
+		return append(reconcileRequests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      name,
+				Namespace: namespace,
+			},
+		})
+	}
+
+	// For Secret that stores multiple User passwords
+	// Cast the client.Object to a *corev1.Secret
+	secretObj, ok := secret.(*corev1.Secret)
+	if !ok {
+		return reconcileRequests
+	}
+
+	for username := range secretObj.Data {
+		// Create a reconcile request for each user found in the Secret
+		reconcileRequests = append(reconcileRequests, reconcile.Request{
+			NamespacedName: types.NamespacedName{
+				Name:      username,
+				Namespace: namespace,
+			},
+		})
+	}
 
 	return reconcileRequests
 }

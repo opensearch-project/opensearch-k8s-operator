@@ -308,7 +308,6 @@ var _ = Describe("users reconciler", func() {
 		})
 		When("user exists and is different", func() {
 			BeforeEach(func() {
-				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				userRequest := requests.User{
 					Attributes: map[string]string{
 						services.K8sAttributeField: "testuid",
@@ -342,6 +341,7 @@ var _ = Describe("users reconciler", func() {
 				)
 			})
 			It("should update the user", func() {
+				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				var createdSecret *corev1.Secret
 				mockClient.On("CreateSecret", mock.Anything).
 					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
@@ -364,7 +364,8 @@ var _ = Describe("users reconciler", func() {
 				Expect(len(events)).To(Equal(1))
 				Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s user updated in opensearch", opensearchAPIUpdated)))
 			})
-			It("should update the secret with opensearch annotations", func() {
+			It("should update the secret with User and Namespace annotations", func() {
+				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				var createdSecret *corev1.Secret
 				mockClient.On("CreateSecret", mock.Anything).
 					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
@@ -384,6 +385,46 @@ var _ = Describe("users reconciler", func() {
 				expectedNamespace := "test-user"
 				Expect(actualName).To(Equal(expectedName))
 				Expect(actualNamespace).To(Equal(expectedNamespace))
+			})
+			It("should update the secret only with Namespace annotation", func() {
+				instance.Spec.PasswordFrom = corev1.SecretKeySelector{
+					Key: instance.Name,
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: "multi-user-secret",
+					},
+				}
+				password = &corev1.Secret{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "multi-user-secret",
+						Namespace: "test-user",
+					},
+					Data: map[string][]byte{
+						instance.Name: []byte("user1password"),
+						"test-user2":  []byte("user2password"),
+					},
+				}
+				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
+
+				var createdSecret *corev1.Secret
+				mockClient.On("CreateSecret", mock.Anything).
+					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+						createdSecret = secret
+						secret.Name = "multi-user-secret"
+						return &ctrl.Result{}, nil
+					})
+				defer close(recorder.Events)
+				_, err := reconciler.Reconcile()
+				Expect(err).ToNot(HaveOccurred())
+
+				annotations := createdSecret.GetAnnotations()
+
+				_, nameOk := annotations[helpers.OsUserNameAnnotation]
+				actualNamespace := annotations[helpers.OsUserNamespaceAnnotation]
+
+				expectedNamespace := "test-user"
+				Expect(actualNamespace).To(Equal(expectedNamespace))
+				Expect(nameOk).To(BeFalse(), "Expected Name annotation to be absent for Secret with multiple user passwords")
+				Expect(len(createdSecret.Data)).To(Equal(2), "Expected secret to contain 2 keys")
 			})
 		})
 		When("user does not exist", func() {
