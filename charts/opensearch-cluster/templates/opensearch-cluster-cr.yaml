@@ -332,11 +332,11 @@ spec:
         secret:
           name: {{ .Values.opensearchCluster.security.tls.transport.secret.name }}
         {{- end }}
-        {{- if .Values.opensearchCluster.security.tls.transport.adminDn }}
         {{- if .Values.opensearchCluster.security.tls.transport.caSecret }}
         caSecret:
           name: {{ .Values.opensearchCluster.security.tls.transport.caSecret.name }}
         {{- end }}
+        {{- if .Values.opensearchCluster.security.tls.transport.adminDn }}
         adminDn:
           {{ toYaml .Values.opensearchCluster.security.tls.transport.adminDn | nindent 10 }}
         {{- end }}
