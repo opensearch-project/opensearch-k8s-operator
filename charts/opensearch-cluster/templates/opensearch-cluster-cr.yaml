@@ -332,6 +332,10 @@ spec:
         secret:
           name: {{ .Values.opensearchCluster.security.tls.transport.secret.name }}
         {{- end }}
+        {{- if .Values.opensearchCluster.security.tls.transport.caSecret }}
+        caSecret:
+          name: {{ .Values.opensearchCluster.security.tls.transport.caSecret.name }}
+        {{- end }}
         {{- if .Values.opensearchCluster.security.tls.transport.adminDn }}
         adminDn:
           {{ toYaml .Values.opensearchCluster.security.tls.transport.adminDn | nindent 10 }}
@@ -349,6 +353,10 @@ spec:
         {{- if .Values.opensearchCluster.security.tls.http.secret }}
         secret:
           name: {{ .Values.opensearchCluster.security.tls.http.secret.name }}
+        {{- end }}
+        {{- if .Values.opensearchCluster.security.tls.http.caSecret }}
+        caSecret:
+          name: {{ .Values.opensearchCluster.security.tls.http.caSecret.name }}
         {{- end }}
       {{- end }}
     {{- end }}
