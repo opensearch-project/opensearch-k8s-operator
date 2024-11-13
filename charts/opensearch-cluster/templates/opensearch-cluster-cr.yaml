@@ -7,10 +7,7 @@ metadata:
 spec:
   {{- if .Values.opensearchCluster.bootstrap }}
   bootstrap:
-    {{- if .Values.opensearchCluster.bootstrap.additionalConfig }}
-    additionalConfig:
-      {{ toYaml .Values.opensearchCluster.bootstrap.additionalConfig | nindent 6 }}
-    {{- end }}
+    {{ toYaml .Values.opensearchCluster.bootstrap | nindent 4 }}
   {{- end }}
   {{- if .Values.opensearchCluster.initHelper }}
   initHelper:
