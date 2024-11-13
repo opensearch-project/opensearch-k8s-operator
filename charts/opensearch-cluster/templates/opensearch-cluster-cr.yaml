@@ -36,6 +36,10 @@ spec:
     {{- if .Values.opensearchCluster.general.image }}
     image: {{ .Values.opensearchCluster.general.image | quote }}
     {{- end }}
+    {{- if .Values.opensearchCluster.general.imagePullSecrets }}
+    imagePullSecrets:
+      {{ toYaml .Values.opensearchCluster.general.imagePullSecrets | nindent 6 }}
+    {{- end }}
     {{- if .Values.opensearchCluster.general.httpPort }}
     httpPort: {{ .Values.opensearchCluster.general.httpPort }}
     {{- end }}
@@ -91,6 +95,10 @@ spec:
   dashboards:
     {{- if .Values.opensearchCluster.dashboards.image }}
     image: {{ .Values.opensearchCluster.dashboards.image | quote }}
+    {{- end }}
+    {{- if .Values.opensearchCluster.dashboards.imagePullSecrets }}
+    imagePullSecrets:
+      {{ toYaml .Values.opensearchCluster.dashboards.imagePullSecrets | nindent 6 }}
     {{- end }}
     version: {{ .Values.opensearchCluster.dashboards.version }}
     {{- if .Values.opensearchCluster.dashboards.enable }}
