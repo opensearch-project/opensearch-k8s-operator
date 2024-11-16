@@ -126,6 +126,16 @@ var _ = Describe("Cluster Reconciler", func() {
 
 			// check if tlsConfig is not defined in the CRD declaration the ServiceMonitor not deploy that part of the config
 			// Expect(sm.Spec.Endpoints[0].TLSConfig).To(BeNil())
+
+			// check if the ServiceMonitor is using the General.Monitoring.label from the CRD declaration
+			Expect(func() bool {
+				for k, v := range OpensearchCluster.Spec.General.Monitoring.Labels {
+					if sm.Labels[k] != v {
+						return false
+					}
+				}
+				return true
+			}()).Should(BeTrue())
 		})
 	})
 
@@ -175,6 +185,7 @@ var _ = Describe("Cluster Reconciler", func() {
 								"test-secret",
 								"test-cm",
 								"test-emptydir",
+								"test-projected-token",
 							),
 						)),
 						HaveMatchingVolume(And(
@@ -188,6 +199,10 @@ var _ = Describe("Cluster Reconciler", func() {
 						HaveMatchingVolume(And(
 							HaveName("test-emptydir"),
 							HaveVolumeSource("EmptyDir"),
+						)),
+						HaveMatchingVolume(And(
+							HaveName("test-projected-token"),
+							HaveVolumeSource("Projected"),
 						)),
 					))
 				}(nodePool)

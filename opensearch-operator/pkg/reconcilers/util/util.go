@@ -127,14 +127,30 @@ func CreateAdditionalVolumes(
 				},
 			})
 		}
+		if volumeConfig.CSI != nil {
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					CSI: volumeConfig.CSI,
+				},
+			})
+		}
+		if volumeConfig.Projected != nil {
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					Projected: volumeConfig.Projected,
+				},
+			})
+		}
 		if volumeConfig.RestartPods {
 			namesIndex[volumeConfig.Name] = i
 			names = append(names, volumeConfig.Name)
 		}
 
 		subPath := ""
-		// SubPaths are only supported for ConfigMaps and Secrets
-		if volumeConfig.ConfigMap != nil || volumeConfig.Secret != nil {
+		// SubPaths are only supported for ConfigMaps, Secrets and CSI volumes
+		if volumeConfig.ConfigMap != nil || volumeConfig.Secret != nil || volumeConfig.CSI != nil || volumeConfig.Projected != nil {
 			subPath = strings.TrimSpace(volumeConfig.SubPath)
 		}
 

@@ -106,12 +106,20 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 		},
 		Spec: opsterv1.ClusterSpec{
 			General: opsterv1.GeneralConfig{
-				Monitoring:  opsterv1.MonitoringConfig{Enable: true, ScrapeInterval: "35s", TLSConfig: &opsterv1.MonitoringConfigTLS{InsecureSkipVerify: true, ServerName: "foo.bar"}},
-				HttpPort:    9200,
-				Vendor:      "opensearch",
-				Version:     "2.0.0",
-				ServiceName: "es-svc",
-				PluginsList: []string{"http://foo-plugin-1.0.0"},
+				Monitoring: opsterv1.MonitoringConfig{
+					Enable:         true,
+					ScrapeInterval: "35s",
+					TLSConfig:      &opsterv1.MonitoringConfigTLS{InsecureSkipVerify: true, ServerName: "foo.bar"},
+					Labels: map[string]string{
+						"foo": "bar",
+					},
+				},
+				HttpPort:       9200,
+				Vendor:         "opensearch",
+				Version:        "2.0.0",
+				ServiceName:    "es-svc",
+				ServiceAccount: "default",
+				PluginsList:    []string{"http://foo-plugin-1.0.0"},
 				AdditionalConfig: map[string]string{
 					"foo": "bar",
 				},
@@ -138,6 +146,18 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 						Name:        "test-emptydir",
 						Path:        "/tmp/",
 						EmptyDir:    &corev1.EmptyDirVolumeSource{},
+						RestartPods: false,
+					},
+					{
+						Name: "test-projected-token",
+						Path: "/opt/test-projected",
+						Projected: &corev1.ProjectedVolumeSource{
+							Sources: []corev1.VolumeProjection{{
+								ServiceAccountToken: &corev1.ServiceAccountTokenProjection{
+									Path: "token",
+								},
+							}},
+						},
 						RestartPods: false,
 					},
 				},

@@ -252,10 +252,10 @@ spec:
                             type: object
                           readOnly:
                             description: Sets a managed index to be read only.
-                            type: string
+                            type: object
                           readWrite:
                             description: Sets a managed index to be writeable.
-                            type: string
+                            type: object
                           replicaCount:
                             description: Sets the number of replicas to assign to
                               an index.
@@ -349,7 +349,8 @@ spec:
                             - snapshot
                             type: object
                           timeout:
-                            description: The timeout period for the action.
+                            description: The timeout period for the action. Accepts
+                              time units for minutes, hours, and days.
                             type: string
                         type: object
                       type: array
@@ -369,16 +370,26 @@ spec:
                                 description: The cron job that triggers the transition
                                   if no other transition happens first.
                                 properties:
-                                  expression:
-                                    description: The cron expression that triggers
-                                      the transition.
-                                    type: string
-                                  timezone:
-                                    description: The timezone that triggers the transition.
-                                    type: string
+                                  cron:
+                                    description: A wrapper for the cron job that triggers
+                                      the transition if no other transition happens
+                                      first. This wrapper is here to adhere to the
+                                      OpenSearch API.
+                                    properties:
+                                      expression:
+                                        description: The cron expression that triggers
+                                          the transition.
+                                        type: string
+                                      timezone:
+                                        description: The timezone that triggers the
+                                          transition.
+                                        type: string
+                                    required:
+                                    - expression
+                                    - timezone
+                                    type: object
                                 required:
-                                - expression
-                                - timezone
+                                - cron
                                 type: object
                               minDocCount:
                                 description: The minimum document count of the index

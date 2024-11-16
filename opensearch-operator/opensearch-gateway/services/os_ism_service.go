@@ -5,17 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var ErrNotFound = errors.New("Policy not found")
+var ErrNotFound = errors.New("policy not found")
 
 // ShouldUpdateISMPolicy checks if the passed policy is same as existing or needs update
-func ShouldUpdateISMPolicy(ctx context.Context, newPolicy, existingPolicy requests.Policy) (bool, error) {
+func ShouldUpdateISMPolicy(ctx context.Context, newPolicy, existingPolicy requests.ISMPolicy) (bool, error) {
 	if cmp.Equal(newPolicy, existingPolicy, cmpopts.EquateEmpty()) {
 		return false, nil
 	}
@@ -26,23 +28,8 @@ func ShouldUpdateISMPolicy(ctx context.Context, newPolicy, existingPolicy reques
 	return true, nil
 }
 
-// PolicyExists checks if the passed policy already exists or not
-func PolicyExists(ctx context.Context, service *OsClusterClient, policyName string) (bool, error) {
-	resp, err := service.GetISMConfig(ctx, policyName)
-	if err != nil {
-		return false, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode == 404 {
-		return false, nil
-	} else if resp.IsError() {
-		return false, fmt.Errorf("response from API is %s", resp.Status())
-	}
-	return true, nil
-}
-
 // GetPolicy fetches the passed policy
-func GetPolicy(ctx context.Context, service *OsClusterClient, policyName string) (*requests.Policy, error) {
+func GetPolicy(ctx context.Context, service *OsClusterClient, policyName string) (*responses.GetISMPolicyResponse, error) {
 	resp, err := service.GetISMConfig(ctx, policyName)
 	if err != nil {
 		return nil, err
@@ -50,10 +37,11 @@ func GetPolicy(ctx context.Context, service *OsClusterClient, policyName string)
 	defer resp.Body.Close()
 	if resp.StatusCode == 404 {
 		return nil, ErrNotFound
-	} else if resp.IsError() {
+	}
+	if resp.IsError() {
 		return nil, fmt.Errorf("response from API is %s", resp.Status())
 	}
-	ismResponse := requests.Policy{}
+	ismResponse := responses.GetISMPolicyResponse{}
 	if resp != nil && resp.Body != nil {
 		err := json.NewDecoder(resp.Body).Decode(&ismResponse)
 		if err != nil {
@@ -65,7 +53,7 @@ func GetPolicy(ctx context.Context, service *OsClusterClient, policyName string)
 }
 
 // CreateISMPolicy creates the passed policy
-func CreateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy requests.Policy, policyId string) error {
+func CreateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy requests.ISMPolicy, policyId string) error {
 	spec := opensearchutil.NewJSONReader(ismpolicy)
 	resp, err := service.PutISMConfig(ctx, policyId, spec)
 	if err != nil {
@@ -79,15 +67,15 @@ func CreateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy re
 }
 
 // UpdateISMPolicy updates the given policy
-func UpdateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy requests.Policy, seqno, primterm *int, policyName string) error {
+func UpdateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy requests.ISMPolicy, seqno, primterm *int, policyId string) error {
 	spec := opensearchutil.NewJSONReader(ismpolicy)
-	resp, err := service.UpdateISMConfig(ctx, policyName, *seqno, *primterm, spec)
+	resp, err := service.UpdateISMConfig(ctx, policyId, *seqno, *primterm, spec)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 	if resp.IsError() {
-		return fmt.Errorf("Failed to create ism policy: %s", resp.String())
+		return fmt.Errorf("failed to update ism policy: %s", resp.String())
 	}
 	return nil
 }
@@ -100,7 +88,7 @@ func DeleteISMPolicy(ctx context.Context, service *OsClusterClient, policyName s
 	}
 	defer resp.Body.Close()
 	if resp.IsError() {
-		return fmt.Errorf("Failed to delete ism policy: %s", resp.String())
+		return fmt.Errorf("failed to delete ism policy: %s", resp.String())
 	}
 	return nil
 }

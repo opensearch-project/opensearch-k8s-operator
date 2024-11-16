@@ -1,14 +1,11 @@
 package requests
 
-type Policy struct {
-	PolicyID       string    `json:"_id,omitempty"`
-	PrimaryTerm    *int      `json:"_primary_term,omitempty"`
-	SequenceNumber *int      `json:"_seq_no,omitempty"`
-	Policy         ISMPolicy `json:"policy"`
+type ISMPolicy struct {
+	Policy ISMPolicySpec `json:"policy"`
 }
 
 // ISMPolicySpec is the specification for the ISM policy for OS.
-type ISMPolicy struct {
+type ISMPolicySpec struct {
 	// The default starting state for each index that uses this policy.
 	DefaultState string `json:"default_state"`
 	// A human-readable description of the policy.
@@ -78,9 +75,9 @@ type Action struct {
 	// Opens a managed index.
 	Open *Open `json:"open,omitempty"`
 	// Sets a managed index to be read only.
-	ReadOnly *string `json:"read_only,omitempty"`
+	ReadOnly *ReadOnly `json:"read_only,omitempty"`
 	// Sets a managed index to be writeable.
-	ReadWrite *string `json:"read_write,omitempty"`
+	ReadWrite *ReadWrite `json:"read_write,omitempty"`
 	// Sets the number of replicas to assign to an index.
 	ReplicaCount *ReplicaCount `json:"replica_count,omitempty"`
 	// The retry configuration for the action.
@@ -129,6 +126,10 @@ type Allocation struct {
 }
 
 type Close struct{}
+
+type ReadOnly struct{}
+
+type ReadWrite struct{}
 
 type Delete struct{}
 
@@ -214,7 +215,12 @@ type Condition struct {
 	// The minimum size of the total primary shard storage (not counting replicas) required to transition.
 	MinSize *string `json:"min_size,omitempty"`
 }
+
 type Cron struct {
+	CronDetails *CronDetails `json:"cron"`
+}
+
+type CronDetails struct {
 	// The cron expression that triggers the transition.
 	Expression string `json:"expression"`
 	// The timezone that triggers the transition.

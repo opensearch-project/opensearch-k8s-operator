@@ -37,6 +37,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	"net/http"
+	_ "net/http/pprof"
 )
 
 var (
@@ -86,6 +89,11 @@ func main() {
 		if devmode {
 			setupLog.Info("Enabled debug logging via environment variable OPERATOR_DEV_LOGGING")
 		}
+	}
+	pprofEndpoints, err := strconv.ParseBool(os.Getenv("PPROF_ENDPOINTS_ENABLED"))
+	if err != nil {
+		// by default to not enable endpoints
+		pprofEndpoints = false
 	}
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
@@ -186,6 +194,13 @@ func main() {
 	if err := mgr.AddReadyzCheck("readyz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
+	}
+
+	if pprofEndpoints {
+		go func() {
+			listenError := http.ListenAndServe("localhost:6060", nil)
+			setupLog.Error(listenError, "Failed to start pprof endpoint listener")
+		}()
 	}
 
 	setupLog.Info("Starting manager")

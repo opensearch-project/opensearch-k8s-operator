@@ -109,9 +109,9 @@ type Action struct {
 	// Opens a managed index.
 	Open *Open `json:"open,omitempty"`
 	// Sets a managed index to be read only.
-	ReadOnly *string `json:"readOnly,omitempty"`
+	ReadOnly *ReadOnly `json:"readOnly,omitempty"`
 	// Sets a managed index to be writeable.
-	ReadWrite *string `json:"readWrite,omitempty"`
+	ReadWrite *ReadWrite `json:"readWrite,omitempty"`
 	// Sets the number of replicas to assign to an index.
 	ReplicaCount *ReplicaCount `json:"replicaCount,omitempty"`
 	// The retry configuration for the action.
@@ -124,7 +124,7 @@ type Action struct {
 	Shrink *Shrink `json:"shrink,omitempty"`
 	// Back up your cluster’s indexes and state
 	Snapshot *Snapshot `json:"snapshot,omitempty"`
-	// The timeout period for the action.
+	// The timeout period for the action. Accepts time units for minutes, hours, and days.
 	Timeout *string `json:"timeout,omitempty"`
 }
 
@@ -160,6 +160,10 @@ type Allocation struct {
 }
 
 type Close struct{}
+
+type ReadOnly struct{}
+
+type ReadWrite struct{}
 
 type Delete struct{}
 
@@ -247,6 +251,11 @@ type Condition struct {
 }
 
 type Cron struct {
+	// A wrapper for the cron job that triggers the transition if no other transition happens first. This wrapper is here to adhere to the OpenSearch API.
+	CronDetails *CronDetails `json:"cron"`
+}
+
+type CronDetails struct {
 	// The cron expression that triggers the transition.
 	Expression string `json:"expression"`
 	// The timezone that triggers the transition.

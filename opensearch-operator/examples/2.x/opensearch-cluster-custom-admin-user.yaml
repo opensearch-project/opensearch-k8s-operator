@@ -7,7 +7,7 @@ metadata:
   namespace: default
 spec:
   general:
-    version: "2.2.1"
+    version: 2.14.0
     httpPort: 9200
     vendor: opensearch
     serviceName: my-cluster
@@ -26,7 +26,7 @@ spec:
   dashboards:
     opensearchCredentialsSecret:
       name: admin-credentials-secret
-    version: "2.2.1"
+    version: 2.14.0
     enable: true
     replicas: 2
     resources:

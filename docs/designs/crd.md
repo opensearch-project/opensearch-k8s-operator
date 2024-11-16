@@ -6,7 +6,7 @@ A resource is an endpoint in the Kubernetes API that stores a collection of API 
 A [Custom Resource](https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/) is an extension of the Kubernetes API, many core Kubernetes functions are now built using custom resources, making Kubernetes more modular.
 Cluster admins can update custom resources independently of the cluster itself. Once a custom resource is installed, users can create and access its objects using kubectl, just as they do for built-in resources like Pods.
 
-The CustomResourceDefinition API resource allows you to define custom resources. Defining a CRD object creates a new custom resource with a name and schema that you specify. The Kubernetes API serves and handles the storage of your custom resource. Every resource is build from `KGV` that stands for Group Version Resource and this is what drives the Kubernetes API Server structure. 
+The CustomResourceDefinition API resource allows you to define custom resources. Defining a CRD object creates a new custom resource with a name and schema that you specify. The Kubernetes API serves and handles the storage of your custom resource. Every resource is build from `KGV` that stands for Group Version Resource and this is what drives the Kubernetes API Server structure.
 The `OpensearchCLuster` CRD is representing an Opensearch cluster.
 
 
@@ -115,7 +115,7 @@ ClusterSpec defines the desired state of OpensearchCluster
   GeneralConfig
 </h3>
 
-GeneralConfig defines global Opensearch cluster configuration 
+GeneralConfig defines global Opensearch cluster configuration
 
 <table>
     <thead>
@@ -290,6 +290,18 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>Added extra items to opensearch.yml in the bootstrap pod</td>
         <td>map[string]string</td>
         <td>general.additionalConfig</td>
+      </tr><tr>
+        <td><b>keystore</b></td>
+        <td>[]opsterv1.KeystoreValue</td>
+        <td>List of objects that define secret values that will populate the opensearch keystore in the bootstrap pod</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>pluginsList</b></td>
+        <td>[]string</td>
+        <td>List of plugins that should be installed for OpenSearch at startup in the boostrap pod</td>
+        <td>false</td>
+        <td> [] </td>
       </tr>
 </table>
 
@@ -432,7 +444,7 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
   NodePools
 </h3>
 
-Every NodePool is defining different Opensearch Nodes StatefulSet 
+Every NodePool is defining different Opensearch Nodes StatefulSet
 
 <table>
     <thead>
@@ -581,8 +593,8 @@ InitHelperConfig defines global Opensearch InitHelper image configuration
         <td>string</td>
         <td>Version of InitHelper (busybox) image to deploy</td>
         <td>false</td>
-        <td>1.27.2-buildx</td>       
-      </tr> 
+        <td>1.27.2-buildx</td>
+      </tr>
 </table>
 
 <h3 id="GeneralConfig">
@@ -606,6 +618,12 @@ Monitoring defines Opensearch monitoring configuration
         <td>bool</td>
         <td>Define if to enable monitoring for that cluster</td>
         <td>true</td>
+        <td>-</td>
+      </tr><tr>
+        <td><b>labels</b></td>
+        <td>map[string]string</td>
+        <td>Add LabelsSelector to ServiceMonitor</td>
+        <td>false</td>
         <td>-</td>
       </tr><tr>
         <td><b>monitoringUserSecret</b></td>
@@ -670,24 +688,33 @@ Monitoring TLS configuration options
   Keystore
 </h3>
 
-Every Keystore Value defines a secret to pull secrets from. 
+Every Keystore Value defines a secret to pull secrets from.
 <table>
-    <tbody>
-      <tr>
-        <td><b>secret</b></td>
-        <td>corev1.LocalObjectReference</td>
-        <td>Define secret that contains key value pairs</td>
-        <td>true</td>
-        <td>-</td>
-      </tr>
-      <tr>
-        <td><b>keyMappings</b></td>
-        <td>map</td>
-        <td>Define key mappings from secret to keystore entry. Example: "old: new" creates a keystore entry "new" with the value from the secret entry "old". When a map is provided, only the specified keys are loaded from the secret, so use "key: key" to load a key that should not be renamed.</td>
-        <td>false</td>
-        <td>-</td>
-      </tr>
-    </tbody>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Required</th>
+      <th>default</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><b>secret</b></td>
+      <td>corev1.LocalObjectReference</td>
+      <td>Define secret that contains key value pairs</td>
+      <td>true</td>
+      <td>-</td>
+    </tr>
+    <tr>
+      <td><b>keyMappings</b></td>
+      <td>map</td>
+      <td>Define key mappings from secret to keystore entry. Example: "old: new" creates a keystore entry "new" with the value from the secret entry "old". When a map is provided, only the specified keys are loaded from the secret, so use "key: key" to load a key that should not be renamed.</td>
+      <td>false</td>
+      <td>-</td>
+    </tr>
+  </tbody>
 </table>
 
 <h3 id="AdditionalVolume">
@@ -696,6 +723,15 @@ Every Keystore Value defines a secret to pull secrets from.
 
 AdditionalVolume object define additional volume and volumeMount
 <table>
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Type</th>
+      <th>Description</th>
+      <th>Required</th>
+      <th>default</th>
+    </tr>
+  </thead>
   <tbody>
     <tr>
       <td><b>name</b></td>
@@ -737,6 +773,19 @@ AdditionalVolume object define additional volume and volumeMount
       <td><b>secret</b></td>
       <td>corev1.SecretVolumeSource</td>
       <td>Defines Secret object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr><tr>
+      <td><b>csi</b></td>
+      <td>corev1.CSIVolumeSource</td>
+      <td>Defines the CSI object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr>
+    </tr><tr>
+      <td><b>projected</b></td>
+      <td>corev1.ProjectedVolumeSource</td>
+      <td>Defines the Projected object to be mounted</td>
       <td>false</td>
       <td>-</td>
     </tr>

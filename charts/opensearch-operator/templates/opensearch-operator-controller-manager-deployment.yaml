@@ -13,6 +13,13 @@ spec:
     metadata:
       labels:
         control-plane: controller-manager
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       containers:
       {{- if or (.Values.kubeRbacProxy.enable) (eq (.Values.kubeRbacProxy.enable | toString) "<nil>") }}
@@ -63,6 +70,8 @@ spec:
           value: {{ .Values.manager.dnsBase }}
         - name: PARALLEL_RECOVERY_ENABLED
           value: "{{ .Values.manager.parallelRecoveryEnabled }}"
+        - name: PPROF_ENDPOINTS_ENABLED
+          value: "{{ .Values.manager.pprofEndpointsEnabled }}"
         {{- if .Values.manager.extraEnv }}
         {{- toYaml .Values.manager.extraEnv | nindent 8 }}
         {{- end }}
@@ -80,3 +89,6 @@ spec:
       {{- end }}
       serviceAccountName: {{ include "opensearch-operator.serviceAccountName" . }}
       terminationGracePeriodSeconds: 10
+      {{- if .Values.priorityClassName }}
+      priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}

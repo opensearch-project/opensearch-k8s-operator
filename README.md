@@ -49,14 +49,11 @@ The Operator can be easily installed using Helm:
 
 The opensearch k8s operator aims to be compatible to all supported opensearch versions. Please check the table below for details:
 
-| Operator Version | Min Supported Opensearch Version | Max supported Opensearch version | Comment |
-|------------------|----------------------------------|----------------------------------|---------|
-| 2.3              | 1.0                              | 2.8                              |         |
-| 2.2              | 1.0                              | 2.5                              |         |
-| 2.1              | 1.0                              | 2.3                              |         |
-| 2.0              | 1.0                              | 2.3                              |         |
-| 1.x              | 1.0                              | 1.x                              |         |
-| 0.x              | 1.0                              | 1.x                              | Beta    |
+
+| Operator Version                                            | Min Supported Opensearch Version | Max Supported Opensearch Version | Comment                                     |
+| ----------------------------------------------------------- | -------------------------------- | -------------------------------- | ------------------------------------------- |
+| 2.7.0<br>2.6.1<br>2.6.0<br>2.5.1<br>2.5.0 | 1.3.x                            | latest 2.x                       | Supports the latest OpenSearch 2.x version. |
+
 
 This table only lists versions that have been explicitly tested with the operator, the operator will not prevent you from using other versions. Newer minor versions (2.x) not listed here generally also work but you should proceed with caution and test it our in a non-production environment first.
 

@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
+
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	"strings"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
@@ -96,9 +97,7 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 		valAsString = strings.Join(valArr, ",")
 	}
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
-	if err == nil {
-		_, err = service.PutClusterSettings(settings)
-	}
+	_, err = service.PutClusterSettings(settings)
 	return err == nil, err
 }
 
@@ -114,9 +113,7 @@ func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	valAsString := strings.ReplaceAll(val.(string), nodeNameToExclude, "")
 	valAsString = strings.ReplaceAll(valAsString, ",,", ",")
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
-	if err == nil {
-		_, err = service.PutClusterSettings(settings)
-	}
+	_, err = service.PutClusterSettings(settings)
 	return err == nil, err
 }
 
@@ -474,6 +471,20 @@ func ShouldUpdateComponentTemplate(
 	// verify the component template name
 	if componentTemplateResponse.Name != componentTemplateName {
 		return false, fmt.Errorf("returned component template named '%s' does not equal the requested name '%s'", componentTemplateResponse.Name, componentTemplateName)
+	}
+
+	if componentTemplateResponse.ComponentTemplate.Template.Settings != nil {
+		componentTemplateResponse.ComponentTemplate.Template.Settings, err = helpers.SortedJsonKeys(componentTemplateResponse.ComponentTemplate.Template.Settings)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	if componentTemplateResponse.ComponentTemplate.Template.Mappings != nil {
+		componentTemplateResponse.ComponentTemplate.Template.Mappings, err = helpers.SortedJsonKeys(componentTemplateResponse.ComponentTemplate.Template.Mappings)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	if cmp.Equal(componentTemplate, componentTemplateResponse.ComponentTemplate, cmpopts.EquateEmpty()) {

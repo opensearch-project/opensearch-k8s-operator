@@ -1,10 +1,13 @@
 nameOverride: ""
 fullnameOverride: ""
 
+podAnnotations: {}
+podLabels: {}
 nodeSelector: {}
 tolerations: []
 securityContext:
   runAsNonRoot: true
+priorityClassName: ""
 manager:
   securityContext:
     allowPrivilegeEscalation: false
@@ -39,6 +42,9 @@ manager:
 
   # Set this to false to disable the experimental parallel recovery in case you are experiencing problems
   parallelRecoveryEnabled: true
+  # Set this to true to enable the standard go pprof endpoints on port 6060 (https://pkg.go.dev/net/http/pprof)
+  # Should only be used for debugging purposes
+  pprofEndpointsEnabled: false
 
   image:
     repository: opensearchproject/opensearch-operator
@@ -71,7 +77,11 @@ serviceAccount:
 kubeRbacProxy:
   enable: true
   securityContext:
-    # allowPrivilegeEscalation: false
+    allowPrivilegeEscalation: false
+    readOnlyRootFilesystem: true
+    capabilities:
+      drop:
+        - ALL
   resources:
     limits:
       cpu: 50m
@@ -105,3 +115,9 @@ kubeRbacProxy:
   image:
     repository: "gcr.io/kubebuilder/kube-rbac-proxy"
     tag: "v0.15.0"
+
+## If this is set to true, RoleBindings will be used instead of ClusterRoleBindings, inorder to restrict ClusterRoles
+## to the namespace where the operator and OpenSearch cluster are in. In that case, specify the namespace where they
+## are in in manager.watchNamespace field.
+## If false, ClusterRoleBindings will be used
+useRoleBindings: false

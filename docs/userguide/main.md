@@ -100,6 +100,17 @@ manager:
   #    value: somevalue
 ```
 
+### Pprof endpoints
+
+There have been situations reported where the operator is leaking memory. To help diagnose these situations the standard go [pprof](https://pkg.go.dev/net/http/pprof) endpoints can be enabled by adding the following to your `values.yaml`:
+
+```yaml
+manager:
+  pprofEndpointsEnabled: true
+```
+
+The access the endpoints you will need to use a port-forward as for security reasons the endpoints are only exposed on localhost inside the pod: `kubectl port-forward deployment/opensearch-operator-controller-manager 6060`. Then from another terminal you can use the [go pprof tool](https://pkg.go.dev/net/http/pprof#hdr-Usage_examples), e.g.: `go tool pprof http://localhost:6060/debug/pprof/heap`.
+
 ## Configuring OpenSearch
 
 The main job of the operator is to deploy and manage OpenSearch clusters. As such it offers a wide range of options to configure clusters.
@@ -113,7 +124,7 @@ spec:
     nodePools:
       - component: masters
         replicas: 3  # The number of replicas
-        diskSize: "30Gi" # The disk size to use 
+        diskSize: "30Gi" # The disk size to use
         resources: # The resource requests and limits for that nodepool
           requests:
             memory: "2Gi"
@@ -210,7 +221,7 @@ If you provide your own node certificates you must also provide an admin cert th
 spec:
   security:
     config:
-      adminSecret: 
+      adminSecret:
         name: my-first-cluster-admin-cert # The secret must have keys tls.crt and tls.key
 ```
 
@@ -244,7 +255,7 @@ Directly exposing the node HTTP port outside the Kubernetes cluster is not recom
 
 ### Adding plugins
 
-You can extend the functionality of OpenSearch via [plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#available-plugins). Commonly used ones are snapshot repository plugins for external backups (e.g. to AWS S3 or Azure Blog Storage). The operator has support to automatically install such plugins during setup.
+You can extend the functionality of OpenSearch via [plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#available-plugins). Commonly used ones are snapshot repository plugins for external backups (e.g. to AWS S3 or Azure Blob Storage). The operator has support to automatically install such plugins during setup.
 
 To install a plugin for opensearch add it to the list under `general.pluginsList`:
 
@@ -266,6 +277,14 @@ To install a plugin for opensearch dashboards add it to the list under `dashboar
     pluginsList:
       - sample-plugin-name
 ```
+
+To install a plugin for the bootstrap pod add it to the list under `bootstrap.pluginsList`:
+
+```yaml
+  bootstrap:
+    pluginsList: ["repository-s3"]
+```
+
 
 Please note:
 
@@ -311,6 +330,18 @@ If you only want to load some keys from a secret or rename the existing keys, yo
 ```
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
+
+To populate the keystore of the boostrap pod add the secrets under the `bootstrap.keystore` section:
+
+```yaml
+  bootstrap:
+    # ...
+    keystore:
+    - secret:
+        name: credentials
+    - secret:
+        name: some-other-secret
+```
 
 ### SmartScaler
 
@@ -371,7 +402,7 @@ You can configure the snapshot repositories for the OpenSearch cluster through t
 ```yaml
 spec:
   general:
-    snapshotRepositories: 
+    snapshotRepositories:
         - name: my_s3_repository_1
           type: s3
           settings:
@@ -698,7 +729,7 @@ spec:
 
 ### Additional Volumes
 
-Sometimes it is neccessary to mount ConfigMaps, Secrets or emptyDir into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`.  The format is as follows:
+Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, or CSI volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files).  This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
 
 ```yaml
 spec:
@@ -713,6 +744,20 @@ spec:
     - name: temp
       path: /tmp
       emptyDir: {}
+    - name: example-csi-volume
+      path: /path/to/mount/volume
+      #subPath: "subpath" # Add this to mount the CSI volume at a specific subpath
+      csi:
+        driver: csi-driver-name
+        readOnly: true
+        volumeAttributes:
+          secretProviderClass: example-secret-provider-class
+    - name: example-projected-volume
+      path: /path/to/mount/volume
+      projected:
+        sources:
+          serviceAccountToken:
+            path: "token"
   dashboards:
     additionalVolumes:
     - name: example-secret
@@ -750,7 +795,7 @@ spec:
       env:
         - name: MY_ENV_VAR
           value: "myvalue"
-        # the other options are supported here as well 
+        # the other options are supported here as well
 ```
 
 ### Custom cluster domain name
@@ -768,7 +813,7 @@ manager:
 During cluster initialization the operator uses init containers as helpers. For these containers a busybox image is used ( specifically `docker.io/busybox:latest`). In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
 
 ```yaml
-  spec:     
+  spec:
     initHelper:
       # You can either only specify the version
       version: "1.27.2-buildcustom"
@@ -927,6 +972,48 @@ spec:
           timeoutSeconds: 30
           failureThreshold: 5
 ```
+
+### Configuring Resource Limits/Requests
+
+In addition to the information provided in the previous sections on how to specify resource requirements for the node pools, it is also possible to specify resources for all entities created by the operator for more advanced use cases.
+
+The operator generates many pods via resources such as jobs, stateful sets, replica sets, and others, which utilize InitContainers. The following configuration allows you to specify a default resources config for all InitContainer.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  initHelper:
+    resources:
+      requests:
+        memory: "50Mi"
+        cpu: "50m"
+      limits:
+        memory: "200Mi"
+        cpu: "200m"
+```
+
+You can also configure the resources for the security update job as shown below.
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  security:
+    config:
+      updateJob:
+        resources:
+          limits:
+            cpu: "100m"
+            memory: "100Mi"
+          requests:
+            cpu: "100m"
+            memory: "100Mi"
+```
+
+Please note that the examples provided here do not reflect actual resource requirements. You may need to conduct further testing to properly adjust the resources based on your specific needs.
 
 ## Cluster operations
 
@@ -1228,6 +1315,8 @@ spec:
     version: <YOUR_CLUSTER_VERSION>
     monitoring:
       enable: true # Enable or disable the monitoring plugin
+      labels: # The labels add for ServiceMonitor
+        someLabelKey: someLabelValue
       scrapeInterval: 30s # The scrape interval for Prometheus
       monitoringUserSecret: monitoring-user-secret # Optional, name of a secret with username/password for prometheus to acces the plugin metrics endpoint with, defaults to the admin user
       pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugin
@@ -1324,7 +1413,7 @@ metadata:
 spec:
   opensearchCluster:
     name: my-first-cluster
-  
+
   name: logs_template # name of the index template - defaults to metadata.name. Can't be updated in-place
 
   indexPatterns: # required index patterns
