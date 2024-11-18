@@ -244,7 +244,10 @@ func (r *UserReconciler) managePasswordSecret(username string, namespace string)
 		secret.Annotations = make(map[string]string)
 	}
 
-	secret.Annotations[helpers.OsUserNameAnnotation] = username
+	// Only put OsUserNameAnnotation if Secret contain a single key, otherwise, consider as multi-user Secret
+	if len(secret.Data) == 1 {
+		secret.Annotations[helpers.OsUserNameAnnotation] = username
+	}
 	secret.Annotations[helpers.OsUserNamespaceAnnotation] = namespace
 
 	if _, err := r.client.CreateSecret(&secret); err != nil {
