@@ -55,7 +55,7 @@ The opensearch k8s operator aims to be compatible to all supported opensearch ve
 | 2.7.0<br>2.6.1<br>2.6.0<br>2.5.1<br>2.5.0 | 1.3.x                            | latest 2.x                       | Supports the latest OpenSearch 2.x version. |
 
 
-This table only lists versions that have been explicitly tested with the operator, the operator will not prevent you from using other versions. Newer minor versions (2.x) not listed here generally also work but you should proceed with caution and test it our in a non-production environment first.
+This table only lists versions that have been explicitly tested with the operator, the operator will not prevent you from using other versions. Newer minor versions (2.x) not listed here generally also work but you should proceed with caution and test it out in a non-production environment first.
 
 ## Development
 
