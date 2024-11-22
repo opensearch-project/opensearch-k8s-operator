@@ -171,7 +171,9 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 
 	newPolicy, retErr := r.CreateISMPolicy()
 	if retErr != nil {
-		r.logger.Error(retErr, reason)
+		shortReason := "failed to generate ism policy document"
+		reason = fmt.Sprintf("%s: %s", shortReason, retErr.Error())
+		r.logger.Error(retErr, shortReason)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: defaultRequeueAfter,
@@ -186,9 +188,10 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}
 		retErr = services.CreateISMPolicy(r.ctx, r.osClient, request, policyId)
 		if retErr != nil {
-			reason = "failed to create ism policy"
-			r.logger.Error(retErr, reason)
-			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
+			shortReason := "failed to create ism policy"
+			reason = fmt.Sprintf("%s: %s", shortReason, retErr.Error())
+			r.logger.Error(retErr, shortReason)
+			r.recorder.Event(r.instance, "Warning", opensearchAPIError, shortReason)
 			return ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: defaultRequeueAfter,
@@ -262,9 +265,10 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	}
 	retErr = services.UpdateISMPolicy(r.ctx, r.osClient, request, &existingPolicy.SequenceNumber, &existingPolicy.PrimaryTerm, existingPolicy.PolicyID)
 	if retErr != nil {
-		reason = "failed to update ism policy with Opensearch API"
-		r.logger.Error(retErr, reason)
-		r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
+		shortReason := "failed to update ism policy with Opensearch API"
+		reason = fmt.Sprintf("%s: %s", shortReason, retErr.Error())
+		r.logger.Error(retErr, shortReason)
+		r.recorder.Event(r.instance, "Warning", opensearchAPIError, shortReason)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: defaultRequeueAfter,
@@ -283,34 +287,37 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 		DefaultState: r.instance.Spec.DefaultState,
 		Description:  r.instance.Spec.Description,
 	}
-	if r.instance.Spec.ErrorNotification != nil {
+	if r.instance.Spec.ErrorNotification != nil && r.instance.Spec.ErrorNotification.Destination != nil && r.instance.Spec.ErrorNotification.MessageTemplate != nil {
 		dest := requests.Destination{}
-		if r.instance.Spec.ErrorNotification.Destination != nil {
-			if r.instance.Spec.ErrorNotification.Destination.Amazon != nil {
-				dest.Amazon = &requests.DestinationURL{
-					URL: r.instance.Spec.ErrorNotification.Destination.Amazon.URL,
-				}
-			}
-			if r.instance.Spec.ErrorNotification.Destination.Chime != nil {
-				dest.Chime = &requests.DestinationURL{
-					URL: r.instance.Spec.ErrorNotification.Destination.Chime.URL,
-				}
-			}
-			if r.instance.Spec.ErrorNotification.Destination.Slack != nil {
-				dest.Slack = &requests.DestinationURL{
-					URL: r.instance.Spec.ErrorNotification.Destination.Slack.URL,
-				}
-			}
-			if r.instance.Spec.ErrorNotification.Destination.CustomWebhook != nil {
-				dest.CustomWebhook = &requests.DestinationURL{
-					URL: r.instance.Spec.ErrorNotification.Destination.CustomWebhook.URL,
-				}
+		if r.instance.Spec.ErrorNotification.Destination.Amazon != nil {
+			dest.Amazon = &requests.DestinationURL{
+				URL: r.instance.Spec.ErrorNotification.Destination.Amazon.URL,
 			}
 		}
+		if r.instance.Spec.ErrorNotification.Destination.Chime != nil {
+			dest.Chime = &requests.DestinationURL{
+				URL: r.instance.Spec.ErrorNotification.Destination.Chime.URL,
+			}
+		}
+		if r.instance.Spec.ErrorNotification.Destination.Slack != nil {
+			dest.Slack = &requests.DestinationURL{
+				URL: r.instance.Spec.ErrorNotification.Destination.Slack.URL,
+			}
+		}
+		if r.instance.Spec.ErrorNotification.Destination.CustomWebhook != nil {
+			dest.CustomWebhook = &requests.DestinationURL{
+				URL: r.instance.Spec.ErrorNotification.Destination.CustomWebhook.URL,
+			}
+		}
+		if dest.Amazon == nil && dest.Chime == nil && dest.Slack == nil && dest.CustomWebhook == nil {
+			return nil, errors.New("exactly one errorNotification.destination must be set")
+		}
+		messageTemplate := requests.MessageTemplate{Source: r.instance.Spec.ErrorNotification.MessageTemplate.Source}
+
 		policy.ErrorNotification = &requests.ErrorNotification{
 			Channel:         r.instance.Spec.ErrorNotification.Channel,
 			Destination:     &dest,
-			MessageTemplate: &requests.MessageTemplate{Source: r.instance.Spec.ErrorNotification.MessageTemplate.Source},
+			MessageTemplate: &messageTemplate,
 		}
 	}
 
