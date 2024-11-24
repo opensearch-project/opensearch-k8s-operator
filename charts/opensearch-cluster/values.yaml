@@ -9,7 +9,7 @@ serviceAccount:
   # -- Create Service Account
   create: false
 
-  # -- Service Account name
+  # -- Service Account name. Set `general.serviceAccount` to use this Service Account for the Opensearch cluster
   name: ""
 
   # -- Service Account annotations
@@ -90,7 +90,7 @@ cluster:
     # -- Opensearch securityContext
     securityContext: {}
 
-    # -- Opensearch serviceAccount name
+    # -- Opensearch serviceAccount name. If Service Account doesn't exist it could be created by setting `serviceAccount.create` and `serviceAccount.name`
     serviceAccount: ""
 
     # -- Opensearch service name

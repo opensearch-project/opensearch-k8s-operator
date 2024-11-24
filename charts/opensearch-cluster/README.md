@@ -100,7 +100,7 @@ A Helm chart for OpenSearch Cluster
 | roles | list | `[]` | List of OpensearchRole. Check values.yaml file for examples. |
 | serviceAccount.annotations | object | `{}` | Service Account annotations |
 | serviceAccount.create | bool | `false` | Create Service Account |
-| serviceAccount.name | string | `""` | Service Account name |
+| serviceAccount.name | string | `""` | Service Account name. Set `general.serviceAccount` to use this Service Account for the Opensearch cluster |
 | tenants | list | `[]` | List of additional tenants. Check values.yaml file for examples. |
 | users | list | `[]` | List of OpensearchUser. Check values.yaml file for examples. |
 | usersRoleBinding | list | `[]` | Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role Check values.yaml file for examples. |
