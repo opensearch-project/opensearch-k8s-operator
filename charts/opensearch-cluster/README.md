@@ -57,7 +57,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.general.pluginsList | list | `[]` | List of Opensearch plugins to install |
 | cluster.general.podSecurityContext | object | `{}` | Opensearch pod security context configuration |
 | cluster.general.securityContext | object | `{}` | Opensearch securityContext |
-| cluster.general.serviceAccount | string | `""` | Opensearch serviceAccount name |
+| cluster.general.serviceAccount | string | `""` | Opensearch serviceAccount name. If Service Account doesn't exist it could be created by setting `serviceAccount.create` and `serviceAccount.name` |
 | cluster.general.serviceName | string | `""` | Opensearch service name |
 | cluster.general.setVMMaxMapCount | bool | `true` | Enable setVMMaxMapCount. OpenSearch requires the Linux kernel vm.max_map_count option to be set to at least 262144 |
 | cluster.general.snapshotRepositories | list | `[]` | Opensearch snapshot repositories configuration |
