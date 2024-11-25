@@ -67,7 +67,7 @@ pipeline {
                     }
 
 
-                    if (ref_final == null || ref_final == '' || ref_final.startsWith('opensearch-operator') || ref_final.startsWith('opensearch-cluster')) { {
+                    if (ref_final == null || ref_final == '' || ref_final.startsWith('opensearch-operator') || ref_final.startsWith('opensearch-cluster')) {
                         currentBuild.result = 'ABORTED'
                         error("Missing git tag reference.")
                     }
