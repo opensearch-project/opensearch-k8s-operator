@@ -1,0 +1,123 @@
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- $svcPort := .Values.cluster.general.httpPort -}}
+{{- if .Values.cluster.ingress.opensearch.enabled -}}
+---
+{{- if and .Values.cluster.ingress.opensearch.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.cluster.ingress.opensearch.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.cluster.ingress.opensearch.annotations "kubernetes.io/ingress.class" .Values.cluster.ingress.opensearch.className }}
+  {{- end }}
+{{- end }}
+{{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1
+{{- else if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  name: {{ $clusterName }}
+  labels:
+    {{- include "opensearch-cluster.labels" . | nindent 4 }}
+  {{- with .Values.cluster.ingress.opensearch.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if and .Values.cluster.ingress.opensearch.className (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion) }}
+  ingressClassName: {{ .Values.cluster.ingress.opensearch.className }}
+  {{- end }}
+  {{- if .Values.cluster.ingress.opensearch.tls }}
+  tls:
+    {{- range .Values.cluster.ingress.opensearch.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.cluster.ingress.opensearch.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            {{- if and .pathType (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion) }}
+            pathType: {{ .pathType }}
+            {{- end }}
+            backend:
+              {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+              service:
+                name: {{ $clusterName }}
+                port:
+                  number: {{ $svcPort }}
+              {{- else }}
+              serviceName: {{ $clusterName }}
+              servicePort: {{ $svcPort }}
+              {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+
+{{- if .Values.cluster.ingress.dashboards.enabled }}
+---
+{{- if and .Values.cluster.ingress.dashboards.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey .Values.cluster.ingress.dashboards.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set .Values.cluster.ingress.dashboards.annotations "kubernetes.io/ingress.class" .Values.cluster.ingress.dashboards.className }}
+  {{- end }}
+{{- end }}
+{{- if semverCompare ">=1.19-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1
+{{- else if semverCompare ">=1.14-0" .Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  name: {{ $clusterName }}-dashboards
+  labels:
+    {{- include "opensearch-cluster.labels" . | nindent 4 }}
+  {{- with .Values.cluster.ingress.dashboards.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if and .Values.cluster.ingress.dashboards.className (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion) }}
+  ingressClassName: {{ .Values.cluster.ingress.dashboards.className }}
+  {{- end }}
+  {{- if .Values.cluster.ingress.dashboards.tls }}
+  tls:
+    {{- range .Values.cluster.ingress.dashboards.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.cluster.ingress.dashboards.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            {{- if and .pathType (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion) }}
+            pathType: {{ .pathType }}
+            {{- end }}
+            backend:
+              {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+              service:
+                name: {{ $clusterName }}-dashboards
+                port:
+                  number: 5601
+              {{- else }}
+              serviceName: {{ $clusterName }}
+              servicePort: 5601
+              {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

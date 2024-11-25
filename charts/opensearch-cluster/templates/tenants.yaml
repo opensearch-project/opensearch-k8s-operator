@@ -1,0 +1,19 @@
+{{- $labels := include "opensearch-cluster.labels" . }}
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- range .Values.tenants }}
+---
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchTenant
+metadata:
+  name: {{ .name }}
+  {{- with $.Values.cluster.annotations }}
+  annotations: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  labels: {{ $labels | nindent 4 }}
+spec:
+  opensearchCluster:
+    name: {{ $clusterName }}
+  {{- with .description }}
+  description: {{ . | toString }}
+  {{- end }}
+{{- end }}

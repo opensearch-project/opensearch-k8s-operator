@@ -1,0 +1,25 @@
+{{- $labels := include "opensearch-cluster.labels" . }}
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- range .Values.roles }}
+---
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchRole
+metadata:
+  name: {{ .name }}
+  {{- with $.Values.cluster.annotations }}
+  annotations: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  labels: {{ $labels | nindent 4 }}
+spec:
+  opensearchCluster:
+    name: {{ $clusterName }}
+  {{- with .clusterPermissions }}
+  clusterPermissions: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .indexPermissions }}
+  indexPermissions: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .tenantPermissions }}
+  tenantPermissions: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+{{- end }}

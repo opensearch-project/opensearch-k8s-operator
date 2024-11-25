@@ -1,0 +1,25 @@
+{{- $labels := include "opensearch-cluster.labels" . }}
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- range .Values.usersRoleBinding }}
+---
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchUserRoleBinding
+metadata:
+  name: {{ .name }}
+  {{- with $.Values.cluster.annotations }}
+  annotations: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  labels: {{ $labels | nindent 4 }}
+spec:
+  opensearchCluster:
+    name: {{ $clusterName }}
+  {{- with .users }}
+  users: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .backendRoles }}
+  backendRoles: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .roles }}
+  roles: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+{{- end }}

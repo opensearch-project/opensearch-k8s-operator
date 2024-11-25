@@ -1,0 +1,30 @@
+{{- $labels := include "opensearch-cluster.labels" . }}
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- range .Values.ismPolicies }}
+---
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchISMPolicy
+metadata:
+  name: {{ .name }}
+  {{- with $.Values.cluster.annotations }}
+  annotations: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  labels: {{ $labels | nindent 4 }}
+spec:
+  defaultState: {{ .defaultState }}
+  description: {{ .description }}
+  {{- with .states }}
+  states: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .errorNotification }}
+  errorNotification: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .ismTemplate }}
+  ismTemplate: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  opensearchCluster:
+    name: {{ $clusterName }}
+  {{- with .policyId }}
+  policyId: {{ . }}
+  {{- end }}
+{{- end }}
