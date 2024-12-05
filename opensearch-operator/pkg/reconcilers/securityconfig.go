@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"sort"
 	"time"
 
@@ -163,6 +164,19 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	r.logger.Info("Starting securityconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting securityconfig update job")
+
+	// Generate additional volumes
+	addVolumes, addVolumeMounts, _, err := util.CreateAdditionalVolumes(
+		r.client,
+		r.instance.Namespace,
+		r.instance.Spec.General.AdditionalVolumes,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, addVolumes...)
+	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, addVolumeMounts...)
 
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,
