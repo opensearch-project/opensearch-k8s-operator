@@ -860,6 +860,10 @@ spec:
                           x-kubernetes-map-type: atomic
                       type: object
                     type: array
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
                   nodeSelector:
                     additionalProperties:
                       type: string
@@ -868,6 +872,8 @@ spec:
                     items:
                       type: string
                     type: array
+                  priorityClassName:
+                    type: string
                   resources:
                     description: ResourceRequirements describes the compute resource
                       requirements.

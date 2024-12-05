@@ -72,6 +72,17 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 	}
 }
 
+func ClusterDescWithBootstrapPriorityClassNameAndLabel(prioClassName string, labels map[string]string) opsterv1.OpenSearchCluster {
+	return opsterv1.OpenSearchCluster{
+		Spec: opsterv1.ClusterSpec{
+			Bootstrap: opsterv1.BootstrapConfig{
+				PriorityClassName: prioClassName,
+				Labels:            labels,
+			},
+		},
+	}
+}
+
 var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
@@ -932,6 +943,28 @@ var _ = Describe("Builders", func() {
 
 			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
+		})
+	})
+
+	When("Constructing a bootstrap pod with priorityClass and label Values", func() {
+		It("should create a proper spec", func() {
+			prioClassName := "testprioclass"
+
+			labels := map[string]string{
+				"testlabel1": "testvalue1",
+				"testlabel2": "testvalue2",
+			}
+
+			clusterObject := ClusterDescWithBootstrapPriorityClassNameAndLabel(prioClassName, labels)
+
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(result.Spec.PriorityClassName).To(Equal(prioClassName))
+			Expect(result.Labels).To(Equal(map[string]string{
+				"opster.io/opensearch-cluster": "",
+				"opster.io/bootstrap-node":     "true",
+				"testlabel1":                   "testvalue1",
+				"testlabel2":                   "testvalue2",
+			}))
 		})
 	})
 })
