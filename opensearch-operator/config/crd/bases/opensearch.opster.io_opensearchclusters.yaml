@@ -5251,6 +5251,8 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      caCertFilePath:
+                        type: string
                       securityConfigSecret:
                         description: Secret that contains the differnt yml files of
                           the opensearch-security config (config.yml, internal_users.yml,

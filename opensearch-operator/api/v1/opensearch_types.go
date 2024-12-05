@@ -270,6 +270,7 @@ type SecurityConfig struct {
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
 	UpdateJob              SecurityUpdateJobConfig     `json:"updateJob,omitempty"`
+	CaCertFilePath         string                      `json:"caCertFilePath,omitempty"`
 }
 
 // Specific configs for the SecurityConfig update job
