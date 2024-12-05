@@ -83,6 +83,16 @@ func ClusterDescWithBootstrapPriorityClassNameAndLabel(prioClassName string, lab
 	}
 }
 
+func ClusterDescWithBootstrapResources(resources corev1.ResourceRequirements) opsterv1.OpenSearchCluster {
+	return opsterv1.OpenSearchCluster{
+		Spec: opsterv1.ClusterSpec{
+			Bootstrap: opsterv1.BootstrapConfig{
+				Resources: resources,
+			},
+		},
+	}
+}
+
 var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
@@ -947,7 +957,7 @@ var _ = Describe("Builders", func() {
 	})
 
 	When("Constructing a bootstrap pod with priorityClass and label Values", func() {
-		It("should create a proper spec", func() {
+		It("should create a proper bootstrap spec with priorityClass and labels", func() {
 			prioClassName := "testprioclass"
 
 			labels := map[string]string{
@@ -965,6 +975,27 @@ var _ = Describe("Builders", func() {
 				"testlabel1":                   "testvalue1",
 				"testlabel2":                   "testvalue2",
 			}))
+		})
+	})
+
+	When("Constructing a bootstrap pod with resources", func() {
+		It("should create a proper spec with resources", func() {
+
+			resources := corev1.ResourceRequirements{
+				Limits: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("1000m"),
+					corev1.ResourceMemory: resource.MustParse("1Gi"),
+				},
+				Requests: corev1.ResourceList{
+					corev1.ResourceCPU:    resource.MustParse("500m"),
+					corev1.ResourceMemory: resource.MustParse("2Gi"),
+				},
+			}
+
+			clusterObject := ClusterDescWithBootstrapResources(resources)
+
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(result.Spec.Containers[0].Resources).To(Equal(resources))
 		})
 	})
 })
