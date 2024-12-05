@@ -5274,6 +5274,8 @@ spec:
                         description: Specific configs for the SecurityConfig update
                           job
                         properties:
+                          priorityClassName:
+                            type: string
                           resources:
                             description: ResourceRequirements describes the compute
                               resource requirements.

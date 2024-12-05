@@ -1116,6 +1116,7 @@ func NewSecurityconfigUpdateJob(
 	securityContext := instance.Spec.General.SecurityContext
 	podSecurityContext := instance.Spec.General.PodSecurityContext
 	resources := instance.Spec.Security.GetConfig().GetUpdateJob().Resources
+	priorityClassName := instance.Spec.Security.GetConfig().GetUpdateJob().PriorityClassName
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
 		Spec: batchv1.JobSpec{
@@ -1139,6 +1140,7 @@ func NewSecurityconfigUpdateJob(
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ImagePullSecrets:   image.ImagePullSecrets,
 					SecurityContext:    podSecurityContext,
+					PriorityClassName:  priorityClassName,
 				},
 			},
 		},

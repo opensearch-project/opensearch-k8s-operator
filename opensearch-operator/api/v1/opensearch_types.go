@@ -276,7 +276,8 @@ type SecurityConfig struct {
 
 // Specific configs for the SecurityConfig update job
 type SecurityUpdateJobConfig struct {
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	Resources         corev1.ResourceRequirements `json:"resources,omitempty"`
+	PriorityClassName string                      `json:"priorityClassName,omitempty"`
 }
 
 type ImageSpec struct {
