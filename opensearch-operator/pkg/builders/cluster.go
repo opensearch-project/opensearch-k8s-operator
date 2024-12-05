@@ -265,7 +265,7 @@ func NewSTSForNodePool(
 		FailureThreshold:    livenessProbeFailureThreshold,
 		SuccessThreshold:    livenessProbeSuccessThreshold,
 		InitialDelaySeconds: livenessProbeInitialDelaySeconds,
-		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.Port}}},
+		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
 	startupProbe := corev1.Probe{
