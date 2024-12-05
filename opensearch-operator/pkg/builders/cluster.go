@@ -265,7 +265,7 @@ func NewSTSForNodePool(
 		FailureThreshold:    livenessProbeFailureThreshold,
 		SuccessThreshold:    livenessProbeSuccessThreshold,
 		InitialDelaySeconds: livenessProbeInitialDelaySeconds,
-		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
+		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.Port}}},
 	}
 
 	startupProbe := corev1.Probe{
@@ -651,7 +651,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				{
-					Name:     "http",
+					Name:     "https",
 					Protocol: "TCP",
 					Port:     cr.Spec.General.HttpPort,
 					TargetPort: intstr.IntOrString{
