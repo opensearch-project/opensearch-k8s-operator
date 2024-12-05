@@ -108,6 +108,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					"action_groups.yml": []byte(""),
 				},
 			}
+			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(*securityConfigSecret, nil)
 			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -175,6 +176,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				Type:       corev1.SecretType("Opaque"),
 				Data:       map[string][]byte{},
 			}
+			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
 			mockClient.EXPECT().GetJob("securityconfig-withadminsecret-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -264,6 +266,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				},
 			}
 
+			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().GetJob("no-securityconfig-tls-configured-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
 			var createdJob *batchv1.Job
