@@ -105,7 +105,7 @@ func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
 	var httpPort int32
 	var securityConfigPort int32
 	var securityConfigPath string
-	versionPassed, _ := version.NewVersion(instance.Spec.General.Version)
+	versionPassed, _ := version.NewVersion(strings.Split(instance.Spec.General.Version, "-")[0])
 	constraints, _ := version.NewConstraint(">= 2.0")
 
 	if instance.Spec.General.HttpPort > 0 {
