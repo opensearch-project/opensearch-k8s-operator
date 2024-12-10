@@ -280,7 +280,7 @@ func NewSTSForNodePool(
 	// Because the http endpoint requires auth we need to do it as a curl script
 	httpPort := PortForCluster(cr)
 
-	curlCmd := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
+	curlCmd := "curl -k --cert /mnt/admin-certificate/tls.crt --key /mnt/admin-certificate/tls.key --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: readinessProbeInitialDelaySeconds,
 		PeriodSeconds:       readinessProbePeriodSeconds,
@@ -306,6 +306,17 @@ func NewSTSForNodePool(
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "admin-credentials",
 		MountPath: "/mnt/admin-credentials",
+	})
+
+	volumes = append(volumes, corev1.Volume{
+		Name: "admin-certificate",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{SecretName: "admin-certificate-secret"},
+		},
+	})
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "admin-certificate",
+		MountPath: "/mnt/admin-certificate",
 	})
 
 	image := helpers.ResolveImage(cr, &node)
