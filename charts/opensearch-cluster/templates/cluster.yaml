@@ -34,10 +34,10 @@ spec:
   - {{ omit . "affinity" | toYaml | nindent 4 | trim }}
     {{- if .affinity }}
     {{- with .affinity }}
-    {{ include "nodePools.affinity" (dict "nodePool" . "clusterName" $clusterName) | nindent 4 | trim }}
+    {{ include "nodePools.affinity" (dict "nodePool" .) | nindent 4 | trim }}
     {{- end }}
     {{- else }}
-    {{ include "nodePools.defaultAffinity" (dict "clusterName" $clusterName) | nindent 4 | trim }}
+    {{ include "nodePools.defaultAffinity" (dict "nodePool" .) | nindent 4 | trim }}
     {{- end }}
   {{- end }}
   {{- with .Values.cluster.security }}
