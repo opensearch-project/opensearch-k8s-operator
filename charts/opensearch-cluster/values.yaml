@@ -252,6 +252,9 @@ cluster:
         limits:
           memory: "2Gi"
           cpu: "500m"
+      # -- Optional, default podAntiAffinity is added to schedule the nodePool replicas on different nodes
+      # additional affinity rules defined here will be appended with the default podAntiAffinity
+      affinity: {}
 
   # Opensearch security configuration
   security:

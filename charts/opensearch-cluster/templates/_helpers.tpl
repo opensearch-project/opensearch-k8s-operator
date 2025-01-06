@@ -58,3 +58,55 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+Default pod antiAffinity to nodePool component if no affinity rules defined
+This rule helps the nodePool replicas to schedule on different nodes
+*/}}
+{{- define "nodePools.defaultAffinity" -}}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchLabels:
+            opster.io/opensearch-cluster: {{ $.clusterName }}
+        topologyKey: kubernetes.io/hostname
+{{- end }}
+
+{{/*
+Takes the pod affinity rules from each nodePool and appends the default podAntiAffinity
+*/}}
+{{- define "nodePools.affinity" -}}
+{{- $nodePool := .nodePool -}}
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchLabels:
+            opster.io/opensearch-cluster: {{ $.clusterName }}
+        topologyKey: kubernetes.io/hostname
+
+    {{- /* checks if preferredDuringSchedulingIgnoredDuringExecution exists under podAntiAffinity and appending */ -}}
+    {{- if not (empty $nodePool.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution) }}
+    {{ $nodePool.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution | toYaml | nindent 4 | trim }}
+    {{- end }}
+
+    {{- /* checks if requiredDuringSchedulingIgnoredDuringExecution exists under podAntiAffinity and appending */ -}}
+    {{- if $nodePool.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution }}
+    requiredDuringSchedulingIgnoredDuringExecution: {{ $nodePool.podAntiAffinity.requiredDuringSchedulingIgnoredDuringExecution | toYaml | nindent 4 }}
+    {{- end }}
+
+  {{- /* checks if podAffinity exists in affinity and appending */ -}}
+  {{- if $nodePool.podAffinity }}
+  podAffinity: {{ $nodePool.podAffinity | toYaml | nindent 4 }}
+  {{- end }}
+
+  {{- /* checks if nodeAffinity exists in affinity and appending */ -}}
+  {{- if $nodePool.nodeAffinity }}
+  nodeAffinity: {{ $nodePool.nodeAffinity | toYaml | nindent 4 }}
+  {{- end }}
+{{- end }}
