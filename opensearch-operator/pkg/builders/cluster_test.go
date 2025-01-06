@@ -292,6 +292,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.General.PodSecurityContext = podSecurityContext
 			clusterObject.Spec.General.SecurityContext = securityContext
 			nodePool := opsterv1.NodePool{
+				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 			}
@@ -303,6 +304,7 @@ var _ = Describe("Builders", func() {
 		It("should use default storageclass if not specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
+				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
