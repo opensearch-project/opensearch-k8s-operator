@@ -292,7 +292,6 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.General.PodSecurityContext = podSecurityContext
 			clusterObject.Spec.General.SecurityContext = securityContext
 			nodePool := opsterv1.NodePool{
-				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 			}
@@ -304,7 +303,6 @@ var _ = Describe("Builders", func() {
 		It("should use default storageclass if not specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
-				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
@@ -400,6 +398,49 @@ var _ = Describe("Builders", func() {
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
+		})
+		It("should only use valid roles", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
+				Roles: []string{"cluster_manager", "data", "invalid"},
+			}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.Containers[0].Env)).To(Equal(8))
+			for _, env := range result.Spec.Template.Spec.Containers[0].Env {
+				if env.Name == "node.roles" {
+					Expect(env.Value).To(Equal("cluster_manager,data"))
+				}
+			}
+		})
+		It("should include sidecar containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			sidecar := corev1.Container{
+				Name:  "sidecar",
+				Image: "sidecar:latest",
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
+				Roles:    []string{"cluster_manager"},
+				Sidecars: []corev1.Container{sidecar},
+			}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.Containers)).To(Equal(2))
+			Expect(result.Spec.Template.Spec.Containers[1].Name).To(Equal("sidecar"))
+		})
+		It("should include multiple sidecar containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			sidecar1 := corev1.Container{
+				Name:  "sidecar1",
+				Image: "sidecar1:latest",
+			}
+			sidecar2 := corev1.Container{
+				Name:  "sidecar2",
+				Image: "sidecar2:latest",
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
+				Roles:    []string{"cluster_manager"},
+				Sidecars: []corev1.Container{sidecar1, sidecar2},
+			}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.Containers)).To(Equal(3))
+			Expect(result.Spec.Template.Spec.Containers[1].Name).To(Equal("sidecar1"))
+			Expect(result.Spec.Template.Spec.Containers[2].Name).To(Equal("sidecar2"))
 		})
 	})
 
