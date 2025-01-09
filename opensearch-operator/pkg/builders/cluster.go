@@ -420,11 +420,13 @@ func NewSTSForNodePool(
 				#!/usr/bin/env bash
 				set -euo pipefail
 
-				/usr/share/opensearch/bin/opensearch-keystore create
+				if [ ! -f /usr/share/opensearch/config/opensearch.keystore ]; then
+				  /usr/share/opensearch/bin/opensearch-keystore create
+				fi
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
-				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i"
+				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i" --force
 				done
 
 				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
@@ -939,7 +941,7 @@ func NewBootstrapPod(
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
-				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i"
+				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i" --force
 				done
 
 				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
