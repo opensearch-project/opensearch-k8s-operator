@@ -89,7 +89,7 @@ var _ = Describe("Additional volumes", func() {
 		})
 	})
 
-	When("CSI volume is added", func() {
+	When("CSI readOnly volume is added", func() {
 		It("Should have CSIVolumeSource fields", func() {
 			readOnly := true
 			volumeConfigs[0].CSI = &v1.CSIVolumeSource{
@@ -106,6 +106,28 @@ var _ = Describe("Additional volumes", func() {
 			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
 			Expect(volume[0].CSI.Driver).To(Equal("testDriver"))
 			Expect(*volume[0].CSI.ReadOnly).Should(BeTrue())
+			Expect(volume[0].CSI.VolumeAttributes["secretProviderClass"]).To(Equal("testSecretProviderClass"))
+			Expect(volume[0].CSI.NodePublishSecretRef.Name).To(Equal("testSecret"))
+		})
+	})
+
+	When("CSI read-write volume is added", func() {
+		It("Should have CSIVolumeSource fields", func() {
+			readOnly := false
+			volumeConfigs[0].CSI = &v1.CSIVolumeSource{
+				Driver:   "testDriver",
+				ReadOnly: &readOnly,
+				VolumeAttributes: map[string]string{
+					"secretProviderClass": "testSecretProviderClass",
+				},
+				NodePublishSecretRef: &v1.LocalObjectReference{
+					Name: "testSecret",
+				},
+			}
+
+			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].CSI.Driver).To(Equal("testDriver"))
+			Expect(*volume[0].CSI.ReadOnly).Should(BeFalse())
 			Expect(volume[0].CSI.VolumeAttributes["secretProviderClass"]).To(Equal("testSecretProviderClass"))
 			Expect(volume[0].CSI.NodePublishSecretRef.Name).To(Equal("testSecret"))
 		})
