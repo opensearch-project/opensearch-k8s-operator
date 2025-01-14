@@ -64,15 +64,17 @@ Default pod antiAffinity to nodePool component if no affinity rules defined
 This rule helps the nodePool replicas to schedule on different nodes
 */}}
 {{- define "nodePools.defaultAffinity" -}}
-{{- $nodePool := .nodePool -}}
 affinity:
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
     - weight: 100
       podAffinityTerm:
         labelSelector:
-          matchLabels:
-            opster.io/opensearch-nodepool: {{ $nodePool.component }}
+          matchExpressions:
+          - key: opster.io/opensearch-nodepool
+            operator: In
+            values:
+            - {{ .nodePool.component }}
         topologyKey: kubernetes.io/hostname
 {{- end }}
 
@@ -80,16 +82,20 @@ affinity:
 Takes the pod affinity rules from each nodePool and appends the default podAntiAffinity
 */}}
 {{- define "nodePools.affinity" -}}
-{{- $nodePool := .nodePool -}}
 affinity:
   podAntiAffinity:
     preferredDuringSchedulingIgnoredDuringExecution:
     - weight: 100
       podAffinityTerm:
         labelSelector:
-          matchLabels:
-            opster.io/opensearch-nodepool: {{ $nodePool.component }}
+          matchExpressions:
+          - key: opster.io/opensearch-nodepool
+            operator: In
+            values:
+            - {{ .nodePool.component }}
         topologyKey: kubernetes.io/hostname
+
+    {{- $nodePool := .nodePool.affinity -}}
 
     {{- /* checks if preferredDuringSchedulingIgnoredDuringExecution exists under podAntiAffinity and appending */ -}}
     {{- if not (empty $nodePool.podAntiAffinity.preferredDuringSchedulingIgnoredDuringExecution) }}
