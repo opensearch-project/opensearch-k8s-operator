@@ -179,16 +179,27 @@ func NewSTSForNodePool(
 	// Supress repeated log messages about a deprecated format for the publish address
 	jvm += " -Dopensearch.transport.cname_in_publish_address=true"
 
-	startupProbePeriodSeconds := int32(20)
-	startupProbeTimeoutSeconds := int32(5)
-	startupProbeFailureThreshold := int32(10)
+	startupProbePeriodSeconds := int32(30)
+	startupProbeTimeoutSeconds := int32(30)
+	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
+	startupProbeCommand := []string{
+		"/bin/bash",
+		"-c",
+		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
+	}
 
 	readinessProbePeriodSeconds := int32(30)
 	readinessProbeTimeoutSeconds := int32(30)
 	readinessProbeFailureThreshold := int32(5)
+	readinessProbeSuccessThreshold := int32(1)
 	readinessProbeInitialDelaySeconds := int32(60)
+	readinessProbeCommand := []string{
+		"/bin/bash",
+		"-c",
+		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
+	}
 
 	livenessProbePeriodSeconds := int32(20)
 	livenessProbeTimeoutSeconds := int32(5)
@@ -239,6 +250,10 @@ func NewSTSForNodePool(
 			if node.Probes.Startup.SuccessThreshold > 0 {
 				startupProbeSuccessThreshold = node.Probes.Startup.SuccessThreshold
 			}
+
+			if len(node.Probes.Startup.Command) > 0 {
+				startupProbeCommand = node.Probes.Startup.Command
+			}
 		}
 
 		if node.Probes.Readiness != nil {
@@ -256,6 +271,14 @@ func NewSTSForNodePool(
 
 			if node.Probes.Readiness.FailureThreshold > 0 {
 				readinessProbeFailureThreshold = node.Probes.Readiness.FailureThreshold
+			}
+
+			if node.Probes.Readiness.SuccessThreshold > 0 {
+				readinessProbeSuccessThreshold = node.Probes.Readiness.SuccessThreshold
+			}
+
+			if len(node.Probes.Readiness.Command) > 0 {
+				readinessProbeCommand = node.Probes.Readiness.Command
 			}
 		}
 	}
@@ -275,25 +298,23 @@ func NewSTSForNodePool(
 		FailureThreshold:    startupProbeFailureThreshold,
 		SuccessThreshold:    startupProbeSuccessThreshold,
 		InitialDelaySeconds: startupProbeInitialDelaySeconds,
-		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: startupProbeCommand,
+			},
+		},
 	}
 
 	// Because the http endpoint requires auth we need to do it as a curl script
-	httpPort := PortForCluster(cr)
-
-	curlCmd := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: readinessProbeInitialDelaySeconds,
 		PeriodSeconds:       readinessProbePeriodSeconds,
 		FailureThreshold:    readinessProbeFailureThreshold,
+		SuccessThreshold:    readinessProbeSuccessThreshold,
 		TimeoutSeconds:      readinessProbeTimeoutSeconds,
 		ProbeHandler: corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
-				Command: []string{
-					"/bin/bash",
-					"-c",
-					curlCmd,
-				},
+				Command: readinessProbeCommand,
 			},
 		},
 	}

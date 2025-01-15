@@ -969,7 +969,33 @@ spec:
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 30
+          successThreshold: 1
           failureThreshold: 5
+```
+
+### Customize startup and readiness probe command
+
+While liveness probe is a TCP check the startup and readiness probes use the OpenSearch API with curl.
+
+If you need to customize the startup or readiness probe commands you can override it as shown below:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  nodePools:
+    - component: masters
+      ...
+      probes:
+        startup:
+          command:
+            - echo
+            - "Hello, World!"
+        readiness:
+          command:
+            - echo
+            - "Hello, World!"
 ```
 
 ### Configuring Resource Limits/Requests
