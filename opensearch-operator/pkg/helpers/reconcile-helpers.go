@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"fmt"
+	"os"
 	"path"
 	"strings"
 
@@ -80,6 +81,34 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 
 	result.Image = pointer.String(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), cr.Spec.Dashboards.Version))
+	return
+}
+
+func ResolveOperatorSidecarImage(nodePool *opsterv1.NodePool) (result opsterv1.ImageSpec) {
+	defaultRepo := "docker.io/opensearchproject"
+	defaultImage := "opensearch-operator-sidecar"
+	defaultVersion := "latest"
+
+	// if image is specified in nodePool, use that
+	if useCustomImage(nodePool.OperatorSidecar.ImageSpec, &result) {
+		return
+	}
+
+	// if image is specified via envvar (from helm chart), use that
+	image, exists := os.LookupEnv("OPERATOR_SIDECAR_IMAGE")
+	if exists && image != "" {
+		result.Image = &image
+		return
+	}
+
+	version, exists := os.LookupEnv("OPERATOR_SIDECAR_VERSION")
+	if exists && version != "" {
+		defaultVersion = version
+	}
+
+	// otherwise fall back to default
+	result.Image = pointer.String(fmt.Sprintf("%s/%s:%s", defaultRepo, defaultImage, defaultVersion))
+
 	return
 }
 

@@ -285,7 +285,6 @@ To install a plugin for the bootstrap pod add it to the list under `bootstrap.pl
     pluginsList: ["repository-s3"]
 ```
 
-
 Please note:
 
 * [Bundled plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#bundled-plugins) do not have to be added to the list, they are installed automatically
@@ -1066,6 +1065,82 @@ The following considerations should be taken into account in order to increase t
 * Make sure the declared size definitions are proper and consistent, example if the `diskSize` is in `G` or `Gi`, make sure the same size definitions are followed for expansion.
 
 Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure data is backed up and make sure the right conversion number is identified, so that the underlying volume has the same value and then re-apply the cluster yaml. This will make sure the statefulset is re-created with right value in VolueClaimTemplates, this operation is expected to have no downtime.
+
+### Keeping Opensearch available during Kubernetes node replacements
+
+When you have restarts of Kubernetes nodes (e.g. because you are upgrading the Kubernetes version) there is a risk of your Opensearch cluster becoming unavailable for a time. The problem is that Kubernetes cannot know when Opensearch has internally finished replicating data and has a green cluster state. So it can happen that a second node with an Opensearch pod is restarted/replaced before Opensearch had a chance to resync. This could lead to indices becoming unavailable with both primary and replica shards being on the pods that were just restarted.
+
+The canonical way around this is to set a Pod Distruption Budget (PDB). But this relies on the readiness probe of all affected pods, which for Opensearch does not reflect cluster state but only if the local pod is reachable. Changing the readiness probe to reflect Opensearch cluster state (green/yellow/red) would make all pods unreachable (because readiness controls which pods are reachable via Service/Ingress).
+
+To support such cases the operator provides a special sidecar added to all Opensearch pods. The sidecars sync with each other so that exactly one of them exposes Opensearch cluster state via the readiness probe. So if the cluster became yellow, the readiness for one pod would switch to not ready. If you also configure a PDB that allows for only one pod to be unavailable, then any Kubernetes node replacements with Opensearch pods on them will be blocked until the Opensearch cluster is healthy again.
+
+Note that there can still be situations with more than one pod down if a pod crashes or is restarted for some other reason while a node restart is in progress.
+
+> [!WARNING]
+> The sidecar feature is still experimential and could have unintended interference with normal cluster operations. Please test it before using it on a production system.
+
+To configure the sidecar you need to do the following:
+
+1. Create a Kubernetes ServiceAccount and give it the permission to perform leader election (find an example manifest below)
+2. Configure your opensearch cluster to use that ServiceAccount
+3. Enable the sidecar for nodePools with the data role
+
+The ServiceAccount manifest should look like this (you need to apply this before creating your Opensearch cluster):
+
+```yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: my-opensearch
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: leaderelection
+  namespace: default
+rules:
+  - apiGroups:
+      - coordination.k8s.io
+    resources:
+      - leases
+    verbs:
+      - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: opensearch-leaderelection
+  namespace: default
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: leaderelection
+subjects:
+  - kind: ServiceAccount
+    name: my-opensearch
+```
+
+The changes to the cluster manifest look like this:
+
+```yaml
+spec:
+  general:
+    serviceAccount: my-opensearch # The name of the ServiceAccount with leader election permissions
+  nodePools:
+  - component: foobar
+    pdb: # PDB is needed so that node restarts take the pods into account
+      enable: true
+      maxUnavailable: 1
+    operatorSidecar:
+      enable: true # This enables the sidecar with the cluster-state-dependent readiness probe
+      readinessPerPool: true # Setting this to false means only one pod from all nodepools has the state-dependent readiness probe instead of one per nodepool
+```
+
+Keep in mind that this setup could block cluster node restarts/replacements for a long time if Opensearch has a problem, so be sure to choose sensible timeouts / max wait times in your operations tooling (ClusterAPI or cloud provider configuration).
+
+> [!WARNING]
+> If you perform an upgrade of Opensearch itself, you should consider disabling the sidecar beforehand. Upgrades can lead to the cluster staying in yellow state during the entire upgrade which the sidecar cannot detect so the upgrade would block. To stay on the safe side it is recommended to disable the sidecar before an upgrade (requires a rolling restart of the opensearch pods) and enable it again afterwards.
 
 ## User and role management
 
