@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/base64"
 	"fmt"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"sort"
 	"time"
 
@@ -25,29 +26,40 @@ import (
 const (
 	checksumAnnotation = "securityconfig/checksum"
 
-	adminCert = "/certs/tls.crt"
-	adminKey  = "/certs/tls.key"
-	caCert    = "/certs/ca.crt"
+	adminCert     = "/certs/tls.crt"
+	adminKey      = "/certs/tls.key"
+	caCertDefault = "/certs/ca.crt"
+	//caCert    = "/trust-bundle-all/ca.crt" /not working//etc/ssl/cert.pem
 
 	SecurityAdminBaseCmdTmpl = `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
 chmod +x $ADMIN;
 until curl -k --silent https://%s:%v;
 do
-echo 'Waiting to connect to the cluster'; sleep 120;
+echo 'Waiting to connect to the cluster'; sleep 10;
 done;`
 
 	ApplyAllYmlCmdTmpl = `count=0;
 until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s -p %v || (( count++ >= 20 ));
 do
-sleep 20;
+sleep 10;
 done;`
 
 	ApplySingleYmlCmdTmpl = `count=0;
 until $ADMIN -cacert %s -cert %s -key %s -f %s -t %s -icl -nhnv -h %s -p %v || (( count++ >= 20 ));
 do
-sleep 20;
+sleep 10;
 done;`
 )
+
+func getCaCertFilePath(security *opsterv1.Security) string {
+	if security != nil && security.Config != nil {
+		if security.Config.CaCertFilePath != "" {
+			return security.Config.CaCertFilePath
+		}
+	}
+
+	return caCertDefault
+}
 
 var ymlToFileType = map[string]string{
 	"internal_users.yml": "internalusers",
@@ -158,11 +170,24 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		clusterHostName := BuildClusterSvcHostName(r.instance)
 		httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(r.instance)
 		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, clusterHostName, httpPort) +
-			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
+			fmt.Sprintf(ApplyAllYmlCmdTmpl, getCaCertFilePath(r.instance.Spec.Security), adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
 	}
 
 	r.logger.Info("Starting securityconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting securityconfig update job")
+
+	// Generate additional volumes
+	addVolumes, addVolumeMounts, _, err := util.CreateAdditionalVolumes(
+		r.client,
+		r.instance.Namespace,
+		r.instance.Spec.General.AdditionalVolumes,
+	)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, addVolumes...)
+	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, addVolumeMounts...)
 
 	job = builders.NewSecurityconfigUpdateJob(
 		r.instance,
@@ -213,7 +238,7 @@ func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, lo
 		// Even if the field was removed from the yaml file it was applied from
 		// Instead it sets it to an empty value
 		if string(secret.Data[k]) != "" {
-			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, securityConfigPort)
+			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, getCaCertFilePath(instance.Spec.Security), adminCert, adminKey, filePath, fileType, clusterHostName, securityConfigPort)
 		}
 	}
 
