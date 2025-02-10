@@ -372,6 +372,20 @@ func NewSTSForNodePool(
 			SubPath:   "opensearch.keystore",
 		})
 
+		// Add volume and volume mount for config, useful for readOnlyRootFilesystem
+		volumes = append(volumes, corev1.Volume{
+			Name: "config-emptydir",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		})
+
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "config-emptydir",
+			MountPath: "/usr/share/opensearch/config/",
+		})
+
+
 		initContainerVolumeMounts := []corev1.VolumeMount{
 			{
 				Name:      "keystore",
