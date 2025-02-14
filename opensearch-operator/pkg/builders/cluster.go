@@ -380,7 +380,7 @@ func NewSTSForNodePool(
 			},
 		})
 
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		initContainerVolumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "config-emptydir",
 			MountPath: "/usr/share/opensearch/config/",
 		})
