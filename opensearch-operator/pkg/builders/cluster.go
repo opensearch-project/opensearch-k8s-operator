@@ -286,7 +286,7 @@ func NewSTSForNodePool(
 	} else {
 		curlCmd += "https://localhost:" + fmt.Sprint(httpPort)
 	}
-	
+
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: readinessProbeInitialDelaySeconds,
 		PeriodSeconds:       readinessProbePeriodSeconds,
@@ -1049,13 +1049,13 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
-	
+
 	// Use HTTP instead of HTTPS if SSL is disabled
 	protocol := "https"
 	if cr.Spec.General.DisableSSL {
 		protocol = "http"
 	}
-	
+
 	return fmt.Sprintf("%s://%s.svc.%s:%d", protocol, DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
 }
 
