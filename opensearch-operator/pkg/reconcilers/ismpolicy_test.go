@@ -38,7 +38,6 @@ var _ = Describe("ism policy reconciler", func() {
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		instance = &opsterv1.OpenSearchISMPolicy{
-
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-policy",
 				Namespace: "test-policy",
@@ -49,6 +48,9 @@ var _ = Describe("ism policy reconciler", func() {
 				OpensearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
+			},
+			Status: opsterv1.OpensearchISMPolicyStatus{
+				PolicyId: "test-policy",
 			},
 		}
 
@@ -260,6 +262,7 @@ var _ = Describe("ism policy reconciler", func() {
 		Context("policy exists in opensearch", func() {
 			BeforeEach(func() {
 				instance.Spec.PolicyID = "test-policy-id"
+				instance.Status.PolicyId = "test-policy-id"
 
 				transport.RegisterResponder(
 					http.MethodGet,
