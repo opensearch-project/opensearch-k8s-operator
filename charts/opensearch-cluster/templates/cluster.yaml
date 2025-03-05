@@ -29,8 +29,14 @@ spec:
   {{- with .Values.cluster.initHelper }}
   initHelper: {{ . | toYaml | nindent 4 }}
   {{- end }}
-  {{- with .Values.cluster.nodePools }}
-  nodePools: {{ . | toYaml | nindent 4 }}
+  nodePools:
+  {{- range .Values.cluster.nodePools }}
+  - {{ omit . "affinity" | toYaml | nindent 4 | trim }}
+    {{- if .affinity }}
+    {{ include "nodePools.affinity" (dict "nodePool" .) | nindent 4 | trim }}
+    {{- else }}
+    {{ include "nodePools.defaultAffinity" (dict "nodePool" .) | nindent 4 | trim }}
+    {{- end }}
   {{- end }}
   {{- with .Values.cluster.security }}
   security:
