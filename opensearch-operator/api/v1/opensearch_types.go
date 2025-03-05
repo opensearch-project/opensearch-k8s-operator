@@ -70,6 +70,8 @@ type GeneralConfig struct {
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the cluster pods' container
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	// Disable SSL for the cluster
+	DisableSSL bool `json:"disableSSL,omitempty"`
 }
 
 type PdbConfig struct {

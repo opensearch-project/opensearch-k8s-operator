@@ -280,7 +280,13 @@ func NewSTSForNodePool(
 	// Because the http endpoint requires auth we need to do it as a curl script
 	httpPort := PortForCluster(cr)
 
-	curlCmd := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
+	curlCmd := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail "
+	if cr.Spec.General.DisableSSL {
+		curlCmd += "http://localhost:" + fmt.Sprint(httpPort)
+	} else {
+		curlCmd += "https://localhost:" + fmt.Sprint(httpPort)
+	}
+
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: readinessProbeInitialDelaySeconds,
 		PeriodSeconds:       readinessProbePeriodSeconds,
@@ -576,6 +582,11 @@ func NewSTSForNodePool(
 				Privileged: pointer.Bool(true),
 			},
 		})
+	}
+
+	// Add plugins.security.disabled=true to environment variables if SSL is disabled
+	if cr.Spec.General.DisableSSL {
+		extraConfig["plugins.security.disabled"] = "true"
 	}
 
 	return sts
@@ -1038,7 +1049,14 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
-	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
+
+	// Use HTTP instead of HTTPS if SSL is disabled
+	protocol := "https"
+	if cr.Spec.General.DisableSSL {
+		protocol = "http"
+	}
+
+	return fmt.Sprintf("%s://%s.svc.%s:%d", protocol, DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {
@@ -1227,6 +1245,12 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		monitorLabel[k] = v
 	}
 
+	// Use HTTP instead of HTTPS for ServiceMonitor if SSL is disabled
+	scheme := "https"
+	if cr.Spec.General.DisableSSL {
+		scheme = "http"
+	}
+
 	return &monitoring.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-monitor",
@@ -1251,7 +1275,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth:       &user,
-					Scheme:          "https",
+					Scheme:          scheme,
 				},
 			},
 			Selector:          selector,
