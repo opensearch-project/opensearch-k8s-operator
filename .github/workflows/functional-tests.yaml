@@ -24,7 +24,14 @@ jobs:
           export CLUSTER_NAME=opensearch-operator-tests
           ## Check disk to avoid failed shard assignments due to watermarking
           df -h
-          cd opensearch-operator
+
+          ## Build sidecar docker image and import into k3d
+          cd operator-sidecar
+          IMG=operator-sidecar:test make docker-build
+          k3d image import -c $CLUSTER_NAME operator-sidecar:test
+
+          cd ../opensearch-operator
+
           ## Prepare kubeconfig
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
@@ -36,8 +43,16 @@ jobs:
           k3d image import -c $CLUSTER_NAME controller:latest
 
           ## Install helm chart
-          helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
+          helm install opensearch-operator ../charts/opensearch-operator \
+            --set manager.image.repository=controller \
+            --set manager.image.tag=latest \
+            --set manager.image.pullPolicy=IfNotPresent \
+            --set operatorSidecar.image=operator-sidecar:test \
+            --namespace default --wait
+          
           cd functionaltests
+
+          kubectl apply -f rbac.yaml
 
           ## Run tests
           go test ./operatortests -timeout 30m
@@ -70,7 +85,13 @@ jobs:
           export CLUSTER_NAME=opensearch-operator-tests
           ## Check disk to avoid failed shard assignments due to watermarking
           df -h
-          cd opensearch-operator
+
+          ## Build sidecar docker image and import into k3d
+          cd operator-sidecar
+          IMG=operator-sidecar:test make docker-build
+          k3d image import -c $CLUSTER_NAME operator-sidecar:test
+
+          cd ../opensearch-operator
           ## Prepare kubeconfig
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
@@ -81,9 +102,22 @@ jobs:
           ## Import controller docker image
           k3d image import -c $CLUSTER_NAME controller:latest
 
-          ## Install helm chart
-          helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
-          helm install opensearch-cluster ../charts/opensearch-cluster --set  opensearchCluster.general.version=${{ matrix.version }} --set opensearchCluster.dashboards.version=${{ matrix.version }} --wait
+          ## Install helm charts
+          helm install opensearch-operator ../charts/opensearch-operator \
+            --set manager.image.repository=controller \
+            --set manager.image.tag=latest \
+            --set manager.image.pullPolicy=IfNotPresent \
+            --set operatorSidecar.image=operator-sidecar:test \
+            --namespace default --wait
+          
+          kubectl apply -f functionaltests/rbac.yaml
+
+          helm install opensearch-cluster ../charts/opensearch-cluster \
+            --set opensearchCluster.general.version=${{ matrix.version }} \
+            --set opensearchCluster.dashboards.version=${{ matrix.version }} \
+            -f functionaltests/helm-cluster-values.yaml \
+            --wait
+
           cd functionaltests
 
           ## Run tests
