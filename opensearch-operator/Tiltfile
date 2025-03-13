@@ -24,7 +24,6 @@ USER 65532:65532
 ENTRYPOINT ["/manager"]
 '''
 # Builds the controller image using the Dockerfile
-# Only copies the manager binary and syncs the binary to the container
 # Live update: Syncs the binary to the container when it changes (Without rebuilding the image)
 docker_build("controller", '.', 
     dockerfile_contents=DOCKERFILE,
