@@ -1,13 +1,21 @@
+# Set the team for the Tilt cloud UI
 set_team('52cc75cc-c4ed-462f-8ea7-a543d398a381')
 
+# Loads the manifests from the config/default directory using kustomize
 k8s_yaml(kustomize('config/default'))
 
+# Specifies the dependencies for the watch & compile command
 deps = ['controllers', 'main.go', 'api', 'pkg']
 
+# Watches the dependencies and compiles the manager binary when they change
 local_resource('Watch & Compile', 
     'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/manager main.go', 
     deps=deps)
 
+# Specifies a simple Dockerfile to build the controller image
+# Distroless: Minimal image from Google
+# USER: Sets the user to a non-root userb (Security)
+# Only copies the manager binary
 DOCKERFILE = '''FROM gcr.io/distroless/base:debug-nonroot
 WORKDIR /
 COPY ./bin/manager /
@@ -15,7 +23,9 @@ USER 65532:65532
 
 ENTRYPOINT ["/manager"]
 '''
-
+# Builds the controller image using the Dockerfile
+# Only copies the manager binary and syncs the binary to the container
+# Live update: Syncs the binary to the container when it changes (Without rebuilding the image)
 docker_build("controller", '.', 
     dockerfile_contents=DOCKERFILE,
     only=['./bin/manager'],
