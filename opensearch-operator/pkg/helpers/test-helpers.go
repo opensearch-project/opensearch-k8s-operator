@@ -1,6 +1,8 @@
 package helpers
 
 import (
+	"time"
+
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -41,9 +43,15 @@ func HasKeyWithBytes(data map[string][]byte, key string) bool {
 	return exists
 }
 
-type PkiMock struct{}
+type PkiMock struct {
+	UsedCertMockRef *CertMock
+}
 
-type CertMock struct{}
+type CertMock struct {
+	LastExpiryTime                                   time.Time
+	NumTimesCalledCreateAndSignCertificate           int
+	NumTimesCalledCreateAndSignCertificateWithExpiry int
+}
 
 func (cert *CertMock) SecretDataCA() map[string][]byte {
 	return map[string][]byte{
@@ -69,17 +77,39 @@ func (cert *CertMock) CertData() []byte {
 }
 
 func (ca *CertMock) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert tls.Cert, err error) {
-	return &CertMock{}, nil
+	ca.NumTimesCalledCreateAndSignCertificate += 1
+	// Calling this method is equivalent to calling CreateAndSignCertificateWithExpiry
+	// with the default expiry time
+	ca.NumTimesCalledCreateAndSignCertificateWithExpiry += 1
+	return ca, nil
+}
+
+func (ca *CertMock) CreateAndSignCertificateWithExpiry(commonName string, orgUnit string, dnsnames []string, expiry time.Time) (cert tls.Cert, err error) {
+	ca.NumTimesCalledCreateAndSignCertificateWithExpiry += 1
+	ca.LastExpiryTime = expiry
+	return ca, nil
 }
 
 func (pki *PkiMock) GenerateCA(name string) (ca tls.Cert, err error) {
-	return &CertMock{}, nil
+	if pki.UsedCertMockRef != nil {
+		return pki.UsedCertMockRef, nil
+	}
+	pki.UsedCertMockRef = &CertMock{}
+	return pki.UsedCertMockRef, nil
 }
 
 func (pki *PkiMock) CAFromSecret(data map[string][]byte) tls.Cert {
-	return &CertMock{}
+	if pki.UsedCertMockRef != nil {
+		return pki.UsedCertMockRef
+	}
+	pki.UsedCertMockRef = &CertMock{}
+	return pki.UsedCertMockRef
 }
 
 func NewMockPKI() tls.PKI {
 	return &PkiMock{}
+}
+
+func (pki *PkiMock) GetUsedCertMock() *CertMock {
+	return pki.UsedCertMockRef
 }

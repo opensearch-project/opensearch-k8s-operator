@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -72,6 +74,11 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 		if err := r.handleHttp(); err != nil {
 			return ctrl.Result{}, err
 		}
+	}
+	// Update the TransportCertificateExpiry and HttpCertificateExpiry status fields
+	if err := r.updateCertificateExpiry(); err != nil {
+		r.logger.Error(err, "Failed to update certificate expiry status")
+		return ctrl.Result{}, err
 	}
 	if r.reconcileAdminCert() {
 		res, err := r.handleAdminCertificate()
@@ -219,17 +226,42 @@ func (r *TLSReconciler) createAdminSecret(ca tls.Cert) (*ctrl.Result, error) {
 		return nil, nil
 	}
 
-	adminCert, err := ca.CreateAndSignCertificate("admin", r.instance.Name, nil)
-	if err != nil {
-		r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
-		r.recorder.AnnotatedEventf(
-			r.instance,
-			map[string]string{"cluster-name": r.instance.GetName()},
-			"Warning",
-			"Security",
-			"Failed to create admin certificate",
-		)
-		return nil, err
+	var adminCert tls.Cert
+	var err2 error
+
+	// Use ValidTill field if specified
+	if r.instance.Spec.Security.Tls.ValidTill != "" {
+		validTill, err := time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+		if err != nil {
+			r.logger.Error(err, "Failed to parse ValidTill date", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
+			// r.recorder.AnnotatedEventf(
+			// 	r.instance,
+			// 	map[string]string{"cluster-name": r.instance.GetName()},
+			// 	"Warning",
+			// 	"Security",
+			// 	"Failed to parse ValidTill date: %s",
+			// 	r.instance.Spec.Security.Tls.ValidTill,
+			// )
+			// Fall back to default expiry
+			adminCert, err2 = ca.CreateAndSignCertificate("admin", r.instance.Name, nil)
+			if err2 != nil {
+				r.logger.Error(err2, "Failed to create and sign certificate")
+				return nil, err2
+			}
+		} else {
+			adminCert, err2 = ca.CreateAndSignCertificateWithExpiry("admin", r.instance.Name, nil, validTill)
+			if err2 != nil {
+				r.logger.Error(err2, "Failed to create and sign certificate with expiry")
+				return nil, err2
+			}
+		}
+	} else {
+		// Use default expiry
+		adminCert, err2 = ca.CreateAndSignCertificate("admin", r.instance.Name, nil)
+		if err2 != nil {
+			r.logger.Error(err2, "Failed to create and sign certificate")
+			return nil, err2
+		}
 	}
 	adminSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -278,10 +310,35 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 		}
-		nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
-		if err != nil {
-			r.logger.Error(err, "Failed to create node certificate", "interface", "transport")
-			return err
+
+		var nodeCert tls.Cert
+
+		// Use ValidTill field if specified
+		if r.instance.Spec.Security.Tls.ValidTill != "" {
+			var validTill time.Time
+			validTill, err = time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+			if err != nil {
+				r.logger.Error(err, "Failed to parse ValidTill date", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
+				// Fall back to default expiry
+				nodeCert, err = ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
+				if err != nil {
+					r.logger.Error(err, "Failed to create and sign certificate")
+					return err
+				}
+			} else {
+				nodeCert, err = ca.CreateAndSignCertificateWithExpiry(clusterName, clusterName, dnsNames, validTill)
+				if err != nil {
+					r.logger.Error(err, "Failed to create and sign certificate with expiry")
+					return err
+				}
+			}
+		} else {
+			// Use default expiry
+			nodeCert, err = ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
+			if err != nil {
+				r.logger.Error(err, "Failed to create and sign certificate")
+				return err
+			}
 		}
 		nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
 		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
@@ -335,6 +392,16 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	}
 	nodeSecret.Data[CaCertKey] = ca.CertData()
 
+	// Parse ValidTill if specified
+	var validTill time.Time
+	var validTillErr error
+	if r.instance.Spec.Security.Tls.ValidTill != "" {
+		validTill, validTillErr = time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+		if validTillErr != nil {
+			r.logger.Error(validTillErr, "Failed to parse ValidTill date", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
+		}
+	}
+
 	// Generate bootstrap pod cert
 	bootstrapPodName := builders.BootstrapPodName(r.instance)
 	_, bootstrapCertExists := nodeSecret.Data[fmt.Sprintf("%s.crt", bootstrapPodName)]
@@ -353,11 +420,23 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			fmt.Sprintf("%s.%s.%s.svc.%s", bootstrapPodName, clusterName, namespace, helpers.ClusterDnsBase()),
 		}
-		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames)
-		if err != nil {
-			r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", bootstrapPodName)
-			//	r.recorder.Event(r.instance, "Normal", "Security", "Created transport certificates")
-			return err
+
+		var nodeCert tls.Cert
+
+		// Use ValidTill field if specified and valid
+		if r.instance.Spec.Security.Tls.ValidTill != "" && validTillErr == nil {
+			nodeCert, err = ca.CreateAndSignCertificateWithExpiry(bootstrapPodName, clusterName, dnsNames, validTill)
+			if err != nil {
+				r.logger.Error(err, "Failed to create and sign certificate with expiry")
+				return err
+			}
+		} else {
+			// Use default expiry
+			nodeCert, err = ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames)
+			if err != nil {
+				r.logger.Error(err, "Failed to create and sign certificate")
+				return err
+			}
 		}
 		//	r.recorder.Event(r.instance, "Normal", "Security", "Created transport certificates")
 		nodeSecret.Data[fmt.Sprintf("%s.crt", bootstrapPodName)] = nodeCert.CertData()
@@ -387,10 +466,23 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 				fmt.Sprintf("%s.%s.%s.svc.%s", podName, clusterName, namespace, helpers.ClusterDnsBase()),
 			}
-			nodeCert, err := ca.CreateAndSignCertificate(podName, clusterName, dnsNames)
-			if err != nil {
-				r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", podName)
-				return err
+
+			var nodeCert tls.Cert
+
+			// Use ValidTill field if specified and valid
+			if r.instance.Spec.Security.Tls.ValidTill != "" && validTillErr == nil {
+				nodeCert, err = ca.CreateAndSignCertificateWithExpiry(podName, clusterName, dnsNames, validTill)
+				if err != nil {
+					r.logger.Error(err, "Failed to create and sign certificate with expiry")
+					return err
+				}
+			} else {
+				// Use default expiry
+				nodeCert, err = ca.CreateAndSignCertificate(podName, clusterName, dnsNames)
+				if err != nil {
+					r.logger.Error(err, "Failed to create and sign certificate")
+					return err
+				}
 			}
 			nodeSecret.Data[certName] = nodeCert.CertData()
 			nodeSecret.Data[keyName] = nodeCert.KeyData()
@@ -498,13 +590,37 @@ func (r *TLSReconciler) handleHttp() error {
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
-			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
-			if err != nil {
-				r.logger.Error(err, "Failed to create node certificate", "interface", "http")
-				//		r.recorder.Event(r.instance, "Warning", "Security", "Failed to create node http certifice")
 
-				return err
+			var nodeCert tls.Cert
+
+			// Use ValidTill field if specified
+			if r.instance.Spec.Security.Tls.ValidTill != "" {
+				var validTill time.Time
+				validTill, err = time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+				if err != nil {
+					r.logger.Error(err, "Failed to parse ValidTill date", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
+					// Fall back to default expiry
+					nodeCert, err = ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
+					if err != nil {
+						r.logger.Error(err, "Failed to create and sign certificate")
+						return err
+					}
+				} else {
+					nodeCert, err = ca.CreateAndSignCertificateWithExpiry(clusterName, clusterName, dnsNames, validTill)
+					if err != nil {
+						r.logger.Error(err, "Failed to create and sign certificate with expiry")
+						return err
+					}
+				}
+			} else {
+				// Use default expiry
+				nodeCert, err = ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
+				if err != nil {
+					r.logger.Error(err, "Failed to create and sign certificate")
+					return err
+				}
 			}
+
 			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
 			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
 				return err
@@ -519,7 +635,7 @@ func (r *TLSReconciler) handleHttp() error {
 		// Tell cluster controller to mount secrets
 		volume := corev1.Volume{Name: "http-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName}}}
 		r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
-		mount := corev1.VolumeMount{Name: "http-cert", MountPath: "/usr/share/opensearch/config/tls-" + "http"}
+		mount := corev1.VolumeMount{Name: "http-cert", MountPath: "/usr/share/opensearch/config/tls-http"}
 		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 	} else {
 		if tlsConfig.TlsCertificateConfig.Secret.Name == "" {
@@ -561,6 +677,48 @@ func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls
 	return ca, nil
 }
 
+func (r *TLSReconciler) updateCertificateExpiry() error {
+	// Skip if TLS is not configured
+	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil {
+		return nil
+	}
+
+	// Determine the expiry date
+	var expiryTime time.Time
+	if r.instance.Spec.Security.Tls.ValidTill != "" {
+		// Use the ValidTill field if specified
+		var err error
+		expiryTime, err = time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+		if err != nil {
+			r.logger.Error(err, "Failed to parse ValidTill date, using default expiry", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
+			// Use default expiry (1 year) if ValidTill is invalid
+			expiryTime = time.Now().AddDate(1, 0, 0)
+		}
+	} else {
+		// Use default expiry (1 year) if ValidTill is not specified
+		expiryTime = time.Now().AddDate(1, 0, 0)
+	}
+
+	// Update the status fields using the UpdateOpenSearchClusterStatus method
+	key := client.ObjectKey{Name: r.instance.Name, Namespace: r.instance.Namespace}
+	return r.client.UpdateOpenSearchClusterStatus(key, func(cluster *opsterv1.OpenSearchCluster) {
+		// Only set TransportCertificateExpiry if transport certificate generation is enabled
+		if r.instance.Spec.Security.Tls.Transport != nil && r.instance.Spec.Security.Tls.Transport.Generate {
+			cluster.Status.TransportCertificateExpiry = metav1.NewTime(expiryTime)
+		}
+
+		// Only set HttpCertificateExpiry if HTTP certificate generation is enabled
+		if r.instance.Spec.Security.Tls.Http != nil && r.instance.Spec.Security.Tls.Http.Generate {
+			cluster.Status.HttpCertificateExpiry = metav1.NewTime(expiryTime)
+		}
+	})
+}
+
+func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
+	result := reconciler.CombinedResult{}
+	return result.Result, result.Err
+}
+
 func mount(interfaceName string, name string, filename string, secretName string, reconcilerContext *ReconcilerContext) {
 	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName}}}
 	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
@@ -575,7 +733,53 @@ func mountFolder(interfaceName string, name string, secretName string, reconcile
 	reconcilerContext.VolumeMounts = append(reconcilerContext.VolumeMounts, mount)
 }
 
-func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
-	result := reconciler.CombinedResult{}
-	return result.Result, result.Err
+// Define the function to be tested
+func GenerateRFC3339DateTime(input string) (string, error) {
+	// Check if input is empty
+	if input == "" {
+		return "", fmt.Errorf("input cannot be empty")
+	}
+
+	// Define regex pattern to match valid input format
+	pattern := `^(\d+)([WMY])$`
+	regex := regexp.MustCompile(pattern)
+	matches := regex.FindStringSubmatch(input)
+
+	if len(matches) != 3 {
+		return "", fmt.Errorf("invalid format, expected number followed by W, M, or Y")
+	}
+
+	// Extract number and unit
+	numStr := matches[1]
+	unit := matches[2]
+
+	// Parse the number
+	num, err := strconv.Atoi(numStr)
+	if err != nil {
+		return "", fmt.Errorf("failed to parse number: %v", err)
+	}
+
+	// Validate the number is positive
+	if num <= 0 {
+		return "", fmt.Errorf("number must be positive")
+	}
+
+	// Get current time in UTC
+	now := time.Now().UTC()
+
+	// Calculate the future time based on the unit
+	var futureTime time.Time
+	switch unit {
+	case "W":
+		futureTime = now.AddDate(0, 0, num*7)
+	case "M":
+		futureTime = now.AddDate(0, num, 0)
+	case "Y":
+		futureTime = now.AddDate(num, 0, 0)
+	default:
+		return "", fmt.Errorf("invalid unit, expected W, M, or Y")
+	}
+
+	// Format the result in RFC3339 format with UTC timezone
+	return futureTime.Format(time.RFC3339), nil
 }

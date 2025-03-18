@@ -229,6 +229,9 @@ type Security struct {
 type TlsConfig struct {
 	Transport *TlsConfigTransport `json:"transport,omitempty"`
 	Http      *TlsConfigHttp      `json:"http,omitempty"`
+	// ValidTill specifies the date until which the certificates should be valid in RFC3339 format
+	// Example: "2026-01-02T15:04:05Z" (UTC)
+	ValidTill string `json:"validTill,omitempty"`
 }
 
 type TlsConfigTransport struct {
@@ -341,6 +344,10 @@ type ClusterStatus struct {
 	// AvailableNodes is the number of available instances.
 	AvailableNodes int32            `json:"availableNodes,omitempty"`
 	Health         OpenSearchHealth `json:"health,omitempty"`
+	// TransportCertificateExpiry indicates when the TLS transport certificates will expire
+	TransportCertificateExpiry metav1.Time `json:"transportCertificateExpiry,omitempty"`
+	// HttpCertificateExpiry indicates when the TLS HTTP certificates will expire
+	HttpCertificateExpiry metav1.Time `json:"httpCertificateExpiry,omitempty"`
 }
 
 // +kubebuilder:object:root=true

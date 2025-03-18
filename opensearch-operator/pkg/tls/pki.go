@@ -27,6 +27,7 @@ type Cert interface {
 	KeyData() []byte
 	CertData() []byte
 	CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error)
+	CreateAndSignCertificateWithExpiry(commonName string, orgUnit string, dnsnames []string, expiry time.Time) (cert Cert, err error)
 }
 
 type CertValidater interface {
@@ -122,7 +123,7 @@ func (cert *PEMCert) CertData() []byte {
 	return cert.certBytes
 }
 
-func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error) {
+func (ca *PEMCert) CreateAndSignCertificateWithExpiry(commonName string, orgUnit string, dnsnames []string, expiry time.Time) (cert Cert, err error) {
 	tlscacert, err := ca.cert()
 	if err != nil {
 		return
@@ -149,7 +150,7 @@ func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, d
 			OrganizationalUnit: []string{orgUnit},
 		},
 		NotBefore:   time.Now(),
-		NotAfter:    time.Now().AddDate(1, 0, 0),
+		NotAfter:    expiry,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 	}
@@ -192,6 +193,10 @@ func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, d
 	keyBytes := keyPEM.Bytes()
 
 	return &PEMCert{keyBytes: keyBytes, certBytes: certBytes}, nil
+}
+
+func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error) {
+	return ca.CreateAndSignCertificateWithExpiry(commonName, orgUnit, dnsnames, time.Now().AddDate(1, 0, 0))
 }
 
 func (pki *PkiImpl) CAFromSecret(data map[string][]byte) Cert {
