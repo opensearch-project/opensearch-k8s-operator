@@ -231,23 +231,10 @@ func (r *TLSReconciler) createAdminSecret(ca tls.Cert) (*ctrl.Result, error) {
 
 	// Use ValidTill field if specified
 	if r.instance.Spec.Security.Tls.ValidTill != "" {
-		validTill, err := time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+		validTill, err := GenerateRFC3339DateTime(r.instance.Spec.Security.Tls.ValidTill)
 		if err != nil {
 			r.logger.Error(err, "Failed to parse ValidTill date", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
-			// r.recorder.AnnotatedEventf(
-			// 	r.instance,
-			// 	map[string]string{"cluster-name": r.instance.GetName()},
-			// 	"Warning",
-			// 	"Security",
-			// 	"Failed to parse ValidTill date: %s",
-			// 	r.instance.Spec.Security.Tls.ValidTill,
-			// )
-			// Fall back to default expiry
-			adminCert, err2 = ca.CreateAndSignCertificate("admin", r.instance.Name, nil)
-			if err2 != nil {
-				r.logger.Error(err2, "Failed to create and sign certificate")
-				return nil, err2
-			}
+			return nil, err
 		} else {
 			adminCert, err2 = ca.CreateAndSignCertificateWithExpiry("admin", r.instance.Name, nil, validTill)
 			if err2 != nil {
@@ -315,16 +302,11 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 		// Use ValidTill field if specified
 		if r.instance.Spec.Security.Tls.ValidTill != "" {
-			var validTill time.Time
-			validTill, err = time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+			validTill, err := GenerateRFC3339DateTime(r.instance.Spec.Security.Tls.ValidTill)
 			if err != nil {
 				r.logger.Error(err, "Failed to parse ValidTill date", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
-				// Fall back to default expiry
-				nodeCert, err = ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
-				if err != nil {
-					r.logger.Error(err, "Failed to create and sign certificate")
-					return err
-				}
+				return err
+
 			} else {
 				nodeCert, err = ca.CreateAndSignCertificateWithExpiry(clusterName, clusterName, dnsNames, validTill)
 				if err != nil {
@@ -396,9 +378,10 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	var validTill time.Time
 	var validTillErr error
 	if r.instance.Spec.Security.Tls.ValidTill != "" {
-		validTill, validTillErr = time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+		validTill, validTillErr = GenerateRFC3339DateTime(r.instance.Spec.Security.Tls.ValidTill)
 		if validTillErr != nil {
 			r.logger.Error(validTillErr, "Failed to parse ValidTill date", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
+			return validTillErr
 		}
 	}
 
@@ -423,8 +406,8 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 
 		var nodeCert tls.Cert
 
-		// Use ValidTill field if specified and valid
-		if r.instance.Spec.Security.Tls.ValidTill != "" && validTillErr == nil {
+		// Use ValidTill field if specified
+		if r.instance.Spec.Security.Tls.ValidTill != "" {
 			nodeCert, err = ca.CreateAndSignCertificateWithExpiry(bootstrapPodName, clusterName, dnsNames, validTill)
 			if err != nil {
 				r.logger.Error(err, "Failed to create and sign certificate with expiry")
@@ -470,7 +453,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			var nodeCert tls.Cert
 
 			// Use ValidTill field if specified and valid
-			if r.instance.Spec.Security.Tls.ValidTill != "" && validTillErr == nil {
+			if r.instance.Spec.Security.Tls.ValidTill != "" {
 				nodeCert, err = ca.CreateAndSignCertificateWithExpiry(podName, clusterName, dnsNames, validTill)
 				if err != nil {
 					r.logger.Error(err, "Failed to create and sign certificate with expiry")
@@ -595,22 +578,15 @@ func (r *TLSReconciler) handleHttp() error {
 
 			// Use ValidTill field if specified
 			if r.instance.Spec.Security.Tls.ValidTill != "" {
-				var validTill time.Time
-				validTill, err = time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+				validTill, err := GenerateRFC3339DateTime(r.instance.Spec.Security.Tls.ValidTill)
 				if err != nil {
 					r.logger.Error(err, "Failed to parse ValidTill date", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
-					// Fall back to default expiry
-					nodeCert, err = ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
-					if err != nil {
-						r.logger.Error(err, "Failed to create and sign certificate")
-						return err
-					}
-				} else {
-					nodeCert, err = ca.CreateAndSignCertificateWithExpiry(clusterName, clusterName, dnsNames, validTill)
-					if err != nil {
-						r.logger.Error(err, "Failed to create and sign certificate with expiry")
-						return err
-					}
+					return err
+				}
+				nodeCert, err = ca.CreateAndSignCertificateWithExpiry(clusterName, clusterName, dnsNames, validTill)
+				if err != nil {
+					r.logger.Error(err, "Failed to create and sign certificate with expiry")
+					return err
 				}
 			} else {
 				// Use default expiry
@@ -688,11 +664,10 @@ func (r *TLSReconciler) updateCertificateExpiry() error {
 	if r.instance.Spec.Security.Tls.ValidTill != "" {
 		// Use the ValidTill field if specified
 		var err error
-		expiryTime, err = time.Parse(time.RFC3339, r.instance.Spec.Security.Tls.ValidTill)
+		expiryTime, err = GenerateRFC3339DateTime(r.instance.Spec.Security.Tls.ValidTill)
 		if err != nil {
 			r.logger.Error(err, "Failed to parse ValidTill date, using default expiry", "ValidTill", r.instance.Spec.Security.Tls.ValidTill)
-			// Use default expiry (1 year) if ValidTill is invalid
-			expiryTime = time.Now().AddDate(1, 0, 0)
+			return err
 		}
 	} else {
 		// Use default expiry (1 year) if ValidTill is not specified
@@ -734,10 +709,10 @@ func mountFolder(interfaceName string, name string, secretName string, reconcile
 }
 
 // Define the function to be tested
-func GenerateRFC3339DateTime(input string) (string, error) {
+func GenerateRFC3339DateTime(input string) (time.Time, error) {
 	// Check if input is empty
 	if input == "" {
-		return "", fmt.Errorf("input cannot be empty")
+		return time.Time{}, fmt.Errorf("input cannot be empty")
 	}
 
 	// Define regex pattern to match valid input format
@@ -746,7 +721,7 @@ func GenerateRFC3339DateTime(input string) (string, error) {
 	matches := regex.FindStringSubmatch(input)
 
 	if len(matches) != 3 {
-		return "", fmt.Errorf("invalid format, expected number followed by W, M, or Y")
+		return time.Time{}, fmt.Errorf("invalid format, expected number followed by W, M, or Y")
 	}
 
 	// Extract number and unit
@@ -756,12 +731,12 @@ func GenerateRFC3339DateTime(input string) (string, error) {
 	// Parse the number
 	num, err := strconv.Atoi(numStr)
 	if err != nil {
-		return "", fmt.Errorf("failed to parse number: %v", err)
+		return time.Time{}, fmt.Errorf("failed to parse number: %v", err)
 	}
 
 	// Validate the number is positive
 	if num <= 0 {
-		return "", fmt.Errorf("number must be positive")
+		return time.Time{}, fmt.Errorf("number must be positive")
 	}
 
 	// Get current time in UTC
@@ -777,9 +752,9 @@ func GenerateRFC3339DateTime(input string) (string, error) {
 	case "Y":
 		futureTime = now.AddDate(num, 0, 0)
 	default:
-		return "", fmt.Errorf("invalid unit, expected W, M, or Y")
+		return time.Time{}, fmt.Errorf("invalid unit, expected W, M, or Y")
 	}
 
 	// Format the result in RFC3339 format with UTC timezone
-	return futureTime.Format(time.RFC3339), nil
+	return futureTime, nil
 }

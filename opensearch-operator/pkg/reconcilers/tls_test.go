@@ -335,7 +335,8 @@ var _ = Describe("TLS Controller", func() {
 			adminSecretName := clusterName + "-admin-cert"
 
 			// Set ValidTill to 6 months from now
-			validTill := time.Now().AddDate(0, 6, 0).Format(time.RFC3339)
+			validTill := "6M"
+			expectedExpiry := time.Now().UTC().AddDate(0, 6, 0)
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -343,59 +344,6 @@ var _ = Describe("TLS Controller", func() {
 					General: opsterv1.GeneralConfig{},
 					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
 						ValidTill: validTill,
-						Transport: &opsterv1.TlsConfigTransport{Generate: true},
-						Http:      &opsterv1.TlsConfigHttp{Generate: true},
-					}},
-				},
-			}
-
-			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			mockClient.EXPECT().Context().Return(context.Background())
-			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
-			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(corev1.Secret{}, NotFoundError())
-			mockClient.EXPECT().GetSecret(transportSecretName, clusterName).Return(corev1.Secret{}, NotFoundError())
-			mockClient.EXPECT().GetSecret(httpSecretName, clusterName).Return(corev1.Secret{}, NotFoundError())
-			mockClient.EXPECT().GetSecret(adminSecretName, clusterName).Return(corev1.Secret{}, NotFoundError())
-
-			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == caSecretName })).Return(&ctrl.Result{}, nil)
-			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == adminSecretName })).Return(&ctrl.Result{}, nil)
-			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == transportSecretName })).Return(&ctrl.Result{}, nil)
-			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == httpSecretName })).Return(&ctrl.Result{}, nil)
-			// Mock for UpdateOpenSearchClusterStatus
-			mockClient.On("UpdateOpenSearchClusterStatus",
-				mock.MatchedBy(func(key client.ObjectKey) bool { return key.Name == clusterName && key.Namespace == clusterName }),
-				mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Return(nil)
-
-			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
-			_, err := underTest.Reconcile()
-			Expect(err).ToNot(HaveOccurred())
-
-			// Basic validation that the reconciler completed successfully
-			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
-			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
-			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
-			Expect(exists).To(BeTrue())
-			Expect(value).To(Equal("[\"CN=tls-validtill,OU=tls-validtill\"]"))
-		})
-	})
-
-	Context("When Reconciling the TLS configuration with invalid ValidTill field", func() {
-		It("should fall back to default expiry", func() {
-			clusterName := "tls-invalid-validtill"
-			caSecretName := clusterName + "-ca"
-			transportSecretName := clusterName + "-transport-cert"
-			httpSecretName := clusterName + "-http-cert"
-			adminSecretName := clusterName + "-admin-cert"
-
-			// Set an invalid ValidTill format
-			invalidValidTill := "invalid-date-format"
-
-			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						ValidTill: invalidValidTill,
 						Transport: &opsterv1.TlsConfigTransport{Generate: true},
 						Http:      &opsterv1.TlsConfigHttp{Generate: true},
 					}},
@@ -424,40 +372,78 @@ var _ = Describe("TLS Controller", func() {
 			}).Return(nil)
 
 			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
-
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
-			// Basic validation that the reconciler completed successfully despite invalid date
+			// Basic validation that the reconciler completed successfully
 			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
 			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
-			Expect(value).To(Equal("[\"CN=tls-invalid-validtill,OU=tls-invalid-validtill\"]"))
-
-			// Verify that the default expiry time (1 year from now) was used
-			expectedExpiry := time.Now().AddDate(1, 0, 0)
-			mockCert := underTest.pki.(*helpers.PkiMock).GetUsedCertMock()
-			Expect(mockCert.NumTimesCalledCreateAndSignCertificate).To(Equal(3))
-			Expect(mockCert.NumTimesCalledCreateAndSignCertificateWithExpiry).To(Equal(3))
-			Expect(statusUpdateFunc).ToNot(BeNil())
+			Expect(value).To(Equal("[\"CN=tls-validtill,OU=tls-validtill\"]"))
 
 			// Verify that the status fields were updated correctly
 			if statusUpdateFunc != nil {
 				updatedCluster := &opsterv1.OpenSearchCluster{}
 				statusUpdateFunc(updatedCluster)
 
-				// Both certificate expiry fields should be set to the default expiry time
+				// Both certificate expiry fields should be set
 				Expect(updatedCluster.Status.TransportCertificateExpiry.IsZero()).To(BeFalse())
 				Expect(updatedCluster.Status.HttpCertificateExpiry.IsZero()).To(BeFalse())
 
-				// The expiry times should be close to the expected default (1 year from now)
 				transportExpiryDiff := updatedCluster.Status.TransportCertificateExpiry.Time.Sub(expectedExpiry)
 				Expect(transportExpiryDiff.Abs()).To(BeNumerically("<=", time.Minute))
 
 				httpExpiryDiff := updatedCluster.Status.HttpCertificateExpiry.Time.Sub(expectedExpiry)
 				Expect(httpExpiryDiff.Abs()).To(BeNumerically("<=", time.Minute))
 			}
+
+		})
+	})
+
+	Context("When Reconciling the TLS configuration with invalid ValidTill field", func() {
+		It("should error out", func() {
+			clusterName := "tls-invalid-validtill"
+			caSecretName := clusterName + "-ca"
+			transportSecretName := clusterName + "-transport-cert"
+
+			// Set an invalid ValidTill format
+			invalidValidTill := "invalid-date-format"
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+						ValidTill: invalidValidTill,
+						Transport: &opsterv1.TlsConfigTransport{Generate: true},
+						Http:      &opsterv1.TlsConfigHttp{Generate: true},
+					}},
+				},
+			}
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.EXPECT().GetSecret(transportSecretName, clusterName).Return(corev1.Secret{}, NotFoundError())
+
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == caSecretName })).Return(&ctrl.Result{}, nil)
+
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+
+			_, err := underTest.Reconcile()
+			Expect(err).To(MatchError("invalid format, expected number followed by W, M, or Y"))
+
+			// Basic validation that the reconciler completed successfully despite invalid date
+			Expect(reconcilerContext.Volumes).Should(BeEmpty())
+			Expect(reconcilerContext.VolumeMounts).Should(BeEmpty())
+			_, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
+			Expect(exists).To(BeFalse())
+
+			mockCert := underTest.pki.(*helpers.PkiMock).GetUsedCertMock()
+			Expect(mockCert.NumTimesCalledCreateAndSignCertificate).To(Equal(0))
+			Expect(mockCert.NumTimesCalledCreateAndSignCertificateWithExpiry).To(Equal(0))
 		})
 	})
 
@@ -470,8 +456,8 @@ var _ = Describe("TLS Controller", func() {
 			adminSecretName := clusterName + "-admin-cert"
 
 			// Set ValidTill to 6 months from now
-			validTillDT := time.Now().AddDate(10, 6, 0)
-			validTill := validTillDT.Format(time.RFC3339)
+			validTillDT := time.Now().UTC().AddDate(10, 0, 0)
+			validTill := "10Y"
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -575,9 +561,9 @@ var _ = Describe("TLS Controller", func() {
 			httpCASecretName := clusterName + "-http-ca"
 			adminSecretName := clusterName + "-admin-cert"
 
-			// Set ValidTill to 6 months from now
-			validTillDT := time.Now().AddDate(10, 6, 0)
-			validTill := validTillDT.Format(time.RFC3339)
+			// Set ValidTill to 520 weeks from now
+			validTillDT := time.Now().UTC().AddDate(0, 0, 520*7)
+			validTill := "520W"
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
@@ -679,8 +665,8 @@ var _ = Describe("TLS Controller", func() {
 			httpSecretName := clusterName + "-http-cert"
 
 			// Set ValidTill to 6 months from now
-			validTillDT := time.Now().AddDate(10, 6, 0)
-			validTill := validTillDT.Format(time.RFC3339)
+			validTillDT := time.Now().AddDate(0, 13, 0)
+			validTill := "13M"
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
@@ -771,15 +757,14 @@ var _ = Describe("RFC3339 DateTime Generator", func() {
 				result, err := GenerateRFC3339DateTime(weeks)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(MatchRegexp(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`))
+				Expect(result).NotTo(Equal(time.Time{}))
 
 				// Validate the duration calculation
 				n, _ := strconv.Atoi(strings.TrimSuffix(weeks, "W"))
 				expectedTime := time.Now().UTC().AddDate(0, 0, n*7)
-				gotTime, _ := time.Parse(time.RFC3339, result)
 
 				// Allow 1 second tolerance
-				diff := expectedTime.Sub(gotTime)
+				diff := expectedTime.Sub(result)
 				if diff < 0 {
 					diff = -diff
 				}
@@ -792,15 +777,14 @@ var _ = Describe("RFC3339 DateTime Generator", func() {
 				result, err := GenerateRFC3339DateTime(months)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(MatchRegexp(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`))
+				Expect(result).NotTo(Equal(time.Time{}))
 
 				// Validate the duration calculation
 				n, _ := strconv.Atoi(strings.TrimSuffix(months, "M"))
 				expectedTime := time.Now().UTC().AddDate(0, n, 0)
-				gotTime, _ := time.Parse(time.RFC3339, result)
 
 				// Allow 1 second tolerance
-				diff := expectedTime.Sub(gotTime)
+				diff := expectedTime.Sub(result)
 				if diff < 0 {
 					diff = -diff
 				}
@@ -813,15 +797,14 @@ var _ = Describe("RFC3339 DateTime Generator", func() {
 				result, err := GenerateRFC3339DateTime(years)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(MatchRegexp(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`))
+				Expect(result).NotTo(Equal(time.Time{}))
 
 				// Validate the duration calculation
 				n, _ := strconv.Atoi(strings.TrimSuffix(years, "Y"))
 				expectedTime := time.Now().UTC().AddDate(n, 0, 0)
-				gotTime, _ := time.Parse(time.RFC3339, result)
 
 				// Allow 1 second tolerance
-				diff := expectedTime.Sub(gotTime)
+				diff := expectedTime.Sub(result)
 				if diff < 0 {
 					diff = -diff
 				}
@@ -855,15 +838,14 @@ var _ = Describe("RFC3339 DateTime Generator", func() {
 				result, err := GenerateRFC3339DateTime(weeks)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(MatchRegexp(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`))
+				Expect(result).NotTo(Equal(time.Time{}))
 
 				// Validate the duration calculation
 				n, _ := strconv.Atoi(strings.TrimSuffix(weeks, "W"))
 				expectedTime := time.Now().UTC().AddDate(0, 0, n*7)
-				gotTime, _ := time.Parse(time.RFC3339, result)
 
 				// Allow 1 second tolerance
-				diff := expectedTime.Sub(gotTime)
+				diff := expectedTime.Sub(result)
 				if diff < 0 {
 					diff = -diff
 				}
@@ -876,15 +858,14 @@ var _ = Describe("RFC3339 DateTime Generator", func() {
 				result, err := GenerateRFC3339DateTime(months)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(MatchRegexp(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`))
+				Expect(result).NotTo(Equal(time.Time{}))
 
 				// Validate the duration calculation
 				n, _ := strconv.Atoi(strings.TrimSuffix(months, "M"))
 				expectedTime := time.Now().UTC().AddDate(0, n, 0)
-				gotTime, _ := time.Parse(time.RFC3339, result)
 
 				// Allow 1 second tolerance
-				diff := expectedTime.Sub(gotTime)
+				diff := expectedTime.Sub(result)
 				if diff < 0 {
 					diff = -diff
 				}
@@ -897,15 +878,14 @@ var _ = Describe("RFC3339 DateTime Generator", func() {
 				result, err := GenerateRFC3339DateTime(years)
 
 				Expect(err).NotTo(HaveOccurred())
-				Expect(result).To(MatchRegexp(`^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`))
+				Expect(result).NotTo(Equal(time.Time{}))
 
 				// Validate the duration calculation
 				n, _ := strconv.Atoi(strings.TrimSuffix(years, "Y"))
 				expectedTime := time.Now().UTC().AddDate(n, 0, 0)
-				gotTime, _ := time.Parse(time.RFC3339, result)
 
 				// Allow 1 second tolerance
-				diff := expectedTime.Sub(gotTime)
+				diff := expectedTime.Sub(result)
 				if diff < 0 {
 					diff = -diff
 				}
