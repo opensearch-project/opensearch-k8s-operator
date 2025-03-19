@@ -142,8 +142,8 @@ var _ = Describe("TLS Reconciler", func() {
 		validTillClusterName := "cluster-test-validtill"
 		validTillNamespace := validTillClusterName
 		// Set expiry to 6 months from now in UTC
-		validTillDate := time.Now().In(time.UTC).AddDate(0, 6, 0).Format(time.RFC3339)
-
+		validTillDate := time.Now().In(time.UTC).AddDate(0, 6, 0)
+		validTill := "6M"
 		specWithValidTill := opsterv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: validTillClusterName, Namespace: validTillNamespace},
 			Spec: opsterv1.ClusterSpec{
@@ -152,7 +152,7 @@ var _ = Describe("TLS Reconciler", func() {
 					Version:     "2.0.0",
 				},
 				Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					ValidTill: validTillDate,
+					ValidTill: validTill,
 					Transport: &opsterv1.TlsConfigTransport{
 						Generate: true,
 						PerNode:  true,
@@ -238,16 +238,12 @@ var _ = Describe("TLS Reconciler", func() {
 			updatedCluster := opsterv1.OpenSearchCluster{}
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: validTillClusterName, Namespace: validTillNamespace}, &updatedCluster)).To(Succeed())
 
-			// Parse the expected expiry date from the ValidTill field
-			expectedExpiry, err := time.Parse(time.RFC3339, validTillDate)
-			Expect(err).NotTo(HaveOccurred())
-
 			// Compare the dates - allow for a small difference due to processing time
 			// The certificate expiry fields should be within a minute of the expected expiry
-			transportExpiryDiff := updatedCluster.Status.TransportCertificateExpiry.Time.Sub(expectedExpiry)
+			transportExpiryDiff := updatedCluster.Status.TransportCertificateExpiry.Time.Sub(validTillDate)
 			Expect(transportExpiryDiff.Abs()).To(BeNumerically("<=", time.Minute))
 
-			httpExpiryDiff := updatedCluster.Status.HttpCertificateExpiry.Time.Sub(expectedExpiry)
+			httpExpiryDiff := updatedCluster.Status.HttpCertificateExpiry.Time.Sub(validTillDate)
 			Expect(httpExpiryDiff.Abs()).To(BeNumerically("<=", time.Minute))
 		})
 	})
