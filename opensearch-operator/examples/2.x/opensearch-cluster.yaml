@@ -15,6 +15,9 @@ spec:
          generate: true
          perNode: true
   general:
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Retain
+      whenScaled: Delete
     httpPort: 9200
     serviceName: my-first-cluster
     version: 2.14.0
