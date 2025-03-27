@@ -10,23 +10,34 @@ deps = ['controllers', 'main.go', 'api', 'pkg']
 # Watches the dependencies and compiles the manager binary when they change
 local_resource('Watch & Compile', 
     'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/manager main.go', 
-    deps=deps)
+    deps=deps,
+    auto_init=True,
+    allow_parallel=True
+)
 
-# Specifies a simple Dockerfile to build the controller image
-# Distroless: Minimal image from Google
-# USER: Sets the user to a non-root userb (Security)
-# Only copies the manager binary
-DOCKERFILE = '''FROM gcr.io/distroless/base:debug-nonroot
+# Specifies a development Dockerfile with writable permissions
+DOCKERFILE = '''FROM gcr.io/distroless/base:debug
 WORKDIR /
-COPY ./bin/manager /
+COPY ./bin/manager /tmp/manager
+RUN ["chown", "65532:65532", "/tmp/manager"]
+RUN ["chmod", "755", "/tmp/manager"]
 USER 65532:65532
-
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/tmp/manager"]
 '''
-# Builds the controller image using the Dockerfile
-# Live update: Syncs the binary to the container when it changes (Without rebuilding the image)
-docker_build("controller", '.', 
+
+# Build the controller image with process restart support
+docker_build("controller", '.',
     dockerfile_contents=DOCKERFILE,
     only=['./bin/manager'],
-    live_update=[sync('./bin/manager', '/manager')]
+    entrypoint=['/tmp/manager'],
+    live_update=[
+        sync('./bin/manager', '/tmp/manager'),
+    ]
+)
+
+# Configure the operator to restart when image changes
+k8s_resource(
+    'opensearch-operator-controller-manager',
+    resource_deps=['Watch & Compile'],
+    trigger_mode=TRIGGER_MODE_AUTO
 )
