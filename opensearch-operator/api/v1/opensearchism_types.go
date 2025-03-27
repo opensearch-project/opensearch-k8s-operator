@@ -44,6 +44,7 @@ type OpenSearchISMPolicySpec struct {
 	DefaultState string `json:"defaultState"`
 	// A human-readable description of the policy.
 	Description       string             `json:"description"`
+	// If true, apply the policy to existing indices that match the index patterns in the ISM template.
 	ApplyToExistingIndices *bool `json:"applyToExistingIndices,omitempty"`
 	ErrorNotification *ErrorNotification `json:"errorNotification,omitempty"`
 	// Specify an ISM template pattern that matches the index to apply the policy.
