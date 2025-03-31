@@ -318,6 +318,21 @@ func (client *OsClusterClient) GetISMConfig(ctx context.Context, name string) (*
 	return doHTTPGet(ctx, client.client, path)
 }
 
+// GetIndices retrieves indices matching the given pattern from OpenSearch
+func (client *OsClusterClient) GetIndices(ctx context.Context, pattern string) (*opensearchapi.Response, error) {
+	req := opensearchapi.CatIndicesRequest{
+		Format: "json",
+		Index:  []string{pattern},
+	}
+	return req.Do(ctx, client.client)
+}
+
+// AddPolicyToIndex performs an HTTP POST request to OS to add an ISM policy to an index
+func (client *OsClusterClient) AddPolicyToIndex(ctx context.Context, indexName string, body io.Reader) (*opensearchapi.Response, error) {
+    path := generateAPIPathAddISMPolicyToIndex(indexName)
+    return doHTTPPost(ctx, client.client, path, body)
+}
+
 // PutISMConfig performs an HTTP PUT request to OS to create the ISM policy resource specified by name
 func (client *OsClusterClient) PutISMConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
 	path := generateAPIPathISM(ismResource, name)
@@ -425,5 +440,21 @@ func generateAPIPathSnapshotRepository(name string) strings.Builder {
 	path.WriteString("_snapshot")
 	path.WriteString("/")
 	path.WriteString(name)
+	return path
+}
+
+// generateAPIPathAddISMPolicyToIndex generates a URI PATH for adding ISM policy to an index
+// URI PATH = '_plugins/_ism/add/<indexName>'
+func generateAPIPathAddISMPolicyToIndex(indexName string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len("_ism") + 1 + len("add") + 1 + len(indexName))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString("_ism")
+	path.WriteString("/")
+	path.WriteString("add")
+	path.WriteString("/")
+	path.WriteString(indexName)
 	return path
 }

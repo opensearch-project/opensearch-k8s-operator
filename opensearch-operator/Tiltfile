@@ -1,23 +1,43 @@
+# Set the team for the Tilt cloud UI
 set_team('52cc75cc-c4ed-462f-8ea7-a543d398a381')
 
+# Loads the manifests from the config/default directory using kustomize
 k8s_yaml(kustomize('config/default'))
 
+# Specifies the dependencies for the watch & compile command
 deps = ['controllers', 'main.go', 'api', 'pkg']
 
+# Watches the dependencies and compiles the manager binary when they change
 local_resource('Watch & Compile', 
     'CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/manager main.go', 
-    deps=deps)
+    deps=deps,
+    auto_init=True,
+    allow_parallel=True
+)
 
-DOCKERFILE = '''FROM gcr.io/distroless/base:debug-nonroot
+# Specifies a development Dockerfile with writable permissions
+DOCKERFILE = '''FROM gcr.io/distroless/base:debug
 WORKDIR /
-COPY ./bin/manager /
+COPY ./bin/manager /tmp/manager
+RUN ["chown", "65532:65532", "/tmp/manager"]
+RUN ["chmod", "755", "/tmp/manager"]
 USER 65532:65532
-
-ENTRYPOINT ["/manager"]
+ENTRYPOINT ["/tmp/manager"]
 '''
 
-docker_build("controller", '.', 
+# Build the controller image with process restart support
+docker_build("controller", '.',
     dockerfile_contents=DOCKERFILE,
     only=['./bin/manager'],
-    live_update=[sync('./bin/manager', '/manager')]
+    entrypoint=['/tmp/manager'],
+    live_update=[
+        sync('./bin/manager', '/tmp/manager'),
+    ]
+)
+
+# Configure the operator to restart when image changes
+k8s_resource(
+    'opensearch-operator-controller-manager',
+    resource_deps=['Watch & Compile'],
+    trigger_mode=TRIGGER_MODE_AUTO
 )
