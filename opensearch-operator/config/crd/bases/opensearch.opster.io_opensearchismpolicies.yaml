@@ -43,6 +43,8 @@ spec:
               OS.
             properties:
               applyToExistingIndices:
+                description: If true, apply the policy to existing indices that match
+                  the index patterns in the ISM template.
                 type: boolean
               defaultState:
                 description: The default starting state for each index that uses this
