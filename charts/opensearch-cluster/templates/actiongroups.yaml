@@ -1,0 +1,25 @@
+{{- $labels := include "opensearch-cluster.labels" . }}
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- range .Values.actionGroups }}
+---
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchActionGroup
+metadata:
+  name: {{ .name }}
+  {{- with $.Values.cluster.annotations }}
+  annotations: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  labels: {{ $labels | nindent 4 }}
+spec:
+  opensearchCluster:
+    name: {{ $clusterName }}
+  {{- with .description }}
+  description: {{ . | toString }}
+  {{- end }}
+  {{- with .allowedActions }}
+  allowedActions: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .type }}
+  type: {{ . | toString }}
+  {{- end }}
+{{- end }}

@@ -36,7 +36,7 @@ spec:
          memory: "512Mi"
          cpu: "200m"
   nodePools:
-    - component: cluster_managers
+    - component: cluster-managers
       replicas: 3
       jvm: -Xmx2G -Xms2G
       resources:

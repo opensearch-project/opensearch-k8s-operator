@@ -66,7 +66,8 @@ pipeline {
                         currentBuild.description = """User/Timer: <a href="${ref_url}">${ref_url}</a>"""
                     }
 
-                    if (ref_final == null || ref_final == '') {
+
+                    if (ref_final == null || ref_final == '' || ref_final.startsWith('opensearch-operator') || ref_final.startsWith('opensearch-cluster')) {
                         currentBuild.result = 'ABORTED'
                         error("Missing git tag reference.")
                     }

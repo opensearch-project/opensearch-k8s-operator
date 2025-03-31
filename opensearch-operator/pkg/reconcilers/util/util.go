@@ -128,6 +128,9 @@ func CreateAdditionalVolumes(
 			})
 		}
 		if volumeConfig.CSI != nil {
+			if volumeConfig.CSI.ReadOnly != nil {
+				readOnly = *volumeConfig.CSI.ReadOnly
+			}
 			retVolumes = append(retVolumes, corev1.Volume{
 				Name: volumeConfig.Name,
 				VolumeSource: corev1.VolumeSource{

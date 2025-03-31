@@ -1,43 +1,243 @@
-opensearchCluster:
-  enabled: true
-#  bootstrap:
-#    Configure settings for the bootstrap pod
+# Default values for opensearch-cluster.
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create Service Account
+  create: false
+
+  # -- Service Account name. Set `general.serviceAccount` to use this Service Account for the Opensearch cluster
+  name: ""
+
+  # -- Service Account annotations
+  annotations: {}
+
+# OpenSearchCluster configuration
+cluster:
+  # -- OpenSearchCluster name, by default release name is used
+  name: ""
+
+  # -- OpenSearchCluster annotations
+  annotations: {}
+
+  # -- OpenSearchCluster labels
+  labels: {}
+
+  # OpenSearchCluster general configuration
   general:
-    httpPort: "9200"
-    version: 2.3.0
-    serviceName: "my-cluster"
+    # -- Extra items to add to the opensearch.yml
+    additionalConfig: {}
+
+    # -- Additional volumes to mount to all pods in the cluster. Supported volume types configMap, emptyDir, secret (with default Kubernetes configuration schema)
+    additionalVolumes: []
+      # - name: "volume-name"
+      #   path: "/tmp/volume"
+      ## Whether to restart the pods on content change
+      #   restartPods: false
+
+    # -- Controls whether to drain data notes on rolling restart operations
     drainDataNodes: true
-    setVMMaxMapCount: true
-#    securityContext:
-#       Specify container security context for OpenSearch pods
-#    podSecurityContext:
-#       Specify pod security context for OpenSearch pods
-  dashboards:
-    enable: true
-    replicas: 1
-    version: 2.3.0
-#        securityContext:
-#           Specify container security context for OSD pods
-#        podSecurityContext:
-#           Specify pod security context for OSD pods
-    resources:
-      requests:
-        memory: "1Gi"
-        cpu: "500m"
-      limits:
-        memory: "1Gi"
-        cpu: "500m"
-  initHelper:
-    imagePullSecrets: []
-    # - registryKeySecretName
+
+    # -- Opensearch service http port
+    httpPort: 9200
+
+    # -- Opensearch image
+    image: docker.io/opensearchproject/opensearch
+
+    # -- Default image pull policy
     imagePullPolicy: IfNotPresent
+
+    # -- Default image pull secret
+    # imagePullSecrets: []
+
+    # -- Populate opensearch keystore before startup
+    keystore: []
+#      - secret:
+#          name: secret-name
+#      - secret:
+#          name: many-secret-values
+#        keyMappings:
+#          # Only read "sensitive-value" from the secret, keep its name.
+#          sensitive-value: sensitive-value
+
+    # Monitoring configuration. Check [documentation](https://github.com/Opster/opensearch-k8s-operator/blob/main/docs/userguide/main.md#adding-opensearch-monitoring-to-your-cluster) how to configure it.
+    monitoring:
+      # -- Enable cluster monitoring
+      enable: false
+
+      # -- Secret with 'username' and 'password' keys for monitoring user. You could also use OpenSearchUser CRD instead of setting it.
+      monitoringUserSecret: ""
+
+      # -- Custom URL for the monitoring plugin
+      pluginUrl: ""
+
+      # -- How often to scrape metrics
+      scrapeInterval: 30s
+
+      # -- Override the tlsConfig of the generated ServiceMonitor
+      tlsConfig: {}
+#        insecureSkipVerify: true
+
+    # -- List of Opensearch plugins to install
+    pluginsList: []
+
+    # -- Opensearch pod security context configuration
+    podSecurityContext: {}
+
+    # -- Opensearch securityContext
+    securityContext: {}
+
+    # -- Opensearch serviceAccount name. If Service Account doesn't exist it could be created by setting `serviceAccount.create` and `serviceAccount.name`
+    serviceAccount: ""
+
+    # -- Opensearch service name
+    serviceName: ""
+
+    # -- Enable setVMMaxMapCount. OpenSearch requires the Linux kernel vm.max_map_count option to be set to at least 262144
+    setVMMaxMapCount: true
+
+    # -- Opensearch snapshot repositories configuration
+    snapshotRepositories: []
+#      - name: "snapshot-repo"
+#        type: s3
+#        settings:
+#          bucket: opensearch-s3-snapshot
+#          region: us-east-1
+#          base_path: os-snapshot
+
+    vendor: Opensearch
+
+    # -- Opensearch version
+    version: 2.3.0
+
+  # OpenSearchCluster boostrap pod configuration
+  bootstrap:
+    # -- bootstrap additional configuration, key-value pairs that will be added to the opensearch.yml configuration
+    additionalConfig: {}
+
+    # -- bootstrap pod affinity rules
+    affinity: {}
+
+    # -- bootstrap pod jvm options. If jvm is not provided then the java heap size will be set to half of resources.requests.memory which is the recommend value for data nodes.
+    # If jvm is not provided and resources.requests.memory does not exist then value will be -Xmx512M -Xms512M
+    jvm: ""
+
+    # -- bootstrap pod node selectors
+    nodeSelector: {}
+
+    # -- bootstrap pod cpu and memory resources
     resources: {}
-    # requests:
-    #   memory: "1Gi"
-    #   cpu: "500m"
-    # limits:
-    #   memory: "1Gi"
-    #   cpu: "500m"
+
+    # -- bootstrap pod tolerations
+    tolerations: []
+
+  # OpenSearchCluster additional services
+  confMgmt:
+    # -- Enable nodes to be safely removed from the cluster
+    smartScaler: false
+
+  # OpenSearchCluster dashboards configuration
+  dashboards:
+    # -- Additional properties for opensearch_dashboards.yaml
+    additionalConfig: {}
+
+    # -- dashboards pod affinity rules
+    affinity: {}
+
+    # -- dashboards annotations
+    annotations: {}
+
+    # -- dashboards Base Path for Opensearch Clusters running behind a reverse proxy
+    basePath: ""
+
+    # -- Enable dashboards deployment
+    enable: true
+
+    # -- dashboards pod env variables
+    env: []
+
+    # -- dashboards image
+    image: docker.io/opensearchproject/opensearch-dashboards
+
+    # -- dashboards image pull policy
+    imagePullPolicy: "IfNotPresent"
+
+    # -- dashboards image pull secrets
+    imagePullSecrets: []
+
+    # -- dashboards labels
+    labels: {}
+
+    # -- dashboards pod node selectors
+    nodeSelector: {}
+
+    # -- Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied
+    # if a custom securityconfig is provided
+    opensearchCredentialsSecret: {}
+      # name: "secret-name"
+
+    # -- List of dashboards plugins to install
+    pluginsList: []
+
+    # -- dasboards pod security context configuration
+    podSecurityContext: {}
+
+    # -- number of dashboards replicas
+    replicas: 1
+
+    # -- dashboards pod cpu and memory resources
+    resources: {}
+
+    # -- dashboards security context configuration
+    securityContext: {}
+
+    service:
+      # -- source ranges for a loadbalancer
+      loadBalancerSourceRanges: []
+      # -- dashboards service type
+      type: ClusterIP
+
+    tls:
+      # -- Secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing
+      # CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
+      caSecret: {}
+        # name: ""
+
+      # -- Enable HTTPS for dashboards
+      enable: false
+
+      # -- generate certificate, if false secret must be provided
+      generate: true
+
+      # -- Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different
+      # secret provide it via the caSecret field
+      secret:
+        # name: "
+
+    # -- dashboards pod tolerations
+    tolerations: []
+
+    # -- dashboards version
+    version: 2.3.0
+
+  # initHelper configuration
+  initHelper:
+    # -- initHelper image pull policy
+    imagePullPolicy: "IfNotPresent"
+
+    # -- initHelper image pull secret
+    imagePullSecrets: []
+
+    # -- initHelper pod cpu and memory resources
+    resources: {}
+
+    # -- initHelper version
+    version: "1.36"
+
+  # -- Opensearch nodes configuration
   nodePools:
     - component: masters
       diskSize: "30Gi"
@@ -52,9 +252,228 @@ opensearchCluster:
         limits:
           memory: "2Gi"
           cpu: "500m"
+
+  # Opensearch security configuration
   security:
+    config:
+      # -- Secret that contains fields username and password to be used by the operator to access the opensearch cluster
+      # for node draining. Must be set if custom securityconfig is provided.
+      adminCredentialsSecret: {}
+#        name: "secret-name"
+
+      # -- TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster.
+      # Must be set if transport certificates are provided by user and not generated
+      adminSecret: {}
+#       name: "secret-name"
+
+      # -- Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, etc)
+      securityConfigSecret: {}
+#        name: "secret-name"
+
+    # Configure tls usage for transport and http interface
     tls:
-      transport:
-        generate: true
       http:
+        # -- Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing
+        # CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
+        caSecret: {}
+#            name: "ca-secret-name"
+
+        # -- If set to true the operator will generate a CA and certificates for the cluster to use,
+        # if false - secrets with existing certificates must be supplied
         generate: true
+
+        # -- Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a
+        # different secret provide it via the caSecret field
+        secret: {}
+#            name: "secret-name"
+
+      transport:
+        # -- DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh,
+        # only used when existing certificates are provided
+        adminDn: []
+
+        # -- Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing
+        # CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
+        caSecret: {}
+#            name: "ca-secret-name"
+
+        # -- If set to true the operator will generate a CA and certificates for the cluster to use,
+        # if false secrets with existing certificates must be supplied
+        generate: true
+
+        # --  Allowed Certificate DNs for nodes, only used when existing certificates are provided
+        nodesDn: []
+
+        # -- Separate certificate per node
+        perNode: true
+
+        # -- Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a
+        # different secret provide it via the caSecret field
+        secret: {}
+#            name: "secret-name"
+
+
+  # Opensearch Ingress configuration
+  ingress:
+    opensearch:
+      # -- Enable ingress for Opensearch service
+      enabled: false
+
+      # -- Opensearch ingress annotations
+      annotations: {}
+
+      # -- Opensearch Ingress class name
+      className: ""
+
+      # -- Opensearch Ingress hostnames
+      hosts: []
+#        - host: example.com
+#          paths:
+#            - path: /
+#              pathType: ImplementationSpecific
+
+      # -- Opensearch tls configuration
+      tls: []
+        #- hosts:
+        #   - example.com
+        #  secretName: tls-secret
+
+    # Dashboards Ingress configuration
+    dashboards:
+      # -- Enable ingress for dashboards service
+      enabled: false
+
+      # -- dashboards ingress annotations
+      annotations: {}
+
+      # -- Ingress class name
+      className: ""
+
+      # -- Ingress hostnames
+      hosts: []
+#        - host: example.com
+#          paths:
+#            - path: /
+#              pathType: ImplementationSpecific
+
+      # -- Ingress tls configuration
+      tls: []
+      #  - hosts:
+      #      - example.com
+      #    secretName: tls-secret
+
+# -- List of OpensearchRole. Check values.yaml file for examples.
+roles: []
+#  - name: "example-role"
+#    clusterPermissions:
+#      - cluster_composite_ops
+#      - cluster_monitor
+#    allowedActions:
+#      - index
+#      - read
+#  - name: "example-role-for-index-pattern"
+#    clusterPermissions:
+#      - cluster_composite_ops
+#      - cluster_monitor
+#    indexPermissions:
+#      - indexPatterns:
+#          - logs*
+#        allowedActions:
+#          - index
+#          - read
+#  - name: "example-role-with-tenant-scope"
+#    clusterPermissions:
+#      - cluster_composite_ops
+#      - cluster_monitor
+#    allowedActions:
+#      - index
+#      - read
+#    tenantPermissions:
+#      allowedActions:
+#        - "*"
+#      tenantPatterns:
+#        - "*"
+
+# -- List of OpensearchUser. Check values.yaml file for examples.
+users: []
+#  - name: "example-user"
+#    secretName: "example-secret"
+#    secretKey: "password-key"
+#    backendRoles: []
+#    opendistroSecurityRoles:
+#      - example-role
+
+# -- Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role
+# Check values.yaml file for examples.
+usersRoleBinding: []
+#  - name: admin_access
+#    users:
+#      - example-user
+#      - example-user2
+#    roles:
+#      - example-role
+#    backendRoles:
+#      - example-backend-role
+
+# -- List of additional tenants. Check values.yaml file for examples.
+tenants: []
+#  - name: "example-tenant"
+#    description: "example-tenant"
+
+# -- List of OpensearchActionGroup. Check values.yaml file for examples.
+actionGroups: []
+#  - name: "example-action-group"
+#    description: "Example of action group"
+#    allowedActions:
+#      - indices:admin/aliases/get
+#      - indices:admin/aliases/exists
+#    type: index
+
+# -- List of OpensearchComponentTemplate. Check values.yaml file for examples.
+componentTemplates: []
+#  - name: example-component-template
+#    templateSpec: # required
+#      aliases: # optional
+#        my_alias: {}
+#      settings: # optional
+#        number_of_shards: 2
+#        number_of_replicas: 1
+#      mappings: # optional
+#        properties:
+#          timestamp:
+#            type: date
+#            format: yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis
+#          value:
+#            type: double
+#    version: 1 # optional
+#    allowAutoCreate: false # optional
+#    _meta: # optional
+#      description: example description
+
+# -- List of OpensearchIndexTemplate. Check values.yaml file for examples.
+indexTemplates: []
+#  - name: example-index-template
+#    indexPatterns:
+#      - "logs-2020-01-*"
+#    composedOf: # optional
+#      - example-component-template
+#    priority: 100 # optional
+#    templateSpec: {} # optional
+#    version: 1 # optional
+#    _meta: {} # optional
+
+# -- List of OpenSearchISMPolicy. Check values.yaml file for examples.
+ismPolicies: []
+#  - name: example-policy
+#    defaultState: hot
+#    description: Example policy
+#    states:
+#      - name: hot
+#        actions:
+#          - replicaCount:
+#              numberOfReplicas: 1
+#        transitions: []
+#    ismTemplate: # optional
+#      priority: 0
+#      indexPatterns:
+#        - "example-index-pattern*"

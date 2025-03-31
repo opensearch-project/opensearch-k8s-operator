@@ -16,6 +16,17 @@ helm uninstall [RELEASE_NAME]
 
 ## Upgrade Chart
 
+### Upgrading to version 3
+
+Version 3.0.0 of opensearch-cluster helm chart is a fully refactored chart. Before upgrading to v3 check that [default chart values](../../charts/opensearch-cluster/values.yaml)
+matches with your configuration.
+
+In v3 `opensearchCluster` variable was replaced by `cluster`. The configuration structure of each custom resource (OpenSearchCluster, OpensearchIndexTemplate, etc) follows the corresponding CRD documentation.
+
+**Make sure to test the upgrade process on none-production environment first.**
+
+If the cluster was installed by using the default `values.yaml`, then the upgrade could be done by running:
+
 ```bash
 helm repo update
 helm upgrade [RELEASE_NAME] opensearch-operator/opensearch-cluster
@@ -26,12 +37,4 @@ helm upgrade [RELEASE_NAME] opensearch-operator/opensearch-cluster
 By default, the installation will deploy a node pool consisting of three master nodes with the dashboard enabled. For the entire configuration, check [helm chart values](../../charts/opensearch-cluster/values.yaml).
 
 To further customize your OpenSearchCluster installation, you can utilize configuration overrides and modify your `values.yaml`, this allows you to tailor various aspects of the installation to meet your specific requirements.
-For instance, if you need to change the httpPort to 9300, this can be achieved by setting `OpenSearchClusterSpec.general.httpPort` to `9300` in the [helm chart values](../../charts/opensearch-cluster/values.yaml).
-
-```yaml
-OpenSearchClusterSpec:
-  general:
-    httpPort: "9300"
-    version: 2.3.0
-    serviceName: "my-cluster"
-```
+Version 3 of the helm chart is designed to have configuration options with the same format and naming as it is defined in the operator doc.

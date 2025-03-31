@@ -1,0 +1,26 @@
+{{- $labels := include "opensearch-cluster.labels" . }}
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- range .Values.componentTemplates }}
+---
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchComponentTemplate
+metadata:
+  name: {{ .name }}
+  {{- with $.Values.cluster.annotations }}
+  annotations: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  labels: {{ $labels | nindent 4 }}
+spec:
+  opensearchCluster:
+    name: {{ $clusterName }}
+  allowAutoCreate: {{ .allowAutoCreate | default false }}
+  {{- with .templateSpec }}
+  template: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .version }}
+  version: {{ . }}
+  {{- end }}
+  {{- with ._meta }}
+  _meta: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,70 @@
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+---
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: {{ $clusterName }}
+  {{- with .Values.cluster.annotations }}
+  annotations: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  labels: {{ include "opensearch-cluster.labels" . | nindent 4 }}
+spec:
+  {{- with .Values.cluster.bootstrap }}
+  bootstrap: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .Values.cluster.confMgmt }}
+  confMgmt: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .Values.cluster.dashboards }}
+  dashboards:
+    {{- . | toYaml | nindent 4 }}
+    image: {{ .image }}:{{ .version }}
+  {{- end }}
+  {{- with .Values.cluster.general }}
+  general:
+    {{- . | toYaml | nindent 4 }}
+    image: {{ .image }}:{{ .version }}
+    serviceName: {{ .serviceName | default $clusterName }}
+  {{- end }}
+  {{- with .Values.cluster.initHelper }}
+  initHelper: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .Values.cluster.nodePools }}
+  nodePools: {{ . | toYaml | nindent 4 }}
+  {{- end }}
+  {{- with .Values.cluster.security }}
+  security:
+    tls:
+      transport:
+        {{- if .tls.transport.generate }}
+        generate: {{ .tls.transport.generate }}
+        {{- end }}
+        {{- if .tls.transport.perNode }}
+        perNode: {{ .tls.transport.perNode }}
+        {{- end }}
+        {{- with .tls.transport.caSecret }}
+        caSecret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- with .tls.transport.adminDn }}
+        adminDn: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- with .tls.transport.nodesDn }}
+        nodesDn: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- with .tls.transport.secret }}
+        secret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+      http:
+        {{- if .tls.http.generate }}
+        generate: {{ .tls.http.generate }}
+        {{- end }}
+        {{- with .tls.http.secret }}
+        secret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- with .tls.http.caSecret }}
+        caSecret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+    {{- with .config }}
+    config: {{ . | toYaml | nindent 6 }}
+    {{- end }}
+  {{- end }}
