@@ -13,6 +13,7 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/metrics"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	"github.com/go-logr/logr"
@@ -25,6 +26,10 @@ import (
 	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+)
+
+const (
+	CaCertKey = "ca.crt"
 )
 
 func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetSpec, text string) (int32, bool, error) {
@@ -83,6 +88,13 @@ func ReadOrGenerateCaCert(pki tls.PKI, k8sClient k8s.K8sClient, instance *opster
 	} else {
 		ca = pki.CAFromSecret(caSecret.Data)
 	}
+
+	validator, err := tls.NewCertValidater(ca.CertData())
+	if err != nil {
+		return ca, err
+	}
+	metrics.TLSCertExpiryDays.WithLabelValues(clusterName, namespace, CaCertKey).Set(validator.DaysUntilExpiry())
+
 	return ca, nil
 }
 

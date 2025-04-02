@@ -229,6 +229,11 @@ type Security struct {
 type TlsConfig struct {
 	Transport *TlsConfigTransport `json:"transport,omitempty"`
 	Http      *TlsConfigHttp      `json:"http,omitempty"`
+	// ValidTill specifies the date until which the certificates should be valid.
+	// You can provide time using an integer ending with M, W, or Y representing months, weeks, and years
+	// Example: "12M" (12 months), "52W" (52 weeks), "2Y" (2 years)
+	// Note: You can only use one integer with one unit (M, W, Y) and cannot mix different units
+	ValidTill string `json:"validTill,omitempty"`
 }
 
 type TlsConfigTransport struct {
@@ -341,6 +346,10 @@ type ClusterStatus struct {
 	// AvailableNodes is the number of available instances.
 	AvailableNodes int32            `json:"availableNodes,omitempty"`
 	Health         OpenSearchHealth `json:"health,omitempty"`
+	// TransportCertificateExpiry indicates when the TLS transport certificates in secret will expire
+	TransportCertificateExpiry metav1.Time `json:"transportCertificateExpiry,omitempty"`
+	// HttpCertificateExpiry indicates when the TLS HTTP certificates in secret will expire
+	HttpCertificateExpiry metav1.Time `json:"httpCertificateExpiry,omitempty"`
 }
 
 // +kubebuilder:object:root=true

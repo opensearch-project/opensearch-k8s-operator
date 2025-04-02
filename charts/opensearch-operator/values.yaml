@@ -75,7 +75,7 @@ serviceAccount:
   name: ""
 
 kubeRbacProxy:
-  enable: true
+  enable: false
   securityContext:
     allowPrivilegeEscalation: false
     readOnlyRootFilesystem: true

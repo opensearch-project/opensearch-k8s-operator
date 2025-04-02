@@ -5416,6 +5416,13 @@ spec:
                             type: object
                             x-kubernetes-map-type: atomic
                         type: object
+                      validTill:
+                        description: |-
+                          ValidTill specifies the date until which the certificates should be valid.
+                          You can provide time using an integer ending with M, W, or Y representing months, weeks, and years
+                          Example: "12M" (12 months), "52W" (52 weeks), "2Y" (2 years)
+                          Note: You can only use one integer with one unit (M, W, Y) and cannot mix different units
+                        type: string
                     type: object
                 type: object
             required:
@@ -5447,12 +5454,22 @@ spec:
                 description: OpenSearchHealth is the health of the cluster as returned
                   by the health API.
                 type: string
+              httpCertificateExpiry:
+                description: HttpCertificateExpiry indicates when the TLS HTTP certificates
+                  in secret will expire
+                format: date-time
+                type: string
               initialized:
                 type: boolean
               phase:
                 description: |-
                   INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
                   Important: Run "make" to regenerate code after modifying this file
+                type: string
+              transportCertificateExpiry:
+                description: TransportCertificateExpiry indicates when the TLS transport
+                  certificates in secret will expire
+                format: date-time
                 type: string
               version:
                 type: string

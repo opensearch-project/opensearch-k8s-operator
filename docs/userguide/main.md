@@ -182,6 +182,29 @@ Depending on your requirements, the Operator offers two ways of managing TLS cer
 
 > :warning: **Clusters with operator-generated certificates will stop working after 1 year**: Make sure you have tested certificate renewals in your cluster before putting it in production!
 
+You can specify how long the certificates should be valid using the `validTill` field in the TLS configuration:
+
+```yaml
+spec:
+  security:
+    tls:
+      validTill: "24M" # for 24 months 
+```
+
+You can specify the validity period using a simple format with an integer followed by a unit:
+- `M` for months: e.g., `12M` (12 months)
+- `W` for weeks: e.g., `52W` (52 weeks)
+- `Y` for years: e.g., `2Y` (2 years)
+
+Note that you can only use one integer with one unit and cannot mix different units.
+
+```yaml
+spec:
+  security:
+    tls:
+      validTill: "2Y"  # Certificates valid for 2 years
+```
+
 TLS certificates are used in three places, and each can be configured independently.
 
 #### Node Transport
