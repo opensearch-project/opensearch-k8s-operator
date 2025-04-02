@@ -124,6 +124,8 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// Sidecars defines the sidecar containers to be added to the nodepool pods
+	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence

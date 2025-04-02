@@ -1455,3 +1455,45 @@ spec:
 ```
 
 Note: the `.spec.name` is immutable, meaning that it cannot be changed after the resources have been deployed to a Kubernetes cluster
+
+## Adding sidecar containers
+
+You can add sidecar containers to your OpenSearch node pods. This is useful for running additional services alongside OpenSearch, such as log collectors, metrics exporters, or custom monitoring agents. Here's an example:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "5Gi"
+      sidecars:
+        - name: log-collector
+          image: fluent/fluent-bit:latest
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+        - name: metrics-exporter
+          image: prom/node-exporter:latest
+          ports:
+            - containerPort: 9100
+              name: metrics
+```
+
+Each sidecar container follows the standard Kubernetes container specification, allowing you to configure:
+- Container image and version
+- Resource requests and limits
+- Environment variables
+- Volume mounts
+- Ports
+- Command and arguments
+- Security context
+
+Sidecar containers are deployed alongside the OpenSearch containers in the same pod, sharing the same network namespace and allowing for localhost communication.
