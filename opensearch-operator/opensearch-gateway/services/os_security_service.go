@@ -13,7 +13,8 @@ import (
 )
 
 const (
-	K8sAttributeField = "k8s-uid"
+	K8sAttributeField              = "k8s-uid"
+	K8sAttributeSecretVersionField = "secret-version"
 
 	ROLES         = "roles"
 	INTERNALUSERS = "internalusers"

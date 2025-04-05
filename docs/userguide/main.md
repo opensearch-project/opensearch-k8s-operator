@@ -756,7 +756,7 @@ spec:
       path: /path/to/mount/volume
       projected:
         sources:
-          serviceAccountToken:
+        - serviceAccountToken:
             path: "token"
   dashboards:
     additionalVolumes:

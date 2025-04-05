@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	v1 "k8s.io/api/core/v1"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -141,15 +142,24 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		return
 	}
 
-	userPassword, retErr := r.managePasswordSecret(r.instance.Name, r.instance.Namespace)
+	userSecret, retErr := r.managePasswordSecret(r.instance.Name, r.instance.Namespace)
 
 	if retErr != nil {
 		// Event and logging handled in fetch function
-		reason = "failed to get password from secret"
+		reason = "failed to get user secret"
 		return
 	}
+
+	userPassword, ok := userSecret.Data[r.instance.Spec.PasswordFrom.Key]
+	if !ok {
+		retErr = fmt.Errorf("key %s does not exist in secret", r.instance.Spec.PasswordFrom.Key)
+		r.logger.V(1).Error(retErr, "failed to get password from secret")
+		r.recorder.Event(r.instance, "Warning", passwordError, fmt.Sprintf("key %s does not exist in secret", r.instance.Spec.PasswordFrom.Key))
+		return
+	}
+
 	user := requests.User{
-		Password:                userPassword,
+		Password:                string(userPassword),
 		OpendistroSecurityRoles: r.instance.Spec.OpendistroSecurityRoles,
 		BackendRoles:            r.instance.Spec.BackendRoles,
 		Attributes:              r.instance.Spec.Attributes,
@@ -157,12 +167,10 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 	// Instantiate the map first
 	if user.Attributes == nil {
-		user.Attributes = map[string]string{
-			services.K8sAttributeField: string(r.instance.GetUID()),
-		}
-	} else {
-		user.Attributes[services.K8sAttributeField] = string(r.instance.GetUID())
+		user.Attributes = make(map[string]string)
 	}
+	user.Attributes[services.K8sAttributeField] = string(r.instance.GetUID())
+	user.Attributes[services.K8sAttributeSecretVersionField] = userSecret.ResourceVersion
 
 	update, retErr := services.ShouldUpdateUser(r.ctx, r.osClient, r.instance.Name, user)
 	if retErr != nil {
@@ -231,12 +239,12 @@ func (r *UserReconciler) Delete() error {
 	return services.DeleteUser(r.ctx, r.osClient, r.instance.Name)
 }
 
-func (r *UserReconciler) managePasswordSecret(username string, namespace string) (string, error) {
+func (r *UserReconciler) managePasswordSecret(username string, namespace string) (v1.Secret, error) {
 	secret, err := r.client.GetSecret(r.instance.Spec.PasswordFrom.Name, r.instance.Namespace)
 	if err != nil {
 		r.logger.V(1).Error(err, "failed to fetch password secret")
 		r.recorder.Event(r.instance, "Warning", passwordError, "error fetching password secret")
-		return "", err
+		return v1.Secret{}, err
 	}
 
 	// Patch OpenSearch Annotations onto secret
@@ -250,19 +258,11 @@ func (r *UserReconciler) managePasswordSecret(username string, namespace string)
 	}
 	secret.Annotations[helpers.OsUserNamespaceAnnotation] = namespace
 
-	if _, err := r.client.CreateSecret(&secret); err != nil {
+	if _, err = r.client.CreateSecret(&secret); err != nil {
 		r.logger.V(1).Error(err, "failed to patch opensearch username onto password secret")
 		r.recorder.Event(r.instance, "Warning", passwordError, "error patching opensearch username onto password secret")
-		return "", err
+		return v1.Secret{}, err
 	}
 
-	userPassword, ok := secret.Data[r.instance.Spec.PasswordFrom.Key]
-	if !ok {
-		err = fmt.Errorf("key %s does not exist in secret", r.instance.Spec.PasswordFrom.Key)
-		r.logger.V(1).Error(err, "failed to get password from secret")
-		r.recorder.Event(r.instance, "Warning", passwordError, fmt.Sprintf("key %s does not exist in secret", r.instance.Spec.PasswordFrom.Key))
-		return "", err
-	}
-
-	return string(userPassword), nil
+	return secret, nil
 }
