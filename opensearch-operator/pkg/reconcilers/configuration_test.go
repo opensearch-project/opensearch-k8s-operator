@@ -38,9 +38,119 @@ var _ = Describe("Configuration Controller", func() {
 		clusterName = "configuration-test"
 	)
 
+	Context("When reconciling writable volumes", func() {
+		It("should create emptyDir volumes for conf and logs", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.On("Context").Return(context.Background())
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{},
+					NodePools: []opsterv1.NodePool{
+						{
+							Component: "test",
+							Roles:     []string{"master", "data"},
+						},
+					},
+				},
+			}
+
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+
+			underTest := newConfigurationReconciler(
+				mockClient,
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify volumes were created
+			Expect(len(reconcilerContext.Volumes)).To(Equal(2))
+			Expect(len(reconcilerContext.VolumeMounts)).To(Equal(2))
+
+			// Check conf volume
+			confVolume := reconcilerContext.Volumes[0]
+			Expect(confVolume.Name).To(Equal("rw-conf"))
+			Expect(confVolume.EmptyDir).ToNot(BeNil())
+
+			// Check logs volume
+			logsVolume := reconcilerContext.Volumes[1]
+			Expect(logsVolume.Name).To(Equal("rw-logs"))
+			Expect(logsVolume.EmptyDir).ToNot(BeNil())
+
+			// Check volume mounts
+			confMount := reconcilerContext.VolumeMounts[0]
+			Expect(confMount.Name).To(Equal("rw-conf"))
+			Expect(confMount.MountPath).To(Equal("/usr/share/opensearch/conf"))
+
+			logsMount := reconcilerContext.VolumeMounts[1]
+			Expect(logsMount.Name).To(Equal("rw-logs"))
+			Expect(logsMount.MountPath).To(Equal("/usr/share/opensearch/logs"))
+		})
+
+		It("should create plugins volume when pluginsList is not empty", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.On("Context").Return(context.Background())
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						PluginsList: []string{"repository-s3"},
+					},
+					NodePools: []opsterv1.NodePool{
+						{
+							Component: "test",
+							Roles:     []string{"master", "data"},
+						},
+					},
+				},
+			}
+
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+
+			underTest := newConfigurationReconciler(
+				mockClient,
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify volumes were created
+			Expect(len(reconcilerContext.Volumes)).To(Equal(3))
+			Expect(len(reconcilerContext.VolumeMounts)).To(Equal(3))
+
+			// Check plugins volume
+			pluginVolume := reconcilerContext.Volumes[2]
+			Expect(pluginVolume.Name).To(Equal("rw-plugins"))
+			Expect(pluginVolume.EmptyDir).ToNot(BeNil())
+
+			// Check plugins mount
+			pluginMount := reconcilerContext.VolumeMounts[2]
+			Expect(pluginMount.Name).To(Equal("rw-plugins"))
+			Expect(pluginMount.MountPath).To(Equal("/usr/share/opensearch/plugins"))
+		})
+	})
+
 	Context("When Reconciling the configuration controller with no configuration snippets", func() {
 		It("should not create a configmap ", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.On("Context").Return(context.Background())
 
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{

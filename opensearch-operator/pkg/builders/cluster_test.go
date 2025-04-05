@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"testing"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -72,7 +73,154 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 	}
 }
 
+func TestNewBootstrapPodWithWritableVolumes(t *testing.T) {
+	clusterObject := opsterv1.OpenSearchCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-cluster",
+			Namespace: "test-namespace",
+		},
+		Spec: opsterv1.ClusterSpec{
+			General: opsterv1.GeneralConfig{
+				PluginsList: []string{"repository-s3"},
+			},
+		},
+	}
+
+	// Create the volumes that would come from the configuration reconciler
+	volumes := []corev1.Volume{
+		{
+			Name: "rw-conf",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: "rw-logs",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+		{
+			Name: "rw-plugins",
+			VolumeSource: corev1.VolumeSource{
+				EmptyDir: &corev1.EmptyDirVolumeSource{},
+			},
+		},
+	}
+
+	volumeMounts := []corev1.VolumeMount{
+		{
+			Name:      "rw-conf",
+			MountPath: "/usr/share/opensearch/conf",
+		},
+		{
+			Name:      "rw-logs",
+			MountPath: "/usr/share/opensearch/logs",
+		},
+		{
+			Name:      "rw-plugins",
+			MountPath: "/usr/share/opensearch/plugins",
+		},
+	}
+
+	result := NewBootstrapPod(&clusterObject, volumes, volumeMounts)
+
+	// Verify the volumes are present
+	for _, expectedVolume := range volumes {
+		found := false
+		for _, actualVolume := range result.Spec.Volumes {
+			if actualVolume.Name == expectedVolume.Name {
+				found = true
+				if actualVolume.EmptyDir == nil {
+					t.Errorf("Volume %s should be emptyDir", actualVolume.Name)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Volume %s not found in pod spec", expectedVolume.Name)
+		}
+	}
+
+	// Verify the volume mounts are present in the container
+	for _, expectedMount := range volumeMounts {
+		found := false
+		for _, actualMount := range result.Spec.Containers[0].VolumeMounts {
+			if actualMount.Name == expectedMount.Name {
+				found = true
+				if actualMount.MountPath != expectedMount.MountPath {
+					t.Errorf("Volume mount %s has wrong path: expected %s, got %s", actualMount.Name, expectedMount.MountPath, actualMount.MountPath)
+				}
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Volume mount %s not found in container spec", expectedMount.Name)
+		}
+	}
+}
+
 var _ = Describe("Builders", func() {
+	Context("When creating bootstrap pod with writable volumes", func() {
+		It("should include the writable volumes", func() {
+			clusterObject := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "test-namespace",
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						PluginsList: []string{"repository-s3"},
+					},
+				},
+			}
+
+			// Create the volumes that would come from the configuration reconciler
+			volumes := []corev1.Volume{
+				{
+					Name: "rw-conf",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "rw-logs",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "rw-plugins",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+			}
+
+			volumeMounts := []corev1.VolumeMount{
+				{
+					Name:      "rw-conf",
+					MountPath: "/usr/share/opensearch/conf",
+				},
+				{
+					Name:      "rw-logs",
+					MountPath: "/usr/share/opensearch/logs",
+				},
+				{
+					Name:      "rw-plugins",
+					MountPath: "/usr/share/opensearch/plugins",
+				},
+			}
+
+			result := NewBootstrapPod(&clusterObject, volumes, volumeMounts)
+
+			// Verify the volumes are present
+			Expect(result.Spec.Volumes).To(ContainElements(volumes))
+
+			// Verify the volume mounts are present in the container
+			Expect(result.Spec.Containers[0].VolumeMounts).To(ContainElements(volumeMounts))
+		})
+	})
 	When("Constructing a STS for a NodePool", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
