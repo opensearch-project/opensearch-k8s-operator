@@ -72,6 +72,89 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 	}
 }
 
+var _ = Describe("When creating a bootstrap pod", func() {
+	Context("with writable volumes", func() {
+		It("should include all the required volumes and mounts", func() {
+			clusterObject := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "test-namespace",
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						PluginsList: []string{"repository-s3"},
+					},
+				},
+			}
+
+			// Create the volumes that would come from the configuration reconciler
+			volumes := []corev1.Volume{
+				{
+					Name: "rw-conf",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "rw-logs",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+				{
+					Name: "rw-plugins",
+					VolumeSource: corev1.VolumeSource{
+						EmptyDir: &corev1.EmptyDirVolumeSource{},
+					},
+				},
+			}
+
+			volumeMounts := []corev1.VolumeMount{
+				{
+					Name:      "rw-conf",
+					MountPath: "/usr/share/opensearch/conf",
+				},
+				{
+					Name:      "rw-logs",
+					MountPath: "/usr/share/opensearch/logs",
+				},
+				{
+					Name:      "rw-plugins",
+					MountPath: "/usr/share/opensearch/plugins",
+				},
+			}
+
+			result := NewBootstrapPod(&clusterObject, volumes, volumeMounts)
+
+			// Verify the volumes are present
+			for _, expectedVolume := range volumes {
+				found := false
+				for _, actualVolume := range result.Spec.Volumes {
+					if actualVolume.Name == expectedVolume.Name {
+						found = true
+						Expect(actualVolume.EmptyDir).ToNot(BeNil(), "Volume %s should be emptyDir", actualVolume.Name)
+						break
+					}
+				}
+				Expect(found).To(BeTrue(), "Volume %s not found in pod spec", expectedVolume.Name)
+			}
+
+			// Verify the volume mounts are present in the container
+			for _, expectedMount := range volumeMounts {
+				found := false
+				for _, actualMount := range result.Spec.Containers[0].VolumeMounts {
+					if actualMount.Name == expectedMount.Name {
+						found = true
+						Expect(actualMount.MountPath).To(Equal(expectedMount.MountPath), "Volume mount %s has wrong path", actualMount.Name)
+						break
+					}
+				}
+				Expect(found).To(BeTrue(), "Volume mount %s not found in container spec", expectedMount.Name)
+			}
+		})
+	})
+})
+
 var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
