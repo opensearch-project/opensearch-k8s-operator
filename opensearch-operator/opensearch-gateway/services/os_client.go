@@ -320,17 +320,14 @@ func (client *OsClusterClient) GetISMConfig(ctx context.Context, name string) (*
 
 // GetIndices retrieves indices matching the given pattern from OpenSearch
 func (client *OsClusterClient) GetIndices(ctx context.Context, pattern string) (*opensearchapi.Response, error) {
-	req := opensearchapi.CatIndicesRequest{
-		Format: "json",
-		Index:  []string{pattern},
-	}
-	return req.Do(ctx, client.client)
+	path := generateGetIndicesPath(pattern)
+	return doHTTPGet(ctx, client.client, path)
 }
 
 // AddPolicyToIndex performs an HTTP POST request to OS to add an ISM policy to an index
 func (client *OsClusterClient) AddPolicyToIndex(ctx context.Context, indexName string, body io.Reader) (*opensearchapi.Response, error) {
-    path := generateAPIPathAddISMPolicyToIndex(indexName)
-    return doHTTPPost(ctx, client.client, path, body)
+	path := generateAPIPathAddISMPolicyToIndex(indexName)
+	return doHTTPPost(ctx, client.client, path, body)
 }
 
 // PutISMConfig performs an HTTP PUT request to OS to create the ISM policy resource specified by name
@@ -373,6 +370,21 @@ func (client *OsClusterClient) UpdateSnapshotRepository(ctx context.Context, nam
 func (client *OsClusterClient) DeleteSnapshotRepository(ctx context.Context, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPathSnapshotRepository(name)
 	return doHTTPDelete(ctx, client.client, path)
+}
+
+// generateGetIndicesPath generates a URI PATH for a specific resource endpoint and name
+// For example: pattern = example-*
+// URI PATH = '_cat/indices/example-*'
+func generateGetIndicesPath(pattern string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_cat") + 1 + len("indices") + 1 + len(pattern))
+	path.WriteString("/")
+	path.WriteString("_cat")
+	path.WriteString("/")
+	path.WriteString("indices")
+	path.WriteString("/")
+	path.WriteString(pattern)
+	return path
 }
 
 // generateAPIPathISM generates a URI PATH for a specific resource endpoint and name

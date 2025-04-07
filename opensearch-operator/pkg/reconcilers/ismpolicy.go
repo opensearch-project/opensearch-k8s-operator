@@ -603,42 +603,40 @@ func (r *IsmPolicyReconciler) Delete() error {
 }
 
 func (r *IsmPolicyReconciler) applyPolicyToExistingIndices(policyId string) error {
-    
+
 	// Null checks
 	if r.osClient == nil {
-        return fmt.Errorf("opensearch client is not initialized")
-    }
+		return fmt.Errorf("opensearch client is not initialized")
+	}
 
-    if r.instance.Spec.ApplyToExistingIndices == nil || !*r.instance.Spec.ApplyToExistingIndices {
-        return nil
-    }
+	if r.instance.Spec.ApplyToExistingIndices == nil || !*r.instance.Spec.ApplyToExistingIndices {
+		return nil
+	}
 
-    if r.instance.Spec.ISMTemplate == nil || len(r.instance.Spec.ISMTemplate.IndexPatterns) == 0 {
-        return nil
-    }
+	if r.instance.Spec.ISMTemplate == nil || len(r.instance.Spec.ISMTemplate.IndexPatterns) == 0 {
+		return nil
+	}
 
-    for _, pattern := range r.instance.Spec.ISMTemplate.IndexPatterns {
-        // Get existing indices matching the pattern
-        indices, err := services.GetIndices(r.ctx, r.osClient, pattern)
-        
+	for _, pattern := range r.instance.Spec.ISMTemplate.IndexPatterns {
+		// Get existing indices matching the pattern
+		indices, err := services.GetIndices(r.ctx, r.osClient, pattern)
+
 		if err != nil {
-            reason := fmt.Sprintf("failed to get indices matching pattern %s", pattern)
-            r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
-            return fmt.Errorf("%s: %w", reason, err)
-        }
+			reason := fmt.Sprintf("failed to get indices matching pattern %s", pattern)
+			return fmt.Errorf("%s: %w", reason, err)
+		}
 
 		// Apply policy to each index
-        for _, index := range indices {
-            
+		for _, index := range indices {
 			if err := services.AddPolicyToIndex(r.ctx, r.osClient, index, policyId); err != nil {
-                reason := fmt.Sprintf("failed to apply policy to index %s", index)
-                r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
-                return fmt.Errorf("%s: %w", reason, err)
-            }
-			r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, fmt.Sprintf("Applied ISM Policy: %s to existing index: %s", policyId, index))
-			r.logger.Info(fmt.Sprintf("!! Applied ISM Policy '%s' to existing index '%s'", policyId, index))
-        }
-    }
+				reason := fmt.Sprintf("failed to apply policy to index %s", index)
+				return fmt.Errorf("%s: %w", reason, err)
+			}
+			r.logger.Info(fmt.Sprintf("Applied ISM Policy '%s' to existing index '%s'", policyId, index))
+		}
+	}
 
-    return nil
+	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "ISM policy applied to existing indices")
+
+	return nil
 }

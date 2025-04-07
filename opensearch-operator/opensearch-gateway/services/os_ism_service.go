@@ -95,54 +95,54 @@ func DeleteISMPolicy(ctx context.Context, service *OsClusterClient, policyName s
 
 // IndexInfo represents the response from OpenSearch for indices
 type IndexInfo struct {
-    Index string `json:"index"`
+	Index string `json:"index"`
 }
 
 // GetIndices retrieves indices matching the given pattern from OpenSearch
 func GetIndices(ctx context.Context, service *OsClusterClient, pattern string) ([]string, error) {
-    resp, err := service.GetIndices(ctx, pattern)
-    if err != nil {
-        return nil, err
-    }
-    defer resp.Body.Close()
-    
-    if resp.IsError() {
-        return nil, fmt.Errorf("failed to get indices: %s", resp.String())
-    }
+	resp, err := service.GetIndices(ctx, pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
 
-    var indices []IndexInfo
-    if resp != nil && resp.Body != nil {
-        err := json.NewDecoder(resp.Body).Decode(&indices)
-        if err != nil {
-            return nil, err
-        }
-        indexNames := make([]string, 0, len(indices))
-        for _, idx := range indices {
-            indexNames = append(indexNames, idx.Index)
-        }
-        return indexNames, nil
-    }
-    return nil, fmt.Errorf("response is empty")
+	if resp.IsError() {
+		return nil, fmt.Errorf("failed to get indices: %s", resp.String())
+	}
+
+	var indices []IndexInfo
+	if resp != nil && resp.Body != nil {
+		err := json.NewDecoder(resp.Body).Decode(&indices)
+		if err != nil {
+			return nil, err
+		}
+		indexNames := make([]string, 0, len(indices))
+		for _, idx := range indices {
+			indexNames = append(indexNames, idx.Index)
+		}
+		return indexNames, nil
+	}
+	return nil, fmt.Errorf("response is empty")
 }
 
 // AddISMPolicyRequest is the request body for adding an ISM policy to an index
 type AddISMPolicyRequest struct {
-    PolicyID string `json:"policy_id"`
+	PolicyID string `json:"policy_id"`
 }
 
 // AddPolicyToIndex applies an ISM policy to the specified index
 func AddPolicyToIndex(ctx context.Context, service *OsClusterClient, indexName string, policyId string) error {
-    body := opensearchutil.NewJSONReader(AddISMPolicyRequest{PolicyID: policyId})
-	
-	resp, err := service.AddPolicyToIndex(ctx, indexName, body)
-    if err != nil {
-        return err
-    }
-    defer resp.Body.Close()
-    
-    if resp.IsError() {
-        return fmt.Errorf("failed to add policy to index: %s", resp.String())
-    }
+	body := opensearchutil.NewJSONReader(AddISMPolicyRequest{PolicyID: policyId})
 
-    return nil
+	resp, err := service.AddPolicyToIndex(ctx, indexName, body)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	if resp.IsError() {
+		return fmt.Errorf("failed to add policy to index: %s", resp.String())
+	}
+
+	return nil
 }
