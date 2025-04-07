@@ -496,52 +496,75 @@ var _ = Describe("Builders", func() {
 				}
 			}
 		})
-		It("should include custom init containers when specified", func() {
+		It("should include custom init containers that run before main container", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			initContainer := corev1.Container{
 				Name:  "custom-init",
 				Image: "custom-init:latest",
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
-				Roles:          []string{"cluster_manager"},
+			nodePool := opsterv1.NodePool{
 				InitContainers: []corev1.Container{initContainer},
-			}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(2))
-			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init"))
-		})
-
-		It("should include sidecars when specified (deprecated)", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			sidecar := corev1.Container{
-				Name:  "sidecar",
-				Image: "sidecar:latest",
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
-				Roles:    []string{"cluster_manager"},
-				Sidecars: []corev1.Container{sidecar},
-			}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(2))
-			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("sidecar"))
-		})
-
-		It("should include both init containers and sidecars when specified", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			initContainer := corev1.Container{
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.InitContainers).To(ContainElement(corev1.Container{
 				Name:  "custom-init",
 				Image: "custom-init:latest",
+			}))
+			for _, container := range result.Spec.Template.Spec.Containers {
+				Expect(container.Name).NotTo(Equal("custom-init"))
 			}
+		})
+
+		It("should include sidecars that run alongside the main container", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
 			sidecar := corev1.Container{
 				Name:  "sidecar",
 				Image: "sidecar:latest",
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
-				Roles:          []string{"cluster_manager"},
+			nodePool := opsterv1.NodePool{
+				Sidecars: []corev1.Container{sidecar},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers).To(ContainElement(corev1.Container{
+				Name:  "sidecar",
+				Image: "sidecar:latest",
+			}))
+			for _, container := range result.Spec.Template.Spec.InitContainers {
+				Expect(container.Name).NotTo(Equal("sidecar"))
+			}
+		})
+
+		It("should handle both init containers and sidecars with correct pod lifecycle", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			initContainer := corev1.Container{
+				Name:  "init-setup",
+				Image: "init:latest",
+			}
+			sidecar := corev1.Container{
+				Name:  "monitor",
+				Image: "monitor:latest",
+			}
+			nodePool := opsterv1.NodePool{
 				InitContainers: []corev1.Container{initContainer},
 				Sidecars:       []corev1.Container{sidecar},
-			}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(3))
-			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init"))
-			Expect(result.Spec.Template.Spec.InitContainers[2].Name).To(Equal("sidecar"))
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.InitContainers).To(ContainElement(corev1.Container{
+				Name:  "init-setup",
+				Image: "init:latest",
+			}))
+			Expect(result.Spec.Template.Spec.Containers).To(ContainElement(corev1.Container{
+				Name:  "monitor",
+				Image: "monitor:latest",
+			}))
+			var opensearchFound bool
+			for _, container := range result.Spec.Template.Spec.Containers {
+				if container.Name == "opensearch" {
+					opensearchFound = true
+					break
+				}
+			}
+			Expect(opensearchFound).To(BeTrue(), "Main OpenSearch container should be present")
 		})
 		It("should include multiple custom init containers when specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")

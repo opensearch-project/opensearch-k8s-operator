@@ -124,11 +124,11 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
-	// InitContainers defines the init containers to be added to the nodepool pods
+	// InitContainers defines initialization containers that run to completion before the main OpenSearch container starts.
+	// Use this for tasks like data initialization, configuration setup, or plugin installation.
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
-
-	// Sidecars defines the sidecar containers to be added to the nodepool pods
-	// Deprecated: Use InitContainers instead
+	// Sidecars defines auxiliary containers that run alongside the main OpenSearch container for the pod's lifetime.
+	// Use this for long-running processes like log shipping, monitoring agents, or proxies.
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 }
 
