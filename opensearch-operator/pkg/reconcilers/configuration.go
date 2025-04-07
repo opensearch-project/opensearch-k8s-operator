@@ -82,9 +82,9 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// Add the volumes and mounts to the reconciler context
-	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volumes...)
-	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, volumeMounts...)
+	// Prepend the volumes and mounts to the reconciler context since they define base directories
+	r.reconcilerContext.Volumes = append(volumes, r.reconcilerContext.Volumes...)
+	r.reconcilerContext.VolumeMounts = append(volumeMounts, r.reconcilerContext.VolumeMounts...)
 
 	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
 		(r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0) {
