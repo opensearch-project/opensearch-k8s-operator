@@ -1098,6 +1098,13 @@ func (in *NodePool) DeepCopyInto(out *NodePool) {
 		*out = new(ProbesConfig)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.InitContainers != nil {
+		in, out := &in.InitContainers, &out.InitContainers
+		*out = make([]corev1.Container, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.Sidecars != nil {
 		in, out := &in.Sidecars, &out.Sidecars
 		*out = make([]corev1.Container, len(*in))

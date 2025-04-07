@@ -496,7 +496,21 @@ var _ = Describe("Builders", func() {
 				}
 			}
 		})
-		It("should include sidecar containers when specified", func() {
+		It("should include custom init containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			initContainer := corev1.Container{
+				Name:  "custom-init",
+				Image: "custom-init:latest",
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
+				Roles:          []string{"cluster_manager"},
+				InitContainers: []corev1.Container{initContainer},
+			}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(2))
+			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init"))
+		})
+
+		It("should include sidecars when specified (deprecated)", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			sidecar := corev1.Container{
 				Name:  "sidecar",
@@ -506,26 +520,46 @@ var _ = Describe("Builders", func() {
 				Roles:    []string{"cluster_manager"},
 				Sidecars: []corev1.Container{sidecar},
 			}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.Containers)).To(Equal(2))
-			Expect(result.Spec.Template.Spec.Containers[1].Name).To(Equal("sidecar"))
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(2))
+			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("sidecar"))
 		})
-		It("should include multiple sidecar containers when specified", func() {
+
+		It("should include both init containers and sidecars when specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			sidecar1 := corev1.Container{
-				Name:  "sidecar1",
-				Image: "sidecar1:latest",
+			initContainer := corev1.Container{
+				Name:  "custom-init",
+				Image: "custom-init:latest",
 			}
-			sidecar2 := corev1.Container{
-				Name:  "sidecar2",
-				Image: "sidecar2:latest",
+			sidecar := corev1.Container{
+				Name:  "sidecar",
+				Image: "sidecar:latest",
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
-				Roles:    []string{"cluster_manager"},
-				Sidecars: []corev1.Container{sidecar1, sidecar2},
+				Roles:          []string{"cluster_manager"},
+				InitContainers: []corev1.Container{initContainer},
+				Sidecars:       []corev1.Container{sidecar},
 			}, "foobar", nil, nil, nil)
-			Expect(len(result.Spec.Template.Spec.Containers)).To(Equal(3))
-			Expect(result.Spec.Template.Spec.Containers[1].Name).To(Equal("sidecar1"))
-			Expect(result.Spec.Template.Spec.Containers[2].Name).To(Equal("sidecar2"))
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(3))
+			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init"))
+			Expect(result.Spec.Template.Spec.InitContainers[2].Name).To(Equal("sidecar"))
+		})
+		It("should include multiple custom init containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			initContainer1 := corev1.Container{
+				Name:  "custom-init1",
+				Image: "custom-init1:latest",
+			}
+			initContainer2 := corev1.Container{
+				Name:  "custom-init2",
+				Image: "custom-init2:latest",
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
+				Roles:          []string{"cluster_manager"},
+				InitContainers: []corev1.Container{initContainer1, initContainer2},
+			}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(3))
+			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init1"))
+			Expect(result.Spec.Template.Spec.InitContainers[2].Name).To(Equal("custom-init2"))
 		})
 	})
 

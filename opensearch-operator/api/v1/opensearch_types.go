@@ -124,7 +124,11 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// InitContainers defines the init containers to be added to the nodepool pods
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+
 	// Sidecars defines the sidecar containers to be added to the nodepool pods
+	// Deprecated: Use InitContainers instead
 	Sidecars []corev1.Container `json:"sidecars,omitempty"`
 }
 

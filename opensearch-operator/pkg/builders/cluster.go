@@ -465,7 +465,7 @@ func NewSTSForNodePool(
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
-					Containers: append([]corev1.Container{
+					Containers: []corev1.Container{
 						{
 							Env: []corev1.EnvVar{
 								{
@@ -523,8 +523,9 @@ func NewSTSForNodePool(
 							VolumeMounts:    volumeMounts,
 							SecurityContext: securityContext,
 						},
-					}, node.Sidecars...),
-					InitContainers:            initContainers,
+					},
+					// Add both init containers and sidecars (for backward compatibility)
+					InitContainers:            append(append(initContainers, node.InitContainers...), node.Sidecars...),
 					Volumes:                   volumes,
 					ServiceAccountName:        cr.Spec.General.ServiceAccount,
 					NodeSelector:              node.NodeSelector,
