@@ -76,10 +76,10 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(len(reconcilerContext.Volumes)).To(Equal(2))
 			Expect(len(reconcilerContext.VolumeMounts)).To(Equal(2))
 
-			// Check conf volume
-			confVolume := reconcilerContext.Volumes[0]
-			Expect(confVolume.Name).To(Equal("rw-conf"))
-			Expect(confVolume.EmptyDir).ToNot(BeNil())
+			// Check config volume
+			configVolume := reconcilerContext.Volumes[0]
+			Expect(configVolume.Name).To(Equal("rw-config"))
+			Expect(configVolume.EmptyDir).ToNot(BeNil())
 
 			// Check logs volume
 			logsVolume := reconcilerContext.Volumes[1]
@@ -87,9 +87,9 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(logsVolume.EmptyDir).ToNot(BeNil())
 
 			// Check volume mounts
-			confMount := reconcilerContext.VolumeMounts[0]
-			Expect(confMount.Name).To(Equal("rw-conf"))
-			Expect(confMount.MountPath).To(Equal("/usr/share/opensearch/conf"))
+			configMount := reconcilerContext.VolumeMounts[0]
+			Expect(configMount.Name).To(Equal("rw-config"))
+			Expect(configMount.MountPath).To(Equal("/usr/share/opensearch/config"))
 
 			logsMount := reconcilerContext.VolumeMounts[1]
 			Expect(logsMount.Name).To(Equal("rw-logs"))

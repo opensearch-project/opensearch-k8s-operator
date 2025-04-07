@@ -52,8 +52,8 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	// Create emptyDir volumes for writable directories that OpenSearch needs
 	writableVolumes := []opsterv1.AdditionalVolume{
 		{
-			Name:     "rw-conf",
-			Path:     "/usr/share/opensearch/conf",
+			Name:     "rw-config",
+			Path:     "/usr/share/opensearch/config",
 			EmptyDir: &corev1.EmptyDirVolumeSource{},
 		},
 		{
