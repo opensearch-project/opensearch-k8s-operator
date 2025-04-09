@@ -2781,6 +2781,10 @@ spec:
                     type: object
                   service:
                     properties:
+                      labels:
+                        additionalProperties:
+                          type: string
+                        type: object
                       loadBalancerSourceRanges:
                         items:
                           type: string
