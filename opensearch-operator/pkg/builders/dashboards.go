@@ -208,11 +208,19 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	}
 }
 
-func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster, customLabels map[string]string) *corev1.Service {
 	var port int32 = 5601
 
-	labels := map[string]string{
+	metadataLabels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
+	}
+	selectorLabels := map[string]string{
+		"opensearch.cluster.dashboards": cr.Name,
+	}
+
+	// Merge customLabels into metadataLabels only
+	for key, value := range customLabels {
+		metadataLabels[key] = value
 	}
 
 	return &corev1.Service{
@@ -223,7 +231,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        cr.Spec.General.ServiceName + "-dashboards",
 			Namespace:   cr.Namespace,
-			Labels:      labels,
+			Labels:      metadataLabels,
 			Annotations: cr.Spec.Dashboards.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
@@ -240,7 +248,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 					},
 				},
 			},
-			Selector: labels,
+			Selector: selectorLabels,
 		},
 	}
 }

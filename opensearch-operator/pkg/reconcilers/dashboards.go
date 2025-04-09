@@ -95,7 +95,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.client.Scheme()))
 	result.Combine(r.client.CreateDeployment(deployment))
 
-	svc := builders.NewDashboardsSvcForCr(r.instance)
+	svc := builders.NewDashboardsSvcForCr(r.instance, r.instance.Spec.Dashboards.Service.Labels)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, svc, r.client.Scheme()))
 	result.Combine(r.client.CreateService(svc))
 
