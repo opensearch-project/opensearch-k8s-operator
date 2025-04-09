@@ -36,6 +36,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.dashboards.securityContext | object | `{}` | dashboards security context configuration |
 | cluster.dashboards.service.loadBalancerSourceRanges | list | `[]` | source ranges for a loadbalancer |
 | cluster.dashboards.service.type | string | `"ClusterIP"` | dashboards service type |
+| cluster.dashboards.service.labels | object | `{}` | Metadata labels for Dashboards service |
 | cluster.dashboards.tls.caSecret | object | `{}` | Secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields |
 | cluster.dashboards.tls.enable | bool | `false` | Enable HTTPS for dashboards |
 | cluster.dashboards.tls.generate | bool | `true` | generate certificate, if false secret must be provided |
