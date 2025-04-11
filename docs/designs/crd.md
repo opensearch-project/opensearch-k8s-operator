@@ -21,22 +21,20 @@ Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.opster.io` an
         </tr>
     </thead>
     <tbody><tr>
-      <td><b>apiVersion</b></td>
-      <td>string</td>
-      <td>opensearch.opster.io/v1</td>
-      <td>true</td>
-      </tr>
-      <tr>
-      <td><b>kind</b></td>
-      <td>string</td>
-      <td>OpenSearchCluster</td>
-      <td>true</td>
-      </tr>
-      <tr>
-      <td><b>metadata</b></td>
-      <td>object</td>
-      <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
-      <td>true</td>
+        <td><b>apiVersion</b></td>
+        <td>string</td>
+        <td>opensearch.opster.io/v1</td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>kind</b></td>
+        <td>string</td>
+        <td>OpenSearchCluster</td>
+        <td>true</td>
+      </tr><tr>
+        <td><b>metadata</b></td>
+        <td>object</td>
+        <td>Refer to the Kubernetes API documentation for the fields of the `metadata` field.</td>
+        <td>true</td>
       </tr><tr>
         <td><b>spec</b></td>
         <td>object</td>
@@ -49,6 +47,7 @@ Our CRD is Defined by kind: `OpenSearchCluster`,group: `opensearch.opster.io` an
         <td>true</td>
       </tr></tbody>
 </table>
+
 <h3 id="OpensearchClusterSPec">
   OpensearchCluster.spec
 </h3>
@@ -91,6 +90,7 @@ ClusterSpec defines the desired state of OpensearchCluster
         <td>[]object</td>
         <td>List of objects that define the different nodePools in an OpensearchCluster. Each nodePool represents a group of nodes with the same opensearch roles and resources. Each nodePool is deployed as a Kubernetes StatefulSet. Together they form the opensearch cluster.</td>
         <td>true</td>
+      </tr></tbody>
 </table>
 
 
@@ -153,6 +153,7 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>Added extra items to opensearch.yml</td>
         <td>string</td>
         <td></td>
+      </tr></tbody>
 </table>
 
 
@@ -197,13 +198,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>latest</td>
       </tr><tr>
-      </tr><tr>
         <td><b>Tls</b></td>
         <td>DashboardsTlsConfig</td>
         <td>defining Dashbaord TLS configuration</td>
         <td>false</td>
         <td>false</td>
-      </tr><tr>
+      </tr></tbody>
 </table>
 
 
@@ -248,13 +248,11 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td> - </td>
       </tr><tr>
-      </tr><tr>
         <td><b>Tls</b></td>
         <td>DashboardsTlsConfig</td>
         <td>defining Dashbaord TLS configuration</td>
         <td>false</td>
         <td>false</td>
-      </tr><tr>
       </tr><tr>
         <td><b>resources</b></td>
         <td>corev1.ResourceRequirements</td>
@@ -262,13 +260,11 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td></td>
       </tr><tr>
-      </tr><tr>
         <td><b>roles</b></td>
         <td>[]string </td>
         <td>List of OpenSearch roles to assign to the nodePool</td>
         <td>true</td>
         <td> - </td>
-      </tr><tr>
       </tr><tr>
         <td><b>JVM</b></td>
         <td>string</td>
@@ -276,18 +272,16 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>false</td>
         <td>-Xmx512M -Xms512M</td>
       </tr><tr>
-      </tr><tr>
         <td><b>Affinity</b></td>
         <td>corev1.Affinity</td>
         <td>add affinity to nodePool</td>
         <td>false</td>
         <td> - </td>
       </tr><tr>
-      </tr><tr>
         <td><b>Tolerations</b></td>
         <td>[]corev1.Toleration</td>
         <td>add toleration to nodePool</td>
         <td>false</td>
         <td> - </td>
-      </tr><tr>
+      </tr></tbody>
 </table>
