@@ -335,6 +335,11 @@ func NewSTSForNodePool(
 	securityContext := cr.Spec.General.SecurityContext
 
 	var initContainers []corev1.Container
+
+	if len(node.InitContainers) > 0 {
+		initContainers = append(initContainers, node.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
@@ -852,6 +857,10 @@ func NewBootstrapPod(
 	}
 
 	var initContainers []corev1.Container
+	if len(cr.Spec.Bootstrap.InitContainers) > 0 {
+		initContainers = append(initContainers, cr.Spec.Bootstrap.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
