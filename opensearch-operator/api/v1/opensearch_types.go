@@ -124,6 +124,7 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	InitContainers            []corev1.Container                `json:"initContainers,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -170,9 +171,10 @@ type BootstrapConfig struct {
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
 	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
-	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
-	PluginsList      []string          `json:"pluginsList,omitempty"`
-	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
+	AdditionalConfig map[string]string  `json:"additionalConfig,omitempty"`
+	PluginsList      []string           `json:"pluginsList,omitempty"`
+	Keystore         []KeystoreValue    `json:"keystore,omitempty"`
+	InitContainers   []corev1.Container `json:"initContainers,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
