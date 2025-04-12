@@ -1,0 +1,126 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-first-cluster
+spec:
+  security:
+    tls:
+      transport:
+        generate: true
+        perNode: true
+      http:
+        generate: true
+  general:
+    pluginsList: []
+    additionalVolumes:
+    - emptyDir: {}
+      name: rw-tmp
+      path: /tmp
+    - emptyDir: {}
+      name: rw-config
+      path: /usr/share/opensearch/config
+    - emptyDir: {}
+      name: rw-plugins
+      path: /usr/share/opensearch/plugins
+    - emptyDir: {}
+      name: rw-logs
+      path: /usr/share/opensearch/logs
+    podSecurityContext:
+      fsGroup: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - all
+      privileged: false
+      readOnlyRootFilesystem: true
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+    serviceName: my-first-cluster
+    version: 2.17.1
+    image: opensearchproject/opensearch:2.17.1
+    httpPort: 9200
+  bootstrap:
+    initContainers:
+      - name: init-copier
+        image: opensearchproject/opensearch:2.17.1
+        volumeMounts:
+          - name: rw-config
+            mountPath: /config-tmp
+          - name: rw-plugins
+            mountPath: /plugins-tmp
+        command: [
+          "bash", 
+          "-c", 
+           "cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
+        ]
+  dashboards:
+    opensearchCredentialsSecret:
+      name: dashboard-credentials-secret
+    tls:
+      enable: true
+      generate: true
+    enable: true
+    version: 2.17.1
+    image: opensearchproject/opensearch-dashboards:2.17.1
+    replicas: 1
+    additionalVolumes:
+    - name: rw-data
+      path: /usr/share/opensearch-dashboards/data
+      emptyDir: {}
+    podSecurityContext: 
+      fsGroup: 1000
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+        - all
+      privileged: false
+      readOnlyRootFilesystem: true
+      runAsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+    resources:
+      requests:
+         memory: "500Mi"
+         cpu: "500m"
+      limits:
+         memory: "1Gi"
+         cpu: "500m"
+  nodePools:
+    - component: nodes
+      replicas: 3
+      persistence:
+         emptyDir: {}
+      diskSize: "4Gi"
+      resources:
+         requests:
+            memory: "2Gi"
+            cpu: "1200m"
+         limits:
+            memory: "2Gi"
+            cpu: "1200m"
+      roles:
+        - "cluster_manager"
+        - "data"
+      initContainers:
+        - name: init-copier
+          image: opensearchproject/opensearch:2.17.1
+          volumeMounts:
+            - name: rw-config
+              mountPath: /config-tmp
+            - name: rw-plugins
+              mountPath: /plugins-tmp
+          command: [
+            "bash", 
+            "-c", 
+            "bin/opensearch-plugin -v install --batch repository-s3 && cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
+          ]
+  

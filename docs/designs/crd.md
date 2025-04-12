@@ -303,6 +303,13 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>false</td>
         <td> [] </td>
       </tr>
+       </tr><tr>
+        <td><b>initContainers</b></td>
+        <td>[]corev1.Container</td>
+        <td>List of init containers that should be added to the bootstrap pod</td>
+        <td>false</td>
+        <td> [] </td>
+      </tr>
 </table>
 
 <h3 id="GeneralConfig">
@@ -550,6 +557,13 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>Updates the probes timeouts and thresholds config</td>
         <td>false</td>
         <td>-</td>
+      </tr>
+       </tr><tr>
+        <td><b>initContainers</b></td>
+        <td>[]corev1.Container</td>
+        <td>List of init containers that should be added to the nodepool pods</td>
+        <td>false</td>
+        <td> [] </td>
       </tr>
 </table>
 
