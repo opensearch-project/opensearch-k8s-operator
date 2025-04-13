@@ -335,6 +335,11 @@ func NewSTSForNodePool(
 	securityContext := cr.Spec.General.SecurityContext
 
 	var initContainers []corev1.Container
+
+	if len(node.InitContainers) > 0 {
+		initContainers = append(initContainers, node.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
@@ -465,72 +470,66 @@ func NewSTSForNodePool(
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
-					// Start with the main OpenSearch container
-					Containers: append(
-						[]corev1.Container{
-							{
-								Name:            "opensearch",
-								Command:         mainCommand,
-								Image:           image.GetImage(),
-								ImagePullPolicy: image.GetImagePullPolicy(),
-								Resources:       node.Resources,
-								Env: []corev1.EnvVar{
-									{
-										Name:  "cluster.initial_master_nodes",
-										Value: BootstrapPodName(cr),
-									},
-									{
-										Name:  "discovery.seed_hosts",
-										Value: DiscoveryServiceName(cr),
-									},
-									{
-										Name:  "cluster.name",
-										Value: cr.Name,
-									},
-									{
-										Name:  "network.bind_host",
-										Value: "0.0.0.0",
-									},
-									{
-										// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-										Name:      "network.publish_host",
-										ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
-									},
-									{
-										Name:  "OPENSEARCH_JAVA_OPTS",
-										Value: jvm,
-									},
-									{
-										Name:  "node.roles",
-										Value: strings.Join(selectedRoles, ","),
-									},
-									{
-										Name:  "http.port",
-										Value: fmt.Sprint(cr.Spec.General.HttpPort),
-									},
+					Containers: append([]corev1.Container{
+						{
+							Env: []corev1.EnvVar{
+								{
+									Name:  "cluster.initial_master_nodes",
+									Value: BootstrapPodName(cr),
 								},
-								Ports: []corev1.ContainerPort{
-									{
-										Name:          "http",
-										ContainerPort: cr.Spec.General.HttpPort,
-									},
-									{
-										Name:          "transport",
-										ContainerPort: 9300,
-									},
+								{
+									Name:  "discovery.seed_hosts",
+									Value: DiscoveryServiceName(cr),
 								},
-								StartupProbe:    &startupProbe,
-								LivenessProbe:   &livenessProbe,
-								ReadinessProbe:  &readinessProbe,
-								VolumeMounts:    volumeMounts,
-								SecurityContext: securityContext,
+								{
+									Name:  "cluster.name",
+									Value: cr.Name,
+								},
+								{
+									Name:  "network.bind_host",
+									Value: "0.0.0.0",
+								},
+								{
+									// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
+									Name:      "network.publish_host",
+									ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
+								},
+								{
+									Name:  "OPENSEARCH_JAVA_OPTS",
+									Value: jvm,
+								},
+								{
+									Name:  "node.roles",
+									Value: strings.Join(selectedRoles, ","),
+								},
+								{
+									Name:  "http.port",
+									Value: fmt.Sprint(cr.Spec.General.HttpPort),
+								},
 							},
+							Name:            "opensearch",
+							Command:         mainCommand,
+							Image:           image.GetImage(),
+							ImagePullPolicy: image.GetImagePullPolicy(),
+							Resources:       node.Resources,
+							Ports: []corev1.ContainerPort{
+								{
+									Name:          "http",
+									ContainerPort: cr.Spec.General.HttpPort,
+								},
+								{
+									Name:          "transport",
+									ContainerPort: 9300,
+								},
+							},
+							StartupProbe:    &startupProbe,
+							LivenessProbe:   &livenessProbe,
+							ReadinessProbe:  &readinessProbe,
+							VolumeMounts:    volumeMounts,
+							SecurityContext: securityContext,
 						},
-						// Add sidecars as regular containers that run alongside the main container
-						node.Sidecars...,
-					),
-					// Keep init containers separate
-					InitContainers:            append(initContainers, node.InitContainers...),
+					}, node.Sidecars...),
+					InitContainers:            initContainers,
 					Volumes:                   volumes,
 					ServiceAccountName:        cr.Spec.General.ServiceAccount,
 					NodeSelector:              node.NodeSelector,
@@ -856,6 +855,10 @@ func NewBootstrapPod(
 	}
 
 	var initContainers []corev1.Container
+	if len(cr.Spec.Bootstrap.InitContainers) > 0 {
+		initContainers = append(initContainers, cr.Spec.Bootstrap.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
@@ -975,31 +978,34 @@ func NewBootstrapPod(
 			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Env:             env,
-					Name:            "opensearch",
-					Command:         mainCommand,
-					Image:           image.GetImage(),
-					ImagePullPolicy: image.GetImagePullPolicy(),
-					Resources:       resources,
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          "http",
-							ContainerPort: cr.Spec.General.HttpPort,
+			Containers: append(
+				[]corev1.Container{
+					{
+						Env:             env,
+						Name:            "opensearch",
+						Command:         mainCommand,
+						Image:           image.GetImage(),
+						ImagePullPolicy: image.GetImagePullPolicy(),
+						Resources:       resources,
+						Ports: []corev1.ContainerPort{
+							{
+								Name:          "http",
+								ContainerPort: cr.Spec.General.HttpPort,
+							},
+							{
+								Name:          "transport",
+								ContainerPort: 9300,
+							},
 						},
-						{
-							Name:          "transport",
-							ContainerPort: 9300,
-						},
+						StartupProbe:    &probe,
+						LivenessProbe:   &probe,
+						VolumeMounts:    volumeMounts,
+						SecurityContext: securityContext,
 					},
-					StartupProbe:    &probe,
-					LivenessProbe:   &probe,
-					VolumeMounts:    volumeMounts,
-					SecurityContext: securityContext,
 				},
-			},
-			InitContainers:     initContainers,
+				cr.Spec.Bootstrap.Sidecars...,
+			),
+			InitContainers:     append(initContainers, cr.Spec.Bootstrap.InitContainers...),
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,
