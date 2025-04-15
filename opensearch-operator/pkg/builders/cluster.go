@@ -335,6 +335,11 @@ func NewSTSForNodePool(
 	securityContext := cr.Spec.General.SecurityContext
 
 	var initContainers []corev1.Container
+
+	if len(node.InitContainers) > 0 {
+		initContainers = append(initContainers, node.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
@@ -852,6 +857,10 @@ func NewBootstrapPod(
 	}
 
 	var initContainers []corev1.Container
+	if len(cr.Spec.Bootstrap.InitContainers) > 0 {
+		initContainers = append(initContainers, cr.Spec.Bootstrap.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
@@ -973,31 +982,34 @@ func NewBootstrapPod(
 			Labels:    labels,
 		},
 		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Env:             env,
-					Name:            "opensearch",
-					Command:         mainCommand,
-					Image:           image.GetImage(),
-					ImagePullPolicy: image.GetImagePullPolicy(),
-					Resources:       resources,
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          "http",
-							ContainerPort: cr.Spec.General.HttpPort,
+			Containers: append(
+				[]corev1.Container{
+					{
+						Env:             env,
+						Name:            "opensearch",
+						Command:         mainCommand,
+						Image:           image.GetImage(),
+						ImagePullPolicy: image.GetImagePullPolicy(),
+						Resources:       resources,
+						Ports: []corev1.ContainerPort{
+							{
+								Name:          "http",
+								ContainerPort: cr.Spec.General.HttpPort,
+							},
+							{
+								Name:          "transport",
+								ContainerPort: 9300,
+							},
 						},
-						{
-							Name:          "transport",
-							ContainerPort: 9300,
-						},
+						StartupProbe:    &probe,
+						LivenessProbe:   &probe,
+						VolumeMounts:    volumeMounts,
+						SecurityContext: securityContext,
 					},
-					StartupProbe:    &probe,
-					LivenessProbe:   &probe,
-					VolumeMounts:    volumeMounts,
-					SecurityContext: securityContext,
 				},
-			},
-			InitContainers:     initContainers,
+				cr.Spec.Bootstrap.Sidecars...,
+			),
+			InitContainers:     append(initContainers, cr.Spec.Bootstrap.InitContainers...),
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,

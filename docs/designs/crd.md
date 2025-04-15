@@ -303,6 +303,20 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>false</td>
         <td> [] </td>
       </tr>
+      </tr><tr>
+        <td><b>sidecars</b></td>
+        <td>[]object</td>
+        <td>List of sidecar containers to be attached to the OpenSearch node pods. Each sidecar follows the Kubernetes container spec.</td>
+        <td>false</td>
+        <td> [] </td>
+      </tr>
+       </tr><tr>
+        <td><b>initContainers</b></td>
+        <td>[]corev1.Container</td>
+        <td>List of init containers that should be added to the bootstrap pod</td>
+        <td>false</td>
+        <td> [] </td>
+      </tr>
 </table>
 
 <h3 id="GeneralConfig">
@@ -555,7 +569,14 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>[]object</td>
         <td>List of sidecar containers to be attached to the OpenSearch node pods. Each sidecar follows the Kubernetes container spec.</td>
         <td>false</td>
-        <td>-</td>
+        <td> [] </td>
+       </tr><tr>
+        <td><b>initContainers</b></td>
+        <td>[]corev1.Container</td>
+        <td>List of init containers that should be added to the nodepool pods</td>
+        <td>false</td>
+        <td> [] </td>
+      </tr>
       </tr>
 </table>
 
