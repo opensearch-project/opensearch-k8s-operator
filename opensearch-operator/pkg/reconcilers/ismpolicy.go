@@ -163,7 +163,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}, retErr
 	}
 
-	// If PolicyID is not provided explicitly, use metadata.name by default
+	// If PolicyId is not provided explicitly, use metadata.name by default
 	policyId = r.instance.Name
 	if r.instance.Spec.PolicyID != "" {
 		policyId = r.instance.Spec.PolicyID
@@ -251,8 +251,8 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	}
 
 	// Return if there are no changes
-	if r.instance.Spec.PolicyID == existingPolicy.PolicyID && cmp.Equal(*newPolicy, existingPolicy.Policy, cmpopts.EquateEmpty()) {
-		r.logger.V(1).Info(fmt.Sprintf("user %s is in sync", r.instance.Name))
+	if r.instance.Status.PolicyId == existingPolicy.PolicyID && cmp.Equal(*newPolicy, existingPolicy.Policy, cmpopts.EquateEmpty()) {
+		r.logger.V(1).Info(fmt.Sprintf("policy %s is in sync", r.instance.Name))
 		r.recorder.Event(r.instance, "Normal", opensearchAPIUnchanged, "policy is in sync")
 		return ctrl.Result{
 			Requeue:      true,
@@ -579,7 +579,7 @@ func (r *IsmPolicyReconciler) Delete() error {
 		return err
 	}
 
-	// If PolicyID not provided explicitly, use metadata.name by default
+	// If PolicyId not provided explicitly, use metadata.name by default
 	policyId := r.instance.Spec.PolicyID
 	if policyId == "" {
 		policyId = r.instance.Name
