@@ -619,6 +619,10 @@ var _ = Describe("Builders", func() {
 		})
 		When("Constructing a bootstrap pod with Volumes", func() {
 			It("should include all the required volumes and mounts", func() {
+				initContainer1 := corev1.Container{
+					Name:  "custom-init1",
+					Image: "custom-init1:latest",
+				}
 				clusterObject := opsterv1.OpenSearchCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-cluster",
@@ -627,6 +631,9 @@ var _ = Describe("Builders", func() {
 					Spec: opsterv1.ClusterSpec{
 						General: opsterv1.GeneralConfig{
 							PluginsList: []string{"repository-s3"},
+						},
+						Bootstrap: opsterv1.BootstrapConfig{
+							InitContainers: []corev1.Container{initContainer1},
 						},
 					},
 				}
@@ -670,6 +677,7 @@ var _ = Describe("Builders", func() {
 
 				result := NewBootstrapPod(&clusterObject, volumes, volumeMounts)
 
+				Expect(len(result.Spec.InitContainers)).To(Equal(2))
 				Expect(len(result.Spec.Volumes)).To(Equal(4))
 				Expect(result.Spec.Volumes[0].Name).To(Equal(volumes[0].Name))
 				Expect(result.Spec.Volumes[1].Name).To(Equal(volumes[1].Name))

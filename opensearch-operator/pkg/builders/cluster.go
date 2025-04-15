@@ -1009,7 +1009,7 @@ func NewBootstrapPod(
 				},
 				cr.Spec.Bootstrap.Sidecars...,
 			),
-			InitContainers:     append(initContainers, cr.Spec.Bootstrap.InitContainers...),
+			InitContainers:     initContainers,
 			Volumes:            volumes,
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,
