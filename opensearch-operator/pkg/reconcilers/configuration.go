@@ -67,6 +67,11 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
 
+		if len(r.instance.Spec.General.AdditionalConfig) > 0 {
+			for k, v := range r.instance.Spec.General.AdditionalConfig {
+				r.reconcilerContext.AddConfig(k, v)
+			}
+		}
 	}
 
 	var sb strings.Builder
