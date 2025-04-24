@@ -374,16 +374,17 @@ func (client *OsClusterClient) DeleteSnapshotRepository(ctx context.Context, nam
 
 // generateGetIndicesPath generates a URI PATH for a specific resource endpoint and name
 // For example: pattern = example-*
-// URI PATH = '_cat/indices/example-*'
+// URI PATH = '_cat/indices/example-*?format=json'
 func generateGetIndicesPath(pattern string) strings.Builder {
 	var path strings.Builder
-	path.Grow(1 + len("_cat") + 1 + len("indices") + 1 + len(pattern))
+	path.Grow(1 + len("_cat") + 1 + len("indices") + 1 + len(pattern) + len("?format=json"))
 	path.WriteString("/")
 	path.WriteString("_cat")
 	path.WriteString("/")
 	path.WriteString("indices")
 	path.WriteString("/")
 	path.WriteString(pattern)
+	path.WriteString("?format=json")
 	return path
 }
 

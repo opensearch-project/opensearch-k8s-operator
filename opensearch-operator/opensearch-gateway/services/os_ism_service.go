@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
@@ -102,27 +103,42 @@ type IndexInfo struct {
 func GetIndices(ctx context.Context, service *OsClusterClient, pattern string) ([]string, error) {
 	resp, err := service.GetIndices(ctx, pattern)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to call GetIndices: %w", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.IsError() {
-		return nil, fmt.Errorf("failed to get indices: %s", resp.String())
+	// Read response body
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body: %w", err)
 	}
 
-	var indices []IndexInfo
-	if resp != nil && resp.Body != nil {
-		err := json.NewDecoder(resp.Body).Decode(&indices)
-		if err != nil {
-			return nil, err
-		}
-		indexNames := make([]string, 0, len(indices))
-		for _, idx := range indices {
-			indexNames = append(indexNames, idx.Index)
-		}
-		return indexNames, nil
+	// Check for OpenSearch error response
+	if resp.IsError() {
+		return nil, fmt.Errorf("OpenSearch API error: %s", resp.String())
 	}
-	return nil, fmt.Errorf("response is empty")
+
+	// Parse response
+	var indices []IndexInfo
+	if err := json.Unmarshal(bodyBytes, &indices); err != nil {
+		// Log the raw response for debugging
+		log.FromContext(ctx).V(1).Info(fmt.Sprintf("Raw response: %s", string(bodyBytes)))
+		return nil, fmt.Errorf("failed to parse indices response: %w", err)
+	}
+
+	// Handle empty result
+	if len(indices) == 0 {
+		log.FromContext(ctx).Info(fmt.Sprintf("No indices found matching pattern: %s", pattern))
+		return []string{}, nil
+	}
+
+	// Extract index names
+	indexNames := make([]string, 0, len(indices))
+	for _, idx := range indices {
+		indexNames = append(indexNames, idx.Index)
+	}
+
+	return indexNames, nil
 }
 
 // AddISMPolicyRequest is the request body for adding an ISM policy to an index

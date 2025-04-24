@@ -10,7 +10,7 @@ spec:
   defaultState: "hot"
   ismTemplate:
     indexPatterns:
-      - "other-*"
+      - "test-*"
   states:
     - name: hot
       actions:
