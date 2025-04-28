@@ -575,8 +575,7 @@ func (r *IsmPolicyReconciler) applyPolicyToExistingIndices(policyId string) erro
 		if err != nil {
 			reason := fmt.Sprintf("failed to get indices matching pattern %s", pattern)
 			r.logger.Error(err, reason)
-			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
-			continue
+			return fmt.Errorf("%s: %w", reason, err)
 		}
 
 		// Apply policy to each index
