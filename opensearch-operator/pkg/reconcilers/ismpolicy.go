@@ -567,8 +567,6 @@ func (r *IsmPolicyReconciler) applyPolicyToExistingIndices(policyId string) erro
 		return nil
 	}
 
-	r.logger.Info("initiating applyToExistingIndices")
-
 	for _, pattern := range r.instance.Spec.ISMTemplate.IndexPatterns {
 
 		// Get existing indices matching the pattern
@@ -580,8 +578,6 @@ func (r *IsmPolicyReconciler) applyPolicyToExistingIndices(policyId string) erro
 			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 			continue
 		}
-
-		r.logger.Info(fmt.Sprintf("Found %d indices matching pattern %s", len(indices), pattern))
 
 		// Apply policy to each index
 		for _, index := range indices {

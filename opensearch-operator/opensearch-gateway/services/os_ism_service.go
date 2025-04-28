@@ -138,6 +138,9 @@ func GetIndices(ctx context.Context, service *OsClusterClient, pattern string) (
 		indexNames = append(indexNames, idx.Index)
 	}
 
+	// Log the found indices
+	log.FromContext(ctx).Info(fmt.Sprintf("Found indices matching pattern '%s': %v", pattern, indexNames))
+
 	return indexNames, nil
 }
 
