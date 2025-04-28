@@ -1261,6 +1261,11 @@ func (in *OpenSearchISMPolicyList) DeepCopyObject() runtime.Object {
 func (in *OpenSearchISMPolicySpec) DeepCopyInto(out *OpenSearchISMPolicySpec) {
 	*out = *in
 	out.OpensearchRef = in.OpensearchRef
+	if in.ApplyToExistingIndices != nil {
+		in, out := &in.ApplyToExistingIndices, &out.ApplyToExistingIndices
+		*out = new(bool)
+		**out = **in
+	}
 	if in.ErrorNotification != nil {
 		in, out := &in.ErrorNotification, &out.ErrorNotification
 		*out = new(ErrorNotification)
