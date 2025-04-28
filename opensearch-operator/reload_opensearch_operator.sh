@@ -29,15 +29,8 @@ make build
 make docker-build
 
 # Check if we're using k3d or kind
-if command -v k3d &> /dev/null; then
-    echo $'\nDetected k3d cluster, importing image...'
-    k3d image import controller:latest
-elif command -v kind &> /dev/null; then
-    echo $'\nDetected kind cluster, loading image...'
-    kind load docker-image controller:latest
-else
-    echo $'\nNeither k3d nor kind found. Please load the image manually.'
-fi
+# k3d image import controller:latest
+kind load docker-image controller:latest
 
 # Restart the OpenSearch operator
 echo $'\nRestarting OpenSearch operator...'
