@@ -128,7 +128,7 @@ func GetIndices(ctx context.Context, service *OsClusterClient, pattern string) (
 
 	// Handle empty result
 	if len(indices) == 0 {
-		log.FromContext(ctx).Info(fmt.Sprintf("No indices found matching pattern: %s", pattern))
+		log.FromContext(ctx).V(1).Info(fmt.Sprintf("No indices found matching pattern: %s", pattern))
 		return []string{}, nil
 	}
 
@@ -139,7 +139,7 @@ func GetIndices(ctx context.Context, service *OsClusterClient, pattern string) (
 	}
 
 	// Log the found indices
-	log.FromContext(ctx).Info(fmt.Sprintf("Found indices matching pattern '%s': %v", pattern, indexNames))
+	log.FromContext(ctx).V(1).Info(fmt.Sprintf("Found indices matching pattern '%s': %v", pattern, indexNames))
 
 	return indexNames, nil
 }

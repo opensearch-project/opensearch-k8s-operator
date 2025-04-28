@@ -584,7 +584,7 @@ func (r *IsmPolicyReconciler) applyPolicyToExistingIndices(policyId string) erro
 				reason := fmt.Sprintf("failed to apply policy to index %s", index)
 				return fmt.Errorf("%s: %w", reason, err)
 			}
-			r.logger.Info(fmt.Sprintf("Applied ISM Policy '%s' to existing index '%s'", policyId, index))
+			r.logger.V(1).Info(fmt.Sprintf("Applied ISM Policy '%s' to existing index '%s'", policyId, index))
 		}
 	}
 
