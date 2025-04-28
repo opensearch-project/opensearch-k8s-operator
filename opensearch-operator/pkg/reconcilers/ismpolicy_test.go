@@ -289,6 +289,35 @@ var _ = Describe("ism policy reconciler", func() {
 					})
 				})
 
+				When("failed to get indices from opensearch api", func() {
+					BeforeEach(func() {
+						transport.RegisterResponder(
+							http.MethodGet,
+							fmt.Sprintf(
+								"https://%s.%s.svc.cluster.local:9200/_cat/indices/test-*",
+								cluster.Spec.General.ServiceName,
+								cluster.Namespace,
+							),
+							httpmock.NewErrorResponder(fmt.Errorf("failed to get indices")).Once(),
+						)
+					})
+					It("should emit a unit test event and requeue", func() {
+						go func() {
+							defer GinkgoRecover()
+							defer close(recorder.Events)
+							result, err := reconciler.Reconcile()
+							Expect(err).To(HaveOccurred())
+							Expect(result.Requeue).To(BeTrue())
+						}()
+						var events []string
+						for msg := range recorder.Events {
+							events = append(events, msg)
+						}
+						Expect(len(events)).To(Equal(1))
+						Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s failed to apply policy to existing indices", opensearchAPIError)))
+					})
+				})
+
 				When("failed to apply policy to existing indices", func() {
 					BeforeEach(func() {
 						transport.RegisterResponder(
