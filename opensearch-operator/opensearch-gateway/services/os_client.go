@@ -294,6 +294,12 @@ func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
 	return true, nil
 }
 
+// GetIndices retrieves indices matching the given pattern from OpenSearch
+func (client *OsClusterClient) GetIndices(ctx context.Context, pattern string) (*opensearchapi.Response, error) {
+	path := generateGetIndicesPath(pattern)
+	return doHTTPGet(ctx, client.client, path)
+}
+
 // GetSecurityResource performs an HTTP GET request to OS to fetch the security resource specified by name
 func (client *OsClusterClient) GetSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
@@ -318,18 +324,6 @@ func (client *OsClusterClient) GetISMConfig(ctx context.Context, name string) (*
 	return doHTTPGet(ctx, client.client, path)
 }
 
-// GetIndices retrieves indices matching the given pattern from OpenSearch
-func (client *OsClusterClient) GetIndices(ctx context.Context, pattern string) (*opensearchapi.Response, error) {
-	path := generateGetIndicesPath(pattern)
-	return doHTTPGet(ctx, client.client, path)
-}
-
-// AddPolicyToIndex performs an HTTP POST request to OS to add an ISM policy to an index
-func (client *OsClusterClient) AddPolicyToIndex(ctx context.Context, indexName string, body io.Reader) (*opensearchapi.Response, error) {
-	path := generateAPIPathAddISMPolicyToIndex(indexName)
-	return doHTTPPost(ctx, client.client, path, body)
-}
-
 // PutISMConfig performs an HTTP PUT request to OS to create the ISM policy resource specified by name
 func (client *OsClusterClient) PutISMConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
 	path := generateAPIPathISM(ismResource, name)
@@ -346,6 +340,12 @@ func (client *OsClusterClient) UpdateISMConfig(ctx context.Context, name string,
 func (client *OsClusterClient) DeleteISMConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPathISM(ismResource, name)
 	return doHTTPDelete(ctx, client.client, path)
+}
+
+// AddPolicyToIndex performs an HTTP POST request to OS to add an ISM policy to an index
+func (client *OsClusterClient) AddPolicyToIndex(ctx context.Context, indexName string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathAddISMPolicyToIndex(ismResource, indexName)
+	return doHTTPPost(ctx, client.client, path, body)
 }
 
 // performs an HTTP GET request to OS to get the snapshot repository specified by name
@@ -426,6 +426,22 @@ func generateAPIPathUpdateISM(resource, name string, seqno, primaryterm int) str
 	return path
 }
 
+// generateAPIPathAddISMPolicyToIndex generates a URI PATH for adding ISM policy to an index
+// URI PATH = '_plugins/_ism/add/<indexName>'
+func generateAPIPathAddISMPolicyToIndex(resource, indexName string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("add") + 1 + len(indexName))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("add")
+	path.WriteString("/")
+	path.WriteString(indexName)
+	return path
+}
+
 // generateAPIPath generates a URI PATH for a specific resource endpoint and name
 // For example: resource = internalusers, name = example
 // URI PATH = '_plugins/_security/api/internalusers/example'
@@ -453,21 +469,5 @@ func generateAPIPathSnapshotRepository(name string) strings.Builder {
 	path.WriteString("_snapshot")
 	path.WriteString("/")
 	path.WriteString(name)
-	return path
-}
-
-// generateAPIPathAddISMPolicyToIndex generates a URI PATH for adding ISM policy to an index
-// URI PATH = '_plugins/_ism/add/<indexName>'
-func generateAPIPathAddISMPolicyToIndex(indexName string) strings.Builder {
-	var path strings.Builder
-	path.Grow(1 + len("_plugins") + 1 + len("_ism") + 1 + len("add") + 1 + len(indexName))
-	path.WriteString("/")
-	path.WriteString("_plugins")
-	path.WriteString("/")
-	path.WriteString("_ism")
-	path.WriteString("/")
-	path.WriteString("add")
-	path.WriteString("/")
-	path.WriteString(indexName)
 	return path
 }
