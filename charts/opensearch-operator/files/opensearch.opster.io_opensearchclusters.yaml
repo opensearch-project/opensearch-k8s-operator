@@ -5403,6 +5403,13 @@ spec:
                     type: object
                   tls:
                     properties:
+                      additionalSANs:
+                        description: |-
+                          AdditionalSANs is a list of additional domain names to be added to the Subject Alternative Names (SAN) field
+                          of the generated dashboard certificate. This allows the certificate to be valid for additional domain names.
+                        items:
+                          type: string
+                        type: array
                       caSecret:
                         description: Optional, secret that contains the ca certificate
                           as ca.crt. If this and generate=true is set the existing
@@ -10552,6 +10559,13 @@ spec:
                     properties:
                       http:
                         properties:
+                          additionalSANs:
+                            description: |-
+                              AdditionalSANs is a list of additional domain names to be added to the Subject Alternative Names (SAN) field
+                              of the generated HTTP certificate. This allows the certificate to be valid for additional domain names.
+                            items:
+                              type: string
+                            type: array
                           caSecret:
                             description: Optional, secret that contains the ca certificate
                               as ca.crt. If this and generate=true is set the existing

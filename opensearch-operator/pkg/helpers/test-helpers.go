@@ -65,6 +65,7 @@ type PkiMock struct {
 
 type CertMock struct {
 	LastExpiryTime                                   time.Time
+	LastDnsNames                                     []string
 	NumTimesCalledCreateAndSignCertificate           int
 	NumTimesCalledCreateAndSignCertificateWithExpiry int
 }
@@ -97,12 +98,14 @@ func (ca *CertMock) CreateAndSignCertificate(commonName string, orgUnit string, 
 	// Calling this method is equivalent to calling CreateAndSignCertificateWithExpiry
 	// with the default expiry time
 	ca.NumTimesCalledCreateAndSignCertificateWithExpiry += 1
+	ca.LastDnsNames = dnsnames
 	return ca, nil
 }
 
 func (ca *CertMock) CreateAndSignCertificateWithExpiry(commonName string, orgUnit string, dnsnames []string, expiry time.Time) (cert tls.Cert, err error) {
 	ca.NumTimesCalledCreateAndSignCertificateWithExpiry += 1
 	ca.LastExpiryTime = expiry
+	ca.LastDnsNames = dnsnames
 	return ca, nil
 }
 

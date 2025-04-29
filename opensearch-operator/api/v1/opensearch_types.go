@@ -219,8 +219,11 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
-	// foobar
+	// TlsCertificateConfig contains configuration for TLS certificates
 	TlsCertificateConfig `json:",omitempty"`
+	// AdditionalSANs is a list of additional domain names to be added to the Subject Alternative Names (SAN) field
+	// of the generated dashboard certificate. This allows the certificate to be valid for additional domain names.
+	AdditionalSANs []string `json:"additionalSANs,omitempty"`
 }
 
 // Security defines options for managing the opensearch-security plugin
@@ -256,6 +259,9 @@ type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate             bool `json:"generate,omitempty"`
 	TlsCertificateConfig `json:",omitempty"`
+	// AdditionalSANs is a list of additional domain names to be added to the Subject Alternative Names (SAN) field
+	// of the generated HTTP certificate. This allows the certificate to be valid for additional domain names.
+	AdditionalSANs []string `json:"additionalSANs,omitempty"`
 }
 
 type TlsCertificateConfig struct {

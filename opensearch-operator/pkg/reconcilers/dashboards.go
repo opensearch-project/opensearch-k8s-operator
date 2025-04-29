@@ -139,6 +139,13 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 				fmt.Sprintf("%s-dashboards.%s.svc", clusterName, namespace),
 				fmt.Sprintf("%s-dashboards.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
+
+			// Add additional SANs if specified
+			if len(r.instance.Spec.Dashboards.Tls.AdditionalSANs) > 0 {
+				r.logger.Info("Adding additional SANs to dashboard certificate", "count", len(r.instance.Spec.Dashboards.Tls.AdditionalSANs))
+				dnsNames = append(dnsNames, r.instance.Spec.Dashboards.Tls.AdditionalSANs...)
+			}
+
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName+"-dashboards", clusterName, dnsNames)
 			if err != nil {
 				r.logger.Error(err, "Failed to create tls certificate")

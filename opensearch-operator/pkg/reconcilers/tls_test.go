@@ -856,4 +856,95 @@ var _ = Describe("RFC3339 DateTime Generator", func() {
 			Entry("non-numeric input", "abc"),
 		)
 	})
+
+	Context("When Reconciling the TLS configuration with AdditionalSANs in HTTP config", func() {
+		It("should include the additional SANs in the HTTP certificate", func() {
+			clusterName := "tls-additional-sans"
+			caSecretName := clusterName + "-ca"
+			httpSecretName := clusterName + "-http-cert"
+
+			// Define additional SANs to include in the HTTP certificate
+			additionalSANs := []string{
+				"opensearch.example.com",
+				"custom-domain.example.org",
+				"*.opensearch-domain.com",
+			}
+
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.0.0",
+					},
+					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
+						Http: &opsterv1.TlsConfigHttp{
+							Generate:       true,
+							AdditionalSANs: additionalSANs,
+						},
+					}},
+					NodePools: []opsterv1.NodePool{
+						{
+							Component:   "masters",
+							Replicas:    1,
+							Roles:       []string{"master", "data"},
+							Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+						},
+					},
+				},
+			}
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.EXPECT().GetSecret(httpSecretName, clusterName).Return(corev1.Secret{}, NotFoundError())
+
+			// Mock HTTP certificate creation
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
+				return secret.ObjectMeta.Name == httpSecretName
+			})).Return(&ctrl.Result{}, nil)
+
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
+				return secret.ObjectMeta.Name == caSecretName
+			})).Return(&ctrl.Result{}, nil)
+
+			// Mock for UpdateOpenSearchClusterStatus
+			mockClient.On("UpdateOpenSearchClusterStatus",
+				mock.MatchedBy(func(key client.ObjectKey) bool {
+					return key.Name == clusterName && key.Namespace == clusterName
+				}),
+				mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Return(nil)
+
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Verify the mock was called with the expected arguments
+			mockCert := underTest.pki.(*helpers.PkiMock).GetUsedCertMock()
+
+			// Check that the certificate was created with the expected DNS names
+			Expect(mockCert.LastDnsNames).To(HaveLen(len(additionalSANs) + 6)) // 6 default DNS names + additional SANs
+
+			// Verify all additional SANs are included
+			for _, san := range additionalSANs {
+				Expect(mockCert.LastDnsNames).To(ContainElement(san))
+			}
+
+			// Verify the default DNS names are also included
+			Expect(mockCert.LastDnsNames).To(ContainElement(clusterName))
+			Expect(mockCert.LastDnsNames).To(ContainElement(spec.Spec.General.ServiceName))
+			Expect(mockCert.LastDnsNames).To(ContainElement(fmt.Sprintf("%s.%s", clusterName, clusterName)))
+			Expect(mockCert.LastDnsNames).To(ContainElement(fmt.Sprintf("%s.%s.svc", clusterName, clusterName)))
+
+			// Basic validation that the reconciler completed successfully
+			Expect(reconcilerContext.Volumes).Should(HaveLen(1))
+			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(1))
+
+			// Verify HTTP TLS config is set
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.ssl.http.enabled"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("true"))
+		})
+	})
 })

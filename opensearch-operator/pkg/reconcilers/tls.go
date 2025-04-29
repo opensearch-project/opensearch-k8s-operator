@@ -631,6 +631,12 @@ func (r *TLSReconciler) handleHttp() error {
 				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
 
+			// Add additional SANs if specified
+			if len(tlsConfig.AdditionalSANs) > 0 {
+				r.logger.Info("Adding additional SANs to HTTP certificate", "count", len(tlsConfig.AdditionalSANs))
+				dnsNames = append(dnsNames, tlsConfig.AdditionalSANs...)
+			}
+
 			var nodeCert tls.Cert
 
 			// Use ValidTill field if specified

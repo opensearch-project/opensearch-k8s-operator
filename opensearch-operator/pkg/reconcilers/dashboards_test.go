@@ -372,4 +372,67 @@ var _ = Describe("Dashboards Reconciler", func() {
 				))
 		})
 	})
+	When("running the dashboards reconciler with TLS enabled, generate enabled SAN supplied", func() {
+		It("should create a cert", func() {
+			clusterName := "dashboards-test-generate"
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			additionalSANs := []string{
+				"opensearch.example.com",
+				"custom-domain.example.org",
+				"*.opensearch-domain.com",
+			}
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Tls: &opsterv1.DashboardsTlsConfig{
+							Enable:         true,
+							Generate:       true,
+							AdditionalSANs: additionalSANs,
+						},
+					},
+				}}
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().GetSecret(clusterName+"-ca", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.EXPECT().GetSecret(clusterName+"-dashboards-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			var createdDeployment *appsv1.Deployment
+			mockClient.On("CreateDeployment", mock.Anything).
+				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
+					createdDeployment = deployment
+					return &ctrl.Result{}, nil
+				})
+			var createdSecret *corev1.Secret
+			mockClient.On("CreateSecret", mock.Anything).
+				Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+					createdSecret = secret
+					return &ctrl.Result{}, nil
+				})
+			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+
+			_, underTest := newDashboardsReconciler(mockClient, &spec)
+			underTest.pki = helpers.NewMockPKI()
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check if secret is mounted
+			Expect(helpers.CheckVolumeExists(createdDeployment.Spec.Template.Spec.Volumes, createdDeployment.Spec.Template.Spec.Containers[0].VolumeMounts, clusterName+"-dashboards-cert", "tls-cert")).Should((BeTrue()))
+			// Check if secret contains correct data keys
+			Expect(helpers.HasKeyWithBytes(createdSecret.Data, "tls.key")).To(BeTrue())
+			Expect(helpers.HasKeyWithBytes(createdSecret.Data, "tls.crt")).To(BeTrue())
+
+			mockCert := underTest.pki.(*helpers.PkiMock).GetUsedCertMock()
+
+			// Check that the certificate was created with the expected DNS names
+			Expect(mockCert.LastDnsNames).To(HaveLen(len(additionalSANs) + 4)) // 4 default DNS names + additional SANs
+
+			// Verify all additional SANs are included
+			for _, san := range additionalSANs {
+				Expect(mockCert.LastDnsNames).To(ContainElement(san))
+			}
+		})
+	})
 })
