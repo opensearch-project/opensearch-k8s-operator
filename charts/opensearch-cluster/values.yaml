@@ -455,6 +455,7 @@ indexTemplates: []
 #  - name: example-index-template
 #    indexPatterns:
 #      - "logs-2020-01-*"
+#    dataStream: null # optional
 #    composedOf: # optional
 #      - example-component-template
 #    priority: 100 # optional
