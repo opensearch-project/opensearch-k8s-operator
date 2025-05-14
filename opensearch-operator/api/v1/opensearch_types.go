@@ -221,8 +221,9 @@ type DashboardsTlsConfig struct {
 
 // Security defines options for managing the opensearch-security plugin
 type Security struct {
-	Tls    *TlsConfig      `json:"tls,omitempty"`
-	Config *SecurityConfig `json:"config,omitempty"`
+	Tls                *TlsConfig      `json:"tls,omitempty"`
+	Config             *SecurityConfig `json:"config,omitempty"`
+	RandomAdminSecrets bool            `json:"randomadminsecrets,omitempty"`
 }
 
 // Configure tls usage for transport and http interface
@@ -268,8 +269,9 @@ type SecurityConfig struct {
 	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
-	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
-	UpdateJob              SecurityUpdateJobConfig     `json:"updateJob,omitempty"`
+	AdminCredentialsSecret       corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
+	SecurityconfigSecretTemplate corev1.LocalObjectReference `json:"securityConfigSecretTemplate,omitempty"`
+	UpdateJob                    SecurityUpdateJobConfig     `json:"updateJob,omitempty"`
 }
 
 // Specific configs for the SecurityConfig update job
@@ -339,8 +341,10 @@ type ClusterStatus struct {
 	Version          string            `json:"version,omitempty"`
 	Initialized      bool              `json:"initialized,omitempty"`
 	// AvailableNodes is the number of available instances.
-	AvailableNodes int32            `json:"availableNodes,omitempty"`
-	Health         OpenSearchHealth `json:"health,omitempty"`
+	AvailableNodes       int32            `json:"availableNodes,omitempty"`
+	Health               OpenSearchHealth `json:"health,omitempty"`
+	AdminSecretCreated   bool             `json:"adminsecretcreated,omitempty"`
+	ContextSecretCreated bool             `json:"contextsecretcreated,omitempty"`
 }
 
 // +kubebuilder:object:root=true
