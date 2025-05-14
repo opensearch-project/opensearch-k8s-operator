@@ -6,7 +6,7 @@ Expand the name of the chart.
 {{- end }}
 
 {{- define "opensearch-cluster.cluster-name" -}}
-{{- default .Values.cluster.name .Release.Name | trunc 63 | trimSuffix "-" }}
+{{- default .Release.Name .Values.cluster.name | trunc 63 | trimSuffix "-" }}
 {{- end }}
 
 {{/*
