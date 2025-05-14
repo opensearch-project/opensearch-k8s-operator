@@ -67,13 +67,17 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	status := r.findStatus()
 	var pendingUpdate bool
 
-	// Check that all nodes are ready before doing work
-	// Also check if there are pending updates for all nodes.
+	statefulSets := []appsv1.StatefulSet{}
 	for _, nodePool := range r.instance.Spec.NodePools {
 		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+		statefulSets = append(statefulSets, sts)
+	}
+
+	// Check if there are pending updates for all nodes.
+	for _, sts := range statefulSets {
 		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
 			pendingUpdate = true
@@ -90,12 +94,6 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 				return ctrl.Result{}, err
 			}
 
-		}
-		if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
-			return ctrl.Result{
-				Requeue:      true,
-				RequeueAfter: 10 * time.Second,
-			}, nil
 		}
 	}
 
@@ -119,6 +117,47 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
+	// Check if there is any crashed pod. Delete it if there is any update in sts.
+	any_restarted_pod := false
+	for _, sts := range statefulSets {
+		restared_pod, err := helpers.DeleteStuckPodWithOlderRevision(r.client, &sts)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if restared_pod {
+			any_restarted_pod = true
+		}
+	}
+	if any_restarted_pod {
+		return ctrl.Result{
+			Requeue:      true,
+			RequeueAfter: 10 * time.Second,
+		}, nil
+	}
+
+	// Check that all nodes of all pools are ready before doing work
+	for _, nodePool := range r.instance.Spec.NodePools {
+		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: 10 * time.Second,
+			}, nil
+		}
+		// CountRunningPodsForNodePool provides a more consistent view of the sts. Status of statefulset
+		// is eventually consistent. Listing pods is more consistent.
+		numReadyPods, err := helpers.CountRunningPodsForNodePool(r.client, r.instance, &nodePool)
+		if err != nil || numReadyPods != int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: 10 * time.Second,
+			}, nil
+		}
+	}
+
 	// Skip a rolling restart if the cluster hasn't finished initializing
 	if !r.instance.Status.Initialized {
 		return ctrl.Result{
@@ -140,8 +179,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	// Restart StatefulSet pod.  Order is not important So we just pick the first we find
-
+	// Restart a single pod of a StatefulSet. Order is not important so we just pick the first we find
 	for _, nodePool := range r.instance.Spec.NodePools {
 		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
 		if err != nil {
@@ -149,18 +187,9 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}
 		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
-			// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
-			if sts.Status.ReadyReplicas == pointer.Int32Deref(sts.Spec.Replicas, 1) {
-				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.client, r.instance, &nodePool); err == nil && numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
-					lg.Info(fmt.Sprintf("Starting rolling restart of the StatefulSet %s", sts.Name))
-					return r.restartStatefulSetPod(&sts)
-				}
-			} else { // Check if there is any crashed pod. Delete it if there is any update in sts.
-				err = helpers.DeleteStuckPodWithOlderRevision(r.client, &sts)
-				if err != nil {
-					return ctrl.Result{}, err
-				}
-			}
+
+			lg.Info(fmt.Sprintf("Starting rolling restart of the StatefulSet %s", sts.Name))
+			return r.restartStatefulSetPod(&sts)
 		}
 	}
 
