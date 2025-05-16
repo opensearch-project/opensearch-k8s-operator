@@ -1469,3 +1469,95 @@ spec:
 Note that the default setting of `applyToExistingIndices` is false and it will be false if the flag is omitted in the manifest.
 
 When the flag is true, any existing indices in the opensearch cluster with the specified index pattern will have this ism policy applied to it. If multiple ism policies use this with the same index pattern, the priority has to be different between the ism policies.
+
+## Apply ism policies to existing indices
+
+The operator provides a flag to apply ism policies to already existing indices in the opensearch cluster.
+This is done by setting the `applyToExistingIndices` flag to true in the `OpenSearchISMPolicy` CRD. An example of this can be seen below:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchISMPolicy
+metadata:
+  name: test-policy-apply
+spec:
+  opensearchCluster:
+    name: opensearch-cluster
+  applyToExistingIndices: true
+  description: "Test ISM policy - Apply to existing indices is true"
+  defaultState: "hot"
+  ismTemplate:
+    indexPatterns:
+      - "test-*"
+  states:
+    - name: hot
+      actions:
+        - replicaCount:
+            numberOfReplicas: 2
+      transitions:
+        - stateName: warm
+          conditions:
+            minIndexAge: "1d"
+    - name: warm
+      actions:
+        - replicaCount:
+            numberOfReplicas: 1
+```
+
+Note that the default setting of `applyToExistingIndices` is false and it will be false if the flag is omitted in the manifest.
+
+When the flag is true, any existing indices in the opensearch cluster with the specified index pattern will have this ism policy applied to it. If multiple ism policies use this with the same index pattern, the priority has to be different between the ism policies.
+
+### Managing Snapshot Policies with Kubernetes Resources
+
+The OpenSearch Operator provides a custom Kubernetes resource to create, update, and manage Snapshot Lifecycle Management (SLM) policies using Kubernetes manifests. This makes it possible to declaratively define and control snapshot policies alongside your cluster resources.
+
+Fields in the CRD map directly to the OpenSearch snapshot policy structure, allowing seamless integration. Policies are not modified if they already exist in OpenSearch. You can define a new policy using the following example:
+
+```
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchSnapshotPolicy
+metadata:
+  name: sample-policy
+  namespace: default
+spec:
+  policyName: sample-policy
+  enabled: true
+  description: Sample policy
+  opensearchCluster:
+    name: my-first-cluster
+  creation:
+    schedule:
+      cron:
+        expression: "0 0 * * *"
+        timezone: "UTC"
+    timeLimit: "1h"
+  deletion:
+    schedule:
+      cron:
+        expression: "0 1 * * *"
+        timezone: "UTC"
+    timeLimit: "30m"
+    deleteCondition:
+      maxAge: "7d"
+      maxCount: 10
+      minCount: 3
+  snapshotConfig:
+    repository: sample-repository
+    indices: "*"
+    includeGlobalState: true
+    ignoreUnavailable: false
+    partial: false
+    dateFormat: "yyyy-MM-dd-HH-mm"
+    dateFormatTimezone: "UTC"
+    metadata:
+      createdBy: "sample-operator"
+```
+
+#### Note:
+
+- The OpensearchSnapshotPolicy must be created in the same namespace as the OpenSearch cluster it targets.
+
+- `policyName` is an optional field, and if not provided `metadata.name` is used as the default.
+
+- The repository field must reference an existing snapshot repository in the OpenSearch cluster.
