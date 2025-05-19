@@ -129,7 +129,7 @@ func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster
 		return string(username), string(password), nil
 	} else {
 		// Use default demo credentials
-		return "admin", "admin", nil
+		return "kibanaserver", "kibanaserver", nil
 	}
 }
 
