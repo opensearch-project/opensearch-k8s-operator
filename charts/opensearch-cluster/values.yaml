@@ -199,8 +199,6 @@ cluster:
       loadBalancerSourceRanges: []
       # -- dashboards service type
       type: ClusterIP
-      # -- dashboards service metadata labels
-      labels: {}
 
     tls:
       # -- Secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing

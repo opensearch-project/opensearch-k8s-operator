@@ -2794,11 +2794,6 @@ spec:
                         - NodePort
                         - LoadBalancer
                         type: string
-                        labels:
-                          additionalProperties:
-                            type: string
-                          description: Additional labels to apply to the dashboard service
-                          type: object
                     type: object
                   tls:
                     properties:
