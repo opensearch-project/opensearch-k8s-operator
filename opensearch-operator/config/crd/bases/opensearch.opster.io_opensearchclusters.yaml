@@ -5264,6 +5264,19 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      securityConfigSecretTemplate:
+                        description: |-
+                          LocalObjectReference contains enough information to let you locate the
+                          referenced object inside the same namespace.
+                        properties:
+                          name:
+                            description: |-
+                              Name of the referent.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                              TODO: Add other useful fields. apiVersion, kind, uid?
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
                       updateJob:
                         description: Specific configs for the SecurityConfig update
                           job
@@ -5327,6 +5340,8 @@ spec:
                             type: object
                         type: object
                     type: object
+                  randomadminsecrets:
+                    type: boolean
                   tls:
                     description: Configure tls usage for transport and http interface
                     properties:
@@ -5424,6 +5439,8 @@ spec:
           status:
             description: ClusterStatus defines the observed state of Es
             properties:
+              adminsecretcreated:
+                type: boolean
               availableNodes:
                 description: AvailableNodes is the number of available instances.
                 format: int32
@@ -5443,6 +5460,8 @@ spec:
                       type: string
                   type: object
                 type: array
+              contextsecretcreated:
+                type: boolean
               health:
                 description: OpenSearchHealth is the health of the cluster as returned
                   by the health API.

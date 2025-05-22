@@ -1501,6 +1501,52 @@ func (_c *MockK8sClient_UpdatePVC_Call) RunAndReturn(run func(*v1.PersistentVolu
 	return _c
 }
 
+// UpdateSecret provides a mock function with given fields: secret
+func (_m *MockK8sClient) UpdateSecret(secret *v1.Secret) error {
+	ret := _m.Called(secret)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateSecret")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*v1.Secret) error); ok {
+		r0 = rf(secret)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_UpdateSecret_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateSecret'
+type MockK8sClient_UpdateSecret_Call struct {
+	*mock.Call
+}
+
+// UpdateSecret is a helper method to define mock.On call
+//   - secret *v1.Secret
+func (_e *MockK8sClient_Expecter) UpdateSecret(secret interface{}) *MockK8sClient_UpdateSecret_Call {
+	return &MockK8sClient_UpdateSecret_Call{Call: _e.mock.On("UpdateSecret", secret)}
+}
+
+func (_c *MockK8sClient_UpdateSecret_Call) Run(run func(secret *v1.Secret)) *MockK8sClient_UpdateSecret_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*v1.Secret))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_UpdateSecret_Call) Return(_a0 error) *MockK8sClient_UpdateSecret_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_UpdateSecret_Call) RunAndReturn(run func(*v1.Secret) error) *MockK8sClient_UpdateSecret_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // NewMockK8sClient creates a new instance of MockK8sClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockK8sClient(t interface {

@@ -88,6 +88,7 @@ func NewSecurityconfigReconciler(
 }
 
 func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
+
 	if r.instance.Spec.Security == nil {
 		return ctrl.Result{}, nil
 	}
@@ -108,10 +109,65 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, nil
 	}
 
+	// if r.instance.Status.Health == "green" && !r.instance.Status.SecretPatched && r.instance.Spec.Security.RandomAdminSecrets && r.instance.Status.Initialized && r.instance.Status.IsMasterRestarted {
+	// 	r.logger.Info("Cluster with default credentials initialized. Generate random secrets.")
+	// 	// wait 2 min to be suree
+	// 	time.Sleep(time.Minute * 4)
+	// 	changed, err := helpers.PatchRandomSecrets(r.client, r.instance)
+	// 	if changed {
+	// 		// r.instance.Status.SecretPatched = true
+	// 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+	// 			instance.Status.SecretPatched = true
+	// 		})
+	// 		// r.callUpdateSecurityConfigJob()
+	// 		r.logger.Info("Cluster  default credentials changed.")
+	// 		return ctrl.Result{}, err
+	// 	} else {
+	// 		r.logger.Error(err, "Cluster  default credentials not changed.")
+	// 	}
+	// }
+
 	// Checking if Security Config values are empty and creates a default-securityconfig secret
 	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.SecurityconfigSecret.Name != "" {
 		// Use a user passed value of SecurityconfigSecret name
 		configSecretName = r.instance.Spec.Security.Config.SecurityconfigSecret.Name
+		if r.instance.Spec.Security.RandomAdminSecrets && r.instance.Spec.Security.Config.SecurityconfigSecretTemplate.Name != "" {
+			if helpers.NeedToCreateCustomSecret(r.client, r.instance, r.instance.Spec.Security.Config.AdminCredentialsSecret.Name) {
+				r.logger.Info(fmt.Sprintf("Creating  secrets '%s' that contains the default credentials", r.instance.Spec.Security.Config.AdminCredentialsSecret.Name))
+				createdAdmin, err := helpers.CreateCustomAdminSecrets(r.client, r.instance)
+				if err != nil {
+					r.logger.Error(err, "Unable to create admin secret")
+					return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 30}, err
+				}
+				err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+					instance.Status.AdminSecretCreated = createdAdmin
+				})
+				if err != nil {
+					r.logger.Error(err, "Unable to update admin secret creation status")
+					return ctrl.Result{}, err
+				}
+				if helpers.NeedToCreateCustomSecret(r.client, r.instance, r.instance.Spec.Security.Config.SecurityconfigSecret.Name) {
+					r.logger.Info(fmt.Sprintf("Creating  secrets '%s' that contains the default securitycontext", r.instance.Spec.Security.Config.SecurityconfigSecret.Name))
+					createdContext, err := helpers.CreateCustomAdminContextSecrets(r.client, r.instance)
+					if err != nil {
+						r.logger.Error(err, "Unable to update security context secret creation status")
+						return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 30}, err
+					}
+					err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+						instance.Status.ContextSecretCreated = createdContext
+					})
+					if err != nil {
+						r.logger.Error(err, "Unable to update security context secret creation status")
+						return ctrl.Result{}, err
+					}
+				}
+			}
+		} else {
+			if r.instance.Spec.Security.Config.SecurityconfigSecretTemplate.Name == "" {
+				r.logger.Info("RandomSecret enabled but Security Config Secret Template not defined")
+			}
+		}
+
 		// Wait for secret to be available
 		configSecret, err := r.client.GetSecret(configSecretName, namespace)
 		if err != nil {
