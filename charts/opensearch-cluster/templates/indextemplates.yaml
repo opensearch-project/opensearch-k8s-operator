@@ -13,6 +13,9 @@ metadata:
 spec:
   opensearchCluster:
     name: {{ $clusterName }}
+  {{- if not (eq .dataStream nil) }}
+  dataStream: {{ .dataStream | toYaml | nindent 4 }}
+  {{- end }}
   {{- with .indexPatterns }}
   indexPatterns: {{ . | toYaml | nindent 4 }}
   {{- end }}
