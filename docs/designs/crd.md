@@ -550,6 +550,12 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>Updates the probes timeouts and thresholds config</td>
         <td>false</td>
         <td>-</td>
+      </tr><tr>
+        <td><b>sidecars</b></td>
+        <td>[]object</td>
+        <td>List of sidecar containers to be attached to the OpenSearch node pods. Each sidecar follows the Kubernetes container spec.</td>
+        <td>false</td>
+        <td>-</td>
       </tr>
 </table>
 
