@@ -1,0 +1,27 @@
+# permissions for end users to view opensearchsnapshotpolicies.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: opensearchsnapshotpolicy-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: opensearch-operator
+    app.kubernetes.io/part-of: opensearch-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: opensearchsnapshotpolicy-viewer-role
+rules:
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchsnapshotpolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchsnapshotpolicies/status
+  verbs:
+  - get
