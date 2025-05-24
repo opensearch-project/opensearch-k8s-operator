@@ -22,14 +22,14 @@ import (
 	"os"
 	"strconv"
 
-	"go.uber.org/zap/zapcore"
-
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
+	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -37,8 +37,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 
 	"net/http"
 	_ "net/http/pprof"
