@@ -29,9 +29,8 @@ import (
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
-	"github.com/phayes/freeport"
-
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/phayes/freeport"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 

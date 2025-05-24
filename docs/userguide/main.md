@@ -1560,4 +1560,4 @@ spec:
 
 - `policyName` is an optional field, and if not provided `metadata.name` is used as the default.
 
-- The repository field must reference an existing snapshot repository in the OpenSearch cluster.
+- The repository field must reference an existing snapshot repository in the OpenSearch cluster. For creating a snapshot repository, you can use [this](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#configuring-snapshot-repositories) guide.

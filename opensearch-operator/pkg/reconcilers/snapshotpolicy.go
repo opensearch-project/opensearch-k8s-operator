@@ -250,7 +250,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 
 	// Return if there are no changes
 	if r.instance.Status.SnapshotPolicyName == existingPolicy.Policy.PolicyName && cmp.Equal(*newPolicy, existingPolicy.Policy, cmpopts.EquateEmpty()) {
-		r.logger.V(1).Info(fmt.Sprintf("policy %s is in sync", r.instance.Name))
+		r.logger.V(1).Info(fmt.Sprintf("policy %s is in sync", r.instance.Spec.PolicyName))
 		r.recorder.Event(r.instance, "Normal", opensearchAPIUnchanged, "policy is in sync")
 		return ctrl.Result{
 			Requeue:      true,
