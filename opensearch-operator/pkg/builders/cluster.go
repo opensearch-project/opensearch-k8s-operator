@@ -334,6 +334,11 @@ func NewSTSForNodePool(
 	podSecurityContext := cr.Spec.General.PodSecurityContext
 	securityContext := cr.Spec.General.SecurityContext
 
+	var persistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy
+	if cr.Spec.General.PersistentVolumeClaimRetentionPolicy != nil {
+		persistentVolumeClaimRetentionPolicy = cr.Spec.General.PersistentVolumeClaimRetentionPolicy
+	}
+
 	var initContainers []corev1.Container
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
@@ -457,7 +462,8 @@ func NewSTSForNodePool(
 			Selector: &metav1.LabelSelector{
 				MatchLabels: matchLabels,
 			},
-			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
+			PodManagementPolicy:                  appsv1.OrderedReadyPodManagement,
+			PersistentVolumeClaimRetentionPolicy: persistentVolumeClaimRetentionPolicy,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: appsv1.OnDeleteStatefulSetStrategyType,
 			},
