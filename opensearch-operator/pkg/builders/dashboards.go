@@ -62,8 +62,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "password"}}})
 	} else {
 		// Default values from demo configuration
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", Value: "admin"})
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", Value: "admin"})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", Value: "kibanaserver"})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", Value: "kibanaserver"})
 	}
 
 	labels := map[string]string{
