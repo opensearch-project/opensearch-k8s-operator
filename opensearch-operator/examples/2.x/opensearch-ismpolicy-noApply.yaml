@@ -1,0 +1,26 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchISMPolicy
+metadata:
+  name: test-policy-no-apply
+spec:
+  opensearchCluster:
+    name: opensearch-cluster
+  applyToExistingIndices: false
+  description: "Test ISM policy 2 - Apply to existing indices is false"
+  defaultState: "hot"
+  ismTemplate:
+    indexPatterns:
+      - "test-*"
+  states:
+    - name: hot
+      actions:
+        - replicaCount:
+            numberOfReplicas: 2
+      transitions:
+        - stateName: warm
+          conditions:
+            minIndexAge: "1d"
+    - name: warm
+      actions:
+        - replicaCount:
+            numberOfReplicas: 1
