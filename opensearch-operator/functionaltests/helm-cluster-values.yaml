@@ -1,0 +1,19 @@
+cluster:
+  general:
+    serviceAccount: opensearch
+  nodePools:
+    - component: masters
+      diskSize: "30Gi"
+      replicas: 3
+      roles:
+        - "master"
+        - "data"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
+      operatorSidecar:
+        enable: true
