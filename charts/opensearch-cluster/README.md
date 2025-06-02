@@ -50,6 +50,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.general.imagePullPolicy | string | `"IfNotPresent"` | Default image pull policy |
 | cluster.general.keystore | list | `[]` | Populate opensearch keystore before startup |
 | cluster.general.monitoring.enable | bool | `false` | Enable cluster monitoring |
+| cluster.general.monitoring.labels | object | `{}` | Additional labels to apply to the generated ServiceMonitor |
 | cluster.general.monitoring.monitoringUserSecret | string | `""` | Secret with 'username' and 'password' keys for monitoring user. You could also use OpenSearchUser CRD instead of setting it. |
 | cluster.general.monitoring.pluginUrl | string | `""` | Custom URL for the monitoring plugin |
 | cluster.general.monitoring.scrapeInterval | string | `"30s"` | How often to scrape metrics |
