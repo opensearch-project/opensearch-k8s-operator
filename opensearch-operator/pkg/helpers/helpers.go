@@ -201,15 +201,26 @@ func MapClusterRole(role string, ver string) string {
 	if err != nil {
 		return role
 	}
-	clusterManagerVer, _ := version.NewVersion("2.0.0")
-	is2XVersion := osVer.GreaterThanOrEqual(clusterManagerVer)
-	if role == "master" && is2XVersion {
-		return "cluster_manager"
-	} else if role == "cluster_manager" && !is2XVersion {
-		return "master"
-	} else {
-		return role
+
+	majorVersion := osVer.Segments()[0]
+	roleMap := map[int]map[string]string{
+		1: {
+			"cluster_manager": "master",
+		},
+		2: {
+			"master": "cluster_manager",
+			"warm":   "search",
+		},
+		3: {
+			"master": "cluster_manager",
+		},
 	}
+
+	if mappedRole, ok := roleMap[majorVersion][role]; ok {
+		return mappedRole
+	}
+
+	return role
 }
 
 func MapClusterRoles(roles []string, version string) []string {

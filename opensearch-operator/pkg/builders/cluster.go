@@ -60,6 +60,7 @@ func NewSTSForNodePool(
 		"transform",
 		"cluster_manager",
 		"search",
+		"warm",
 	}
 	var selectedRoles []string
 	for _, role := range node.Roles {

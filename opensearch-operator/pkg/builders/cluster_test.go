@@ -134,6 +134,30 @@ var _ = Describe("Builders", func() {
 				Value: "master",
 			}))
 		})
+		It("should accept the warm role", func() {
+			clusterObject := ClusterDescWithVersion("3.0.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"warm"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "node.roles",
+				Value: "warm",
+			}))
+		})
+		It("should convert the warm role", func() {
+			clusterObject := ClusterDescWithVersion("2.0.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"warm"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "node.roles",
+				Value: "search",
+			}))
+		})
 		It("should have annotations added to node", func() {
 			clusterObject := ClusterDescWithVersion("1.3.0")
 			nodePool := opsterv1.NodePool{
