@@ -212,7 +212,6 @@ func MapClusterRole(role string, ver string) string {
 			"warm":   "search",
 		},
 		3: {
-			"search": "warm",
 			"master": "cluster_manager",
 		},
 	}
