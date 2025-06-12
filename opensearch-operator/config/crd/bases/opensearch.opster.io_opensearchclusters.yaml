@@ -4902,6 +4902,10 @@ spec:
                           type: object
                         readiness:
                           properties:
+                            command:
+                              items:
+                                type: string
+                              type: array
                             failureThreshold:
                               format: int32
                               type: integer
@@ -4911,12 +4915,19 @@ spec:
                             periodSeconds:
                               format: int32
                               type: integer
+                            successThreshold:
+                              format: int32
+                              type: integer
                             timeoutSeconds:
                               format: int32
                               type: integer
                           type: object
                         startup:
                           properties:
+                            command:
+                              items:
+                                type: string
+                              type: array
                             failureThreshold:
                               format: int32
                               type: integer
