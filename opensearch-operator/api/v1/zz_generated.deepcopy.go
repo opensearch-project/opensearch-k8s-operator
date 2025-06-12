@@ -2501,6 +2501,7 @@ func (in *SecurityConfig) DeepCopyInto(out *SecurityConfig) {
 	out.SecurityconfigSecret = in.SecurityconfigSecret
 	out.AdminSecret = in.AdminSecret
 	out.AdminCredentialsSecret = in.AdminCredentialsSecret
+	out.SecurityconfigSecretTemplate = in.SecurityconfigSecretTemplate
 	in.UpdateJob.DeepCopyInto(&out.UpdateJob)
 }
 
