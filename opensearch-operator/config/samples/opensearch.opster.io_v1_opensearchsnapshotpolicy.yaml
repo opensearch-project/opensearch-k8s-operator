@@ -1,0 +1,37 @@
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchSnapshotPolicy
+metadata:
+  name: sample-policy
+  namespace: default
+spec:
+  policyName: sample-policy
+  enabled: true
+  description: Sample policy
+  opensearchCluster:
+    name: my-first-cluster
+  creation:
+    schedule:
+      cron:
+        expression: "0 0 * * *"
+        timezone: "UTC"
+    timeLimit: "1h"
+  deletion:
+    schedule:
+      cron:
+        expression: "0 1 * * *"
+        timezone: "UTC"
+    timeLimit: "30m"
+    deleteCondition:
+      maxAge: "7d"
+      maxCount: 10
+      minCount: 3
+  snapshotConfig:
+    repository: sample-repository
+    indices: "*"
+    includeGlobalState: true
+    ignoreUnavailable: false
+    partial: false
+    dateFormat: "yyyy-MM-dd-HH-mm"
+    dateFormatTimezone: "UTC"
+    metadata:
+      createdBy: "sample-operator"
