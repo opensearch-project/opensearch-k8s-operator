@@ -40,10 +40,10 @@ metadata:
 spec:
   general:
     serviceName: my-first-cluster
-    version: 2
+    version: 3
   dashboards:
     enable: true
-    version: 2
+    version: 3
     replicas: 1
     resources:
       requests:
