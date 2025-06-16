@@ -11,6 +11,7 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 )
 
+// GetSnapshotPolicy gets the snapshot policy with the given name
 func GetSnapshotPolicy(ctx context.Context, service *OsClusterClient, policyName string) (*responses.GetSnapshotPolicyResponse, error) {
 	resp, err := service.GetSnapshotPolicyConfig(ctx, policyName)
 	if err != nil {
@@ -61,7 +62,7 @@ func DeleteSnapshotPolicy(ctx context.Context, service *OsClusterClient, policyN
 	return nil
 }
 
-// UpdateSnapshot policy updates the given policy
+// UpdateSnapshotPolicy updates the given policy
 func UpdateSnapshotPolicy(ctx context.Context, service *OsClusterClient, snapshotpolicy requests.SnapshotPolicy, seqno, primterm *int, policyName string) error {
 	spec := opensearchutil.NewJSONReader(snapshotpolicy)
 	resp, err := service.UpdateSnapshotPolicyConfig(ctx, policyName, *seqno, *primterm, spec)

@@ -63,7 +63,6 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 
 	defer func() {
 		if !pointer.BoolDeref(r.updateStatus, true) {
-			r.logger.Info("error reconcilers snapshot line no 65")
 			return
 		}
 		// When the reconciler is done, figure out what the state of the resource
@@ -97,7 +96,6 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 	})
 	if err != nil {
 		reason = "error fetching opensearch cluster"
-		r.logger.Error(err, "error reconcilers snapshot line no 100")
 		r.logger.Error(err, "failed to fetch opensearch cluster")
 		r.recorder.Event(r.instance, "Warning", opensearchError, reason)
 		return ctrl.Result{

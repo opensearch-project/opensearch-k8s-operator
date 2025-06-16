@@ -385,7 +385,7 @@ func (client *OsClusterClient) CreateSnapshotPolicyConfig(ctx context.Context, n
 	return doHTTPPost(ctx, client.client, path, body)
 }
 
-// DeleteSnapshotPolicy performs an HTTP DELETE request to OS to delete the Snapshot policy resource specified by name
+// DeleteSnapshotPolicyConfig performs an HTTP DELETE request to OS to delete the Snapshot policy resource specified by name
 func (client *OsClusterClient) DeleteSnapshotPolicyConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPathSnapshotPolicies(snapshotpolicyResource, name)
 	return doHTTPDelete(ctx, client.client, path)
