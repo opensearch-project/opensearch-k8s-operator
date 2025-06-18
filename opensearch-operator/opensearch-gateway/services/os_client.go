@@ -20,8 +20,9 @@ import (
 const (
 	headerContentType = "Content-Type"
 
-	jsonContentHeader = "application/json"
-	ismResource       = "_ism"
+	jsonContentHeader      = "application/json"
+	ismResource            = "_ism"
+	snapshotpolicyResource = "_sm"
 )
 
 var AdditionalSystemIndices = []string{
@@ -372,6 +373,30 @@ func (client *OsClusterClient) DeleteSnapshotRepository(ctx context.Context, nam
 	return doHTTPDelete(ctx, client.client, path)
 }
 
+// GetSnapshotPolicyConfig performs an HTTP GET request to OS to create the Snapshot policy resource specified by name
+func (client *OsClusterClient) GetSnapshotPolicyConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotPolicies(snapshotpolicyResource, name)
+	return doHTTPGet(ctx, client.client, path)
+}
+
+// CreateSnapshotPolicyConfig performs an HTTP POST request to OS to create the Snapshot policy resource specified by name
+func (client *OsClusterClient) CreateSnapshotPolicyConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotPolicies(snapshotpolicyResource, name)
+	return doHTTPPost(ctx, client.client, path, body)
+}
+
+// DeleteSnapshotPolicyConfig performs an HTTP DELETE request to OS to delete the Snapshot policy resource specified by name
+func (client *OsClusterClient) DeleteSnapshotPolicyConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotPolicies(snapshotpolicyResource, name)
+	return doHTTPDelete(ctx, client.client, path)
+}
+
+// UpdateSnapshotPolicyConfig performs an HTTP PUT request to OS to update the Snapshot policy resource specified by name
+func (client *OsClusterClient) UpdateSnapshotPolicyConfig(ctx context.Context, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotUpdatePolicies(snapshotpolicyResource, name, seqnumber, primterm)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
 // generateGetIndicesPath generates a URI PATH for a specific resource endpoint and name
 // For example: pattern = example-*
 // URI PATH = '_cat/indices/example-*?format=json'
@@ -469,5 +494,43 @@ func generateAPIPathSnapshotRepository(name string) strings.Builder {
 	path.WriteString("_snapshot")
 	path.WriteString("/")
 	path.WriteString(name)
+	return path
+}
+
+// generateAPIPathSnapshotPolicies generates a URI PATH for a specific resource endpoint and name
+// For example: resource = _sm, name = example
+// URI PATH = '_plugins/_sm/policies/example'
+func generateAPIPathSnapshotPolicies(resource, name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("policies")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
+// generateAPIPathSnapshotPolicies generates a URI PATH for a specific resource endpoint and name for updating the resource
+// For example: resource = _sm, name = example, seqno = 1, primaryterm = 0
+// URI PATH = '_plugins/_sm/policies/example'
+func generateAPIPathSnapshotUpdatePolicies(resource, name string, seqno, primaryterm int) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name) + len("?if_seq_no=") + len(strconv.Itoa(seqno)) + len("&if_primary_term=") + len(strconv.Itoa(primaryterm)))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("policies")
+	path.WriteString("/")
+	path.WriteString(name)
+	path.WriteString("?if_seq_no=")
+	path.WriteString(strconv.Itoa(seqno))
+	path.WriteString("&if_primary_term=")
+	path.WriteString(strconv.Itoa(primaryterm))
 	return path
 }
