@@ -430,27 +430,27 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 							r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
 							return nil, errors.New(reason)
 						}
-						if action.Shrink.NumNewShards != nil {
-							if action.Shrink.MaxShardSize == nil && action.Shrink.PercentageOfSourceShards == nil {
-								shrink.NumNewShards = action.Shrink.NumNewShards
-							} else {
-								reason := "numNewShards can't exist with MaxShardSize or PercentageOfSourceShards. Keep one of these"
-								r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
-								return nil, errors.New(reason)
-							}
+					}
+					if action.Shrink.NumNewShards != nil {
+						if action.Shrink.MaxShardSize == nil && action.Shrink.PercentageOfSourceShards == nil {
+							shrink.NumNewShards = action.Shrink.NumNewShards
+						} else {
+							reason := "numNewShards can't exist with MaxShardSize or PercentageOfSourceShards. Keep one of these"
+							r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
+							return nil, errors.New(reason)
 						}
-						if action.Shrink.PercentageOfSourceShards != nil {
-							if action.Shrink.NumNewShards == nil && action.Shrink.MaxShardSize == nil {
-								shrink.PercentageOfSourceShards = action.Shrink.PercentageOfSourceShards
-							} else {
-								reason := "percentageOfSourceShards can't exist with MaxShardSize or NumNewShards. Keep one of these"
-								r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
-								return nil, errors.New(reason)
-							}
+					}
+					if action.Shrink.PercentageOfSourceShards != nil {
+						if action.Shrink.NumNewShards == nil && action.Shrink.MaxShardSize == nil {
+							shrink.PercentageOfSourceShards = action.Shrink.PercentageOfSourceShards
+						} else {
+							reason := "percentageOfSourceShards can't exist with MaxShardSize or NumNewShards. Keep one of these"
+							r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
+							return nil, errors.New(reason)
 						}
-						if action.Shrink.TargetIndexNameTemplate != nil {
-							shrink.TargetIndexNameTemplate = action.Shrink.TargetIndexNameTemplate
-						}
+					}
+					if action.Shrink.TargetIndexNameTemplate != nil {
+						shrink.TargetIndexNameTemplate = action.Shrink.TargetIndexNameTemplate
 					}
 				}
 
