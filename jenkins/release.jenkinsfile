@@ -77,8 +77,59 @@ pipeline {
                     sh("git checkout ${ref_final}")
 
                     def OPERATOR_PRODUCT = "opensearch-operator"
+                    def SIDECAR_PRODUCT = "operator-sidecar"
                     def OPERATOR_VERSION = ref_final.substring(1);
 
+
+                    // First build and promote image for the sidecar
+                    echo("${SIDECAR_PRODUCT}: ${OPERATOR_VERSION}")
+
+                    // Build and push to dockerhub staging repo https://hub.docker.com/r/opensearchstaging/opensearch-operator.
+                    dockerBuild: {
+                        build job: 'docker-build',
+                        parameters: [
+                            string(name: 'DOCKER_BUILD_GIT_REPOSITORY', value: "${REPO_URL}"),
+                            string(name: 'DOCKER_BUILD_GIT_REPOSITORY_REFERENCE', value: "${ref_final}"),
+                            string(name: 'DOCKER_BUILD_SCRIPT_WITH_COMMANDS', value: [
+                                    'ls -l',
+                                    'cd operator-sidecar',
+                                    [
+                                        'bash',
+                                        '../scripts/build-image-multi-arch.sh',
+                                        "-v ${OPERATOR_VERSION}",
+                                        "-a 'x64,arm,arm64'",
+                                        "-f Dockerfile",
+                                        "-p ${SIDECAR_PRODUCT}"
+                                    ].join(' ')
+                            ].join(' && ')),
+                        ]
+                    }
+                    // This is required to copy the operator to staging ECR https://gallery.ecr.aws/opensearchstaging/opensearch-operator repo as the docker-promotion job does not promote to staging ECR.
+                    dockerCopy: {
+                        build job: 'docker-copy',
+                            parameters: [
+                                string(name: 'SOURCE_IMAGE_REGISTRY', value: 'opensearchstaging'),
+                                string(name: 'SOURCE_IMAGE', value: "${SIDECAR_PRODUCT}:${OPERATOR_VERSION}"),
+                                string(name: 'DESTINATION_IMAGE_REGISTRY', value: 'public.ecr.aws/opensearchstaging'),
+                                string(name: 'DESTINATION_IMAGE', value: "${SIDECAR_PRODUCT}:${OPERATOR_VERSION}")
+                            ]
+                    }
+
+                    // Promote to DockerHub Prod https://hub.docker.com/r/opensearchproject/opensearch-operator repo.
+                    // Promote to ECR Prod https://gallery.ecr.aws/opensearchproject/opensearch-operator repo.
+                    dockerPromotion: {
+                        build job: 'docker-promotion',
+                            parameters: [
+                                string(name: 'SOURCE_IMAGES', value: "${SIDECAR_PRODUCT}:${OPERATOR_VERSION}"),
+                                string(name: 'RELEASE_VERSION', value: "${OPERATOR_VERSION}"),
+                                booleanParam(name: 'DOCKER_HUB_PROMOTE', value: true),
+                                booleanParam(name: 'ECR_PROMOTE', value: true),
+                                booleanParam(name: 'TAG_LATEST', value: true),
+                                booleanParam(name: 'TAG_MAJOR_VERSION', value: false)
+                            ]
+                    }
+
+                    // Then build the actual operator image
                     echo("${OPERATOR_PRODUCT}: ${OPERATOR_VERSION}")
 
                     // Build and push to dockerhub staging repo https://hub.docker.com/r/opensearchstaging/opensearch-operator.
