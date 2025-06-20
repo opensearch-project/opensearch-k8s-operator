@@ -185,6 +185,14 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchComponentTemplate")
 		os.Exit(1)
 	}
+	if err = (&controllers.OpensearchSnapshotPolicyReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("snapshotpolicy-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

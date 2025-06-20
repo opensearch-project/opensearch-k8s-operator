@@ -21,11 +21,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-var _ = Describe("ism policy reconciler", func() {
+var _ = Describe("snapshot policy reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
-		reconciler *IsmPolicyReconciler
-		instance   *opsterv1.OpenSearchISMPolicy
+		reconciler *SnapshotPolicyReconciler
+		instance   *opsterv1.OpensearchSnapshotPolicy
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
@@ -37,20 +37,20 @@ var _ = Describe("ism policy reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opsterv1.OpenSearchISMPolicy{
+		instance = &opsterv1.OpensearchSnapshotPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-policy",
 				Namespace: "test-policy",
 				UID:       types.UID("testuid"),
 			},
-			Spec: opsterv1.OpenSearchISMPolicySpec{
-				PolicyID: "test-policy",
+			Spec: opsterv1.OpensearchSnapshotPolicySpec{
+				PolicyName: "test-policy",
 				OpensearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 			},
-			Status: opsterv1.OpensearchISMPolicyStatus{
-				PolicyId: "test-policy",
+			Status: opsterv1.OpensearchSnapshotPolicyStatus{
+				SnapshotPolicyName: "test-policy",
 			},
 		}
 
@@ -80,7 +80,7 @@ var _ = Describe("ism policy reconciler", func() {
 	JustBeforeEach(func() {
 		options := ReconcilerOptions{}
 		options.apply(WithOSClientTransport(transport), WithUpdateStatus(false))
-		reconciler = &IsmPolicyReconciler{
+		reconciler = &SnapshotPolicyReconciler{
 			client:            mockClient,
 			ctx:               context.Background(),
 			ReconcilerOptions: options,
@@ -96,7 +96,7 @@ var _ = Describe("ism policy reconciler", func() {
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
-		It("should wait for the cluster to exist", func() {
+		It("should wait he cluster to exist", func() {
 			go func() {
 				defer GinkgoRecover()
 				defer close(recorder.Events)
@@ -118,7 +118,6 @@ var _ = Describe("ism policy reconciler", func() {
 			recorder = record.NewFakeRecorder(1)
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 		})
-
 		It("should emit a unit test event and requeue", func() {
 			go func() {
 				defer GinkgoRecover()
@@ -188,23 +187,24 @@ var _ = Describe("ism policy reconciler", func() {
 			})
 		})
 
-		Context("policy does not exist in opensearch", func() {
+		When("policy does not exist in opensearch", func() {
 			BeforeEach(func() {
+				mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
+
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
 						cluster.Spec.General.ServiceName,
 						cluster.Namespace,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(404, "Not Found").Once(),
 				)
-
 				transport.RegisterResponder(
-					http.MethodPut,
+					http.MethodPost,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
 						cluster.Spec.General.ServiceName,
 						cluster.Namespace,
 						instance.Name,
@@ -212,141 +212,20 @@ var _ = Describe("ism policy reconciler", func() {
 					httpmock.NewStringResponder(200, "OK").Once(),
 				)
 			})
-
-			When("apply ism policy to existing indices is false", func() {
-				BeforeEach(func() {
-					instance.Spec.ApplyToExistingIndices = pointer.Bool(false)
-					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
-				})
-
-				It("should create the policy, emit a unit test event, and requeue", func() {
-					go func() {
-						defer GinkgoRecover()
-						defer close(recorder.Events)
-						result, err := reconciler.Reconcile()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(result.Requeue).To(BeTrue())
-					}()
-					var events []string
-					for msg := range recorder.Events {
-						events = append(events, msg)
-					}
-					Expect(len(events)).To(Equal(1))
-					Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s policy successfully created in OpenSearch Cluster", opensearchAPIUpdated)))
-				})
-			})
-
-			Context("applyToExistingIndices is true", func() {
-				indexName := "test-index-1"
-				BeforeEach(func() {
-					instance.Spec.ApplyToExistingIndices = pointer.Bool(true)
-					instance.Spec.ISMTemplate = &opsterv1.ISMTemplate{
-						IndexPatterns: []string{"test-*"},
-					}
-					transport.RegisterResponder(
-						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_cat/indices/test-*",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
-						httpmock.NewJsonResponderOrPanic(200, []map[string]interface{}{
-							{"index": indexName},
-						}),
-					)
-				})
-
-				When("successfully applied applied policy to indices", func() {
-					BeforeEach(func() {
-						mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
-						transport.RegisterResponder(
-							http.MethodPost,
-							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/add/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
-								indexName,
-							),
-							httpmock.NewStringResponder(200, "OK").Once(),
-						)
-					})
-
-					It("should create the policy, apply it to existing indices, emit a unit test event, and requeue", func() {
-						go func() {
-							defer GinkgoRecover()
-							defer close(recorder.Events)
-							result, err := reconciler.Reconcile()
-							Expect(err).ToNot(HaveOccurred())
-							Expect(result.Requeue).To(BeTrue())
-						}()
-						var events []string
-						for msg := range recorder.Events {
-							events = append(events, msg)
-						}
-						Expect(len(events)).To(Equal(2))
-						Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s ISM policy applied to existing indices", opensearchAPIUpdated)))
-						Expect(events[1]).To(Equal(fmt.Sprintf("Normal %s policy successfully created in OpenSearch Cluster", opensearchAPIUpdated)))
-					})
-				})
-
-				When("failed to get indices from opensearch api", func() {
-					BeforeEach(func() {
-						transport.RegisterResponder(
-							http.MethodGet,
-							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_cat/indices/test-*",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
-							),
-							httpmock.NewErrorResponder(fmt.Errorf("failed to get indices")).Once(),
-						)
-					})
-					It("should emit a unit test event and requeue", func() {
-						go func() {
-							defer GinkgoRecover()
-							defer close(recorder.Events)
-							result, err := reconciler.Reconcile()
-							Expect(err).To(HaveOccurred())
-							Expect(result.Requeue).To(BeTrue())
-						}()
-						var events []string
-						for msg := range recorder.Events {
-							events = append(events, msg)
-						}
-						Expect(len(events)).To(Equal(1))
-						Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s failed to apply policy to existing indices", opensearchAPIError)))
-					})
-				})
-
-				When("failed to apply policy to existing indices", func() {
-					BeforeEach(func() {
-						transport.RegisterResponder(
-							http.MethodPost,
-							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/add/test-index-1",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
-							),
-							httpmock.NewErrorResponder(fmt.Errorf("failed to apply policy")).Once(),
-						)
-					})
-
-					It("should emit a unit test event and requeue", func() {
-						go func() {
-							defer GinkgoRecover()
-							defer close(recorder.Events)
-							result, err := reconciler.Reconcile()
-							Expect(err).To(HaveOccurred())
-							Expect(result.Requeue).To(BeTrue())
-						}()
-						var events []string
-						for msg := range recorder.Events {
-							events = append(events, msg)
-						}
-						Expect(len(events)).To(Equal(1))
-						Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s failed to apply policy to existing indices", opensearchAPIError)))
-					})
-				})
+			It("should create the policy, emit a unit test event, and requeue", func() {
+				go func() {
+					defer GinkgoRecover()
+					defer close(recorder.Events)
+					result, err := reconciler.Reconcile()
+					Expect(err).ToNot(HaveOccurred())
+					Expect(result.Requeue).To(BeTrue())
+				}()
+				var events []string
+				for msg := range recorder.Events {
+					events = append(events, msg)
+				}
+				Expect(len(events)).To(Equal(1))
+				Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s policy successfully created in OpenSearch Cluster", opensearchAPIUpdated)))
 			})
 		})
 
@@ -355,7 +234,7 @@ var _ = Describe("ism policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
 						cluster.Spec.General.ServiceName,
 						cluster.Namespace,
 						instance.Name,
@@ -363,7 +242,6 @@ var _ = Describe("ism policy reconciler", func() {
 					httpmock.NewErrorResponder(fmt.Errorf("failed to get policy")).Once(),
 				)
 			})
-
 			It("should emit a unit test event, requeue, and return an error", func() {
 				go func() {
 					defer GinkgoRecover()
@@ -377,28 +255,28 @@ var _ = Describe("ism policy reconciler", func() {
 					events = append(events, msg)
 				}
 				Expect(len(events)).To(Equal(1))
-				Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s failed to get the ism policy from Opensearch API", opensearchAPIError)))
+				Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s failed to get the snapshot policy from Opensearch API", opensearchAPIError)))
 			})
 		})
 
 		Context("policy exists in opensearch", func() {
 			BeforeEach(func() {
-				instance.Spec.PolicyID = "test-policy-id"
-				instance.Status.PolicyId = "test-policy-id"
+				instance.Spec.PolicyName = "test-policy-name"
+				instance.Status.SnapshotPolicyName = "test-policy-name"
 
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
+						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
 						cluster.Spec.General.ServiceName,
 						cluster.Namespace,
-						instance.Spec.PolicyID,
+						instance.Spec.PolicyName,
 					),
-					httpmock.NewJsonResponderOrPanic(200, responses.GetISMPolicyResponse{
-						PolicyID: "test-policy-id",
-						Policy: requests.ISMPolicySpec{
-							DefaultState: "test-state",
-							Description:  "test-policy",
+					httpmock.NewJsonResponderOrPanic(200, responses.GetSnapshotPolicyResponse{
+						PolicyId: "test-policy-name-sm-policy",
+						Policy: requests.SnapshotPolicySpec{
+							PolicyName:  "test-policy-name",
+							Description: ptr("test-policy-name sample description"),
 						},
 					}).Once(),
 				)
@@ -407,31 +285,7 @@ var _ = Describe("ism policy reconciler", func() {
 			When("existing status is nil", func() {
 				BeforeEach(func() {
 					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
-					instance.Status.ExistingISMPolicy = nil
-				})
-
-				It("should emit a unit test event and requeue", func() {
-					go func() {
-						defer GinkgoRecover()
-						defer close(recorder.Events)
-						result, err := reconciler.Reconcile()
-						Expect(err).ToNot(HaveOccurred())
-						Expect(result.Requeue).To(BeTrue())
-						Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
-					}()
-					var events []string
-					for msg := range recorder.Events {
-						events = append(events, msg)
-					}
-					Expect(len(events)).To(Equal(1))
-					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s the ISM policy already exists in the OpenSearch cluster", opensearchIsmPolicyExists)))
-				})
-			})
-
-			When("existing status is true", func() {
-				BeforeEach(func() {
-					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
-					instance.Status.ExistingISMPolicy = pointer.Bool(true)
+					instance.Status.ExistingSnapshotPolicy = nil
 				})
 
 				It("should emit a unit test event and requeue", func() {
@@ -449,21 +303,45 @@ var _ = Describe("ism policy reconciler", func() {
 						events = append(events, msg)
 					}
 					Expect(len(events)).To(Equal(1))
-					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s the ISM policy already exists in the OpenSearch cluster", opensearchIsmPolicyExists)))
+					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s the Snapshot policy already exists in the OpenSearch cluster", opensearchSnapshotPolicyExists)))
+				})
+			})
+
+			When("existing status is true", func() {
+				BeforeEach(func() {
+					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
+					instance.Status.ExistingSnapshotPolicy = pointer.Bool(true)
+				})
+
+				It("should emit a unit test event and requeue", func() {
+					go func() {
+						defer GinkgoRecover()
+						defer close(recorder.Events)
+						result, err := reconciler.Reconcile()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(result.Requeue).To(BeTrue())
+						// Confirm all responders have been called
+						Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
+					}()
+					var events []string
+					for msg := range recorder.Events {
+						events = append(events, msg)
+					}
+					Expect(len(events)).To(Equal(1))
+					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s the Snapshot policy already exists in the OpenSearch cluster", opensearchSnapshotPolicyExists)))
 				})
 			})
 
 			Context("existing status is false", func() {
 				BeforeEach(func() {
-					instance.Status.ExistingISMPolicy = pointer.Bool(false)
+					instance.Status.ExistingSnapshotPolicy = pointer.Bool(false)
 				})
 
 				When("policy is the same", func() {
 					BeforeEach(func() {
-						instance.Spec.DefaultState = "test-state"
-						instance.Spec.Description = "test-policy"
+						instance.Spec.PolicyName = "test-policy-name"
+						instance.Spec.Description = ptr("test-policy-name sample description")
 					})
-
 					It("should emit a unit test event and requeue", func() {
 						go func() {
 							defer GinkgoRecover()
@@ -485,22 +363,37 @@ var _ = Describe("ism policy reconciler", func() {
 
 				When("policy is not the same", func() {
 					BeforeEach(func() {
-						instance.Spec.DefaultState = "test-state2"
-						instance.Spec.Description = "test-policy2"
+						instance.Spec.PolicyName = "test-policy-name-2"
+						instance.Spec.Description = ptr("test-policy-name sample description 2")
+
+						transport.RegisterResponder(
+							http.MethodGet,
+							fmt.Sprintf(
+								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
+								cluster.Spec.General.ServiceName,
+								cluster.Namespace,
+								instance.Spec.PolicyName,
+							),
+							httpmock.NewJsonResponderOrPanic(200, map[string]interface{}{
+								"policy": map[string]interface{}{
+									"name":        instance.Spec.PolicyName,
+									"description": "changed description",
+								},
+							}).Once(),
+						)
 
 						transport.RegisterResponder(
 							http.MethodPut,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
+								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/?if_seq_no=0&if_primary_term=0",
 								cluster.Spec.General.ServiceName,
 								cluster.Namespace,
-								instance.Spec.PolicyID,
 							),
 							httpmock.NewStringResponder(200, "OK").Once(),
 						)
-					})
 
-					It("should update ism policy, emit a unit test event, and requeue", func() {
+					})
+					It("should update snapshot policy, emit a unit test event, and requeue", func() {
 						go func() {
 							defer GinkgoRecover()
 							defer close(recorder.Events)
@@ -508,7 +401,7 @@ var _ = Describe("ism policy reconciler", func() {
 							Expect(err).ToNot(HaveOccurred())
 							Expect(result.Requeue).To(BeTrue())
 							// Confirm all responders have been called
-							Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
+							Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders()))
 						}()
 						var events []string
 						for msg := range recorder.Events {
@@ -531,9 +424,8 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingISMPolicy = pointer.Bool(true)
+				instance.Status.ExistingSnapshotPolicy = pointer.Bool(true)
 			})
-
 			It("should do nothing and exit", func() {
 				Expect(reconciler.Delete()).To(Succeed())
 			})
@@ -541,7 +433,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 		Context("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingISMPolicy = pointer.Bool(false)
+				instance.Status.ExistingSnapshotPolicy = pointer.Bool(false)
 			})
 
 			When("cluster does not exist", func() {
@@ -549,7 +441,6 @@ var _ = Describe("ism policy reconciler", func() {
 					instance.Spec.OpensearchRef.Name = "doesnotexist"
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
 				})
-
 				It("should do nothing and exit", func() {
 					Expect(reconciler.Delete()).To(Succeed())
 				})
@@ -589,7 +480,7 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodDelete,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
+								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
 								cluster.Spec.General.ServiceName,
 								cluster.Namespace,
 								instance.Name,
@@ -597,7 +488,6 @@ var _ = Describe("ism policy reconciler", func() {
 							httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
 						)
 					})
-
 					It("should do nothing and exit", func() {
 						Expect(reconciler.Delete()).NotTo(Succeed())
 					})
@@ -608,7 +498,7 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodDelete,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
+								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
 								cluster.Spec.General.ServiceName,
 								cluster.Namespace,
 								instance.Name,
@@ -616,7 +506,6 @@ var _ = Describe("ism policy reconciler", func() {
 							httpmock.NewStringResponder(200, "OK").Once(failMessage),
 						)
 					})
-
 					It("should delete the policy", func() {
 						Expect(reconciler.Delete()).To(Succeed())
 					})
@@ -625,3 +514,7 @@ var _ = Describe("ism policy reconciler", func() {
 		})
 	})
 })
+
+func ptr[T any](v T) *T {
+	return &v
+}

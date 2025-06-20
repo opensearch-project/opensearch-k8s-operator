@@ -386,3 +386,29 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchsnapshotpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchsnapshotpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  resources:
+  - opensearchsnapshotpolicies/finalizers
+  verbs:
+  - update
