@@ -20,6 +20,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"strconv"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
@@ -34,12 +37,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"net/http"
+	_ "net/http/pprof"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	"net/http"
-	_ "net/http/pprof"
 )
 
 var (
@@ -69,6 +71,12 @@ func main() {
 		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
 
+	var cacheOpts cache.Options
+	if watchNamespace != "" {
+		cacheOpts.DefaultNamespaces = map[string]cache.Config{
+			watchNamespace: {},
+		}
+	}
 	opts := zap.Options{
 		Development: false,
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -99,13 +107,17 @@ func main() {
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: metricsAddr,
+		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
-		Namespace:              watchNamespace,
+		Cache:                  cacheOpts,
+		WebhookServer: webhook.NewServer(webhook.Options{
+			Port: 9443,
+		}),
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
