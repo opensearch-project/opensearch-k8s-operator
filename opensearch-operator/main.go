@@ -71,6 +71,12 @@ func main() {
 		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
 
+	var cacheOpts cache.Options
+	if watchNamespace != "" {
+		cacheOpts.DefaultNamespaces = map[string]cache.Config{
+			watchNamespace: {},
+		}
+	}
 	opts := zap.Options{
 		Development: false,
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
@@ -108,11 +114,7 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
-		Cache: cache.Options{
-			DefaultNamespaces: map[string]cache.Config{
-				watchNamespace: {},
-			},
-		},
+		Cache:                  cacheOpts,
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port: 9443,
 		}),
