@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -17,7 +18,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -65,7 +65,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	var policyId string
 
 	defer func() {
-		if !pointer.BoolDeref(r.updateStatus, true) {
+		if !ptr.Deref(r.updateStatus, true) {
 			return
 		}
 		// When the reconciler is done, figure out what the state of the resource
@@ -128,7 +128,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}, retErr
 	}
 
-	if pointer.BoolDeref(r.updateStatus, true) {
+	if ptr.Deref(r.updateStatus, true) {
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 			object.(*opsterv1.OpenSearchISMPolicy).Status.ManagedCluster = &r.cluster.UID
 		})
@@ -209,7 +209,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}
 		// Mark the ISM Policy as not pre-existing (created by the operator)
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = pointer.Bool(false)
+			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(false)
 		})
 		if retErr != nil {
 			reason = "failed to update custom resource object"
@@ -241,7 +241,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	// If the ISM policy exists in OpenSearch cluster and was not created by the operator, update the status and return
 	if r.instance.Status.ExistingISMPolicy == nil || *r.instance.Status.ExistingISMPolicy {
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = pointer.Bool(true)
+			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(true)
 		})
 		if retErr != nil {
 			reason = "failed to update custom resource object"

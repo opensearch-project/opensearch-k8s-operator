@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"net/http"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -17,7 +18,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -215,7 +215,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 			When("apply ism policy to existing indices is false", func() {
 				BeforeEach(func() {
-					instance.Spec.ApplyToExistingIndices = pointer.Bool(false)
+					instance.Spec.ApplyToExistingIndices = ptr.To(false)
 					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
 				})
 
@@ -239,7 +239,7 @@ var _ = Describe("ism policy reconciler", func() {
 			Context("applyToExistingIndices is true", func() {
 				indexName := "test-index-1"
 				BeforeEach(func() {
-					instance.Spec.ApplyToExistingIndices = pointer.Bool(true)
+					instance.Spec.ApplyToExistingIndices = ptr.To(true)
 					instance.Spec.ISMTemplate = &opsterv1.ISMTemplate{
 						IndexPatterns: []string{"test-*"},
 					}
@@ -431,7 +431,7 @@ var _ = Describe("ism policy reconciler", func() {
 			When("existing status is true", func() {
 				BeforeEach(func() {
 					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
-					instance.Status.ExistingISMPolicy = pointer.Bool(true)
+					instance.Status.ExistingISMPolicy = ptr.To(true)
 				})
 
 				It("should emit a unit test event and requeue", func() {
@@ -455,7 +455,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 			Context("existing status is false", func() {
 				BeforeEach(func() {
-					instance.Status.ExistingISMPolicy = pointer.Bool(false)
+					instance.Status.ExistingISMPolicy = ptr.To(false)
 				})
 
 				When("policy is the same", func() {
@@ -531,7 +531,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingISMPolicy = pointer.Bool(true)
+				instance.Status.ExistingISMPolicy = ptr.To(true)
 			})
 
 			It("should do nothing and exit", func() {
@@ -541,7 +541,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 		Context("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingISMPolicy = pointer.Bool(false)
+				instance.Status.ExistingISMPolicy = ptr.To(false)
 			})
 
 			When("cluster does not exist", func() {

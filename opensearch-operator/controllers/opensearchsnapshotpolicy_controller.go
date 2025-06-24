@@ -29,7 +29,6 @@ import (
 
 	"github.com/go-logr/logr"
 
-	opensearchopsteriov1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
@@ -57,7 +56,7 @@ type OpensearchSnapshotPolicyReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.4/pkg/reconcile
 func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("snapshotpolicy", req.NamespacedName)
-	r.Logger.Info("Reconciling OpensearchSnapshotPolicy")
+	r.Info("Reconciling OpensearchSnapshotPolicy")
 
 	r.Instance = &opsterv1.OpensearchSnapshotPolicy{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
@@ -74,7 +73,7 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 
 	if r.Instance.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Client.Update(ctx, r.Instance)
+		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -86,7 +85,7 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 				return ctrl.Result{}, err
 			}
 			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
-			return ctrl.Result{}, r.Client.Update(ctx, r.Instance)
+			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
 
@@ -96,7 +95,7 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpensearchSnapshotPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchopsteriov1.OpensearchSnapshotPolicy{}).
+		For(&opsterv1.OpensearchSnapshotPolicy{}).
 		Owns(&opsterv1.OpenSearchCluster{}).
 		Complete(r)
 }

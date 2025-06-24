@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -17,7 +18,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -62,7 +62,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 	var policyName string
 
 	defer func() {
-		if !pointer.BoolDeref(r.updateStatus, true) {
+		if !ptr.Deref(r.updateStatus, true) {
 			return
 		}
 		// When the reconciler is done, figure out what the state of the resource
@@ -124,7 +124,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 		}, err
 	}
 
-	if pointer.BoolDeref(r.updateStatus, true) {
+	if ptr.Deref(r.updateStatus, true) {
 		err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 			object.(*opsterv1.OpensearchSnapshotPolicy).Status.ManagedCluster = &r.cluster.UID
 		})
@@ -195,7 +195,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 		}
 		// Mark the Snapshot Policy as not pre-existing (created by the operator)
 		err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpensearchSnapshotPolicy).Status.ExistingSnapshotPolicy = pointer.Bool(false)
+			object.(*opsterv1.OpensearchSnapshotPolicy).Status.ExistingSnapshotPolicy = ptr.To(false)
 		})
 		if err != nil {
 			reason = "failed to update custom resource object"
@@ -227,7 +227,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 	// If the Snapshot policy exists in OpenSearch cluster and was not created by the operator, update the status and return
 	if r.instance.Status.ExistingSnapshotPolicy == nil || *r.instance.Status.ExistingSnapshotPolicy {
 		err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpensearchSnapshotPolicy).Status.ExistingSnapshotPolicy = pointer.Bool(true)
+			object.(*opsterv1.OpensearchSnapshotPolicy).Status.ExistingSnapshotPolicy = ptr.To(true)
 		})
 		if err != nil {
 			reason = "failed to update custom resource object"

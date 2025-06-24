@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"os"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -12,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -232,7 +232,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespace
 			clusterObject.Spec.General.HttpPort = port
 
-			os.Setenv(helpers.DnsBaseEnvVariable, customDns)
+			_ = os.Setenv(helpers.DnsBaseEnvVariable, customDns)
 
 			actualUrl := URLForCluster(&clusterObject)
 			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
@@ -306,11 +306,11 @@ var _ = Describe("Builders", func() {
 			podSecurityContext := &corev1.PodSecurityContext{
 				RunAsUser:    &user,
 				RunAsGroup:   &user,
-				RunAsNonRoot: pointer.Bool(true),
+				RunAsNonRoot: ptr.To(true),
 			}
 			securityContext := &corev1.SecurityContext{
-				Privileged:               pointer.Bool(false),
-				AllowPrivilegeEscalation: pointer.Bool(false),
+				Privileged:               ptr.To(false),
+				AllowPrivilegeEscalation: ptr.To(false),
 			}
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.Spec.General.PodSecurityContext = podSecurityContext
@@ -627,8 +627,8 @@ var _ = Describe("Builders", func() {
 			namespaceName := "rolemapping"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.ObjectMeta.Namespace = namespaceName
-			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceName = "foobar"
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -648,8 +648,8 @@ var _ = Describe("Builders", func() {
 			namespaceName := "rolemapping-v1v2"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.ObjectMeta.Namespace = namespaceName
-			clusterObject.ObjectMeta.Name = "foobar-v1v2"
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "foobar-v1v2"
 			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -669,8 +669,8 @@ var _ = Describe("Builders", func() {
 			namespaceName := "rolemapping-v1"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
 			clusterObject := ClusterDescWithVersion("1.3.0")
-			clusterObject.ObjectMeta.Namespace = namespaceName
-			clusterObject.ObjectMeta.Name = "foobar-v1"
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "foobar-v1"
 			clusterObject.Spec.General.ServiceName = "foobar-v1"
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -692,8 +692,8 @@ var _ = Describe("Builders", func() {
 			namespaceName := "customcommand"
 			customCommand := "/myentrypoint.sh"
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.ObjectMeta.Namespace = namespaceName
-			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.Command = customCommand
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -711,8 +711,8 @@ var _ = Describe("Builders", func() {
 		It("should set it for all cluster pods and the securityconfig-update job", func() {
 			const serviceAccount = "my-test-serviceaccount"
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.ObjectMeta.Namespace = "foobar"
-			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Namespace = "foobar"
+			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceAccount = serviceAccount
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,

@@ -49,7 +49,7 @@ func NewSnapshotRepositoryReconciler(
 }
 
 func (r *SnapshotRepositoryReconciler) Reconcile() (ctrl.Result, error) {
-	if r.instance.Spec.General.SnapshotRepositories == nil || len(r.instance.Spec.General.SnapshotRepositories) == 0 {
+	if len(r.instance.Spec.General.SnapshotRepositories) == 0 {
 		// Skip reconcile if no repositories are configured
 		return ctrl.Result{}, nil
 	}

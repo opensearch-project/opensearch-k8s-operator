@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"io"
+	"k8s.io/utils/ptr"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,7 +16,6 @@ import (
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
-	"k8s.io/utils/pointer"
 )
 
 const (
@@ -116,7 +117,7 @@ func MainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	infoRes, err := req.Do(context.Background(), client)
 	var response responses.MainResponse
 	if err == nil {
-		defer infoRes.Body.Close()
+		defer helpers.SafeClose(infoRes.Body)
 		err = json.NewDecoder(infoRes.Body).Decode(&response)
 	}
 	return response, err
@@ -129,7 +130,7 @@ func (client *OsClusterClient) GetHealth() (responses.ClusterHealthResponse, err
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.ClusterHealthResponse
 	if err == nil {
-		defer catNodesRes.Body.Close()
+		defer helpers.SafeClose(catNodesRes.Body)
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
 	}
 	return response, err
@@ -140,7 +141,7 @@ func (client *OsClusterClient) CatNodes() ([]responses.CatNodesResponse, error) 
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response []responses.CatNodesResponse
 	if err == nil {
-		defer catNodesRes.Body.Close()
+		defer helpers.SafeClose(catNodesRes.Body)
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
 	}
 	return response, err
@@ -151,7 +152,7 @@ func (client *OsClusterClient) NodesStats() (responses.NodesStatsResponse, error
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.NodesStatsResponse
 	if err == nil {
-		defer catNodesRes.Body.Close()
+		defer helpers.SafeClose(catNodesRes.Body)
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
 	}
 	return response, err
@@ -164,7 +165,7 @@ func (client *OsClusterClient) CatIndices() ([]responses.CatIndicesResponse, err
 	if err != nil {
 		return response, err
 	}
-	defer indicesRes.Body.Close()
+	defer helpers.SafeClose(indicesRes.Body)
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }
@@ -176,7 +177,7 @@ func (client *OsClusterClient) CatShards(headers []string) ([]responses.CatShard
 	if err != nil {
 		return response, err
 	}
-	defer indicesRes.Body.Close()
+	defer helpers.SafeClose(indicesRes.Body)
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }
@@ -192,7 +193,7 @@ func (client *OsClusterClient) CatNamedIndicesShards(headers []string, indices [
 	if err != nil {
 		return response, err
 	}
-	defer indicesRes.Body.Close()
+	defer helpers.SafeClose(indicesRes.Body)
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }
@@ -204,21 +205,21 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 	if err != nil {
 		return response, err
 	}
-	defer settingsRes.Body.Close()
+	defer helpers.SafeClose(settingsRes.Body)
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
 
 func (client *OsClusterClient) GetFlatClusterSettings() (responses.FlatClusterSettingsResponse, error) {
 	req := opensearchapi.ClusterGetSettingsRequest{
-		FlatSettings: pointer.Bool(true),
+		FlatSettings: ptr.To(true),
 	}
 	settingsRes, err := req.Do(context.Background(), client.client)
 	var response responses.FlatClusterSettingsResponse
 	if err != nil {
 		return response, err
 	}
-	defer settingsRes.Body.Close()
+	defer helpers.SafeClose(settingsRes.Body)
 
 	if settingsRes.IsError() {
 		return response, ErrClusterHealthGetFailed(settingsRes.String())
@@ -236,7 +237,7 @@ func (client *OsClusterClient) PutClusterSettings(settings responses.ClusterSett
 	if err != nil {
 		return response, err
 	}
-	defer settingsRes.Body.Close()
+	defer helpers.SafeClose(settingsRes.Body)
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
@@ -249,7 +250,7 @@ func (client *OsClusterClient) ReRouteShard(rerouteJson string) (responses.Clust
 	if err != nil {
 		return response, err
 	}
-	defer settingsRes.Body.Close()
+	defer helpers.SafeClose(settingsRes.Body)
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
@@ -264,7 +265,7 @@ func (client *OsClusterClient) GetClusterHealth() (responses.ClusterHealthRespon
 	if err != nil {
 		return health, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return health, ErrClusterHealthGetFailed(resp.String())
@@ -285,7 +286,7 @@ func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer indicesRes.Body.Close()
+	defer helpers.SafeClose(indicesRes.Body)
 	if indicesRes.StatusCode == 404 {
 		return false, nil
 	} else if indicesRes.IsError() {
