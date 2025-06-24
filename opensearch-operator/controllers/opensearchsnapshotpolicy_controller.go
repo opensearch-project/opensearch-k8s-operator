@@ -29,7 +29,6 @@ import (
 
 	"github.com/go-logr/logr"
 
-	opensearchopsteriov1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
@@ -96,7 +95,7 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpensearchSnapshotPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchopsteriov1.OpensearchSnapshotPolicy{}).
+		For(&opsterv1.OpensearchSnapshotPolicy{}).
 		Owns(&opsterv1.OpenSearchCluster{}).
 		Complete(r)
 }

@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	sts "k8s.io/api/apps/v1"
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -129,7 +129,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 						Namespace: OpensearchCluster.Namespace,
 					}, deployment)
 				}, timeout, interval).Should(Succeed())
-				Expect(deployment.Spec.Replicas).To(Equal(pointer.Int32(3)))
+				Expect(deployment.Spec.Replicas).To(Equal(ptr.To(int32(3))))
 				Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Cpu().String()).To(Equal("500m"))
 				Expect(deployment.Spec.Template.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("1Gi"))
 				Expect(deployment.Spec.Template.Spec.Tolerations).To(ContainElement(corev1.Toleration{

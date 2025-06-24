@@ -48,7 +48,7 @@ func (r *OpensearchIndexTemplateReconciler) Reconcile(ctx context.Context, req c
 
 	if r.Instance.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Client.Update(ctx, r.Instance)
+		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}

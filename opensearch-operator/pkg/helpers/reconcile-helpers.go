@@ -135,7 +135,7 @@ func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bo
 	if len(pluginsList) > 0 {
 		mainCommand = append(mainCommand, "/bin/bash", "-c")
 		for _, plugin := range pluginsList {
-			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
+			com = com + " '" + strings.ReplaceAll(plugin, "'", "\\'") + "'"
 		}
 
 		com = com + " && " + entrypoint
@@ -153,7 +153,7 @@ func BuildMainCommandOSD(installerBinary string, pluginsList []string, entrypoin
 
 	var com string
 	for _, plugin := range pluginsList {
-		com = com + installerBinary + " install" + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
+		com = com + installerBinary + " install" + " '" + strings.ReplaceAll(plugin, "'", "\\'") + "'"
 		com = com + " && "
 	}
 	com = com + entrypoint

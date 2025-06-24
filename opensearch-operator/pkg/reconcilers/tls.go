@@ -340,7 +340,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 	_, bootstrapCertExists := nodeSecret.Data[fmt.Sprintf("%s.crt", bootstrapPodName)]
 	_, bootstrapKeyExists := nodeSecret.Data[fmt.Sprintf("%s.key", bootstrapPodName)]
 
-	if !r.instance.Status.Initialized && !(bootstrapCertExists && bootstrapKeyExists) {
+	if !r.instance.Status.Initialized && (!bootstrapCertExists || !bootstrapKeyExists) {
 		dnsNames := []string{
 			bootstrapPodName,
 			clusterName,

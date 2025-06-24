@@ -232,7 +232,10 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespace
 			clusterObject.Spec.General.HttpPort = port
 
-			os.Setenv(helpers.DnsBaseEnvVariable, customDns)
+			// os.Setenv(helpers.DnsBaseEnvVariable, customDns)
+			if err := os.Setenv(helpers.DnsBaseEnvVariable, customDns); err != nil {
+				fmt.Sprintf("failed to set environment variable %s: %v", helpers.DnsBaseEnvVariable, err)
+			}
 
 			actualUrl := URLForCluster(&clusterObject)
 			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
@@ -627,8 +630,8 @@ var _ = Describe("Builders", func() {
 			namespaceName := "rolemapping"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.ObjectMeta.Namespace = namespaceName
-			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceName = "foobar"
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,

@@ -73,7 +73,7 @@ func NewSTSForNodePool(
 	pvc := corev1.PersistentVolumeClaim{}
 	dataVolume := corev1.Volume{}
 
-	if node.Persistence == nil || node.Persistence.PersistenceSource.PVC != nil {
+	if node.Persistence == nil || node.Persistence.PVC != nil {
 		mode := corev1.PersistentVolumeFilesystem
 		pvc = corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: "data"},
@@ -82,7 +82,7 @@ func NewSTSForNodePool(
 					if node.Persistence == nil {
 						return []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
 					}
-					return node.Persistence.PersistenceSource.PVC.AccessModes
+					return node.Persistence.PVC.AccessModes
 				}(),
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
@@ -357,7 +357,7 @@ func NewSTSForNodePool(
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
-	if cr.Spec.General.Keystore != nil && len(cr.Spec.General.Keystore) > 0 {
+	if len(cr.Spec.General.Keystore) > 0 {
 
 		// Add volume and volume mount for keystore
 		volumes = append(volumes, corev1.Volume{
@@ -391,7 +391,7 @@ func NewSTSForNodePool(
 				},
 			})
 
-			if keystoreValue.KeyMappings == nil || len(keystoreValue.KeyMappings) == 0 {
+			if len(keystoreValue.KeyMappings) == 0 {
 				// If no renames are necessary, mount secret key-value pairs directly
 				initContainerVolumeMounts = append(initContainerVolumeMounts, corev1.VolumeMount{
 					Name:      "keystore-" + keystoreValue.Secret.Name,
@@ -874,7 +874,7 @@ func NewBootstrapPod(
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
-	if cr.Spec.Bootstrap.Keystore != nil && len(cr.Spec.Bootstrap.Keystore) > 0 {
+	if len(cr.Spec.Bootstrap.Keystore) > 0 {
 
 		// Add volume and volume mount for keystore
 		volumes = append(volumes, corev1.Volume{
@@ -908,7 +908,7 @@ func NewBootstrapPod(
 				},
 			})
 
-			if keystoreValue.KeyMappings == nil || len(keystoreValue.KeyMappings) == 0 {
+			if len(keystoreValue.KeyMappings) == 0 {
 				// If no renames are necessary, mount secret key-value pairs directly
 				initContainerVolumeMounts = append(initContainerVolumeMounts, corev1.VolumeMount{
 					Name:      "keystore-" + keystoreValue.Secret.Name,
