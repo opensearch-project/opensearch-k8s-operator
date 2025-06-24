@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"net/http"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -17,7 +18,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -276,7 +276,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 						PolicyId: "test-policy-name-sm-policy",
 						Policy: requests.SnapshotPolicySpec{
 							PolicyName:  "test-policy-name",
-							Description: ptr("test-policy-name sample description"),
+							Description: ptr.To("test-policy-name sample description"),
 						},
 					}).Once(),
 				)
@@ -310,7 +310,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 			When("existing status is true", func() {
 				BeforeEach(func() {
 					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
-					instance.Status.ExistingSnapshotPolicy = pointer.Bool(true)
+					instance.Status.ExistingSnapshotPolicy = ptr.To(true)
 				})
 
 				It("should emit a unit test event and requeue", func() {
@@ -334,13 +334,13 @@ var _ = Describe("snapshot policy reconciler", func() {
 
 			Context("existing status is false", func() {
 				BeforeEach(func() {
-					instance.Status.ExistingSnapshotPolicy = pointer.Bool(false)
+					instance.Status.ExistingSnapshotPolicy = ptr.To(false)
 				})
 
 				When("policy is the same", func() {
 					BeforeEach(func() {
 						instance.Spec.PolicyName = "test-policy-name"
-						instance.Spec.Description = ptr("test-policy-name sample description")
+						instance.Spec.Description = ptr.To("test-policy-name sample description")
 					})
 					It("should emit a unit test event and requeue", func() {
 						go func() {
@@ -364,7 +364,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 				When("policy is not the same", func() {
 					BeforeEach(func() {
 						instance.Spec.PolicyName = "test-policy-name-2"
-						instance.Spec.Description = ptr("test-policy-name sample description 2")
+						instance.Spec.Description = ptr.To("test-policy-name sample description 2")
 
 						transport.RegisterResponder(
 							http.MethodGet,
@@ -424,7 +424,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingSnapshotPolicy = pointer.Bool(true)
+				instance.Status.ExistingSnapshotPolicy = ptr.To(true)
 			})
 			It("should do nothing and exit", func() {
 				Expect(reconciler.Delete()).To(Succeed())
@@ -433,7 +433,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 
 		Context("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingSnapshotPolicy = pointer.Bool(false)
+				instance.Status.ExistingSnapshotPolicy = ptr.To(false)
 			})
 
 			When("cluster does not exist", func() {
@@ -514,7 +514,3 @@ var _ = Describe("snapshot policy reconciler", func() {
 		})
 	})
 })
-
-func ptr[T any](v T) *T {
-	return &v
-}

@@ -17,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -1022,7 +1021,7 @@ func NewBootstrapPod(
 				"vm.max_map_count=262144",
 			},
 			SecurityContext: &corev1.SecurityContext{
-				Privileged: pointer.Bool(true),
+				Privileged: ptr.To(true),
 			},
 		})
 	}
@@ -1155,9 +1154,10 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 			}, sts); err != nil {
 				return false
 			}
-			if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
 				return false
 			}
+
 		}
 	}
 	return true

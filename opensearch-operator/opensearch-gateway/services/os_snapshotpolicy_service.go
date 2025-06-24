@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 
@@ -17,7 +18,7 @@ func GetSnapshotPolicy(ctx context.Context, service *OsClusterClient, policyName
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.StatusCode == 404 {
 		return nil, ErrNotFound
 	}
@@ -42,7 +43,7 @@ func CreateSnapshotPolicy(ctx context.Context, service *OsClusterClient, snapsho
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to create snapshot policy: %s", resp.String())
 	}
@@ -55,7 +56,7 @@ func DeleteSnapshotPolicy(ctx context.Context, service *OsClusterClient, policyN
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to delete snapshot policy: %s", resp.String())
 	}
@@ -69,7 +70,7 @@ func UpdateSnapshotPolicy(ctx context.Context, service *OsClusterClient, snapsho
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to update snapshot policy: %s", resp.String())
 	}

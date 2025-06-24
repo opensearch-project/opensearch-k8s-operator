@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
@@ -34,7 +35,7 @@ func SnapshotRepositoryExists(ctx context.Context, service *OsClusterClient, rep
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.StatusCode == 404 {
 		return false, nil
 	} else if resp.IsError() {
@@ -49,7 +50,7 @@ func GetSnapshotRepository(ctx context.Context, service *OsClusterClient, reposi
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.StatusCode == 404 {
 		return nil, ErrRepoNotFound
 	} else if resp.IsError() {
@@ -78,7 +79,7 @@ func CreateSnapshotRepository(ctx context.Context, service *OsClusterClient, rep
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to create snapshot repository: %s", resp.String())
 	}
@@ -92,7 +93,7 @@ func UpdateSnapshotRepository(ctx context.Context, service *OsClusterClient, rep
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to update snapshot repository: %s", resp.String())
 	}
@@ -105,7 +106,7 @@ func DeleteSnapshotRepository(ctx context.Context, service *OsClusterClient, rep
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to delete snapshot repository: %s", resp.String())
 	}

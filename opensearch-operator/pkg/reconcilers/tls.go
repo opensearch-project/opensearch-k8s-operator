@@ -442,13 +442,13 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", "tls-transport/${HOSTNAME}.key")
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "true")
 	} else {
-		if tlsConfig.TlsCertificateConfig.Secret.Name == "" {
+		if tlsConfig.Secret.Name == "" {
 			err := errors.New("missing secret in spec")
 			r.logger.Error(err, "Not all secrets for transport provided")
 			//		r.recorder.Event(r.instance, "Warning", "Security", "Notice - Not all secrets for transport provided")
 			return err
 		}
-		if tlsConfig.TlsCertificateConfig.CaSecret.Name == "" {
+		if tlsConfig.CaSecret.Name == "" {
 			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
 		} else {
 			mount("transport", "ca", CaCertKey, tlsConfig.CaSecret.Name, r.reconcilerContext)

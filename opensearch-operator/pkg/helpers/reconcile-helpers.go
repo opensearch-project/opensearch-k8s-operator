@@ -8,7 +8,6 @@ import (
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/hashicorp/go-version"
-	"k8s.io/utils/pointer"
 )
 
 func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
@@ -57,7 +56,7 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 		defaultRepo = *cr.Spec.General.DefaultRepo
 	}
 
-	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), version))
 	return
 }
@@ -79,7 +78,7 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 		defaultRepo = *cr.Spec.General.DefaultRepo
 	}
 
-	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), cr.Spec.Dashboards.Version))
 	return
 }

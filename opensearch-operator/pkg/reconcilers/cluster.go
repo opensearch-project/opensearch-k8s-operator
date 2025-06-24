@@ -212,8 +212,8 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 					}
 					// Recreate with PodManagementPolicy=Parallel
 					sts.Spec.PodManagementPolicy = appsv1.ParallelPodManagement
-					sts.ObjectMeta.ResourceVersion = ""
-					sts.ObjectMeta.UID = ""
+					sts.ResourceVersion = ""
+					sts.UID = ""
 					result, err = r.client.ReconcileResource(sts, reconciler.StatePresent)
 					if err != nil {
 						r.logger.Error(err, "Failed to create STS")

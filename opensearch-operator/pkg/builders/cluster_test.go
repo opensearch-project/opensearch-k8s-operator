@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/utils/ptr"
-	"log"
 	"os"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -233,10 +232,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespace
 			clusterObject.Spec.General.HttpPort = port
 
-			// os.Setenv(helpers.DnsBaseEnvVariable, customDns)
-			if err := os.Setenv(helpers.DnsBaseEnvVariable, customDns); err != nil {
-				log.Println("failed to set environment variable %s: %v", helpers.DnsBaseEnvVariable, err)
-			}
+			_ = os.Setenv(helpers.DnsBaseEnvVariable, customDns)
 
 			actualUrl := URLForCluster(&clusterObject)
 			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
