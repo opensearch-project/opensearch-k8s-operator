@@ -48,7 +48,7 @@ type OpensearchRoleReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("role", req.NamespacedName)
-	r.Logger.Info("Reconciling OpensearchRole")
+	r.Info("Reconciling OpensearchRole")
 
 	r.Instance = &opsterv1.OpensearchRole{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
@@ -65,7 +65,7 @@ func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if r.Instance.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Client.Update(ctx, r.Instance)
+		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}

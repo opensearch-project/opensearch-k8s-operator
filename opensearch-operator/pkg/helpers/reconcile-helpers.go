@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"fmt"
+	"k8s.io/utils/ptr"
 	"path"
 	"strings"
 
@@ -31,7 +32,7 @@ func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 		defaultVersion = *cr.Spec.InitHelper.Version
 	}
 
-	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), defaultVersion))
 	return
 }

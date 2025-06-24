@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"reflect"
 	"sort"
 	"time"
@@ -567,5 +568,6 @@ func DeleteDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNam
 
 func SafeClose(c io.Closer) {
 	if err := c.Close(); err != nil {
+		log.Println("SafeClose error:", err)
 	}
 }

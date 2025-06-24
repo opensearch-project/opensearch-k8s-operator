@@ -32,7 +32,7 @@ type OpensearchActionGroupReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("actiongroup", req.NamespacedName)
-	r.Logger.Info("Reconciling OpensearchActionGroup")
+	r.Info("Reconciling OpensearchActionGroup")
 
 	r.Instance = &opsterv1.OpensearchActionGroup{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)

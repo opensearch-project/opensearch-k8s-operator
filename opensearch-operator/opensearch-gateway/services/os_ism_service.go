@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"io"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
@@ -35,7 +36,7 @@ func GetPolicy(ctx context.Context, service *OsClusterClient, policyName string)
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.StatusCode == 404 {
 		return nil, ErrNotFound
 	}
@@ -60,7 +61,7 @@ func CreateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy re
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to create ism policy: %s", resp.String())
 	}
@@ -74,7 +75,7 @@ func UpdateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy re
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to update ism policy: %s", resp.String())
 	}
@@ -87,7 +88,7 @@ func DeleteISMPolicy(ctx context.Context, service *OsClusterClient, policyName s
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to delete ism policy: %s", resp.String())
 	}
@@ -105,7 +106,7 @@ func GetIndices(ctx context.Context, service *OsClusterClient, pattern string) (
 	if err != nil {
 		return nil, fmt.Errorf("failed to call GetIndices: %w", err)
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	// Read response body
 	bodyBytes, err := io.ReadAll(resp.Body)
@@ -157,7 +158,7 @@ func AddPolicyToIndex(ctx context.Context, service *OsClusterClient, indexName s
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("failed to add policy to index: %s", resp.String())

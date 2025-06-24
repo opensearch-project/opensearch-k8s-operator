@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"k8s.io/utils/ptr"
+	"log"
 	"os"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -234,7 +235,7 @@ var _ = Describe("Builders", func() {
 
 			// os.Setenv(helpers.DnsBaseEnvVariable, customDns)
 			if err := os.Setenv(helpers.DnsBaseEnvVariable, customDns); err != nil {
-				fmt.Printf("failed to set environment variable %s: %v", helpers.DnsBaseEnvVariable, err)
+				log.Println("failed to set environment variable %s: %v", helpers.DnsBaseEnvVariable, err)
 			}
 
 			actualUrl := URLForCluster(&clusterObject)
@@ -695,8 +696,8 @@ var _ = Describe("Builders", func() {
 			namespaceName := "customcommand"
 			customCommand := "/myentrypoint.sh"
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.ObjectMeta.Namespace = namespaceName
-			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.Command = customCommand
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -714,8 +715,8 @@ var _ = Describe("Builders", func() {
 		It("should set it for all cluster pods and the securityconfig-update job", func() {
 			const serviceAccount = "my-test-serviceaccount"
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.ObjectMeta.Namespace = "foobar"
-			clusterObject.ObjectMeta.Name = "foobar"
+			clusterObject.Namespace = "foobar"
+			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceAccount = serviceAccount
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,

@@ -541,7 +541,7 @@ func NewSTSForNodePool(
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
-				if node.Persistence == nil || node.Persistence.PersistenceSource.PVC != nil {
+				if node.Persistence == nil || node.Persistence.PVC != nil {
 					return []corev1.PersistentVolumeClaim{pvc}
 				}
 				return []corev1.PersistentVolumeClaim{}
@@ -863,7 +863,7 @@ func NewBootstrapPod(
 			Command:         []string{"sh", "-c"},
 			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 			SecurityContext: &corev1.SecurityContext{
-				RunAsUser: pointer.Int64(0),
+				RunAsUser: ptr.To(int64(0)),
 			},
 			VolumeMounts: []corev1.VolumeMount{
 				{
