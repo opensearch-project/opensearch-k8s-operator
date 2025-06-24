@@ -31,7 +31,7 @@ type OpensearchComponentTemplateReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("componenttemplate", req.NamespacedName)
-	r.Logger.Info("Reconciling OpensearchComponentTemplate")
+	r.Info("Reconciling OpensearchComponentTemplate")
 
 	r.Instance = &opsterv1.OpensearchComponentTemplate{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)

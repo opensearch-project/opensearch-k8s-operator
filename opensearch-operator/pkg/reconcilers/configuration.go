@@ -82,7 +82,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	data := sb.String()
 	result := reconciler.CombinedResult{}
 
-	if r.reconcilerContext.OpenSearchConfig != nil && len(r.reconcilerContext.OpenSearchConfig) != 0 {
+	if len(r.reconcilerContext.OpenSearchConfig) != 0 {
 		cm := r.buildConfigMap(data)
 		if err := ctrl.SetControllerReference(r.instance, cm, r.client.Scheme()); err != nil {
 			return ctrl.Result{}, err

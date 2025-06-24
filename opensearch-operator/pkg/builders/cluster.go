@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"strings"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -107,16 +108,16 @@ func NewSTSForNodePool(
 	if node.Persistence != nil {
 		dataVolume.Name = "data"
 
-		if node.Persistence.PersistenceSource.HostPath != nil {
+		if node.Persistence.HostPath != nil {
 			dataVolume.VolumeSource = corev1.VolumeSource{
-				HostPath: node.Persistence.PersistenceSource.HostPath,
+				HostPath: node.Persistence.HostPath,
 			}
 			volumes = append(volumes, dataVolume)
 		}
 
-		if node.Persistence.PersistenceSource.EmptyDir != nil {
+		if node.Persistence.EmptyDir != nil {
 			dataVolume.VolumeSource = corev1.VolumeSource{
-				EmptyDir: node.Persistence.PersistenceSource.EmptyDir,
+				EmptyDir: node.Persistence.EmptyDir,
 			}
 			volumes = append(volumes, dataVolume)
 		}
@@ -574,7 +575,7 @@ func NewSTSForNodePool(
 				"vm.max_map_count=262144",
 			},
 			SecurityContext: &corev1.SecurityContext{
-				Privileged: pointer.Bool(true),
+				Privileged: ptr.To(true),
 			},
 		})
 	}

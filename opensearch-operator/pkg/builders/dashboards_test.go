@@ -2,8 +2,7 @@ package builders
 
 import (
 	"fmt"
-
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
@@ -132,11 +131,11 @@ var _ = Describe("Builders", func() {
 			podSecurityContext := &corev1.PodSecurityContext{
 				RunAsUser:    &user,
 				RunAsGroup:   &user,
-				RunAsNonRoot: pointer.Bool(true),
+				RunAsNonRoot: ptr.To(true),
 			}
 			securityContext := &corev1.SecurityContext{
-				Privileged:               pointer.Bool(false),
-				AllowPrivilegeEscalation: pointer.Bool(false),
+				Privileged:               ptr.To(false),
+				AllowPrivilegeEscalation: ptr.To(false),
 			}
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},

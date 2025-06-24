@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"os"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -12,7 +13,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/pointer"
 )
 
 func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
@@ -234,7 +234,7 @@ var _ = Describe("Builders", func() {
 
 			// os.Setenv(helpers.DnsBaseEnvVariable, customDns)
 			if err := os.Setenv(helpers.DnsBaseEnvVariable, customDns); err != nil {
-				fmt.Sprintf("failed to set environment variable %s: %v", helpers.DnsBaseEnvVariable, err)
+				fmt.Printf("failed to set environment variable %s: %v", helpers.DnsBaseEnvVariable, err)
 			}
 
 			actualUrl := URLForCluster(&clusterObject)
@@ -309,11 +309,11 @@ var _ = Describe("Builders", func() {
 			podSecurityContext := &corev1.PodSecurityContext{
 				RunAsUser:    &user,
 				RunAsGroup:   &user,
-				RunAsNonRoot: pointer.Bool(true),
+				RunAsNonRoot: ptr.To(true),
 			}
 			securityContext := &corev1.SecurityContext{
-				Privileged:               pointer.Bool(false),
-				AllowPrivilegeEscalation: pointer.Bool(false),
+				Privileged:               ptr.To(false),
+				AllowPrivilegeEscalation: ptr.To(false),
 			}
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.Spec.General.PodSecurityContext = podSecurityContext
@@ -651,8 +651,8 @@ var _ = Describe("Builders", func() {
 			namespaceName := "rolemapping-v1v2"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.ObjectMeta.Namespace = namespaceName
-			clusterObject.ObjectMeta.Name = "foobar-v1v2"
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "foobar-v1v2"
 			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -672,8 +672,8 @@ var _ = Describe("Builders", func() {
 			namespaceName := "rolemapping-v1"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
 			clusterObject := ClusterDescWithVersion("1.3.0")
-			clusterObject.ObjectMeta.Namespace = namespaceName
-			clusterObject.ObjectMeta.Name = "foobar-v1"
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "foobar-v1"
 			clusterObject.Spec.General.ServiceName = "foobar-v1"
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,

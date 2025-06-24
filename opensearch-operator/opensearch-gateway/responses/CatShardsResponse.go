@@ -1,9 +1,9 @@
 package responses
 
 type CatShardsResponse struct {
-	Index             string `json:"index" json:"i" json:"idx"`
-	Shard             string `json:"shard" json:"s" json:"sh"`
-	PrimaryOrReplica  string `json:"prirep" json:"p" json:"pr" json:"primaryOrReplica"`
+	Index             string `json:"index" json:"i" json:"idx"`                         //nolint:staticcheck
+	Shard             string `json:"shard" json:"s" json:"sh"`                          //nolint:staticcheck
+	PrimaryOrReplica  string `json:"prirep" json:"p" json:"pr" json:"primaryOrReplica"` //nolint:staticcheck
 	State             string `json:"state" json:"st"`
 	Docs              string `json:"docs" json:"d" json:"dc"`
 	Store             string `json:"store" json:"sto"`

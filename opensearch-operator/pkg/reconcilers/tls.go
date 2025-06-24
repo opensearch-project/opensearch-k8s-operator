@@ -143,9 +143,9 @@ func (r *TLSReconciler) securityChangeVersion() bool {
 
 func (r *TLSReconciler) adminCAName() string {
 	if r.securityChangeVersion() {
-		return r.instance.Spec.Security.Tls.Http.TlsCertificateConfig.CaSecret.Name
+		return r.instance.Spec.Security.Tls.Http.CaSecret.Name
 	}
-	return r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name
+	return r.instance.Spec.Security.Tls.Transport.CaSecret.Name
 }
 
 func (r *TLSReconciler) reconcileAdminCert() bool {
@@ -259,8 +259,8 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 	var ca tls.Cert
 	var err error
-	if r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name != "" {
-		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.TlsCertificateConfig.CaSecret.Name, namespace)
+	if r.instance.Spec.Security.Tls.Transport.CaSecret.Name != "" {
+		ca, err = r.providedCaCert(r.instance.Spec.Security.Tls.Transport.CaSecret.Name, namespace)
 	} else {
 		ca, err = util.ReadOrGenerateCaCert(r.pki, r.client, r.instance)
 	}

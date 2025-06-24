@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"reflect"
 	"sort"
 	"time"
@@ -562,4 +563,9 @@ func DeleteDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNam
 	}
 
 	return fmt.Errorf("failed to delete dashboards deployment for cluster %s", clusterName)
+}
+
+func SafeClose(c io.Closer) {
+	if err := c.Close(); err != nil {
+	}
 }
