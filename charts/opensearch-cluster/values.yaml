@@ -125,6 +125,10 @@ cluster:
     # If jvm is not provided and resources.requests.memory does not exist then value will be -Xmx512M -Xms512M
     jvm: ""
 
+    priorityClassName: ""
+
+    labels: {}
+
     # -- bootstrap pod node selectors
     nodeSelector: {}
 
