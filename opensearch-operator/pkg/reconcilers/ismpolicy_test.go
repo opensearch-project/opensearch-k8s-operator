@@ -522,6 +522,208 @@ var _ = Describe("ism policy reconciler", func() {
 		})
 	})
 
+	Context("CreateISMPolicy Shrink Action Validation", func() {
+		var (
+			originalInstanceSpec opsterv1.OpenSearchISMPolicySpec
+		)
+
+		BeforeEach(func() {
+			recorder = record.NewFakeRecorder(1)
+
+			options := ReconcilerOptions{}
+			options.apply(WithOSClientTransport(transport), WithUpdateStatus(false))
+			reconciler = &IsmPolicyReconciler{
+				client:            mockClient,
+				ctx:               context.Background(),
+				ReconcilerOptions: options,
+				recorder:          recorder,
+				instance:          instance,
+				logger:            log.FromContext(context.Background()),
+			}
+
+			originalInstanceSpec = instance.Spec
+		})
+
+		AfterEach(func() {
+			instance.Spec = originalInstanceSpec
+		})
+
+		When("a Shrink action is configured correctly with NumNewShards", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									NumNewShards: ptr.To(1),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should create the policy without error and set NumNewShards", func() {
+				policy, err := reconciler.CreateISMPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).ToNot(BeNil())
+				Expect(policy.States).To(HaveLen(1))
+				Expect(policy.States[0].Actions).To(HaveLen(1))
+				Expect(policy.States[0].Actions[0].Shrink).ToNot(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.NumNewShards).To(Equal(ptr.To(1)))
+				Expect(policy.States[0].Actions[0].Shrink.MaxShardSize).To(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.PercentageOfSourceShards).To(BeNil())
+			})
+		})
+
+		When("a Shrink action is configured correctly with MaxShardSize", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									MaxShardSize: ptr.To("1gb"),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should create the policy without error and set MaxShardSize", func() {
+				policy, err := reconciler.CreateISMPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).ToNot(BeNil())
+				Expect(policy.States).To(HaveLen(1))
+				Expect(policy.States[0].Actions).To(HaveLen(1))
+				Expect(policy.States[0].Actions[0].Shrink).ToNot(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.NumNewShards).To(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.MaxShardSize).To(Equal(ptr.To("1gb")))
+				Expect(policy.States[0].Actions[0].Shrink.PercentageOfSourceShards).To(BeNil())
+			})
+		})
+
+		When("a Shrink action is configured correctly with PercentageOfSourceShards", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									PercentageOfSourceShards: ptr.To[int64](50),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should create the policy without error and set PercentageOfSourceShards", func() {
+				policy, err := reconciler.CreateISMPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).ToNot(BeNil())
+				Expect(policy.States).To(HaveLen(1))
+				Expect(policy.States[0].Actions).To(HaveLen(1))
+				Expect(policy.States[0].Actions[0].Shrink).ToNot(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.NumNewShards).To(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.MaxShardSize).To(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.PercentageOfSourceShards).To(Equal(ptr.To[int64](50)))
+			})
+		})
+
+		When("a Shrink action is configured with NumNewShards and MaxShardSize", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									NumNewShards: ptr.To(1),
+									MaxShardSize: ptr.To("1gb"),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should return an error", func() {
+				_, err := reconciler.CreateISMPolicy()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("maxShardSize can't exist with NumNewShards or PercentageOfSourceShards"))
+			})
+		})
+
+		When("a Shrink action is configured with NumNewShards and PercentageOfSourceShards", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									NumNewShards:             ptr.To(1),
+									PercentageOfSourceShards: ptr.To[int64](50),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should return an error", func() {
+				_, err := reconciler.CreateISMPolicy()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("numNewShards can't exist with MaxShardSize or PercentageOfSourceShards"))
+			})
+		})
+
+		When("a Shrink action is configured with MaxShardSize and PercentageOfSourceShards", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									MaxShardSize:             ptr.To("1gb"),
+									PercentageOfSourceShards: ptr.To[int64](50),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should return an error", func() {
+				_, err := reconciler.CreateISMPolicy()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("maxShardSize can't exist with NumNewShards or PercentageOfSourceShards"))
+			})
+		})
+
+		When("a Shrink action is configured with none of the required parameters", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									// No fields set
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should return an error", func() {
+				_, err := reconciler.CreateISMPolicy()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("either of MaxShardSize or NumNewShards or PercentageOfSourceShards is required"))
+			})
+		})
+	})
+
 	Context("deletions", func() {
 		When("existing status is nil", func() {
 			It("should do nothing and exit", func() {
