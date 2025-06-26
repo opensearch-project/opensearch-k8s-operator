@@ -795,14 +795,15 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold).To(Equal(int32(10)))
 
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.InitialDelaySeconds).To(Equal(int32(10)))
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(5)))
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(20)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(30)))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.SuccessThreshold).To(Equal(int32(1)))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.FailureThreshold).To(Equal(int32(10)))
 
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(60)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(30)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.SuccessThreshold).To(Equal(int32(1)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(5)))
 		})
 
@@ -815,10 +816,10 @@ var _ = Describe("Builders", func() {
 					Liveness: &opsterv1.ProbeConfig{
 						FailureThreshold: 15,
 					},
-					Startup: &opsterv1.ProbeConfig{
+					Startup: &opsterv1.CommandProbeConfig{
 						FailureThreshold: 11,
 					},
-					Readiness: &opsterv1.ReadinessProbeConfig{
+					Readiness: &opsterv1.CommandProbeConfig{
 						FailureThreshold: 9,
 					},
 				},
@@ -831,14 +832,15 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold).To(Equal(int32(15)))
 
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.InitialDelaySeconds).To(Equal(int32(10)))
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(5)))
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(20)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(30)))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.SuccessThreshold).To(Equal(int32(1)))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.FailureThreshold).To(Equal(int32(11)))
 
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(60)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(30)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.SuccessThreshold).To(Equal(int32(1)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
 		})
 
@@ -855,17 +857,18 @@ var _ = Describe("Builders", func() {
 						SuccessThreshold:    2,
 						FailureThreshold:    15,
 					},
-					Startup: &opsterv1.ProbeConfig{
+					Startup: &opsterv1.CommandProbeConfig{
 						InitialDelaySeconds: 14,
 						TimeoutSeconds:      7,
 						PeriodSeconds:       27,
 						SuccessThreshold:    3,
 						FailureThreshold:    11,
 					},
-					Readiness: &opsterv1.ReadinessProbeConfig{
+					Readiness: &opsterv1.CommandProbeConfig{
 						InitialDelaySeconds: 65,
 						TimeoutSeconds:      34,
 						PeriodSeconds:       33,
+						SuccessThreshold:    4,
 						FailureThreshold:    9,
 					},
 				},
@@ -886,7 +889,44 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(65)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(34)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(33)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.SuccessThreshold).To(Equal(int32(4)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
+		})
+	})
+
+	When("Using custom command for OpenSearch probes", func() {
+		It("should have default command when not set", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+		})
+
+		It("should have custom command when set", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+				Probes: &opsterv1.ProbesConfig{
+					Startup: &opsterv1.CommandProbeConfig{
+						Command: []string{"/bin/bash", "-c", "echo 'startup'"},
+					},
+					Readiness: &opsterv1.CommandProbeConfig{
+						Command: []string{"/bin/bash", "-c", "echo 'ready'"},
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
 		})
 	})
 
