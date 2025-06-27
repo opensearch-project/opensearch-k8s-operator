@@ -27,7 +27,9 @@ spec:
     serviceName: {{ .serviceName | default $clusterName }}
   {{- end }}
   {{- with .Values.cluster.initHelper }}
-  initHelper: {{ . | toYaml | nindent 4 }}
+  initHelper:
+    {{- omit . "image" | toYaml | nindent 4 }}
+    image: {{ .image }}:{{ .version }}
   {{- end }}
   {{- with .Values.cluster.nodePools }}
   nodePools: {{ . | toYaml | nindent 4 }}
