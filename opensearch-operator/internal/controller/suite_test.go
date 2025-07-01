@@ -19,7 +19,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 // +kubebuilder:docs-gen:collapse=Apache License
-package controllers
+package controller
 
 import (
 	"context"

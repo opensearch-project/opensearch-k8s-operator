@@ -20,28 +20,32 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"strconv"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/internal/controller"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"net/http"
+	_ "net/http/pprof"
+
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"net/http"
-	_ "net/http/pprof"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 var (
@@ -203,6 +207,13 @@ func main() {
 		Recorder: mgr.GetEventRecorderFor("snapshotpolicy-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
+		os.Exit(1)
+	}
+	if err = (&controller.OpensearchSearchTemplateReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSearchTemplate")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
