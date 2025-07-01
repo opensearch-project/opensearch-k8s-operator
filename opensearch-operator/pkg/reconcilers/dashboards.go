@@ -95,7 +95,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.client.Scheme()))
 	result.Combine(r.client.CreateDeployment(deployment))
 
-	svc := builders.NewDashboardsSvcForCr(r.instance)
+	svc := builders.NewDashboardsSvcForCr(r.instance, r.instance.Spec.Dashboards.Service.Labels)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, svc, r.client.Scheme()))
 	result.Combine(r.client.CreateService(svc))
 
@@ -120,8 +120,8 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		// Take CA from TLS reconciler or generate new one
 		var ca tls.Cert
 		var err error
-		if tlsConfig.TlsCertificateConfig.CaSecret.Name != "" {
-			ca, err = r.providedCaCert(tlsConfig.TlsCertificateConfig.CaSecret.Name, namespace)
+		if tlsConfig.CaSecret.Name != "" {
+			ca, err = r.providedCaCert(tlsConfig.CaSecret.Name, namespace)
 		} else {
 			ca, err = util.ReadOrGenerateCaCert(r.pki, r.client, r.instance)
 		}
@@ -163,7 +163,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		volumeMounts = append(volumeMounts, mount)
 	} else {
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Notice - using externally provided certificates for Dashboard Cluster")
-		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.TlsCertificateConfig.Secret.Name}}}
+		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.Secret.Name}}}
 		volumes = append(volumes, volume)
 		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}
 		volumeMounts = append(volumeMounts, mount)

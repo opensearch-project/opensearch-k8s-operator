@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"net/http"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -17,7 +18,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -118,6 +118,7 @@ var _ = Describe("ism policy reconciler", func() {
 			recorder = record.NewFakeRecorder(1)
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 		})
+
 		It("should emit a unit test event and requeue", func() {
 			go func() {
 				defer GinkgoRecover()
@@ -187,10 +188,8 @@ var _ = Describe("ism policy reconciler", func() {
 			})
 		})
 
-		When("policy does not exist in opensearch", func() {
+		Context("policy does not exist in opensearch", func() {
 			BeforeEach(func() {
-				mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
-
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
@@ -201,6 +200,7 @@ var _ = Describe("ism policy reconciler", func() {
 					),
 					httpmock.NewStringResponder(404, "Not Found").Once(),
 				)
+
 				transport.RegisterResponder(
 					http.MethodPut,
 					fmt.Sprintf(
@@ -212,20 +212,141 @@ var _ = Describe("ism policy reconciler", func() {
 					httpmock.NewStringResponder(200, "OK").Once(),
 				)
 			})
-			It("should create the policy, emit a unit test event, and requeue", func() {
-				go func() {
-					defer GinkgoRecover()
-					defer close(recorder.Events)
-					result, err := reconciler.Reconcile()
-					Expect(err).ToNot(HaveOccurred())
-					Expect(result.Requeue).To(BeTrue())
-				}()
-				var events []string
-				for msg := range recorder.Events {
-					events = append(events, msg)
-				}
-				Expect(len(events)).To(Equal(1))
-				Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s policy successfully created in OpenSearch Cluster", opensearchAPIUpdated)))
+
+			When("apply ism policy to existing indices is false", func() {
+				BeforeEach(func() {
+					instance.Spec.ApplyToExistingIndices = ptr.To(false)
+					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
+				})
+
+				It("should create the policy, emit a unit test event, and requeue", func() {
+					go func() {
+						defer GinkgoRecover()
+						defer close(recorder.Events)
+						result, err := reconciler.Reconcile()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(result.Requeue).To(BeTrue())
+					}()
+					var events []string
+					for msg := range recorder.Events {
+						events = append(events, msg)
+					}
+					Expect(len(events)).To(Equal(1))
+					Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s policy successfully created in OpenSearch Cluster", opensearchAPIUpdated)))
+				})
+			})
+
+			Context("applyToExistingIndices is true", func() {
+				indexName := "test-index-1"
+				BeforeEach(func() {
+					instance.Spec.ApplyToExistingIndices = ptr.To(true)
+					instance.Spec.ISMTemplate = &opsterv1.ISMTemplate{
+						IndexPatterns: []string{"test-*"},
+					}
+					transport.RegisterResponder(
+						http.MethodGet,
+						fmt.Sprintf(
+							"https://%s.%s.svc.cluster.local:9200/_cat/indices/test-*",
+							cluster.Spec.General.ServiceName,
+							cluster.Namespace,
+						),
+						httpmock.NewJsonResponderOrPanic(200, []map[string]interface{}{
+							{"index": indexName},
+						}),
+					)
+				})
+
+				When("successfully applied applied policy to indices", func() {
+					BeforeEach(func() {
+						mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
+						transport.RegisterResponder(
+							http.MethodPost,
+							fmt.Sprintf(
+								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/add/%s",
+								cluster.Spec.General.ServiceName,
+								cluster.Namespace,
+								indexName,
+							),
+							httpmock.NewStringResponder(200, "OK").Once(),
+						)
+					})
+
+					It("should create the policy, apply it to existing indices, emit a unit test event, and requeue", func() {
+						go func() {
+							defer GinkgoRecover()
+							defer close(recorder.Events)
+							result, err := reconciler.Reconcile()
+							Expect(err).ToNot(HaveOccurred())
+							Expect(result.Requeue).To(BeTrue())
+						}()
+						var events []string
+						for msg := range recorder.Events {
+							events = append(events, msg)
+						}
+						Expect(len(events)).To(Equal(2))
+						Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s ISM policy applied to existing indices", opensearchAPIUpdated)))
+						Expect(events[1]).To(Equal(fmt.Sprintf("Normal %s policy successfully created in OpenSearch Cluster", opensearchAPIUpdated)))
+					})
+				})
+
+				When("failed to get indices from opensearch api", func() {
+					BeforeEach(func() {
+						transport.RegisterResponder(
+							http.MethodGet,
+							fmt.Sprintf(
+								"https://%s.%s.svc.cluster.local:9200/_cat/indices/test-*",
+								cluster.Spec.General.ServiceName,
+								cluster.Namespace,
+							),
+							httpmock.NewErrorResponder(fmt.Errorf("failed to get indices")).Once(),
+						)
+					})
+					It("should emit a unit test event and requeue", func() {
+						go func() {
+							defer GinkgoRecover()
+							defer close(recorder.Events)
+							result, err := reconciler.Reconcile()
+							Expect(err).To(HaveOccurred())
+							Expect(result.Requeue).To(BeTrue())
+						}()
+						var events []string
+						for msg := range recorder.Events {
+							events = append(events, msg)
+						}
+						Expect(len(events)).To(Equal(1))
+						Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s failed to apply policy to existing indices", opensearchAPIError)))
+					})
+				})
+
+				When("failed to apply policy to existing indices", func() {
+					BeforeEach(func() {
+						transport.RegisterResponder(
+							http.MethodPost,
+							fmt.Sprintf(
+								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/add/test-index-1",
+								cluster.Spec.General.ServiceName,
+								cluster.Namespace,
+							),
+							httpmock.NewErrorResponder(fmt.Errorf("failed to apply policy")).Once(),
+						)
+					})
+
+					It("should emit a unit test event and requeue", func() {
+						go func() {
+							defer GinkgoRecover()
+							defer close(recorder.Events)
+							result, err := reconciler.Reconcile()
+							Expect(err).To(HaveOccurred())
+							Expect(result.Requeue).To(BeTrue())
+						}()
+						var events []string
+						for msg := range recorder.Events {
+							events = append(events, msg)
+						}
+						Expect(len(events)).To(Equal(1))
+						Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s failed to apply policy to existing indices", opensearchAPIError)))
+					})
+				})
 			})
 		})
 
@@ -242,6 +363,7 @@ var _ = Describe("ism policy reconciler", func() {
 					httpmock.NewErrorResponder(fmt.Errorf("failed to get policy")).Once(),
 				)
 			})
+
 			It("should emit a unit test event, requeue, and return an error", func() {
 				go func() {
 					defer GinkgoRecover()
@@ -295,7 +417,6 @@ var _ = Describe("ism policy reconciler", func() {
 						result, err := reconciler.Reconcile()
 						Expect(err).ToNot(HaveOccurred())
 						Expect(result.Requeue).To(BeTrue())
-						// Confirm all responders have been called
 						Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + extraContextCalls))
 					}()
 					var events []string
@@ -310,7 +431,7 @@ var _ = Describe("ism policy reconciler", func() {
 			When("existing status is true", func() {
 				BeforeEach(func() {
 					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).Return(nil)
-					instance.Status.ExistingISMPolicy = pointer.Bool(true)
+					instance.Status.ExistingISMPolicy = ptr.To(true)
 				})
 
 				It("should emit a unit test event and requeue", func() {
@@ -334,7 +455,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 			Context("existing status is false", func() {
 				BeforeEach(func() {
-					instance.Status.ExistingISMPolicy = pointer.Bool(false)
+					instance.Status.ExistingISMPolicy = ptr.To(false)
 				})
 
 				When("policy is the same", func() {
@@ -342,6 +463,7 @@ var _ = Describe("ism policy reconciler", func() {
 						instance.Spec.DefaultState = "test-state"
 						instance.Spec.Description = "test-policy"
 					})
+
 					It("should emit a unit test event and requeue", func() {
 						go func() {
 							defer GinkgoRecover()
@@ -377,6 +499,7 @@ var _ = Describe("ism policy reconciler", func() {
 							httpmock.NewStringResponder(200, "OK").Once(),
 						)
 					})
+
 					It("should update ism policy, emit a unit test event, and requeue", func() {
 						go func() {
 							defer GinkgoRecover()
@@ -399,6 +522,208 @@ var _ = Describe("ism policy reconciler", func() {
 		})
 	})
 
+	Context("CreateISMPolicy Shrink Action Validation", func() {
+		var (
+			originalInstanceSpec opsterv1.OpenSearchISMPolicySpec
+		)
+
+		BeforeEach(func() {
+			recorder = record.NewFakeRecorder(1)
+
+			options := ReconcilerOptions{}
+			options.apply(WithOSClientTransport(transport), WithUpdateStatus(false))
+			reconciler = &IsmPolicyReconciler{
+				client:            mockClient,
+				ctx:               context.Background(),
+				ReconcilerOptions: options,
+				recorder:          recorder,
+				instance:          instance,
+				logger:            log.FromContext(context.Background()),
+			}
+
+			originalInstanceSpec = instance.Spec
+		})
+
+		AfterEach(func() {
+			instance.Spec = originalInstanceSpec
+		})
+
+		When("a Shrink action is configured correctly with NumNewShards", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									NumNewShards: ptr.To(1),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should create the policy without error and set NumNewShards", func() {
+				policy, err := reconciler.CreateISMPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).ToNot(BeNil())
+				Expect(policy.States).To(HaveLen(1))
+				Expect(policy.States[0].Actions).To(HaveLen(1))
+				Expect(policy.States[0].Actions[0].Shrink).ToNot(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.NumNewShards).To(Equal(ptr.To(1)))
+				Expect(policy.States[0].Actions[0].Shrink.MaxShardSize).To(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.PercentageOfSourceShards).To(BeNil())
+			})
+		})
+
+		When("a Shrink action is configured correctly with MaxShardSize", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									MaxShardSize: ptr.To("1gb"),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should create the policy without error and set MaxShardSize", func() {
+				policy, err := reconciler.CreateISMPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).ToNot(BeNil())
+				Expect(policy.States).To(HaveLen(1))
+				Expect(policy.States[0].Actions).To(HaveLen(1))
+				Expect(policy.States[0].Actions[0].Shrink).ToNot(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.NumNewShards).To(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.MaxShardSize).To(Equal(ptr.To("1gb")))
+				Expect(policy.States[0].Actions[0].Shrink.PercentageOfSourceShards).To(BeNil())
+			})
+		})
+
+		When("a Shrink action is configured correctly with PercentageOfSourceShards", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									PercentageOfSourceShards: ptr.To[int64](50),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should create the policy without error and set PercentageOfSourceShards", func() {
+				policy, err := reconciler.CreateISMPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).ToNot(BeNil())
+				Expect(policy.States).To(HaveLen(1))
+				Expect(policy.States[0].Actions).To(HaveLen(1))
+				Expect(policy.States[0].Actions[0].Shrink).ToNot(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.NumNewShards).To(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.MaxShardSize).To(BeNil())
+				Expect(policy.States[0].Actions[0].Shrink.PercentageOfSourceShards).To(Equal(ptr.To[int64](50)))
+			})
+		})
+
+		When("a Shrink action is configured with NumNewShards and MaxShardSize", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									NumNewShards: ptr.To(1),
+									MaxShardSize: ptr.To("1gb"),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should return an error", func() {
+				_, err := reconciler.CreateISMPolicy()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("maxShardSize can't exist with NumNewShards or PercentageOfSourceShards"))
+			})
+		})
+
+		When("a Shrink action is configured with NumNewShards and PercentageOfSourceShards", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									NumNewShards:             ptr.To(1),
+									PercentageOfSourceShards: ptr.To[int64](50),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should return an error", func() {
+				_, err := reconciler.CreateISMPolicy()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("numNewShards can't exist with MaxShardSize or PercentageOfSourceShards"))
+			})
+		})
+
+		When("a Shrink action is configured with MaxShardSize and PercentageOfSourceShards", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									MaxShardSize:             ptr.To("1gb"),
+									PercentageOfSourceShards: ptr.To[int64](50),
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should return an error", func() {
+				_, err := reconciler.CreateISMPolicy()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("maxShardSize can't exist with NumNewShards or PercentageOfSourceShards"))
+			})
+		})
+
+		When("a Shrink action is configured with none of the required parameters", func() {
+			BeforeEach(func() {
+				instance.Spec.States = []opsterv1.State{
+					{
+						Name: "hot",
+						Actions: []opsterv1.Action{
+							{
+								Shrink: &opsterv1.Shrink{
+									// No fields set
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should return an error", func() {
+				_, err := reconciler.CreateISMPolicy()
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("either of MaxShardSize or NumNewShards or PercentageOfSourceShards is required"))
+			})
+		})
+	})
+
 	Context("deletions", func() {
 		When("existing status is nil", func() {
 			It("should do nothing and exit", func() {
@@ -408,8 +733,9 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingISMPolicy = pointer.Bool(true)
+				instance.Status.ExistingISMPolicy = ptr.To(true)
 			})
+
 			It("should do nothing and exit", func() {
 				Expect(reconciler.Delete()).To(Succeed())
 			})
@@ -417,7 +743,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 		Context("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingISMPolicy = pointer.Bool(false)
+				instance.Status.ExistingISMPolicy = ptr.To(false)
 			})
 
 			When("cluster does not exist", func() {
@@ -425,6 +751,7 @@ var _ = Describe("ism policy reconciler", func() {
 					instance.Spec.OpensearchRef.Name = "doesnotexist"
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
 				})
+
 				It("should do nothing and exit", func() {
 					Expect(reconciler.Delete()).To(Succeed())
 				})
@@ -472,6 +799,7 @@ var _ = Describe("ism policy reconciler", func() {
 							httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
 						)
 					})
+
 					It("should do nothing and exit", func() {
 						Expect(reconciler.Delete()).NotTo(Succeed())
 					})
@@ -490,6 +818,7 @@ var _ = Describe("ism policy reconciler", func() {
 							httpmock.NewStringResponder(200, "OK").Once(failMessage),
 						)
 					})
+
 					It("should delete the policy", func() {
 						Expect(reconciler.Delete()).To(Succeed())
 					})

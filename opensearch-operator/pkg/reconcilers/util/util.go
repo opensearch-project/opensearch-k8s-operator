@@ -5,6 +5,7 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"net/http"
 	"sort"
 	"strings"
@@ -22,7 +23,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -289,7 +289,7 @@ func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int
 		if helpers.HasDataRole(&nodePool) {
 			sts, err := k8sClient.GetStatefulSet(builders.StsName(cr, &nodePool), cr.Namespace)
 			if err == nil {
-				count = count + pointer.Int32Deref(sts.Spec.Replicas, 1)
+				count = count + ptr.Deref(sts.Spec.Replicas, 1)
 			}
 		}
 	}

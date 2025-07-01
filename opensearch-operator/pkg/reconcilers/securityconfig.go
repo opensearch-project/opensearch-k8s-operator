@@ -195,7 +195,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	job, err := r.client.GetJob(jobName, namespace)
 	if err == nil {
-		value, exists := job.ObjectMeta.Annotations[checksumAnnotation]
+		value, exists := job.Annotations[checksumAnnotation]
 		if exists && value == checksumval {
 			// Nothing to do, current securityconfig already applied
 			return ctrl.Result{}, nil

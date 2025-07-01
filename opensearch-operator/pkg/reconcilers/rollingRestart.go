@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -16,7 +17,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -75,7 +75,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 		if sts.Status.UpdateRevision != "" &&
-			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			sts.Status.UpdatedReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
 			pendingUpdate = true
 			break
 		} else if sts.Status.UpdateRevision != "" &&
@@ -91,7 +91,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 			}
 
 		}
-		if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+		if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, 1) {
 			return ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: 10 * time.Second,
@@ -148,10 +148,10 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 		if sts.Status.UpdateRevision != "" &&
-			sts.Status.UpdatedReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			sts.Status.UpdatedReplicas != ptr.Deref(sts.Spec.Replicas, 1) {
 			// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
-			if sts.Status.ReadyReplicas == pointer.Int32Deref(sts.Spec.Replicas, 1) {
-				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.client, r.instance, &nodePool); err == nil && numReadyPods == int(pointer.Int32Deref(sts.Spec.Replicas, 1)) {
+			if sts.Status.ReadyReplicas == ptr.Deref(sts.Spec.Replicas, 1) {
+				if numReadyPods, err := helpers.CountRunningPodsForNodePool(r.client, r.instance, &nodePool); err == nil && numReadyPods == int(ptr.Deref(sts.Spec.Replicas, 1)) {
 					lg.Info(fmt.Sprintf("Starting rolling restart of the StatefulSet %s", sts.Name))
 					return r.restartStatefulSetPod(&sts)
 				}

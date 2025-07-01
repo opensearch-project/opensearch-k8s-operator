@@ -195,7 +195,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Detect cluster failure and initiate parallel recovery
 	if helpers.ParallelRecoveryMode() &&
-		(nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
+		(nodePool.Persistence == nil || nodePool.Persistence.PVC != nil) {
 		// This logic only works if the STS uses PVCs
 		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
 		if existing.Status.CurrentRevision == "" {
@@ -224,8 +224,8 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 					}
 					// Recreate with PodManagementPolicy=Parallel
 					sts.Spec.PodManagementPolicy = appsv1.ParallelPodManagement
-					sts.ObjectMeta.ResourceVersion = ""
-					sts.ObjectMeta.UID = ""
+					sts.ResourceVersion = ""
+					sts.UID = ""
 					result, err = r.client.ReconcileResource(sts, reconciler.StatePresent)
 					if err != nil {
 						r.logger.Error(err, "Failed to create STS")
@@ -258,7 +258,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Default is PVC, or explicit check for PersistenceSource as PVC
 	// Handle volume resizing, but only if we are using PVCs
-	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
+	if nodePool.Persistence == nil || nodePool.Persistence.PVC != nil {
 		err := r.maybeUpdateVolumes(&existing, nodePool)
 		if err != nil {
 			return result, err

@@ -78,7 +78,7 @@ func IsConfigMapDeleted(k8sClient client.Client, name string, namespace string) 
 
 func HasOwnerReference(object client.Object, owner *opsterv1.OpenSearchCluster) bool {
 	for _, ownerRef := range object.GetOwnerReferences() {
-		if ownerRef.Name == owner.ObjectMeta.Name {
+		if ownerRef.Name == owner.Name {
 			return true
 		}
 	}
