@@ -20,28 +20,32 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"strconv"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/internal/controller"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"net/http"
+	_ "net/http/pprof"
+
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"net/http"
-	_ "net/http/pprof"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 var (
@@ -124,7 +128,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.OpenSearchClusterReconciler{
+	if err = (&controller.OpenSearchClusterReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("containerset-controller"),
@@ -133,7 +137,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.OpensearchUserReconciler{
+	if err = (&controller.OpensearchUserReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("user-controller"),
@@ -141,7 +145,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchUser")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchRoleReconciler{
+	if err = (&controller.OpensearchRoleReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("role-controller"),
@@ -149,7 +153,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchRole")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchISMPolicyReconciler{
+	if err = (&controller.OpensearchISMPolicyReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("ism-controller"),
@@ -157,7 +161,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchISM")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchTenantReconciler{
+	if err = (&controller.OpensearchTenantReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("tenant-controller"),
@@ -165,7 +169,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchTenant")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchUserRoleBindingReconciler{
+	if err = (&controller.OpensearchUserRoleBindingReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("userrolebinding-controller"),
@@ -173,7 +177,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchUserRoleBinding")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchActionGroupReconciler{
+	if err = (&controller.OpensearchActionGroupReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("actiongroup-controller"),
@@ -181,7 +185,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchActionGroup")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchIndexTemplateReconciler{
+	if err = (&controller.OpensearchIndexTemplateReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("indextemplate-controller"),
@@ -189,7 +193,7 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchIndexTemplate")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchComponentTemplateReconciler{
+	if err = (&controller.OpensearchComponentTemplateReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("componenttemplate-controller"),
@@ -197,12 +201,20 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchComponentTemplate")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchSnapshotPolicyReconciler{
+	if err = (&controller.OpensearchSnapshotPolicyReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("snapshotpolicy-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
+		os.Exit(1)
+	}
+	if err = (&controller.OpensearchSearchTemplateReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("searchtemplate-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSearchTemplate")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

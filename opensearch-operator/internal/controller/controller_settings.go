@@ -1,4 +1,4 @@
-package controllers
+package controller
 
 const (
 	OpensearchFinalizer = "opster.io/opensearch-data"

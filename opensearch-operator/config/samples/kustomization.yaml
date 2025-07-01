@@ -1,0 +1,4 @@
+## Append samples of your project ##
+resources:
+- opensearch.opster.io_v1_opensearchsearchtemplate.yaml
+# +kubebuilder:scaffold:manifestskustomizesamples

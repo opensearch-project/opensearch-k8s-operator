@@ -1,11 +1,12 @@
-package controllers
+package controller
 
 import (
 	"context"
 	"fmt"
+	"time"
+
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/utils/ptr"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"

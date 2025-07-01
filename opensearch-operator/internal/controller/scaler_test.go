@@ -1,9 +1,10 @@
-package controllers
+package controller
 
 import (
 	"context"
-	"k8s.io/utils/ptr"
 	"time"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"

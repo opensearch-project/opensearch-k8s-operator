@@ -1,0 +1,260 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.16.0
+  name: opensearchsearchtemplates.opensearch.opster.io
+spec:
+  group: opensearch.opster.io
+  names:
+    kind: OpensearchSearchTemplate
+    listKind: OpensearchSearchTemplateList
+    plural: opensearchsearchtemplates
+    singular: opensearchsearchtemplate
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        description: OpensearchSearchTemplate is the Schema for the opensearchsearchtemplates
+          API
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: OpensearchSearchTemplateSpec defines the desired state of
+              the search template.
+            properties:
+              opensearchCluster:
+                description: Reference to the OpenSearch cluster to which this search
+                  template belongs.
+                properties:
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
+              params:
+                description: Parameters to be passed when executing the search template
+                  (dynamic variables).
+                x-kubernetes-preserve-unknown-fields: true
+              script:
+                description: Search template script definition and configuration.
+                properties:
+                  allowNoIndices:
+                    description: Whether to ignore if the index doesn't exist.
+                    type: boolean
+                  allowPartialSearchResults:
+                    description: Whether to allow partial search results if some shards
+                      fail.
+                    type: boolean
+                  analyzeWildcard:
+                    description: Whether to analyze wildcard terms in the query string.
+                    type: boolean
+                  analyzer:
+                    description: The analyzer to use for the query string.
+                    type: string
+                  batchedReduceSize:
+                    description: Maximum number of concurrent shard requests during
+                      reduce phase.
+                    type: integer
+                  cancelAfterTimeInterval:
+                    description: Cancel the search after a given time interval.
+                    type: string
+                  ccsMinimizeRoundtrips:
+                    description: Minimize cross-cluster search roundtrips.
+                    type: boolean
+                  defaultOperator:
+                    description: Default boolean operator (AND/OR) for query strings.
+                    type: string
+                  df:
+                    description: Default field for query string search.
+                    type: string
+                  docvalueFields:
+                    description: Fields to return in the `docvalue_fields` section.
+                    items:
+                      type: string
+                    type: array
+                  expandWildcards:
+                    description: Which wildcard expressions to expand (e.g., open,
+                      closed).
+                    type: string
+                  explain:
+                    description: Whether to include explanation of score in results.
+                    type: boolean
+                  from:
+                    description: Starting offset for paginated search results.
+                    type: integer
+                  ignoreThrottled:
+                    description: Whether to ignore throttled indices.
+                    type: boolean
+                  ignoreUnavailable:
+                    description: Whether to ignore unavailable indices (closed or
+                      missing).
+                    type: boolean
+                  includeNamedQueriesScore:
+                    description: Include scores for named queries (not widely used).
+                    type: boolean
+                  lenient:
+                    description: Whether to allow queries with format errors.
+                    type: boolean
+                  maxConcurrentShardRequests:
+                    description: Max concurrent shard-level search requests.
+                    type: integer
+                  phaseTook:
+                    description: Whether to collect per-phase timings.
+                    type: boolean
+                  preFilterShardSize:
+                    description: Pre-filter shards if number of hits is expected to
+                      be small.
+                    type: integer
+                  preference:
+                    description: Search preference (e.g., _primary, _replica, or custom
+                      string).
+                    type: string
+                  q:
+                    description: Query string.
+                    type: string
+                  requestCache:
+                    description: Whether to use the request cache.
+                    type: boolean
+                  restTotalHitsAsInt:
+                    description: Whether to return `total_hits` as integer.
+                    type: boolean
+                  routing:
+                    description: Custom routing value to control which shards to query.
+                    type: string
+                  scroll:
+                    description: Duration for scroll context to remain alive.
+                    type: string
+                  searchType:
+                    description: 'Type of search: query_then_fetch, dfs_query_then_fetch,
+                      etc.'
+                    type: string
+                  seqNoPrimaryTerm:
+                    description: Whether to include sequence number and primary term
+                      in results.
+                    type: boolean
+                  size:
+                    description: Number of hits to return.
+                    type: integer
+                  sort:
+                    description: Fields to sort results on.
+                    items:
+                      type: string
+                    type: array
+                  source:
+                    description: The query `_source` clause for including/excluding
+                      fields.
+                    type: string
+                  sourceExcludes:
+                    description: Fields to exclude from the source.
+                    items:
+                      type: string
+                    type: array
+                  sourceIncludes:
+                    description: Fields to include from the source.
+                    items:
+                      type: string
+                    type: array
+                  stats:
+                    description: Stats groups to associate with this request.
+                    type: string
+                  storedFields:
+                    description: List of stored fields to return (vs _source).
+                    items:
+                      type: string
+                    type: array
+                  suggestField:
+                    description: Field for suggestions (autocomplete).
+                    type: string
+                  suggestMode:
+                    description: 'Suggestion mode: missing, popular, always.'
+                    type: string
+                  suggestSize:
+                    description: Number of suggestions to return.
+                    type: integer
+                  suggestText:
+                    description: Input text for suggestions.
+                    type: string
+                  terminateAfter:
+                    description: Max number of documents to collect before terminating
+                      the query.
+                    type: integer
+                  timeout:
+                    description: Timeout for the entire search request.
+                    type: string
+                  trackScores:
+                    description: Whether to track scores even when not sorting by
+                      score.
+                    type: boolean
+                  trackTotalHits:
+                    description: Track total number of hits (true/false or integer
+                      threshold).
+                    x-kubernetes-preserve-unknown-fields: true
+                  typedKeys:
+                    description: Whether response should include typed keys.
+                    type: boolean
+                  version:
+                    description: Whether to include document version in hits.
+                    type: boolean
+                type: object
+              scriptId:
+                description: ID under which the script/search template will be stored
+                  in OpenSearch.
+                minLength: 1
+                type: string
+            required:
+            - opensearchCluster
+            - params
+            - script
+            - scriptId
+            type: object
+          status:
+            description: OpensearchSearchTemplateStatus defines the current state
+              of the search template.
+            properties:
+              existingSearchTemplate:
+                description: Whether the search template was already present in OpenSearch.
+                type: boolean
+              managedCluster:
+                description: UID of the managed OpenSearch cluster (used for multi-cluster
+                  context).
+                type: string
+              reason:
+                description: Reason for current state, if applicable.
+                type: string
+              searchTemplateName:
+                description: Name of the created search template in OpenSearch.
+                type: string
+              state:
+                description: Current state (e.g., CREATED, PENDING, ERROR, IGNORED).
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
