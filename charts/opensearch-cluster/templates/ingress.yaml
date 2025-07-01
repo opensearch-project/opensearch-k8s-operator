@@ -1,5 +1,6 @@
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
 {{- $svcPort := .Values.cluster.general.httpPort -}}
+{{- $svcName := .Values.cluster.general.serviceName | default $clusterName }}
 {{- if .Values.cluster.ingress.opensearch.enabled -}}
 ---
 {{- if and .Values.cluster.ingress.opensearch.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
@@ -50,11 +51,11 @@ spec:
             backend:
               {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
               service:
-                name: {{ $clusterName }}
+                name: {{ $svcName }}
                 port:
                   number: {{ $svcPort }}
               {{- else }}
-              serviceName: {{ $clusterName }}
+              serviceName: {{ $svcName }}
               servicePort: {{ $svcPort }}
               {{- end }}
           {{- end }}
@@ -111,11 +112,11 @@ spec:
             backend:
               {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
               service:
-                name: {{ $clusterName }}-dashboards
+                name: {{ $svcName }}-dashboards
                 port:
                   number: 5601
               {{- else }}
-              serviceName: {{ $clusterName }}
+              serviceName: {{ $svcName }}
               servicePort: 5601
               {{- end }}
           {{- end }}
