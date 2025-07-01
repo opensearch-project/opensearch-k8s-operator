@@ -398,6 +398,64 @@ func (client *OsClusterClient) UpdateSnapshotPolicyConfig(ctx context.Context, n
 	return doHTTPPut(ctx, client.client, path, body)
 }
 
+// GetSearchTemplate performs an HTTP GET request to OS to fetch the search template specified by name
+func (client *OsClusterClient) GetSearchTemplateConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSearchTemplate(name)
+	return doHTTPGet(ctx, client.client, path)
+}
+
+// CreateSearchTemplate performs an HTTP POST request to OS to create the search template specified by name
+func (client *OsClusterClient) CreateSearchTemplateConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSearchTemplate(name)
+	return doHTTPPost(ctx, client.client, path, body)
+}
+
+// DeleteSearchTemplate performs an HTTP DELETE request to OS to delete the search template specified by name
+func (client *OsClusterClient) DeleteSearchTemplateConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSearchTemplate(name)
+	return doHTTPDelete(ctx, client.client, path)
+}
+
+// UpdateSearchTemplate performs an HTTP PUT request to OS to update the search template specified by name
+func (client *OsClusterClient) UpdateSearchTemplateConfig(ctx context.Context, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathUpdateSearchTemplate(name, seqnumber, primterm)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// generateAPIPathSearchTemplate generates a URI PATH for a specific search template endpoint and name
+// For example: name = example
+// URI PATH = '_search/template/example'
+func generateAPIPathSearchTemplate(name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_search") + 1 + len("template") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_search")
+	path.WriteString("/")
+	path.WriteString("template")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
+// generateAPIPathUpdateSearchTemplate generates a URI PATH for updating a search template
+// For example: name = example, seq_no = 7, primary_term = 1
+// URI PATH = '_search/template/example?if_seq_no=7&if_primary_term=1'
+func generateAPIPathUpdateSearchTemplate(name string, seqno, primaryterm int) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_search") + 1 + len("template") + 1 + len(name) + len("?if_seq_no=") + len(strconv.Itoa(seqno)) + len("&if_primary_term=") + len(strconv.Itoa(primaryterm)))
+	path.WriteString("/")
+	path.WriteString("_search")
+	path.WriteString("/")
+	path.WriteString("template")
+	path.WriteString("/")
+	path.WriteString(name)
+	path.WriteString("?if_seq_no=")
+	path.WriteString(strconv.Itoa(seqno))
+	path.WriteString("&if_primary_term=")
+	path.WriteString(strconv.Itoa(primaryterm))
+	return path
+}
+
 // generateGetIndicesPath generates a URI PATH for a specific resource endpoint and name
 // For example: pattern = example-*
 // URI PATH = '_cat/indices/example-*?format=json'

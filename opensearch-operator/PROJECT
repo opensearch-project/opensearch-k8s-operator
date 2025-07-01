@@ -4,7 +4,7 @@
 # More info: https://book.kubebuilder.io/reference/project-config.html
 domain: opensearch.opster.io
 layout:
-- go.kubebuilder.io/v3
+- go.kubebuilder.io/v4
 projectName: opensearch-operator
 repo: github.com/Opster/opensearch-k8s-operator/opensearch-operator
 resources:
@@ -73,6 +73,15 @@ resources:
   domain: opensearch.opster.io
   group: opensearch.opster.io
   kind: OpensearchSnapshotPolicy
+  path: github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpensearchSearchTemplate
   path: github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1
   version: v1
 version: "3"

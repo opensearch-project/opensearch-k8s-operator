@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package controller
 
 import (
 	"context"
 
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
@@ -26,39 +28,43 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
-// OpensearchRoleReconciler reconciles a OpensearchRole object
-type OpensearchRoleReconciler struct {
+// OpensearchSearchTemplateReconciler reconciles a OpensearchSearchTemplate object
+type OpensearchSearchTemplateReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opsterv1.OpensearchRole
+	Instance *opsterv1.OpensearchSearchTemplate
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchroles,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchroles/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchroles/finalizers,verbs=update
+// +kubebuilder:rbac:groups=opensearch.opster.io.opensearch.opster.io,resources=opensearchsearchtemplates,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=opensearch.opster.io.opensearch.opster.io,resources=opensearchsearchtemplates/status,verbs=get;update;patch
+// +kubebuilder:rbac:groups=opensearch.opster.io.opensearch.opster.io,resources=opensearchsearchtemplates/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("role", req.NamespacedName)
-	r.Info("Reconciling OpensearchRole")
+// TODO(user): Modify the Reconcile function to compare the state specified by
+// the OpensearchSearchTemplate object against the actual cluster state, and then
+// perform operations to make the cluster state reflect the state specified by
+// the user.
+//
+// For more details, check Reconcile and its Result here:
+// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.19.0/pkg/reconcile
+func (r *OpensearchSearchTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.Logger = log.FromContext(ctx).WithValues("searchtemplate", req.NamespacedName)
+	r.Info("Reconciling OpensearchSearchTemplate")
 
-	r.Instance = &opsterv1.OpensearchRole{}
+	r.Instance = &opsterv1.OpensearchSearchTemplate{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	roleReconciler := reconcilers.NewRoleReconciler(
-		r.Client,
+	searchTemplateReconciler := reconcilers.NewSearchTemplateReconciler(
 		ctx,
+		r.Client,
 		r.Recorder,
 		r.Instance,
 	)
@@ -69,10 +75,10 @@ func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		return roleReconciler.Reconcile()
+		return searchTemplateReconciler.Reconcile()
 	} else {
 		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
-			err = roleReconciler.Delete()
+			err = searchTemplateReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -85,9 +91,8 @@ func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpensearchSearchTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.OpensearchRole{}).
-		Owns(&opsterv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
+		For(&opsterv1.OpensearchSearchTemplate{}).
 		Complete(r)
 }
