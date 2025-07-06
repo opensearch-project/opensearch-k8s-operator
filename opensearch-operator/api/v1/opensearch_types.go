@@ -342,6 +342,12 @@ type ClusterStatus struct {
 	// AvailableNodes is the number of available instances.
 	AvailableNodes int32            `json:"availableNodes,omitempty"`
 	Health         OpenSearchHealth `json:"health,omitempty"`
+	// ObservedGeneration reflects the generation of the spec that has been acted upon.
+	// +kubebuilder:default=0
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// Conditions represent the latest available observations of an object's current state.
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty" patchStrategy:"merge" patchMergeKey:"type"`
 }
 
 // +kubebuilder:object:root=true

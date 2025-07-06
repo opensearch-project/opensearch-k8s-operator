@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/conditions"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
@@ -226,6 +227,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 		}
 		r.Instance.Status.Phase = opsterv1.PhaseRunning
 		r.Instance.Status.ComponentsStatus = make([]opsterv1.ComponentStatus, 0)
+		conditions.SetReady(r.Instance, false, "Pending", "Cluster reconciliation has started")
 		return r.Status().Update(ctx, r.Instance)
 	})
 	if err != nil {
@@ -331,6 +333,16 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		}
 	}
 
-	// -------- all resources has been created -----------
+	// All resources are in the desired state – mark cluster Ready
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
+			return err
+		}
+		conditions.SetReady(r.Instance, true, "Reconciled", "Cluster is ready")
+		return r.Status().Update(ctx, r.Instance)
+	}); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 }

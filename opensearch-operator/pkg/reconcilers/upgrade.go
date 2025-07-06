@@ -10,6 +10,7 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/conditions"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
@@ -67,15 +68,19 @@ func NewUpgradeReconciler(
 func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	// If versions are in sync do nothing
 	if r.instance.Spec.General.Version == r.instance.Status.Version {
+		// Ensure Reconciling condition is false
+		_ = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(obj *opsterv1.OpenSearchCluster) {
+			conditions.SetReconciling(obj, false, "InSync", "Cluster version matches spec")
+		})
 		return ctrl.Result{}, nil
 	}
 
 	// Skip an upgrade if the cluster hasn't finished initializing
 	if !r.instance.Status.Initialized {
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: 10 * time.Second,
-		}, nil
+		_ = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(obj *opsterv1.OpenSearchCluster) {
+			conditions.SetReconciling(obj, true, "WaitingInit", "Waiting for cluster initialization before upgrade")
+		})
+		return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
@@ -101,6 +106,9 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	switch currentStatus.Status {
 	case upgradeStatusPending:
 		// Set it to upgrading and requeue
+		_ = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(obj *opsterv1.OpenSearchCluster) {
+			conditions.SetReconciling(obj, true, "UpgradePending", fmt.Sprintf("Preparing upgrade of node pool %s", currentStatus.Description))
+		})
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			currentStatus.Status = upgradeStatusInProgress
 			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, currentStatus)
@@ -111,6 +119,9 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			RequeueAfter: 15 * time.Second,
 		}, err
 	case upgradeStatusInProgress:
+		_ = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(obj *opsterv1.OpenSearchCluster) {
+			conditions.SetReconciling(obj, true, "UpgradeInProgress", fmt.Sprintf("Upgrading node pool %s", currentStatus.Description))
+		})
 		err := r.doNodePoolUpgrade(nodePool)
 		return ctrl.Result{
 			Requeue:      true,
@@ -118,6 +129,9 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		}, err
 	case "Finished":
 		// Cleanup status after successful upgrade
+		_ = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(obj *opsterv1.OpenSearchCluster) {
+			conditions.SetReconciling(obj, false, "UpgradeComplete", "Upgrade finished successfully")
+		})
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			instance.Status.Version = instance.Spec.General.Version
 			for _, pool := range instance.Spec.NodePools {

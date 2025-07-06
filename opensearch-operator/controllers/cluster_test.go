@@ -9,6 +9,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/conditions"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
@@ -16,6 +17,7 @@ import (
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -377,6 +379,17 @@ var _ = Describe("Cluster Reconciler", func() {
 				return true
 			}, timeout, interval).Should(BeTrue())
 			Expect(*pdb.Spec.MinAvailable).To(Equal(intstr.FromInt(3)))
+		})
+		It("should report Ready condition once reconciled", func() {
+			Eventually(func() bool {
+				cl := &opsterv1.OpenSearchCluster{}
+				if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: clusterName, Namespace: namespace}, cl); err != nil {
+					return false
+				}
+				readyCond := meta.FindStatusCondition(cl.Status.Conditions, conditions.ConditionReady)
+				reconCond := meta.FindStatusCondition(cl.Status.Conditions, conditions.ConditionReconciling)
+				return readyCond != nil && readyCond.Status == metav1.ConditionTrue && (reconCond == nil || reconCond.Status == metav1.ConditionFalse)
+			}, timeout*2, interval).Should(BeTrue())
 		})
 	})
 

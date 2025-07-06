@@ -3,12 +3,14 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"time"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/conditions"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
@@ -60,6 +62,15 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+
+	// Update Reconciling condition based on whether we need to continue scaling
+	_ = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(obj *opsterv1.OpenSearchCluster) {
+		if requeue || results.Result.RequeueAfter > 0 {
+			conditions.SetReconciling(obj, true, "Scaling", "Scaling operation in progress")
+		} else {
+			conditions.SetReconciling(obj, false, "ScalingComplete", "No scaling operations pending")
+		}
+	})
 
 	// Clean up old node pools
 	r.cleanupStatefulSets(results)
