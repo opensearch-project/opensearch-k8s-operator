@@ -298,7 +298,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 }
 
 func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult) {
-	stsList, err := r.client.ListStatefulSets(client.InNamespace(r.instance.Name),
+	stsList, err := r.client.ListStatefulSets(client.InNamespace(r.instance.Namespace),
 		client.MatchingLabels{helpers.ClusterLabel: r.instance.Name})
 	if err != nil {
 		result.Combine(&ctrl.Result{}, err)
