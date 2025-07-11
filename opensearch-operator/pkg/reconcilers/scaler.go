@@ -375,6 +375,6 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
 	}
-	r.recorder.AnnotatedEventf(r.instance, annotations, "Noraml", "Scaler", "Finished scaling")
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished scaling")
 	return result, err
 }
