@@ -27,7 +27,7 @@ const (
 
 	adminCert = "/certs/tls.crt"
 	adminKey  = "/certs/tls.key"
-	caCert    = "/certs/ca.crt"
+	caCert    = "/usr/share/opensearch/config/tls-http/ca.crt"
 
 	SecurityAdminBaseCmdTmpl = `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
 chmod +x $ADMIN;
