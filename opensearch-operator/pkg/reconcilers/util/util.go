@@ -5,10 +5,11 @@ import (
 	"crypto/sha1"
 	"encoding/hex"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"net/http"
 	"sort"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
@@ -215,6 +216,11 @@ func CreateAdditionalVolumes(
 }
 
 func OpensearchClusterURL(cluster *opsterv1.OpenSearchCluster) string {
+	if cluster.Spec.General.OperatorClusterURL != nil && *cluster.Spec.General.OperatorClusterURL != "" {
+		url := "https://" + *cluster.Spec.General.OperatorClusterURL
+		httpPort := cluster.Spec.General.HttpPort
+		return fmt.Sprintf("%s:%d", url, httpPort)
+	}
 	return fmt.Sprintf(
 		"https://%s.%s.svc.%s:%v",
 		cluster.Spec.General.ServiceName,
