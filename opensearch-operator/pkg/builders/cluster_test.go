@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"os"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -238,6 +239,15 @@ var _ = Describe("Builders", func() {
 			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
 
 			Expect(actualUrl).To(Equal(expectedUrl))
+		})
+
+		It("should use operatorClusterURL when provided", func() {
+			customURL := "https://opensearch.example.com:9200"
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.OperatorClusterURL = &customURL
+
+			actualUrl := URLForCluster(&clusterObject)
+			Expect(actualUrl).To(Equal(customURL))
 		})
 
 		It("should properly setup the main command when installing plugins", func() {

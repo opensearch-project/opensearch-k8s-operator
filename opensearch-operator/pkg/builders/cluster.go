@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
@@ -1038,6 +1039,12 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 }
 
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
+	if cr.Spec.General.OperatorClusterURL != nil && *cr.Spec.General.OperatorClusterURL != "" {
+		url := "https://" + *cr.Spec.General.OperatorClusterURL
+		httpPort := PortForCluster(cr)
+		return fmt.Sprintf("%s:%d", url, httpPort)
+	}
+	// Otherwise use the default internal Kubernetes service DNS name
 	httpPort := PortForCluster(cr)
 	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
 }
