@@ -150,13 +150,14 @@ func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatu
 }
 
 func MergeConfigs(left map[string]string, right map[string]string) map[string]string {
-	if left == nil {
-		return right
+	result := make(map[string]string)
+	for k, v := range left {
+		result[k] = v
 	}
 	for k, v := range right {
-		left[k] = v
+		result[k] = v
 	}
-	return left
+	return result
 }
 
 // Return the keys of the input map in sorted order
