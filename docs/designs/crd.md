@@ -789,6 +789,13 @@ AdditionalVolume object define additional volume and volumeMount
       <td>false</td>
       <td>-</td>
     </tr>
+    </tr><tr>
+      <td><b>persistentVolumeClaim</b></td>
+      <td>corev1.PersistentVolumeClaimVolumeSource</td>
+      <td>Defines the PersistentVolumeClaim object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr>
   </tbody>
 </table>
 

@@ -299,6 +299,8 @@ type AdditionalVolume struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 	// CSI object to use to populate the volume
 	CSI *corev1.CSIVolumeSource `json:"csi,omitempty"`
+	// PersistentVolumeClaim object to use to populate the volume
+	PersistentVolumeClaim *corev1.PersistentVolumeClaimVolumeSource `json:"persistentVolumeClaim,omitempty"`
 	// Projected object to use to populate the volume
 	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
 	// Whether to restart the pods on content change
