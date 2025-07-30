@@ -446,6 +446,15 @@ func NewSTSForNodePool(
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
 
+	discoveryType := ""
+	initialMasterNodes := BootstrapPodName(cr)
+
+	// Support for single-node clusters
+	if cr.Spec.NodePools[0].Replicas < 2 {
+		discoveryType = "single-node"
+		initialMasterNodes = ""
+	}
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        cr.Name + "-" + node.Component,
@@ -473,7 +482,11 @@ func NewSTSForNodePool(
 							Env: []corev1.EnvVar{
 								{
 									Name:  "cluster.initial_master_nodes",
-									Value: BootstrapPodName(cr),
+									Value: initialMasterNodes,
+								},
+								{
+									Name:  "discovery.type",
+									Value: discoveryType,
 								},
 								{
 									Name:  "discovery.seed_hosts",
