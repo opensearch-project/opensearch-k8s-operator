@@ -177,7 +177,11 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 
 func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
 	config["server.name"] = cr.Name + "-dashboards"
-	config["opensearch.ssl.verificationMode"] = "none"
+
+	// Don't override verificationMode
+	if _, ok := config["opensearch.ssl.verificationMode"]; !ok {
+		config["opensearch.ssl.verificationMode"] = "none"
+	}
 
 	if cr.Spec.Dashboards.BasePath != "" {
 		config["server.basePath"] = cr.Spec.Dashboards.BasePath
