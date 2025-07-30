@@ -225,6 +225,9 @@ cluster:
 
   # initHelper configuration
   initHelper:
+    # -- initHelper image
+    image: docker.io/busybox
+    
     # -- initHelper image pull policy
     imagePullPolicy: "IfNotPresent"
 
