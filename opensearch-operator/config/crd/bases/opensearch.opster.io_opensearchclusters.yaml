@@ -1287,6 +1287,22 @@ spec:
                           description: Path in the container to mount the volume at.
                             Required.
                           type: string
+                        persistentVolumeClaim:
+                          description: PersistentVolumeClaim object to use to populate the volume
+                          properties:
+                            claimName:
+                              description: |-
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
+                                Default false.
+                              type: boolean
+                          required:
+                          - claimName
+                          type: object
                         projected:
                           description: Projected object to use to populate the volume
                           properties:
@@ -3561,6 +3577,22 @@ spec:
                           description: Path in the container to mount the volume at.
                             Required.
                           type: string
+                        persistentVolumeClaim:
+                          description: PersistentVolumeClaim object to use to populate the volume
+                          properties:
+                            claimName:
+                              description: |-
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
+                                Default false.
+                              type: boolean
+                          required:
+                          - claimName
+                          type: object
                         projected:
                           description: Projected object to use to populate the volume
                           properties:
