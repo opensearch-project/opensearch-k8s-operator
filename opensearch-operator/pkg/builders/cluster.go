@@ -852,6 +852,10 @@ func NewBootstrapPod(
 		})
 	}
 
+	if cr.Spec.Bootstrap.Env != nil {
+		env = append(env, cr.Spec.Bootstrap.Env...)
+	}
+
 	var initContainers []corev1.Container
 	if !helpers.SkipInitContainer() {
 		initContainers = append(initContainers, corev1.Container{
