@@ -73,6 +73,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.ingress.opensearch.enabled | bool | `false` | Enable ingress for Opensearch service |
 | cluster.ingress.opensearch.hosts | list | `[]` | Opensearch Ingress hostnames |
 | cluster.ingress.opensearch.tls | list | `[]` | Opensearch tls configuration |
+| cluster.initHelper.image | string | `"docker.io/busybox"` | initHelper image |
 | cluster.initHelper.imagePullPolicy | string | `"IfNotPresent"` | initHelper image pull policy |
 | cluster.initHelper.imagePullSecrets | list | `[]` | initHelper image pull secret |
 | cluster.initHelper.resources | object | `{}` | initHelper pod cpu and memory resources |

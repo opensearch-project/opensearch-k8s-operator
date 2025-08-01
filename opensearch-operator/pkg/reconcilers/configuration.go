@@ -50,7 +50,7 @@ func NewConfigurationReconciler(
 
 func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
-		(r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0) {
+		len(r.reconcilerContext.OpenSearchConfig) == 0 {
 		return ctrl.Result{}, nil
 	}
 	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
@@ -87,7 +87,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	data := sb.String()
 	result := reconciler.CombinedResult{}
 
-	if r.reconcilerContext.OpenSearchConfig != nil && len(r.reconcilerContext.OpenSearchConfig) != 0 {
+	if len(r.reconcilerContext.OpenSearchConfig) != 0 {
 		cm := r.buildConfigMap(data)
 		if err := ctrl.SetControllerReference(r.instance, cm, r.client.Scheme()); err != nil {
 			return ctrl.Result{}, err

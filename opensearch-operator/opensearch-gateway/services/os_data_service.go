@@ -299,7 +299,7 @@ func IndexTemplateExists(ctx context.Context, service *OsClusterClient, template
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return false, nil
@@ -321,7 +321,7 @@ func ShouldUpdateIndexTemplate(
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return true, nil
@@ -385,7 +385,7 @@ func CreateOrUpdateIndexTemplate(
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("failed to create index template: %s", resp.String())
@@ -400,7 +400,7 @@ func DeleteIndexTemplate(ctx context.Context, service *OsClusterClient, indexTem
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("response from API is %s", resp.Status())
@@ -424,7 +424,7 @@ func ComponentTemplateExists(ctx context.Context, service *OsClusterClient, temp
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return false, nil
@@ -446,7 +446,7 @@ func ShouldUpdateComponentTemplate(
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return true, nil
@@ -510,7 +510,7 @@ func CreateOrUpdateComponentTemplate(
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("failed to create component template: %s", resp.String())
@@ -525,7 +525,7 @@ func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, comp
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("response from API is %s", resp.Status())

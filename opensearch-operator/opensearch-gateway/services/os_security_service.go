@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
@@ -33,7 +34,7 @@ func ShouldUpdateUser(
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return true, nil
@@ -74,7 +75,7 @@ func UserExists(ctx context.Context, service *OsClusterClient, username string) 
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return false, nil
@@ -89,7 +90,7 @@ func UserUIDMatches(ctx context.Context, service *OsClusterClient, username stri
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return false, fmt.Errorf("response from API is %s", resp.Status())
@@ -117,7 +118,7 @@ func CreateOrUpdateUser(
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to create user: %s", resp.String())
 	}
@@ -129,7 +130,7 @@ func DeleteUser(ctx context.Context, service *OsClusterClient, username string) 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("response from API is %s", resp.Status())
@@ -142,7 +143,7 @@ func RoleExists(ctx context.Context, service *OsClusterClient, rolename string) 
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return false, nil
@@ -162,7 +163,7 @@ func ShouldUpdateRole(
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return true, nil
@@ -197,7 +198,7 @@ func CreateOrUpdateRole(
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to create role: %s", resp.String())
 	}
@@ -209,7 +210,7 @@ func DeleteRole(ctx context.Context, service *OsClusterClient, rolename string) 
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("response from API is %s", resp.Status())
@@ -226,7 +227,7 @@ func RoleMappingExists(
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return false, nil
@@ -245,7 +246,7 @@ func FetchExistingRoleMapping(
 	if err != nil {
 		return requests.RoleMapping{}, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return requests.RoleMapping{}, fmt.Errorf("response from API is %s", resp.Status())
@@ -270,7 +271,7 @@ func CreateOrUpdateRoleMapping(
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to create role mapping: %s", resp.String())
 	}
@@ -282,7 +283,7 @@ func DeleteRoleMapping(ctx context.Context, service *OsClusterClient, rolename s
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("response from API is %s", resp.Status())
@@ -296,7 +297,7 @@ func ActionGroupExists(ctx context.Context, service *OsClusterClient, actionGrou
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return false, nil
@@ -317,7 +318,7 @@ func ShouldUpdateActionGroup(
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return true, nil
@@ -353,7 +354,7 @@ func CreateOrUpdateActionGroup(
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to create actiongroup: %s", resp.String())
 	}
@@ -366,7 +367,7 @@ func DeleteActionGroup(ctx context.Context, service *OsClusterClient, actionGrou
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("response from API is %s", resp.Status())
@@ -380,7 +381,7 @@ func TenantExists(ctx context.Context, service *OsClusterClient, tenantName stri
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return false, nil
@@ -401,7 +402,7 @@ func ShouldUpdateTenant(
 	if err != nil {
 		return false, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.StatusCode == 404 {
 		return true, nil
@@ -437,7 +438,7 @@ func CreateOrUpdateTenant(
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 	if resp.IsError() {
 		return fmt.Errorf("failed to create tenant: %s", resp.String())
 	}
@@ -450,7 +451,7 @@ func DeleteTenant(ctx context.Context, service *OsClusterClient, tenantName stri
 	if err != nil {
 		return err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return fmt.Errorf("response from API is %s", resp.Status())

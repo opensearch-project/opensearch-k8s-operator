@@ -77,7 +77,7 @@ type OpenSearchClusterReconciler struct {
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("cluster", req.NamespacedName)
-	r.Logger.Info("Reconciling OpenSearchCluster")
+	r.Info("Reconciling OpenSearchCluster")
 	myFinalizerName := "Opster"
 
 	r.Instance = &opsterv1.OpenSearchCluster{}
@@ -93,7 +93,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	/// ------ check if CRD has been deleted ------ ///
 	///	if ns deleted, delete the associated resources ///
-	if r.Instance.ObjectMeta.DeletionTimestamp.IsZero() {
+	if r.Instance.DeletionTimestamp.IsZero() {
 		if !helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
 			// Use RetryOnConflict to update finalizer to handle any changes to resource
 			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -162,7 +162,7 @@ func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // delete associated cluster resources //
 func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Context) (ctrl.Result, error) {
-	r.Logger.Info("Deleting resources")
+	r.Info("Deleting resources")
 	// Run through all sub controllers to delete existing objects
 	reconcilerContext := reconcilers.NewReconcilerContext(r.Recorder, r.Instance, r.Instance.Spec.NodePools)
 
@@ -214,12 +214,12 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 			return result, err
 		}
 	}
-	r.Logger.Info("Finished deleting resources")
+	r.Info("Finished deleting resources")
 	return ctrl.Result{}, nil
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context) (ctrl.Result, error) {
-	r.Logger.Info("Start reconcile - Phase: PENDING")
+	r.Info("Start reconcile - Phase: PENDING")
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 			return err

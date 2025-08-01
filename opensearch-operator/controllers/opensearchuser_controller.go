@@ -70,7 +70,7 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 
 	if r.Instance.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Client.Update(ctx, r.Instance)
+		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -82,7 +82,7 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 				return ctrl.Result{}, err
 			}
 			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
-			return ctrl.Result{}, r.Client.Update(ctx, r.Instance)
+			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
 
