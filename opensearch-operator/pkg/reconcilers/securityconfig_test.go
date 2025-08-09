@@ -108,6 +108,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 					"action_groups.yml": []byte(""),
 				},
 			}
+			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(*securityConfigSecret, nil)
 			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -175,6 +176,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				Type:       corev1.SecretType("Opaque"),
 				Data:       map[string][]byte{},
 			}
+			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
 			mockClient.EXPECT().GetJob("securityconfig-withadminsecret-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -264,6 +266,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 				},
 			}
 
+			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().GetJob("no-securityconfig-tls-configured-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
 			var createdJob *batchv1.Job
@@ -288,11 +291,11 @@ var _ = Describe("Securityconfig Reconciler", func() {
 chmod +x $ADMIN;
 until curl -k --silent https://no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local:9200;
 do
-echo 'Waiting to connect to the cluster'; sleep 120;
+echo 'Waiting to connect to the cluster'; sleep 10;
 done;count=0;
 until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd /usr/share/opensearch/config/opensearch-security -icl -nhnv -h no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local -p 9200 || (( count++ >= 20 ));
 do
-sleep 20;
+sleep 10;
 done;`
 
 			Expect(createdJob.Spec.Template.Spec.Containers[0].Args[0]).To(Equal(cmdArg))
