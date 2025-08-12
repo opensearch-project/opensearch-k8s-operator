@@ -78,7 +78,7 @@ docker-build: generate fmt vet ## Build docker image with the manager.
 	DOCKER_BUILDKIT=1 docker build -t ${IMG} .
 
 docker-build-multiarch: ## Build docker image with the manager for all supported architectures
-	DOCKER_BUILDKIT=1 docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" -t ${IMG} .
+	DOCKER_BUILDKIT=1 docker buildx build --platform="linux/amd64" -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
