@@ -451,9 +451,9 @@ func NewSTSForNodePool(
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
 
-	policyPodManagement := appsv1.ParallelPodManagement
+	policyPodManagement := appsv1.OrderedReadyPodManagement
 	if node.Component == "nodes" {
-		policyPodManagement = appsv1.OrderedReadyPodManagement
+		policyPodManagement = appsv1.ParallelPodManagement
 	}
 
 	sts := &appsv1.StatefulSet{
@@ -468,7 +468,7 @@ func NewSTSForNodePool(
 			Selector: &metav1.LabelSelector{
 				MatchLabels: matchLabels,
 			},
-			PodManagementPolicy:                  appsv1.OrderedReadyPodManagement,
+			PodManagementPolicy:                  policyPodManagement,
 			PersistentVolumeClaimRetentionPolicy: persistentVolumeClaimRetentionPolicy,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: appsv1.OnDeleteStatefulSetStrategyType,
