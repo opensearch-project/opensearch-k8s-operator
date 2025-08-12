@@ -369,7 +369,7 @@ var _ = Describe("users reconciler", func() {
 			})
 			It("should update the user password", func() {
 				instance.Spec.BackendRoles = []string{}
-				password.ObjectMeta.ResourceVersion = "987654321"
+				password.ResourceVersion = "987654321"
 				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				var createdSecret *corev1.Secret
 				mockClient.On("CreateSecret", mock.Anything).

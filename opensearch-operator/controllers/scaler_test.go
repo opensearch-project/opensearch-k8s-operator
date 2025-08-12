@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"k8s.io/utils/ptr"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -12,7 +13,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
 )
@@ -125,7 +125,7 @@ var _ = Describe("Scaler Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: clusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
 					return false
 				}
-				if pointer.Int32Deref(nodePool.Spec.Replicas, 1) != 2 {
+				if ptr.Deref(nodePool.Spec.Replicas, int32(1)) != 2 {
 					return false
 				}
 				return true
@@ -146,7 +146,7 @@ var _ = Describe("Scaler Reconciler", func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &OpensearchCluster); err != nil {
 					return err
 				}
-				if OpensearchCluster.Spec.NodePools[0].Persistence == nil || OpensearchCluster.Spec.NodePools[0].Persistence.PersistenceSource.PVC != nil {
+				if OpensearchCluster.Spec.NodePools[0].Persistence == nil || OpensearchCluster.Spec.NodePools[0].Persistence.PVC != nil {
 					OpensearchCluster.Spec.NodePools[0].DiskSize = "32Gi"
 				}
 

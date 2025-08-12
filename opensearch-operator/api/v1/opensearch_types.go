@@ -183,6 +183,7 @@ type DashboardsServiceSpec struct {
 	// +kubebuilder:default=ClusterIP
 	Type                     corev1.ServiceType `json:"type,omitempty"`
 	LoadBalancerSourceRanges []string           `json:"loadBalancerSourceRanges,omitempty"`
+	Labels                   map[string]string  `json:"labels,omitempty"`
 }
 
 type DashboardsConfig struct {

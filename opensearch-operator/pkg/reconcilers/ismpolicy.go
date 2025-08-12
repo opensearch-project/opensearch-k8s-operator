@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -17,7 +18,6 @@ import (
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -65,7 +65,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	var policyId string
 
 	defer func() {
-		if !pointer.BoolDeref(r.updateStatus, true) {
+		if !ptr.Deref(r.updateStatus, true) {
 			return
 		}
 		// When the reconciler is done, figure out what the state of the resource
@@ -128,7 +128,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}, retErr
 	}
 
-	if pointer.BoolDeref(r.updateStatus, true) {
+	if ptr.Deref(r.updateStatus, true) {
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 			object.(*opsterv1.OpenSearchISMPolicy).Status.ManagedCluster = &r.cluster.UID
 		})
@@ -197,9 +197,19 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 				RequeueAfter: defaultRequeueAfter,
 			}, retErr
 		}
+		// Apply to existing indices
+		if err := r.applyPolicyToExistingIndices(policyId); err != nil {
+			reason = "failed to apply policy to existing indices"
+			r.logger.Error(err, reason)
+			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: defaultRequeueAfter,
+			}, err
+		}
 		// Mark the ISM Policy as not pre-existing (created by the operator)
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = pointer.Bool(false)
+			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(false)
 		})
 		if retErr != nil {
 			reason = "failed to update custom resource object"
@@ -231,7 +241,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	// If the ISM policy exists in OpenSearch cluster and was not created by the operator, update the status and return
 	if r.instance.Status.ExistingISMPolicy == nil || *r.instance.Status.ExistingISMPolicy {
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = pointer.Bool(true)
+			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(true)
 		})
 		if retErr != nil {
 			reason = "failed to update custom resource object"
@@ -420,27 +430,27 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 							r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
 							return nil, errors.New(reason)
 						}
-						if action.Shrink.NumNewShards != nil {
-							if action.Shrink.MaxShardSize == nil && action.Shrink.PercentageOfSourceShards == nil {
-								shrink.NumNewShards = action.Shrink.NumNewShards
-							} else {
-								reason := "numNewShards can't exist with MaxShardSize or PercentageOfSourceShards. Keep one of these"
-								r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
-								return nil, errors.New(reason)
-							}
+					}
+					if action.Shrink.NumNewShards != nil {
+						if action.Shrink.MaxShardSize == nil && action.Shrink.PercentageOfSourceShards == nil {
+							shrink.NumNewShards = action.Shrink.NumNewShards
+						} else {
+							reason := "numNewShards can't exist with MaxShardSize or PercentageOfSourceShards. Keep one of these"
+							r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
+							return nil, errors.New(reason)
 						}
-						if action.Shrink.PercentageOfSourceShards != nil {
-							if action.Shrink.NumNewShards == nil && action.Shrink.MaxShardSize == nil {
-								shrink.PercentageOfSourceShards = action.Shrink.PercentageOfSourceShards
-							} else {
-								reason := "percentageOfSourceShards can't exist with MaxShardSize or NumNewShards. Keep one of these"
-								r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
-								return nil, errors.New(reason)
-							}
+					}
+					if action.Shrink.PercentageOfSourceShards != nil {
+						if action.Shrink.NumNewShards == nil && action.Shrink.MaxShardSize == nil {
+							shrink.PercentageOfSourceShards = action.Shrink.PercentageOfSourceShards
+						} else {
+							reason := "percentageOfSourceShards can't exist with MaxShardSize or NumNewShards. Keep one of these"
+							r.recorder.Event(r.instance, "Error", opensearchCustomResourceError, reason)
+							return nil, errors.New(reason)
 						}
-						if action.Shrink.TargetIndexNameTemplate != nil {
-							shrink.TargetIndexNameTemplate = action.Shrink.TargetIndexNameTemplate
-						}
+					}
+					if action.Shrink.TargetIndexNameTemplate != nil {
+						shrink.TargetIndexNameTemplate = action.Shrink.TargetIndexNameTemplate
 					}
 				}
 
@@ -546,6 +556,41 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 	}
 
 	return &policy, nil
+}
+
+func (r *IsmPolicyReconciler) applyPolicyToExistingIndices(policyId string) error {
+	if r.instance.Spec.ApplyToExistingIndices == nil || !*r.instance.Spec.ApplyToExistingIndices {
+		return nil
+	}
+
+	if r.instance.Spec.ISMTemplate == nil || len(r.instance.Spec.ISMTemplate.IndexPatterns) == 0 {
+		return nil
+	}
+
+	for _, pattern := range r.instance.Spec.ISMTemplate.IndexPatterns {
+
+		// Get existing indices matching the pattern
+		indices, err := services.GetIndices(r.ctx, r.osClient, pattern)
+
+		if err != nil {
+			reason := fmt.Sprintf("failed to get indices matching pattern %s", pattern)
+			r.logger.Error(err, reason)
+			return fmt.Errorf("%s: %w", reason, err)
+		}
+
+		// Apply policy to each index
+		for _, index := range indices {
+			if err := services.AddPolicyToIndex(r.ctx, r.osClient, index, policyId); err != nil {
+				reason := fmt.Sprintf("failed to apply policy to index %s", index)
+				return fmt.Errorf("%s: %w", reason, err)
+			}
+			r.logger.V(1).Info(fmt.Sprintf("Applied ISM Policy '%s' to existing index '%s'", policyId, index))
+		}
+	}
+
+	r.recorder.Event(r.instance, "Normal", opensearchAPIUpdated, "ISM policy applied to existing indices")
+
+	return nil
 }
 
 // Delete ISM policy from the OS cluster
