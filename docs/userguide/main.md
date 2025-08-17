@@ -578,7 +578,7 @@ The default option is persistent storage via PVCs. You can explicity define the 
 nodePools:
   - component: masters
     replicas: 3
-    diskSize: 30
+    
     roles:
       - "data"
       - "master"
@@ -597,7 +597,7 @@ If you do not want to use persistent storage you can use the `emptyDir` option. 
 nodePools:
   - component: masters
     replicas: 3
-    diskSize: 30
+    diskSize: "30Gi"
     roles:
       - "data"
       - "master"
@@ -615,7 +615,7 @@ As a last option you can hose a `hostPath`. Please note that hostPath is strongl
 nodePools:
   - component: masters
     replicas: 3
-    diskSize: 30
+    diskSize: "30Gi"
     roles:
       - "data"
       - "master"
