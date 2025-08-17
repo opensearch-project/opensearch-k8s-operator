@@ -578,7 +578,7 @@ The default option is persistent storage via PVCs. You can explicity define the 
 nodePools:
   - component: masters
     replicas: 3
-    
+    diskSize: "30Gi"
     roles:
       - "data"
       - "master"
