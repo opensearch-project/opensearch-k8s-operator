@@ -119,7 +119,7 @@ You can configure the operator to use a custom URL when communicating with OpenS
 spec:
   general:
     serviceName: my-cluster
-    version: "2.11.0"
+    version: "3.2.0"
     httpPort: 9200
     vendor: "opensearch"
     operatorClusterURL: "opensearch.example.com"  # Optional: custom FQDN for operator communication
