@@ -1039,14 +1039,7 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 }
 
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
-	if cr.Spec.General.OperatorClusterURL != nil && *cr.Spec.General.OperatorClusterURL != "" {
-		url := "https://" + *cr.Spec.General.OperatorClusterURL
-		httpPort := PortForCluster(cr)
-		return fmt.Sprintf("%s:%d", url, httpPort)
-	}
-	// Otherwise use the default internal Kubernetes service DNS name
-	httpPort := PortForCluster(cr)
-	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
+	return helpers.ClusterURL(cr)
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {

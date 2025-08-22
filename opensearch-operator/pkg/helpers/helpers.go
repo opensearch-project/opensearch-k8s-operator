@@ -43,6 +43,28 @@ func ContainsString(slice []string, s string) bool {
 	return false
 }
 
+// ClusterURL returns the URL for communicating with the OpenSearch cluster.
+// If OperatorClusterURL is specified, it uses that custom URL.
+// Otherwise, it constructs the default internal Kubernetes service DNS name.
+func ClusterURL(cluster *opsterv1.OpenSearchCluster) string {
+	httpPort := cluster.Spec.General.HttpPort
+	if httpPort == 0 {
+		httpPort = 9200 // default port
+	}
+
+	if cluster.Spec.General.OperatorClusterURL != nil && *cluster.Spec.General.OperatorClusterURL != "" {
+		return fmt.Sprintf("https://%s:%d", *cluster.Spec.General.OperatorClusterURL, httpPort)
+	}
+
+	// Default internal Kubernetes service DNS name
+	return fmt.Sprintf("https://%s.%s.svc.%s:%d",
+		cluster.Spec.General.ServiceName,
+		cluster.Namespace,
+		ClusterDnsBase(),
+		httpPort,
+	)
+}
+
 func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 	r := reflect.ValueOf(v)
 	f := reflect.Indirect(r).FieldByName(field).Interface()
