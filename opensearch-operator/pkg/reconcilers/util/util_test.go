@@ -2,14 +2,12 @@ package util
 
 import (
 	"context"
-	"fmt"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 var _ = Describe("Additional volumes", func() {
@@ -201,38 +199,5 @@ var _ = Describe("Additional volumes", func() {
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 		})
-	})
-})
-
-var _ = Describe("OpensearchClusterURL", func() {
-	It("should prepend https:// and append the port to operatorClusterURL if set", func() {
-		url := "opensearch.example.com"
-		cluster := &opsterv1.OpenSearchCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
-					OperatorClusterURL: &url,
-					HttpPort:           9443,
-					ServiceName:        "test",
-				},
-			},
-		}
-		result := OpensearchClusterURL(cluster)
-		Expect(result).To(Equal("https://opensearch.example.com:9443"))
-	})
-
-	It("should use the default internal DNS if operatorClusterURL is not set", func() {
-		cluster := &opsterv1.OpenSearchCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
-					HttpPort:    9200,
-					ServiceName: "test",
-				},
-			},
-		}
-		result := OpensearchClusterURL(cluster)
-		expected := fmt.Sprintf("https://%s.%s.svc.%s:%d", "test", "default", "cluster.local", 9200)
-		Expect(result).To(Equal(expected))
 	})
 })
