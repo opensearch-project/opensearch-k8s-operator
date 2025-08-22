@@ -490,29 +490,19 @@ func (r *TLSReconciler) handleHttp() error {
 		nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
 		if err != nil {
 			// Generate node cert and put it into secret
-			var dnsNames []string
+			// Build default DNS names
+			dnsNames := []string{
+				clusterName,
+				r.instance.Spec.General.ServiceName,
+				builders.DiscoveryServiceName(r.instance),
+				fmt.Sprintf("%s.%s", clusterName, namespace),
+				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
+				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
+			}
 
-			// If custom FQDN is provided, use it as the primary DNS name
+			// Prepend custom FQDN if provided
 			if tlsConfig.CustomFQDN != nil && *tlsConfig.CustomFQDN != "" {
-				dnsNames = []string{
-					*tlsConfig.CustomFQDN,
-					clusterName,
-					r.instance.Spec.General.ServiceName,
-					builders.DiscoveryServiceName(r.instance),
-					fmt.Sprintf("%s.%s", clusterName, namespace),
-					fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-					fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
-				}
-			} else {
-				// Use default DNS names
-				dnsNames = []string{
-					clusterName,
-					r.instance.Spec.General.ServiceName,
-					builders.DiscoveryServiceName(r.instance),
-					fmt.Sprintf("%s.%s", clusterName, namespace),
-					fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-					fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
-				}
+				dnsNames = append([]string{*tlsConfig.CustomFQDN}, dnsNames...)
 			}
 
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
