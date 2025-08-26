@@ -106,8 +106,11 @@ type ReadinessProbeConfig struct {
 }
 
 type NodePool struct {
-	Component                 string                            `json:"component"`
-	Replicas                  int32                             `json:"replicas"`
+	Component string `json:"component"`
+	// Count of Elasticsearch nodes to deploy.
+	// If the node set is managed by an autoscaling policy the initial value is automatically set by the autoscaling controller.
+	// +kubebuilder:validation:Optional
+	Replicas                  int32                             `json:"replicas,omitempty"`
 	DiskSize                  string                            `json:"diskSize,omitempty"`
 	Resources                 corev1.ResourceRequirements       `json:"resources,omitempty"`
 	Jvm                       string                            `json:"jvm,omitempty"`
@@ -299,6 +302,8 @@ type AdditionalVolume struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 	// CSI object to use to populate the volume
 	CSI *corev1.CSIVolumeSource `json:"csi,omitempty"`
+	// PersistentVolumeClaim object to use to populate the volume
+	PersistentVolumeClaim *corev1.PersistentVolumeClaimVolumeSource `json:"persistentVolumeClaim,omitempty"`
 	// Projected object to use to populate the volume
 	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
 	// Whether to restart the pods on content change
