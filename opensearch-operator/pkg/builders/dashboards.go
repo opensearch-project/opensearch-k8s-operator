@@ -127,6 +127,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 			Name:      cr.Name + "-dashboards",
 			Namespace: cr.Namespace,
 			Labels:    labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
