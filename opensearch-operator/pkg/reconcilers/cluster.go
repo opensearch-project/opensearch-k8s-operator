@@ -109,7 +109,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Status.Initialized {
 		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
 	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StatePresent))
+		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateCreated))
 	}
 
 	for _, nodePool := range r.instance.Spec.NodePools {
