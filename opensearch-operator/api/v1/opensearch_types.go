@@ -85,9 +85,9 @@ type InitHelperConfig struct {
 }
 
 type ProbesConfig struct {
-	Liveness  *ProbeConfig          `json:"liveness,omitempty"`
-	Readiness *ReadinessProbeConfig `json:"readiness,omitempty"`
-	Startup   *ProbeConfig          `json:"startup,omitempty"`
+	Liveness  *ProbeConfig        `json:"liveness,omitempty"`
+	Readiness *CommandProbeConfig `json:"readiness,omitempty"`
+	Startup   *CommandProbeConfig `json:"startup,omitempty"`
 }
 
 type ProbeConfig struct {
@@ -98,11 +98,13 @@ type ProbeConfig struct {
 	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
 }
 
-type ReadinessProbeConfig struct {
-	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
-	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
-	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
-	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+type CommandProbeConfig struct {
+	InitialDelaySeconds int32    `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32    `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32    `json:"timeoutSeconds,omitempty"`
+	SuccessThreshold    int32    `json:"successThreshold,omitempty"`
+	FailureThreshold    int32    `json:"failureThreshold,omitempty"`
+	Command             []string `json:"command,omitempty"`
 }
 
 type NodePool struct {
