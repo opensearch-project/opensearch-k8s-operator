@@ -291,6 +291,12 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>map[string]string</td>
         <td>general.additionalConfig</td>
       </tr><tr>
+        <td><b>env</b></td>
+        <td>[]corev1.Env</td>
+        <td>add user defined environment variables to bootstrap pod</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
         <td><b>keystore</b></td>
         <td>[]opsterv1.KeystoreValue</td>
         <td>List of objects that define secret values that will populate the opensearch keystore in the bootstrap pod</td>
