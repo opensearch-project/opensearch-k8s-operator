@@ -4501,6 +4501,7 @@ spec:
                   serviceName:
                     type: string
                   setVMMaxMapCount:
+                    default: true
                     type: boolean
                   snapshotRepositories:
                     items:
