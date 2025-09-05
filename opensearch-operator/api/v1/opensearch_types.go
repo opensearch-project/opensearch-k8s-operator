@@ -70,6 +70,7 @@ type GeneralConfig struct {
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the cluster pods' container
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	HostAliases     []corev1.HostAlias      `json:"hostAliases,omitempty"`
 }
 
 type PdbConfig struct {
@@ -205,6 +206,7 @@ type DashboardsConfig struct {
 	Annotations                 map[string]string           `json:"annotations,omitempty"`
 	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
 	PluginsList                 []string                    `json:"pluginsList,omitempty"`
+	HostAliases                 []corev1.HostAlias          `json:"hostAliases,omitempty"`
 	// Set security context for the dashboards pods
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the dashboards pods' container

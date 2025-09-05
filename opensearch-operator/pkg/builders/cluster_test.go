@@ -958,4 +958,27 @@ var _ = Describe("Builders", func() {
 			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
 		})
 	})
+
+	When("configuring a host alias for the cluster", func() {
+		It("should configure the host alias for the statefulset pods", func() {
+			hostNames := []string{"dummy.com"}
+			hostAlias := corev1.HostAlias{
+				IP:        "3.5.7.9",
+				Hostnames: hostNames,
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Namespace = "foobar"
+			clusterObject.Name = "foobar"
+			clusterObject.Spec.General.HostAliases = []corev1.HostAlias{hostAlias}
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(sts.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
+		})
+	})
 })

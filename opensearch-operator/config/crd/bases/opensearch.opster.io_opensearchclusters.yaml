@@ -2754,6 +2754,25 @@ spec:
                       - name
                       type: object
                     type: array
+                  hostAliases:
+                    items:
+                      description: |-
+                        HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the
+                        pod's hosts file.
+                      properties:
+                        hostnames:
+                          description: Hostnames for the above IP address.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        ip:
+                          description: IP address of the host file entry.
+                          type: string
+                      required:
+                      - ip
+                      type: object
+                    type: array
                   image:
                     type: string
                   imagePullPolicy:
@@ -3993,6 +4012,25 @@ spec:
                     description: Drain data nodes controls whether to drain data notes
                       on rolling restart operations
                     type: boolean
+                  hostAliases:
+                    items:
+                      description: |-
+                        HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the
+                        pod's hosts file.
+                      properties:
+                        hostnames:
+                          description: Hostnames for the above IP address.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        ip:
+                          description: IP address of the host file entry.
+                          type: string
+                      required:
+                      - ip
+                      type: object
+                    type: array
                   httpPort:
                     default: 9200
                     format: int32
