@@ -33,7 +33,7 @@ const (
 chmod +x $ADMIN;
 until curl -k --silent https://%s:%v;
 do
-echo 'Waiting to connect to the cluster'; sleep 120;
+echo 'Waiting to connect to the cluster'; sleep 20;
 done;`
 
 	ApplyAllYmlCmdTmpl = `count=0;
