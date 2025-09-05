@@ -3335,6 +3335,12 @@ spec:
                       enable:
                         description: Enable HTTPS for Dashboards
                         type: boolean
+                      enableHotReload:
+                        description: Enable hot reloading of TLS certificates. When
+                          enabled, certificates are mounted as directories instead
+                          of using subPath, allowing Kubernetes to update certificate
+                          files when secrets are updated.
+                        type: boolean
                       generate:
                         description: Generate certificate, if false secret must be
                           provided
@@ -6254,6 +6260,12 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          enableHotReload:
+                            description: Enable hot reloading of TLS certificates.
+                              When enabled, certificates are mounted as directories
+                              instead of using subPath, allowing Kubernetes to update
+                              certificate files when secrets are updated.
+                            type: boolean
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
@@ -6302,6 +6314,12 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          enableHotReload:
+                            description: Enable hot reloading of TLS certificates.
+                              When enabled, certificates are mounted as directories
+                              instead of using subPath, allowing Kubernetes to update
+                              certificate files when secrets are updated.
+                            type: boolean
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
