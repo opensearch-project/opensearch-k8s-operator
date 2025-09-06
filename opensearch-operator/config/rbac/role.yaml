@@ -127,6 +127,32 @@ rules:
   - patch
   - update
 - apiGroups:
+  - opensearch.opster.io.opensearch.opster.io
+  resources:
+  - opensearchsearchtemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.opster.io.opensearch.opster.io
+  resources:
+  - opensearchsearchtemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io.opensearch.opster.io
+  resources:
+  - opensearchsearchtemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
   - policy
   resources:
   - poddisruptionbudgets

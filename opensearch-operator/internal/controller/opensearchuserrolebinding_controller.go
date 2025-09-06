@@ -14,12 +14,12 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package controllers
+package controller
 
 import (
 	"context"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -27,46 +27,38 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	"github.com/go-logr/logr"
-
+	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
-// OpensearchSnapshotPolicyReconciler reconciles a OpensearchSnapshotPolicy object
-type OpensearchSnapshotPolicyReconciler struct {
+// OpensearchUserRoleBindingReconciler reconciles a OpensearchUserRoleBinding object
+type OpensearchUserRoleBindingReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Instance *opsterv1.OpensearchSnapshotPolicy
-	logr.Logger
 	Recorder record.EventRecorder
+	Instance *opsterv1.OpensearchUserRoleBinding
+	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the OpensearchSnapshotPolicy object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.4/pkg/reconcile
-func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("snapshotpolicy", req.NamespacedName)
-	r.Info("Reconciling OpensearchSnapshotPolicy")
+func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.Logger = log.FromContext(ctx).WithValues("userrolebinding", req.NamespacedName)
+	r.Info("Reconciling OpensearchUserRoleBinding")
 
-	r.Instance = &opsterv1.OpensearchSnapshotPolicy{}
+	r.Instance = &opsterv1.OpensearchUserRoleBinding{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	snapshotPolicyReconciler := reconcilers.NewSnapshotPolicyReconciler(
-		ctx,
+	userRoleBindingReconciler := reconcilers.NewUserRoleBindingReconciler(
 		r.Client,
+		ctx,
 		r.Recorder,
 		r.Instance,
 	)
@@ -77,10 +69,10 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		return snapshotPolicyReconciler.Reconcile()
+		return userRoleBindingReconciler.Reconcile()
 	} else {
 		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
-			err = snapshotPolicyReconciler.Delete()
+			err = userRoleBindingReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -93,9 +85,9 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchSnapshotPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpensearchUserRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.OpensearchSnapshotPolicy{}).
-		Owns(&opsterv1.OpenSearchCluster{}).
+		For(&opsterv1.OpensearchUserRoleBinding{}).
+		Owns(&opsterv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }
