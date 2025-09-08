@@ -655,6 +655,26 @@ The Opensearch pods by default launch an init container to configure the volume.
 
 Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods (with the same limitations for the init containers).
 
+### Host Aliases for pods and containers
+
+You can add entries to Opensearch and Dashboard pods /etc/hosts files using [HostAliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/).
+
+The structure is the same for both Opensearch pods (in `spec.general`) and the Dashboard pod (in `spec.dashboards`):
+
+```yaml
+spec:
+  general:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
+  dashboards:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
+```
+
 ### Labels or Annotations on OpenSearch nodes
 
 You can add additional labels or annotations on the nodepool configuration. This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint:
