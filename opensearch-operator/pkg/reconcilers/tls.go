@@ -451,16 +451,27 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 		if tlsConfig.CaSecret.Name == "" {
 			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
 		} else {
-			mount("transport", "ca", CaCertKey, tlsConfig.CaSecret.Name, r.reconcilerContext)
-			mount("transport", "key", corev1.TLSPrivateKeyKey, tlsConfig.Secret.Name, r.reconcilerContext)
-			mount("transport", "cert", corev1.TLSCertKey, tlsConfig.Secret.Name, r.reconcilerContext)
+			enableHotReload := tlsConfig.EnableHotReload
+			mountWithHotReload("transport", "ca", CaCertKey, tlsConfig.CaSecret.Name, r.reconcilerContext, enableHotReload)
+			mountWithHotReload("transport", "key", corev1.TLSPrivateKeyKey, tlsConfig.Secret.Name, r.reconcilerContext, enableHotReload)
+			mountWithHotReload("transport", "cert", corev1.TLSCertKey, tlsConfig.Secret.Name, r.reconcilerContext, enableHotReload)
 		}
-		// Extend opensearch.yml
-		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSCertKey))
-		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSPrivateKeyKey))
+		// Extend opensearch.yml with appropriate file paths based on hot reload setting
+		if tlsConfig.EnableHotReload && tlsConfig.CaSecret.Name != "" {
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", fmt.Sprintf("tls-transport-cert/%s", corev1.TLSCertKey))
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", fmt.Sprintf("tls-transport-key/%s", corev1.TLSPrivateKeyKey))
+		} else {
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSCertKey))
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSPrivateKeyKey))
+		}
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "false")
 	}
-	r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport/%s", CaCertKey))
+	// Set CA certificate path based on hot reload setting
+	if tlsConfig.EnableHotReload && tlsConfig.CaSecret.Name != "" {
+		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport-ca/%s", CaCertKey))
+	} else {
+		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport/%s", CaCertKey))
+	}
 	dnList := strings.Join(tlsConfig.NodesDn, "\",\"")
 	r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"%s\"]", dnList))
 	return nil
@@ -531,16 +542,23 @@ func (r *TLSReconciler) handleHttp() error {
 		if tlsConfig.CaSecret.Name == "" {
 			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
 		} else {
-			mount("http", "ca", CaCertKey, tlsConfig.CaSecret.Name, r.reconcilerContext)
-			mount("http", "key", corev1.TLSPrivateKeyKey, tlsConfig.Secret.Name, r.reconcilerContext)
-			mount("http", "cert", corev1.TLSCertKey, tlsConfig.Secret.Name, r.reconcilerContext)
+			enableHotReload := tlsConfig.EnableHotReload
+			mountWithHotReload("http", "ca", CaCertKey, tlsConfig.CaSecret.Name, r.reconcilerContext, enableHotReload)
+			mountWithHotReload("http", "key", corev1.TLSPrivateKeyKey, tlsConfig.Secret.Name, r.reconcilerContext, enableHotReload)
+			mountWithHotReload("http", "cert", corev1.TLSCertKey, tlsConfig.Secret.Name, r.reconcilerContext, enableHotReload)
 		}
 	}
-	// Extend opensearch.yml
+	// Extend opensearch.yml with appropriate file paths based on hot reload setting
 	r.reconcilerContext.AddConfig("plugins.security.ssl.http.enabled", "true")
-	r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemcert_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSCertKey))
-	r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemkey_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSPrivateKeyKey))
-	r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemtrustedcas_filepath", fmt.Sprintf("tls-http/%s", CaCertKey))
+	if tlsConfig.EnableHotReload && tlsConfig.CaSecret.Name != "" {
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemcert_filepath", fmt.Sprintf("tls-http-cert/%s", corev1.TLSCertKey))
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemkey_filepath", fmt.Sprintf("tls-http-key/%s", corev1.TLSPrivateKeyKey))
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemtrustedcas_filepath", fmt.Sprintf("tls-http-ca/%s", CaCertKey))
+	} else {
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemcert_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSCertKey))
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemkey_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSPrivateKeyKey))
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemtrustedcas_filepath", fmt.Sprintf("tls-http/%s", CaCertKey))
+	}
 	return nil
 }
 
@@ -561,10 +579,25 @@ func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls
 	return ca, nil
 }
 
-func mount(interfaceName string, name string, filename string, secretName string, reconcilerContext *ReconcilerContext) {
+func mountWithHotReload(interfaceName string, name string, filename string, secretName string, reconcilerContext *ReconcilerContext, enableHotReload bool) {
 	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName}}}
 	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
-	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s/%s", interfaceName, filename), SubPath: filename}
+
+	var mount corev1.VolumeMount
+	if enableHotReload {
+		// Mount the entire secret as a directory to enable hot reloading
+		mount = corev1.VolumeMount{
+			Name:      interfaceName + "-" + name,
+			MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s-%s", interfaceName, name),
+		}
+	} else {
+		// Use subPath for backward compatibility (prevents hot reloading)
+		mount = corev1.VolumeMount{
+			Name:      interfaceName + "-" + name,
+			MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s/%s", interfaceName, filename),
+			SubPath:   filename,
+		}
+	}
 	reconcilerContext.VolumeMounts = append(reconcilerContext.VolumeMounts, mount)
 }
 
