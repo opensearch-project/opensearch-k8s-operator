@@ -1,4 +1,4 @@
-package controllers
+package controller
 
 import (
 	"context"
@@ -14,46 +14,48 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// OpensearchISMReconciler reconciles a ISMPolicy object
-type OpensearchISMPolicyReconciler struct {
+// OpensearchComponentTemplateReconciler reconciles a OpensearchComponentTemplate object
+type OpensearchComponentTemplateReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opsterv1.OpenSearchISMPolicy
+	Instance *opsterv1.OpensearchComponentTemplate
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchismpolicies,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchismpolicies/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchismpolicies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("tenant", req.NamespacedName)
-	r.Info("Reconciling OpensearchISMPolicy")
-	r.Instance = &opsterv1.OpenSearchISMPolicy{}
+func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	r.Logger = log.FromContext(ctx).WithValues("componenttemplate", req.NamespacedName)
+	r.Info("Reconciling OpensearchComponentTemplate")
+
+	r.Instance = &opsterv1.OpensearchComponentTemplate{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	ismReconciler := reconcilers.NewIsmReconciler(
+	componentTemplateReconciler := reconcilers.NewComponentTemplateReconciler(
 		ctx,
 		r.Client,
 		r.Recorder,
 		r.Instance,
 	)
+
 	if r.Instance.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		return ismReconciler.Reconcile()
+		return componentTemplateReconciler.Reconcile()
 	} else {
 		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
-			err = ismReconciler.Delete()
+			err = componentTemplateReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
@@ -61,13 +63,14 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
+
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchISMPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpensearchComponentTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.OpenSearchISMPolicy{}).
+		For(&opsterv1.OpensearchComponentTemplate{}).
 		Owns(&opsterv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }

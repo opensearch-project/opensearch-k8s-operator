@@ -398,6 +398,43 @@ func (client *OsClusterClient) UpdateSnapshotPolicyConfig(ctx context.Context, n
 	return doHTTPPut(ctx, client.client, path, body)
 }
 
+// GetSearchTemplate performs an HTTP GET request to OS to fetch the search template specified by name
+func (client *OsClusterClient) GetSearchTemplateConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSearchTemplate(name)
+	return doHTTPGet(ctx, client.client, path)
+}
+
+// CreateSearchTemplate performs an HTTP POST request to OS to create the search template specified by name
+func (client *OsClusterClient) CreateSearchTemplateConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSearchTemplate(name)
+	return doHTTPPost(ctx, client.client, path, body)
+}
+
+// DeleteSearchTemplate performs an HTTP DELETE request to OS to delete the search template specified by name
+func (client *OsClusterClient) DeleteSearchTemplateConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSearchTemplate(name)
+	return doHTTPDelete(ctx, client.client, path)
+}
+
+// UpdateSearchTemplate performs an HTTP PUT request to OS to update the search template specified by name
+func (client *OsClusterClient) UpdateSearchTemplateConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSearchTemplate(name)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// generateAPIPathSearchTemplate generates a URI PATH for a specific search template endpoint and name
+// For example: name = example
+// URI PATH = '_search/template/example'
+func generateAPIPathSearchTemplate(name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_scripts") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_scripts")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
 // generateGetIndicesPath generates a URI PATH for a specific resource endpoint and name
 // For example: pattern = example-*
 // URI PATH = '_cat/indices/example-*?format=json'
