@@ -55,8 +55,8 @@ Create the name of the service account to use
 */}}
 {{- define "opensearch-operator.serviceAccountName" -}}
 {{- if .Values.serviceAccount.create }}
-{{- default (printf "%s-%s" (include "opensearch-operator.fullname" .) "controller-manager") .Values.serviceAccount.name }}
+{{- default (include "opensearch-operator.fullname" .) .Values.serviceAccount.name }}
 {{- else }}
-{{- default "opensearch-operator-controller-manager" .Values.serviceAccount.name }}
+{{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
