@@ -56,6 +56,9 @@ spec:
         {{- if .tls.transport.duration }}
         duration: {{ .tls.transport.duration | nindent 10 }}
         {{- end }}
+        {{- if .tls.transport.enableHotReload }}
+        enableHotReload: {{ .tls.transport.enableHotReload }}
+        {{- end }}
       http:
         {{- with .tls.http.adminDn }}
         adminDn: {{ . | toYaml | nindent 10 }}
@@ -71,6 +74,9 @@ spec:
         {{- end }}
         {{- if .tls.http.duration }}
         duration: {{ .tls.http.duration | nindent 10 }}
+        {{- end }}
+        {{- if .tls.http.enableHotReload }}
+        enableHotReload: {{ .tls.http.enableHotReload }}
         {{- end }}
     {{- with .config }}
     config: {{ . | toYaml | nindent 6 }}
