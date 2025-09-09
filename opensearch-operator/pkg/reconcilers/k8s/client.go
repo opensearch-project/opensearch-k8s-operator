@@ -21,6 +21,7 @@ import (
 type K8sClient interface {
 	GetSecret(name, namespace string) (corev1.Secret, error)
 	CreateSecret(secret *corev1.Secret) (*ctrl.Result, error)
+	UpdateSecret(secret *corev1.Secret) error
 	GetJob(name, namespace string) (batchv1.Job, error)
 	CreateJob(job *batchv1.Job) (*ctrl.Result, error)
 	DeleteJob(job *batchv1.Job) error
@@ -71,6 +72,10 @@ func (c K8sClientImpl) GetSecret(name, namespace string) (corev1.Secret, error) 
 
 func (c K8sClientImpl) CreateSecret(secret *corev1.Secret) (*ctrl.Result, error) {
 	return c.ReconcileResource(secret, reconciler.StatePresent)
+}
+
+func (c K8sClientImpl) UpdateSecret(secret *corev1.Secret) error {
+	return c.Update(c.ctx, secret)
 }
 
 func (c K8sClientImpl) GetJob(name, namespace string) (batchv1.Job, error) {
