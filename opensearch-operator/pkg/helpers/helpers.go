@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -26,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -310,45 +312,82 @@ func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluste
 
 // Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
 func WaitForSTSDelete(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) error {
+	ctx := context.Background()
+	return WaitForSTSDeleteWithContext(ctx, k8sClient, obj)
+}
+
+// WaitForSTSDeleteWithContext deletes a STS with cascade=orphan and waits until it is actually deleted from the kubernetes API
+func WaitForSTSDeleteWithContext(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) error {
 	if err := k8sClient.DeleteStatefulSet(obj, true); err != nil {
 		return err
 	}
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		_, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
-		if err != nil {
-			return nil
-		}
-		time.Sleep(time.Second * updateStepTime)
-	}
-	return fmt.Errorf("failed to delete STS")
+
+	// Use proper context-aware polling with exponential backoff
+	return wait.PollUntilContextTimeout(ctx, time.Second*2, time.Second*30, true,
+		func(ctx context.Context) (bool, error) {
+			_, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
+			if k8serrors.IsNotFound(err) {
+				return true, nil // Successfully deleted
+			}
+			if err != nil {
+				return false, err // Unexpected error
+			}
+			return false, nil // Still exists, continue polling
+		},
+	)
 }
 
 // Wait for max 30s until a STS has at least the given number of replicas
 func WaitForSTSReplicas(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet, replicas int32) error {
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
-		if err == nil {
-			if existing.Status.Replicas >= replicas {
-				return nil
+	ctx := context.Background()
+	return WaitForSTSReplicasWithContext(ctx, k8sClient, obj, replicas)
+}
+
+// WaitForSTSReplicasWithContext waits until a STS has at least the given number of replicas
+func WaitForSTSReplicasWithContext(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet, replicas int32) error {
+	return wait.PollUntilContextTimeout(ctx, time.Second*2, time.Second*30, true,
+		func(ctx context.Context) (bool, error) {
+			existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				if k8serrors.IsNotFound(err) {
+					return false, nil // Keep waiting, STS might be recreating
+				}
+				return false, err // Unexpected error
 			}
-		}
-		time.Sleep(time.Second * updateStepTime)
-	}
-	return fmt.Errorf("failed to wait for replicas")
+			if existing.Status.Replicas >= replicas {
+				return true, nil // Success
+			}
+			return false, nil // Keep waiting
+		},
+	)
 }
 
 // Wait for max 30s until a STS has a normal status (CurrentRevision != "")
 func WaitForSTSStatus(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
-		if err == nil {
-			if existing.Status.CurrentRevision != "" {
-				return &existing, nil
+	ctx := context.Background()
+	return WaitForSTSStatusWithContext(ctx, k8sClient, obj)
+}
+
+// WaitForSTSStatusWithContext waits until a STS has a normal status (CurrentRevision != "")
+func WaitForSTSStatusWithContext(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
+	var result *appsv1.StatefulSet
+	err := wait.PollUntilContextTimeout(ctx, time.Second*2, time.Second*30, true,
+		func(ctx context.Context) (bool, error) {
+			existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
+			if err != nil {
+				if k8serrors.IsNotFound(err) {
+					return false, nil // Keep waiting, STS might be recreating
+				}
+				return false, err // Unexpected error
 			}
-		}
-		time.Sleep(time.Second * updateStepTime)
-	}
-	return nil, fmt.Errorf("failed to wait for STS")
+			if existing.Status.CurrentRevision != "" {
+				result = &existing
+				return true, nil // Success
+			}
+			return false, nil // Keep waiting
+		},
+	)
+	return result, err
 }
 
 // GetSTSForNodePool returns the corresponding sts for a given nodePool and cluster name
@@ -360,6 +399,12 @@ func GetSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clus
 
 // DeleteSTSForNodePool deletes the sts for the corresponding nodePool
 func DeleteSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
+	ctx := context.Background()
+	return DeleteSTSForNodePoolWithContext(ctx, k8sClient, nodePool, clusterName, clusterNamespace)
+}
+
+// DeleteSTSForNodePoolWithContext deletes the sts for the corresponding nodePool with context support
+func DeleteSTSForNodePoolWithContext(ctx context.Context, k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
 	sts, err := GetSTSForNodePool(k8sClient, nodePool, clusterName, clusterNamespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -372,16 +417,19 @@ func DeleteSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, c
 		return err
 	}
 
-	// Wait for the STS to actually be deleted
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		_, err := k8sClient.GetStatefulSet(sts.Name, sts.Namespace)
-		if err != nil {
-			return nil
-		}
-		time.Sleep(time.Second * updateStepTime)
-	}
-
-	return fmt.Errorf("failed to delete STS for nodepool %s", nodePool.Component)
+	// Wait for the STS to actually be deleted using context-aware polling
+	return wait.PollUntilContextTimeout(ctx, time.Second*2, time.Second*30, true,
+		func(ctx context.Context) (bool, error) {
+			_, err := k8sClient.GetStatefulSet(sts.Name, sts.Namespace)
+			if k8serrors.IsNotFound(err) {
+				return true, nil // Successfully deleted
+			}
+			if err != nil {
+				return false, err // Unexpected error
+			}
+			return false, nil // Still exists, continue polling
+		},
+	)
 }
 
 // DeleteSecurityUpdateJob deletes the securityconfig update job
@@ -546,6 +594,12 @@ func GetDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNamesp
 
 // DeleteDashboardsDeployment deletes the OSD deployment along with all its pods
 func DeleteDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNamespace string) error {
+	ctx := context.Background()
+	return DeleteDashboardsDeploymentWithContext(ctx, k8sClient, clusterName, clusterNamespace)
+}
+
+// DeleteDashboardsDeploymentWithContext deletes the OSD deployment along with all its pods with context support
+func DeleteDashboardsDeploymentWithContext(ctx context.Context, k8sClient k8s.K8sClient, clusterName, clusterNamespace string) error {
 	deploy, err := GetDashboardsDeployment(k8sClient, clusterName, clusterNamespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -558,17 +612,19 @@ func DeleteDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNam
 		return err
 	}
 
-	// Wait for Dashboards deploy to delete
-	// We can use the same waiting time for sts as both have same termination grace period
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		_, err := k8sClient.GetDeployment(deploy.Name, clusterNamespace)
-		if err != nil {
-			return nil
-		}
-		time.Sleep(time.Second * updateStepTime)
-	}
-
-	return fmt.Errorf("failed to delete dashboards deployment for cluster %s", clusterName)
+	// Wait for Dashboards deploy to delete using context-aware polling
+	return wait.PollUntilContextTimeout(ctx, time.Second*2, time.Second*30, true,
+		func(ctx context.Context) (bool, error) {
+			_, err := k8sClient.GetDeployment(deploy.Name, clusterNamespace)
+			if k8serrors.IsNotFound(err) {
+				return true, nil // Successfully deleted
+			}
+			if err != nil {
+				return false, err // Unexpected error
+			}
+			return false, nil // Still exists, continue polling
+		},
+	)
 }
 
 func SafeClose(c io.Closer) {
