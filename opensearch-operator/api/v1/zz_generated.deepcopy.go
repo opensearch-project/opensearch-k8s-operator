@@ -295,6 +295,13 @@ func (in *BootstrapConfig) DeepCopyInto(out *BootstrapConfig) {
 			(*out)[key] = val
 		}
 	}
+	if in.Env != nil {
+		in, out := &in.Env, &out.Env
+		*out = make([]corev1.EnvVar, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.PluginsList != nil {
 		in, out := &in.PluginsList, &out.PluginsList
 		*out = make([]string, len(*in))
