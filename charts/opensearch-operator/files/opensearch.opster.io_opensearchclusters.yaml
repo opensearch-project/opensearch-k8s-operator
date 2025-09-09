@@ -1013,6 +1013,10 @@ spec:
                           x-kubernetes-map-type: atomic
                       type: object
                     type: array
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
                   nodeSelector:
                     additionalProperties:
                       type: string
@@ -1021,6 +1025,8 @@ spec:
                     items:
                       type: string
                     type: array
+                  priorityClassName:
+                    type: string
                   resources:
                     description: ResourceRequirements describes the compute resource
                       requirements.
@@ -6149,6 +6155,8 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      caCertFilePath:
+                        type: string
                       securityConfigSecret:
                         description: Secret that contains the differnt yml files of
                           the opensearch-security config (config.yml, internal_users.yml,
@@ -6169,6 +6177,8 @@ spec:
                         description: Specific configs for the SecurityConfig update
                           job
                         properties:
+                          priorityClassName:
+                            type: string
                           resources:
                             description: ResourceRequirements describes the compute
                               resource requirements.
