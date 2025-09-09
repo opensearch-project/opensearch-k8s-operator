@@ -78,8 +78,6 @@ If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The
 
 The minimal cluster you deployed in this section is only intended for demo purposes. Please see the next sections on how to configure and manage the different aspects of your cluster.
 
-**Single-Node clusters are currently not supported**. Your cluster must have at least 3 nodes with the `master/cluster_manager` role configured.
-
 ## Configuring the operator
 
 The majority of this guide deals with configuring and managing OpenSearch clusters. But there are some general options that can be configured for the operator itself. All of this is done using helm values your provide during installation: `helm install opensearch-operator opensearch-operator/opensearch-operator -f values.yaml`.
