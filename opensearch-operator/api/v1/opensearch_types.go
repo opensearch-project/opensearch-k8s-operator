@@ -337,6 +337,8 @@ type AdditionalVolume struct {
 	PersistentVolumeClaim *corev1.PersistentVolumeClaimVolumeSource `json:"persistentVolumeClaim,omitempty"`
 	// Projected object to use to populate the volume
 	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
+	// NFS object to use to populate the volume
+	NFS *corev1.NFSVolumeSource `json:"nfs,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }
