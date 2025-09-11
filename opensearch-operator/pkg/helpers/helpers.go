@@ -482,6 +482,12 @@ func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 }
 
 func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
+	// Skip rolling restart if revisions are the same (no actual spec changes)
+	// This prevents unnecessary rolling restarts during node draining/pod recreation
+	if sts.Status.UpdateRevision != "" && sts.Status.CurrentRevision == sts.Status.UpdateRevision {
+		return "", errors.New("no rolling restart needed - StatefulSet revisions match")
+	}
+	
 	// If there are potentially mixed revisions we need to check each pod
 	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
 	if err != nil {
