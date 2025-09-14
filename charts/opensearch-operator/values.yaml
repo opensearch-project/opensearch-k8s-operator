@@ -76,47 +76,12 @@ serviceAccount:
   # Override the service account name. Defaults to opensearch-operator-controller-manager
   name: ""
 
-kubeRbacProxy:
-  enable: true
-  securityContext:
-    allowPrivilegeEscalation: false
-    readOnlyRootFilesystem: true
-    capabilities:
-      drop:
-        - ALL
-  resources:
-    limits:
-      cpu: 50m
-      memory: 50Mi
-    requests:
-      cpu: 25m
-      memory: 25Mi
-
-  livenessProbe:
-    failureThreshold: 3
-    httpGet:
-      path: /healthz
-      port: 10443
-      scheme: HTTPS
-    periodSeconds: 15
-    successThreshold: 1
-    timeoutSeconds: 3
-    initialDelaySeconds: 10
-
-  readinessProbe:
-    failureThreshold: 3
-    httpGet:
-      path: /healthz
-      port: 10443
-      scheme: HTTPS
-    periodSeconds: 15
-    successThreshold: 1
-    timeoutSeconds: 3
-    initialDelaySeconds: 10
-
-  image:
-    repository: "gcr.io/kubebuilder/kube-rbac-proxy"
-    tag: "v0.15.0"
+# kubeRbacProxy has been replaced with controller-runtime's built-in
+# WithAuthenticationAndAuthorization for metrics endpoint protection.
+# This provides equivalent security functionality without external dependencies.
+# 
+# kubeRbacProxy:
+#   enable: false
 
 ## If this is set to true, RoleBindings will be used instead of ClusterRoleBindings, inorder to restrict ClusterRoles
 ## to the namespace where the operator and OpenSearch cluster are in. In that case, specify the namespace where they
