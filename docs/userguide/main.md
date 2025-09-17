@@ -92,6 +92,10 @@ manager:
   loglevel: info
 
   # If specified, the operator will be restricted to watch objects only in the desired namespace. Defaults is to watch all namespaces.
+  # To watch multiple namespaces, either separate their name via commas or define it as a list.
+  # Examples:
+  # watchNamespaces: 'ns1,ns2'
+  # watchNamespace: [ns1, ns2]
   watchNamespace:
 
   # Configure extra environment variables for the operator. You can also pull them from secrets or configmaps

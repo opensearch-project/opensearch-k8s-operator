@@ -63,6 +63,10 @@ manager:
 
   # If a watchNamespace is specified, the manager's cache will be restricted to
   # watch objects in the desired namespace. Defaults is to watch all namespaces.
+  # To watch multiple namespaces, separate them by commas, or define it as a list.
+  # Examples:
+  # watchNamespace: ns1,ns2
+  # watchNamespace: [ns1, ns2]
   watchNamespace:
 
   metricsBindAddress: 127.0.0.1:8080

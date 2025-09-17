@@ -22,7 +22,10 @@ import (
 	"os"
 	"strconv"
 
+	"strings"
+
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
@@ -72,7 +75,7 @@ func main() {
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
-		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
+		"The comma-separated list of namespaces that the controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
 
 	opts := zap.Options{
@@ -94,6 +97,9 @@ func main() {
 	if watchNamespace != "" {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{
 			watchNamespace: {},
+		}
+		for watchNs := range strings.SplitSeq(watchNamespace, ",") {
+			cacheOpts.DefaultNamespaces[watchNs] = cache.Config{}
 		}
 	}
 
