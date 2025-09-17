@@ -783,9 +783,10 @@ func NewBootstrapPod(
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) *corev1.Pod {
-	labels := map[string]string{
-		helpers.ClusterLabel: cr.Name,
-	}
+	labels := make(map[string]string)
+	labels[helpers.ClusterLabel] = cr.Name
+	labels["opster.io/bootstrap-node"] = "true"
+
 	resources := cr.Spec.Bootstrap.Resources
 
 	var jvm string
@@ -793,6 +794,11 @@ func NewBootstrapPod(
 		jvm = "-Xmx512M -Xms512M"
 	} else {
 		jvm = cr.Spec.Bootstrap.Jvm
+	}
+
+	// cr.Spec.Bootstrap.labels
+	for key, value := range cr.Spec.Bootstrap.Labels {
+		labels[key] = value
 	}
 
 	image := helpers.ResolveImage(cr, nil)
@@ -1027,6 +1033,7 @@ func NewBootstrapPod(
 			Affinity:           cr.Spec.Bootstrap.Affinity,
 			ImagePullSecrets:   image.ImagePullSecrets,
 			SecurityContext:    podSecurityContext,
+			PriorityClassName:  cr.Spec.Bootstrap.PriorityClassName,
 		},
 	}
 
@@ -1135,6 +1142,7 @@ func NewSecurityconfigUpdateJob(
 	securityContext := instance.Spec.General.SecurityContext
 	podSecurityContext := instance.Spec.General.PodSecurityContext
 	resources := instance.Spec.Security.GetConfig().GetUpdateJob().Resources
+	priorityClassName := instance.Spec.Security.GetConfig().GetUpdateJob().PriorityClassName
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
 		Spec: batchv1.JobSpec{
@@ -1158,6 +1166,7 @@ func NewSecurityconfigUpdateJob(
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ImagePullSecrets:   image.ImagePullSecrets,
 					SecurityContext:    podSecurityContext,
+					PriorityClassName:  priorityClassName,
 				},
 			},
 		},

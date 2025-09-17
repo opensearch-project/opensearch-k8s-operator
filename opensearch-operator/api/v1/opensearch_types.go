@@ -172,9 +172,11 @@ type BootstrapConfig struct {
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
 	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
-	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
-	PluginsList      []string          `json:"pluginsList,omitempty"`
-	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
+	AdditionalConfig  map[string]string `json:"additionalConfig,omitempty"`
+	PluginsList       []string          `json:"pluginsList,omitempty"`
+	Keystore          []KeystoreValue   `json:"keystore,omitempty"`
+	PriorityClassName string            `json:"priorityClassName,omitempty"`
+	Labels            map[string]string `json:"labels,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
@@ -277,7 +279,8 @@ type SecurityConfig struct {
 
 // Specific configs for the SecurityConfig update job
 type SecurityUpdateJobConfig struct {
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	Resources         corev1.ResourceRequirements `json:"resources,omitempty"`
+	PriorityClassName string                      `json:"priorityClassName,omitempty"`
 }
 
 type ImageSpec struct {
