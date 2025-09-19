@@ -466,6 +466,19 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 
+		It("should apply bootstrap pod annotations", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			expectedAnnotations := map[string]string{
+				"custom-annotation":  "custom-value",
+				"another-annotation": "another-value",
+			}
+			clusterObject.Spec.Bootstrap.Annotations = expectedAnnotations
+
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.ObjectMeta.Annotations).To(Equal(expectedAnnotations))
+		})
+
 		It("should overwrite the General.AdditionalConfig with Bootstrap.AdditionalConfig when set", func() {
 			mockKey1 := "server.basePath"
 			mockKey2 := "server.rewriteBasePath"

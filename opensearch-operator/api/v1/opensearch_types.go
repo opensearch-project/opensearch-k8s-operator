@@ -173,6 +173,7 @@ type BootstrapConfig struct {
 	Jvm          string                      `json:"jvm,omitempty"`
 	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	Annotations      map[string]string `json:"annotations,omitempty"`
 	PluginsList      []string          `json:"pluginsList,omitempty"`
 	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
 }

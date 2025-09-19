@@ -100,6 +100,8 @@ func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, e
 	client, err := opensearch.NewClient(config)
 	if err == nil {
 		service.client = client
+	} else {
+		return nil, err
 	}
 	pingReq := opensearchapi.PingRequest{}
 	pingRes, err := pingReq.Do(context.Background(), client)
