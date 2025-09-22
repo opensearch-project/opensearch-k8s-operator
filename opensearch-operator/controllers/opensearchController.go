@@ -127,6 +127,8 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+
+			helpers.DeleteClusterMetrics(req.NamespacedName.Namespace, r.Instance.Name)
 		}
 		return ctrl.Result{}, nil
 	}

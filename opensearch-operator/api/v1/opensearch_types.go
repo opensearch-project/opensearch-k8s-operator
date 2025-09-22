@@ -128,7 +128,7 @@ type NodePool struct {
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
 }
 
-// PersistencConfig defines options for data persistence
+// PersistenceConfig defines options for data persistence
 type PersistenceConfig struct {
 	PersistenceSource `json:","`
 }
@@ -238,7 +238,11 @@ type TlsConfigTransport struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
-	PerNode              bool `json:"perNode,omitempty"`
+	PerNode bool `json:"perNode,omitempty"`
+	// Automatically rotate certificates before they expire, set to -1 to disable
+	//+kubebuilder:default=-1
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
+	//
 	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
@@ -248,7 +252,11 @@ type TlsConfigTransport struct {
 
 type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
-	Generate             bool `json:"generate,omitempty"`
+	Generate bool `json:"generate,omitempty"`
+	// Automatically rotate certificates before they expire, set to -1 to disable
+	//+kubebuilder:default=-1
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
+	//
 	TlsCertificateConfig `json:",omitempty"`
 }
 
@@ -266,7 +274,7 @@ type TlsSecret struct {
 }
 
 type SecurityConfig struct {
-	// Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
 	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
