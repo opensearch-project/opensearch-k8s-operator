@@ -1198,11 +1198,23 @@ func NewSecurityconfigUpdateJob(
 	podSecurityContext := instance.Spec.General.PodSecurityContext
 	resources := instance.Spec.Security.GetConfig().GetUpdateJob().Resources
 	return batchv1.Job{
-		ObjectMeta: metav1.ObjectMeta{Name: jobName, Namespace: namespace, Annotations: annotations},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        jobName,
+			Namespace:   namespace,
+			Annotations: annotations,
+			Labels: map[string]string{
+				helpers.JobLabel: instance.Name,
+			},
+		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{Name: jobName},
+				ObjectMeta: metav1.ObjectMeta{
+					Name: jobName,
+					Labels: map[string]string{
+						helpers.JobLabel: instance.Name,
+					},
+				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
 					Containers: []corev1.Container{{
