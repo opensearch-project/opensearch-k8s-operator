@@ -5700,7 +5700,7 @@ spec:
                           x-kubernetes-int-or-string: true
                       type: object
                     persistence:
-                      description: PersistencConfig defines options for data persistence
+                      description: PersistenceConfig defines options for data persistence
                       properties:
                         emptyDir:
                           description: |-
@@ -6150,8 +6150,8 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       securityConfigSecret:
-                        description: Secret that contains the differnt yml files of
-                          the opensearch-security config (config.yml, internal_users.yml,
+                        description: Secret that contains the different yml files
+                          of the opensearch-security config (config.yml, internal_users.yml,
                           ...)
                         properties:
                           name:
