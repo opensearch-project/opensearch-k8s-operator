@@ -5,9 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"log"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -443,25 +445,23 @@ func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) pol
 	return newpdb
 }
 
-func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
-	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
-
-	if nodePool.Jvm == "" {
-		memoryLimit := nodePool.Resources.Requests.Memory()
-
-		// Memory request is not present
-		if memoryLimit.IsZero() {
-			return fmt.Sprintf(jvmHeapSizeTemplate, "512M", "512M")
-		}
-
-		// Set Java Heap size to half of the node pool memory size
-		megabytes := float64((memoryLimit.Value() / 2) / 1024.0 / 1024.0)
-
-		heapSize := fmt.Sprintf("%vM", megabytes)
-		return fmt.Sprintf(jvmHeapSizeTemplate, heapSize, heapSize)
+func AppendJvmHeapSizeSettings(jvm string, heapSizeSettings string) string {
+	if strings.Contains(jvm, "Xms") || strings.Contains(jvm, "Xmx") {
+		return jvm
 	}
+	if jvm == "" {
+		return heapSizeSettings
+	}
+	return fmt.Sprintf("%s %s", jvm, heapSizeSettings)
+}
 
-	return nodePool.Jvm
+func CalculateJvmHeapSizeSettings(memoryRequest *resource.Quantity) string {
+	var memoryRequestMb int64 = 512
+	if memoryRequest != nil && !memoryRequest.IsZero() {
+		memoryRequestMb = ((memoryRequest.Value() / 2.0) / 1024.0) / 1024.0
+	}
+	// Set Java Heap size to half of the node pool memory request for both Xms and Xmx
+	return fmt.Sprintf("-Xms%dM -Xmx%dM", memoryRequestMb, memoryRequestMb)
 }
 
 func IsUpgradeInProgress(status opsterv1.ClusterStatus) bool {

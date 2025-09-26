@@ -169,7 +169,8 @@ func NewSTSForNodePool(
 		// vendor ="elasticsearch"
 	}
 
-	jvm := helpers.CalculateJvmHeapSize(&node)
+	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(node.Resources.Requests.Memory())
+	jvm := helpers.AppendJvmHeapSizeSettings(node.Jvm, jvmHeapSizeSettings)
 
 	// If node role `search` defined add required experimental flag if version less than 2.7
 	if helpers.ContainsString(selectedRoles, "search") && helpers.CompareVersions(cr.Spec.General.Version, "2.7.0") {
@@ -789,12 +790,8 @@ func NewBootstrapPod(
 	}
 	resources := cr.Spec.Bootstrap.Resources
 
-	var jvm string
-	if cr.Spec.Bootstrap.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
-	} else {
-		jvm = cr.Spec.Bootstrap.Jvm
-	}
+	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(cr.Spec.Bootstrap.Resources.Requests.Memory())
+	jvm := helpers.AppendJvmHeapSizeSettings(cr.Spec.Bootstrap.Jvm, jvmHeapSizeSettings)
 
 	image := helpers.ResolveImage(cr, nil)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
