@@ -126,6 +126,9 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Type=object
+	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence

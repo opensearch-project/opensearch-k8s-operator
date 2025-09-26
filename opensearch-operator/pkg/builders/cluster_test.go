@@ -425,6 +425,57 @@ var _ = Describe("Builders", func() {
 				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
+
+		It("should include additional containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				SidecarContainers: []corev1.Container{
+					{
+						Name:  "log-shipper",
+						Image: "fluent/fluent-bit:latest",
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceMemory: resource.MustParse("64Mi"),
+								corev1.ResourceCPU:    resource.MustParse("100m"),
+							},
+						},
+					},
+					{
+						Name:  "metrics-collector",
+						Image: "prom/node-exporter:latest",
+						Ports: []corev1.ContainerPort{
+							{
+								Name:          "metrics",
+								ContainerPort: 9100,
+								Protocol:      "TCP",
+							},
+						},
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+
+			// Should have 3 containers total: 1 main OpenSearch + 2 additional
+			Expect(len(result.Spec.Template.Spec.Containers)).To(Equal(3))
+
+			// First container should be the main OpenSearch container
+			Expect(result.Spec.Template.Spec.Containers[0].Name).To(Equal("opensearch"))
+
+			// Second container should be the first additional container
+			Expect(result.Spec.Template.Spec.Containers[1].Name).To(Equal("log-shipper"))
+			Expect(result.Spec.Template.Spec.Containers[1].Image).To(Equal("fluent/fluent-bit:latest"))
+			Expect(result.Spec.Template.Spec.Containers[1].Resources.Requests[corev1.ResourceMemory]).To(Equal(resource.MustParse("64Mi")))
+			Expect(result.Spec.Template.Spec.Containers[1].Resources.Requests[corev1.ResourceCPU]).To(Equal(resource.MustParse("100m")))
+
+			// Third container should be the second additional container
+			Expect(result.Spec.Template.Spec.Containers[2].Name).To(Equal("metrics-collector"))
+			Expect(result.Spec.Template.Spec.Containers[2].Image).To(Equal("prom/node-exporter:latest"))
+			Expect(len(result.Spec.Template.Spec.Containers[2].Ports)).To(Equal(1))
+			Expect(result.Spec.Template.Spec.Containers[2].Ports[0].Name).To(Equal("metrics"))
+			Expect(result.Spec.Template.Spec.Containers[2].Ports[0].ContainerPort).To(Equal(int32(9100)))
+		})
 	})
 
 	When("Constructing a bootstrap pod", func() {
