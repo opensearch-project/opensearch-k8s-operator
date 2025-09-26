@@ -358,13 +358,14 @@ func NewSTSForNodePool(
 
 	var initContainers []corev1.Container
 	if !helpers.SkipInitContainer() {
+		uid, gid := helpers.ResolveUidGid(cr)
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Resources:       resources,
 			Command:         []string{"sh", "-c"},
-			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			Args:            []string{helpers.GetChownCommand(uid, gid, "/usr/share/opensearch/data")},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: &runas,
 			},
@@ -875,13 +876,14 @@ func NewBootstrapPod(
 
 	var initContainers []corev1.Container
 	if !helpers.SkipInitContainer() {
+		uid, gid := helpers.ResolveUidGid(cr)
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Resources:       cr.Spec.InitHelper.Resources,
 			Command:         []string{"sh", "-c"},
-			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			Args:            []string{helpers.GetChownCommand(uid, gid, "/usr/share/opensearch/data")},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: ptr.To(int64(0)),
 			},
