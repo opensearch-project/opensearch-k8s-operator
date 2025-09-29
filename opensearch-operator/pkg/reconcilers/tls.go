@@ -640,6 +640,6 @@ func parseCertificate(data []byte) (int, error) {
 	if err != nil {
 		return -1, err
 	}
-	daysRemaining := int(cert.NotAfter.Sub(time.Now()).Hours() / 24)
+	daysRemaining := int(time.Until(cert.NotAfter).Hours() / 24)
 	return daysRemaining, nil
 }
