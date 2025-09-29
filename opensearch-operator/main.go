@@ -84,9 +84,6 @@ func main() {
 		Development: false,
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
-	//opts.EncoderConfigOptions = append(opts.EncoderConfigOptions, func(ec *zapcore.EncoderConfig) {
-	//	ec.MessageKey = "message"
-	//})
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
 
