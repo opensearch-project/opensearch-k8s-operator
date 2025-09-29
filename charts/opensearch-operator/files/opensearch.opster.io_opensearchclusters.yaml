@@ -5892,6 +5892,8 @@ spec:
                       items:
                         type: string
                       type: array
+                    sidecarContainers:
+                      x-kubernetes-preserve-unknown-fields: true
                     tolerations:
                       items:
                         description: |-

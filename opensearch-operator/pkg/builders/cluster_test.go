@@ -426,7 +426,7 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 
-		It("should include additional containers when specified", func() {
+		It("should include sidecar containers when specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
 				Component: "masters",
