@@ -20,7 +20,7 @@ var (
 	ClusterInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "opensearch_cluster_info",
-			Help: "",
+			Help: "An info metric containing the cluster name, namespace, and version.",
 		}, []string{
 			"namespace", "opensearch_cluster", "version",
 		})
