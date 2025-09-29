@@ -29,6 +29,23 @@ const (
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
+// NewPluginInstallerInitContainer creates an init container for installing OpenSearch plugins
+func NewPluginInstallerInitContainer(pluginsList []string, image opsterv1.ImageSpec, resources corev1.ResourceRequirements, securityContext *corev1.SecurityContext) *corev1.Container {
+	if len(pluginsList) == 0 {
+		return nil
+	}
+
+	pluginsCommand := helpers.BuildPluginInstallCommand("./bin/opensearch-plugin", pluginsList)
+	return &corev1.Container{
+		Name:            "plugin-installer",
+		Image:           image.GetImage(),
+		ImagePullPolicy: image.GetImagePullPolicy(),
+		Resources:       resources,
+		Command:         pluginsCommand,
+		SecurityContext: securityContext,
+	}
+}
+
 func NewSTSForNodePool(
 	username string,
 	cr *opsterv1.OpenSearchCluster,
@@ -334,24 +351,10 @@ func NewSTSForNodePool(
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
 	resources := cr.Spec.InitHelper.Resources
 
-	startUpCommand := "./opensearch-docker-entrypoint.sh"
-	// If a custom command is specified, use it.
+	var mainCommand []string = nil
 	if len(cr.Spec.General.Command) > 0 {
-		startUpCommand = cr.Spec.General.Command
+		mainCommand = []string{"/bin/bash", "-c", cr.Spec.General.Command}
 	}
-
-	var pluginslist []string
-	if cr.Spec.General.Monitoring.Enable {
-		if cr.Spec.General.Monitoring.PluginURL != "" {
-			pluginslist = append(pluginslist, cr.Spec.General.Monitoring.PluginURL)
-		} else {
-			pluginslist = append(pluginslist, fmt.Sprintf(defaultMonitoringPlugin, cr.Spec.General.Version, cr.Spec.General.Version))
-		}
-	}
-
-	pluginslist = helpers.RemoveDuplicateStrings(append(pluginslist, cr.Spec.General.PluginsList...))
-
-	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
 
 	podSecurityContext := cr.Spec.General.PodSecurityContext
 	securityContext := cr.Spec.General.SecurityContext
@@ -375,6 +378,19 @@ func NewSTSForNodePool(
 				},
 			},
 		})
+	}
+
+	var pluginslist []string
+	if cr.Spec.General.Monitoring.Enable {
+		if cr.Spec.General.Monitoring.PluginURL != "" {
+			pluginslist = append(pluginslist, cr.Spec.General.Monitoring.PluginURL)
+		} else {
+			pluginslist = append(pluginslist, fmt.Sprintf(defaultMonitoringPlugin, cr.Spec.General.Version, cr.Spec.General.Version))
+		}
+	}
+	pluginslist = helpers.RemoveDuplicateStrings(append(pluginslist, cr.Spec.General.PluginsList...))
+	if pluginInitContainer := NewPluginInstallerInitContainer(pluginslist, image, resources, securityContext); pluginInitContainer != nil {
+		initContainers = append(initContainers, *pluginInitContainer)
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
@@ -984,10 +1000,15 @@ func NewBootstrapPod(
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
 
-	startUpCommand := "./opensearch-docker-entrypoint.sh"
-
 	pluginslist := helpers.RemoveDuplicateStrings(cr.Spec.Bootstrap.PluginsList)
-	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
+	if pluginInitContainer := NewPluginInstallerInitContainer(pluginslist, image, resources, securityContext); pluginInitContainer != nil {
+		initContainers = append(initContainers, *pluginInitContainer)
+	}
+
+	var mainCommand []string = nil
+	if len(cr.Spec.General.Command) > 0 {
+		mainCommand = []string{"/bin/bash", "-c", cr.Spec.General.Command}
+	}
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      BootstrapPodName(cr),

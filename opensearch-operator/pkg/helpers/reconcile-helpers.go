@@ -124,27 +124,19 @@ func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
 	return httpPort, securityConfigPort, securityConfigPath
 }
 
-func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool, entrypoint string) []string {
-	var mainCommand []string
-	com := installerBinary + " install"
-
-	if batchMode {
-		com = com + " --batch"
+// BuildPluginInstallCommand builds a command for installing plugins in an init container
+func BuildPluginInstallCommand(installerBinary string, pluginsList []string) []string {
+	if len(pluginsList) == 0 {
+		return []string{"/bin/bash", "-c", "echo 'No plugins to install'"}
 	}
-
-	if len(pluginsList) > 0 {
-		mainCommand = append(mainCommand, "/bin/bash", "-c")
-		for _, plugin := range pluginsList {
-			com = com + " '" + strings.ReplaceAll(plugin, "'", "\\'") + "'"
-		}
-
-		com = com + " && " + entrypoint
-		mainCommand = append(mainCommand, com)
-	} else {
-		mainCommand = []string{"/bin/bash", "-c", entrypoint}
+	var command []string
+	command = append(command, "/bin/bash", "-c")
+	com := installerBinary + " install --batch"
+	for _, plugin := range pluginsList {
+		com = com + " '" + strings.ReplaceAll(plugin, "'", "\\'") + "'"
 	}
-
-	return mainCommand
+	command = append(command, com)
+	return command
 }
 
 func BuildMainCommandOSD(installerBinary string, pluginsList []string, entrypoint string) []string {

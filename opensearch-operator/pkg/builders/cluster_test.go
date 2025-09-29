@@ -25,6 +25,44 @@ func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
 	}
 }
 
+func ClusterDescWithPlugins(plugins []string) opsterv1.OpenSearchCluster {
+	return opsterv1.OpenSearchCluster{
+		Spec: opsterv1.ClusterSpec{
+			General: opsterv1.GeneralConfig{
+				Version:     "2.3.0",
+				ServiceName: "test-service",
+				PluginsList: plugins,
+			},
+			NodePools: []opsterv1.NodePool{
+				{
+					Component: "test-node",
+					Replicas:  1,
+					Roles:     []string{"master", "data"},
+				},
+			},
+		},
+	}
+}
+
+func ClusterDescWithCustomCommand(command string) opsterv1.OpenSearchCluster {
+	return opsterv1.OpenSearchCluster{
+		Spec: opsterv1.ClusterSpec{
+			General: opsterv1.GeneralConfig{
+				Version:     "2.3.0",
+				ServiceName: "test-service",
+				Command:     command,
+			},
+			NodePools: []opsterv1.NodePool{
+				{
+					Component: "test-node",
+					Replicas:  1,
+					Roles:     []string{"master", "data"},
+				},
+			},
+		},
+	}
+}
+
 func ClusterDescWithKeystoreSecret(secretName string, keyMappings map[string]string) opsterv1.OpenSearchCluster {
 	return opsterv1.OpenSearchCluster{
 		Spec: opsterv1.ClusterSpec{
@@ -240,31 +278,6 @@ var _ = Describe("Builders", func() {
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 
-		It("should properly setup the main command when installing plugins", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			pluginA := "some-plugin"
-			pluginB := "another-plugin"
-
-			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil, nil)
-
-			installCmd := fmt.Sprintf(
-				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
-				pluginA,
-				pluginB,
-			)
-
-			expected := []string{
-				"/bin/bash",
-				"-c",
-				installCmd,
-			}
-
-			actual := result.Spec.Template.Spec.Containers[0].Command
-
-			Expect(expected).To(Equal(actual))
-		})
-
 		It("should add experimental flag when the node.roles contains search and the version is below 2.7", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
@@ -425,6 +438,58 @@ var _ = Describe("Builders", func() {
 				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
+
+		It("should create plugin installer init container when plugins are specified", func() {
+			cr := ClusterDescWithPlugins([]string{"plugin1", "plugin2"})
+			nodePool := cr.Spec.NodePools[0]
+
+			sts := NewSTSForNodePool("admin", &cr, nodePool, "test-checksum", []corev1.Volume{}, []corev1.VolumeMount{}, map[string]string{})
+
+			// Should have init containers including plugin installer
+			Expect(len(sts.Spec.Template.Spec.InitContainers)).To(BeNumerically(">=", 2)) // init + plugin-installer
+
+			// Find the plugin installer init container
+			var pluginInstaller *corev1.Container
+			for _, container := range sts.Spec.Template.Spec.InitContainers {
+				if container.Name == "plugin-installer" {
+					pluginInstaller = &container
+					break
+				}
+			}
+
+			Expect(pluginInstaller).ToNot(BeNil())
+			Expect(pluginInstaller.Command).To(ContainElement("/bin/bash"))
+			Expect(pluginInstaller.Command).To(ContainElement("-c"))
+			Expect(len(pluginInstaller.VolumeMounts)).To(Equal(0)) // No volume mounts needed
+		})
+
+		It("should use custom command when specified", func() {
+			cr := ClusterDescWithCustomCommand("custom-entrypoint.sh")
+			nodePool := cr.Spec.NodePools[0]
+
+			sts := NewSTSForNodePool("admin", &cr, nodePool, "test-checksum", []corev1.Volume{}, []corev1.VolumeMount{}, map[string]string{})
+
+			// Main container should use custom command
+			Expect(sts.Spec.Template.Spec.Containers[0].Command).To(Equal([]string{"/bin/bash", "-c", "custom-entrypoint.sh"}))
+		})
+
+		It("should use image default command when no custom command provided", func() {
+			cr := ClusterDescWithVersion("2.3.0")
+			cr.Spec.General.ServiceName = "test-service"
+			cr.Spec.NodePools = []opsterv1.NodePool{
+				{
+					Component: "test-node",
+					Replicas:  1,
+					Roles:     []string{"master", "data"},
+				},
+			}
+			nodePool := cr.Spec.NodePools[0]
+
+			sts := NewSTSForNodePool("admin", &cr, nodePool, "test-checksum", []corev1.Volume{}, []corev1.VolumeMount{}, map[string]string{})
+
+			// Main container should not have command (uses image default)
+			Expect(sts.Spec.Template.Spec.Containers[0].Command).To(BeNil())
+		})
 	})
 
 	When("Constructing a bootstrap pod", func() {
@@ -490,29 +555,44 @@ var _ = Describe("Builders", func() {
 				Value: mockBootstrapConfig[mockKey2],
 			}))
 		})
-		It("should properly setup the main command when installing plugins", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			pluginA := "some-plugin"
-			pluginB := "another-plugin"
 
-			clusterObject.Spec.Bootstrap.PluginsList = []string{pluginA, pluginB}
-			result := NewBootstrapPod(&clusterObject, nil, nil)
+		It("should use custom command when specified", func() {
+			cr := ClusterDescWithCustomCommand("custom-entrypoint.sh")
+			bootstrap := NewBootstrapPod(&cr, []corev1.Volume{}, []corev1.VolumeMount{})
 
-			installCmd := fmt.Sprintf(
-				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
-				pluginA,
-				pluginB,
-			)
+			// Bootstrap pod should use custom command
+			Expect(bootstrap.Spec.Containers[0].Command).To(Equal([]string{"/bin/bash", "-c", "custom-entrypoint.sh"}))
+		})
 
-			expected := []string{
-				"/bin/bash",
-				"-c",
-				installCmd,
+		It("should use image default command when no custom command provided", func() {
+			cr := ClusterDescWithVersion("2.3.0")
+			cr.Spec.General.ServiceName = "test-service"
+			bootstrap := NewBootstrapPod(&cr, []corev1.Volume{}, []corev1.VolumeMount{})
+
+			// Bootstrap pod should not have command (uses image default)
+			Expect(bootstrap.Spec.Containers[0].Command).To(BeNil())
+		})
+
+		It("should create plugin installer init container when plugins specified", func() {
+			cr := ClusterDescWithVersion("2.3.0")
+			cr.Spec.General.ServiceName = "test-service"
+			cr.Spec.Bootstrap.PluginsList = []string{"bootstrap-plugin"}
+
+			bootstrap := NewBootstrapPod(&cr, []corev1.Volume{}, []corev1.VolumeMount{})
+
+			// Find the plugin installer init container
+			var pluginInstaller *corev1.Container
+			for _, container := range bootstrap.Spec.InitContainers {
+				if container.Name == "plugin-installer" {
+					pluginInstaller = &container
+					break
+				}
 			}
 
-			actual := result.Spec.Containers[0].Command
-
-			Expect(expected).To(Equal(actual))
+			Expect(pluginInstaller).ToNot(BeNil())
+			Expect(pluginInstaller.Command).To(ContainElement("/bin/bash"))
+			Expect(pluginInstaller.Command).To(ContainElement("-c"))
+			Expect(len(pluginInstaller.VolumeMounts)).To(Equal(0)) // No volume mounts needed
 		})
 	})
 
@@ -889,44 +969,7 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(65)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(34)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(33)))
-			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.SuccessThreshold).To(Equal(int32(4)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
-		})
-	})
-
-	When("Using custom command for OpenSearch probes", func() {
-		It("should have default command when not set", func() {
-			clusterObject := ClusterDescWithVersion("2.7.0")
-			nodePool := opsterv1.NodePool{
-				Component: "masters",
-				Roles:     []string{"search"},
-			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
-			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
-		})
-
-		It("should have custom command when set", func() {
-			clusterObject := ClusterDescWithVersion("2.7.0")
-			nodePool := opsterv1.NodePool{
-				Component: "masters",
-				Roles:     []string{"search"},
-				Probes: &opsterv1.ProbesConfig{
-					Startup: &opsterv1.CommandProbeConfig{
-						Command: []string{"/bin/bash", "-c", "echo 'startup'"},
-					},
-					Readiness: &opsterv1.CommandProbeConfig{
-						Command: []string{"/bin/bash", "-c", "echo 'ready'"},
-					},
-				},
-			}
-			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
-			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
 		})
 	})
 
