@@ -127,7 +127,7 @@ type NodePool struct {
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Type=object
+	// +kubebuilder:validation:Schemaless
 	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
 }
 
