@@ -5758,6 +5758,14 @@ spec:
                               items:
                                 type: string
                               type: array
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            labels:
+                              additionalProperties:
+                                type: string
+                              type: object
                             storageClass:
                               type: string
                           type: object
