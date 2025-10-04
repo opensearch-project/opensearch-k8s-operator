@@ -641,6 +641,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.HttpPort,
 					},
+					AppProtocol: pointer.String("https"),
 				},
 				{
 					Name:     "transport",
@@ -682,6 +683,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.HttpPort,
 					},
+					AppProtocol: pointer.String("https"),
 				},
 				{
 					Name:     "transport",
@@ -771,6 +773,7 @@ func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.HttpPort,
 					},
+					AppProtocol: pointer.String("https"),
 				},
 			},
 			Selector: labels,
