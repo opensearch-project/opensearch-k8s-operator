@@ -990,9 +990,10 @@ func NewBootstrapPod(
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      BootstrapPodName(cr),
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        BootstrapPodName(cr),
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: cr.Spec.Bootstrap.Annotations,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
