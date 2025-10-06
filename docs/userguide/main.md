@@ -726,6 +726,48 @@ spec:
         - "master"
 ```
 
+### Sidecar Containers
+
+You can deploy additional sidecar containers alongside OpenSearch in the same pod. This is useful for log shipping, monitoring agents, or other auxiliary services that need to run alongside OpenSearch nodes.
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
+      roles:
+        - "master"
+        - "data"
+      sidecarContainers:
+        - name: log-shipper
+          image: fluent/fluent-bit:latest
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+        - name: monitoring-agent
+          image: prometheus/node-exporter:latest
+          ports:
+            - containerPort: 9100
+              name: metrics
+```
+
+Sidecar containers share the same network namespace and storage volumes as the OpenSearch container as they are on the same pod.
+
 ### Additional Volumes
 
 Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, or CSI volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
