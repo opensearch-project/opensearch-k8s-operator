@@ -1750,6 +1750,11 @@ spec:
                       - name
                       - path
                       type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of secret, configMap, emptyDir, csi,
+                          projected, nfs must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          == 1
                     type: array
                   affinity:
                     description: Affinity is a group of affinity scheduling rules.
@@ -4068,6 +4073,11 @@ spec:
                       - name
                       - path
                       type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of secret, configMap, emptyDir, csi,
+                          projected, nfs must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          == 1
                     type: array
                   annotations:
                     additionalProperties:
