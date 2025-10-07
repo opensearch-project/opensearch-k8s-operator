@@ -362,12 +362,12 @@ var _ = Describe("Builders", func() {
 			emptyString := ""
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
-				Component: "masters", 
+				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
 					PVC: &opsterv1.PVCSource{
 						StorageClassName: &emptyString,
-						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					},
 				}},
 			}
@@ -387,7 +387,7 @@ var _ = Describe("Builders", func() {
 				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
 					PVC: &opsterv1.PVCSource{
 						StorageClassName: &specificClass,
-						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					},
 				}},
 			}
