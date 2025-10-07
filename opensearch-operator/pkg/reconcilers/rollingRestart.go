@@ -74,7 +74,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		
+
 		// Skip rolling restart if revisions are the same (no actual spec changes)
 		// This prevents unnecessary rolling restarts during node draining/pod recreation
 		if sts.Status.UpdateRevision != "" && sts.Status.CurrentRevision == sts.Status.UpdateRevision {
@@ -82,7 +82,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 			lg.V(1).Info(fmt.Sprintf("StatefulSet %s has matching current and update revisions, skipping rolling restart", sts.Name))
 			continue
 		}
-		
+
 		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
 			pendingUpdate = true
@@ -156,14 +156,14 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		if err != nil {
 			return ctrl.Result{}, err
 		}
-		
+
 		// Skip rolling restart if revisions are the same (no actual spec changes)
 		// This prevents unnecessary rolling restarts during node draining/pod recreation
 		if sts.Status.UpdateRevision != "" && sts.Status.CurrentRevision == sts.Status.UpdateRevision {
 			lg.V(1).Info(fmt.Sprintf("StatefulSet %s has matching current and update revisions, skipping rolling restart", sts.Name))
 			continue
 		}
-		
+
 		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != ptr.Deref(sts.Spec.Replicas, 1) {
 			// Only restart pods if not all pods are updated and the sts is healthy with no pods terminating
@@ -206,6 +206,10 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 	workingPod, err := helpers.WorkingPodForRollingRestart(r.client, sts)
 	if err != nil {
 		return ctrl.Result{}, err
+	}
+	if workingPod == "" {
+		// Nothing to restart right now; do not requeue due to this condition
+		return ctrl.Result{}, nil
 	}
 
 	lg.Info(fmt.Sprintf("Preparing to restart pod %s", workingPod))
