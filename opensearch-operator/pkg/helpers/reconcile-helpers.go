@@ -82,7 +82,7 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 	if version == "" {
 		version = cr.Spec.General.Version
 	}
-	
+
 	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), version))
 	return

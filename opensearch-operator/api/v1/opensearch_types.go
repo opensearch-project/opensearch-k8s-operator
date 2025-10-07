@@ -204,9 +204,9 @@ type DashboardsConfig struct {
 	Enable     bool                        `json:"enable,omitempty"`
 	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
 	//+kubebuilder:default=1
-	Replicas   int32                       `json:"replicas,omitempty"`
-	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
-	Version    string                      `json:"version,omitempty"`
+	Replicas int32                `json:"replicas,omitempty"`
+	Tls      *DashboardsTlsConfig `json:"tls,omitempty"`
+	Version  string               `json:"version,omitempty"`
 	// Base Path for Opensearch Clusters running behind a reverse proxy
 	BasePath string `json:"basePath,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
