@@ -21,8 +21,8 @@ import (
 	"fmt"
 	"os"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"strconv"
 
@@ -110,8 +110,8 @@ func main() {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress:   metricsAddr,
-			SecureServing: true,
+			BindAddress:    metricsAddr,
+			SecureServing:  true,
 			FilterProvider: filters.WithAuthenticationAndAuthorization,
 		},
 		HealthProbeBindAddress: probeAddr,
