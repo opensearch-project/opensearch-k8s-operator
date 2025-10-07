@@ -52,6 +52,8 @@ type GeneralConfig struct {
 	ServiceName      string  `json:"serviceName"`
 	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
+	// Disable SSL for the cluster
+	DisableSSL bool `json:"disableSSL,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services

@@ -3993,6 +3993,9 @@ spec:
                     type: string
                   defaultRepo:
                     type: string
+                  disableSSL:
+                    description: Disable SSL for the cluster
+                    type: boolean
                   drainDataNodes:
                     description: Drain data nodes controls whether to drain data notes
                       on rolling restart operations

@@ -943,6 +943,46 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("DisableSSL is enabled", func() {
+		It("should use http protocol in URLForCluster", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Spec.General.DisableSSL = true
+			clusterObject.Spec.General.ServiceName = "opensearch"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.HttpPort = 9200
+
+			actualUrl := URLForCluster(&clusterObject)
+			Expect(actualUrl).To(ContainSubstring("http://"))
+			Expect(actualUrl).NotTo(ContainSubstring("https://"))
+		})
+
+		It("should use http protocol in probe commands", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Spec.General.DisableSSL = true
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
+		})
+
+		It("should use http scheme in ServiceMonitor", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Name = "test-cluster"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.DisableSSL = true
+			clusterObject.Spec.General.Monitoring.Enable = true
+			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
+
+			result := NewServiceMonitor(&clusterObject)
+			Expect(result.Spec.Endpoints[0].Scheme).To(Equal("http"))
+		})
+	})
+
 	When("Configuring InitHelper Resources", func() {
 		It("should propagate Resources to all init containers", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
