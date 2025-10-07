@@ -207,6 +207,10 @@ func (r *RollingRestartReconciler) restartStatefulSetPod(sts *appsv1.StatefulSet
 	if err != nil {
 		return ctrl.Result{}, err
 	}
+	if workingPod == "" {
+		// Nothing to restart right now; do not requeue due to this condition
+		return ctrl.Result{}, nil
+	}
 
 	lg.Info(fmt.Sprintf("Preparing to restart pod %s", workingPod))
 	ready, err = services.PreparePodForDelete(r.osClient, lg, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
