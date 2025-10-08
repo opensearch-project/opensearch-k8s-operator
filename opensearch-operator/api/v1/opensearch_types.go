@@ -47,10 +47,10 @@ type GeneralConfig struct {
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
-	Vendor           string  `json:"vendor,omitempty"`
-	Version          string  `json:"version,omitempty"`
-	ServiceAccount   string  `json:"serviceAccount,omitempty"`
-	ServiceName      string  `json:"serviceName"`
+	Vendor         string `json:"vendor,omitempty"`
+	Version        string `json:"version,omitempty"`
+	ServiceAccount string `json:"serviceAccount,omitempty"`
+	ServiceName    string `json:"serviceName"`
 	//+kubebuilder:default=true
 	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
