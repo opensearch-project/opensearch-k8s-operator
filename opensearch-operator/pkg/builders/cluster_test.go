@@ -527,6 +527,25 @@ var _ = Describe("Builders", func() {
 
 			Expect(expected).To(Equal(actual))
 		})
+
+		It("should use PVC for data volume instead of emptyDir", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			// Find the data volume
+			var dataVolume *corev1.Volume
+			for i, volume := range result.Spec.Volumes {
+				if volume.Name == "data" {
+					dataVolume = &result.Spec.Volumes[i]
+					break
+				}
+			}
+
+			Expect(dataVolume).NotTo(BeNil())
+			Expect(dataVolume.VolumeSource.PersistentVolumeClaim).NotTo(BeNil())
+			Expect(dataVolume.VolumeSource.PersistentVolumeClaim.ClaimName).To(Equal(fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)))
+			Expect(dataVolume.VolumeSource.EmptyDir).To(BeNil())
+		})
 	})
 
 	When("Constructing a bootstrap pod with Keystore Values", func() {
@@ -573,6 +592,38 @@ var _ = Describe("Builders", func() {
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
 			}))
+		})
+	})
+
+	When("Constructing a bootstrap PVC", func() {
+		It("should create a PVC with correct name and storage size", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			expectedName := fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)
+			Expect(result.Name).To(Equal(expectedName))
+			Expect(result.Namespace).To(Equal(clusterObject.Namespace))
+			Expect(result.Spec.AccessModes).To(ContainElement(corev1.ReadWriteOnce))
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("1Gi")))
+		})
+
+		It("should use custom storage size from bootstrap resources", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.Bootstrap.Resources = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("2Gi"),
+				},
+			}
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("2Gi")))
+		})
+
+		It("should have correct labels for cluster identification", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
 		})
 	})
 
