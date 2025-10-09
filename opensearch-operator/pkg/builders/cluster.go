@@ -808,10 +808,14 @@ func NewBootstrapPod(
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
+	// Use persistent storage for bootstrap pod to maintain cluster state across restarts
+	// This prevents cluster formation failures when the bootstrap pod restarts during initialization
 	volumes = append(volumes, corev1.Volume{
 		Name: "data",
 		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+				ClaimName: fmt.Sprintf("%s-bootstrap-data", cr.Name),
+			},
 		},
 	})
 
@@ -1090,6 +1094,39 @@ func DiscoveryServiceName(cr *opsterv1.OpenSearchCluster) string {
 
 func BootstrapPodName(cr *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-bootstrap-0", cr.Name)
+}
+
+func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeClaim {
+	labels := map[string]string{
+		helpers.ClusterLabel: cr.Name,
+	}
+
+	// Use default storage class and ReadWriteOnce access mode
+	// The bootstrap pod only needs a small amount of storage for cluster metadata
+	storageSize := "1Gi"
+	if cr.Spec.Bootstrap.Resources.Requests != nil {
+		if size, exists := cr.Spec.Bootstrap.Resources.Requests["storage"]; exists {
+			storageSize = size.String()
+		}
+	}
+
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-bootstrap-data", cr.Name),
+			Namespace: cr.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(storageSize),
+				},
+			},
+		},
+	}
 }
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
