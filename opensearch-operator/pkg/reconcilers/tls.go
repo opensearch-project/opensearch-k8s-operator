@@ -272,6 +272,10 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 	// Generate node cert, sign it and put it into secret
 	nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
+	if err != nil && !k8serrors.IsNotFound(err) {
+		r.logger.Error(err, "Failed to get secret for transport certificate")
+		return err
+	}
 	certRenewal := false
 	if err == nil {
 		daysRemaining, err := parseCertificate(nodeSecret.Data[corev1.TLSCertKey])
@@ -524,6 +528,11 @@ func (r *TLSReconciler) handleHttp() error {
 
 		// Generate node cert, sign it and put it into secret
 		nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
+		if err != nil && !k8serrors.IsNotFound(err) {
+			r.logger.Error(err, "Failed to get secret for http certificate")
+			return err
+		}
+
 		certRenewal := false
 		if err == nil {
 			daysRemaining, err := parseCertificate(nodeSecret.Data[corev1.TLSCertKey])
