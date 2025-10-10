@@ -302,10 +302,8 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			r.logger.Error(err, "Failed to create node certificate", "interface", "transport")
 			return err
 		}
-		if certRenewal {
-			nodeSecret.Data = nodeCert.SecretData(ca)
-		} else {
-			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
+		nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
+		if !certRenewal {
 			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
 				return err
 			}
@@ -564,10 +562,8 @@ func (r *TLSReconciler) handleHttp() error {
 
 				return err
 			}
-			if certRenewal {
-				nodeSecret.Data = nodeCert.SecretData(ca)
-			} else {
-				nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
+			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
+			if !certRenewal {
 				if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
 					return err
 				}
