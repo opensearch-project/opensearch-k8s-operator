@@ -476,8 +476,10 @@ func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) er
 
 // UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
 func (r *ClusterReconciler) UpdateClusterStatus() error {
-	health := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
+	health, healthResponse := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
 	availableNodes := util.GetAvailableOpenSearchNodes(r.client, r.ctx, r.instance, r.logger)
+
+	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
 
 	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 		instance.Status.Health = health
