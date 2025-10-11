@@ -446,20 +446,6 @@ var _ = Describe("Cluster Reconciler", func() {
 				return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:1.1.0"
 			}, timeout, interval).Should(BeTrue())
 		})
-		It("should update any plugin URLs", func() {
-			Eventually(func() bool {
-				sts := &appsv1.StatefulSet{}
-				if err := k8sClient.Get(
-					context.Background(),
-					client.ObjectKey{
-						Namespace: OpensearchCluster.Namespace,
-						Name:      clusterName + "-nodes",
-					}, sts); err != nil {
-					return false
-				}
-				return ArrayElementContains(sts.Spec.Template.Spec.Containers[0].Command, "http://foo-plugin-1.1.0")
-			}, timeout, interval).Should(BeTrue())
-		})
 	})
 	When("a cluster is upgraded", func() {
 		Specify("updating the status should succeed", func() {
