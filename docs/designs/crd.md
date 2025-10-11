@@ -167,7 +167,7 @@ GeneralConfig defines global Opensearch cluster configuration
         <td><b>SetVMMaxMapCount</b></td>
         <td>bool</td>
         <td>will add VMmaxMapCount</td>
-        <td>false</td>
+        <td>true</td>
         <td></td>
       </tr><tr>
         <td><b>additionalConfig</b></td>
