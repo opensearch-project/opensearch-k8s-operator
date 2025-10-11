@@ -81,6 +81,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.labels | object | `{}` | OpenSearchCluster labels |
 | cluster.name | string | `""` | OpenSearchCluster name, by default release name is used |
 | cluster.nodePools | list | `[{"component":"masters","diskSize":"30Gi","replicas":3,"resources":{"limits":{"cpu":"500m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"2Gi"}},"roles":["master","data"]}]` | Opensearch nodes configuration |
+| cluster.nodePools.sidecarContainers | list | `[]` | Additional sidecar containers to deploy alongside OpenSearch in the same pod. |
 | cluster.security.config.adminCredentialsSecret | object | `{}` | Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided. |
 | cluster.security.config.adminSecret | object | `{}` | TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated |
 | cluster.security.config.securityConfigSecret | object | `{}` | Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, etc) |
