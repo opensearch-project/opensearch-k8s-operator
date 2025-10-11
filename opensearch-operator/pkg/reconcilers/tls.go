@@ -56,6 +56,12 @@ const (
 )
 
 func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
+	if r.instance.Spec.General.DisableSSL {
+		r.logger.Info("SSL is disabled. Skipping TLS setup")
+		r.reconcilerContext.AddConfig("plugins.security.disabled", "true")
+		return ctrl.Result{}, nil
+	}
+
 	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil {
 		r.logger.Info("No security specified. Not doing anything")
 		return ctrl.Result{}, nil

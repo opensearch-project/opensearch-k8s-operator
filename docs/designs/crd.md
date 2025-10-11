@@ -200,6 +200,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td></td>
         <td></td>
       </tr><tr>
+        <td><b>DisableSSL</b></td>
+        <td>bool</td>
+        <td>Disable SSL for the cluster (uses HTTP instead of HTTPS)</td>
+        <td>false</td>
+        <td>false</td>
+      </tr><tr>
         <td><b>keystore</b></td>
         <td>[]opsterv1.KeystoreValue</td>
         <td>List of objects that define secret values that will populate the opensearch keystore.</td>
