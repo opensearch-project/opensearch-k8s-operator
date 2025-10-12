@@ -32,6 +32,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/webhook"
 	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -229,6 +230,44 @@ func main() {
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder
+
+	// Setup webhook validators
+	if err = (&webhook.OpenSearchIndexTemplateValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchIndexTemplate")
+		os.Exit(1)
+	}
+	if err = (&webhook.OpenSearchComponentTemplateValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchComponentTemplate")
+		os.Exit(1)
+	}
+	if err = (&webhook.OpenSearchUserValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUser")
+		os.Exit(1)
+	}
+	if err = (&webhook.OpenSearchRoleValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchRole")
+		os.Exit(1)
+	}
+	if err = (&webhook.OpenSearchTenantValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchTenant")
+		os.Exit(1)
+	}
+	if err = (&webhook.OpenSearchUserRoleBindingValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUserRoleBinding")
+		os.Exit(1)
+	}
+	if err = (&webhook.OpenSearchActionGroupValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchActionGroup")
+		os.Exit(1)
+	}
+	if err = (&webhook.OpenSearchISMPolicyValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchISMPolicy")
+		os.Exit(1)
+	}
+	if err = (&webhook.OpenSearchSnapshotPolicyValidator{}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchSnapshotPolicy")
+		os.Exit(1)
+	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")
