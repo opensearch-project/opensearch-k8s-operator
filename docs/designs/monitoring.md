@@ -138,15 +138,12 @@ Implemented metrics:
 
 # Note: 0 - Green, 1 - Yellow, 2 - Red
 
-| Metrics                                                    | Description                                                         |
-|------------------------------------------------------------|---------------------------------------------------------------------|
-| opensearch_operator_cluster_info                           | An info metric containing the cluster name, namespace, and version. |
-| opensearch_operator_cluster_tls_certificate_remaining_days | Days until the TLS certificate expires.                             |
-| opensearch_operator_cluster_health                         | Health status of the cluster. 0=green, 1=yellow, 2=red, -1=unknown  |
-| opensearch_operator_cluster_shards_active                  | The number of active primary and replica shards.                    |
-| opensearch_operator_cluster_shards_relocating              | The number of shards that are currently relocating.                 |
-| opensearch_operator_cluster_shards_initializing            | The number of shards that are currently initializing.               |
-| opensearch_operator_cluster_shards_unassigned              | The number of shards that are currently unassigned.                 |
+| Metrics                                                    | Description                                                                                                                       |
+|------------------------------------------------------------|-----------------------------------------------------------------------------------------------------------------------------------|
+| opensearch_operator_cluster_info                           | An info metric containing the cluster name, namespace, and version.                                                               |
+| opensearch_operator_cluster_tls_certificate_remaining_days | Days until the TLS certificate expires.                                                                                           |
+| opensearch_operator_cluster_health                         | Health status of the cluster. The value can be 0=green, 1=yellow, 2=red, or -1=unknown.                                           |
+| opensearch_operator_cluster_shards                         | The number of shards in the cluster by status. The `status` label can be `active`, `relocating`, `initializing`, or `unassigned`. |
 
 Suggested future metrics:
 

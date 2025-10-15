@@ -35,48 +35,24 @@ var (
 		}, []string{
 			"namespace", "opensearch_cluster",
 		})
-	ActiveShards = prometheus.NewGaugeVec(
+	ClusterShards = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: clusterMetricsPrefix + "shards_active",
-			Help: "The number of active primary and replica shards.",
+			Name: clusterMetricsPrefix + "shards",
+			Help: "The number of shards in the cluster.",
 		}, []string{
-			"namespace", "opensearch_cluster",
-		})
-	RelocatingShards = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: clusterMetricsPrefix + "shards_relocating",
-			Help: "The number of shards that are currently relocating.",
-		}, []string{
-			"namespace", "opensearch_cluster",
-		})
-	InitializingShards = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: clusterMetricsPrefix + "shards_initializing",
-			Help: "The number of shards that are currently initializing.",
-		}, []string{
-			"namespace", "opensearch_cluster",
-		})
-	UnassignedShards = prometheus.NewGaugeVec(
-		prometheus.GaugeOpts{
-			Name: clusterMetricsPrefix + "shards_unassigned",
-			Help: "The number of shards that are currently unassigned.",
-		}, []string{
-			"namespace", "opensearch_cluster",
+			"namespace", "opensearch_cluster", "status",
 		})
 )
 
 func RegisterMetrics() {
-	metrics.Registry.MustRegister(TlsCertificateDaysRemaining, ClusterInfo, ClusterHealth, ActiveShards, RelocatingShards, InitializingShards, UnassignedShards)
+	metrics.Registry.MustRegister(TlsCertificateDaysRemaining, ClusterInfo, ClusterHealth, ClusterShards)
 }
 
 func DeleteClusterMetrics(namespace string, clusterName string) {
 	TlsCertificateDaysRemaining.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 	ClusterInfo.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 	ClusterHealth.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
-	ActiveShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
-	RelocatingShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
-	InitializingShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
-	UnassignedShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
+	ClusterShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 }
 
 func UpdateClusterInfo(instance *opsterv1.OpenSearchCluster, health opsterv1.OpenSearchHealth, healthResponse responses.ClusterHealthResponse) {
@@ -101,9 +77,9 @@ func UpdateClusterInfo(instance *opsterv1.OpenSearchCluster, health opsterv1.Ope
 	ClusterHealth.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName}).Set(value)
 
 	if health != opsterv1.OpenSearchUnknownHealth {
-		ActiveShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName}).Set(float64(healthResponse.ActiveShards))
-		RelocatingShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName}).Set(float64(healthResponse.RelocatingShards))
-		InitializingShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName}).Set(float64(healthResponse.InitializingShards))
-		UnassignedShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName}).Set(float64(healthResponse.UnassignedShards))
+		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "active"}).Set(float64(healthResponse.ActiveShards))
+		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "relocating"}).Set(float64(healthResponse.RelocatingShards))
+		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "initializing"}).Set(float64(healthResponse.InitializingShards))
+		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "unassigned"}).Set(float64(healthResponse.UnassignedShards))
 	}
 }
