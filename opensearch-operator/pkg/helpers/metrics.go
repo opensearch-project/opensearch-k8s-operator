@@ -9,52 +9,56 @@ import (
 
 // see https://book.kubebuilder.io/reference/metrics#publishing-additional-metrics
 
+const (
+	clusterMetricsPrefix = "opensearch_operator_cluster_"
+)
+
 var (
 	TlsCertificateDaysRemaining = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "opensearch_tls_certificate_remaining_days",
+			Name: clusterMetricsPrefix + "tls_certificate_remaining_days",
 			Help: "Days until the certificate expires.",
 		}, []string{
 			"namespace", "opensearch_cluster", "interface", "node",
 		})
 	ClusterInfo = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "opensearch_cluster_info",
+			Name: clusterMetricsPrefix + "info",
 			Help: "An info metric containing the cluster name, namespace, and version.",
 		}, []string{
 			"namespace", "opensearch_cluster", "version",
 		})
 	ClusterHealth = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "opensearch_cluster_health",
+			Name: clusterMetricsPrefix + "health",
 			Help: "Health status of the cluster. 0=red, 1=yellow, 2=green, -1=unknown",
 		}, []string{
 			"namespace", "opensearch_cluster",
 		})
 	ActiveShards = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "opensearch_cluster_shards_active",
+			Name: clusterMetricsPrefix + "shards_active",
 			Help: "The number of active primary and replica shards.",
 		}, []string{
 			"namespace", "opensearch_cluster",
 		})
 	RelocatingShards = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "opensearch_cluster_shards_relocating",
+			Name: clusterMetricsPrefix + "shards_relocating",
 			Help: "The number of shards that are currently relocating.",
 		}, []string{
 			"namespace", "opensearch_cluster",
 		})
 	InitializingShards = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "opensearch_cluster_shards_initializing",
+			Name: clusterMetricsPrefix + "shards_initializing",
 			Help: "The number of shards that are currently initializing.",
 		}, []string{
 			"namespace", "opensearch_cluster",
 		})
 	UnassignedShards = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
-			Name: "opensearch_cluster_shards_unassigned",
+			Name: clusterMetricsPrefix + "shards_unassigned",
 			Help: "The number of shards that are currently unassigned.",
 		}, []string{
 			"namespace", "opensearch_cluster",
@@ -86,11 +90,11 @@ func UpdateClusterInfo(instance *opsterv1.OpenSearchCluster, health opsterv1.Ope
 	var value float64
 	switch health {
 	case opsterv1.OpenSearchRedHealth:
-		value = 0
+		value = 2
 	case opsterv1.OpenSearchYellowHealth:
 		value = 1
 	case opsterv1.OpenSearchGreenHealth:
-		value = 2
+		value = 0
 	default:
 		value = -1
 	}
