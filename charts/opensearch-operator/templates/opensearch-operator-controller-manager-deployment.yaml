@@ -48,7 +48,7 @@ spec:
       {{- end}}
       - args:
         - --health-probe-bind-address=:8081
-        - --metrics-bind-address=127.0.0.1:8080
+        - --metrics-bind-address={{ .Values.manager.metricsBindAddress }}
         - --leader-elect
         {{- if .Values.manager.watchNamespace }}
         - --watch-namespace={{ .Values.manager.watchNamespace }}
