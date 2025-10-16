@@ -20,10 +20,11 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
-	"strconv"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
 	"go.uber.org/zap/zapcore"
@@ -32,13 +33,14 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
+	"net/http"
+	_ "net/http/pprof"
+
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
-	"net/http"
-	_ "net/http/pprof"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -71,18 +73,27 @@ func main() {
 		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
 
+	opts := zap.Options{
+		Development: false,
+		TimeEncoder: zapcore.ISO8601TimeEncoder,
+	}
+
+	messageKey := os.Getenv("OPERATOR_LOGGING_MESSAGE_KEY")
+	if messageKey != "" {
+		opts.EncoderConfigOptions = append(opts.EncoderConfigOptions, func(ec *zapcore.EncoderConfig) {
+			ec.MessageKey = messageKey
+		})
+	}
+
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+
 	var cacheOpts cache.Options
 	if watchNamespace != "" {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{
 			watchNamespace: {},
 		}
 	}
-	opts := zap.Options{
-		Development: false,
-		TimeEncoder: zapcore.ISO8601TimeEncoder,
-	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
 
 	level, err := zapcore.ParseLevel(logLevel)
 	if err != nil {
