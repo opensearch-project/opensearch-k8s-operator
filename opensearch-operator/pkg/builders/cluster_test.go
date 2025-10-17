@@ -479,6 +479,43 @@ var _ = Describe("Builders", func() {
 				Value: "-Xmx1024M -Xms1024M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
+		It("should include custom init containers that run before main container", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			initContainer := corev1.Container{
+				Name:  "custom-init",
+				Image: "custom-init:latest",
+			}
+			nodePool := opsterv1.NodePool{
+				InitContainers: []corev1.Container{initContainer},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.InitContainers).To(ContainElement(corev1.Container{
+				Name:  "custom-init",
+				Image: "custom-init:latest",
+			}))
+			for _, container := range result.Spec.Template.Spec.Containers {
+				Expect(container.Name).NotTo(Equal("custom-init"))
+			}
+		})
+
+		It("should include multiple custom init containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			initContainer1 := corev1.Container{
+				Name:  "custom-init1",
+				Image: "custom-init1:latest",
+			}
+			initContainer2 := corev1.Container{
+				Name:  "custom-init2",
+				Image: "custom-init2:latest",
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
+				Roles:          []string{"cluster_manager"},
+				InitContainers: []corev1.Container{initContainer1, initContainer2},
+			}, "foobar", nil, nil, nil)
+			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(3))
+			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("custom-init1"))
+			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init2"))
+		})
 	})
 
 	When("Constructing a bootstrap pod", func() {
@@ -646,6 +683,71 @@ var _ = Describe("Builders", func() {
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
 			}))
+		})
+		When("Constructing a bootstrap pod with Volumes", func() {
+			It("should include all the required volumes and mounts", func() {
+				clusterObject := opsterv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test-cluster",
+						Namespace: "test-namespace",
+					},
+					Spec: opsterv1.ClusterSpec{
+						General: opsterv1.GeneralConfig{
+							PluginsList: []string{"repository-s3"},
+						},
+					},
+				}
+
+				// Create the volumes that would come from the configuration reconciler
+				volumes := []corev1.Volume{
+					{
+						Name: "rw-conf",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
+						},
+					},
+					{
+						Name: "rw-logs",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
+						},
+					},
+					{
+						Name: "rw-plugins",
+						VolumeSource: corev1.VolumeSource{
+							EmptyDir: &corev1.EmptyDirVolumeSource{},
+						},
+					},
+				}
+
+				volumeMounts := []corev1.VolumeMount{
+					{
+						Name:      "rw-conf",
+						MountPath: "/usr/share/opensearch/conf",
+					},
+					{
+						Name:      "rw-logs",
+						MountPath: "/usr/share/opensearch/logs",
+					},
+					{
+						Name:      "rw-plugins",
+						MountPath: "/usr/share/opensearch/plugins",
+					},
+				}
+
+				result := NewBootstrapPod(&clusterObject, volumes, volumeMounts)
+
+				Expect(len(result.Spec.Volumes)).To(Equal(4))
+				Expect(result.Spec.Volumes[0].Name).To(Equal(volumes[0].Name))
+				Expect(result.Spec.Volumes[1].Name).To(Equal(volumes[1].Name))
+				Expect(result.Spec.Volumes[2].Name).To(Equal(volumes[2].Name))
+
+				Expect(len(result.Spec.Containers)).To(Equal(1))
+				Expect(len(result.Spec.Containers[0].VolumeMounts)).To(Equal(4))
+				Expect(result.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(volumeMounts[0].Name))
+				Expect(result.Spec.Containers[0].VolumeMounts[1].Name).To(Equal(volumeMounts[1].Name))
+				Expect(result.Spec.Containers[0].VolumeMounts[2].Name).To(Equal(volumeMounts[2].Name))
+			})
 		})
 	})
 
