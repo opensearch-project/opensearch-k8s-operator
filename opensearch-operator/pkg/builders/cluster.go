@@ -658,6 +658,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
+	httpsProtocol := "HTTPS"
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -674,6 +675,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 				{
 					Name:     "http",
 					Protocol: "TCP",
+					AppProtocol: &httpsProtocol,
 					Port:     cr.Spec.General.HttpPort,
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.HttpPort,
