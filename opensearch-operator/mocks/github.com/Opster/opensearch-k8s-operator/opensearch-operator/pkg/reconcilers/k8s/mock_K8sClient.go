@@ -1512,6 +1512,24 @@ func (_m *MockK8sClient) UpdateSecret(secret *v1.Secret) error {
 	var r0 error
 	if rf, ok := ret.Get(0).(func(*v1.Secret) error); ok {
 		r0 = rf(secret)
+        } else {
+                r0 = ret.Error(0)
+        }
+
+        return r0
+}
+
+// WaitForPodDeletion provides a mock function with given fields: podName, namespace
+func (_m *MockK8sClient) WaitForPodDeletion(podName string, namespace string) error {
+	ret := _m.Called(podName, namespace)
+
+	if len(ret) == 0 {
+		panic("no return value specified for WaitForPodDeletion")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = rf(podName, namespace)
 	} else {
 		r0 = ret.Error(0)
 	}
@@ -1533,16 +1551,45 @@ func (_e *MockK8sClient_Expecter) UpdateSecret(secret interface{}) *MockK8sClien
 func (_c *MockK8sClient_UpdateSecret_Call) Run(run func(secret *v1.Secret)) *MockK8sClient_UpdateSecret_Call {
 	_c.Call.Run(func(args mock.Arguments) {
 		run(args[0].(*v1.Secret))
+        })
+        return _c
+}
+
+// MockK8sClient_WaitForPodDeletion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WaitForPodDeletion'
+type MockK8sClient_WaitForPodDeletion_Call struct {
+	*mock.Call
+}
+
+// WaitForPodDeletion is a helper method to define mock.On call
+//   - podName string
+//   - namespace string
+func (_e *MockK8sClient_Expecter) WaitForPodDeletion(podName interface{}, namespace interface{}) *MockK8sClient_WaitForPodDeletion_Call {
+	return &MockK8sClient_WaitForPodDeletion_Call{Call: _e.mock.On("WaitForPodDeletion", podName, namespace)}
+}
+
+func (_c *MockK8sClient_WaitForPodDeletion_Call) Run(run func(podName string, namespace string)) *MockK8sClient_WaitForPodDeletion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
 	})
 	return _c
 }
 
 func (_c *MockK8sClient_UpdateSecret_Call) Return(_a0 error) *MockK8sClient_UpdateSecret_Call {
+        _c.Call.Return(_a0)
+        return _c
+}
+
+func (_c *MockK8sClient_WaitForPodDeletion_Call) Return(_a0 error) *MockK8sClient_WaitForPodDeletion_Call {
 	_c.Call.Return(_a0)
 	return _c
 }
 
 func (_c *MockK8sClient_UpdateSecret_Call) RunAndReturn(run func(*v1.Secret) error) *MockK8sClient_UpdateSecret_Call {
+        _c.Call.Return(run)
+        return _c
+}
+
+func (_c *MockK8sClient_WaitForPodDeletion_Call) RunAndReturn(run func(string, string) error) *MockK8sClient_WaitForPodDeletion_Call {
 	_c.Call.Return(run)
 	return _c
 }

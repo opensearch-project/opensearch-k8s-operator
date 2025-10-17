@@ -17,6 +17,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -121,7 +123,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Status.Initialized {
 		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
 	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateCreated))
+		result.Combine(r.reconcileBootstrapPod(bootstrapPod))
 	}
 
 	for _, nodePool := range r.instance.Spec.NodePools {
@@ -516,4 +518,40 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 		instance.Status.Health = health
 		instance.Status.AvailableNodes = availableNodes
 	})
+}
+
+// reconcileBootstrapPod handles bootstrap pod reconciliation with recreation for any changes
+func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
+	// Check if bootstrap pod exists
+	existingPod, err := r.client.GetPod(desiredPod.Name, desiredPod.Namespace)
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return &ctrl.Result{}, err
+	}
+
+	if k8serrors.IsNotFound(err) {
+		// Pod doesn't exist, create it
+		r.logger.Info("Creating bootstrap pod", "pod", desiredPod.Name)
+		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+	}
+
+	// Pod exists, check if spec has changed
+	if util.PodSpecChanged(&existingPod, desiredPod) {
+		r.logger.Info("Bootstrap pod spec changed, recreating pod", "pod", desiredPod.Name)
+
+		// Delete existing pod
+		if err := r.client.DeletePod(&existingPod); err != nil {
+			r.logger.Error(err, "Failed to delete existing bootstrap pod", "pod", desiredPod.Name)
+			return &ctrl.Result{}, err
+		}
+		if err := r.client.WaitForPodDeletion(desiredPod.Name, desiredPod.Namespace); err != nil {
+			r.logger.Error(err, "Timeout waiting for bootstrap pod deletion", "pod", desiredPod.Name)
+			return &ctrl.Result{}, err
+		}
+
+		// Create new pod with updated spec
+		r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
+		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+	}
+
+	return &ctrl.Result{}, nil
 }

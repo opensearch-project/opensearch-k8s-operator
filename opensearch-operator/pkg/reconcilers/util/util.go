@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"net/http"
+	"reflect"
 	"sort"
 	"strings"
 
@@ -357,4 +358,11 @@ func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, c
 	}
 
 	return availableNodes
+}
+
+// PodSpecChanged checks if any pod spec fields have changed
+func PodSpecChanged(existing, desired *corev1.Pod) bool {
+	// Use DeepEqual to compare the entire pod spec
+	// This is simpler, more comprehensive, and catches all changes
+	return !reflect.DeepEqual(existing.Spec, desired.Spec)
 }
