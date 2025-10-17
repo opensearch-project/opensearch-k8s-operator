@@ -1203,7 +1203,7 @@ func NewSecurityconfigUpdateJob(
 			Namespace:   namespace,
 			Annotations: annotations,
 			Labels: map[string]string{
-				helpers.JobLabel: instance.Name,
+				helpers.JobLabel: jobName,
 			},
 		},
 		Spec: batchv1.JobSpec{
@@ -1212,7 +1212,7 @@ func NewSecurityconfigUpdateJob(
 				ObjectMeta: metav1.ObjectMeta{
 					Name: jobName,
 					Labels: map[string]string{
-						helpers.JobLabel: instance.Name,
+						helpers.JobLabel: jobName,
 					},
 				},
 				Spec: corev1.PodSpec{
