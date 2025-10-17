@@ -140,7 +140,7 @@ type PersistenceSource struct {
 }
 
 type PVCSource struct {
-	StorageClassName string                              `json:"storageClass,omitempty"`
+	StorageClassName *string                             `json:"storageClass,omitempty"`
 	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 	Annotations      map[string]string                   `json:"annotations,omitempty"`
 	Labels           map[string]string                   `json:"labels,omitempty"`
@@ -175,6 +175,7 @@ type BootstrapConfig struct {
 	Jvm          string                      `json:"jvm,omitempty"`
 	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	Annotations      map[string]string `json:"annotations,omitempty"`
 	PluginsList      []string          `json:"pluginsList,omitempty"`
 	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
 }

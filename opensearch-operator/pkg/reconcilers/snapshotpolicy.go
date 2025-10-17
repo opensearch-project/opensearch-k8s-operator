@@ -306,13 +306,16 @@ func (r *SnapshotPolicyReconciler) CreateSnapshotPolicy() (*requests.SnapshotPol
 
 	if r.instance.Spec.Deletion != nil {
 		del := &requests.SnapshotDeletion{
-			Schedule: &requests.CronSchedule{
-				Cron: requests.CronExpression{
-					Expression: r.instance.Spec.Creation.Schedule.Cron.Expression,
-					Timezone:   r.instance.Spec.Creation.Schedule.Cron.Timezone,
-				},
-			},
 			TimeLimit: r.instance.Spec.Deletion.TimeLimit,
+		}
+
+		if r.instance.Spec.Deletion.Schedule != nil {
+			del.Schedule = &requests.CronSchedule{
+				Cron: requests.CronExpression{
+					Expression: r.instance.Spec.Deletion.Schedule.Cron.Expression,
+					Timezone:   r.instance.Spec.Deletion.Schedule.Cron.Timezone,
+				},
+			}
 		}
 
 		if r.instance.Spec.Deletion.DeleteCondition != nil {

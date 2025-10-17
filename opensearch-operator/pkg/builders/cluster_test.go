@@ -326,7 +326,21 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
-		It("should use default storageclass if not specified", func() {
+		It("should use default storageclass if no persistence specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				// No persistence specified
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should use default storageClass when persistence is specified without storageClass", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -521,6 +535,19 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 
+		It("should apply bootstrap pod annotations", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			expectedAnnotations := map[string]string{
+				"custom-annotation":  "custom-value",
+				"another-annotation": "another-value",
+			}
+			clusterObject.Spec.Bootstrap.Annotations = expectedAnnotations
+
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.ObjectMeta.Annotations).To(Equal(expectedAnnotations))
+		})
+
 		It("should overwrite the General.AdditionalConfig with Bootstrap.AdditionalConfig when set", func() {
 			mockKey1 := "server.basePath"
 			mockKey2 := "server.rewriteBasePath"
@@ -569,6 +596,25 @@ var _ = Describe("Builders", func() {
 
 			Expect(expected).To(Equal(actual))
 		})
+
+		It("should use PVC for data volume instead of emptyDir", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			// Find the data volume
+			var dataVolume *corev1.Volume
+			for i, volume := range result.Spec.Volumes {
+				if volume.Name == "data" {
+					dataVolume = &result.Spec.Volumes[i]
+					break
+				}
+			}
+
+			Expect(dataVolume).NotTo(BeNil())
+			Expect(dataVolume.VolumeSource.PersistentVolumeClaim).NotTo(BeNil())
+			Expect(dataVolume.VolumeSource.PersistentVolumeClaim.ClaimName).To(Equal(fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)))
+			Expect(dataVolume.VolumeSource.EmptyDir).To(BeNil())
+		})
 	})
 
 	When("Constructing a bootstrap pod with Keystore Values", func() {
@@ -615,6 +661,38 @@ var _ = Describe("Builders", func() {
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
 			}))
+		})
+	})
+
+	When("Constructing a bootstrap PVC", func() {
+		It("should create a PVC with correct name and storage size", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			expectedName := fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)
+			Expect(result.Name).To(Equal(expectedName))
+			Expect(result.Namespace).To(Equal(clusterObject.Namespace))
+			Expect(result.Spec.AccessModes).To(ContainElement(corev1.ReadWriteOnce))
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("1Gi")))
+		})
+
+		It("should use custom storage size from bootstrap resources", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.Bootstrap.Resources = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("2Gi"),
+				},
+			}
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("2Gi")))
+		})
+
+		It("should have correct labels for cluster identification", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
 		})
 	})
 
