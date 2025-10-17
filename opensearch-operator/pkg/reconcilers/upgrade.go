@@ -348,6 +348,11 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		r.setComponentConditions(conditions, pool.Component)
 		return err
 	}
+	if workingPod == "" {
+		// No pod to restart right now; this is a non-error state
+		r.setComponentConditions(conditions, pool.Component)
+		return nil
+	}
 
 	ready, err = services.PreparePodForDelete(r.osClient, r.logger, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {

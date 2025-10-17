@@ -486,6 +486,11 @@ func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
 }
 
 func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
+	// If revisions match (no spec change), indicate no work without requeue-triggering error
+	if sts.Status.UpdateRevision != "" && sts.Status.CurrentRevision == sts.Status.UpdateRevision {
+		return "", nil
+	}
+
 	// If there are potentially mixed revisions we need to check each pod
 	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
 	if err != nil {
@@ -494,7 +499,9 @@ func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSe
 	if podWithOlderRevision != nil {
 		return podWithOlderRevision.Name, nil
 	}
-	return "", errors.New("unable to calculate the working pod for rolling restart")
+
+	// No pod requires restart at the moment; return empty name with nil error
+	return "", nil
 }
 
 // DeleteStuckPodWithOlderRevision deletes the crashed pod only if there is any update in StatefulSet.
