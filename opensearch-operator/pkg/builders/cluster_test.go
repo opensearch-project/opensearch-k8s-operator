@@ -325,7 +325,21 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
-		It("should use default storageclass if not specified", func() {
+		It("should use default storageclass if no persistence specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				// No persistence specified
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should use default storageClass when persistence is specified without storageClass", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -340,6 +354,46 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should create empty storageClassName when explicitly set to empty", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			emptyString := ""
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
+					PVC: &opsterv1.PVCSource{
+						StorageClassName: &emptyString,
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					},
+				}},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			expected := &emptyString
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should use specific storageClassName when provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			specificClass := "fast-ssd"
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
+					PVC: &opsterv1.PVCSource{
+						StorageClassName: &specificClass,
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					},
+				}},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			expected := &specificClass
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
 		})
