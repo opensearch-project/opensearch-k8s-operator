@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"os"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -357,44 +358,58 @@ var _ = Describe("Builders", func() {
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
 		})
-		It("should create empty storageClassName when explicitly set to empty", func() {
+		It("should have annotations added to pvc", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			emptyString := ""
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
-					PVC: &opsterv1.PVCSource{
-						StorageClassName: &emptyString,
-						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Persistence: &opsterv1.PersistenceConfig{
+					PersistenceSource: opsterv1.PersistenceSource{
+						PVC: &opsterv1.PVCSource{
+							AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+							Annotations: map[string]string{
+								"annotation.io/id": "id",
+							},
+						},
 					},
-				}},
+				},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			expected := &emptyString
-			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			var expected = "annotation.io/id"
+			var actual string
+			annotations := result.Spec.VolumeClaimTemplates[0].GetAnnotations()
+			for key := range annotations {
+				actual = key
+			}
 			Expect(expected).To(Equal(actual))
 		})
-		It("should use specific storageClassName when provided", func() {
+		It("should have labels added to pvc", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			specificClass := "fast-ssd"
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
-					PVC: &opsterv1.PVCSource{
-						StorageClassName: &specificClass,
-						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Persistence: &opsterv1.PersistenceConfig{
+					PersistenceSource: opsterv1.PersistenceSource{
+						PVC: &opsterv1.PVCSource{
+							AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+							Labels: map[string]string{
+								"info": "my-label",
+							},
+						},
 					},
-				}},
+				},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
-			expected := &specificClass
-			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			var expected = "my-label"
+			var actual string
+			labels := result.Spec.VolumeClaimTemplates[0].GetLabels()
+			for _, value := range labels {
+				actual = value
+			}
 			Expect(expected).To(Equal(actual))
 		})
 		It("should set jvm to half of memory request when memory request is set and jvm are not provided", func() {
