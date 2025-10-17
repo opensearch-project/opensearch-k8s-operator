@@ -1,0 +1,185 @@
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: opensearch-operator-validating-webhook-configuration
+webhooks:
+- name: vopensearchindextemplate.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchindextemplate
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchindextemplates
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
+- name: vopensearchcomponenttemplate.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchcomponenttemplate
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchcomponenttemplates
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
+- name: vopensearchuser.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchuser
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchusers
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
+- name: vopensearchrole.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchrole
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchroles
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
+- name: vopensearchtenant.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchtenant
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchtenants
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
+- name: vopensearchuserrolebinding.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchuserrolebinding
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchuserrolebindings
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
+- name: vopensearchactiongroup.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchactiongroup
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchactiongroups
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
+- name: vopensearchismpolicy.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchismpolicy
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchismpolicies
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
+- name: vopensearchsnapshotpolicy.kb.io
+  clientConfig:
+    service:
+      namespace: system
+      name: webhook-service
+      path: /validate-opensearch-opster-io-v1-opensearchsnapshotpolicy
+  rules:
+  - operations:
+    - CREATE
+    - UPDATE
+    apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    resources:
+    - opensearchsnapshotpolicies
+  failurePolicy: Fail
+  sideEffects: None
+  admissionReviewVersions:
+  - v1
