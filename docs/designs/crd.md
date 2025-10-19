@@ -236,6 +236,13 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>false</td>
         <td>-</td>
       </tr>
+      </tr><tr>
+        <td><b>persistentVolumeClaimRetentionPolicy</b></td>
+        <td>appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy</td>
+        <td>Defines the policy for handling PVCs when StatefulSet pods are deleted or scaled down. Controls whether PVCs created from the StatefulSet template should be automatically deleted or retained.</td>
+        <td>false</td>
+        <td>-</td>
+      </tr>
 </table>
 
 <h3 id="GeneralConfig">
@@ -550,7 +557,7 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>Updates the probes timeouts and thresholds config</td>
         <td>false</td>
         <td>-</td>
-      </tr>
+      </tr><tr>
 </table>
 
 <h3 id="InitHelperConfig">
