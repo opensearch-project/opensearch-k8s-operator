@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
@@ -76,7 +77,18 @@ func NewSTSForNodePool(
 	if node.Persistence == nil || node.Persistence.PVC != nil {
 		mode := corev1.PersistentVolumeFilesystem
 		pvc = corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{Name: "data"},
+			ObjectMeta: func() metav1.ObjectMeta {
+				if node.Persistence == nil {
+					return metav1.ObjectMeta{
+						Name: "data",
+					}
+				}
+				return metav1.ObjectMeta{
+					Name:        "data",
+					Annotations: node.Persistence.PVC.Annotations,
+					Labels:      node.Persistence.PVC.Labels,
+				}
+			}(),
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes: func() []corev1.PersistentVolumeAccessMode {
 					if node.Persistence == nil {
