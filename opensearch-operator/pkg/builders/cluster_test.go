@@ -325,7 +325,21 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
-		It("should use default storageclass if not specified", func() {
+		It("should use default storageclass if no persistence specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				// No persistence specified
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should use default storageClass when persistence is specified without storageClass", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -340,6 +354,46 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should create empty storageClassName when explicitly set to empty", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			emptyString := ""
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
+					PVC: &opsterv1.PVCSource{
+						StorageClassName: &emptyString,
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					},
+				}},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			expected := &emptyString
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should use specific storageClassName when provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			specificClass := "fast-ssd"
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
+					PVC: &opsterv1.PVCSource{
+						StorageClassName: &specificClass,
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					},
+				}},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			expected := &specificClass
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
 		})
@@ -466,6 +520,19 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 
+		It("should apply bootstrap pod annotations", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			expectedAnnotations := map[string]string{
+				"custom-annotation":  "custom-value",
+				"another-annotation": "another-value",
+			}
+			clusterObject.Spec.Bootstrap.Annotations = expectedAnnotations
+
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.ObjectMeta.Annotations).To(Equal(expectedAnnotations))
+		})
+
 		It("should overwrite the General.AdditionalConfig with Bootstrap.AdditionalConfig when set", func() {
 			mockKey1 := "server.basePath"
 			mockKey2 := "server.rewriteBasePath"
@@ -514,6 +581,25 @@ var _ = Describe("Builders", func() {
 
 			Expect(expected).To(Equal(actual))
 		})
+
+		It("should use PVC for data volume instead of emptyDir", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			// Find the data volume
+			var dataVolume *corev1.Volume
+			for i, volume := range result.Spec.Volumes {
+				if volume.Name == "data" {
+					dataVolume = &result.Spec.Volumes[i]
+					break
+				}
+			}
+
+			Expect(dataVolume).NotTo(BeNil())
+			Expect(dataVolume.VolumeSource.PersistentVolumeClaim).NotTo(BeNil())
+			Expect(dataVolume.VolumeSource.PersistentVolumeClaim.ClaimName).To(Equal(fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)))
+			Expect(dataVolume.VolumeSource.EmptyDir).To(BeNil())
+		})
 	})
 
 	When("Constructing a bootstrap pod with Keystore Values", func() {
@@ -560,6 +646,38 @@ var _ = Describe("Builders", func() {
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
 			}))
+		})
+	})
+
+	When("Constructing a bootstrap PVC", func() {
+		It("should create a PVC with correct name and storage size", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			expectedName := fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)
+			Expect(result.Name).To(Equal(expectedName))
+			Expect(result.Namespace).To(Equal(clusterObject.Namespace))
+			Expect(result.Spec.AccessModes).To(ContainElement(corev1.ReadWriteOnce))
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("1Gi")))
+		})
+
+		It("should use custom storage size from bootstrap resources", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.Bootstrap.Resources = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("2Gi"),
+				},
+			}
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("2Gi")))
+		})
+
+		It("should have correct labels for cluster identification", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
 		})
 	})
 
@@ -795,14 +913,15 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold).To(Equal(int32(10)))
 
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.InitialDelaySeconds).To(Equal(int32(10)))
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(5)))
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(20)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(30)))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.SuccessThreshold).To(Equal(int32(1)))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.FailureThreshold).To(Equal(int32(10)))
 
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(60)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(30)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.SuccessThreshold).To(Equal(int32(1)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(5)))
 		})
 
@@ -815,10 +934,10 @@ var _ = Describe("Builders", func() {
 					Liveness: &opsterv1.ProbeConfig{
 						FailureThreshold: 15,
 					},
-					Startup: &opsterv1.ProbeConfig{
+					Startup: &opsterv1.CommandProbeConfig{
 						FailureThreshold: 11,
 					},
-					Readiness: &opsterv1.ReadinessProbeConfig{
+					Readiness: &opsterv1.CommandProbeConfig{
 						FailureThreshold: 9,
 					},
 				},
@@ -831,14 +950,15 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.FailureThreshold).To(Equal(int32(15)))
 
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.InitialDelaySeconds).To(Equal(int32(10)))
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(5)))
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(20)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.TimeoutSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.PeriodSeconds).To(Equal(int32(30)))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.SuccessThreshold).To(Equal(int32(1)))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.FailureThreshold).To(Equal(int32(11)))
 
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(60)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(30)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(30)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.SuccessThreshold).To(Equal(int32(1)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
 		})
 
@@ -855,17 +975,18 @@ var _ = Describe("Builders", func() {
 						SuccessThreshold:    2,
 						FailureThreshold:    15,
 					},
-					Startup: &opsterv1.ProbeConfig{
+					Startup: &opsterv1.CommandProbeConfig{
 						InitialDelaySeconds: 14,
 						TimeoutSeconds:      7,
 						PeriodSeconds:       27,
 						SuccessThreshold:    3,
 						FailureThreshold:    11,
 					},
-					Readiness: &opsterv1.ReadinessProbeConfig{
+					Readiness: &opsterv1.CommandProbeConfig{
 						InitialDelaySeconds: 65,
 						TimeoutSeconds:      34,
 						PeriodSeconds:       33,
+						SuccessThreshold:    4,
 						FailureThreshold:    9,
 					},
 				},
@@ -886,7 +1007,44 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.InitialDelaySeconds).To(Equal(int32(65)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.TimeoutSeconds).To(Equal(int32(34)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.PeriodSeconds).To(Equal(int32(33)))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.SuccessThreshold).To(Equal(int32(4)))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.FailureThreshold).To(Equal(int32(9)))
+		})
+	})
+
+	When("Using custom command for OpenSearch probes", func() {
+		It("should have default command when not set", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+		})
+
+		It("should have custom command when set", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"search"},
+				Probes: &opsterv1.ProbesConfig{
+					Startup: &opsterv1.CommandProbeConfig{
+						Command: []string{"/bin/bash", "-c", "echo 'startup'"},
+					},
+					Readiness: &opsterv1.CommandProbeConfig{
+						Command: []string{"/bin/bash", "-c", "echo 'ready'"},
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
 		})
 	})
 

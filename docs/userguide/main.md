@@ -578,7 +578,7 @@ The default option is persistent storage via PVCs. You can explicity define the 
 nodePools:
   - component: masters
     replicas: 3
-    diskSize: 30
+    diskSize: "30Gi"
     roles:
       - "data"
       - "master"
@@ -597,7 +597,7 @@ If you do not want to use persistent storage you can use the `emptyDir` option. 
 nodePools:
   - component: masters
     replicas: 3
-    diskSize: 30
+    diskSize: "30Gi"
     roles:
       - "data"
       - "master"
@@ -615,7 +615,7 @@ As a last option you can hose a `hostPath`. Please note that hostPath is strongl
 nodePools:
   - component: masters
     replicas: 3
-    diskSize: 30
+    diskSize: "30Gi"
     roles:
       - "data"
       - "master"
@@ -654,6 +654,8 @@ spec:
 The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions and does not use any defined securityContext. If your kubernetes environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches an init container with root.
 
 Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods (with the same limitations for the init containers).
+
+The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod.
 
 ### Labels or Annotations on OpenSearch nodes
 
@@ -969,7 +971,33 @@ spec:
           initialDelaySeconds: 60
           periodSeconds: 30
           timeoutSeconds: 30
+          successThreshold: 1
           failureThreshold: 5
+```
+
+### Customize startup and readiness probe command
+
+While liveness probe is a TCP check the startup and readiness probes use the OpenSearch API with curl.
+
+If you need to customize the startup or readiness probe commands you can override it as shown below:
+
+```yaml
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+...
+spec:
+  nodePools:
+    - component: masters
+      ...
+      probes:
+        startup:
+          command:
+            - echo
+            - "Hello, World!"
+        readiness:
+          command:
+            - echo
+            - "Hello, World!"
 ```
 
 ### Configuring Resource Limits/Requests
