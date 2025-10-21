@@ -148,6 +148,8 @@ type PersistenceSource struct {
 type PVCSource struct {
 	StorageClassName *string                             `json:"storageClass,omitempty"`
 	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+	Annotations      map[string]string                   `json:"annotations,omitempty"`
+	Labels           map[string]string                   `json:"labels,omitempty"`
 }
 
 // ConfMgmt defines which additional services will be deployed
