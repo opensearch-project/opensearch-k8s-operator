@@ -466,13 +466,14 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 		}
 
 		// Implement new mounting logic based on CaSecret.Name configuration
-		if tlsConfig.CaSecret.Name == "" {
+		switch name := tlsConfig.CaSecret.Name; name {
+		case "":
 			// If CaSecret.Name is empty, mount Secret.Name as a directory
 			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
-		} else if tlsConfig.CaSecret.Name == tlsConfig.Secret.Name {
+		case tlsConfig.Secret.Name:
 			// If CaSecret.Name is same as Secret.Name, mount only Secret.Name as a directory
 			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
-		} else {
+		default:
 			// If CaSecret.Name is different from Secret.Name, mount both secrets as directories
 			// Mount Secret.Name as tls-transport/
 			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
@@ -568,13 +569,14 @@ func (r *TLSReconciler) handleHttp() error {
 		}
 
 		// Implement new mounting logic based on CaSecret.Name configuration
-		if tlsConfig.CaSecret.Name == "" {
+		switch name := tlsConfig.CaSecret.Name; name {
+		case "":
 			// If CaSecret.Name is empty, mount Secret.Name as a directory
 			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
-		} else if tlsConfig.CaSecret.Name == tlsConfig.Secret.Name {
+		case tlsConfig.Secret.Name:
 			// If CaSecret.Name is same as Secret.Name, mount only Secret.Name as a directory
 			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
-		} else {
+		default:
 			// If CaSecret.Name is different from Secret.Name, mount both secrets as directories
 			// Mount Secret.Name as tls-http/
 			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
@@ -620,28 +622,6 @@ func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls
 	}
 	ca = r.pki.CAFromSecret(data)
 	return ca, nil
-}
-
-func mountWithHotReload(interfaceName string, name string, filename string, secretName string, reconcilerContext *ReconcilerContext, enableHotReload bool) {
-	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName}}}
-	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
-
-	var mount corev1.VolumeMount
-	if enableHotReload {
-		// Mount the entire secret as a directory to enable hot reloading
-		mount = corev1.VolumeMount{
-			Name:      interfaceName + "-" + name,
-			MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s-%s", interfaceName, name),
-		}
-	} else {
-		// Use subPath for backward compatibility (prevents hot reloading)
-		mount = corev1.VolumeMount{
-			Name:      interfaceName + "-" + name,
-			MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s/%s", interfaceName, filename),
-			SubPath:   filename,
-		}
-	}
-	reconcilerContext.VolumeMounts = append(reconcilerContext.VolumeMounts, mount)
 }
 
 func mountFolder(interfaceName string, name string, secretName string, reconcilerContext *ReconcilerContext) {
