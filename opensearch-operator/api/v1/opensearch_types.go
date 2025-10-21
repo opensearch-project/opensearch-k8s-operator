@@ -126,6 +126,9 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
 }
 
 // PersistencConfig defines options for data persistence
@@ -140,7 +143,7 @@ type PersistenceSource struct {
 }
 
 type PVCSource struct {
-	StorageClassName string                              `json:"storageClass,omitempty"`
+	StorageClassName *string                             `json:"storageClass,omitempty"`
 	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 }
 

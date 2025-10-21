@@ -325,7 +325,21 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
-		It("should use default storageclass if not specified", func() {
+		It("should use default storageclass if no persistence specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				// No persistence specified
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should use default storageClass when persistence is specified without storageClass", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opsterv1.NodePool{
 				Replicas:  3,
@@ -340,6 +354,46 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			var expected *string = nil
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should create empty storageClassName when explicitly set to empty", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			emptyString := ""
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
+					PVC: &opsterv1.PVCSource{
+						StorageClassName: &emptyString,
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					},
+				}},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			expected := &emptyString
+			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
+			Expect(expected).To(Equal(actual))
+		})
+		It("should use specific storageClassName when provided", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			specificClass := "fast-ssd"
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
+					PVC: &opsterv1.PVCSource{
+						StorageClassName: &specificClass,
+						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+					},
+				}},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			expected := &specificClass
 			actual := result.Spec.VolumeClaimTemplates[0].Spec.StorageClassName
 			Expect(expected).To(Equal(actual))
 		})
@@ -424,6 +478,57 @@ var _ = Describe("Builders", func() {
 				Name:  "OPENSEARCH_JAVA_OPTS",
 				Value: "-Xms1024M -Xmx1024M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
+		})
+
+		It("should include sidecar containers when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+				SidecarContainers: []corev1.Container{
+					{
+						Name:  "log-shipper",
+						Image: "fluent/fluent-bit:latest",
+						Resources: corev1.ResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceMemory: resource.MustParse("64Mi"),
+								corev1.ResourceCPU:    resource.MustParse("100m"),
+							},
+						},
+					},
+					{
+						Name:  "metrics-collector",
+						Image: "prom/node-exporter:latest",
+						Ports: []corev1.ContainerPort{
+							{
+								Name:          "metrics",
+								ContainerPort: 9100,
+								Protocol:      "TCP",
+							},
+						},
+					},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+
+			// Should have 3 containers total: 1 main OpenSearch + 2 additional
+			Expect(len(result.Spec.Template.Spec.Containers)).To(Equal(3))
+
+			// First container should be the main OpenSearch container
+			Expect(result.Spec.Template.Spec.Containers[0].Name).To(Equal("opensearch"))
+
+			// Second container should be the first additional container
+			Expect(result.Spec.Template.Spec.Containers[1].Name).To(Equal("log-shipper"))
+			Expect(result.Spec.Template.Spec.Containers[1].Image).To(Equal("fluent/fluent-bit:latest"))
+			Expect(result.Spec.Template.Spec.Containers[1].Resources.Requests[corev1.ResourceMemory]).To(Equal(resource.MustParse("64Mi")))
+			Expect(result.Spec.Template.Spec.Containers[1].Resources.Requests[corev1.ResourceCPU]).To(Equal(resource.MustParse("100m")))
+
+			// Third container should be the second additional container
+			Expect(result.Spec.Template.Spec.Containers[2].Name).To(Equal("metrics-collector"))
+			Expect(result.Spec.Template.Spec.Containers[2].Image).To(Equal("prom/node-exporter:latest"))
+			Expect(len(result.Spec.Template.Spec.Containers[2].Ports)).To(Equal(1))
+			Expect(result.Spec.Template.Spec.Containers[2].Ports[0].Name).To(Equal("metrics"))
+			Expect(result.Spec.Template.Spec.Containers[2].Ports[0].ContainerPort).To(Equal(int32(9100)))
 		})
 	})
 
@@ -527,6 +632,25 @@ var _ = Describe("Builders", func() {
 
 			Expect(expected).To(Equal(actual))
 		})
+
+		It("should use PVC for data volume instead of emptyDir", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			// Find the data volume
+			var dataVolume *corev1.Volume
+			for i, volume := range result.Spec.Volumes {
+				if volume.Name == "data" {
+					dataVolume = &result.Spec.Volumes[i]
+					break
+				}
+			}
+
+			Expect(dataVolume).NotTo(BeNil())
+			Expect(dataVolume.VolumeSource.PersistentVolumeClaim).NotTo(BeNil())
+			Expect(dataVolume.VolumeSource.PersistentVolumeClaim.ClaimName).To(Equal(fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)))
+			Expect(dataVolume.VolumeSource.EmptyDir).To(BeNil())
+		})
 	})
 
 	When("Constructing a bootstrap pod with Keystore Values", func() {
@@ -573,6 +697,38 @@ var _ = Describe("Builders", func() {
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
 			}))
+		})
+	})
+
+	When("Constructing a bootstrap PVC", func() {
+		It("should create a PVC with correct name and storage size", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			expectedName := fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)
+			Expect(result.Name).To(Equal(expectedName))
+			Expect(result.Namespace).To(Equal(clusterObject.Namespace))
+			Expect(result.Spec.AccessModes).To(ContainElement(corev1.ReadWriteOnce))
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("1Gi")))
+		})
+
+		It("should use custom storage size from bootstrap resources", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.Bootstrap.Resources = corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("2Gi"),
+				},
+			}
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("2Gi")))
+		})
+
+		It("should have correct labels for cluster identification", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
 		})
 	})
 
