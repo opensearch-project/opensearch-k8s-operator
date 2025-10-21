@@ -11,7 +11,7 @@ permissions:
   id-token: write
   contents: read
 env:
-  SERVER_IMAGE: us-east4-docker.pkg.dev/datajet-platform/datajet-platform-useast4-docker-gcr/opensearch-k8s-operator
+  SERVER_IMAGE: europe-west1-docker.pkg.dev/datajet-production/datajet-prod-euw1-docker-gcr/opensearch-k8s-operator
 
 jobs:
   docker-build-push:
@@ -38,10 +38,8 @@ jobs:
           version: '>= 363.0.0'
           install_components: 'docker-credential-gcr'
 
-      - name: Verify Authentication
+      - name: Gcloud configure docker for us-east4-docker.pkg.dev
         run: |
-          echo "GOOGLE_APPLICATION_CREDENTIALS: $GOOGLE_APPLICATION_CREDENTIALS"
-          gcloud info
           gcloud auth configure-docker us-east4-docker.pkg.dev
       
       - name: Set up Docker Buildx
@@ -65,6 +63,10 @@ jobs:
             type=semver,pattern={{major}}
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Gcloud configure docker for europe-west1-docker.pkg.dev
+        run: |
+          gcloud auth configure-docker europe-west1-docker.pkg.dev
 
       - name: Build and push
         uses: docker/build-push-action@v5
