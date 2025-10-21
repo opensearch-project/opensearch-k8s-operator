@@ -991,6 +991,8 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  initContainers:
+                    x-kubernetes-preserve-unknown-fields: true
                   jvm:
                     type: string
                   keystore:
@@ -5678,6 +5680,8 @@ spec:
                         - name
                         type: object
                       type: array
+                    initContainers:
+                      x-kubernetes-preserve-unknown-fields: true
                     jvm:
                       type: string
                     labels:
