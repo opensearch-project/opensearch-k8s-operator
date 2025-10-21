@@ -1,0 +1,83 @@
+name: "Docker Build Push"
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - "main"
+  workflow_dispatch:
+permissions:
+  id-token: write
+  contents: read
+env:
+  SERVER_IMAGE: us-east4-docker.pkg.dev/datajet-platform/datajet-platform-useast4-docker-gcr/opensearch-k8s-operator
+
+jobs:
+  docker-build-push:
+    runs-on: dj-arc-runner-set
+    container:
+      image: us-east4-docker.pkg.dev/datajet-platform/datajet-platform-useast4-docker-gcr/go-lang-ci:latest
+      options: --pull=missing
+    name: Docker Build Push
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up GCP auth
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: 'projects/221333776893/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+          service_account: 'github-actions-sa@datajet-platform.iam.gserviceaccount.com'
+          create_credentials_file: true
+          export_environment_variables: true
+
+      - name: Set up Cloud SDK
+        uses: 'google-github-actions/setup-gcloud@v2'
+        with:
+          version: '>= 363.0.0'
+          install_components: 'docker-credential-gcr'
+
+      - name: Verify Authentication
+        run: |
+          echo "GOOGLE_APPLICATION_CREDENTIALS: $GOOGLE_APPLICATION_CREDENTIALS"
+          gcloud info
+          gcloud auth configure-docker us-east4-docker.pkg.dev
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        with:
+          image: us-east4-docker.pkg.dev/datajet-platform/dockerhub-proxy/tonistiigi/binfmt:latest
+      
+      - name: Extract metadata for Server
+        id: meta-server
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.SERVER_IMAGE }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr,prefix=pr-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ./opensearch-operator
+          file: ./opensearch-operator/Dockerfile
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta-server.outputs.tags }}
+          labels: ${{ steps.meta-server.outputs.labels }}
+          cache-from: type=registry,ref=${{ env.SERVER_IMAGE }}:buildcache
+          cache-to: type=registry,ref=${{ env.SERVER_IMAGE }}:buildcache,mode=max
+          platforms: linux/amd64,linux/arm64
+
+      - name: Image digest
+        run: |
+          echo "Server Image Digest: ${{ steps.meta-server.outputs.digest }}"
