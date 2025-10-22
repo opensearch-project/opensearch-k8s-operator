@@ -470,7 +470,7 @@ func NewSTSForNodePool(
 	}
 
 	policyPodManagement := appsv1.OrderedReadyPodManagement
-	if node.Component == "nodes" {
+	if !helpers.ContainsString(selectedRoles, "master") || !helpers.ContainsString(selectedRoles, "cluster_manager") {
 		policyPodManagement = appsv1.ParallelPodManagement
 	}
 
