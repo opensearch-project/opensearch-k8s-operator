@@ -469,11 +469,13 @@ func NewSTSForNodePool(
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
 
-	policyPodManagement := appsv1.OrderedReadyPodManagement
-	if !helpers.ContainsString(selectedRoles, "master") && !helpers.ContainsString(selectedRoles, "cluster_manager") {
-		policyPodManagement = appsv1.ParallelPodManagement
+	policyPodManagement := appsv1.ParallelPodManagement
+	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
+	if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole)
+	{
+		policyPodManagement = appsv1.OrderedReadyPodManagement
 	}
-
+	
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        cr.Name + "-" + node.Component,
