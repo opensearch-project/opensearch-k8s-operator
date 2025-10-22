@@ -234,13 +234,19 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 					return &ctrl.Result{Requeue: true}, err
 				}
 			} else if existing.Spec.PodManagementPolicy == appsv1.ParallelPodManagement {
-				// We are in Parallel mode but appear to not have a failure situation any longer. Switch back to normal mode
-				r.logger.Info(fmt.Sprintf("Ending recovery mode for nodepool %s", nodePool.Component))
-				if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
-					r.logger.Error(err, "Failed to delete STS")
-					return result, err
+				// Only exit recovery mode if the cluster is actually healthy
+				if existing.Status.ReadyReplicas >= nodePool.Replicas-1 && 
+					existing.Status.ReadyReplicas > 0 {
+					r.logger.Info(fmt.Sprintf("Ending recovery mode for nodepool %s", nodePool.Component))
+					if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+						r.logger.Error(err, "Failed to delete STS")
+						return result, err
+					}
+					// STS will be recreated by the normal code below
+				} else {
+					// Still in recovery, just requeue
+					return &ctrl.Result{Requeue: true}, err
 				}
-				// STS will be recreated by the normal code below
 			}
 		}
 	}
