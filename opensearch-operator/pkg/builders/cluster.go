@@ -471,7 +471,7 @@ func NewSTSForNodePool(
 
 	policyPodManagement := appsv1.ParallelPodManagement
 	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
-	if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
+	if helpers.ContainsString(helpers.MapClusterRoles(node.Roles, cr.Spec.General.Version), masterRole) {
 		policyPodManagement = appsv1.OrderedReadyPodManagement
 	}
 	
