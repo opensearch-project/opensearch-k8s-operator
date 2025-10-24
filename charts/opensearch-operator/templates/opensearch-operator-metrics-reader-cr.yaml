@@ -1,4 +1,14 @@
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.useRoleBindings }}
+kind: Role
+metadata:
+  name: {{ include "opensearch-operator.fullname" . }}-{{ .Release.Namespace }}-metrics-reader
+rules:
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+{{- else }}
 kind: ClusterRole
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-{{ .Release.Namespace }}-metrics-reader
@@ -7,3 +17,4 @@ rules:
   - /metrics
   verbs:
   - get
+{{- end }}
