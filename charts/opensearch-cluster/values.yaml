@@ -68,6 +68,9 @@ cluster:
       # -- Enable cluster monitoring
       enable: false
 
+      # -- Additional labels to apply to the generated ServiceMonitor
+      labels: {}
+
       # -- Secret with 'username' and 'password' keys for monitoring user. You could also use OpenSearchUser CRD instead of setting it.
       monitoringUserSecret: ""
 
