@@ -267,6 +267,8 @@ type TlsCertificateConfig struct {
 	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
 	// Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
 	CaSecret corev1.LocalObjectReference `json:"caSecret,omitempty"`
+	// Enable hot reloading of TLS certificates. When enabled, certificates are mounted as directories instead of using subPath, allowing Kubernetes to update certificate files when secrets are updated.
+	EnableHotReload bool `json:"enableHotReload,omitempty"`
 }
 
 // Reference to a secret
