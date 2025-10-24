@@ -839,12 +839,52 @@ spec:
         path: /path/to/mount/volume
         persistentVolumeClaim:
           claimName: claim-name
+      - name: nfs-volume
+        path: /mnt/backups/opensearch
+        nfs:
+          server: 192.168.1.233
+          path: /export/backups/opensearch
+          readOnly: false # Optional, defaults to false
   dashboards:
     additionalVolumes:
       - name: example-secret
         path: /path/to/mount/volume
         secret:
           secretName: secret-name
+```
+
+#### NFS Volume Support
+
+NFS volumes can be mounted directly into OpenSearch pods without requiring external provisioners or CSI drivers. This is particularly useful for snapshot repositories stored on NFS shares. To configure an NFS volume, specify the `nfs` field with the required `server` and `path` parameters:
+
+```yaml
+spec:
+  general:
+    additionalVolumes:
+      - name: nfs-backups
+        path: /mnt/backups/opensearch
+        nfs:
+          server: 192.168.1.233
+          path: /export/backups/opensearch
+          readOnly: false # Optional, defaults to false
+```
+
+This can be combined with snapshot repository configuration:
+
+```yaml
+spec:
+  general:
+    additionalVolumes:
+      - name: nfs-backups
+        path: /mnt/backups/opensearch
+        nfs:
+          server: 192.168.1.233
+          path: /export/backups/opensearch
+    snapshotRepositories:
+      - name: nfs-repository
+        type: fs
+        settings:
+          location: /mnt/backups/opensearch
 ```
 
 The defined volumes are added to all pods of the opensearch cluster. It is currently not possible to define them per nodepool.
