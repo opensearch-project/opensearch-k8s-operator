@@ -95,21 +95,24 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
 
-	// Create bootstrap PVC for persistent storage
-	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
-	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPVC, r.client.Scheme()))
-	if r.instance.Status.Initialized {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
-	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
-	}
+	// Single node clusters do not use bootstrap pod, which acts as a temporary master
+	if !helpers.IsSingleNodeCluster(r.instance) {
+		// Create bootstrap PVC for persistent storage
+		bootstrapPVC := builders.NewBootstrapPVC(r.instance)
+		result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPVC, r.client.Scheme()))
+		if r.instance.Status.Initialized {
+			result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
+		} else {
+			result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
+		}
 
-	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
-	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
-	if r.instance.Status.Initialized {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
-	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StatePresent))
+		bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
+		result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
+		if r.instance.Status.Initialized {
+			result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
+		} else {
+			result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StatePresent))
+		}
 	}
 
 	for _, nodePool := range r.instance.Spec.NodePools {
