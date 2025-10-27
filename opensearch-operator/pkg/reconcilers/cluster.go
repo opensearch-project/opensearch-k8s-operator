@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	policyv1 "k8s.io/api/policy/v1"
@@ -12,8 +13,7 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/cisco-open/k8s-objectmatcher/patch"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"

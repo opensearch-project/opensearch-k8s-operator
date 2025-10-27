@@ -728,6 +728,48 @@ spec:
         - "master"
 ```
 
+### Sidecar Containers
+
+You can deploy additional sidecar containers alongside OpenSearch in the same pod. This is useful for log shipping, monitoring agents, or other auxiliary services that need to run alongside OpenSearch nodes.
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
+      roles:
+        - "master"
+        - "data"
+      sidecarContainers:
+        - name: log-shipper
+          image: fluent/fluent-bit:latest
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+          volumeMounts:
+            - name: varlog
+              mountPath: /var/log
+        - name: monitoring-agent
+          image: prometheus/node-exporter:latest
+          ports:
+            - containerPort: 9100
+              name: metrics
+```
+
+Sidecar containers share the same network namespace and storage volumes as the OpenSearch container as they are on the same pod.
+
 ### Additional Volumes
 
 Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, or CSI volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
@@ -1551,3 +1593,82 @@ Note:
 - `policyName` is an optional field, and if not provided `metadata.name` is used as the default.
 
 - The repository field must reference an existing snapshot repository in the OpenSearch cluster. For creating a snapshot repository, you can use [this](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#configuring-snapshot-repositories) guide.
+### ReadOnlyRootFilesystem: Enhancing Container Security
+
+The `readOnlyRootFilesystem` security context setting prevents runtime modifications to the container's filesystem, significantly improving security by reducing the attack surface. This section explains how to configure OpenSearch clusters with this security feature.
+
+#### Configuration Overview
+
+An example configuration is available in [readonlyrootfs-example.yaml](../../opensearch-operator/examples/2.x/readonlyrootfs-example.yaml).
+
+To enable `readOnlyRootFilesystem`, you need to:
+
+1. Configure writable volumes using `emptyDir` in the `general` section
+2. Add initialization containers to copy necessary files before the main container starts
+
+#### Step 1: Configure Writable Volumes
+
+Add the following `emptyDir` volumes to provide writable paths for OpenSearch:
+
+```yaml
+general:
+  additionalVolumes:
+  - emptyDir: {}
+    name: rw-tmp
+    path: /tmp
+  - emptyDir: {}
+    name: rw-config
+    path: /usr/share/opensearch/config
+  - emptyDir: {}
+    name: rw-plugins
+    path: /usr/share/opensearch/plugins
+  - emptyDir: {}
+    name: rw-logs
+    path: /usr/share/opensearch/logs
+```
+
+#### Step 2: Add Initialization Containers
+
+The operator mounts the volumes specified in `additionalVolumes` before any other volumes. To prevent issues with empty directories in `config` and `plugins`, add initialization containers to copy the necessary files. 
+
+
+> **Note:** The operator ensures these initialization containers run first in the initialization sequence, before any other init containers you may have defined.
+
+
+##### For the bootstrap section:
+```yaml
+bootstrap:
+  initContainers:
+    - name: init-copier
+      image: opensearchproject/opensearch:2.17.1
+      volumeMounts:
+        - name: rw-config
+          mountPath: /config-tmp
+        - name: rw-plugins
+          mountPath: /plugins-tmp
+      command: [
+        "bash", 
+        "-c", 
+        "cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
+      ]
+```
+
+##### For the nodePool section:
+
+When using `readOnlyRootFilesystem`, it's recommended to install plugins in the nodePool's initialization container:
+```yaml
+nodePools:
+  initContainers:
+    - name: init-copier
+      image: opensearchproject/opensearch:2.17.1
+      volumeMounts:
+        - name: rw-config
+          mountPath: /config-tmp
+        - name: rw-plugins
+          mountPath: /plugins-tmp
+      command: [
+        "bash", 
+        "-c", 
+        "bin/opensearch-plugin -v install --batch repository-s3 && cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
+      ]
+```

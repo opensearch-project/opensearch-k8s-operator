@@ -68,6 +68,9 @@ cluster:
       # -- Enable cluster monitoring
       enable: false
 
+      # -- Additional labels to apply to the generated ServiceMonitor
+      labels: {}
+
       # -- Secret with 'username' and 'password' keys for monitoring user. You could also use OpenSearchUser CRD instead of setting it.
       monitoringUserSecret: ""
 
@@ -260,6 +263,34 @@ cluster:
         limits:
           memory: "2Gi"
           cpu: "500m"
+        # -- These containers will be deployed as sidecars in the same pod as the OpenSearch container
+        sidecarContainers: [ ]
+        # Example configurations:
+        # - name: log-shipper
+        #   image: fluent/fluent-bit:latest
+        #   resources:
+        #     requests:
+        #       memory: "64Mi"
+        #       cpu: "100m"
+        #     limits:
+        #       memory: "128Mi"
+        #       cpu: "200m"
+        #   volumeMounts:
+        #     - name: varlog
+        #       mountPath: /var/log
+        #       readOnly: true
+        # - name: metrics-collector
+        #   image: prom/node-exporter:latest
+        #   ports:
+        #     - containerPort: 9100
+        #       name: metrics
+        #   resources:
+        #     requests:
+        #       memory: "32Mi"
+        #       cpu: "50m"
+        #     limits:
+        #       memory: "64Mi"
+        #       cpu: "100m"
 
   # Opensearch security configuration
   security:

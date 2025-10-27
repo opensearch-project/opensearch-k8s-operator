@@ -354,6 +354,11 @@ func NewSTSForNodePool(
 	securityContext := cr.Spec.General.SecurityContext
 
 	var initContainers []corev1.Container
+
+	if len(node.InitContainers) > 0 {
+		initContainers = append(initContainers, node.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		uid, gid := helpers.ResolveUidGid(cr)
 		initContainers = append(initContainers, corev1.Container{
@@ -487,7 +492,7 @@ func NewSTSForNodePool(
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
+					Containers: append([]corev1.Container{
 						{
 							Env: []corev1.EnvVar{
 								{
@@ -545,7 +550,7 @@ func NewSTSForNodePool(
 							VolumeMounts:    volumeMounts,
 							SecurityContext: securityContext,
 						},
-					},
+					}, node.SidecarContainers...),
 					InitContainers:            initContainers,
 					Volumes:                   volumes,
 					ServiceAccountName:        cr.Spec.General.ServiceAccount,
@@ -876,6 +881,10 @@ func NewBootstrapPod(
 	}
 
 	var initContainers []corev1.Container
+	if len(cr.Spec.Bootstrap.InitContainers) > 0 {
+		initContainers = append(initContainers, cr.Spec.Bootstrap.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
 		uid, gid := helpers.ResolveUidGid(cr)
 		initContainers = append(initContainers, corev1.Container{
