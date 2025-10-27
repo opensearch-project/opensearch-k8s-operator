@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
@@ -1277,8 +1278,8 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 	var tlsconfig *monitoring.TLSConfig
 	if cr.Spec.General.Monitoring.TLSConfig != nil {
 		safetlsconfig := monitoring.SafeTLSConfig{
-			ServerName:         cr.Spec.General.Monitoring.TLSConfig.ServerName,
-			InsecureSkipVerify: cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify,
+			ServerName:         ptr.To(cr.Spec.General.Monitoring.TLSConfig.ServerName),
+			InsecureSkipVerify: ptr.To(cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify),
 		}
 
 		tlsconfig = &monitoring.TLSConfig{
