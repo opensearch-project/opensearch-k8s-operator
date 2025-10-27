@@ -219,7 +219,7 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
-	// foobar
+	// TLS certificate configuration
 	TlsCertificateConfig `json:",omitempty"`
 }
 
