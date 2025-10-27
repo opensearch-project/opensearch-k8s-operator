@@ -247,7 +247,8 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.General.OperatorClusterURL = &customHost
 
 			actualUrl := URLForCluster(&clusterObject)
-			expectedUrl := fmt.Sprintf("https://%s:%d", customHost, clusterObject.Spec.General.HttpPort)
+			// When HttpPort is 0 (default), ClusterURL should default to 9200
+			expectedUrl := fmt.Sprintf("https://%s:9200", customHost)
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 
