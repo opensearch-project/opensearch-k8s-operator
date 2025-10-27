@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"os"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -566,6 +567,39 @@ var _ = Describe("Builders", func() {
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(3))
 			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("custom-init1"))
 			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init2"))
+		})
+	})
+
+	When("Constructing a STS for a NodePool for a single-node cluster", func() {
+		It("should have single-node discovery type and no initial manager nodes", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Replicas:  1,
+				Roles:     []string{"search"},
+			}
+			clusterObject.Spec.NodePools = []opsterv1.NodePool{nodePool}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{Name: "discovery.type", Value: "single-node"}))
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(Or(
+				ContainElement(corev1.EnvVar{Name: "cluster.initial_master_nodes", Value: ""}),
+				Not(ContainElement(HaveField("Name", "cluster.initial_master_nodes"))),
+			))
+		})
+
+		It("should have default probe command without --fail", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Replicas:  1,
+				Roles:     []string{"search"},
+			}
+			clusterObject.Spec.NodePools = []opsterv1.NodePool{nodePool}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent 'https://localhost:9200'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent 'https://localhost:9200'"}))
 		})
 	})
 

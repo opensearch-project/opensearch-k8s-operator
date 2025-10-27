@@ -2,8 +2,9 @@ package controllers
 
 import (
 	"context"
-	"k8s.io/utils/ptr"
 	"time"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
@@ -29,7 +30,7 @@ var _ = Describe("Scaler Reconciler", func() {
 		interval    = time.Second * 1
 	)
 	var (
-		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace)
+		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace, false)
 		nodePool          = appsv1.StatefulSet{}
 		cluster2          = opsterv1.OpenSearchCluster{}
 	)
