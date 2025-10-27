@@ -126,6 +126,12 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 }
 
 // PersistenceConfig defines options for data persistence
@@ -140,7 +146,7 @@ type PersistenceSource struct {
 }
 
 type PVCSource struct {
-	StorageClassName string                              `json:"storageClass,omitempty"`
+	StorageClassName *string                             `json:"storageClass,omitempty"`
 	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
 }
 
@@ -173,8 +179,12 @@ type BootstrapConfig struct {
 	Jvm          string                      `json:"jvm,omitempty"`
 	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	Annotations      map[string]string `json:"annotations,omitempty"`
 	PluginsList      []string          `json:"pluginsList,omitempty"`
 	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 }
 
 type DashboardsServiceSpec struct {

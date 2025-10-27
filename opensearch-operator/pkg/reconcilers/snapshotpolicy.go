@@ -10,9 +10,9 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -306,13 +306,16 @@ func (r *SnapshotPolicyReconciler) CreateSnapshotPolicy() (*requests.SnapshotPol
 
 	if r.instance.Spec.Deletion != nil {
 		del := &requests.SnapshotDeletion{
-			Schedule: &requests.CronSchedule{
-				Cron: requests.CronExpression{
-					Expression: r.instance.Spec.Creation.Schedule.Cron.Expression,
-					Timezone:   r.instance.Spec.Creation.Schedule.Cron.Timezone,
-				},
-			},
 			TimeLimit: r.instance.Spec.Deletion.TimeLimit,
+		}
+
+		if r.instance.Spec.Deletion.Schedule != nil {
+			del.Schedule = &requests.CronSchedule{
+				Cron: requests.CronExpression{
+					Expression: r.instance.Spec.Deletion.Schedule.Cron.Expression,
+					Timezone:   r.instance.Spec.Deletion.Schedule.Cron.Timezone,
+				},
+			}
 		}
 
 		if r.instance.Spec.Deletion.DeleteCondition != nil {

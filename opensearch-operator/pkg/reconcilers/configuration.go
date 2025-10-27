@@ -13,9 +13,9 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -124,8 +124,8 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		return result.Result, result.Err
 	}
 
-	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, addVolumes...)
-	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, addVolumeMounts...)
+	r.reconcilerContext.Volumes = append(addVolumes, r.reconcilerContext.Volumes...)
+	r.reconcilerContext.VolumeMounts = append(addVolumeMounts, r.reconcilerContext.VolumeMounts...)
 
 	for _, nodePool := range r.instance.Spec.NodePools {
 		result.Combine(r.createHashForNodePool(nodePool, data, addVolumeData))

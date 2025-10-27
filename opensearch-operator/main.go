@@ -74,18 +74,27 @@ func main() {
 		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
 
+	opts := zap.Options{
+		Development: false,
+		TimeEncoder: zapcore.ISO8601TimeEncoder,
+	}
+
+	messageKey := os.Getenv("OPERATOR_LOGGING_MESSAGE_KEY")
+	if messageKey != "" {
+		opts.EncoderConfigOptions = append(opts.EncoderConfigOptions, func(ec *zapcore.EncoderConfig) {
+			ec.MessageKey = messageKey
+		})
+	}
+
+	opts.BindFlags(flag.CommandLine)
+	flag.Parse()
+
 	var cacheOpts cache.Options
 	if watchNamespace != "" {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{
 			watchNamespace: {},
 		}
 	}
-	opts := zap.Options{
-		Development: false,
-		TimeEncoder: zapcore.ISO8601TimeEncoder,
-	}
-	opts.BindFlags(flag.CommandLine)
-	flag.Parse()
 
 	level, err := zapcore.ParseLevel(logLevel)
 	if err != nil {

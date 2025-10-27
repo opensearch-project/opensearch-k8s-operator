@@ -987,6 +987,12 @@ spec:
                             x-kubernetes-list-type: atomic
                         type: object
                     type: object
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  initContainers:
+                    x-kubernetes-preserve-unknown-fields: true
                   jvm:
                     type: string
                   keystore:
@@ -5674,6 +5680,8 @@ spec:
                         - name
                         type: object
                       type: array
+                    initContainers:
+                      x-kubernetes-preserve-unknown-fields: true
                     jvm:
                       type: string
                     labels:
@@ -5892,6 +5900,8 @@ spec:
                       items:
                         type: string
                       type: array
+                    sidecarContainers:
+                      x-kubernetes-preserve-unknown-fields: true
                     tolerations:
                       items:
                         description: |-
