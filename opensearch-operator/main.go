@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
@@ -134,6 +135,8 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	helpers.RegisterMetrics()
 
 	if err = (&controllers.OpenSearchClusterReconciler{
 		Client:   mgr.GetClient(),
