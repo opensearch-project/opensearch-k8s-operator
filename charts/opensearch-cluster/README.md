@@ -50,6 +50,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.general.imagePullPolicy | string | `"IfNotPresent"` | Default image pull policy |
 | cluster.general.keystore | list | `[]` | Populate opensearch keystore before startup |
 | cluster.general.monitoring.enable | bool | `false` | Enable cluster monitoring |
+| cluster.general.monitoring.labels | object | `{}` | Additional labels to apply to the generated ServiceMonitor |
 | cluster.general.monitoring.monitoringUserSecret | string | `""` | Secret with 'username' and 'password' keys for monitoring user. You could also use OpenSearchUser CRD instead of setting it. |
 | cluster.general.monitoring.pluginUrl | string | `""` | Custom URL for the monitoring plugin |
 | cluster.general.monitoring.scrapeInterval | string | `"30s"` | How often to scrape metrics |
@@ -73,6 +74,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.ingress.opensearch.enabled | bool | `false` | Enable ingress for Opensearch service |
 | cluster.ingress.opensearch.hosts | list | `[]` | Opensearch Ingress hostnames |
 | cluster.ingress.opensearch.tls | list | `[]` | Opensearch tls configuration |
+| cluster.initHelper.image | string | `"docker.io/busybox"` | initHelper image |
 | cluster.initHelper.imagePullPolicy | string | `"IfNotPresent"` | initHelper image pull policy |
 | cluster.initHelper.imagePullSecrets | list | `[]` | initHelper image pull secret |
 | cluster.initHelper.resources | object | `{}` | initHelper pod cpu and memory resources |
@@ -80,6 +82,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.labels | object | `{}` | OpenSearchCluster labels |
 | cluster.name | string | `""` | OpenSearchCluster name, by default release name is used |
 | cluster.nodePools | list | `[{"component":"masters","diskSize":"30Gi","replicas":3,"resources":{"limits":{"cpu":"500m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"2Gi"}},"roles":["master","data"]}]` | Opensearch nodes configuration |
+| cluster.nodePools.sidecarContainers | list | `[]` | Additional sidecar containers to deploy alongside OpenSearch in the same pod. |
 | cluster.security.config.adminCredentialsSecret | object | `{}` | Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided. |
 | cluster.security.config.adminSecret | object | `{}` | TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated |
 | cluster.security.config.securityConfigSecret | object | `{}` | Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, etc) |

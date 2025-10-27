@@ -75,6 +75,9 @@ cluster:
       # -- Enable cluster monitoring
       enable: false
 
+      # -- Additional labels to apply to the generated ServiceMonitor
+      labels: {}
+
       # -- Secret with 'username' and 'password' keys for monitoring user. You could also use OpenSearchUser CRD instead of setting it.
       monitoringUserSecret: ""
 
@@ -127,6 +130,9 @@ cluster:
 
     # -- bootstrap pod affinity rules
     affinity: {}
+
+    # -- bootstrap pod annotations
+    annotations: {}
 
     # -- bootstrap pod jvm options. If jvm is not provided then the java heap size will be set to half of resources.requests.memory which is the recommend value for data nodes.
     # If jvm is not provided and resources.requests.memory does not exist then value will be -Xmx512M -Xms512M
@@ -232,6 +238,9 @@ cluster:
 
   # initHelper configuration
   initHelper:
+    # -- initHelper image
+    image: docker.io/busybox
+    
     # -- initHelper image pull policy
     imagePullPolicy: "IfNotPresent"
 
@@ -247,6 +256,8 @@ cluster:
   # -- Opensearch nodes configuration
   nodePools:
     - component: masters
+      # -- node pool pod annotations
+      annotations: {}
       diskSize: "30Gi"
       replicas: 3
       roles:
@@ -259,6 +270,34 @@ cluster:
         limits:
           memory: "2Gi"
           cpu: "500m"
+        # -- These containers will be deployed as sidecars in the same pod as the OpenSearch container
+        sidecarContainers: [ ]
+        # Example configurations:
+        # - name: log-shipper
+        #   image: fluent/fluent-bit:latest
+        #   resources:
+        #     requests:
+        #       memory: "64Mi"
+        #       cpu: "100m"
+        #     limits:
+        #       memory: "128Mi"
+        #       cpu: "200m"
+        #   volumeMounts:
+        #     - name: varlog
+        #       mountPath: /var/log
+        #       readOnly: true
+        # - name: metrics-collector
+        #   image: prom/node-exporter:latest
+        #   ports:
+        #     - containerPort: 9100
+        #       name: metrics
+        #   resources:
+        #     requests:
+        #       memory: "32Mi"
+        #       cpu: "50m"
+        #     limits:
+        #       memory: "64Mi"
+        #       cpu: "100m"
 
   # Opensearch security configuration
   security:

@@ -16,7 +16,7 @@ import (
 
 	reconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	reconciler "github.com/cisco-open/operator-tools/pkg/reconciler"
+	reconciler "github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 
 	runtime "k8s.io/apimachinery/pkg/runtime"
 

@@ -32,6 +32,10 @@ const (
 	updateStepTime    = 3
 
 	stsRevisionLabel = "controller-revision-hash"
+
+	// Default UID and GID for OpenSearch containers
+	DefaultUID = int64(1000)
+	DefaultGID = int64(1000)
 )
 
 func ContainsString(slice []string, s string) bool {
@@ -172,13 +176,14 @@ func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatu
 }
 
 func MergeConfigs(left map[string]string, right map[string]string) map[string]string {
-	if left == nil {
-		return right
+	result := make(map[string]string)
+	for k, v := range left {
+		result[k] = v
 	}
 	for k, v := range right {
-		left[k] = v
+		result[k] = v
 	}
-	return left
+	return result
 }
 
 // Return the keys of the input map in sorted order
@@ -592,4 +597,30 @@ func SafeClose(c io.Closer) {
 	if err := c.Close(); err != nil {
 		log.Println("SafeClose error:", err)
 	}
+}
+
+// ResolveUidGid resolves the UID and GID using security context hierarchy
+// Priority: securityContext.runAsUser/Group > podSecurityContext.runAsUser/Group > defaults (1000:1000)
+func ResolveUidGid(cr *opsterv1.OpenSearchCluster) (uid, gid int64) {
+	uid = DefaultUID
+	gid = DefaultGID
+
+	if cr.Spec.General.SecurityContext != nil && cr.Spec.General.SecurityContext.RunAsUser != nil {
+		uid = *cr.Spec.General.SecurityContext.RunAsUser
+	} else if cr.Spec.General.PodSecurityContext != nil && cr.Spec.General.PodSecurityContext.RunAsUser != nil {
+		uid = *cr.Spec.General.PodSecurityContext.RunAsUser
+	}
+
+	if cr.Spec.General.SecurityContext != nil && cr.Spec.General.SecurityContext.RunAsGroup != nil {
+		gid = *cr.Spec.General.SecurityContext.RunAsGroup
+	} else if cr.Spec.General.PodSecurityContext != nil && cr.Spec.General.PodSecurityContext.RunAsGroup != nil {
+		gid = *cr.Spec.General.PodSecurityContext.RunAsGroup
+	}
+
+	return uid, gid
+}
+
+// GetChownCommand creates a chown command with the given UID, GID, and path
+func GetChownCommand(uid, gid int64, path string) string {
+	return fmt.Sprintf("chown -R %d:%d %s", uid, gid, path)
 }
