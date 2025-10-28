@@ -2,6 +2,7 @@ package operatortests
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -14,8 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-var _ = Describe("DeployAndUpgrade", Ordered, func() {
-	name := "deploy-and-upgrade"
+var _ = DescribeTableSubtree("DeployAndUpgrade", Ordered, func(name string, masterNodes int32) {
 	namespace := "default"
 
 	BeforeAll(func() {
@@ -23,7 +23,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 	})
 
 	When("creating a cluster", Ordered, func() {
-		It("should have 3 ready master pods", func() {
+		It(fmt.Sprintf("should have %d ready master pods", masterNodes), func() {
 			sts := appsv1.StatefulSet{}
 			Eventually(func() int32 {
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-masters", Namespace: namespace}, &sts)
@@ -31,7 +31,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return sts.Status.ReadyReplicas
 				}
 				return 0
-			}, time.Minute*15, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*15, time.Second*5).Should(Equal(masterNodes))
 		})
 
 		It("should have a ready dashboards pod", func() {
@@ -94,7 +94,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 				}
 				GinkgoWriter.Println(err)
 				return 0
-			}, time.Minute*15, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*15, time.Second*5).Should(Equal(masterNodes))
 		})
 
 		It("should upgrade the dashboard pod", func() {
@@ -120,4 +120,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 	AfterAll(func() {
 		Cleanup(name)
 	})
-})
+},
+	Entry("Multi-node cluster", "deploy-and-upgrade", int32(3)),
+	Entry("Single-node cluster", "deploy-and-upgrade-single-node", int32(1)),
+)
