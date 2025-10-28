@@ -1,51 +1,35 @@
-# Rolling Restart Improvements for Multi-AZ Master Nodes
+# Rolling Restart Design for Multi-AZ OpenSearch Clusters
 
-## Problem Statement
+## Overview
 
-The OpenSearch Kubernetes operator had a critical issue where it would restart all node pools simultaneously during configuration changes. This violates OpenSearch cluster quorum requirements and causes cluster outages.
+This document describes the design for rolling restart functionality in the OpenSearch Kubernetes operator. The design ensures cluster stability and availability during configuration updates by implementing a role-aware, quorum-preserving restart strategy that works across multiple availability zones and node types.
 
-### Issue Details
+## Design Principles
 
-- **Issue #650**: [#650](https://github.com/opensearch-project/opensearch-k8s-operator/issues/650) - Master nodes restart simultaneously across availability zones
-- **Issue #738**: [#738](https://github.com/opensearch-project/opensearch-k8s-operator/issues/738) - All data node pools restart at the same time
-- **Root Cause**: The operator treated each node pool independently during rolling restarts without considering cluster-wide role distribution, quorum requirements, or proper sequencing
-- **Impact**: Production cluster outages when nodes are configured across availability zones, causing cluster status to turn red during updates
+The rolling restart implementation follows these core principles:
 
-### Example Problematic Configuration
+1. **Cluster Stability First** - Maintain OpenSearch cluster quorum and health during restarts
+2. **Role-Aware Sequencing** - Restart nodes in an order that minimizes cluster impact
+3. **Multi-AZ Support** - Handle node pools distributed across multiple availability zones
+4. **One-at-a-Time Control** - Restart only one pod per reconciliation loop for precise control
+5. **Backward Compatibility** - Work with existing cluster configurations without changes
 
-```yaml
-nodePools:
-  - component: master-a
-    replicas: 1
-    roles: ["cluster_manager"]
-  - component: master-b  
-    replicas: 1
-    roles: ["cluster_manager"]
-  - component: master-c
-    replicas: 1
-    roles: ["cluster_manager"]
-  - component: data-b
-    replicas: 2
-    roles: ["data"]
-  - component: data-c
-    replicas: 2
-    roles: ["data"]
-```
+## Architecture
 
-## Solution Overview
+### Global Candidate Rolling Restart Strategy
 
-Implemented a **comprehensive global candidate rolling restart strategy** that:
+The operator implements a **comprehensive global candidate rolling restart strategy** that:
 
 1. **Collects candidates across all StatefulSets** - Builds a global list of pods needing updates across all node types
 2. **Applies intelligent candidate selection** - Prioritizes data nodes over master nodes, then sorts by StatefulSet name and highest ordinal
 3. **Enforces master quorum preservation** - Ensures at least 2/3 masters are ready before restarting any master
 4. **Restarts one pod at a time** - Only deletes one pod per reconciliation loop to maintain precise control
 
-## Implementation Details
+## Implementation Design
 
 ### Global Candidate Collection
 
-The new `globalCandidateRollingRestart()` function:
+The `globalCandidateRollingRestart()` function:
 
 1. **Iterates through all node pools** to find StatefulSets with pending updates
 2. **Identifies pods needing updates** by comparing `UpdateRevision` with pod labels
@@ -53,7 +37,7 @@ The new `globalCandidateRollingRestart()` function:
 
 ### Intelligent Candidate Selection
 
-Candidates are sorted using a proven algorithm that ensures optimal restart order:
+Candidates are sorted using an algorithm that ensures optimal restart order:
 
 ```go
 // 1. Prioritize data nodes over master nodes for cluster stability
@@ -90,7 +74,7 @@ if readyMasters <= requiredMasters {
 
 ### One-Pod-at-a-Time Restart
 
-The operator now deletes only one pod per reconciliation loop:
+The operator deletes only one pod per reconciliation loop:
 
 ```go
 // Find the best candidate
@@ -122,23 +106,17 @@ Calculates cluster-wide master node quorum:
 - Counts ready master nodes across all master-eligible node pools
 - Used for quorum preservation decisions
 
-#### `groupNodePoolsByRole()`
-Groups node pools by role for analysis and logging:
-- `dataOnly`: Node pools with only data role
-- `dataAndMaster`: Node pools with both data and master roles  
-- `masterOnly`: Node pools with only master role
-- `other`: Node pools with other roles (ingest, etc.)
 
-## Benefits
+## Design Benefits
 
 ### 1. **Comprehensive Cluster Stability**
 - Prevents simultaneous restart of all master nodes
 - Ensures data nodes restart before master nodes for optimal cluster health
 - Maintains OpenSearch cluster quorum requirements
-- Eliminates production outages during configuration changes
+- Preserves cluster availability during configuration changes
 
 ### 2. **Multi-AZ and Multi-Node-Type Support**
-- Properly handles all node types (master, data, coordinating, ingest) across multiple AZs
+- Handles all node types (master, data, coordinating, ingest) across multiple AZs
 - Works with node provisioners like Karpenter that create separate node pools per AZ
 - Ensures consistent restart behavior regardless of node distribution
 
@@ -152,13 +130,7 @@ Groups node pools by role for analysis and logging:
 - Works with existing cluster configurations
 
 ## Testing
-
-### Unit Tests
-- `TestGroupNodePoolsByRole()` - Validates role-based grouping logic used for analysis and logging
-- `TestHasManagerRole()` / `TestHasDataRole()` - Validates role detection helper functions used throughout the implementation
-
-### Integration Testing
-The implementation includes comprehensive test scenarios in `test-scenario-rolling-restart.md`:
+The design includes comprehensive test scenarios:
 
 1. **Intelligent Candidate Selection** - Verifies data nodes restart before masters
 2. **Master Quorum Protection** - Ensures restart is blocked when < 2/3 masters ready
@@ -167,19 +139,19 @@ The implementation includes comprehensive test scenarios in `test-scenario-rolli
 5. **All Node Types** - Validates proper restart order for data, coordinating, and master nodes
 
 ### Test Cluster Configuration
-A multi-AZ test cluster is provided in `test-multi-az-cluster.yaml` with:
+A multi-AZ test cluster configuration includes:
 - 3 master node pools across different AZs
 - 3 data node pools across different AZs  
 - 1 coordinating node pool
 - Proper node selectors and tolerations for AZ distribution
 
-## Migration Guide
+## Usage
 
 ### For Existing Clusters
-No changes required. The new logic is automatically applied to existing clusters.
+No changes required. The rolling restart logic is automatically applied to existing clusters.
 
 ### For New Clusters
-Continue using the same configuration format. The operator will automatically apply role-aware rolling restarts.
+Use the standard configuration format. The operator will automatically apply role-aware rolling restarts.
 
 ### Configuration Best Practices
 
@@ -213,7 +185,7 @@ Continue using the same configuration format. The operator will automatically ap
 ## Monitoring and Observability
 
 ### Events
-The operator now emits more detailed events during rolling restarts:
+The operator emits detailed events during rolling restarts:
 - `"Starting rolling restart"` - When restart begins
 - `"Starting rolling restart of master node pool X"` - Master-specific restarts
 - `"Skipping restart of master node pool X: insufficient quorum"` - Quorum preservation
@@ -243,6 +215,6 @@ spec:
     maxConcurrentRestarts: 1    # Limit concurrent restarts
 ```
 
-## Conclusion
+## Summary
 
-This implementation resolves the critical issue of simultaneous master node restarts while maintaining backward compatibility and improving overall cluster stability. The role-aware approach ensures that OpenSearch clusters remain available during configuration changes, especially in multi-availability zone deployments.
+This design provides a comprehensive rolling restart strategy that ensures cluster stability and availability during configuration updates. The role-aware approach maintains OpenSearch cluster quorum requirements and works effectively across multiple availability zones and node types, providing predictable and controlled restart behavior.

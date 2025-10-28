@@ -361,34 +361,6 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 	return ctrl.Result{}, nil
 }
 
-// groupNodePoolsByRole groups node pools by their role configuration
-func (r *RollingRestartReconciler) groupNodePoolsByRole() map[string][]opsterv1.NodePool {
-	groups := map[string][]opsterv1.NodePool{
-		"dataOnly":      {},
-		"dataAndMaster": {},
-		"masterOnly":    {},
-		"other":         {},
-	}
-
-	for _, nodePool := range r.instance.Spec.NodePools {
-		hasData := helpers.HasDataRole(&nodePool)
-		hasMaster := helpers.HasManagerRole(&nodePool)
-
-		switch {
-		case hasData && hasMaster:
-			groups["dataAndMaster"] = append(groups["dataAndMaster"], nodePool)
-		case hasData && !hasMaster:
-			groups["dataOnly"] = append(groups["dataOnly"], nodePool)
-		case !hasData && hasMaster:
-			groups["masterOnly"] = append(groups["masterOnly"], nodePool)
-		default:
-			groups["other"] = append(groups["other"], nodePool)
-		}
-	}
-
-	return groups
-}
-
 func (r *RollingRestartReconciler) updateStatus(status string) error {
 	return UpdateComponentStatus(r.client, r.instance, &opsterv1.ComponentStatus{
 		Component:   componentName,
