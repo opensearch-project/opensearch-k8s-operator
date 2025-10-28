@@ -2,6 +2,8 @@ package reconcilers
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"strings"
@@ -254,7 +256,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	clusterName := r.instance.Name
 	nodeSecretName := clusterName + "-transport-cert"
 
-	r.logger.Info("Generating certificates", "interface", "transport")
+	r.logger.Info("Reconciling certificates", "interface", "transport")
 	// r.recorder.Event(r.instance, "Normal", "Security", "Starting to generating certificates")
 
 	var ca tls.Cert
@@ -270,7 +272,24 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 	// Generate node cert, sign it and put it into secret
 	nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
-	if err != nil {
+	if err != nil && !k8serrors.IsNotFound(err) {
+		r.logger.Error(err, "Failed to get secret for transport certificate")
+		return err
+	}
+	certRenewal := false
+	if err == nil {
+		daysRemaining, err := parseCertificate(nodeSecret.Data[corev1.TLSCertKey])
+		if err != nil {
+			helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace, clusterName, "transport", "global").Set(float64(daysRemaining))
+		}
+		renewBeforeExpirationDays := r.instance.Spec.Security.Tls.Transport.RotateDaysBeforeExpiry
+		if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+			r.logger.Info("Renewing transport certificate", "node", "global")
+			certRenewal = true
+		}
+
+	}
+	if err != nil || certRenewal {
 		// Generate node cert and put it into secret
 		dnsNames := []string{
 			clusterName,
@@ -283,17 +302,22 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			r.logger.Error(err, "Failed to create node certificate", "interface", "transport")
 			return err
 		}
-		nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
-		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
-			return err
+
+		if !certRenewal {
+			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS}
+			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
+				return err
+			}
 		}
+		nodeSecret.Data = nodeCert.SecretData(ca)
+
 		_, err = r.client.CreateSecret(&nodeSecret)
 		if err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
 		}
 	}
-	// Tell cluster controller to mount secrets
+	// Tell the cluster controller to mount secrets
 	volume := corev1.Volume{Name: "transport-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName}}}
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
 	mount := corev1.VolumeMount{Name: "transport-cert", MountPath: "/usr/share/opensearch/config/tls-transport"}
@@ -370,9 +394,25 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			podName := fmt.Sprintf("%s-%s-%d", clusterName, nodePool.Component, i)
 			certName := fmt.Sprintf("%s.crt", podName)
 			keyName := fmt.Sprintf("%s.key", podName)
-			_, certExists := nodeSecret.Data[certName]
+			certData, certExists := nodeSecret.Data[certName]
+
+			certRenewal := false
+			if certExists && certData != nil {
+				daysRemaining, err := parseCertificate(certData)
+				if err != nil {
+					r.logger.Info("Failed to parse certificate", "interface", "transport", "node", podName)
+				} else {
+					helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace, clusterName, "transport", podName).Set(float64(daysRemaining))
+					renewBeforeExpirationDays := r.instance.Spec.Security.Tls.Transport.RotateDaysBeforeExpiry
+					if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+						r.logger.Info("Renewing transport certificate", "node", podName)
+						certRenewal = true
+					}
+				}
+			}
+
 			_, keyExists := nodeSecret.Data[keyName]
-			if certExists && keyExists {
+			if certExists && keyExists && !certRenewal {
 				continue
 			}
 			dnsNames := []string{
@@ -473,7 +513,7 @@ func (r *TLSReconciler) handleHttp() error {
 	nodeSecretName := clusterName + "-http-cert"
 
 	if tlsConfig.Generate {
-		r.logger.Info("Generating certificates", "interface", "http")
+		r.logger.Info("Reconciling certificates", "interface", "http")
 
 		var ca tls.Cert
 		var err error
@@ -488,7 +528,26 @@ func (r *TLSReconciler) handleHttp() error {
 
 		// Generate node cert, sign it and put it into secret
 		nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
-		if err != nil {
+		if err != nil && !k8serrors.IsNotFound(err) {
+			r.logger.Error(err, "Failed to get secret for http certificate")
+			return err
+		}
+
+		certRenewal := false
+		if err == nil {
+			daysRemaining, err := parseCertificate(nodeSecret.Data[corev1.TLSCertKey])
+			if err == nil {
+				helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace, clusterName, "http", "global").Set(float64(daysRemaining))
+				renewBeforeExpirationDays := r.instance.Spec.Security.Tls.Http.RotateDaysBeforeExpiry
+				if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+					r.logger.Info("Renewing http certificate")
+					certRenewal = true
+				}
+			} else {
+				r.logger.Info("Failed to parse certificate", "interface", "http", "error", err)
+			}
+		}
+		if err != nil || certRenewal {
 			// Generate node cert and put it into secret
 			// Build default DNS names
 			dnsNames := []string{
@@ -512,10 +571,15 @@ func (r *TLSReconciler) handleHttp() error {
 
 				return err
 			}
-			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
-			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
-				return err
+
+			if !certRenewal {
+				nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS}
+				if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
+					return err
+				}
 			}
+			nodeSecret.Data = nodeCert.SecretData(ca)
+
 			_, err = r.client.CreateSecret(&nodeSecret)
 			if err != nil {
 				r.logger.Error(err, "Failed to store node certificate in secret", "interface", "http")
@@ -585,4 +649,14 @@ func mountFolder(interfaceName string, name string, secretName string, reconcile
 func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+func parseCertificate(data []byte) (int, error) {
+	der, _ := pem.Decode(data)
+	cert, err := x509.ParseCertificate(der.Bytes)
+	if err != nil {
+		return -1, err
+	}
+	daysRemaining := int(time.Until(cert.NotAfter).Hours() / 24)
+	return daysRemaining, nil
 }

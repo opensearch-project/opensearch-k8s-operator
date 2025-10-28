@@ -65,6 +65,8 @@ manager:
   # watch objects in the desired namespace. Defaults is to watch all namespaces.
   watchNamespace:
 
+  metricsBindAddress: 127.0.0.1:8080
+
 # Install the Custom Resource Definitions with Helm
 installCRDs: true
 

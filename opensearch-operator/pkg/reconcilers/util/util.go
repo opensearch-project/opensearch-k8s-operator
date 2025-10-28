@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -292,20 +293,21 @@ func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int
 }
 
 // GetClusterHealth returns the health of OpenSearch cluster
-func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) opsterv1.OpenSearchHealth {
+func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) (opsterv1.OpenSearchHealth, responses.ClusterHealthResponse) {
+	healthResponse := responses.ClusterHealthResponse{}
 	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, nil)
 	if err != nil {
 		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))
-		return opsterv1.OpenSearchUnknownHealth
+		return opsterv1.OpenSearchUnknownHealth, healthResponse
 	}
 
-	healthResponse, err := osClient.GetClusterHealth()
+	healthResponse, err = osClient.GetClusterHealth()
 	if err != nil {
 		lg.Error(err, "Failed to get OpenSearch health status")
-		return opsterv1.OpenSearchUnknownHealth
+		return opsterv1.OpenSearchUnknownHealth, healthResponse
 	}
 
-	return opsterv1.OpenSearchHealth(healthResponse.Status)
+	return opsterv1.OpenSearchHealth(healthResponse.Status), healthResponse
 }
 
 // GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
