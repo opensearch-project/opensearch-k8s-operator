@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
@@ -1071,8 +1072,7 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 }
 
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
-	httpPort := PortForCluster(cr)
-	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
+	return helpers.ClusterURL(cr)
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {

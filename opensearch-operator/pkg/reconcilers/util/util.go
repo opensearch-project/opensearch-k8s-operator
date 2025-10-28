@@ -217,13 +217,7 @@ func CreateAdditionalVolumes(
 }
 
 func OpensearchClusterURL(cluster *opsterv1.OpenSearchCluster) string {
-	return fmt.Sprintf(
-		"https://%s.%s.svc.%s:%v",
-		cluster.Spec.General.ServiceName,
-		cluster.Namespace,
-		helpers.ClusterDnsBase(),
-		cluster.Spec.General.HttpPort,
-	)
+	return helpers.ClusterURL(cluster)
 }
 
 func CreateClientForCluster(
