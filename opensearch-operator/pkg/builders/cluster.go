@@ -3,8 +3,10 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"strings"
+
+	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
