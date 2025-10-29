@@ -572,7 +572,7 @@ The available storage options are:
 
 #### PVC
 
-The default option is persistent storage via PVCs. You can explicity define the `storageClass` if needed:
+The default option is persistent storage via PVCs. You can explicity define the `storageClass`, the `annotations` and the `labels` if needed:
 
 ```yaml
 nodePools:
@@ -587,6 +587,10 @@ nodePools:
         storageClass: mystorageclass # Set the name of the storage class to be used
         accessModes: # You can change the accessMode
           - ReadWriteOnce
+        annotations: # You can add annotations
+          test.io/crypt-key-id: "your-kms-key-id"
+        labels: # You can add labels
+          team: "backend-data"
 ```
 
 #### EmptyDir
