@@ -221,7 +221,7 @@ func (r *TLSReconciler) createAdminSecret(ca tls.Cert) (*ctrl.Result, error) {
 		return nil, nil
 	}
 
-	adminCert, err := ca.CreateAndSignCertificate("admin", r.instance.Name, nil)
+	adminCert, err := ca.CreateAndSignCertificate("admin", r.instance.Name, nil, r.resolveTransportCertDuration())
 	if err != nil {
 		r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
 		r.recorder.AnnotatedEventf(
@@ -297,7 +297,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 		}
-		nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
+		nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames, r.resolveTransportCertDuration())
 		if err != nil {
 			r.logger.Error(err, "Failed to create node certificate", "interface", "transport")
 			return err
@@ -377,7 +377,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			fmt.Sprintf("%s.%s.%s.svc.%s", bootstrapPodName, clusterName, namespace, helpers.ClusterDnsBase()),
 		}
-		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames)
+		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames, r.resolveTransportCertDuration())
 		if err != nil {
 			r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", bootstrapPodName)
 			//	r.recorder.Event(r.instance, "Normal", "Security", "Created transport certificates")
@@ -427,7 +427,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 				fmt.Sprintf("%s.%s.%s.svc.%s", podName, clusterName, namespace, helpers.ClusterDnsBase()),
 			}
-			nodeCert, err := ca.CreateAndSignCertificate(podName, clusterName, dnsNames)
+			nodeCert, err := ca.CreateAndSignCertificate(podName, clusterName, dnsNames, r.resolveTransportCertDuration())
 			if err != nil {
 				r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", podName)
 				return err
@@ -557,7 +557,7 @@ func (r *TLSReconciler) handleHttp() error {
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
-			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
+			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames, r.resolveHttpCertDuration())
 			if err != nil {
 				r.logger.Error(err, "Failed to create node certificate", "interface", "http")
 				//		r.recorder.Event(r.instance, "Warning", "Security", "Failed to create node http certifice")
@@ -652,4 +652,22 @@ func parseCertificate(data []byte) (int, error) {
 	}
 	daysRemaining := int(time.Until(cert.NotAfter).Hours() / 24)
 	return daysRemaining, nil
+}
+
+func (r *TLSReconciler) resolveTransportCertDuration() time.Duration {
+	if r.instance.Spec.Security != nil && r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Transport != nil {
+		if r.instance.Spec.Security.Tls.Transport.Duration != nil {
+			return r.instance.Spec.Security.Tls.Transport.Duration.Duration
+		}
+	}
+	return 365 * 24 * time.Hour
+}
+
+func (r *TLSReconciler) resolveHttpCertDuration() time.Duration {
+	if r.instance.Spec.Security != nil && r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Http != nil {
+		if r.instance.Spec.Security.Tls.Http.Duration != nil {
+			return r.instance.Spec.Security.Tls.Http.Duration.Duration
+		}
+	}
+	return 365 * 24 * time.Hour
 }
