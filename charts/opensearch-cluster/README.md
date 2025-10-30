@@ -39,6 +39,7 @@ A Helm chart for OpenSearch Cluster
 | cluster.dashboards.tls.caSecret | object | `{}` | Secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields |
 | cluster.dashboards.tls.enable | bool | `false` | Enable HTTPS for dashboards |
 | cluster.dashboards.tls.generate | bool | `true` | generate certificate, if false secret must be provided |
+| cluster.dashboards.tls.duration | string | `"8760h"` | Duration controls the validity period of generated certificates (used when generate is true) |
 | cluster.dashboards.tls.secret | string | `nil` | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |
 | cluster.dashboards.tolerations | list | `[]` | dashboards pod tolerations |
 | cluster.dashboards.version | string | `"2.3.0"` | dashboards version |
@@ -88,10 +89,12 @@ A Helm chart for OpenSearch Cluster
 | cluster.security.config.securityConfigSecret | object | `{}` | Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, etc) |
 | cluster.security.tls.http.caSecret | object | `{}` | Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields |
 | cluster.security.tls.http.generate | bool | `true` | If set to true the operator will generate a CA and certificates for the cluster to use, if false - secrets with existing certificates must be supplied |
+| cluster.security.tls.http.duration | string | `"8760h"` | Duration controls the validity period of generated certificates (used when generate is true) |
 | cluster.security.tls.http.secret | object | `{}` | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |
 | cluster.security.tls.transport.adminDn | list | `[]` | DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided |
 | cluster.security.tls.transport.caSecret | object | `{}` | Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields |
 | cluster.security.tls.transport.generate | bool | `true` | If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied |
+| cluster.security.tls.transport.duration | string | `"8760h"` | Duration controls the validity period of generated certificates (used when generate is true) |
 | cluster.security.tls.transport.nodesDn | list | `[]` | Allowed Certificate DNs for nodes, only used when existing certificates are provided |
 | cluster.security.tls.transport.perNode | bool | `true` | Separate certificate per node |
 | cluster.security.tls.transport.secret | object | `{}` | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |

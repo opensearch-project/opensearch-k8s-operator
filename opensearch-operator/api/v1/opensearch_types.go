@@ -275,6 +275,9 @@ type TlsCertificateConfig struct {
 	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
 	// Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
 	CaSecret corev1.LocalObjectReference `json:"caSecret,omitempty"`
+	// Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
+	//+kubebuilder:default:="8760h"
+	Duration *metav1.Duration `json:"duration,omitempty"`
 }
 
 // Reference to a secret

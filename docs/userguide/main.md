@@ -180,7 +180,7 @@ For security reasons, encryption is required for communication with the OpenSear
 
 Depending on your requirements, the Operator offers two ways of managing TLS certificates. You can either supply your own certificates, or the Operator will generate its own CA and sign certificates for all nodes using that CA. The second option is recommended, unless you want to directly expose your OpenSearch cluster outside your Kubernetes cluster, or your organization has rules about using self-signed certificates for internal communication.
 
-> :warning: **Clusters with operator-generated certificates will stop working after 1 year**: Make sure you have tested certificate renewals in your cluster before putting it in production!
+Note: When the operator generates certificates, you can now control certificate validity using the `duration` field (e.g. `"720h"`, `"17520h"`). If omitted, it defaults to one year (`"8760h"`).
 
 TLS certificates are used in three places, and each can be configured independently.
 
@@ -198,6 +198,8 @@ spec:
       transport: # Configuration of the transport endpoint
         generate: true # Have the operator generate and sign certificates
         perNode: true # Separate certificate per node
+        # How long generated certificates are valid (default: 8760h = 1 year)
+        duration: "8760h"
         secret:
           name: # Name of the secret that contains the provided certificate
         caSecret:
@@ -207,7 +209,7 @@ spec:
 # ...
 ```
 
-To have the Operator generate the certificates, you only need to set the `generate` and `perNode` fields to `true` (all other fields can be omitted). The Operator will then generate a CA certificate and one certificate per node, and then use the CA to sign the node certificates. These certificates are valid for one year. Note that the Operator does not currently have certificate renewal implemented.
+To have the Operator generate the certificates, set `generate` and `perNode` to `true` (other fields can be omitted). The Operator will generate a CA certificate, issue one certificate per node, and sign them. Certificates default to one year validity, configurable via `duration`. The Operator supports rotation by reissuing certs when near expiry if `rotateDaysBeforeExpiry` is set.
 
 Alternatively, you can provide the certificates yourself (e.g. if your organization has an internal CA). You can either provide one certificate to be used by all nodes or provide a certificate for each node (recommended). In this mode, set `generate: false` and `perNode` to `true` or `false` depending on whether you're providing per-node certificates.
 
@@ -240,6 +242,8 @@ spec:
     tls: # Everything related to TLS configuration
       http: # Configuration of the HTTP endpoint
         generate: true # Have the Operator generate and sign certificates
+        # How long generated certificates are valid (default: 8760h = 1 year)
+        duration: "8760h"
         secret:
           name: # Name of the secret that contains the provided certificate
         caSecret:
@@ -548,6 +552,8 @@ spec:
     tls:
       enable: true # Configure TLS
       generate: true # Have the Operator generate and sign a certificate
+      # How long generated certificates are valid (default: 8760h = 1 year)
+      duration: "8760h"
       secret:
         name: # Name of the secret that contains the provided certificate
       caSecret:

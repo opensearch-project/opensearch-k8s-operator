@@ -3338,6 +3338,11 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      duration:
+                        default: 8760h
+                        description: Duration controls the validity period of generated
+                          certificates (e.g. "8760h", "720h").
+                        type: string
                       enable:
                         description: Enable HTTPS for Dashboards
                         type: boolean
@@ -6264,6 +6269,11 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          duration:
+                            default: 8760h
+                            description: Duration controls the validity period of
+                              generated certificates (e.g. "8760h", "720h").
+                            type: string
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
@@ -6317,6 +6327,11 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          duration:
+                            default: 8760h
+                            description: Duration controls the validity period of
+                              generated certificates (e.g. "8760h", "720h").
+                            type: string
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
