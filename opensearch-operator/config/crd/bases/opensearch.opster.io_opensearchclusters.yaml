@@ -987,6 +987,12 @@ spec:
                             x-kubernetes-list-type: atomic
                         type: object
                     type: object
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  initContainers:
+                    x-kubernetes-preserve-unknown-fields: true
                   jvm:
                     type: string
                   keystore:
@@ -5712,6 +5718,8 @@ spec:
                         - name
                         type: object
                       type: array
+                    initContainers:
+                      x-kubernetes-preserve-unknown-fields: true
                     jvm:
                       type: string
                     labels:
@@ -5738,7 +5746,7 @@ spec:
                           x-kubernetes-int-or-string: true
                       type: object
                     persistence:
-                      description: PersistencConfig defines options for data persistence
+                      description: PersistenceConfig defines options for data persistence
                       properties:
                         emptyDir:
                           description: |-
@@ -5792,6 +5800,14 @@ spec:
                               items:
                                 type: string
                               type: array
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            labels:
+                              additionalProperties:
+                                type: string
+                              type: object
                             storageClass:
                               type: string
                           type: object
@@ -5820,6 +5836,10 @@ spec:
                           type: object
                         readiness:
                           properties:
+                            command:
+                              items:
+                                type: string
+                              type: array
                             failureThreshold:
                               format: int32
                               type: integer
@@ -5829,12 +5849,19 @@ spec:
                             periodSeconds:
                               format: int32
                               type: integer
+                            successThreshold:
+                              format: int32
+                              type: integer
                             timeoutSeconds:
                               format: int32
                               type: integer
                           type: object
                         startup:
                           properties:
+                            command:
+                              items:
+                                type: string
+                              type: array
                             failureThreshold:
                               format: int32
                               type: integer
@@ -5919,6 +5946,8 @@ spec:
                       items:
                         type: string
                       type: array
+                    sidecarContainers:
+                      x-kubernetes-preserve-unknown-fields: true
                     tolerations:
                       items:
                         description: |-
@@ -6177,8 +6206,8 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       securityConfigSecret:
-                        description: Secret that contains the differnt yml files of
-                          the opensearch-security config (config.yml, internal_users.yml,
+                        description: Secret that contains the different yml files
+                          of the opensearch-security config (config.yml, internal_users.yml,
                           ...)
                         properties:
                           name:
@@ -6286,6 +6315,11 @@ spec:
                               a CA and certificates for the cluster to use, if false
                               secrets with existing certificates must be supplied
                             type: boolean
+                          rotateDaysBeforeExpiry:
+                            default: -1
+                            description: Automatically rotate certificates before
+                              they expire, set to -1 to disable
+                            type: integer
                           secret:
                             description: Optional, name of a TLS secret that contains
                               ca.crt, tls.key and tls.crt data. If ca.crt is in a
@@ -6343,6 +6377,11 @@ spec:
                           perNode:
                             description: Configure transport node certificate
                             type: boolean
+                          rotateDaysBeforeExpiry:
+                            default: -1
+                            description: Automatically rotate certificates before
+                              they expire, set to -1 to disable
+                            type: integer
                           secret:
                             description: Optional, name of a TLS secret that contains
                               ca.crt, tls.key and tls.crt data. If ca.crt is in a

@@ -10,9 +10,9 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -298,7 +298,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 }
 
 func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult) {
-	stsList, err := r.client.ListStatefulSets(client.InNamespace(r.instance.Name),
+	stsList, err := r.client.ListStatefulSets(client.InNamespace(r.instance.Namespace),
 		client.MatchingLabels{helpers.ClusterLabel: r.instance.Name})
 	if err != nil {
 		result.Combine(&ctrl.Result{}, err)
@@ -375,6 +375,6 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
 	}
-	r.recorder.AnnotatedEventf(r.instance, annotations, "Noraml", "Scaler", "Finished scaling")
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished scaling")
 	return result, err
 }

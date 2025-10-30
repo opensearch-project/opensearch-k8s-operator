@@ -3,8 +3,9 @@ package builders
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
@@ -76,7 +77,18 @@ func NewSTSForNodePool(
 	if node.Persistence == nil || node.Persistence.PVC != nil {
 		mode := corev1.PersistentVolumeFilesystem
 		pvc = corev1.PersistentVolumeClaim{
-			ObjectMeta: metav1.ObjectMeta{Name: "data"},
+			ObjectMeta: func() metav1.ObjectMeta {
+				if node.Persistence == nil {
+					return metav1.ObjectMeta{
+						Name: "data",
+					}
+				}
+				return metav1.ObjectMeta{
+					Name:        "data",
+					Annotations: node.Persistence.PVC.Annotations,
+					Labels:      node.Persistence.PVC.Labels,
+				}
+			}(),
 			Spec: corev1.PersistentVolumeClaimSpec{
 				AccessModes: func() []corev1.PersistentVolumeAccessMode {
 					if node.Persistence == nil {
@@ -93,11 +105,7 @@ func NewSTSForNodePool(
 					if node.Persistence == nil {
 						return nil
 					}
-					if node.Persistence.PVC.StorageClassName == "" {
-						return nil
-					}
-
-					return &node.Persistence.PVC.StorageClassName
+					return node.Persistence.PVC.StorageClassName
 				}(),
 				VolumeMode: &mode,
 			},
@@ -169,7 +177,8 @@ func NewSTSForNodePool(
 		// vendor ="elasticsearch"
 	}
 
-	jvm := helpers.CalculateJvmHeapSize(&node)
+	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(node.Resources.Requests.Memory())
+	jvm := helpers.AppendJvmHeapSizeSettings(node.Jvm, jvmHeapSizeSettings)
 
 	// If node role `search` defined add required experimental flag if version less than 2.7
 	if helpers.ContainsString(selectedRoles, "search") && helpers.CompareVersions(cr.Spec.General.Version, "2.7.0") {
@@ -179,16 +188,27 @@ func NewSTSForNodePool(
 	// Supress repeated log messages about a deprecated format for the publish address
 	jvm += " -Dopensearch.transport.cname_in_publish_address=true"
 
-	startupProbePeriodSeconds := int32(20)
-	startupProbeTimeoutSeconds := int32(5)
-	startupProbeFailureThreshold := int32(10)
+	startupProbePeriodSeconds := int32(30)
+	startupProbeTimeoutSeconds := int32(30)
+	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
+	startupProbeCommand := []string{
+		"/bin/bash",
+		"-c",
+		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
+	}
 
 	readinessProbePeriodSeconds := int32(30)
 	readinessProbeTimeoutSeconds := int32(30)
 	readinessProbeFailureThreshold := int32(5)
+	readinessProbeSuccessThreshold := int32(1)
 	readinessProbeInitialDelaySeconds := int32(60)
+	readinessProbeCommand := []string{
+		"/bin/bash",
+		"-c",
+		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
+	}
 
 	livenessProbePeriodSeconds := int32(20)
 	livenessProbeTimeoutSeconds := int32(5)
@@ -239,6 +259,10 @@ func NewSTSForNodePool(
 			if node.Probes.Startup.SuccessThreshold > 0 {
 				startupProbeSuccessThreshold = node.Probes.Startup.SuccessThreshold
 			}
+
+			if len(node.Probes.Startup.Command) > 0 {
+				startupProbeCommand = node.Probes.Startup.Command
+			}
 		}
 
 		if node.Probes.Readiness != nil {
@@ -256,6 +280,14 @@ func NewSTSForNodePool(
 
 			if node.Probes.Readiness.FailureThreshold > 0 {
 				readinessProbeFailureThreshold = node.Probes.Readiness.FailureThreshold
+			}
+
+			if node.Probes.Readiness.SuccessThreshold > 0 {
+				readinessProbeSuccessThreshold = node.Probes.Readiness.SuccessThreshold
+			}
+
+			if len(node.Probes.Readiness.Command) > 0 {
+				readinessProbeCommand = node.Probes.Readiness.Command
 			}
 		}
 	}
@@ -275,25 +307,23 @@ func NewSTSForNodePool(
 		FailureThreshold:    startupProbeFailureThreshold,
 		SuccessThreshold:    startupProbeSuccessThreshold,
 		InitialDelaySeconds: startupProbeInitialDelaySeconds,
-		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
+		ProbeHandler: corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: startupProbeCommand,
+			},
+		},
 	}
 
 	// Because the http endpoint requires auth we need to do it as a curl script
-	httpPort := PortForCluster(cr)
-
-	curlCmd := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail https://localhost:" + fmt.Sprint(httpPort)
 	readinessProbe := corev1.Probe{
 		InitialDelaySeconds: readinessProbeInitialDelaySeconds,
 		PeriodSeconds:       readinessProbePeriodSeconds,
 		FailureThreshold:    readinessProbeFailureThreshold,
+		SuccessThreshold:    readinessProbeSuccessThreshold,
 		TimeoutSeconds:      readinessProbeTimeoutSeconds,
 		ProbeHandler: corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
-				Command: []string{
-					"/bin/bash",
-					"-c",
-					curlCmd,
-				},
+				Command: readinessProbeCommand,
 			},
 		},
 	}
@@ -336,14 +366,20 @@ func NewSTSForNodePool(
 	securityContext := cr.Spec.General.SecurityContext
 
 	var initContainers []corev1.Container
+
+	if len(node.InitContainers) > 0 {
+		initContainers = append(initContainers, node.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
+		uid, gid := helpers.ResolveUidGid(cr)
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Resources:       resources,
 			Command:         []string{"sh", "-c"},
-			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			Args:            []string{helpers.GetChownCommand(uid, gid, "/usr/share/opensearch/data")},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: &runas,
 			},
@@ -468,7 +504,7 @@ func NewSTSForNodePool(
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{
+					Containers: append([]corev1.Container{
 						{
 							Env: []corev1.EnvVar{
 								{
@@ -526,7 +562,7 @@ func NewSTSForNodePool(
 							VolumeMounts:    volumeMounts,
 							SecurityContext: securityContext,
 						},
-					},
+					}, node.SidecarContainers...),
 					InitContainers:            initContainers,
 					Volumes:                   volumes,
 					ServiceAccountName:        cr.Spec.General.ServiceAccount,
@@ -768,12 +804,8 @@ func NewBootstrapPod(
 	}
 	resources := cr.Spec.Bootstrap.Resources
 
-	var jvm string
-	if cr.Spec.Bootstrap.Jvm == "" {
-		jvm = "-Xmx512M -Xms512M"
-	} else {
-		jvm = cr.Spec.Bootstrap.Jvm
-	}
+	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(cr.Spec.Bootstrap.Resources.Requests.Memory())
+	jvm := helpers.AppendJvmHeapSizeSettings(cr.Spec.Bootstrap.Jvm, jvmHeapSizeSettings)
 
 	image := helpers.ResolveImage(cr, nil)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
@@ -788,10 +820,14 @@ func NewBootstrapPod(
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
+	// Use persistent storage for bootstrap pod to maintain cluster state across restarts
+	// This prevents cluster formation failures when the bootstrap pod restarts during initialization
 	volumes = append(volumes, corev1.Volume{
 		Name: "data",
 		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
+			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
+				ClaimName: fmt.Sprintf("%s-bootstrap-data", cr.Name),
+			},
 		},
 	})
 
@@ -854,14 +890,19 @@ func NewBootstrapPod(
 	}
 
 	var initContainers []corev1.Container
+	if len(cr.Spec.Bootstrap.InitContainers) > 0 {
+		initContainers = append(initContainers, cr.Spec.Bootstrap.InitContainers...)
+	}
+
 	if !helpers.SkipInitContainer() {
+		uid, gid := helpers.ResolveUidGid(cr)
 		initContainers = append(initContainers, corev1.Container{
 			Name:            "init",
 			Image:           initHelperImage.GetImage(),
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Resources:       cr.Spec.InitHelper.Resources,
 			Command:         []string{"sh", "-c"},
-			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
+			Args:            []string{helpers.GetChownCommand(uid, gid, "/usr/share/opensearch/data")},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: ptr.To(int64(0)),
 			},
@@ -970,9 +1011,10 @@ func NewBootstrapPod(
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      BootstrapPodName(cr),
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        BootstrapPodName(cr),
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: cr.Spec.Bootstrap.Annotations,
 		},
 		Spec: corev1.PodSpec{
 			Containers: []corev1.Container{
@@ -1070,6 +1112,39 @@ func DiscoveryServiceName(cr *opsterv1.OpenSearchCluster) string {
 
 func BootstrapPodName(cr *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-bootstrap-0", cr.Name)
+}
+
+func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeClaim {
+	labels := map[string]string{
+		helpers.ClusterLabel: cr.Name,
+	}
+
+	// Use default storage class and ReadWriteOnce access mode
+	// The bootstrap pod only needs a small amount of storage for cluster metadata
+	storageSize := "1Gi"
+	if cr.Spec.Bootstrap.Resources.Requests != nil {
+		if size, exists := cr.Spec.Bootstrap.Resources.Requests["storage"]; exists {
+			storageSize = size.String()
+		}
+	}
+
+	return &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-bootstrap-data", cr.Name),
+			Namespace: cr.Namespace,
+			Labels:    labels,
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			AccessModes: []corev1.PersistentVolumeAccessMode{
+				corev1.ReadWriteOnce,
+			},
+			Resources: corev1.VolumeResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse(storageSize),
+				},
+			},
+		},
+	}
 }
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
@@ -1212,8 +1287,8 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 	var tlsconfig *monitoring.TLSConfig
 	if cr.Spec.General.Monitoring.TLSConfig != nil {
 		safetlsconfig := monitoring.SafeTLSConfig{
-			ServerName:         cr.Spec.General.Monitoring.TLSConfig.ServerName,
-			InsecureSkipVerify: cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify,
+			ServerName:         ptr.To(cr.Spec.General.Monitoring.TLSConfig.ServerName),
+			InsecureSkipVerify: ptr.To(cr.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify),
 		}
 
 		tlsconfig = &monitoring.TLSConfig{

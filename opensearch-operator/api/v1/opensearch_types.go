@@ -86,9 +86,9 @@ type InitHelperConfig struct {
 }
 
 type ProbesConfig struct {
-	Liveness  *ProbeConfig          `json:"liveness,omitempty"`
-	Readiness *ReadinessProbeConfig `json:"readiness,omitempty"`
-	Startup   *ProbeConfig          `json:"startup,omitempty"`
+	Liveness  *ProbeConfig        `json:"liveness,omitempty"`
+	Readiness *CommandProbeConfig `json:"readiness,omitempty"`
+	Startup   *CommandProbeConfig `json:"startup,omitempty"`
 }
 
 type ProbeConfig struct {
@@ -99,11 +99,13 @@ type ProbeConfig struct {
 	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
 }
 
-type ReadinessProbeConfig struct {
-	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
-	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
-	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
-	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+type CommandProbeConfig struct {
+	InitialDelaySeconds int32    `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32    `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32    `json:"timeoutSeconds,omitempty"`
+	SuccessThreshold    int32    `json:"successThreshold,omitempty"`
+	FailureThreshold    int32    `json:"failureThreshold,omitempty"`
+	Command             []string `json:"command,omitempty"`
 }
 
 type NodePool struct {
@@ -125,9 +127,15 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 }
 
-// PersistencConfig defines options for data persistence
+// PersistenceConfig defines options for data persistence
 type PersistenceConfig struct {
 	PersistenceSource `json:","`
 }
@@ -139,8 +147,10 @@ type PersistenceSource struct {
 }
 
 type PVCSource struct {
-	StorageClassName string                              `json:"storageClass,omitempty"`
+	StorageClassName *string                             `json:"storageClass,omitempty"`
 	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+	Annotations      map[string]string                   `json:"annotations,omitempty"`
+	Labels           map[string]string                   `json:"labels,omitempty"`
 }
 
 // ConfMgmt defines which additional services will be deployed
@@ -172,8 +182,12 @@ type BootstrapConfig struct {
 	Jvm          string                      `json:"jvm,omitempty"`
 	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	Annotations      map[string]string `json:"annotations,omitempty"`
 	PluginsList      []string          `json:"pluginsList,omitempty"`
 	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
@@ -238,7 +252,11 @@ type TlsConfigTransport struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
-	PerNode              bool `json:"perNode,omitempty"`
+	PerNode bool `json:"perNode,omitempty"`
+	// Automatically rotate certificates before they expire, set to -1 to disable
+	//+kubebuilder:default=-1
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
+	//
 	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
@@ -248,7 +266,11 @@ type TlsConfigTransport struct {
 
 type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
-	Generate             bool `json:"generate,omitempty"`
+	Generate bool `json:"generate,omitempty"`
+	// Automatically rotate certificates before they expire, set to -1 to disable
+	//+kubebuilder:default=-1
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
+	//
 	TlsCertificateConfig `json:",omitempty"`
 }
 
@@ -266,7 +288,7 @@ type TlsSecret struct {
 }
 
 type SecurityConfig struct {
-	// Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
 	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
