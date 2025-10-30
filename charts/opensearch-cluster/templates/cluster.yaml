@@ -56,6 +56,9 @@ spec:
         {{- with .tls.transport.secret }}
         secret: {{ . | toYaml | nindent 10 }}
         {{- end }}
+        {{- if .tls.transport.enableHotReload }}
+        enableHotReload: {{ .tls.transport.enableHotReload }}
+        {{- end }}
       http:
         {{- if .tls.http.generate }}
         generate: {{ .tls.http.generate }}
@@ -65,6 +68,9 @@ spec:
         {{- end }}
         {{- with .tls.http.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- if .tls.http.enableHotReload }}
+        enableHotReload: {{ .tls.http.enableHotReload }}
         {{- end }}
     {{- with .config }}
     config: {{ . | toYaml | nindent 6 }}

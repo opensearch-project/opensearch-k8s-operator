@@ -326,6 +326,9 @@ cluster:
         secret: {}
 #            name: "secret-name"
 
+        # -- Enable hot reloading of TLS certificates.
+        enableHotReload: false
+
       transport:
         # -- DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh,
         # only used when existing certificates are provided
@@ -351,6 +354,8 @@ cluster:
         secret: {}
 #            name: "secret-name"
 
+        # -- Enable hot reloading of TLS certificates.
+        enableHotReload: false
 
   # Opensearch Ingress configuration
   ingress:
