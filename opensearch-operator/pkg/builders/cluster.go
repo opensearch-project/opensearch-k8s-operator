@@ -193,10 +193,14 @@ func NewSTSForNodePool(
 	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
+	probeProtocol := "https"
+	if cr.Spec.General.DisableSSL {
+		probeProtocol = "http"
+	}
 	startupProbeCommand := []string{
 		"/bin/bash",
 		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
+		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
 	}
 
 	readinessProbePeriodSeconds := int32(30)
@@ -207,7 +211,7 @@ func NewSTSForNodePool(
 	readinessProbeCommand := []string{
 		"/bin/bash",
 		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
+		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
 	}
 
 	livenessProbePeriodSeconds := int32(20)
@@ -1081,7 +1085,11 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
 	httpPort := PortForCluster(cr)
-	return fmt.Sprintf("https://%s.svc.%s:%d", DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
+	protocol := "https"
+	if cr.Spec.General.DisableSSL {
+		protocol = "http"
+	}
+	return fmt.Sprintf("%s://%s.svc.%s:%d", protocol, DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {
@@ -1304,6 +1312,11 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 		monitorLabel[k] = v
 	}
 
+	scheme := "https"
+	if cr.Spec.General.DisableSSL {
+		scheme = "http"
+	}
+
 	return &monitoring.ServiceMonitor{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cr.Name + "-monitor",
@@ -1328,7 +1341,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth:       &user,
-					Scheme:          "https",
+					Scheme:          scheme,
 				},
 			},
 			Selector:          selector,
