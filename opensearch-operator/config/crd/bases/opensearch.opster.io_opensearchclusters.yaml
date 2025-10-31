@@ -6158,8 +6158,8 @@ spec:
                       adminSecret:
                         description: TLS Secret that contains a client certificate
                           (tls.key, tls.crt, ca.crt) with admin rights in the opensearch
-                          cluster. Must be set if transport certificates are provided
-                          by user and not generated
+                          cluster. Must be set if http certificates are provided by
+                          user and not generated
                         properties:
                           name:
                             default: ""
@@ -6260,6 +6260,13 @@ spec:
                     properties:
                       http:
                         properties:
+                          adminDn:
+                            description: DNs of certificates that should have admin
+                              access, mainly used for securityconfig updates via securityadmin.sh,
+                              only used when existing certificates are provided
+                            items:
+                              type: string
+                            type: array
                           caSecret:
                             description: Optional, secret that contains the ca certificate
                               as ca.crt. If this and generate=true is set the existing
@@ -6311,13 +6318,6 @@ spec:
                         type: object
                       transport:
                         properties:
-                          adminDn:
-                            description: DNs of certificates that should have admin
-                              access, mainly used for securityconfig updates via securityadmin.sh,
-                              only used when existing certificates are provided
-                            items:
-                              type: string
-                            type: array
                           caSecret:
                             description: Optional, secret that contains the ca certificate
                               as ca.crt. If this and generate=true is set the existing

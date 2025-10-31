@@ -47,9 +47,6 @@ spec:
         {{- with .tls.transport.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
         {{- end }}
-        {{- with .tls.transport.adminDn }}
-        adminDn: {{ . | toYaml | nindent 10 }}
-        {{- end }}
         {{- with .tls.transport.nodesDn }}
         nodesDn: {{ . | toYaml | nindent 10 }}
         {{- end }}
@@ -60,6 +57,9 @@ spec:
         duration: {{ .tls.transport.duration | nindent 10 }}
         {{- end }}
       http:
+        {{- with .tls.http.adminDn }}
+        adminDn: {{ . | toYaml | nindent 10 }}
+        {{- end }}
         {{- if .tls.http.generate }}
         generate: {{ .tls.http.generate }}
         {{- end }}
