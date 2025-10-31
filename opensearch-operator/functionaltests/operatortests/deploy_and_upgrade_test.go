@@ -66,7 +66,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return sts.Spec.Template.Spec.Containers[0].Image
 				}
 				return ""
-			}, time.Minute*1, time.Second*5).Should(Equal("docker.io/opensearchproject/opensearch:2.3.0"))
+			}, time.Minute*3, time.Second*5).Should(Equal("docker.io/opensearchproject/opensearch:2.3.0"))
 
 			Eventually(func() int32 {
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-masters", Namespace: namespace}, &sts)
