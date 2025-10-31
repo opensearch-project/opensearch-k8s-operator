@@ -105,12 +105,12 @@ func (r *TLSReconciler) handleTransport() error {
 
 func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 	// TODO: This should be refactored in the API - https://github.com/Opster/opensearch-k8s-operator/issues/569
-	tlsConfig := r.instance.Spec.Security.Tls.Transport
+	tlsConfig := r.instance.Spec.Security.Tls.Http
 	clusterName := r.instance.Name
 
 	var res *ctrl.Result
 	var certDN string
-	if tlsConfig.Generate {
+	if tlsConfig.Generate || (r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name == "") {
 		ca, err := r.getCACert()
 		if err != nil {
 			return nil, err

@@ -258,8 +258,6 @@ type TlsConfigTransport struct {
 	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
-	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
-	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsConfigHttp struct {
@@ -270,6 +268,8 @@ type TlsConfigHttp struct {
 	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	//
 	TlsCertificateConfig `json:",omitempty"`
+	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
+	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsCertificateConfig struct {
@@ -291,7 +291,7 @@ type TlsSecret struct {
 type SecurityConfig struct {
 	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
-	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
+	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
