@@ -223,6 +223,10 @@ cluster:
       secret:
         # name: "
 
+      # -- Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
+      # This is used only when generate is true.
+      duration: "8760h"
+
     # -- dashboards pod tolerations
     tolerations: []
 
@@ -326,6 +330,10 @@ cluster:
         secret: {}
 #            name: "secret-name"
 
+        # -- Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
+        # This is used only when generate is true.
+        duration: "8760h"
+
       transport:
         # -- DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh,
         # only used when existing certificates are provided
@@ -351,6 +359,9 @@ cluster:
         secret: {}
 #            name: "secret-name"
 
+        # -- Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
+        # This is used only when generate is true.
+        duration: "8760h"
 
   # Opensearch Ingress configuration
   ingress:

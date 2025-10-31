@@ -26,7 +26,7 @@ type Cert interface {
 	SecretData(ca Cert) map[string][]byte
 	KeyData() []byte
 	CertData() []byte
-	CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error)
+	CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string, validity time.Duration) (cert Cert, err error)
 }
 
 type CertValidater interface {
@@ -122,7 +122,7 @@ func (cert *PEMCert) CertData() []byte {
 	return cert.certBytes
 }
 
-func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string) (cert Cert, err error) {
+func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, dnsnames []string, validity time.Duration) (cert Cert, err error) {
 	tlscacert, err := ca.cert()
 	if err != nil {
 		return
@@ -142,6 +142,11 @@ func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, d
 		return
 	}
 
+	if validity <= 0 {
+		validity = 365 * 24 * time.Hour
+	}
+	notAfter := time.Now().Add(validity)
+
 	x509cert := &x509.Certificate{
 		SerialNumber: serial,
 		Subject: pkix.Name{
@@ -149,7 +154,7 @@ func (ca *PEMCert) CreateAndSignCertificate(commonName string, orgUnit string, d
 			OrganizationalUnit: []string{orgUnit},
 		},
 		NotBefore:   time.Now(),
-		NotAfter:    time.Now().AddDate(1, 0, 0),
+		NotAfter:    notAfter,
 		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		KeyUsage:    x509.KeyUsageDigitalSignature,
 	}
