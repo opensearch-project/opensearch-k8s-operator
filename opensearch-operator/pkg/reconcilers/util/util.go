@@ -140,6 +140,15 @@ func CreateAdditionalVolumes(
 				},
 			})
 		}
+		if volumeConfig.PersistentVolumeClaim != nil {
+			readOnly = volumeConfig.PersistentVolumeClaim.ReadOnly
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: volumeConfig.PersistentVolumeClaim,
+				},
+			})
+		}
 		if volumeConfig.Projected != nil {
 			retVolumes = append(retVolumes, corev1.Volume{
 				Name: volumeConfig.Name,
