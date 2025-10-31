@@ -18,6 +18,7 @@ import (
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -30,16 +31,15 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var _ = Describe("Cluster Reconciler", func() {
+var _ = DescribeTableSubtree("Cluster Reconciler", func(clusterName string, isSingleNode bool) {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
-		clusterName = "cluster-test-cluster"
-		namespace   = clusterName
-		timeout     = time.Second * 30
-		interval    = time.Second * 1
+		timeout  = time.Second * 30
+		interval = time.Second * 1
 	)
 	var (
-		OpensearchCluster      = ComposeOpensearchCrd(clusterName, namespace)
+		namespace              = clusterName
+		OpensearchCluster      = ComposeOpensearchCrd(clusterName, namespace, isSingleNode)
 		service                = corev1.Service{}
 		preUpgradeStatusLength int
 	)
@@ -214,6 +214,9 @@ var _ = Describe("Cluster Reconciler", func() {
 		})
 
 		It("should set nodepool specific config", func() {
+			if isSingleNode {
+				Skip("No client nodepool in single-node config")
+			}
 			sts := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{
@@ -228,6 +231,9 @@ var _ = Describe("Cluster Reconciler", func() {
 		})
 
 		It("should set nodepool additional user defined env vars", func() {
+			if isSingleNode {
+				Skip("No client nodepool in single-node cluster")
+			}
 			sts := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{
@@ -248,6 +254,9 @@ var _ = Describe("Cluster Reconciler", func() {
 		})
 
 		It("should set nodepool additional user defined labels", func() {
+			if isSingleNode {
+				Skip("No client nodepool in single-node cluster")
+			}
 			sts := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{
@@ -269,7 +278,10 @@ var _ = Describe("Cluster Reconciler", func() {
 			Expect(sts.Spec.Template.Spec.TopologySpreadConstraints[0].TopologyKey).To(Equal("zone"))
 		})
 
-		It("should create a bootstrap pod", func() {
+		It("should create a bootstrap pod in multi-node cluster", func() {
+			if isSingleNode {
+				Skip("Not valid for single-node cluster")
+			}
 			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{
@@ -301,7 +313,56 @@ var _ = Describe("Cluster Reconciler", func() {
 			}
 			wg.Wait()
 		})
+		It("should not create a bootstrap pod in single-node cluster", func() {
+			if !isSingleNode {
+				Skip("Not valid for multi-node cluster")
+			}
+			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
+			nodePool := OpensearchCluster.Spec.NodePools[0]
+			By(fmt.Sprintf("retrieving %s nodepool", nodePool.Component))
+			sts := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      clusterName + "-" + nodePool.Component,
+					Namespace: OpensearchCluster.Namespace,
+				}, sts)
+			}, timeout, interval).Should(Succeed())
+
+			By("checkin that the bootstrap pod doesn't exist")
+			Eventually(func() bool {
+				pod := &corev1.Pod{}
+				err := k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      bootstrapName,
+					Namespace: OpensearchCluster.Namespace,
+				}, pod)
+				if err != nil {
+					return apierrors.IsNotFound(err)
+				}
+				return false
+			}, timeout, interval).Should(BeTrue())
+
+			By(fmt.Sprintf("checking %s nodepool initial master is not set", nodePool.Component))
+			Eventually(func() []corev1.EnvVar {
+				sts := &appsv1.StatefulSet{}
+				if err := k8sClient.Get(context.Background(), types.NamespacedName{
+					Namespace: OpensearchCluster.Namespace,
+					Name:      clusterName + "-" + nodePool.Component,
+				}, sts); err != nil {
+					return []corev1.EnvVar{}
+				}
+				return sts.Spec.Template.Spec.Containers[0].Env
+			}, timeout, interval).Should(Or(
+				ContainElement(corev1.EnvVar{
+					Name:  "cluster.initial_master_nodes",
+					Value: "",
+				}),
+				Not(ContainElement(HaveField("Name", "cluster.initial_master_nodes"))),
+			))
+		})
 		It("should configure bootstrap pod correctly", func() {
+			if isSingleNode {
+				Skip("Not valid for single-node cluster")
+			}
 			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
 			pod := &corev1.Pod{}
 			Eventually(func() error {
@@ -372,6 +433,9 @@ var _ = Describe("Cluster Reconciler", func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 		It("should create a pdb resource", func() {
+			if isSingleNode {
+				Skip("Not valid for single-node cluster")
+			}
 			pdb := policyv1.PodDisruptionBudget{}
 			Eventually(func() bool {
 				if err := k8sClient.Get(context.Background(), types.NamespacedName{Name: clusterName + "-master-pdb", Namespace: OpensearchCluster.Namespace}, &pdb); err != nil {
@@ -390,7 +454,10 @@ var _ = Describe("Cluster Reconciler", func() {
 			Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster)).Should(Succeed())
 
 			// Update the opensearch object
-			OpensearchCluster.Spec.NodePools = OpensearchCluster.Spec.NodePools[:2]
+			if !isSingleNode {
+				// We can't add/remove nodes in single-node cluster
+				OpensearchCluster.Spec.NodePools = OpensearchCluster.Spec.NodePools[:2]
+			}
 			OpensearchCluster.Spec.General.Version = "1.1.0"
 			OpensearchCluster.Spec.General.PluginsList[0] = "http://foo-plugin-1.1.0"
 			Expect(k8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
@@ -402,7 +469,7 @@ var _ = Describe("Cluster Reconciler", func() {
 					return false
 				}
 
-				return len(stsList.Items) == 2
+				return len(stsList.Items) == len(OpensearchCluster.Spec.NodePools)
 			})
 		})
 		It("should update the node pool image version", func() {
@@ -420,10 +487,17 @@ var _ = Describe("Cluster Reconciler", func() {
 	})
 
 	When("A node pool is upgrading", func() {
+		var selectedComponent string
+		if !isSingleNode {
+			selectedComponent = "nodes"
+		} else {
+			selectedComponent = "master"
+		}
+
 		Specify("updating the status should succeed", func() {
 			status := opsterv1.ComponentStatus{
 				Component:   "Upgrader",
-				Description: "nodes",
+				Description: selectedComponent,
 				Status:      "Upgrading",
 			}
 			Eventually(func() error {
@@ -442,7 +516,7 @@ var _ = Describe("Cluster Reconciler", func() {
 					context.Background(),
 					client.ObjectKey{
 						Namespace: OpensearchCluster.Namespace,
-						Name:      clusterName + "-nodes",
+						Name:      clusterName + "-" + selectedComponent,
 					}, sts); err != nil {
 					return false
 				}
@@ -456,7 +530,7 @@ var _ = Describe("Cluster Reconciler", func() {
 					context.Background(),
 					client.ObjectKey{
 						Namespace: OpensearchCluster.Namespace,
-						Name:      clusterName + "-nodes",
+						Name:      clusterName + "-" + selectedComponent,
 					}, sts); err != nil {
 					return false
 				}
@@ -465,16 +539,23 @@ var _ = Describe("Cluster Reconciler", func() {
 		})
 	})
 	When("a cluster is upgraded", func() {
+		var selectedComponent string
+		if !isSingleNode {
+			selectedComponent = "nodes"
+		} else {
+			selectedComponent = "master"
+		}
+
 		Specify("updating the status should succeed", func() {
 			currentStatus := opsterv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgrading",
-				Description: "nodes",
+				Description: selectedComponent,
 			}
 			componentStatus := opsterv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgraded",
-				Description: "nodes",
+				Description: selectedComponent,
 			}
 			masterComponentStatus := opsterv1.ComponentStatus{
 				Component:   "Upgrader",
@@ -549,4 +630,7 @@ var _ = Describe("Cluster Reconciler", func() {
 			// that the method doesn't error and returns the expected result
 		})
 	})
-})
+},
+	Entry("Multi-node cluster", "multi-node-cluster", false),
+	Entry("Single-node cluster", "single-node-cluster", true),
+)

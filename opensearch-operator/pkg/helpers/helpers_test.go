@@ -162,6 +162,64 @@ var _ = Describe("Helper Functions", func() {
 		})
 	})
 
+	Describe("IsSingleNodeCluster", func() {
+		Context("when checking for single node configuration", func() {
+			It("should return true for a single node cluster", func() {
+				cluster := &opsterv1.OpenSearchCluster{
+					Spec: opsterv1.ClusterSpec{
+						NodePools: []opsterv1.NodePool{
+							{
+								Component: "node",
+								Replicas:  1,
+							},
+						},
+					},
+				}
+				Expect(IsSingleNodeCluster(cluster)).To(BeTrue())
+			})
+
+			It("should return false for a cluster with multiple nodepools", func() {
+				cluster := &opsterv1.OpenSearchCluster{
+					Spec: opsterv1.ClusterSpec{
+						NodePools: []opsterv1.NodePool{
+							{
+								Component: "master",
+								Replicas:  1,
+							},
+							{
+								Component: "data",
+								Replicas:  1,
+							},
+						},
+					},
+				}
+				Expect(IsSingleNodeCluster(cluster)).To(BeFalse())
+			})
+
+			It("should return false for a cluster with single nodepool but multiple replicas", func() {
+				cluster := &opsterv1.OpenSearchCluster{
+					Spec: opsterv1.ClusterSpec{
+						NodePools: []opsterv1.NodePool{
+							{
+								Component: "node",
+								Replicas:  3,
+							},
+						},
+					},
+				}
+				Expect(IsSingleNodeCluster(cluster)).To(BeFalse())
+			})
+
+			It("should return false for a cluster with no nodepools", func() {
+				cluster := &opsterv1.OpenSearchCluster{
+					Spec: opsterv1.ClusterSpec{
+						NodePools: []opsterv1.NodePool{},
+					},
+				}
+				Expect(IsSingleNodeCluster(cluster)).To(BeFalse())
+			})
+		})
+	})
 })
 
 var _ = Describe("JVM Heap Size Functions", func() {

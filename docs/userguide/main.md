@@ -78,8 +78,6 @@ If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The
 
 The minimal cluster you deployed in this section is only intended for demo purposes. Please see the next sections on how to configure and manage the different aspects of your cluster.
 
-**Single-Node clusters are currently not supported**. Your cluster must have at least 3 nodes with the `master/cluster_manager` role configured.
-
 ## Configuring the operator
 
 The majority of this guide deals with configuring and managing OpenSearch clusters. But there are some general options that can be configured for the operator itself. All of this is done using helm values your provide during installation: `helm install opensearch-operator opensearch-operator/opensearch-operator -f values.yaml`.
@@ -118,6 +116,10 @@ The main job of the operator is to deploy and manage OpenSearch clusters. As suc
 ### Nodepools and Scaling
 
 OpenSearch clusters are composed of one or more node pools, with each representing a logical group of nodes that have the same [role](https://opensearch.org/docs/latest/opensearch/cluster/). Each node pool can have its own resources. For each configured nodepool the operator will create a Kubernetes StatefulSet. It also creates a Kubernetes service object for each nodepool so you can communicate with a specfic nodepool if you want.
+
+In a regular setup, your cluster must have at least 3 nodes with the `master/cluster_manager` role configured.  
+A cluster with just 2 `master/cluster_manager` nodes is not supported, as it won't be able to elect a cluster manager.  
+Single-node clusters are supported, but shall only be used for development and testing purposes.
 
 ```yaml
 spec:

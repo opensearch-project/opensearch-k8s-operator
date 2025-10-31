@@ -193,22 +193,14 @@ func NewSTSForNodePool(
 	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
-	startupProbeCommand := []string{
-		"/bin/bash",
-		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
-	}
+	startupProbeCommand := NodePoolProbeCommand(cr)
 
 	readinessProbePeriodSeconds := int32(30)
 	readinessProbeTimeoutSeconds := int32(30)
 	readinessProbeFailureThreshold := int32(5)
 	readinessProbeSuccessThreshold := int32(1)
 	readinessProbeInitialDelaySeconds := int32(60)
-	readinessProbeCommand := []string{
-		"/bin/bash",
-		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:%d'", PortForCluster(cr)),
-	}
+	readinessProbeCommand := NodePoolProbeCommand(cr)
 
 	livenessProbePeriodSeconds := int32(20)
 	livenessProbeTimeoutSeconds := int32(5)
@@ -482,6 +474,14 @@ func NewSTSForNodePool(
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
 
+	initialManagerNodes := BootstrapPodName(cr)
+	discoveryType := ""
+
+	if helpers.IsSingleNodeCluster(cr) {
+		initialManagerNodes = ""
+		discoveryType = "single-node"
+	}
+
 	sts := &appsv1.StatefulSet{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        cr.Name + "-" + node.Component,
@@ -509,7 +509,11 @@ func NewSTSForNodePool(
 							Env: []corev1.EnvVar{
 								{
 									Name:  "cluster.initial_master_nodes",
-									Value: BootstrapPodName(cr),
+									Value: initialManagerNodes,
+								},
+								{
+									Name:  "discovery.type",
+									Value: discoveryType,
 								},
 								{
 									Name:  "discovery.seed_hosts",
@@ -1094,6 +1098,25 @@ func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *
 			"username": username,
 			"password": password,
 		},
+	}
+}
+
+func NodePoolProbeCommand(cr *opsterv1.OpenSearchCluster) []string {
+	// Distinguish two cases during cluster initialization:
+	// - general case: the SecuirtyconfigUpdateJob configures the security index through the bootstrap pod, so the probe can wait until the node is fully ready,
+	//   i.e. the admin user can authenticate
+	// - single-node case: since there is no bootstrap pod, the SecurityconfigUpdateJob configures the security index on the single node itself,
+	//   so we need to mark the node as ready as soon as the HTTP endpoint is available; otherwise the cluster will never complete initialization
+	cmdString := "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent "
+	if !helpers.IsSingleNodeCluster(cr) {
+		cmdString += "--fail "
+	}
+	cmdString += fmt.Sprintf("'https://localhost:%d'", PortForCluster(cr))
+
+	return []string{
+		"/bin/bash",
+		"-c",
+		cmdString,
 	}
 }
 

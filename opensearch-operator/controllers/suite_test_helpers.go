@@ -94,7 +94,10 @@ func ArrayElementContains(array []string, content string) bool {
 	return false
 }
 
-func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSearchCluster {
+func ComposeOpensearchCrd(clusterName string, namespace string, isSingleNode bool) opsterv1.OpenSearchCluster {
+	// To make the code mode readable,
+	// we first define the CRD for the general multi-node case,
+	// then if the single-node case was requsted we perform the necessary mutations
 	OpensearchCluster := &opsterv1.OpenSearchCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OpenSearchCluster",
@@ -287,5 +290,15 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			},
 		},
 	}
+
+	// Make the necessary mutations to produce a single-node cluster
+	if isSingleNode {
+		OpensearchCluster.Spec.Dashboards.Replicas = 1
+		OpensearchCluster.Spec.NodePools[0].Pdb = nil
+		OpensearchCluster.Spec.NodePools[0].Replicas = 1
+		// Keep only the "master" nodepool
+		OpensearchCluster.Spec.NodePools = []opsterv1.NodePool{OpensearchCluster.Spec.NodePools[0]}
+	}
+
 	return *OpensearchCluster
 }

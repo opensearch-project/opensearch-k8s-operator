@@ -3,9 +3,10 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
+
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/utils/ptr"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -29,7 +30,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 		interval    = time.Second * 1
 	)
 	var (
-		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace)
+		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace, false)
 		cm                = corev1.ConfigMap{}
 		service           = corev1.Service{}
 		deploy            = sts.Deployment{}
