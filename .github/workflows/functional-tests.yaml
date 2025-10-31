@@ -84,7 +84,7 @@ jobs:
 
           ## Install helm chart
           helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
-          helm install opensearch-cluster ../charts/opensearch-cluster --set  opensearchCluster.general.version=${{ matrix.version }} --set opensearchCluster.dashboards.version=${{ matrix.version }} --wait
+          helm install opensearch-cluster ../charts/opensearch-cluster --set  cluster.general.version=${{ matrix.version }} --set cluster.dashboards.version=${{ matrix.version }} --wait
           cd functionaltests
 
           ## Run tests
