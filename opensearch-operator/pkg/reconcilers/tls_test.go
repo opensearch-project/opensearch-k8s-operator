@@ -162,7 +162,6 @@ var _ = Describe("TLS Controller", func() {
 							CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
 						},
 						NodesDn: []string{"CN=mycn", "CN=othercn"},
-						AdminDn: []string{"CN=admin1", "CN=admin2"},
 					},
 					Http: &opsterv1.TlsConfigHttp{
 						Generate: false,
@@ -170,6 +169,7 @@ var _ = Describe("TLS Controller", func() {
 							Secret:   corev1.LocalObjectReference{Name: "cert-http"},
 							CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
 						},
+						AdminDn: []string{"CN=admin1", "CN=admin2"},
 					},
 				},
 				}}}
