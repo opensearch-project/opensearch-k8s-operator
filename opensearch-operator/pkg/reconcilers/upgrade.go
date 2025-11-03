@@ -156,7 +156,7 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 
 	// Don't allow version downgrades as they might cause unexpected issues
 	if new.LessThan(existing) {
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Error", "Upgrade", "Invalid version: specified version is more than 1 major version greater than existing")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Error", "Upgrade", "Invalid version: specified version is a downgrade")
 		return ErrVersionDowngrade
 	}
 
