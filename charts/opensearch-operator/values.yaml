@@ -77,7 +77,8 @@ installCRDs: true
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
-  # Override the service account name. Defaults to opensearch-operator-controller-manager
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
   name: ""
 
 # kubeRbacProxy has been replaced with controller-runtime's built-in
