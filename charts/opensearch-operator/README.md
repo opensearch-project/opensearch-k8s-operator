@@ -81,32 +81,6 @@ The following table lists the configurable parameters of the Helm chart.
 | `installCRDs` | bool | `true` |  |
 | `serviceAccount.create` | bool | `true` |  |
 | `serviceAccount.name` | string | `""` |  |
-| `kubeRbacProxy.enable` | bool | `true` |  |
-| `kubeRbacProxy.securityContext.allowPrivilegeEscalation` | bool | `false` |  |
-| `kubeRbacProxy.securityContext.readOnlyRootFilesystem` | bool | `true` |  |
-| `kubeRbacProxy.securityContext.capabilities.drop[0]` | string | `"ALL"` |  |
-| `kubeRbacProxy.resources.limits.cpu` | string | `"50m"` |  |
-| `kubeRbacProxy.resources.limits.memory` | string | `"50Mi"` |  |
-| `kubeRbacProxy.resources.requests.cpu` | string | `"25m"` |  |
-| `kubeRbacProxy.resources.requests.memory` | string | `"25Mi"` |  |
-| `kubeRbacProxy.livenessProbe.failureThreshold` | int | `3` |  |
-| `kubeRbacProxy.livenessProbe.httpGet.path` | string | `"/healthz"` |  |
-| `kubeRbacProxy.livenessProbe.httpGet.port` | int | `10443` |  |
-| `kubeRbacProxy.livenessProbe.httpGet.scheme` | string | `"HTTPS"` |  |
-| `kubeRbacProxy.livenessProbe.periodSeconds` | int | `15` |  |
-| `kubeRbacProxy.livenessProbe.successThreshold` | int | `1` |  |
-| `kubeRbacProxy.livenessProbe.timeoutSeconds` | int | `3` |  |
-| `kubeRbacProxy.livenessProbe.initialDelaySeconds` | int | `10` |  |
-| `kubeRbacProxy.readinessProbe.failureThreshold` | int | `3` |  |
-| `kubeRbacProxy.readinessProbe.httpGet.path` | string | `"/healthz"` |  |
-| `kubeRbacProxy.readinessProbe.httpGet.port` | int | `10443` |  |
-| `kubeRbacProxy.readinessProbe.httpGet.scheme` | string | `"HTTPS"` |  |
-| `kubeRbacProxy.readinessProbe.periodSeconds` | int | `15` |  |
-| `kubeRbacProxy.readinessProbe.successThreshold` | int | `1` |  |
-| `kubeRbacProxy.readinessProbe.timeoutSeconds` | int | `3` |  |
-| `kubeRbacProxy.readinessProbe.initialDelaySeconds` | int | `10` |  |
-| `kubeRbacProxy.image.repository` | string | `"gcr.io/kubebuilder/kube-rbac-proxy"` |  |
-| `kubeRbacProxy.image.tag` | string | `"v0.15.0"` |  |
 | `useRoleBindings` | bool | `false` |  |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
