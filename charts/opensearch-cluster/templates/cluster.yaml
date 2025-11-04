@@ -54,7 +54,7 @@ spec:
         secret: {{ . | toYaml | nindent 10 }}
         {{- end }}
         {{- if .tls.transport.duration }}
-        duration: {{ .tls.transport.duration | nindent 10 }}
+        duration: {{ .tls.transport.duration }}
         {{- end }}
         {{- if .tls.transport.enableHotReload }}
         enableHotReload: {{ .tls.transport.enableHotReload }}
@@ -73,7 +73,7 @@ spec:
         caSecret: {{ . | toYaml | nindent 10 }}
         {{- end }}
         {{- if .tls.http.duration }}
-        duration: {{ .tls.http.duration | nindent 10 }}
+        duration: {{ .tls.http.duration }}
         {{- end }}
         {{- if .tls.http.enableHotReload }}
         enableHotReload: {{ .tls.http.enableHotReload }}
