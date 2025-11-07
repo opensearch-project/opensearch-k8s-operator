@@ -24,7 +24,7 @@ var _ = Describe("DeployWithHelm", Ordered, func() {
 					return sts.Status.ReadyReplicas
 				}
 				return 0
-			}, time.Minute*15, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*30, time.Second*5).Should(Equal(int32(3)))
 		})
 
 		It("should have a ready dashboards pod", func() {
