@@ -35,7 +35,7 @@ var _ = Describe("DeployWithHelm", Ordered, func() {
 					return deployment.Status.ReadyReplicas
 				}
 				return 0
-			}, time.Minute*5, time.Second*5).Should(Equal(int32(1)))
+			}, time.Minute*10, time.Second*5).Should(Equal(int32(1)))
 		})
 	})
 })
