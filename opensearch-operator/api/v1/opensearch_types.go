@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	PhasePending = "PENDING"
-	PhaseRunning = "RUNNING"
+	PhasePending   = "PENDING"
+	PhaseRunning   = "RUNNING"
+	PhaseUpgrading = "UPGRADING"
 )
 
 // OpenSearchHealth is the health of the cluster as returned by the health API.
