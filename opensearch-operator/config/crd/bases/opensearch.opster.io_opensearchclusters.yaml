@@ -3045,6 +3045,7 @@ spec:
                         type: object
                     type: object
                   replicas:
+                    default: 1
                     format: int32
                     type: integer
                   resources:
@@ -3407,9 +3408,6 @@ spec:
                     type: array
                   version:
                     type: string
-                required:
-                - replicas
-                - version
                 type: object
               general:
                 description: |-
