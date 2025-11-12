@@ -1010,7 +1010,12 @@ func NewBootstrapPod(
 
 	startUpCommand := "./opensearch-docker-entrypoint.sh"
 
-	pluginslist := helpers.RemoveDuplicateStrings(cr.Spec.Bootstrap.PluginsList)
+	// Use General.PluginsList by default, override with Bootstrap.PluginsList if set
+	pluginslist := cr.Spec.General.PluginsList
+	if len(cr.Spec.Bootstrap.PluginsList) > 0 {
+		pluginslist = cr.Spec.Bootstrap.PluginsList
+	}
+	pluginslist = helpers.RemoveDuplicateStrings(pluginslist)
 	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
 	pod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{

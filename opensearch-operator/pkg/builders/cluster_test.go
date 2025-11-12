@@ -671,6 +671,49 @@ var _ = Describe("Builders", func() {
 			Expect(expected).To(Equal(actual))
 		})
 
+		It("should inherit General.PluginsList when Bootstrap.PluginsList is not set", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			pluginA := "repository-s3"
+			pluginB := "analysis-icu"
+
+			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
+			// Bootstrap.PluginsList is not set
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(ContainSubstring(pluginA))
+			Expect(actual[2]).To(ContainSubstring(pluginB))
+		})
+
+		It("should override General.PluginsList with Bootstrap.PluginsList when explicitly set", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			generalPlugin := "repository-s3"
+			bootstrapPluginA := "custom-plugin-a"
+			bootstrapPluginB := "custom-plugin-b"
+
+			clusterObject.Spec.General.PluginsList = []string{generalPlugin}
+			clusterObject.Spec.Bootstrap.PluginsList = []string{bootstrapPluginA, bootstrapPluginB}
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			// Should use Bootstrap.PluginsList, not General.PluginsList
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(ContainSubstring(bootstrapPluginA))
+			Expect(actual[2]).To(ContainSubstring(bootstrapPluginB))
+			Expect(actual[2]).NotTo(ContainSubstring(generalPlugin))
+		})
+
+		It("should use no plugins when both General.PluginsList and Bootstrap.PluginsList are empty", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			// Neither list is set
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(Equal("./opensearch-docker-entrypoint.sh"))
+		})
+
 		It("should use PVC for data volume instead of emptyDir", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewBootstrapPod(&clusterObject, nil, nil)
