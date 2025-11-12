@@ -52,8 +52,8 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 			cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpenSearchCluster"})
 			Get(&cluster, client.ObjectKey{Name: name, Namespace: namespace}, time.Second*5)
 
-			SetNestedKey(cluster.Object, "2.3.0", "spec", "general", "version")
-			SetNestedKey(cluster.Object, "2.3.0", "spec", "dashboards", "version")
+			SetNestedKey(cluster.Object, "3.3.0", "spec", "general", "version")
+			SetNestedKey(cluster.Object, "3.3.0", "spec", "dashboards", "version")
 
 			Expect(k8sClient.Update(context.Background(), &cluster)).ToNot(HaveOccurred())
 		})
@@ -66,7 +66,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return sts.Spec.Template.Spec.Containers[0].Image
 				}
 				return ""
-			}, time.Minute*3, time.Second*5).Should(Equal("docker.io/opensearchproject/opensearch:2.3.0"))
+			}, time.Minute*3, time.Second*5).Should(Equal("docker.io/opensearchproject/opensearch:3.3.0"))
 
 			Eventually(func() int32 {
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-masters", Namespace: namespace}, &sts)
@@ -105,7 +105,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return deployment.Spec.Template.Spec.Containers[0].Image
 				}
 				return ""
-			}, time.Minute*1, time.Second*5).Should(Equal("docker.io/opensearchproject/opensearch-dashboards:2.3.0"))
+			}, time.Minute*1, time.Second*5).Should(Equal("docker.io/opensearchproject/opensearch-dashboards:3.3.0"))
 
 			Eventually(func() int32 {
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-dashboards", Namespace: namespace}, &deployment)
