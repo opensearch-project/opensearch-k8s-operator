@@ -154,6 +154,20 @@ var _ = Describe("Additional volumes", func() {
 		})
 	})
 
+	When("PersistentVolumeClaim volume is added", func() {
+		It("Should have PersistentVolumeClaimVolumeSource fields", func() {
+			readOnly := true
+			volumeConfigs[0].PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
+				ClaimName: "testClaim",
+				ReadOnly:  readOnly,
+			}
+
+			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].PersistentVolumeClaim.ClaimName).To(Equal("testClaim"))
+			Expect(volume[0].PersistentVolumeClaim.ReadOnly).Should(BeTrue())
+		})
+	})
+
 	When("Projected volume is added", func() {
 		It("Should have ProjectedVolumeSource fields", func() {
 			volumeConfigs[0].Projected = &v1.ProjectedVolumeSource{

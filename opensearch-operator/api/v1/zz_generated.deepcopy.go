@@ -152,6 +152,11 @@ func (in *AdditionalVolume) DeepCopyInto(out *AdditionalVolume) {
 		*out = new(corev1.CSIVolumeSource)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.PersistentVolumeClaim != nil {
+		in, out := &in.PersistentVolumeClaim, &out.PersistentVolumeClaim
+		*out = new(corev1.PersistentVolumeClaimVolumeSource)
+		(*in).DeepCopyInto(*out)
+	}
 	if in.Projected != nil {
 		in, out := &in.Projected, &out.Projected
 		*out = new(corev1.ProjectedVolumeSource)
