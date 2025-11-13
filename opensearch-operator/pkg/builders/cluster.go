@@ -577,6 +577,7 @@ func NewSTSForNodePool(
 					ImagePullSecrets:          image.ImagePullSecrets,
 					PriorityClassName:         node.PriorityClassName,
 					SecurityContext:           podSecurityContext,
+					HostAliases:               cr.Spec.General.HostAliases,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
