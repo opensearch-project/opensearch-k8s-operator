@@ -1,5 +1,13 @@
 name: Functional tests
-on: [pull_request]
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      enable_log_collection:
+        description: 'Enable log collection and publishing'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   operator:
@@ -84,14 +92,18 @@ jobs:
 
           ## Install helm chart
           helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
-          helm install opensearch-cluster ../charts/opensearch-cluster --set  cluster.general.version=${{ matrix.version }} --set cluster.dashboards.version=${{ matrix.version }} --wait
+          helm install opensearch-cluster ../charts/opensearch-cluster \
+            --set cluster.general.version=${{ matrix.version }} \
+            --set cluster.dashboards.version=${{ matrix.version }} \
+            -f functionaltests/helmtests/ci-values.yml \
+            --wait
           cd functionaltests
 
           ## Run tests
           go test ./helmtests -timeout 15m
 
       - name: Collect operator logs
-        if: always()
+        if: always() && inputs.enable_log_collection == true
         run: |
           export CLUSTER_NAME=opensearch-operator-tests
           cd opensearch-operator
@@ -140,7 +152,7 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
           done
       - name: Publish logs
-        if: always()
+        if: always() && inputs.enable_log_collection == true
         uses: actions/upload-artifact@v4
         with:
           name: operator-logs-${{ matrix.version }}
