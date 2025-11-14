@@ -335,7 +335,10 @@ func NewSTSForNodePool(
 	volumes = append(volumes, corev1.Volume{
 		Name: "admin-credentials",
 		VolumeSource: corev1.VolumeSource{
-			Secret: &corev1.SecretVolumeSource{SecretName: fmt.Sprintf("%s-admin-password", cr.Name)},
+			Secret: &corev1.SecretVolumeSource{
+				SecretName:  fmt.Sprintf("%s-admin-password", cr.Name),
+				DefaultMode: helpers.SecretDefaultMode(),
+			},
 		},
 	})
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
@@ -426,7 +429,8 @@ func NewSTSForNodePool(
 				Name: "keystore-" + keystoreValue.Secret.Name,
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: keystoreValue.Secret.Name,
+						SecretName:  keystoreValue.Secret.Name,
+						DefaultMode: helpers.SecretDefaultMode(),
 					},
 				},
 			})
@@ -948,7 +952,8 @@ func NewBootstrapPod(
 				Name: "keystore-" + keystoreValue.Secret.Name,
 				VolumeSource: corev1.VolumeSource{
 					Secret: &corev1.SecretVolumeSource{
-						SecretName: keystoreValue.Secret.Name,
+						SecretName:  keystoreValue.Secret.Name,
+						DefaultMode: helpers.SecretDefaultMode(),
 					},
 				},
 			})
@@ -1184,8 +1189,11 @@ func NewSecurityconfigUpdateJob(
 	}
 
 	volumes = append(volumes, corev1.Volume{
-		Name:         "admin-cert",
-		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: adminCertName}},
+		Name: "admin-cert",
+		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{
+			SecretName:  adminCertName,
+			DefaultMode: helpers.SecretDefaultMode(),
+		}},
 	})
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "admin-cert",

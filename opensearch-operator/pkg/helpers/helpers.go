@@ -602,3 +602,9 @@ func ResolveUidGid(cr *opsterv1.OpenSearchCluster) (uid, gid int64) {
 func GetChownCommand(uid, gid int64, path string) string {
 	return fmt.Sprintf("chown -R %d:%d %s", uid, gid, path)
 }
+
+func SecretDefaultMode() *int32 {
+	defaultMode := int32(0600)
+	return &defaultMode
+}
+
