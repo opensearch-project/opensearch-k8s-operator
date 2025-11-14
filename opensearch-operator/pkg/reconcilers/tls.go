@@ -324,7 +324,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 		}
 	}
 	// Tell the cluster controller to mount secrets
-	volume := corev1.Volume{Name: "transport-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName}}}
+	volume := corev1.Volume{Name: "transport-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName, DefaultMode: helpers.SecretDefaultMode()}}}
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
 	mount := corev1.VolumeMount{Name: "transport-cert", MountPath: "/usr/share/opensearch/config/tls-transport"}
 	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
@@ -459,7 +459,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 		}
 	}
 	// Tell cluster controller to mount secrets
-	volume := corev1.Volume{Name: "transport-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName}}}
+	volume := corev1.Volume{Name: "transport-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName, DefaultMode: helpers.SecretDefaultMode()}}}
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
 	mount := corev1.VolumeMount{Name: "transport-cert", MountPath: "/usr/share/opensearch/config/tls-transport"}
 	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
@@ -587,7 +587,7 @@ func (r *TLSReconciler) handleHttp() error {
 			}
 		}
 		// Tell cluster controller to mount secrets
-		volume := corev1.Volume{Name: "http-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName}}}
+		volume := corev1.Volume{Name: "http-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName, DefaultMode: helpers.SecretDefaultMode()}}}
 		r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
 		mount := corev1.VolumeMount{Name: "http-cert", MountPath: "/usr/share/opensearch/config/tls-" + "http"}
 		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
@@ -632,14 +632,14 @@ func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls
 }
 
 func mount(interfaceName string, name string, filename string, secretName string, reconcilerContext *ReconcilerContext) {
-	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName}}}
+	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName, DefaultMode: helpers.SecretDefaultMode()}}}
 	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
 	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s/%s", interfaceName, filename), SubPath: filename}
 	reconcilerContext.VolumeMounts = append(reconcilerContext.VolumeMounts, mount)
 }
 
 func mountFolder(interfaceName string, name string, secretName string, reconcilerContext *ReconcilerContext) {
-	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName}}}
+	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName, DefaultMode: helpers.SecretDefaultMode()}}}
 	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
 	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s", interfaceName)}
 	reconcilerContext.VolumeMounts = append(reconcilerContext.VolumeMounts, mount)
