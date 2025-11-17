@@ -24,8 +24,18 @@ jobs:
         with:
           version: v1
           k3d-name: opensearch-operator-tests
-          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: Disable kubelet eviction in k3d creation
+          k3d-args: >
+            --servers 1
+            --agents 2
+            -p 30000-30005:30000-30005@agent:0
+            --k3s-arg "--kubelet-arg=eviction-hard=nodefs.available<1Mi@server:*"
+            --k3s-arg "--kubelet-arg=eviction-hard=nodefs.available<1Mi@agent:*"
+            --k3s-arg "--kubelet-arg=eviction-soft=0@server:*"
+            --k3s-arg "--kubelet-arg=eviction-soft=0@agent:*"
+            --k3s-arg "--kubelet-arg=eviction-minimum-reclaim=0@server:*"
+            --k3s-arg "--kubelet-arg=eviction-minimum-reclaim=0@agent:*"
       - name: Run tests
         run: |
           set -e
@@ -71,8 +81,18 @@ jobs:
         with:
           version: v1
           k3d-name: opensearch-operator-tests
-          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: Disable kubelet eviction in k3d creation
+          k3d-args: >
+            --servers 1
+            --agents 2
+            -p 30000-30005:30000-30005@agent:0
+            --k3s-arg "--kubelet-arg=eviction-hard=nodefs.available<1Mi@server:*"
+            --k3s-arg "--kubelet-arg=eviction-hard=nodefs.available<1Mi@agent:*"
+            --k3s-arg "--kubelet-arg=eviction-soft=0@server:*"
+            --k3s-arg "--kubelet-arg=eviction-soft=0@agent:*"
+            --k3s-arg "--kubelet-arg=eviction-minimum-reclaim=0@server:*"
+            --k3s-arg "--kubelet-arg=eviction-minimum-reclaim=0@agent:*"
       - name: Run tests
         id: helm_tests
         run: |
