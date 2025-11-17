@@ -1,0 +1,9 @@
+# NOTE(joseb): This file is used to create a temporary values file for disk watermark configuration
+#              It is used in the functional tests to avoid failed shard assignments due to watermarking
+#              in limited disk space environments like Github Actions runners
+cluster:
+  general:
+    additionalConfig:
+      cluster.routing.allocation.disk.watermark.low: 500m
+      cluster.routing.allocation.disk.watermark.high: 300m
+      cluster.routing.allocation.disk.watermark.flood_stage: 100m
