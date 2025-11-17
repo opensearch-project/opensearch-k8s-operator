@@ -106,6 +106,7 @@ jobs:
       - name: Collect operator logs
         if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
         run: |
+          df -h
           export CLUSTER_NAME=opensearch-operator-tests
           cd opensearch-operator
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
