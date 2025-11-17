@@ -31,8 +31,6 @@ jobs:
             --agents 2
             -p 30000-30005:30000-30005@agent:0
             --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
-            --k3s-arg --kubelet-arg=eviction-soft=0@all
-            --k3s-arg --kubelet-arg=eviction-minimum-reclaim=0@all
       - name: Run tests
         run: |
           set -e
@@ -85,8 +83,6 @@ jobs:
             --agents 2
             -p 30000-30005:30000-30005@agent:0
             --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
-            --k3s-arg --kubelet-arg=eviction-soft=0@all
-            --k3s-arg --kubelet-arg=eviction-minimum-reclaim=0@all
       - name: Run tests
         id: helm_tests
         run: |
