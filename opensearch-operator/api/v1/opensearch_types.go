@@ -270,7 +270,7 @@ type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names.
-	CustomFQDN           *string `json:"customFQDN,omitempty"`
+	CustomFQDN *string `json:"customFQDN,omitempty"`
 	// Automatically rotate certificates before they expire, set to -1 to disable
 	//+kubebuilder:default=-1
 	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
