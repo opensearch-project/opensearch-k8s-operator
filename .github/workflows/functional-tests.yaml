@@ -129,6 +129,9 @@ jobs:
           echo "=== All Pods Status ==="
           cat ../logs/all-pods.txt || true
 
+          echo "Collecting all pods YAMLs..."
+          kubectl get pods -n default -o yaml > ../logs/all-pods.yaml 2>&1 || true
+
           echo "Collecting OpenSearchCluster resource status..."
           kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
 
