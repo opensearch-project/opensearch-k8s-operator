@@ -83,6 +83,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `serviceAccount.name` | string | `""` |  |
 | `useRoleBindings` | bool | `false` |  |
 | `webhook.enabled` | bool | `true` |  |
+| `webhook.port` | int | `9443` |  |
 | `webhook.failurePolicy` | string | `"Fail"` |  |
 | `webhook.secretName` | string | `""` |  |
 | `webhook.certManager.enabled` | bool | `true` |  |

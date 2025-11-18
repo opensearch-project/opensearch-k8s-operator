@@ -14,7 +14,7 @@ data:
     metrics:
       bindAddress: 127.0.0.1:8080
     webhook:
-      port: 9443
+      port: {{ .Values.webhook.port }}
     leaderElection:
       leaderElect: true
       resourceName: a867c7dc.opensearch.opster.io

@@ -38,11 +38,20 @@ This naming convention aligns with the operator's domain and makes it clear that
 
 ### Enabling/Disabling Webhooks
 
-Webhooks are enabled by default when installing the operator via Helm. You can control this behavior using the `webhook.enabled` value:
+Webhooks are enabled by default when installing the operator via Helm. You can control this behavior using the `webhook.enabled` value, which also drives the operator's `--enable-webhooks` flag:
 
 ```yaml
 webhook:
   enabled: true  # Set to false to disable webhooks
+  port: 9443     # Customize the webhook server port
+```
+
+When running the manager outside of Helm (for example, during local development), use the CLI flag directly:
+
+```bash
+./manager --enable-webhooks=false
+# optionally override the webhook port
+./manager --webhook-port=9443
 ```
 
 ### Failure Policy
@@ -187,6 +196,15 @@ If you need to temporarily disable webhooks for troubleshooting:
 ```yaml
 webhook:
   enabled: false
+  port: 9443
+```
+
+Or, if you are running the binary directly:
+
+```bash
+./manager --enable-webhooks=false
+# If you also need to change the webhook port:
+./manager --webhook-port=9443
 ```
 
 **Warning:** Disabling webhooks will bypass validation, which may allow invalid configurations to be created. Only disable webhooks for troubleshooting purposes.

@@ -67,6 +67,8 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var enableWebhooks bool
+	var webhookPort int
 	var probeAddr string
 	var watchNamespace string
 	var logLevel string
@@ -75,6 +77,8 @@ func main() {
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "Enable validating webhooks for OpenSearch custom resources.")
+	flag.IntVar(&webhookPort, "webhook-port", 9443, "Port used by the validating webhook server.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
 		"The comma-separated list of namespaces that the controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
@@ -126,6 +130,13 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	var webhookServer webhook.Server
+	if enableWebhooks {
+		webhookServer = webhook.NewServer(webhook.Options{
+			Port: webhookPort,
+		})
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
@@ -137,9 +148,7 @@ func main() {
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
 		Cache:                  cacheOpts,
-		WebhookServer: webhook.NewServer(webhook.Options{
-			Port: 9443,
-		}),
+		WebhookServer:          webhookServer,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -231,46 +240,50 @@ func main() {
 	}
 	//+kubebuilder:scaffold:builder
 
-	// Setup webhook validators
-	if err = (&opsterwebhook.OpenSearchIndexTemplateValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchIndexTemplate")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchComponentTemplateValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchComponentTemplate")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchUserValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUser")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchRoleValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchRole")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchTenantValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchTenant")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchUserRoleBindingValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUserRoleBinding")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchActionGroupValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchActionGroup")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchISMPolicyValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchISMPolicy")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchSnapshotPolicyValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchSnapshotPolicy")
-		os.Exit(1)
-	}
-	if err = (&opsterwebhook.OpenSearchClusterValidator{}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchCluster")
-		os.Exit(1)
+	// Setup webhook validators if enabled
+	if enableWebhooks {
+		if err = (&opsterwebhook.OpenSearchIndexTemplateValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchIndexTemplate")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchComponentTemplateValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchComponentTemplate")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchUserValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUser")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchRoleValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchRole")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchTenantValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchTenant")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchUserRoleBindingValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUserRoleBinding")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchActionGroupValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchActionGroup")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchISMPolicyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchISMPolicy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchSnapshotPolicyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchSnapshotPolicy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchClusterValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchCluster")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("Webhooks disabled; skipping webhook registration")
 	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

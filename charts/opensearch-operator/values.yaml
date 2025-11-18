@@ -98,6 +98,8 @@ useRoleBindings: false
 webhook:
   # Enable validation webhooks
   enabled: true
+  # Port exposed by the webhook server container
+  port: 9443
   # Failure policy for webhooks. Options: Fail, Ignore
   failurePolicy: Fail
   # Secret name for webhook TLS certificates (used when certManager.enabled is false)
