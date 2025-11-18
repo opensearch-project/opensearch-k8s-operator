@@ -3,10 +3,6 @@ version: "2"
 run:
   timeout: 3m
 
-issues:
-  exclude-files:
-    - "opensearch-gateway/responses/.*\\.go$"
-
 formatters:
   enable:
     - gofmt
