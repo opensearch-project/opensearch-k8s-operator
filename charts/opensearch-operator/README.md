@@ -82,6 +82,10 @@ The following table lists the configurable parameters of the Helm chart.
 | `serviceAccount.create` | bool | `true` |  |
 | `serviceAccount.name` | string | `""` |  |
 | `useRoleBindings` | bool | `false` |  |
+| `webhook.enabled` | bool | `true` |  |
+| `webhook.failurePolicy` | string | `"Fail"` |  |
+| `webhook.secretName` | string | `""` |  |
+| `webhook.certManager.enabled` | bool | `true` |  |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 

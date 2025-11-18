@@ -93,3 +93,25 @@ serviceAccount:
 ## are in in manager.watchNamespace field.
 ## If false, ClusterRoleBindings will be used
 useRoleBindings: false
+
+# Webhook configuration
+webhook:
+  # Enable validation webhooks
+  enabled: true
+  # Failure policy for webhooks. Options: Fail, Ignore
+  failurePolicy: Fail
+  # Secret name for webhook TLS certificates (used when certManager.enabled is false)
+  # Defaults to: <release-name>-opensearch-operator-webhook-server-cert
+  # If certManager is disabled, you must manually create this secret with:
+  #   - tls.crt: The TLS certificate
+  #   - tls.key: The TLS private key
+  #   - ca.crt: The CA certificate (optional, for client verification)
+  # The certificate should be valid for:
+  #   - <release-name>-opensearch-operator-webhook-service.<namespace>.svc
+  #   - <release-name>-opensearch-operator-webhook-service.<namespace>.svc.cluster.local
+  secretName: ""
+  # Cert-manager configuration for webhook certificates
+  certManager:
+    # Enable cert-manager for automatic certificate management
+    # If set to false, you must manually create the TLS secret (see webhook.secretName above)
+    enabled: true

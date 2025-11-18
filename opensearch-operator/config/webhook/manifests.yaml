@@ -1,0 +1,206 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchactiongroup
+  failurePolicy: Fail
+  name: vopensearchactiongroup.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchactiongroups
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchcluster
+  failurePolicy: Fail
+  name: vopensearchcluster.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchclusters
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchcomponenttemplate
+  failurePolicy: Fail
+  name: vopensearchcomponenttemplate.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchcomponenttemplates
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchindextemplate
+  failurePolicy: Fail
+  name: vopensearchindextemplate.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchindextemplates
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchismpolicy
+  failurePolicy: Fail
+  name: vopensearchismpolicy.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchismpolicies
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchrole
+  failurePolicy: Fail
+  name: vopensearchrole.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchroles
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchsnapshotpolicy
+  failurePolicy: Fail
+  name: vopensearchsnapshotpolicy.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchsnapshotpolicies
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchtenant
+  failurePolicy: Fail
+  name: vopensearchtenant.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchtenants
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchuser
+  failurePolicy: Fail
+  name: vopensearchuser.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchusers
+  sideEffects: None
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-opensearch-opster-io-v1-opensearchuserrolebinding
+  failurePolicy: Fail
+  name: vopensearchuserrolebinding.opensearch.opster.io
+  rules:
+  - apiGroups:
+    - opensearch.opster.io
+    apiVersions:
+    - v1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - opensearchuserrolebindings
+  sideEffects: None

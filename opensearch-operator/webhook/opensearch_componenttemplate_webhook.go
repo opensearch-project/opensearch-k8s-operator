@@ -23,17 +23,17 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
-	"sigs.k8s.io/controller-runtime/pkg/webhook"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchcomponenttemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchcomponenttemplates,verbs=create;update,versions=v1,name=vopensearchcomponenttemplate.kb.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchcomponenttemplate,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchcomponenttemplates,verbs=create;update,versions=v1,name=vopensearchcomponenttemplate.opensearch.opster.io,admissionReviewVersions=v1
 
 type OpenSearchComponentTemplateValidator struct {
 	Client  client.Client
-	decoder *admission.Decoder
+	decoder admission.Decoder
 }
 
 // SetupWithManager sets up the webhook with the Manager.
@@ -48,12 +48,12 @@ func (v *OpenSearchComponentTemplateValidator) SetupWithManager(mgr ctrl.Manager
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchComponentTemplateValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	componentTemplate := obj.(*opsterv1.OpensearchComponentTemplate)
-	
+
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, componentTemplate); err != nil {
 		return nil, err
 	}
-	
+
 	return nil, nil
 }
 
@@ -61,17 +61,17 @@ func (v *OpenSearchComponentTemplateValidator) ValidateCreate(ctx context.Contex
 func (v *OpenSearchComponentTemplateValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
 	oldComponentTemplate := oldObj.(*opsterv1.OpensearchComponentTemplate)
 	newComponentTemplate := newObj.(*opsterv1.OpensearchComponentTemplate)
-	
+
 	// Validate that the OpenSearch cluster reference hasn't changed
 	if err := v.validateClusterReferenceUnchanged(oldComponentTemplate, newComponentTemplate); err != nil {
 		return nil, err
 	}
-	
+
 	// Validate that the component template name hasn't changed (if it was previously set)
 	if err := v.validateComponentTemplateNameUnchanged(oldComponentTemplate, newComponentTemplate); err != nil {
 		return nil, err
 	}
-	
+
 	return nil, nil
 }
 
@@ -84,15 +84,15 @@ func (v *OpenSearchComponentTemplateValidator) ValidateDelete(ctx context.Contex
 // validateClusterReference validates that the referenced OpenSearch cluster exists
 func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx context.Context, componentTemplate *opsterv1.OpensearchComponentTemplate) error {
 	cluster := &opsterv1.OpenSearchCluster{}
-	err := v.Client.Get(ctx, client.ObjectKey{
+	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      componentTemplate.Spec.OpensearchRef.Name,
 		Namespace: componentTemplate.Namespace,
 	}, cluster)
-	
+
 	if err != nil {
 		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", componentTemplate.Spec.OpensearchRef.Name, err)
 	}
-	
+
 	return nil
 }
 

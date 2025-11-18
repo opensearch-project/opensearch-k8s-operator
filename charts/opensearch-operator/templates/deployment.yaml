@@ -60,6 +60,17 @@ spec:
         - containerPort: 8443
           name: https
           protocol: TCP
+        {{- if .Values.webhook.enabled }}
+        - containerPort: 9443
+          name: webhook-server
+          protocol: TCP
+        {{- end }}
+        {{- if .Values.webhook.enabled }}
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+        {{- end }}
         securityContext:
 {{- toYaml .Values.manager.securityContext | nindent 10 }}
       nodeSelector:
@@ -76,4 +87,11 @@ spec:
       terminationGracePeriodSeconds: 10
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- if .Values.webhook.enabled }}
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: {{ if .Values.webhook.secretName }}{{ .Values.webhook.secretName }}{{ else }}{{ include "opensearch-operator.fullname" . }}-webhook-server-cert{{ end }}
       {{- end }}

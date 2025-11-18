@@ -86,6 +86,8 @@ The majority of this guide deals with configuring and managing OpenSearch cluste
 
 For a list of all possible values see the [chart default values.yaml](../../charts/opensearch-operator/values.yaml). Some important ones:
 
+> **Note:** The operator includes admission controller webhooks for validating OpenSearch CRDs. See the [Webhooks Documentation](./webhooks.md) for detailed information about webhook configuration, certificate management, and troubleshooting.
+
 ```yaml
 manager:
   # Log level of the operator. Possible values: debug, info, warn, error
