@@ -5,45 +5,14 @@ metadata:
   name: manager-role
 rules:
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - statefulsets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - ""
   resources:
   - configmaps
+  - namespaces
+  - persistentvolumeclaims
+  - pods
+  - secrets
+  - services
   verbs:
   - create
   - delete
@@ -61,9 +30,10 @@ rules:
   - patch
   - update
 - apiGroups:
-  - ""
+  - apps
   resources:
-  - namespaces
+  - deployments
+  - statefulsets
   verbs:
   - create
   - delete
@@ -73,45 +43,9 @@ rules:
   - update
   - watch
 - apiGroups:
-  - ""
+  - batch
   resources:
-  - persistentvolumeclaims
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - pods
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - services
+  - jobs
   verbs:
   - create
   - delete
@@ -143,239 +77,14 @@ rules:
   - opensearch.opster.io
   resources:
   - opensearchactiongroups
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchactiongroups/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchactiongroups/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchclusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchclusters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchclusters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchcomponenttemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchcomponenttemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchcomponenttemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchindextemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchindextemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchindextemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchismpolicies
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchismpolicies/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchismpolicies/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchroles
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchroles/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchroles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchsnapshotpolicies
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchsnapshotpolicies/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchsnapshotpolicies/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchtenants
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchtenants/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchtenants/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchuserrolebindings
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchuserrolebindings/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchuserrolebindings/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
   - opensearchusers
   verbs:
   - create
@@ -388,12 +97,30 @@ rules:
 - apiGroups:
   - opensearch.opster.io
   resources:
+  - opensearchactiongroups/finalizers
+  - opensearchclusters/finalizers
+  - opensearchcomponenttemplates/finalizers
+  - opensearchindextemplates/finalizers
+  - opensearchismpolicies/finalizers
+  - opensearchroles/finalizers
+  - opensearchsnapshotpolicies/finalizers
+  - opensearchtenants/finalizers
+  - opensearchuserrolebindings/finalizers
   - opensearchusers/finalizers
   verbs:
   - update
 - apiGroups:
   - opensearch.opster.io
   resources:
+  - opensearchactiongroups/status
+  - opensearchclusters/status
+  - opensearchcomponenttemplates/status
+  - opensearchindextemplates/status
+  - opensearchismpolicies/status
+  - opensearchroles/status
+  - opensearchsnapshotpolicies/status
+  - opensearchtenants/status
+  - opensearchuserrolebindings/status
   - opensearchusers/status
   verbs:
   - get
