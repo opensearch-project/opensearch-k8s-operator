@@ -395,15 +395,15 @@ We don't support dynamic values depending on the node type for now.
 
 ### Deal with `max virtual memory areas vm.max_map_count` errors
 
-OpenSearch requires the Linux kernel `vm.max_map_count` option [to be set to at least 262144](https://opensearch.org/docs/1.0/opensearch/install/important-settings/). You can either set this yourself on the Kubernetes hosts using sysctl or you can let the operator take care of it by adding the following option to your cluster spec:
+OpenSearch requires the Linux kernel `vm.max_map_count` option [to be set to at least 262144](https://opensearch.org/docs/1.0/opensearch/install/important-settings/). The operator sets this option as 262144 in default using an init container for each opensearch pod. If you already set this option yourself on the Kubernetes hosts using sysctl and don't want to change it by the operator again, you can disable by adding the following option to your cluster spec:
 
 ```yaml
 spec:
   general:
-    setVMMaxMapCount: true
+    setVMMaxMapCount: false
 ```
 
-This will configure an init container for each opensearch pod that executes the needed `sysctl` command. By default the init container uses a busybox image. If you want to change that (for example to use an image from a private registry), see [Custom init helper](#custom-init-helper).
+By default the init container uses a busybox image. If you want to change that (for example to use an image from a private registry), see [Custom init helper](#custom-init-helper).
 
 ### Configuring Snapshot Repositories
 
