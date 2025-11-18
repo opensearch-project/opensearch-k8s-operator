@@ -115,6 +115,24 @@ manager:
 
 The access the endpoints you will need to use a port-forward as for security reasons the endpoints are only exposed on localhost inside the pod: `kubectl port-forward deployment/opensearch-operator-controller-manager 6060`. Then from another terminal you can use the [go pprof tool](https://pkg.go.dev/net/http/pprof#hdr-Usage_examples), e.g.: `go tool pprof http://localhost:6060/debug/pprof/heap`.
 
+### Custom Operator Communication URL
+
+You can configure the operator to use a custom URL when communicating with OpenSearch by setting `operatorClusterURL`:
+
+```yaml
+spec:
+  general:
+    serviceName: my-cluster
+    version: "3.2.0"
+    httpPort: 9200
+    vendor: "opensearch"
+    operatorClusterURL: "opensearch.example.com"  # Optional: custom FQDN for operator communication
+```
+
+This is useful when using external certificates (e.g., from cert-manager) that are valid for a specific FQDN. The operator will use this URL instead of the default internal Kubernetes DNS name, allowing you to use a single certificate for both external access and operator communication.
+
+For a complete example with cert-manager, see `examples/2.x/opensearch-cluster-certmanager-example.yaml`.
+
 ## Configuring OpenSearch
 
 The main job of the operator is to deploy and manage OpenSearch clusters. As such it offers a wide range of options to configure clusters.
@@ -233,6 +251,7 @@ spec:
     tls: # Everything related to TLS configuration
       http: # Configuration of the HTTP endpoint
         generate: true # Have the Operator generate and sign certificates
+        customFQDN: "opensearch.example.com" # Optional: Custom FQDN for the certificate
         # How long generated certificates are valid (default: 8760h = 1 year)
         duration: "8760h"
         secret:
@@ -243,6 +262,8 @@ spec:
 ```
 
 Again, you have the option of either letting the Operator generate and sign the certificates or providing your own. The only difference between node transport certificates and node HTTP/REST APIs is that per-node certificate are not possible here. In all other respects the two work the same way.
+
+When using generated certificates, you can optionally specify a `customFQDN` field to include a custom domain in the certificate's Subject Alternative Names (SAN) alongside the default cluster DNS names.
 
 If you provide your own certificates, please make sure the following names are added as SubjectAltNames (SAN): `<cluster-name>`, `<cluster-name>.<namespace>`, `<cluster-name>.<namespace>.svc`,`<cluster-name>.<namespace>.svc.cluster.local`.
 

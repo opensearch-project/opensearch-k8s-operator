@@ -555,6 +555,7 @@ func (r *TLSReconciler) handleHttp() error {
 		}
 		if err != nil || certRenewal {
 			// Generate node cert and put it into secret
+			// Build default DNS names
 			dnsNames := []string{
 				clusterName,
 				r.instance.Spec.General.ServiceName,
@@ -563,6 +564,12 @@ func (r *TLSReconciler) handleHttp() error {
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
+
+			// Prepend custom FQDN if provided
+			if tlsConfig.CustomFQDN != nil && *tlsConfig.CustomFQDN != "" {
+				dnsNames = append([]string{*tlsConfig.CustomFQDN}, dnsNames...)
+			}
+
 			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames, r.resolveHttpCertDuration())
 			if err != nil {
 				r.logger.Error(err, "Failed to create node certificate", "interface", "http")

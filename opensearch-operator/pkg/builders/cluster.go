@@ -1089,12 +1089,7 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 }
 
 func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
-	httpPort := PortForCluster(cr)
-	protocol := "https"
-	if cr.Spec.General.DisableSSL {
-		protocol = "http"
-	}
-	return fmt.Sprintf("%s://%s.svc.%s:%d", protocol, DnsOfService(cr), helpers.ClusterDnsBase(), httpPort)
+	return helpers.ClusterURL(cr)
 }
 
 func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {

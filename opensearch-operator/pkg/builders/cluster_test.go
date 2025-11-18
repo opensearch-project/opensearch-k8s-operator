@@ -241,6 +241,17 @@ var _ = Describe("Builders", func() {
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 
+		It("should use operatorClusterURL when provided", func() {
+			customHost := "opensearch.example.com"
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.OperatorClusterURL = &customHost
+
+			actualUrl := URLForCluster(&clusterObject)
+			// When HttpPort is 0 (default), ClusterURL should default to 9200
+			expectedUrl := fmt.Sprintf("https://%s:9200", customHost)
+			Expect(actualUrl).To(Equal(expectedUrl))
+		})
+
 		It("should properly setup the main command when installing plugins", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			pluginA := "some-plugin"

@@ -53,6 +53,13 @@ cluster:
     # -- Default image pull secret
     # imagePullSecrets: []
 
+    # -- Optional custom URL for operator to communicate with OpenSearch
+    # This is useful when using external certificates (e.g., from cert-manager)
+    # that are valid for a specific FQDN. The operator will use this URL
+    # instead of the default internal Kubernetes service DNS name.
+    operatorClusterURL: ""
+#      "opensearch.example.com"
+
     # -- Populate opensearch keystore before startup
     keystore: []
 #      - secret:
@@ -328,6 +335,13 @@ cluster:
         # -- If set to true the operator will generate a CA and certificates for the cluster to use,
         # if false - secrets with existing certificates must be supplied
         generate: true
+
+        # -- Optional custom FQDN to use for the HTTP certificate. If provided, this FQDN will be used
+        # as the primary DNS name in the certificate's Subject Alternative Names (SAN), along with the
+        # default cluster DNS names. This allows you to use a single certificate that works with both
+        # your custom domain and the internal Kubernetes DNS names.
+        customFQDN: ""
+#            "opensearch.example.com"
 
         # -- Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a
         # different secret provide it via the caSecret field

@@ -74,6 +74,9 @@ type GeneralConfig struct {
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the cluster pods' container
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
+	// instead of the default internal Kubernetes service DNS name.
+	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
 }
 
 type PdbConfig struct {
@@ -234,7 +237,7 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
-	// foobar
+	// TLS certificate configuration
 	TlsCertificateConfig `json:",omitempty"`
 }
 
@@ -267,6 +270,8 @@ type TlsConfigTransport struct {
 type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
+	// Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names.
+	CustomFQDN *string `json:"customFQDN,omitempty"`
 	// Automatically rotate certificates before they expire, set to -1 to disable
 	//+kubebuilder:default=-1
 	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`

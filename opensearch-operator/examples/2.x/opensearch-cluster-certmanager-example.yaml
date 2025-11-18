@@ -1,0 +1,86 @@
+# Example: OpenSearch cluster with cert-manager certificates and operator communication URL
+# This example shows how to use external certificates from cert-manager with a LoadBalancer
+# and configure the operator to use the same FQDN for communication
+
+apiVersion: opensearch.opster.io/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+  namespace: default
+spec:
+  general:
+    serviceName: my-cluster
+    httpPort: 9200
+    version: "2.11.0"
+    vendor: "opensearch"
+    # Configure the operator to communicate with OpenSearch using the external FQDN
+    # This allows using a single external certificate for both external traffic and operator communication
+    operatorClusterURL: "opensearch.example.com"
+  security:
+    tls:
+      http:
+        generate: false  # Use external certificates from cert-manager
+        secret:
+          name: opensearch-tls  # Secret created by cert-manager
+      transport:
+        generate: true  # Generate internal transport certificates
+        perNode: true
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "20Gi"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
+      roles:
+        - "cluster_manager"
+        - "data"
+    - component: nodes
+      replicas: 3
+      diskSize: "20Gi"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
+      roles:
+        - "data"
+---
+# Example cert-manager Certificate resource
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: opensearch-tls
+  namespace: default
+spec:
+  secretName: opensearch-tls
+  issuerRef:
+    name: letsencrypt-prod  # Your cert-manager issuer
+    kind: ClusterIssuer
+  dnsNames:
+    - opensearch.example.com  # Your external FQDN
+  commonName: opensearch.example.com
+---
+# Example LoadBalancer service (if not using ingress)
+apiVersion: v1
+kind: Service
+metadata:
+  name: opensearch-external
+  namespace: default
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-ssl-cert: arn:aws:acm:region:account:certificate/cert-id  # If using AWS
+spec:
+  type: LoadBalancer
+  ports:
+    - name: https
+      port: 443
+      targetPort: 9200
+      protocol: TCP
+  selector:
+    opster.io/opensearch-cluster: my-cluster
