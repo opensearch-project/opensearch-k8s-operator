@@ -141,7 +141,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	switch r.Instance.Status.Phase {
 	case opsterv1.PhasePending:
 		return r.reconcilePhasePending(ctx)
-	case opsterv1.PhaseRunning:
+	case opsterv1.PhaseRunning, opsterv1.PhaseUpgrading:
 		return r.reconcilePhaseRunning(ctx)
 	default:
 		// NOTHING WILL HAPPEN - DEFAULT

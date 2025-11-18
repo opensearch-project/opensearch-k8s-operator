@@ -92,6 +92,10 @@ manager:
   loglevel: info
 
   # If specified, the operator will be restricted to watch objects only in the desired namespace. Defaults is to watch all namespaces.
+  # To watch multiple namespaces, either separate their name via commas or define it as a list.
+  # Examples:
+  # watchNamespaces: 'ns1,ns2'
+  # watchNamespace: [ns1, ns2]
   watchNamespace:
 
   # Configure extra environment variables for the operator. You can also pull them from secrets or configmaps
@@ -198,7 +202,7 @@ For security reasons, encryption is required for communication with the OpenSear
 
 Depending on your requirements, the Operator offers two ways of managing TLS certificates. You can either supply your own certificates, or the Operator will generate its own CA and sign certificates for all nodes using that CA. The second option is recommended, unless you want to directly expose your OpenSearch cluster outside your Kubernetes cluster, or your organization has rules about using self-signed certificates for internal communication.
 
-> :warning: **Clusters with operator-generated certificates will stop working after 1 year**: Make sure you have tested certificate renewals in your cluster before putting it in production!
+Note: When the operator generates certificates, you can now control certificate validity using the `duration` field (e.g. `"720h"`, `"17520h"`). If omitted, it defaults to one year (`"8760h"`).
 
 TLS certificates are used in three places, and each can be configured independently.
 
@@ -216,34 +220,23 @@ spec:
       transport: # Configuration of the transport endpoint
         generate: true # Have the operator generate and sign certificates
         perNode: true # Separate certificate per node
+        # How long generated certificates are valid (default: 8760h = 1 year)
+        duration: "8760h"
         secret:
           name: # Name of the secret that contains the provided certificate
         caSecret:
           name: # Name of the secret that contains a CA the operator should use
         nodesDn: [] # List of certificate DNs allowed to connect
-        adminDn: [] # List of certificate DNs that should get admin access
 # ...
 ```
 
-To have the Operator generate the certificates, you only need to set the `generate` and `perNode` fields to `true` (all other fields can be omitted). The Operator will then generate a CA certificate and one certificate per node, and then use the CA to sign the node certificates. These certificates are valid for one year. Note that the Operator does not currently have certificate renewal implemented.
+To have the Operator generate the certificates, set `generate` and `perNode` to `true` (other fields can be omitted). The Operator will generate a CA certificate, issue one certificate per node, and sign them. Certificates default to one year validity, configurable via `duration`. The Operator supports rotation by reissuing certs when near expiry if `rotateDaysBeforeExpiry` is set.
 
 Alternatively, you can provide the certificates yourself (e.g. if your organization has an internal CA). You can either provide one certificate to be used by all nodes or provide a certificate for each node (recommended). In this mode, set `generate: false` and `perNode` to `true` or `false` depending on whether you're providing per-node certificates.
 
 If you provide just one certificate, it must be placed in a Kubernetes TLS secret (with the fields `ca.crt`, `tls.key` and `tls.crt`, must all be PEM-encoded), and you must provide the name of the secret as `secret.name`. If you want to keep the CA certificate separate, you can place it in a separate secret and supply that as `caSecret.name`. If you provide one certificate per node, you must place all certificates into one secret (including the `ca.crt`) with a `<hostname>.key` and `<hostname>.crt` for each node. The hostname is defined as `<cluster-name>-<nodepool-component>-<index>` (e.g. `my-first-cluster-masters-0`).
 
 If you provide the certificates yourself, you must also provide the list of certificate DNs in `nodesDn`, wildcards can be used (e.g. `"CN=my-first-cluster-*,OU=my-org"`).
-
-If you provide your own node certificates you must also provide an admin cert that the operator can use for managing the cluster:
-
-```yaml
-spec:
-  security:
-    config:
-      adminSecret:
-        name: my-first-cluster-admin-cert # The secret must have keys tls.crt and tls.key
-```
-
-Make sure the DN of the certificate is set in the `adminDn` field.
 
 #### Node HTTP/REST API
 
@@ -259,6 +252,8 @@ spec:
       http: # Configuration of the HTTP endpoint
         generate: true # Have the Operator generate and sign certificates
         customFQDN: "opensearch.example.com" # Optional: Custom FQDN for the certificate
+        # How long generated certificates are valid (default: 8760h = 1 year)
+        duration: "8760h"
         secret:
           name: # Name of the secret that contains the provided certificate
         caSecret:
@@ -273,6 +268,18 @@ When using generated certificates, you can optionally specify a `customFQDN` fie
 If you provide your own certificates, please make sure the following names are added as SubjectAltNames (SAN): `<cluster-name>`, `<cluster-name>.<namespace>`, `<cluster-name>.<namespace>.svc`,`<cluster-name>.<namespace>.svc.cluster.local`.
 
 Directly exposing the node HTTP port outside the Kubernetes cluster is not recommended. Rather than doing so, you should configure an ingress. The ingress can then also present a certificate from an accredited CA (for example LetsEncrypt) and hide self-signed certificates that are being used internally. In this way, the nodes should be supplied internally with properly signed certificates.
+
+If you provide your own node certificates you must also provide an admin cert that the operator can use for managing the cluster:
+
+```yaml
+spec:
+  security:
+    config:
+      adminSecret:
+        name: my-first-cluster-admin-cert # The secret must have keys tls.crt and tls.key
+```
+
+Make sure the DN of the certificate is set in the `adminDn` field.
 
 ### Adding plugins
 
@@ -569,6 +576,8 @@ spec:
     tls:
       enable: true # Configure TLS
       generate: true # Have the Operator generate and sign a certificate
+      # How long generated certificates are valid (default: 8760h = 1 year)
+      duration: "8760h"
       secret:
         name: # Name of the secret that contains the provided certificate
       caSecret:
@@ -593,7 +602,7 @@ The available storage options are:
 
 #### PVC
 
-The default option is persistent storage via PVCs. You can explicity define the `storageClass` if needed:
+The default option is persistent storage via PVCs. You can explicity define the `storageClass`, the `annotations` and the `labels` if needed:
 
 ```yaml
 nodePools:
@@ -608,6 +617,10 @@ nodePools:
         storageClass: mystorageclass # Set the name of the storage class to be used
         accessModes: # You can change the accessMode
           - ReadWriteOnce
+        annotations: # You can add annotations
+          test.io/crypt-key-id: "your-kms-key-id"
+        labels: # You can add labels
+          team: "backend-data"
 ```
 
 #### EmptyDir
@@ -1202,9 +1215,9 @@ These minimum configuration files can later be removed from the secret so that y
 
 In addition, you must provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). This user must be defined in your securityconfig and must have appropriate permissions (currently admin).
 
-You must also configure TLS transport (see [Node Transport](#node-transport)). You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
+You must also configure SSL/TLS HTTP. You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
 
-If you provided your own certificate for node transport communication, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.transport.adminDn`. Be advised that the `adminDn` and `nodesDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
+If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.http.adminDn`. Be advised that the `adminDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 

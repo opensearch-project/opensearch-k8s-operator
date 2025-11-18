@@ -201,3 +201,50 @@ var _ = Describe("Additional volumes", func() {
 		})
 	})
 })
+
+var _ = Describe("OpensearchClusterURL", func() {
+	When("DisableSSL is false", func() {
+		It("should return https URL", func() {
+			cluster := &opsterv1.OpenSearchCluster{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: "test-service",
+						HttpPort:    9200,
+						DisableSSL:  false,
+					},
+				},
+			}
+			cluster.Name = "test-cluster"
+			cluster.Namespace = "test-namespace"
+
+			url := OpensearchClusterURL(cluster)
+			Expect(url).To(ContainSubstring("https://"))
+			Expect(url).To(ContainSubstring("test-service"))
+			Expect(url).To(ContainSubstring("test-namespace"))
+			Expect(url).To(ContainSubstring(":9200"))
+		})
+	})
+
+	When("DisableSSL is true", func() {
+		It("should return http URL", func() {
+			cluster := &opsterv1.OpenSearchCluster{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: "test-service",
+						HttpPort:    9200,
+						DisableSSL:  true,
+					},
+				},
+			}
+			cluster.Name = "test-cluster"
+			cluster.Namespace = "test-namespace"
+
+			url := OpensearchClusterURL(cluster)
+			Expect(url).To(ContainSubstring("http://"))
+			Expect(url).NotTo(ContainSubstring("https://"))
+			Expect(url).To(ContainSubstring("test-service"))
+			Expect(url).To(ContainSubstring("test-namespace"))
+			Expect(url).To(ContainSubstring(":9200"))
+		})
+	})
+})
