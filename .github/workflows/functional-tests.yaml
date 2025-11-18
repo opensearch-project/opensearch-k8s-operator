@@ -24,8 +24,13 @@ jobs:
         with:
           version: v1
           k3d-name: opensearch-operator-tests
-          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: Disable kubelet eviction in k3d creation
+          k3d-args: >
+            --servers 1
+            --agents 2
+            -p 30000-30005:30000-30005@agent:0
+            --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
       - name: Run tests
         run: |
           set -e
@@ -71,8 +76,13 @@ jobs:
         with:
           version: v1
           k3d-name: opensearch-operator-tests
-          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: Disable kubelet eviction in k3d creation
+          k3d-args: >
+            --servers 1
+            --agents 2
+            -p 30000-30005:30000-30005@agent:0
+            --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
       - name: Run tests
         id: helm_tests
         run: |
@@ -104,8 +114,9 @@ jobs:
           go test ./helmtests -timeout 15m
 
       - name: Collect operator logs
-        if: ${{ (steps.helm_tests.outcome == 'failure') || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true) }}
+        if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
         run: |
+          df -h
           export CLUSTER_NAME=opensearch-operator-tests
           cd opensearch-operator
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
@@ -153,7 +164,7 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
           done
       - name: Publish logs
-        if: ${{ (steps.helm_tests.outcome == 'failure') || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true) }}
+        if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
         uses: actions/upload-artifact@v4
         with:
           name: operator-logs-${{ matrix.version }}
