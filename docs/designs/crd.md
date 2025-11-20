@@ -167,7 +167,7 @@ GeneralConfig defines global Opensearch cluster configuration
         <td><b>SetVMMaxMapCount</b></td>
         <td>bool</td>
         <td>will add VMmaxMapCount</td>
-        <td>false</td>
+        <td>true</td>
         <td></td>
       </tr><tr>
         <td><b>additionalConfig</b></td>
@@ -199,6 +199,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>Default image repository to use</td>
         <td></td>
         <td></td>
+      </tr><tr>
+        <td><b>DisableSSL</b></td>
+        <td>bool</td>
+        <td>Disable SSL for the cluster (uses HTTP instead of HTTPS)</td>
+        <td>false</td>
+        <td>false</td>
       </tr><tr>
         <td><b>keystore</b></td>
         <td>[]opsterv1.KeystoreValue</td>

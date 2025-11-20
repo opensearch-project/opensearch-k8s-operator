@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	PhasePending = "PENDING"
-	PhaseRunning = "RUNNING"
+	PhasePending   = "PENDING"
+	PhaseRunning   = "RUNNING"
+	PhaseUpgrading = "UPGRADING"
 )
 
 // OpenSearchHealth is the health of the cluster as returned by the health API.
@@ -46,12 +47,15 @@ type GeneralConfig struct {
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
-	Vendor           string  `json:"vendor,omitempty"`
-	Version          string  `json:"version,omitempty"`
-	ServiceAccount   string  `json:"serviceAccount,omitempty"`
-	ServiceName      string  `json:"serviceName"`
+	Vendor         string `json:"vendor,omitempty"`
+	Version        string `json:"version,omitempty"`
+	ServiceAccount string `json:"serviceAccount,omitempty"`
+	ServiceName    string `json:"serviceName"`
+	//+kubebuilder:default=true
 	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
+	// Disable SSL for the cluster
+	DisableSSL bool `json:"disableSSL,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
@@ -71,6 +75,9 @@ type GeneralConfig struct {
 	// Set security context for the cluster pods' container
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 	HostAliases     []corev1.HostAlias      `json:"hostAliases,omitempty"`
+	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
+	// instead of the default internal Kubernetes service DNS name.
+	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
 }
 
 type PdbConfig struct {
@@ -232,7 +239,7 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
-	// foobar
+	// TLS certificate configuration
 	TlsCertificateConfig `json:",omitempty"`
 }
 
@@ -260,18 +267,20 @@ type TlsConfigTransport struct {
 	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
-	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
-	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
+	// Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names.
+	CustomFQDN *string `json:"customFQDN,omitempty"`
 	// Automatically rotate certificates before they expire, set to -1 to disable
 	//+kubebuilder:default=-1
 	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	//
 	TlsCertificateConfig `json:",omitempty"`
+	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
+	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsCertificateConfig struct {
@@ -279,6 +288,9 @@ type TlsCertificateConfig struct {
 	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
 	// Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
 	CaSecret corev1.LocalObjectReference `json:"caSecret,omitempty"`
+	// Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
+	//+kubebuilder:default:="8760h"
+	Duration *metav1.Duration `json:"duration,omitempty"`
 }
 
 // Reference to a secret
@@ -290,7 +302,7 @@ type TlsSecret struct {
 type SecurityConfig struct {
 	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
-	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
+	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`

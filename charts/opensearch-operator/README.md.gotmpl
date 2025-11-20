@@ -1,0 +1,53 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.description" . }}
+
+## Getting started
+
+The Operator can be easily installed using helm on any CNCF-certified Kubernetes cluster. Please refer to the [User Guide](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md) for more information.
+
+### Installation Using Helm
+
+#### Get Repo Info
+
+```shell
+helm repo add opensearch-operator https://opensearch-project.github.io/opensearch-k8s-operator/
+helm repo update
+```
+
+#### Install Chart
+
+```shell
+helm install [RELEASE_NAME] opensearch-operator/opensearch-operator
+```
+
+#### Uninstall Chart
+
+```shell
+helm uninstall [RELEASE_NAME]
+```
+
+#### Upgrade Chart
+
+```shell
+helm repo update
+helm upgrade [RELEASE_NAME] opensearch-operator/opensearch-operator
+```
+
+{{ define "chart.valuesTableHtml" }}
+
+The following table lists the configurable parameters of the Helm chart.
+
+| Parameter | Type | Default | Description |
+| --- | ---- | ------- | ----------- |
+{{- range .Values }}
+| `{{ .Key }}` | {{ .Type }} | {{ .Default }} | {{ if .Description }}{{ .Description }}{{ else }}{{ .AutoDescription }}{{ end }} |
+{{- end }}
+
+Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
+
+{{ end }}
+
+{{ template "chart.valuesSectionHtml" . -}}
+
+Opensearch-operator Helm Chart version: `{{ template "chart.version" . }}`

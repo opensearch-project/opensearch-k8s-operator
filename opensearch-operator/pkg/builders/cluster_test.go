@@ -241,6 +241,17 @@ var _ = Describe("Builders", func() {
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 
+		It("should use operatorClusterURL when provided", func() {
+			customHost := "opensearch.example.com"
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.OperatorClusterURL = &customHost
+
+			actualUrl := URLForCluster(&clusterObject)
+			// When HttpPort is 0 (default), ClusterURL should default to 9200
+			expectedUrl := fmt.Sprintf("https://%s:9200", customHost)
+			Expect(actualUrl).To(Equal(expectedUrl))
+		})
+
 		It("should properly setup the main command when installing plugins", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			pluginA := "some-plugin"
@@ -669,6 +680,49 @@ var _ = Describe("Builders", func() {
 			actual := result.Spec.Containers[0].Command
 
 			Expect(expected).To(Equal(actual))
+		})
+
+		It("should inherit General.PluginsList when Bootstrap.PluginsList is not set", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			pluginA := "repository-s3"
+			pluginB := "analysis-icu"
+
+			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
+			// Bootstrap.PluginsList is not set
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(ContainSubstring(pluginA))
+			Expect(actual[2]).To(ContainSubstring(pluginB))
+		})
+
+		It("should override General.PluginsList with Bootstrap.PluginsList when explicitly set", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			generalPlugin := "repository-s3"
+			bootstrapPluginA := "custom-plugin-a"
+			bootstrapPluginB := "custom-plugin-b"
+
+			clusterObject.Spec.General.PluginsList = []string{generalPlugin}
+			clusterObject.Spec.Bootstrap.PluginsList = []string{bootstrapPluginA, bootstrapPluginB}
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			// Should use Bootstrap.PluginsList, not General.PluginsList
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(ContainSubstring(bootstrapPluginA))
+			Expect(actual[2]).To(ContainSubstring(bootstrapPluginB))
+			Expect(actual[2]).NotTo(ContainSubstring(generalPlugin))
+		})
+
+		It("should use no plugins when both General.PluginsList and Bootstrap.PluginsList are empty", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			// Neither list is set
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			actual := result.Spec.Containers[0].Command
+			Expect(len(actual)).To(Equal(3))
+			Expect(actual[2]).To(Equal("./opensearch-docker-entrypoint.sh"))
 		})
 
 		It("should use PVC for data volume instead of emptyDir", func() {
@@ -1199,6 +1253,46 @@ var _ = Describe("Builders", func() {
 				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
 				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
+		})
+	})
+
+	When("DisableSSL is enabled", func() {
+		It("should use http protocol in URLForCluster", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Spec.General.DisableSSL = true
+			clusterObject.Spec.General.ServiceName = "opensearch"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.HttpPort = 9200
+
+			actualUrl := URLForCluster(&clusterObject)
+			Expect(actualUrl).To(ContainSubstring("http://"))
+			Expect(actualUrl).NotTo(ContainSubstring("https://"))
+		})
+
+		It("should use http protocol in probe commands", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Spec.General.DisableSSL = true
+			nodePool := opsterv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
+		})
+
+		It("should use http scheme in ServiceMonitor", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Name = "test-cluster"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.DisableSSL = true
+			clusterObject.Spec.General.Monitoring.Enable = true
+			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
+
+			result := NewServiceMonitor(&clusterObject)
+			Expect(result.Spec.Endpoints[0].Scheme).To(Equal("http"))
 		})
 	})
 

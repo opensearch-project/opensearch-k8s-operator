@@ -22,8 +22,12 @@ import (
 	"os"
 	"strconv"
 
+	"strings"
+
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
@@ -65,13 +69,13 @@ func main() {
 	var probeAddr string
 	var watchNamespace string
 	var logLevel string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
-		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
+		"The comma-separated list of namespaces that the controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
 
 	opts := zap.Options{
@@ -93,6 +97,9 @@ func main() {
 	if watchNamespace != "" {
 		cacheOpts.DefaultNamespaces = map[string]cache.Config{
 			watchNamespace: {},
+		}
+		for watchNs := range strings.SplitSeq(watchNamespace, ",") {
+			cacheOpts.DefaultNamespaces[watchNs] = cache.Config{}
 		}
 	}
 
@@ -121,7 +128,9 @@ func main() {
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme: scheme,
 		Metrics: metricsserver.Options{
-			BindAddress: metricsAddr,
+			BindAddress:    metricsAddr,
+			SecureServing:  true,
+			FilterProvider: filters.WithAuthenticationAndAuthorization,
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,

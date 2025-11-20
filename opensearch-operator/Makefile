@@ -43,8 +43,13 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: controller-gen helm-docs ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations and helm-docs.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+.PHONY: helm-docs
+helm-docs: ${HELM_DOCS}
+	${HELM_DOCS} -s file -c ../charts/opensearch-operator
+	${HELM_DOCS} -s file -c ../charts/opensearch-cluster
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -114,11 +119,13 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 MOCKERY ?= $(LOCALBIN)/mockery
+HELM_DOCS := $(LOCALBIN)/helm-docs
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
-CONTROLLER_TOOLS_VERSION ?= v0.16.0
+CONTROLLER_TOOLS_VERSION ?= v0.19.0
 MOCKERY_VERSION ?= v2.52.2
+HELM_DOCS_VERSION ?= 1.14.2
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -140,3 +147,9 @@ $(MOCKERY): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: helm-docs
+helm-docs: $(HELM_DOCS) ## Download helm-docs locally if necessary.
+$(HELM_DOCS): $(LOCALBIN)
+	@curl -sL "https://github.com/norwoodj/helm-docs/releases/download/v$(HELM_DOCS_VERSION)/helm-docs_$(HELM_DOCS_VERSION)_$$(uname -s)_x86_64.tar.gz" | tar -xz -C $(LOCALBIN) helm-docs
+	@chmod +x $(HELM_DOCS)
