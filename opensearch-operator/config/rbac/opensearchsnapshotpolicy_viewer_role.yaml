@@ -12,7 +12,7 @@ metadata:
   name: opensearchsnapshotpolicy-viewer-role
 rules:
 - apiGroups:
-  - opensearch.org/v1
+  - opensearch.org
   resources:
   - opensearchsnapshotpolicies
   verbs:
@@ -20,7 +20,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - opensearch.org/v1
+  - opensearch.org
   resources:
   - opensearchsnapshotpolicies/status
   verbs:
