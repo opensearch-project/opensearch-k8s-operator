@@ -2,7 +2,7 @@
 # This example shows how to use external certificates from cert-manager with a LoadBalancer
 # and configure the operator to use the same FQDN for communication
 
-apiVersion: opensearch.opster.io/v1
+apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
 metadata:
   name: my-cluster

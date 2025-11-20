@@ -2,7 +2,7 @@
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
 {{- range .Values.actionGroups }}
 ---
-apiVersion: opensearch.opster.io/v1
+apiVersion: opensearch.org/v1
 kind: OpensearchActionGroup
 metadata:
   name: {{ .name }}

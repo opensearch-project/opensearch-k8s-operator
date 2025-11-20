@@ -2,7 +2,7 @@
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
 {{- range .Values.users }}
 ---
-apiVersion: opensearch.opster.io/v1
+apiVersion: opensearch.org/v1
 kind: OpensearchUser
 metadata:
   name: {{ .name }}

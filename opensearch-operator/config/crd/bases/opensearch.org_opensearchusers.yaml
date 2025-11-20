@@ -3,24 +3,23 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.0
-  name: opensearchactiongroups.opensearch.opster.io
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: opensearchusers.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
-    kind: OpensearchActionGroup
-    listKind: OpensearchActionGroupList
-    plural: opensearchactiongroups
+    kind: OpensearchUser
+    listKind: OpensearchUserList
+    plural: opensearchusers
     shortNames:
-    - opensearchactiongroup
-    singular: opensearchactiongroup
+    - opensearchuser
+    singular: opensearchuser
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchActionGroup is the Schema for the opensearchactiongroups
-          API
+        description: OpensearchUser is the Schema for the opensearchusers API
         properties:
           apiVersion:
             description: |-
@@ -40,14 +39,20 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchActionGroupSpec defines the desired state of OpensearchActionGroup
+            description: OpensearchUserSpec defines the desired state of OpensearchUser
             properties:
-              allowedActions:
+              attributes:
+                additionalProperties:
+                  type: string
+                type: object
+              backendRoles:
                 items:
                   type: string
                 type: array
-              description:
-                type: string
+              opendistroSecurityRoles:
+                items:
+                  type: string
+                type: array
               opensearchCluster:
                 description: |-
                   LocalObjectReference contains enough information to let you locate the
@@ -64,18 +69,36 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              type:
-                type: string
+              passwordFrom:
+                description: SecretKeySelector selects a key of a Secret.
+                properties:
+                  key:
+                    description: The key of the secret to select from.  Must be a
+                      valid secret key.
+                    type: string
+                  name:
+                    default: ""
+                    description: |-
+                      Name of the referent.
+                      This field is effectively required, but due to backwards compatibility is
+                      allowed to be empty. Instances of this type with an empty value here are
+                      almost certainly wrong.
+                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    type: string
+                  optional:
+                    description: Specify whether the Secret or its key must be defined
+                    type: boolean
+                required:
+                - key
+                type: object
+                x-kubernetes-map-type: atomic
             required:
-            - allowedActions
             - opensearchCluster
+            - passwordFrom
             type: object
           status:
-            description: OpensearchActionGroupStatus defines the observed state of
-              OpensearchActionGroup
+            description: OpensearchUserStatus defines the observed state of OpensearchUser
             properties:
-              existingActionGroup:
-                type: boolean
               managedCluster:
                 description: |-
                   UID is a type that holds unique ID values, including UUIDs.  Because we

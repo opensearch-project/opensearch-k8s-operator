@@ -67,14 +67,14 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org
   resources:
   - events
   verbs:
   - create
   - patch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org
   resources:
   - opensearchactiongroups
   - opensearchclusters
@@ -95,7 +95,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org
   resources:
   - opensearchactiongroups/finalizers
   - opensearchclusters/finalizers
@@ -110,7 +110,7 @@ rules:
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org
   resources:
   - opensearchactiongroups/status
   - opensearchclusters/status

@@ -25,12 +25,13 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"testing"
+
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/phayes/freeport"
 
 	ctrl "sigs.k8s.io/controller-runtime"

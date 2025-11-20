@@ -3,24 +3,24 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.0
-  name: opensearchcomponenttemplates.opensearch.opster.io
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: opensearchindextemplates.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
-    kind: OpensearchComponentTemplate
-    listKind: OpensearchComponentTemplateList
-    plural: opensearchcomponenttemplates
+    kind: OpensearchIndexTemplate
+    listKind: OpensearchIndexTemplateList
+    plural: opensearchindextemplates
     shortNames:
-    - opensearchcomponenttemplate
-    singular: opensearchcomponenttemplate
+    - opensearchindextemplate
+    singular: opensearchindextemplate
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchComponentTemplate is the schema for the OpenSearch
-          component templates API
+        description: OpensearchIndexTemplate is the schema for the OpenSearch index
+          templates API
         properties:
           apiVersion:
             description: |-
@@ -42,14 +42,36 @@ spec:
           spec:
             properties:
               _meta:
-                description: Optional user metadata about the component template
+                description: Optional user metadata about the index template
                 x-kubernetes-preserve-unknown-fields: true
-              allowAutoCreate:
-                description: If true, then indices can be automatically created using
-                  this template
-                type: boolean
+              composedOf:
+                description: |-
+                  An ordered list of component template names. Component templates are merged in the order specified,
+                  meaning that the last component template specified has the highest precedence
+                items:
+                  type: string
+                type: array
+              dataStream:
+                description: The dataStream config that should be applied
+                properties:
+                  timestamp_field:
+                    description: TimestampField for dataStream
+                    properties:
+                      name:
+                        description: Name of the field that are used for the DataStream
+                        type: string
+                    required:
+                    - name
+                    type: object
+                type: object
+              indexPatterns:
+                description: Array of wildcard expressions used to match the names
+                  of indices during creation
+                items:
+                  type: string
+                type: array
               name:
-                description: The name of the component template. Defaults to metadata.name
+                description: The name of the index template. Defaults to metadata.name
                 type: string
               opensearchCluster:
                 description: |-
@@ -67,6 +89,11 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
+              priority:
+                description: |-
+                  Priority to determine index template precedence when a new data stream or index is created.
+                  The index template with the highest priority is chosen
+                type: integer
               template:
                 description: The template that should be applied
                 properties:
@@ -108,16 +135,16 @@ spec:
                   externally
                 type: integer
             required:
+            - indexPatterns
             - opensearchCluster
-            - template
             type: object
           status:
             properties:
-              componentTemplateName:
-                description: Name of the currently managed component template
-                type: string
-              existingComponentTemplate:
+              existingIndexTemplate:
                 type: boolean
+              indexTemplateName:
+                description: Name of the currently managed index template
+                type: string
               managedCluster:
                 description: |-
                   UID is a type that holds unique ID values, including UUIDs.  Because we

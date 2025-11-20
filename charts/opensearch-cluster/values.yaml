@@ -70,7 +70,7 @@ cluster:
 #          # Only read "sensitive-value" from the secret, keep its name.
 #          sensitive-value: sensitive-value
 
-    # Monitoring configuration. Check [documentation](https://github.com/Opster/opensearch-k8s-operator/blob/main/docs/userguide/main.md#adding-opensearch-monitoring-to-your-cluster) how to configure it.
+    # Monitoring configuration. Check [documentation](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#adding-opensearch-monitoring-to-your-cluster) how to configure it.
     monitoring:
       # -- Enable cluster monitoring
       enable: false
