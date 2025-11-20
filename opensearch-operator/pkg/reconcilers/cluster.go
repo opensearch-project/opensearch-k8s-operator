@@ -534,24 +534,41 @@ func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl
 		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
 	}
 
-	// Pod exists, check if spec has changed
-	if util.PodSpecChanged(&existingPod, desiredPod) {
-		r.logger.Info("Bootstrap pod spec changed, recreating pod", "pod", desiredPod.Name)
-
-		// Delete existing pod
-		if err := r.client.DeletePod(&existingPod); err != nil {
-			r.logger.Error(err, "Failed to delete existing bootstrap pod", "pod", desiredPod.Name)
-			return &ctrl.Result{}, err
+	updatePod := desiredPod.DeepCopy()
+	if _, err := r.client.ReconcileResource(updatePod, reconciler.StatePresent); err != nil {
+		if isImmutablePodUpdateErr(err) {
+			r.logger.Info("Bootstrap pod update touched immutable fields, recreating pod", "pod", desiredPod.Name)
+			return r.recreateBootstrapPod(&existingPod, desiredPod)
 		}
-		if err := r.client.WaitForPodDeletion(desiredPod.Name, desiredPod.Namespace); err != nil {
-			r.logger.Error(err, "Timeout waiting for bootstrap pod deletion", "pod", desiredPod.Name)
-			return &ctrl.Result{}, err
-		}
-
-		// Create new pod with updated spec
-		r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
-		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+		r.logger.Error(err, "Failed to update bootstrap pod", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
 	}
 
 	return &ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {
+	if err := r.client.DeletePod(existingPod); err != nil {
+		r.logger.Error(err, "Failed to delete existing bootstrap pod", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+	if err := r.client.WaitForPodDeletion(desiredPod.Name, desiredPod.Namespace); err != nil {
+		r.logger.Error(err, "Timeout waiting for bootstrap pod deletion", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+
+	r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
+	return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+}
+
+func isImmutablePodUpdateErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if statusErr, ok := err.(*k8serrors.StatusError); ok {
+		if statusErr.ErrStatus.Reason == metav1.StatusReasonInvalid && strings.Contains(statusErr.ErrStatus.Message, "pod updates may not change") {
+			return true
+		}
+	}
+	return strings.Contains(err.Error(), "pod updates may not change")
 }
