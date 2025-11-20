@@ -3,10 +3,10 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.0
-  name: opensearchclusters.opensearch.opster.io
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: opensearchclusters.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
     kind: OpenSearchCluster
     listKind: OpenSearchClusterList
@@ -4082,6 +4082,11 @@ spec:
                             type: string
                         type: object
                     type: object
+                  operatorClusterURL:
+                    description: |-
+                      Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
+                      instead of the default internal Kubernetes service DNS name.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -6288,6 +6293,11 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          customFQDN:
+                            description: Custom FQDN to use for the HTTP certificate.
+                              If not set, the operator will use the default cluster
+                              DNS names.
+                            type: string
                           duration:
                             default: 8760h
                             description: Duration controls the validity period of

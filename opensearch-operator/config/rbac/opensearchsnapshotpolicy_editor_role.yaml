@@ -12,7 +12,7 @@ metadata:
   name: opensearchsnapshotpolicy-editor-role
 rules:
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchsnapshotpolicies
   verbs:
@@ -24,7 +24,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchsnapshotpolicies/status
   verbs:

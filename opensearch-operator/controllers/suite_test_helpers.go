@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -98,7 +98,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 	OpensearchCluster := &opsterv1.OpenSearchCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OpenSearchCluster",
-			APIVersion: "opensearch.opster.io/v1",
+			APIVersion: "opensearch.org/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,

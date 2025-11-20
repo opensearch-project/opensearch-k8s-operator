@@ -2,7 +2,7 @@
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
 {{- range .Values.tenants }}
 ---
-apiVersion: opensearch.opster.io/v1
+apiVersion: opensearch.org/v1
 kind: OpensearchTenant
 metadata:
   name: {{ .name }}

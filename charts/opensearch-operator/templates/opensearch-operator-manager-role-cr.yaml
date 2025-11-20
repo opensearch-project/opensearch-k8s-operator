@@ -122,14 +122,14 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - events
   verbs:
   - create
   - patch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchactiongroups
   verbs:
@@ -141,13 +141,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchactiongroups/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchactiongroups/status
   verbs:
@@ -155,7 +155,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchclusters
   verbs:
@@ -167,13 +167,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchclusters/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchclusters/status
   verbs:
@@ -181,7 +181,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchcomponenttemplates
   verbs:
@@ -193,13 +193,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchcomponenttemplates/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchcomponenttemplates/status
   verbs:
@@ -207,7 +207,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchindextemplates
   verbs:
@@ -219,13 +219,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchindextemplates/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchindextemplates/status
   verbs:
@@ -233,7 +233,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchroles
   verbs:
@@ -245,13 +245,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchroles/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchroles/status
   verbs:
@@ -259,7 +259,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchtenants
   verbs:
@@ -271,13 +271,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchtenants/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchtenants/status
   verbs:
@@ -285,7 +285,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchuserrolebindings
   verbs:
@@ -297,13 +297,13 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchuserrolebindings/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchuserrolebindings/status
   verbs:
@@ -311,7 +311,7 @@ rules:
   - patch
   - update
 - apiGroups:
-    - opensearch.opster.io
+    - opensearch.org/v1
   resources:
     - opensearchismpolicies/status
   verbs:
@@ -319,13 +319,13 @@ rules:
     - patch
     - update
 - apiGroups:
-    - opensearch.opster.io
+    - opensearch.org/v1
   resources:
     - opensearchismpolicies/finalizers
   verbs:
     - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchusers
   verbs:
@@ -337,7 +337,7 @@ rules:
   - update
   - watch
 - apiGroups:
-    - opensearch.opster.io
+    - opensearch.org/v1
   resources:
     - opensearchismpolicies
   verbs:
@@ -349,13 +349,13 @@ rules:
     - update
     - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchusers/finalizers
   verbs:
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchusers/status
   verbs:
@@ -387,7 +387,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchsnapshotpolicies
   verbs:
@@ -399,7 +399,7 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchsnapshotpolicies/status
   verbs:
@@ -407,7 +407,7 @@ rules:
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - opensearch.org/v1
   resources:
   - opensearchsnapshotpolicies/finalizers
   verbs:

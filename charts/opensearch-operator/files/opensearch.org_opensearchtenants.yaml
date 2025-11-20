@@ -4,9 +4,9 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: opensearchtenants.opensearch.opster.io
+  name: opensearchtenants.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
     kind: OpensearchTenant
     listKind: OpensearchTenantList

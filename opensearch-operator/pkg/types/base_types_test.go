@@ -19,7 +19,7 @@ import (
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/types"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/types"
 )
 
 func TestMetaBaseEmptyOverrideOnEmptyObject(t *testing.T) {

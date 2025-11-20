@@ -24,14 +24,14 @@ import (
 
 	"strings"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/controllers"
 	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -41,7 +41,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -134,7 +134,7 @@ func main() {
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
+		LeaderElectionID:       "a867c7dc.opensearch.org",
 		Cache:                  cacheOpts,
 		WebhookServer: webhook.NewServer(webhook.Options{
 			Port: 9443,

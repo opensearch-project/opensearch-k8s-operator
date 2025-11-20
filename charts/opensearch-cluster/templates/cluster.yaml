@@ -1,6 +1,6 @@
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
 ---
-apiVersion: opensearch.opster.io/v1
+apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
 metadata:
   name: {{ $clusterName }}

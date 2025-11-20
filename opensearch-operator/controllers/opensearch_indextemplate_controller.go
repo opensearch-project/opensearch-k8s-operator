@@ -3,9 +3,9 @@ package controllers
 import (
 	"context"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -23,9 +23,9 @@ type OpensearchIndexTemplateReconciler struct {
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchindextemplates,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchindextemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchindextemplates/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.

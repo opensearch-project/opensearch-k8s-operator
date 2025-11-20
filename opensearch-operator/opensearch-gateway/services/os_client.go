@@ -4,18 +4,19 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"io"
-	"k8s.io/utils/ptr"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"k8s.io/utils/ptr"
+
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 )
 
 const (

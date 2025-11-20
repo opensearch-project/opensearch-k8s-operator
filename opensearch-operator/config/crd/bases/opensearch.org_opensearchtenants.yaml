@@ -4,23 +4,22 @@ kind: CustomResourceDefinition
 metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.19.0
-  name: opensearchactiongroups.opensearch.opster.io
+  name: opensearchtenants.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
-    kind: OpensearchActionGroup
-    listKind: OpensearchActionGroupList
-    plural: opensearchactiongroups
+    kind: OpensearchTenant
+    listKind: OpensearchTenantList
+    plural: opensearchtenants
     shortNames:
-    - opensearchactiongroup
-    singular: opensearchactiongroup
+    - opensearchtenant
+    singular: opensearchtenant
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchActionGroup is the Schema for the opensearchactiongroups
-          API
+        description: OpensearchTenant is the Schema for the opensearchtenants API
         properties:
           apiVersion:
             description: |-
@@ -40,12 +39,8 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchActionGroupSpec defines the desired state of OpensearchActionGroup
+            description: OpensearchTenantSpec defines the desired state of OpensearchTenant
             properties:
-              allowedActions:
-                items:
-                  type: string
-                type: array
               description:
                 type: string
               opensearchCluster:
@@ -64,17 +59,13 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              type:
-                type: string
             required:
-            - allowedActions
             - opensearchCluster
             type: object
           status:
-            description: OpensearchActionGroupStatus defines the observed state of
-              OpensearchActionGroup
+            description: OpensearchTenantStatus defines the observed state of OpensearchTenant
             properties:
-              existingActionGroup:
+              existingTenant:
                 type: boolean
               managedCluster:
                 description: |-

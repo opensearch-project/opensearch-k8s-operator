@@ -3,23 +3,24 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.0
-  name: opensearchusers.opensearch.opster.io
+    controller-gen.kubebuilder.io/version: v0.19.0
+  name: opensearchuserrolebindings.opensearch.org
 spec:
-  group: opensearch.opster.io
+  group: opensearch.org
   names:
-    kind: OpensearchUser
-    listKind: OpensearchUserList
-    plural: opensearchusers
+    kind: OpensearchUserRoleBinding
+    listKind: OpensearchUserRoleBindingList
+    plural: opensearchuserrolebindings
     shortNames:
-    - opensearchuser
-    singular: opensearchuser
+    - opensearchuserrolebinding
+    singular: opensearchuserrolebinding
   scope: Namespaced
   versions:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchUser is the Schema for the opensearchusers API
+        description: OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings
+          API
         properties:
           apiVersion:
             description: |-
@@ -39,17 +40,10 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchUserSpec defines the desired state of OpensearchUser
+            description: OpensearchUserRoleBindingSpec defines the desired state of
+              OpensearchUserRoleBinding
             properties:
-              attributes:
-                additionalProperties:
-                  type: string
-                type: object
               backendRoles:
-                items:
-                  type: string
-                type: array
-              opendistroSecurityRoles:
                 items:
                   type: string
                 type: array
@@ -69,35 +63,21 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              passwordFrom:
-                description: SecretKeySelector selects a key of a Secret.
-                properties:
-                  key:
-                    description: The key of the secret to select from.  Must be a
-                      valid secret key.
-                    type: string
-                  name:
-                    default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                    type: string
-                  optional:
-                    description: Specify whether the Secret or its key must be defined
-                    type: boolean
-                required:
-                - key
-                type: object
-                x-kubernetes-map-type: atomic
+              roles:
+                items:
+                  type: string
+                type: array
+              users:
+                items:
+                  type: string
+                type: array
             required:
             - opensearchCluster
-            - passwordFrom
+            - roles
             type: object
           status:
-            description: OpensearchUserStatus defines the observed state of OpensearchUser
+            description: OpensearchUserRoleBindingStatus defines the observed state
+              of OpensearchUserRoleBinding
             properties:
               managedCluster:
                 description: |-
@@ -105,6 +85,18 @@ spec:
                   don't ONLY use UUIDs, this is an alias to string.  Being a type captures
                   intent and helps make sure that UIDs and names do not get conflated.
                 type: string
+              provisionedBackendRoles:
+                items:
+                  type: string
+                type: array
+              provisionedRoles:
+                items:
+                  type: string
+                type: array
+              provisionedUsers:
+                items:
+                  type: string
+                type: array
               reason:
                 type: string
               state:

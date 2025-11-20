@@ -37,9 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/patch"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/types"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/utils"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/types"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/utils"
 )
 
 const (
