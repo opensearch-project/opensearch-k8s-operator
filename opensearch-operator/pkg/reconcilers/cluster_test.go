@@ -8,6 +8,7 @@ import (
 	. "github.com/onsi/gomega"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 )
 
 var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
@@ -101,6 +102,29 @@ var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
 				},
 			})
 			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
+
+			// Test 8: NodeName changes set by the scheduler should be ignored
+			modifiedPod = originalPod.DeepCopy()
+			modifiedPod.Spec.NodeName = "worker-node-1"
+			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
+
+			// Test 9: Default node lifecycle tolerations injected by Kubelet should be ignored
+			modifiedPod = originalPod.DeepCopy()
+			modifiedPod.Spec.Tolerations = append(modifiedPod.Spec.Tolerations,
+				corev1.Toleration{
+					Key:               "node.kubernetes.io/not-ready",
+					Operator:          corev1.TolerationOpExists,
+					Effect:            corev1.TaintEffectNoExecute,
+					TolerationSeconds: ptr.To[int64](300),
+				},
+				corev1.Toleration{
+					Key:               "node.kubernetes.io/unreachable",
+					Operator:          corev1.TolerationOpExists,
+					Effect:            corev1.TaintEffectNoExecute,
+					TolerationSeconds: ptr.To[int64](300),
+				},
+			)
+			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
 		})
 	})
 })
