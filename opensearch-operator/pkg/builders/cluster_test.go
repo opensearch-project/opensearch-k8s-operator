@@ -1366,7 +1366,7 @@ var _ = Describe("Builders", func() {
 	})
 
 	When("configuring a host alias for the cluster", func() {
-		It("should configure the host alias for the statefulset pods", func() {
+		It("should configure the host alias for the statefulset and bootstrap pods", func() {
 			hostNames := []string{"dummy.com"}
 			hostAlias := corev1.HostAlias{
 				IP:        "3.5.7.9",
@@ -1385,6 +1385,9 @@ var _ = Describe("Builders", func() {
 
 			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(sts.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
+
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
 		})
 	})
 })

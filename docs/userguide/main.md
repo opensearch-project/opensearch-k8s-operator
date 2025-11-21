@@ -693,7 +693,7 @@ The bootstrap pod uses persistent storage (PVC) to maintain cluster state across
 
 ### Host Aliases for pods and containers
 
-You can add entries to Opensearch and Dashboard pods /etc/hosts files using [HostAliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/).
+You can add entries to Opensearch, Bootstrap and Dashboard pods /etc/hosts files using [HostAliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/).
 
 The structure is the same for both Opensearch pods (in `spec.general`) and the Dashboard pod (in `spec.dashboards`):
 

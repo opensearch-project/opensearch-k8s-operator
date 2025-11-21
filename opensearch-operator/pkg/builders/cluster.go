@@ -1058,6 +1058,7 @@ func NewBootstrapPod(
 			Affinity:           cr.Spec.Bootstrap.Affinity,
 			ImagePullSecrets:   image.ImagePullSecrets,
 			SecurityContext:    podSecurityContext,
+			HostAliases:        cr.Spec.General.HostAliases,
 		},
 	}
 

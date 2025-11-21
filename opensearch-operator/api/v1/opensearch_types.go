@@ -195,6 +195,7 @@ type BootstrapConfig struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+	HostAliases    []corev1.HostAlias `json:"hostAliases,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
