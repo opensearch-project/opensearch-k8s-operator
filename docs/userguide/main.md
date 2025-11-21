@@ -835,6 +835,10 @@ spec:
           sources:
             - serviceAccountToken:
                 path: "token"
+      - name: example-persistentvolumeclaim-volume
+        path: /path/to/mount/volume
+        persistentVolumeClaim:
+          claimName: claim-name
   dashboards:
     additionalVolumes:
       - name: example-secret
