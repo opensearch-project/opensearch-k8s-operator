@@ -27,6 +27,8 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address={{ .Values.manager.metricsBindAddress }}
         - --leader-elect
+        - --enable-webhooks={{ .Values.webhook.enabled }}
+        - --webhook-port={{ .Values.webhook.port }}
         {{- if .Values.manager.watchNamespace }}
         {{- if kindIs "slice" .Values.manager.watchNamespace }}
         - --watch-namespace={{ .Values.manager.watchNamespace | join "," }}
@@ -60,6 +62,17 @@ spec:
         - containerPort: 8443
           name: https
           protocol: TCP
+        {{- if .Values.webhook.enabled }}
+        - containerPort: {{ .Values.webhook.port }}
+          name: webhook-server
+          protocol: TCP
+        {{- end }}
+        {{- if .Values.webhook.enabled }}
+        volumeMounts:
+        - mountPath: /tmp/k8s-webhook-server/serving-certs
+          name: cert
+          readOnly: true
+        {{- end }}
         securityContext:
 {{- toYaml .Values.manager.securityContext | nindent 10 }}
       nodeSelector:
@@ -76,4 +89,11 @@ spec:
       terminationGracePeriodSeconds: 10
       {{- if .Values.priorityClassName }}
       priorityClassName: {{ .Values.priorityClassName }}
+      {{- end }}
+      {{- if .Values.webhook.enabled }}
+      volumes:
+      - name: cert
+        secret:
+          defaultMode: 420
+          secretName: {{ if .Values.webhook.secretName }}{{ .Values.webhook.secretName }}{{ else }}{{ include "opensearch-operator.fullname" . }}-webhook-server-cert{{ end }}
       {{- end }}

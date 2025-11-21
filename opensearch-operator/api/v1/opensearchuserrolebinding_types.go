@@ -70,6 +70,11 @@ type OpensearchUserRoleBindingList struct {
 	Items           []OpensearchUserRoleBinding `json:"items"`
 }
 
+// GetOpensearchRef returns the OpenSearch cluster reference
+func (urb *OpensearchUserRoleBinding) GetOpensearchRef() corev1.LocalObjectReference {
+	return urb.Spec.OpensearchRef
+}
+
 func init() {
 	SchemeBuilder.Register(&OpensearchUserRoleBinding{}, &OpensearchUserRoleBindingList{})
 }

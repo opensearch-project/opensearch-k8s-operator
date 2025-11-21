@@ -53,6 +53,11 @@ type OpensearchActionGroupList struct {
 	Items           []OpensearchActionGroup `json:"items"`
 }
 
+// GetOpensearchRef returns the OpenSearch cluster reference
+func (ag *OpensearchActionGroup) GetOpensearchRef() corev1.LocalObjectReference {
+	return ag.Spec.OpensearchRef
+}
+
 func init() {
 	SchemeBuilder.Register(&OpensearchActionGroup{}, &OpensearchActionGroupList{})
 }

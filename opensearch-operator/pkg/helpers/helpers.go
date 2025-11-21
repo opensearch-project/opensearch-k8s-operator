@@ -5,12 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"log"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
@@ -629,4 +630,20 @@ func ResolveUidGid(cr *opsterv1.OpenSearchCluster) (uid, gid int64) {
 // GetChownCommand creates a chown command with the given UID, GID, and path
 func GetChownCommand(uid, gid int64, path string) string {
 	return fmt.Sprintf("chown -R %d:%d %s", uid, gid, path)
+}
+
+// GenComponentTemplateName generates the component template name from the resource
+func GenComponentTemplateName(template *opsterv1.OpensearchComponentTemplate) string {
+	if template.Spec.Name != "" {
+		return template.Spec.Name
+	}
+	return template.Name
+}
+
+// GenIndexTemplateName generates the index template name from the resource
+func GenIndexTemplateName(template *opsterv1.OpensearchIndexTemplate) string {
+	if template.Spec.Name != "" {
+		return template.Spec.Name
+	}
+	return template.Name
 }

@@ -50,7 +50,9 @@ jobs:
           k3d image import -c $CLUSTER_NAME controller:latest
 
           ## Install helm chart
-          helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
+          helm install opensearch-operator ../charts/opensearch-operator \
+          -f functionaltests/helmtests/ci-operator-values.yml \
+          --namespace default --wait
           cd functionaltests
 
           ## Run tests
@@ -161,11 +163,13 @@ jobs:
           k3d image import -c $CLUSTER_NAME controller:latest
 
           ## Install helm chart
-          helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
+          helm install opensearch-operator ../charts/opensearch-operator \
+          -f functionaltests/helmtests/ci-operator-values.yml \
+          --namespace default --wait
           helm install opensearch-cluster ../charts/opensearch-cluster \
             --set cluster.general.version=${{ matrix.version }} \
             --set cluster.dashboards.version=${{ matrix.version }} \
-            -f functionaltests/helmtests/ci-values.yml \
+            -f functionaltests/helmtests/ci-cluster-values.yml \
             --wait
           cd functionaltests
 

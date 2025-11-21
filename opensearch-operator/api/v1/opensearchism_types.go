@@ -272,6 +272,11 @@ type OpenSearchISMPolicyList struct {
 	Items           []OpenSearchISMPolicy `json:"items"`
 }
 
+// GetOpensearchRef returns the OpenSearch cluster reference
+func (p *OpenSearchISMPolicy) GetOpensearchRef() corev1.LocalObjectReference {
+	return p.Spec.OpensearchRef
+}
+
 func init() {
 	SchemeBuilder.Register(&OpenSearchISMPolicy{}, &OpenSearchISMPolicyList{})
 }
