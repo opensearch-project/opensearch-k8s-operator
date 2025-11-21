@@ -135,18 +135,34 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 	return res, nil
 }
 
-func (r *TLSReconciler) securityChangeVersion() bool {
-	newVersionConstraint, err := semver.NewConstraint(">=2.0.0")
+func (r *TLSReconciler) checkVersionConstraint(constraint string, defaultOnError bool, errMsg string) bool {
+	versionConstraint, err := semver.NewConstraint(constraint)
 	if err != nil {
 		panic(err)
 	}
 
 	version, err := semver.NewVersion(r.instance.Spec.General.Version)
 	if err != nil {
-		r.logger.Error(err, "unable to parse version, assuming >= 2.0.0")
-		return true
+		r.logger.Error(err, errMsg)
+		return defaultOnError
 	}
-	return newVersionConstraint.Check(version)
+	return versionConstraint.Check(version)
+}
+
+func (r *TLSReconciler) securityChangeVersion() bool {
+	return r.checkVersionConstraint(
+		">=2.0.0",
+		true,
+		"unable to parse version, assuming >= 2.0.0",
+	)
+}
+
+func (r *TLSReconciler) supportsHotReload() bool {
+	return r.checkVersionConstraint(
+		">=2.19.1",
+		false,
+		"unable to parse version for hot reload check, assuming not supported",
+	)
 }
 
 func (r *TLSReconciler) adminCAName() string {
@@ -494,19 +510,42 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 			//		r.recorder.Event(r.instance, "Warning", "Security", "Notice - Not all secrets for transport provided")
 			return err
 		}
-		if tlsConfig.CaSecret.Name == "" {
+
+		// Implement new mounting logic based on CaSecret.Name configuration
+		switch name := tlsConfig.CaSecret.Name; name {
+		case "":
+			// If CaSecret.Name is empty, mount Secret.Name as a directory
 			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
-		} else {
-			mount("transport", "ca", CaCertKey, tlsConfig.CaSecret.Name, r.reconcilerContext)
-			mount("transport", "key", corev1.TLSPrivateKeyKey, tlsConfig.Secret.Name, r.reconcilerContext)
-			mount("transport", "cert", corev1.TLSCertKey, tlsConfig.Secret.Name, r.reconcilerContext)
+		case tlsConfig.Secret.Name:
+			// If CaSecret.Name is same as Secret.Name, mount only Secret.Name as a directory
+			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+		default:
+			// If CaSecret.Name is different from Secret.Name, mount both secrets as directories
+			// Mount Secret.Name as tls-transport/
+			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+			// Mount CaSecret.Name as tls-transport-ca/
+			mountFolder("transport", "ca", tlsConfig.CaSecret.Name, r.reconcilerContext)
 		}
-		// Extend opensearch.yml
-		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSCertKey))
-		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSPrivateKeyKey))
+
+		// Extend opensearch.yml with appropriate file paths based on mounting logic
+		if tlsConfig.CaSecret.Name == "" || tlsConfig.CaSecret.Name == tlsConfig.Secret.Name {
+			// Single secret mounted as directory
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSCertKey))
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSPrivateKeyKey))
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport/%s", CaCertKey))
+		} else {
+			// Separate secrets mounted as directories
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSCertKey))
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSPrivateKeyKey))
+			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport-ca/%s", CaCertKey))
+		}
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "false")
+
+		// Enable hot reload if configured and version supports it
+		if tlsConfig.EnableHotReload && r.supportsHotReload() {
+			r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
+		}
 	}
-	r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport/%s", CaCertKey))
 	dnList := strings.Join(tlsConfig.NodesDn, "\",\"")
 	r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"%s\"]", dnList))
 	return nil
@@ -605,19 +644,43 @@ func (r *TLSReconciler) handleHttp() error {
 			//		r.recorder.Event(r.instance, "Warning", "Security", "Notice - Not all secrets for http provided")
 			return err
 		}
-		if tlsConfig.CaSecret.Name == "" {
+
+		// Implement new mounting logic based on CaSecret.Name configuration
+		switch name := tlsConfig.CaSecret.Name; name {
+		case "":
+			// If CaSecret.Name is empty, mount Secret.Name as a directory
 			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
-		} else {
-			mount("http", "ca", CaCertKey, tlsConfig.CaSecret.Name, r.reconcilerContext)
-			mount("http", "key", corev1.TLSPrivateKeyKey, tlsConfig.Secret.Name, r.reconcilerContext)
-			mount("http", "cert", corev1.TLSCertKey, tlsConfig.Secret.Name, r.reconcilerContext)
+		case tlsConfig.Secret.Name:
+			// If CaSecret.Name is same as Secret.Name, mount only Secret.Name as a directory
+			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+		default:
+			// If CaSecret.Name is different from Secret.Name, mount both secrets as directories
+			// Mount Secret.Name as tls-http/
+			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+			// Mount CaSecret.Name as tls-http-ca/
+			mountFolder("http", "ca", tlsConfig.CaSecret.Name, r.reconcilerContext)
 		}
 	}
-	// Extend opensearch.yml
+	// Extend opensearch.yml with appropriate file paths based on mounting logic
 	r.reconcilerContext.AddConfig("plugins.security.ssl.http.enabled", "true")
-	r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemcert_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSCertKey))
-	r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemkey_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSPrivateKeyKey))
-	r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemtrustedcas_filepath", fmt.Sprintf("tls-http/%s", CaCertKey))
+
+	// Set certificate file paths based on mounting configuration
+	if tlsConfig.CaSecret.Name == "" || tlsConfig.CaSecret.Name == tlsConfig.Secret.Name {
+		// Single secret mounted as directory
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemcert_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSCertKey))
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemkey_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSPrivateKeyKey))
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemtrustedcas_filepath", fmt.Sprintf("tls-http/%s", CaCertKey))
+	} else {
+		// Separate secrets mounted as directories
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemcert_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSCertKey))
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemkey_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSPrivateKeyKey))
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemtrustedcas_filepath", fmt.Sprintf("tls-http-ca/%s", CaCertKey))
+	}
+
+	// Enable hot reload if configured and version supports it
+	if tlsConfig.EnableHotReload && r.supportsHotReload() {
+		r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
+	}
 	return nil
 }
 
@@ -638,17 +701,18 @@ func (r *TLSReconciler) providedCaCert(secretName string, namespace string) (tls
 	return ca, nil
 }
 
-func mount(interfaceName string, name string, filename string, secretName string, reconcilerContext *ReconcilerContext) {
-	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName}}}
-	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
-	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s/%s", interfaceName, filename), SubPath: filename}
-	reconcilerContext.VolumeMounts = append(reconcilerContext.VolumeMounts, mount)
-}
-
 func mountFolder(interfaceName string, name string, secretName string, reconcilerContext *ReconcilerContext) {
 	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName}}}
 	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
-	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: fmt.Sprintf("/usr/share/opensearch/config/tls-%s", interfaceName)}
+
+	var mountPath string
+	if name == "ca" {
+		mountPath = fmt.Sprintf("/usr/share/opensearch/config/tls-%s-ca", interfaceName)
+	} else {
+		mountPath = fmt.Sprintf("/usr/share/opensearch/config/tls-%s", interfaceName)
+	}
+
+	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: mountPath}
 	reconcilerContext.VolumeMounts = append(reconcilerContext.VolumeMounts, mount)
 }
 
