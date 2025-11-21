@@ -324,7 +324,7 @@ Bootstrap defines Opensearch bootstrap pod configuration
       </tr><tr>
         <td><b>hostAliases</b></td>
         <td>[]corev1.HostAlias</td>
-        <td>Set the host aliases for the dashboards pods.</td>
+        <td>Set the host aliases for the bootstrap pods.</td>
         <td>false</td>
         <td> - </td>
       </tr>
