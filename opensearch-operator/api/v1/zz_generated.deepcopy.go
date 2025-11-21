@@ -886,6 +886,7 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
 	if in.OperatorClusterURL != nil {
 		in, out := &in.OperatorClusterURL, &out.OperatorClusterURL
 		*out = new(string)
