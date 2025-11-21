@@ -1,6 +1,10 @@
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.useRoleBindings }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}
   labels:
@@ -414,6 +418,7 @@ rules:
   - opensearchsnapshotpolicies/finalizers
   verbs:
   - update
+{{- if not .Values.useRoleBindings }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -426,9 +431,14 @@ rules:
   - /metrics
   verbs:
   - get
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.useRoleBindings }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-proxy
   labels:
@@ -520,7 +530,7 @@ metadata:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: {{ if .Values.useRoleBindings }}Role{{ else }}ClusterRole{{ end }}
   name: {{ include "opensearch-operator.fullname" . }}
 subjects:
 - kind: ServiceAccount
@@ -535,7 +545,7 @@ metadata:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: {{ if .Values.useRoleBindings }}Role{{ else }}ClusterRole{{ end }}
   name: {{ include "opensearch-operator.fullname" . }}-proxy
 subjects:
 - kind: ServiceAccount
