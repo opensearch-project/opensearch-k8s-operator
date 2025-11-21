@@ -74,6 +74,7 @@ type GeneralConfig struct {
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the cluster pods' container
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	HostAliases     []corev1.HostAlias      `json:"hostAliases,omitempty"`
 	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
 	// instead of the default internal Kubernetes service DNS name.
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
@@ -194,6 +195,7 @@ type BootstrapConfig struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+	HostAliases    []corev1.HostAlias `json:"hostAliases,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
@@ -227,6 +229,7 @@ type DashboardsConfig struct {
 	Annotations                 map[string]string           `json:"annotations,omitempty"`
 	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
 	PluginsList                 []string                    `json:"pluginsList,omitempty"`
+	HostAliases                 []corev1.HostAlias          `json:"hostAliases,omitempty"`
 	// Set security context for the dashboards pods
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the dashboards pods' container

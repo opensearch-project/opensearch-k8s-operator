@@ -170,6 +170,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 					Tolerations:        cr.Spec.Dashboards.Tolerations,
 					Affinity:           cr.Spec.Dashboards.Affinity,
 					SecurityContext:    podSecurityContext,
+					HostAliases:        cr.Spec.Dashboards.HostAliases,
 				},
 			},
 		},
