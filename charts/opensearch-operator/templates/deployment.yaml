@@ -1,18 +1,19 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    control-plane: controller-manager
-  name: {{ include "opensearch-operator.fullname" . }}-controller-manager
+    {{- include "opensearch-operator.labels" . | nindent 4 }}
+  name: {{ include "opensearch-operator.fullname" . }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      control-plane: controller-manager
+      {{- include "opensearch-operator.selectorLabels" . | nindent 6 }}
   template:
     metadata:
       labels:
-        control-plane: controller-manager
+        {{- include "opensearch-operator.labels" . | nindent 8 }}
         {{- with .Values.podLabels }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
