@@ -709,7 +709,14 @@ spec:
     - hostnames:
       - example.com
       ip: 127.0.0.1
+  bootstrap:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
 ```
+
+By default, the bootstrap pods will have the same hostAliases set as the Opensearch pods. To overwrite this, set the hostAliases in the bootstrap section.
 
 ### Labels or Annotations on OpenSearch nodes
 

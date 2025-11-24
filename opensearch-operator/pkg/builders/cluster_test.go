@@ -1389,5 +1389,57 @@ var _ = Describe("Builders", func() {
 			pod := NewBootstrapPod(&clusterObject, nil, nil)
 			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
 		})
+		It("should overwrite the host alias for the bootstrap pods", func() {
+			hostNames := []string{"dummy.com"}
+			hostAlias := corev1.HostAlias{
+				IP:        "3.5.7.9",
+				Hostnames: hostNames,
+			}
+			bootstrapHostNames := []string{"bootstrap.dummy.com"}
+			bootstrapHostAlias := corev1.HostAlias{
+				IP:        "3.5.7.10",
+				Hostnames: bootstrapHostNames,
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Namespace = "foobar"
+			clusterObject.Name = "foobar"
+			clusterObject.Spec.General.HostAliases = []corev1.HostAlias{hostAlias}
+			clusterObject.Spec.Bootstrap.HostAliases = []corev1.HostAlias{bootstrapHostAlias}
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(sts.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
+
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
+		})
+		It("should set the host alias for the bootstrap pods without hostAlias defined in opensearch pods", func() {
+			bootstrapHostNames := []string{"bootstrap.dummy.com"}
+			bootstrapHostAlias := corev1.HostAlias{
+				IP:        "3.5.7.10",
+				Hostnames: bootstrapHostNames,
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Namespace = "foobar"
+			clusterObject.Name = "foobar"
+			clusterObject.Spec.Bootstrap.HostAliases = []corev1.HostAlias{bootstrapHostAlias}
+			nodePool := opsterv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(sts.Spec.Template.Spec.HostAliases).To(BeNil())
+
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
+		})
 	})
 })
