@@ -318,6 +318,15 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearc
 	return numReadyPods, nil
 }
 
+// ReadyReplicasForNodePool returns the number of ready replicas derived from the actual running pods.
+func ReadyReplicasForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int32, error) {
+	numReadyPods, err := CountRunningPodsForNodePool(k8sClient, cr, nodePool)
+	if err != nil {
+		return 0, err
+	}
+	return int32(numReadyPods), nil
+}
+
 // Count the number of PVCs created for the given NodePool
 func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})

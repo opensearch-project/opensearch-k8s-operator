@@ -77,6 +77,12 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 		return false, err
 	}
 
+	readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, nodePool)
+	if err != nil {
+		return false, err
+	}
+	currentSts.Status.ReadyReplicas = readyReplicas
+
 	componentStatus := opsterv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Running",
