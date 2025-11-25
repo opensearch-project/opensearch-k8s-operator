@@ -1009,7 +1009,7 @@ func NewBootstrapPod(
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
 
-	// Use General.HostAliases by default, overwrite with Bootstrap.HostAliases if et
+	// Use General.HostAliases by default, overwrite with Bootstrap.HostAliases if set
 	hostAliases := cr.Spec.General.HostAliases
 	if cr.Spec.Bootstrap.HostAliases != nil {
 		hostAliases = cr.Spec.Bootstrap.HostAliases
