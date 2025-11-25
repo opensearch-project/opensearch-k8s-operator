@@ -83,11 +83,19 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 
 	// Check that all nodes are ready before doing work
 	// Also check if there are pending updates for all nodes.
-	for _, nodePool := range r.instance.Spec.NodePools {
+	for i := range r.instance.Spec.NodePools {
+		nodePool := r.instance.Spec.NodePools[i]
 		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+		if err != nil {
+			r.logger.Error(err, "Failed to count ready pods for node pool", "nodePool", nodePool.Component)
+			return ctrl.Result{Requeue: true}, err
+		}
+		sts.Status.ReadyReplicas = readyReplicas
 
 		// Check for pending updates
 		if sts.Status.UpdateRevision != "" &&
@@ -309,7 +317,8 @@ func parseOrdinalFromName(name string) int {
 
 func (r *RollingRestartReconciler) countMasters() (int32, int32, error) {
 	var total, ready int32
-	for _, np := range r.instance.Spec.NodePools {
+	for i := range r.instance.Spec.NodePools {
+		np := r.instance.Spec.NodePools[i]
 		if !helpers.HasManagerRole(&np) {
 			continue
 		}
@@ -318,6 +327,11 @@ func (r *RollingRestartReconciler) countMasters() (int32, int32, error) {
 			return 0, 0, err
 		}
 		total += ptr.Deref(sts.Spec.Replicas, 1)
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &np)
+		if err != nil {
+			return 0, 0, err
+		}
+		sts.Status.ReadyReplicas = readyReplicas
 		ready += sts.Status.ReadyReplicas
 	}
 	return total, ready, nil

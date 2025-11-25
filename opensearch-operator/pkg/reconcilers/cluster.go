@@ -202,6 +202,11 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			}
 			existing = *new
 		}
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+		if err != nil {
+			return result, err
+		}
+		existing.Status.ReadyReplicas = readyReplicas
 		// Check number of PVCs for nodepool
 		pvcCount, err := helpers.CountPVCsForNodePool(r.client, r.instance, &nodePool)
 		if err != nil {
@@ -334,6 +339,11 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			if err != nil {
 				return &ctrl.Result{Requeue: true}, err
 			}
+			readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+			if err != nil {
+				return &ctrl.Result{Requeue: true}, err
+			}
+			sts.Status.ReadyReplicas = readyReplicas
 		}
 
 		if helpers.HasDataRole(&nodePool) {
