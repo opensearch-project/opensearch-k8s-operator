@@ -58,9 +58,8 @@ type Meta struct {
 }
 
 type InternalUserConfig struct {
-	Meta          Meta `yaml:"_meta"`
-	Admin         User `yaml:"admin"`
-	DashboardUser User `yaml:"dashboarduser"`
+	Meta  Meta `yaml:"_meta"`
+	Admin User `yaml:"admin"`
 }
 
 func ContainsString(slice []string, s string) bool {
@@ -192,12 +191,33 @@ func generateRandomPassword(length int) (string, error) {
 	return string(password), nil
 }
 
-func CreateCustomAdminSecrets(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (bool, error) {
-	randomPassword, _ := generateRandomPassword(15)
+func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
+	if cr.Spec.Security == nil || cr.Spec.Security.Config == nil {
+		return nil, false, errors.New("security config is not defined")
+	}
+
+	if cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
+		secret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
+		return &secret, false, err
+	}
+
+	generatedName := GeneratedAdminCredentialsSecretName(cr)
+	secret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err == nil {
+		return &secret, true, nil
+	}
+	if !k8serrors.IsNotFound(err) {
+		return nil, true, err
+	}
+
+	randomPassword, err := generateRandomPassword(15)
+	if err != nil {
+		return nil, true, err
+	}
 
 	adminSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.Security.Config.AdminCredentialsSecret.Name,
+			Name:      generatedName,
 			Namespace: cr.Namespace,
 		},
 		StringData: map[string]string{
@@ -205,115 +225,158 @@ func CreateCustomAdminSecrets(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCl
 			"password": randomPassword,
 		},
 	}
-	_, err := k8sClient.CreateSecret(adminSecret)
-	if err != nil {
-		return false, err
+	if _, err := k8sClient.CreateSecret(adminSecret); err != nil {
+		return nil, true, err
 	}
-	return true, nil
 
+	createdSecret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err != nil {
+		return nil, true, err
+	}
+	return &createdSecret, true, nil
 }
 
-func CreateCustomAdminContextSecrets(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (bool, error) {
-
-	adminSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
+func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, adminSecret *corev1.Secret) (*corev1.Secret, error) {
+	baseData, err := defaultSecurityconfigData()
 	if err != nil {
-		return false, err
-	}
-	randomPassword := adminSecret.Data["password"]
-
-	contextSecretTemplate, err := k8sClient.GetSecret(cr.Spec.Security.Config.SecurityconfigSecretTemplate.Name, cr.Namespace)
-	if err != nil {
-		return false, err
-	}
-
-	internalUsers := contextSecretTemplate.Data["internal_users.yml"]
-
-	internalUsers, err = internalUsersGenerator(internalUsers, randomPassword)
-	if err != nil {
-		return false, err
-	}
-
-	contextSecret := &corev1.Secret{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Spec.Security.Config.SecurityconfigSecret.Name,
-			Namespace: cr.Namespace,
-		},
-		Data: map[string][]byte{
-			"action_groups.yml":  contextSecretTemplate.Data["action_groups.yml"],
-			"config.yml":         contextSecretTemplate.Data["config.yml"],
-			"internal_users.yml": internalUsers,
-			"nodes_dn.yml":       contextSecretTemplate.Data["nodes_dn.yml"],
-			"roles.yml":          contextSecretTemplate.Data["roles.yml"],
-			"roles_mapping.yml":  contextSecretTemplate.Data["roles_mapping.yml"],
-			"tenants.yml":        contextSecretTemplate.Data["tenants.yml"],
-			"whitelist.yml":      contextSecretTemplate.Data["whitelist.yml"],
-		},
-	}
-	_, err = k8sClient.CreateSecret(contextSecret)
-	if err != nil {
-		return false, err
-	}
-	return true, nil
-}
-
-func NeedToCreateCustomSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, secretname string) bool {
-	if cr.Spec.Security != nil && secretname != "" && cr.Spec.Security.RandomAdminSecrets {
-		_, err := k8sClient.GetSecret(secretname, cr.Namespace)
-
-		// skip secret creation if already exist
-		if err != nil {
-			if statusErr, ok := err.(*k8serrors.StatusError); ok {
-				statusCode := statusErr.ErrStatus.Code
-				if statusCode == 404 {
-					return true
-				} else {
-					return false
-				}
-			}
-		}
-		return false
-	}
-	return false
-}
-
-func internalUsersGenerator(internalUserData, randomPassword []byte) ([]byte, error) { // todo
-	var data InternalUserConfig
-	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
 	}
 
+	if cr.Spec.Security.Config.SecurityconfigSecret.Name != "" {
+		userSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.SecurityconfigSecret.Name, cr.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range userSecret.Data {
+			baseData[key] = append([]byte(nil), value...)
+		}
+	}
+
+	password, passwordExists := adminSecret.Data["password"]
+	if !passwordExists {
+		return nil, errors.New("admin credentials secret missing password field")
+	}
+
+	internalUsers, ok := baseData["internal_users.yml"]
+	if !ok {
+		return nil, errors.New("securityconfig missing internal_users.yml")
+	}
+
+	generatedName := GeneratedSecurityConfigSecretName(cr)
+	var existingGenerated *corev1.Secret
+	existingSecret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err == nil {
+		existingGenerated = &existingSecret
+	} else if !k8serrors.IsNotFound(err) {
+		return nil, err
+	}
+
+	hashOverride := ""
+	if existingGenerated != nil {
+		if existingInternal, exists := existingGenerated.Data["internal_users.yml"]; exists {
+			var existingConfig InternalUserConfig
+			if err := yaml.Unmarshal(existingInternal, &existingConfig); err == nil {
+				if existingConfig.Admin.Hash != "" && bcrypt.CompareHashAndPassword([]byte(existingConfig.Admin.Hash), password) == nil {
+					hashOverride = existingConfig.Admin.Hash
+				}
+			}
+		}
+	}
+
+	if hashOverride != "" {
+		internalUsers, err = applyAdminHash(internalUsers, hashOverride)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		internalUsers, err = internalUsersGenerator(internalUsers, password)
+		if err != nil {
+			return nil, err
+		}
+	}
+	baseData["internal_users.yml"] = internalUsers
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generatedName,
+			Namespace: cr.Namespace,
+		},
+		Data: baseData,
+		Type: corev1.SecretTypeOpaque,
+	}
+
+	return secret, nil
+}
+
+func internalUsersGenerator(internalUserData, randomPassword []byte) ([]byte, error) { // todo
 	hash, err := bcrypt.GenerateFromPassword(randomPassword, 12)
 	if err != nil {
 		return nil, err
 	}
+	return applyAdminHash(internalUserData, string(hash))
+}
 
-	data.Admin.Hash = string(hash)
+func applyAdminHash(internalUserData []byte, hash string) ([]byte, error) {
+	var data InternalUserConfig
+	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
+		return nil, err
+	}
+	data.Admin.Hash = hash
 
-	// Marshal the updated data back to YAML
+	if !data.Admin.Reserved {
+		data.Admin.Reserved = true
+	}
+	if len(data.Admin.BackendRoles) == 0 {
+		data.Admin.BackendRoles = []string{"admin"}
+	} else {
+		found := false
+		for _, role := range data.Admin.BackendRoles {
+			if role == "admin" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			data.Admin.BackendRoles = append(data.Admin.BackendRoles, "admin")
+		}
+	}
 	modifiedYaml, err := yaml.Marshal(data)
 	if err != nil {
 		return nil, err
 	}
-	return modifiedYaml, err
+	return modifiedYaml, nil
 }
 
 func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (string, string, error) {
-	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
-		// Read credentials from secret
-		credentialsSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
-		if err != nil {
-			return "", "", err
-		}
-		username, usernameExists := credentialsSecret.Data["username"]
-		password, passwordExists := credentialsSecret.Data["password"]
-		if !usernameExists || !passwordExists {
-			return "", "", errors.New("username or password field missing")
-		}
-		return string(username), string(password), nil
-	} else {
-		// Use default demo credentials
+	if cr.Spec.Security == nil || cr.Spec.Security.Config == nil {
 		return "admin", "admin", nil
 	}
+
+	secretName := cr.Spec.Security.Config.AdminCredentialsSecret.Name
+	if secretName == "" {
+		secretName = GeneratedAdminCredentialsSecretName(cr)
+	}
+
+	credentialsSecret, err := k8sClient.GetSecret(secretName, cr.Namespace)
+	if err != nil {
+		if k8serrors.IsNotFound(err) && secretName == GeneratedAdminCredentialsSecretName(cr) {
+			credentialsSecretPtr, _, createErr := EnsureAdminCredentialsSecret(k8sClient, cr)
+			if createErr != nil {
+				return "", "", createErr
+			}
+			credentialsSecret = *credentialsSecretPtr
+		} else {
+			return "", "", err
+		}
+	}
+	username, usernameExists := credentialsSecret.Data["username"]
+	password, passwordExists := credentialsSecret.Data["password"]
+	if !usernameExists || !passwordExists {
+		return "", "", errors.New("username or password field missing")
+	}
+	log.Println("username", string(username))
+	log.Println("password", string(password))
+	return string(username), string(password), nil
 }
 
 func GetByDescriptionAndComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
@@ -804,11 +867,17 @@ func GenIndexTemplateName(template *opsterv1.OpensearchIndexTemplate) string {
 }
 
 func DiscoverRandomAdminSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, error) {
-	secret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
+	if cr.Spec.Security == nil || cr.Spec.Security.Config == nil {
+		return nil, fmt.Errorf("security config is not defined")
+	}
+	if cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
+		return nil, fmt.Errorf("admin credentials secret managed by user")
+	}
+	secret, err := k8sClient.GetSecret(GeneratedAdminCredentialsSecretName(cr), cr.Namespace)
 	return &secret, err
 }
 
 func DiscoverRandomContextSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, error) {
-	secret, err := k8sClient.GetSecret(cr.Spec.Security.Config.SecurityconfigSecret.Name, cr.Namespace)
+	secret, err := k8sClient.GetSecret(GeneratedSecurityConfigSecretName(cr), cr.Namespace)
 	return &secret, err
 }
