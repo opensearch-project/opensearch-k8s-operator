@@ -1277,7 +1277,11 @@ spec:
 # ...
 ```
 
-Provide the name of the secret that contains your securityconfig yaml files as `securityconfigSecret.name`. In the secret, you can provide the files that you want to configure. The operator will only apply the files present in the secret. Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
+Provide the name of the secret that contains your securityconfig yaml files as `securityConfigSecret.name`. This secret acts as the source of truth that you manage. The operator always creates its own runtime secret named `<cluster-name>-security-config-generated`, copies your files into it (or falls back to the bundled defaults when no secret is supplied), and automatically updates the password hashes for the admin and dashboard (kibanaserver) users before applying the configuration to the cluster.
+
+**Important:** You no longer need to provide password hashes for the `admin` or `kibanaserver` users in your security config secret. The operator will automatically generate password hashes from the credentials secrets and override any hash values you provide in the security config secret for these users. This means you only need to manage passwords in one place (the credentials secrets), not in both the credentials secrets and the security config secret.
+
+Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
 
 If you don't want to use the default files, you must provide at least a minimum configuration for the file. Example:
 
@@ -1290,7 +1294,9 @@ tenants.yml: |-
 
 These minimum configuration files can later be removed from the secret so that you don't overwrite the resources created via the CRDs or the REST APIs when modifying other configuration files.
 
-In addition, you must provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). This user must be defined in your securityconfig and must have appropriate permissions (currently admin).
+In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). When you omit this field the operator automatically creates `<cluster-name>-admin-password`, seeds it with the default `admin` username and a **random password**, and automatically generates the password hash and adds it to the generated securityconfig. If you bring your own secret, the operator reads the password from your secret and automatically generates the hash and adds it to the generated securityconfig without modifying your source secret.
+
+Similarly, for OpenSearch Dashboards, if you don't provide `dashboards.opensearchCredentialsSecret`, the operator automatically creates `<cluster-name>-dashboards-password` with a **random password** for the `kibanaserver` user and automatically generates the password hash and adds it to the generated securityconfig.
 
 You must also configure SSL/TLS HTTP. You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
 
@@ -1413,8 +1419,9 @@ spec:
 
 ### Custom Admin User
 
-In order to create your cluster with an adminuser different from the default `admin:admin` you will have to walk through the following steps:
-First you will have to create a secret with your admin user configuration (in this example `admin-credentials-secret`):
+In order to create your cluster with an admin user different from the default, you can provide your own admin credentials secret. The operator will automatically generate the password hash and add it to the security config, so you no longer need to manually generate and include the password hash in your security config secret.
+
+First, create a secret with your admin user configuration (in this example `admin-credentials-secret`):
 
 ```yaml
 apiVersion: v1
@@ -1429,10 +1436,12 @@ data:
   password: YWRtaW4xMjM=
 ```
 
-Then you have to create your own securityconfig and store it in a secret (`securityconfig-secret` in this example). You can take a look at [securityconfig-secret.yaml](../../opensearch-operator/examples/securityconfig-secret.yaml) for how such a secret should look like.
-Make sure that the password hash of the admin user corresponds to the password you stored in the `admin-credentials-secret`.
+**Important:** You do **not** need to include the password hash in your security config secret. The operator will automatically:
+1. Read the password from your `adminCredentialsSecret`
+2. Generate the bcrypt hash
+3. Override the `admin` user's hash in the generated security config secret (`<cluster-name>-security-config-generated`)
 
-Notice that inside `securityconfig-secret` You must edit the `hash` of the admin user before creating the secret. if you have python 3.x installed on your machine you can use the following command to hash your password: `python -c 'import bcrypt; print(bcrypt.hashpw("admin123".encode("utf-8"), bcrypt.gensalt(12, prefix=b"2a")).decode("utf-8"))'`
+If you provide your own securityconfig secret, you can optionally include the admin user definition, but any hash you provide will be automatically overridden by the operator:
 
 ```yaml
 internal_users.yml: |-
@@ -1440,14 +1449,14 @@ internal_users.yml: |-
     type: "internalusers"
     config_version: 2
   admin:
-    hash: "$2y$12$lJsHWchewGVcGlYgE3js/O4bkTZynETyXChAITarCHLz8cuaueIyq"   <------- change that hash to your new password hash
+    # hash field is optional - operator will override it automatically
     reserved: true
     backend_roles:
     - "admin"
     description: "Demo admin user"
 ```
 
-The last thing that you have to do is to add that security configuration to your cluster spec:
+Add the security configuration to your cluster spec:
 
 ```yaml
 security:
@@ -1455,7 +1464,7 @@ security:
     adminCredentialsSecret:
       name: admin-credentials-secret # The secret with the admin credentials for the operator to use
     securityConfigSecret:
-      name: securityconfig-secret # The secret containing your customized securityconfig
+      name: securityconfig-secret # Optional: The secret containing your customized securityconfig
   tls:
     transport:
       generate: true
@@ -1463,11 +1472,24 @@ security:
       generate: true
 ```
 
-Changing the admin password after the cluster has been created is possible via the same way. You must update your securityconfig (in the `securityconfig-secret`) and the content of the `admin-credentials-secret` to both reflect the new password. Note that currently the operator cannot make changes in the securityconfig itself. As such you must always update the securityconfig in the secret with the new password and in addition provide it via the credentials secret so that the operator can still access the cluster.
+**Changing the admin password:** To change the admin password after the cluster has been created, simply update the password in your `admin-credentials-secret`. The operator will automatically:
+1. Detect the password change
+2. Generate a new password hash
+3. Update the generated security config secret
+4. Trigger a security config update job to apply the changes to OpenSearch
+
+You no longer need to manually update the password hash in the security config secret.
 
 ### Custom Dashboards user
 
-Dashboards requires an opensearch user to connect to the cluster. By default Dashboards is configured to use the demo admin user. If you supply your own securityconfig and want to change the credentials Dashboards should use, you must create a secret with keys `username` and `password` that contains the new credentials and then supply that secret to the operator via the cluster spec:
+Dashboards requires an opensearch user (typically `kibanaserver`) to connect to the cluster. 
+
+**If you don't provide a custom credentials secret**, the operator automatically:
+1. Creates a secret named `<cluster-name>-dashboards-password` with a **random password** for the `kibanaserver` user
+2. Generates the password hash and automatically adds it to the generated security config secret
+3. Configures Dashboards to use these credentials
+
+**If you want to use custom credentials**, create a secret with keys `username` and `password` and supply it to the operator via the cluster spec:
 
 ```yaml
 spec:
@@ -1475,6 +1497,25 @@ spec:
     opensearchCredentialsSecret:
       name: dashboards-credentials # This is the name of your secret that contains the credentials for Dashboards to use
 ```
+
+**Important:** Similar to the admin user, you do **not** need to include the password hash for the `kibanaserver` user in your security config secret. The operator will automatically:
+1. Read the password from your `opensearchCredentialsSecret` (or use the generated random password if not provided)
+2. Generate the bcrypt hash
+3. Override the `kibanaserver` user's hash in the generated security config secret
+
+### Security Plugin Disabled
+
+When the security plugin is disabled (`spec.security.disable: true`), password management works differently:
+
+**Admin User:**
+- You can now set a custom password for the admin user by providing `adminCredentialsSecret` with your desired password
+- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in the bootstrap pod and all OpenSearch StatefulSet pods
+- This allows OpenSearch to use your custom password during initial setup, even when the security plugin is disabled
+
+**Dashboards User:**
+- Custom passwords for the Dashboards user are **not supported** when the security plugin is disabled
+- The operator will use the default `kibanaserver` password
+- This is a current limitation
 
 ## Adding Opensearch Monitoring to your cluster
 

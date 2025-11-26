@@ -1,0 +1,13 @@
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: ""
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "Demo admin user"
+kibanaserver:
+  hash: ""
+  reserved: true
+  description: "Demo user for the OpenSearch Dashboards server"

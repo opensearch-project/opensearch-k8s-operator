@@ -11,7 +11,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Masterminds/semver"
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -90,7 +89,7 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
-	// Handle HTTP TLS: check enabled field, with disableSSL as backward compatibility override
+	// Handle HTTP TLS: check enabled field
 	if r.isHttpTlsEnabled(tlsConfig) {
 		if err := r.handleHttp(); err != nil {
 			return ctrl.Result{}, err
@@ -100,7 +99,7 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.ssl.http.enabled", "false")
 	}
 
-	if r.isAdminCertEnabled(tlsConfig) {
+	if helpers.IsSecurityPluginEnabled(r.instance) {
 		res, err := r.handleAdminCertificate()
 		return lo.FromPtrOr(res, ctrl.Result{}), err
 	}
@@ -144,13 +143,6 @@ func (r *TLSReconciler) isHttpTlsEnabled(config *opsterv1.TlsConfig) bool {
 	return true
 }
 
-func (r *TLSReconciler) isAdminCertEnabled(config *opsterv1.TlsConfig) bool {
-	if r.securityChangeVersion() {
-		return r.isHttpTlsEnabled(config)
-	}
-	return r.isTransportTlsEnabled(config)
-}
-
 func (r *TLSReconciler) handleTransport() error {
 	config := r.instance.Spec.Security.Tls.Transport
 
@@ -173,9 +165,14 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 	var certDN string
 	var shouldGenerate bool
 
-	if r.securityChangeVersion() {
+	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
+		shouldGenerate = false
+	} else {
+		shouldGenerate = true
+	}
+
+	if helpers.SecurityChangeVersion(r.instance) {
 		tlsConfig := r.instance.Spec.Security.Tls.Http
-		shouldGenerate = tlsConfig.Generate || (r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name == "")
 		if shouldGenerate {
 			ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
 			if err != nil {
@@ -192,7 +189,6 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 		}
 	} else {
 		tlsConfig := r.instance.Spec.Security.Tls.Transport
-		shouldGenerate = tlsConfig.Generate || (r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name == "")
 		if shouldGenerate {
 			ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
 			if err != nil {
@@ -213,38 +209,8 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 	return res, nil
 }
 
-func (r *TLSReconciler) checkVersionConstraint(constraint string, defaultOnError bool, errMsg string) bool {
-	versionConstraint, err := semver.NewConstraint(constraint)
-	if err != nil {
-		panic(err)
-	}
-
-	version, err := semver.NewVersion(r.instance.Spec.General.Version)
-	if err != nil {
-		r.logger.Error(err, errMsg)
-		return defaultOnError
-	}
-	return versionConstraint.Check(version)
-}
-
-func (r *TLSReconciler) securityChangeVersion() bool {
-	return r.checkVersionConstraint(
-		">=2.0.0",
-		true,
-		"unable to parse version, assuming >= 2.0.0",
-	)
-}
-
-func (r *TLSReconciler) supportsHotReload() bool {
-	return r.checkVersionConstraint(
-		">=2.19.1",
-		false,
-		"unable to parse version for hot reload check, assuming not supported",
-	)
-}
-
 func (r *TLSReconciler) adminCAConfig() corev1.LocalObjectReference {
-	if r.securityChangeVersion() {
+	if helpers.SecurityChangeVersion(r.instance) {
 		return r.instance.Spec.Security.Tls.Http.CaSecret
 	}
 	return r.instance.Spec.Security.Tls.Transport.CaSecret
@@ -635,7 +601,7 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "false")
 
 		// Enable hot reload if configured and version supports it
-		if tlsConfig.EnableHotReload && r.supportsHotReload() {
+		if tlsConfig.EnableHotReload && helpers.SupportsHotReload(r.instance) {
 			r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
 		}
 	}
@@ -759,7 +725,7 @@ func (r *TLSReconciler) handleHttp() error {
 	}
 
 	// Enable hot reload if configured and version supports it
-	if tlsConfig.EnableHotReload && r.supportsHotReload() {
+	if tlsConfig.EnableHotReload && helpers.SupportsHotReload(r.instance) {
 		r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
 	}
 	return nil

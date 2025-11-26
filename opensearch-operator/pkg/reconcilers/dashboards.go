@@ -77,6 +77,20 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	volumes = append(volumes, addVolumes...)
 	volumeMounts = append(volumeMounts, addVolumeMounts...)
 
+	// Ensure Dashboards credentials secret exists (always generated/administered)
+	// OpensearchCredentialsSecret is optional - check if Name is set
+	if r.instance.Spec.Dashboards.OpensearchCredentialsSecret.Name == "" {
+		dashboardsCredSecret, managedByOperator, err := helpers.EnsureDashboardsCredentialsSecret(r.client, r.instance)
+		if err != nil {
+			r.logger.Error(err, "Unable to ensure Dashboards credentials secret")
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 30}, err
+		}
+		if managedByOperator && dashboardsCredSecret != nil {
+			result.CombineErr(ctrl.SetControllerReference(r.instance, dashboardsCredSecret, r.client.Scheme()))
+			result.Combine(r.client.ReconcileResource(dashboardsCredSecret, reconciler.StatePresent))
+		}
+	}
+
 	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Name), r.reconcilerContext.DashboardsConfig)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, cm, r.client.Scheme()))
 	result.Combine(r.client.CreateConfigMap(cm))
