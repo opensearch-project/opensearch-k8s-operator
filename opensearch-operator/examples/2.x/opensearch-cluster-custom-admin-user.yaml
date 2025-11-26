@@ -41,9 +41,6 @@ spec:
         name: admin-credentials-secret
       securityConfigSecret:
        name: securityconfig-secret
-      securityConfigSecretTemplate:
-       name: securityconfig-template-secret
-    randomadminsecrets: true
     tls:
       transport:
         generate: true
@@ -94,7 +91,7 @@ spec:
 apiVersion: v1
 kind: Secret
 metadata:
-  name: securityconfig-template-secret
+  name: securityconfig-secret
   namespace: test-opensearch-cluster
 type: Opaque
 stringData:

@@ -6503,25 +6503,10 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       securityConfigSecret:
-                        description: Secret that contains the different yml files
-                          of the opensearch-security config (config.yml, internal_users.yml,
-                          ...)
-                        properties:
-                          name:
-                            default: ""
-                            description: |-
-                              Name of the referent.
-                              This field is effectively required, but due to backwards compatibility is
-                              allowed to be empty. Instances of this type with an empty value here are
-                              almost certainly wrong.
-                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                            type: string
-                        type: object
-                        x-kubernetes-map-type: atomic
-                      securityConfigSecretTemplate:
-                        description: |-
-                          LocalObjectReference contains enough information to let you locate the
-                          referenced object inside the same namespace.
+                        description: Optional secret that contains the different
+                          yml files of the opensearch-security config (config.yml,
+                          internal_users.yml, ...). When omitted the operator seeds
+                          the cluster with its bundled defaults.
                         properties:
                           name:
                             default: ""
@@ -6601,8 +6586,6 @@ spec:
                             type: object
                         type: object
                     type: object
-                  randomadminsecrets:
-                    type: boolean
                   tls:
                     description: Configure tls usage for transport and http interface
                     properties:

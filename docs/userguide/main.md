@@ -1277,7 +1277,7 @@ spec:
 # ...
 ```
 
-Provide the name of the secret that contains your securityconfig yaml files as `securityconfigSecret.name`. In the secret, you can provide the files that you want to configure. The operator will only apply the files present in the secret. Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
+Provide the name of the secret that contains your securityconfig yaml files as `securityConfigSecret.name`. This secret acts as the source of truth that you manage. The operator always creates its own runtime secret named `<cluster-name>-security-config-generated`, copies your files into it (or falls back to the bundled defaults when no secret is supplied), and updates the admin user hash before applying the configuration to the cluster. Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
 
 If you don't want to use the default files, you must provide at least a minimum configuration for the file. Example:
 
@@ -1290,7 +1290,7 @@ tenants.yml: |-
 
 These minimum configuration files can later be removed from the secret so that you don't overwrite the resources created via the CRDs or the REST APIs when modifying other configuration files.
 
-In addition, you must provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). This user must be defined in your securityconfig and must have appropriate permissions (currently admin).
+In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). When you omit this field the operator automatically creates `<cluster-name>-admin-password`, seeds it with the default `admin` username and a random password, and wires that user into the generated securityconfig. If you bring your own secret, the operator copies the provided password into the generated securityconfig without modifying your source secret.
 
 You must also configure SSL/TLS HTTP. You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
 

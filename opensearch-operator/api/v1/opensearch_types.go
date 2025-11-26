@@ -246,9 +246,8 @@ type DashboardsTlsConfig struct {
 
 // Security defines options for managing the opensearch-security plugin
 type Security struct {
-	Tls                *TlsConfig      `json:"tls,omitempty"`
-	Config             *SecurityConfig `json:"config,omitempty"`
-	RandomAdminSecrets bool            `json:"randomadminsecrets,omitempty"`
+	Tls    *TlsConfig      `json:"tls,omitempty"`
+	Config *SecurityConfig `json:"config,omitempty"`
 }
 
 // Configure tls usage for transport and http interface
@@ -327,14 +326,14 @@ type TlsSecret struct {
 }
 
 type SecurityConfig struct {
-	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	// Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
+	// When omitted the operator seeds the cluster with its bundled defaults.
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
 	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
-	AdminCredentialsSecret       corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
-	SecurityconfigSecretTemplate corev1.LocalObjectReference `json:"securityConfigSecretTemplate,omitempty"`
-	UpdateJob                    SecurityUpdateJobConfig     `json:"updateJob,omitempty"`
+	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
+	UpdateJob              SecurityUpdateJobConfig     `json:"updateJob,omitempty"`
 }
 
 // Specific configs for the SecurityConfig update job
