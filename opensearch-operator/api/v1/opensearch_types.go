@@ -195,20 +195,21 @@ type DashboardsConfig struct {
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
-	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
-	Env                         []corev1.EnvVar             `json:"env,omitempty"`
-	AdditionalVolumes           []AdditionalVolume          `json:"additionalVolumes,omitempty"`
-	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
-	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
-	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
-	Labels                      map[string]string           `json:"labels,omitempty"`
-	Annotations                 map[string]string           `json:"annotations,omitempty"`
-	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
-	PluginsList                 []string                    `json:"pluginsList,omitempty"`
+	OpensearchCredentialsSecret corev1.LocalObjectReference 		`json:"opensearchCredentialsSecret,omitempty"`
+	Env                         []corev1.EnvVar             		`json:"env,omitempty"`
+	AdditionalVolumes           []AdditionalVolume          		`json:"additionalVolumes,omitempty"`
+	Tolerations                 []corev1.Toleration         		`json:"tolerations,omitempty"`
+	NodeSelector                map[string]string           		`json:"nodeSelector,omitempty"`
+	Affinity                    *corev1.Affinity            		`json:"affinity,omitempty"`
+	Labels                      map[string]string           		`json:"labels,omitempty"`
+	Annotations                 map[string]string           		`json:"annotations,omitempty"`
+	Service                     DashboardsServiceSpec       		`json:"service,omitempty"`
+	PluginsList                 []string                    		`json:"pluginsList,omitempty"`
+	TopologySpreadConstraints   []corev1.TopologySpreadConstraint 	`json:"topologySpreadConstraints,omitempty"`
 	// Set security context for the dashboards pods
-	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
+	PodSecurityContext *corev1.PodSecurityContext 					`json:"podSecurityContext,omitempty"`
 	// Set security context for the dashboards pods' container
-	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	SecurityContext *corev1.SecurityContext 						`json:"securityContext,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
