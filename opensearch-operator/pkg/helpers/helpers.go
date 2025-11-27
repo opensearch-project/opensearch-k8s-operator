@@ -58,8 +58,9 @@ type Meta struct {
 }
 
 type InternalUserConfig struct {
-	Meta  Meta `yaml:"_meta"`
-	Admin User `yaml:"admin"`
+	Meta         Meta  `yaml:"_meta"`
+	Admin        User  `yaml:"admin"`
+	Kibanaserver *User `yaml:"kibanaserver,omitempty"`
 }
 
 func ContainsString(slice []string, s string) bool {
@@ -192,15 +193,13 @@ func generateRandomPassword(length int) (string, error) {
 }
 
 func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
-	if cr.Spec.Security == nil || cr.Spec.Security.Config == nil {
-		return nil, false, errors.New("security config is not defined")
-	}
-
-	if cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
+	// Check if user provided AdminCredentialsSecret via Security.Config
+	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
 		secret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
 		return &secret, false, err
 	}
 
+	// Always generate/administer the admin credentials secret
 	generatedName := GeneratedAdminCredentialsSecretName(cr)
 	secret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
 	if err == nil {
@@ -242,7 +241,7 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opsterv1.Op
 		return nil, err
 	}
 
-	if cr.Spec.Security.Config.SecurityconfigSecret.Name != "" {
+	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.SecurityconfigSecret.Name != "" {
 		userSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.SecurityconfigSecret.Name, cr.Namespace)
 		if err != nil {
 			return nil, err
@@ -252,9 +251,23 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opsterv1.Op
 		}
 	}
 
-	password, passwordExists := adminSecret.Data["password"]
+	adminPassword, passwordExists := adminSecret.Data["password"]
 	if !passwordExists {
 		return nil, errors.New("admin credentials secret missing password field")
+	}
+
+	dashboardsSecret, _, err := EnsureDashboardsCredentialsSecret(k8sClient, cr)
+	if err != nil {
+		return nil, err
+	}
+	var dashboardsPassword []byte
+	if dashboardsSecret != nil {
+		if pwd, exists := dashboardsSecret.Data["password"]; exists {
+			dashboardsPassword = pwd
+		}
+	}
+	if len(dashboardsPassword) == 0 {
+		return nil, errors.New("dashboards credentials secret missing password field")
 	}
 
 	internalUsers, ok := baseData["internal_users.yml"]
@@ -271,28 +284,26 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opsterv1.Op
 		return nil, err
 	}
 
-	hashOverride := ""
+	var adminHashOverride, dashboardsHashOverride string
 	if existingGenerated != nil {
 		if existingInternal, exists := existingGenerated.Data["internal_users.yml"]; exists {
 			var existingConfig InternalUserConfig
 			if err := yaml.Unmarshal(existingInternal, &existingConfig); err == nil {
-				if existingConfig.Admin.Hash != "" && bcrypt.CompareHashAndPassword([]byte(existingConfig.Admin.Hash), password) == nil {
-					hashOverride = existingConfig.Admin.Hash
+				if existingConfig.Admin.Hash != "" && bcrypt.CompareHashAndPassword([]byte(existingConfig.Admin.Hash), adminPassword) == nil {
+					adminHashOverride = existingConfig.Admin.Hash
+				}
+				if existingConfig.Kibanaserver != nil && existingConfig.Kibanaserver.Hash != "" {
+					if bcrypt.CompareHashAndPassword([]byte(existingConfig.Kibanaserver.Hash), dashboardsPassword) == nil {
+						dashboardsHashOverride = existingConfig.Kibanaserver.Hash
+					}
 				}
 			}
 		}
 	}
 
-	if hashOverride != "" {
-		internalUsers, err = applyAdminHash(internalUsers, hashOverride)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		internalUsers, err = internalUsersGenerator(internalUsers, password)
-		if err != nil {
-			return nil, err
-		}
+	internalUsers, err = applyUserHashes(internalUsers, adminPassword, adminHashOverride, dashboardsPassword, dashboardsHashOverride)
+	if err != nil {
+		return nil, err
 	}
 	baseData["internal_users.yml"] = internalUsers
 
@@ -308,20 +319,23 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opsterv1.Op
 	return secret, nil
 }
 
-func internalUsersGenerator(internalUserData, randomPassword []byte) ([]byte, error) { // todo
-	hash, err := bcrypt.GenerateFromPassword(randomPassword, 12)
-	if err != nil {
-		return nil, err
-	}
-	return applyAdminHash(internalUserData, string(hash))
-}
-
-func applyAdminHash(internalUserData []byte, hash string) ([]byte, error) {
+func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
 	var data InternalUserConfig
 	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
 	}
-	data.Admin.Hash = hash
+
+	var adminHash string
+	if adminHashOverride != "" {
+		adminHash = adminHashOverride
+	} else {
+		hashed, err := bcrypt.GenerateFromPassword(adminPassword, 12)
+		if err != nil {
+			return nil, err
+		}
+		adminHash = string(hashed)
+	}
+	data.Admin.Hash = adminHash
 
 	if !data.Admin.Reserved {
 		data.Admin.Reserved = true
@@ -340,6 +354,29 @@ func applyAdminHash(internalUserData []byte, hash string) ([]byte, error) {
 			data.Admin.BackendRoles = append(data.Admin.BackendRoles, "admin")
 		}
 	}
+
+	if data.Kibanaserver == nil {
+		data.Kibanaserver = &User{}
+	}
+
+	var dashboardsHash string
+	if dashboardsHashOverride != "" {
+		dashboardsHash = dashboardsHashOverride
+	} else {
+		hashed, err := bcrypt.GenerateFromPassword(dashboardsPassword, 12)
+		if err != nil {
+			return nil, err
+		}
+		dashboardsHash = string(hashed)
+	}
+	data.Kibanaserver.Hash = dashboardsHash
+	if !data.Kibanaserver.Reserved {
+		data.Kibanaserver.Reserved = true
+	}
+	if data.Kibanaserver.Description == "" {
+		data.Kibanaserver.Description = "Demo user for the OpenSearch Dashboards server"
+	}
+
 	modifiedYaml, err := yaml.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -348,12 +385,11 @@ func applyAdminHash(internalUserData []byte, hash string) ([]byte, error) {
 }
 
 func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (string, string, error) {
-	if cr.Spec.Security == nil || cr.Spec.Security.Config == nil {
-		return "admin", "admin", nil
-	}
-
-	secretName := cr.Spec.Security.Config.AdminCredentialsSecret.Name
-	if secretName == "" {
+	// Check if user provided AdminCredentialsSecret via Security.Config
+	var secretName string
+	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
+		secretName = cr.Spec.Security.Config.AdminCredentialsSecret.Name
+	} else {
 		secretName = GeneratedAdminCredentialsSecretName(cr)
 	}
 
@@ -374,8 +410,6 @@ func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster
 	if !usernameExists || !passwordExists {
 		return "", "", errors.New("username or password field missing")
 	}
-	log.Println("username", string(username))
-	log.Println("password", string(password))
 	return string(username), string(password), nil
 }
 
@@ -880,4 +914,53 @@ func DiscoverRandomAdminSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchC
 func DiscoverRandomContextSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, error) {
 	secret, err := k8sClient.GetSecret(GeneratedSecurityConfigSecretName(cr), cr.Namespace)
 	return &secret, err
+}
+
+// EnsureDashboardsCredentialsSecret ensures a credentials secret exists for Dashboards.
+// It generates a separate password for Dashboards (not the admin password).
+func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
+	// Check if user provided OpensearchCredentialsSecret via Dashboards config
+	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
+		secret, err := k8sClient.GetSecret(cr.Spec.Dashboards.OpensearchCredentialsSecret.Name, cr.Namespace)
+		return &secret, false, err
+	}
+
+	// Always generate/administer the Dashboards credentials secret
+	generatedName := GeneratedDashboardsCredentialsSecretName(cr)
+	secret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err == nil {
+		return &secret, true, nil
+	}
+	if !k8serrors.IsNotFound(err) {
+		return nil, true, err
+	}
+
+	randomPassword, err := generateRandomPassword(15)
+	if err != nil {
+		return nil, true, err
+	}
+	// NOTE(joseb): we cannot set random password when security plugin is disabled.
+	if IsSecurityPluginDisabled(cr) {
+		randomPassword = "kibanaserver"
+	}
+
+	dashboardsSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generatedName,
+			Namespace: cr.Namespace,
+		},
+		StringData: map[string]string{
+			"username": "kibanaserver",
+			"password": randomPassword,
+		},
+	}
+	if _, err := k8sClient.CreateSecret(dashboardsSecret); err != nil {
+		return nil, true, err
+	}
+
+	createdSecret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err != nil {
+		return nil, true, err
+	}
+	return &createdSecret, true, nil
 }

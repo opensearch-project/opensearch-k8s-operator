@@ -545,6 +545,17 @@ func NewSTSForNodePool(
 									Name:  "http.port",
 									Value: fmt.Sprint(cr.Spec.General.HttpPort),
 								},
+								{
+									Name: "OPENSEARCH_INITIAL_ADMIN_PASSWORD",
+									ValueFrom: &corev1.EnvVarSource{
+										SecretKeyRef: &corev1.SecretKeySelector{
+											LocalObjectReference: corev1.LocalObjectReference{
+												Name: helpers.GeneratedAdminCredentialsSecretName(cr),
+											},
+											Key: "password",
+										},
+									},
+								},
 							},
 							Name:            "opensearch",
 							Command:         mainCommand,
@@ -878,6 +889,19 @@ func NewBootstrapPod(
 			Value: fmt.Sprint(cr.Spec.General.HttpPort),
 		},
 	}
+
+	// Add OPENSEARCH_INITIAL_ADMIN_PASSWORD from admin credentials secret
+	generatedSecretName := helpers.GeneratedAdminCredentialsSecretName(cr)
+	secretRef := corev1.LocalObjectReference{Name: generatedSecretName}
+	env = append(env, corev1.EnvVar{
+		Name: "OPENSEARCH_INITIAL_ADMIN_PASSWORD",
+		ValueFrom: &corev1.EnvVarSource{
+			SecretKeyRef: &corev1.SecretKeySelector{
+				LocalObjectReference: secretRef,
+				Key:                  "password",
+			},
+		},
+	})
 
 	// Append additional config to env vars, use General.AdditionalConfig by default, overwrite with Bootstrap.AdditionalConfig
 	extraConfig := cr.Spec.General.AdditionalConfig

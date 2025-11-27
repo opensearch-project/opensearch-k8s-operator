@@ -45,6 +45,7 @@ var _ = Describe("Securityconfig Reconciler", func() {
 		adminCredsName = "admin-creds"
 
 		defaultAdminHash          = "$2y$12$lJsHWchewGVcGlYgE3js/O4bkTZynETyXChAITarCHLz8cuaueIyq"
+		defaultKibanaServerHash   = "$2a$12$4AcgAt3xwOWadA5s5blL6ev39OXDNhmOesEoo33eZtrq2N0YrU3H."
 		internalUsersTemplateYAML = `_meta:
   type: "internalusers"
   config_version: 2
@@ -54,6 +55,10 @@ admin:
   backend_roles:
     - "admin"
   description: "Demo admin user"
+kibanaserver:
+  hash: "%s"
+  reserved: true
+  description: "Demo user for the OpenSearch Dashboards server"
 `
 		configYAML = `_meta:
   type: "config"
@@ -69,11 +74,14 @@ config:
 `
 	)
 
-	internalUsersYAML := func(hash string) []byte {
-		if hash == "" {
-			hash = defaultAdminHash
+	internalUsersYAML := func(adminHash, kibanaHash string) []byte {
+		if adminHash == "" {
+			adminHash = defaultAdminHash
 		}
-		return []byte(fmt.Sprintf(internalUsersTemplateYAML, hash))
+		if kibanaHash == "" {
+			kibanaHash = defaultKibanaServerHash
+		}
+		return []byte(fmt.Sprintf(internalUsersTemplateYAML, adminHash, kibanaHash))
 	}
 
 	newAdminCredentialsSecret := func(namespace string) corev1.Secret {
@@ -122,14 +130,14 @@ config:
 				Type:       corev1.SecretType("Opaque"),
 				Data: map[string][]byte{
 					"config.yml":         []byte(configYAML),
-					"internal_users.yml": internalUsersYAML(""),
+					"internal_users.yml": internalUsersYAML("", ""),
 					// Invalid yml in secret should not throw an error
 					"invalid.yml": []byte("foo"),
 					// Empty contents for a yml should be ignored
 					"action_groups.yml": []byte(actionGroupsYAML),
 				},
 			}
-			existingInternalUsers := internalUsersYAML(string(existingHash))
+			existingInternalUsers := internalUsersYAML(string(existingHash), defaultKibanaServerHash)
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -222,7 +230,7 @@ config:
 			securityConfigSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
 				Type:       corev1.SecretType("Opaque"),
-				Data:       map[string][]byte{"internal_users.yml": internalUsersYAML("")},
+				Data:       map[string][]byte{"internal_users.yml": internalUsersYAML("", "")},
 			}
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
