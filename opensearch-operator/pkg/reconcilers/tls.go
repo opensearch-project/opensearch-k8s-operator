@@ -349,7 +349,9 @@ func (r *TLSReconciler) handleTransportGenerate(ca tls.Cert) error {
 	if generatePerNode {
 		nodeSecret.Data[CaCertKey] = ca.CertData()
 
-		r.generateBootstrapCertIfNeeded(ca, &nodeSecret, clusterName, namespace)
+		if err := r.generateBootstrapCertIfNeeded(ca, &nodeSecret, clusterName, namespace); err != nil {
+			return err
+		}
 	}
 
 	if !generatePerNode {
