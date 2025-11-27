@@ -40,5 +40,5 @@ func GeneratedDashboardsCredentialsSecretName(cr *opsterv1.OpenSearchCluster) st
 
 func IsSecurityPluginDisabled(cr *opsterv1.OpenSearchCluster) bool {
 	// NOTE(joseb): Need to define this condition properly
-	return cr.Spec.Security == nil || cr.Spec.General.DisableSSL == true
+	return cr.Spec.Security == nil || cr.Spec.General.DisableSSL
 }
