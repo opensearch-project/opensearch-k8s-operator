@@ -108,7 +108,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	// TODO(joseb): Check if admin certificate is provided or generated in webhook
 	if adminCertName == "" {
-		err := errors.New("Admin certificate neither provided nor generation is enabled")
+		err := errors.New("admin certificate neither provided nor generation is enabled")
 		r.logger.Error(err, "Skipping securityconfig reconciliation")
 		return ctrl.Result{}, err
 	}
