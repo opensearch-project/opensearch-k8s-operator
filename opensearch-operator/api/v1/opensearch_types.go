@@ -290,6 +290,8 @@ type TlsCertificateConfig struct {
 	// Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
 	//+kubebuilder:default:="8760h"
 	Duration *metav1.Duration `json:"duration,omitempty"`
+	// Enable hot reloading of TLS certificates. When enabled, certificates are mounted as directories instead of using subPath, allowing Kubernetes to update certificate files when secrets are updated.
+	EnableHotReload bool `json:"enableHotReload,omitempty"`
 }
 
 // Reference to a secret
