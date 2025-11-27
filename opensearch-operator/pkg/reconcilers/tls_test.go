@@ -97,6 +97,11 @@ var _ = Describe("TLS Controller", func() {
 							Component: "masters",
 							Replicas:  3,
 						},
+						{
+							// sufficiently large to be above the pool cap
+							Component: "data",
+							Replicas:  12,
+						},
 					},
 				}}
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -117,15 +122,18 @@ var _ = Describe("TLS Controller", func() {
 					fmt.Printf("ca.crt missing from transport secret\n")
 					return false
 				}
-				for i := 0; i < 3; i++ {
-					name := fmt.Sprintf("tls-pernode-masters-%d", i)
-					if _, exists := secret.Data[name+".crt"]; !exists {
-						fmt.Printf("%s.crt missing from transport secret\n", name)
-						return false
-					}
-					if _, exists := secret.Data[name+".key"]; !exists {
-						fmt.Printf("%s.key missing from transport secret\n", name)
-						return false
+				for _, nodePool := range spec.Spec.NodePools {
+					var i int32
+					for i = 0; i < nodePool.Replicas; i++ {
+						name := fmt.Sprintf("tls-pernode-%s-%d", nodePool.Component, i)
+						if _, exists := secret.Data[name+".crt"]; !exists {
+							fmt.Printf("%s.crt missing from transport secret\n", name)
+							return false
+						}
+						if _, exists := secret.Data[name+".key"]; !exists {
+							fmt.Printf("%s.key missing from transport secret\n", name)
+							return false
+						}
 					}
 				}
 				return true
