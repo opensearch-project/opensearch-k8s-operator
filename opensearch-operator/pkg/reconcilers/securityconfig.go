@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -94,8 +95,8 @@ func NewSecurityconfigReconciler(
 }
 
 func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
-
-	if r.instance.Spec.Security == nil {
+	if helpers.IsSecurityPluginDisabled(r.instance) {
+		r.logger.Info("Security plugin is disabled, skipping securityconfig reconciliation")
 		return ctrl.Result{}, nil
 	}
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
@@ -109,18 +110,14 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	clusterName := r.instance.Name
 	jobName := clusterName + "-securityconfig-update"
 
-	if adminCertName == "" {
-		r.logger.Info("Cluster is running with demo certificates.")
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Notice - Cluster is running with demo certificates")
-		return ctrl.Result{}, nil
-	}
-
-	if r.instance.Spec.Security.Config == nil {
-		r.logger.Info("Security config not defined, skipping securityconfig reconciliation")
-		return ctrl.Result{}, nil
-	}
-
 	configSecretName = helpers.GeneratedSecurityConfigSecretName(r.instance)
+
+	// TODO(joseb): Check if admin certificate is provided or generated in webhook
+	if adminCertName == "" {
+		err := errors.New("Admin certificate neither provided nor generation is enabled")
+		r.logger.Error(err, "Skipping securityconfig reconciliation")
+		return ctrl.Result{}, err
+	}
 
 	adminCredentialsSecret, managedByOperator, err := helpers.EnsureAdminCredentialsSecret(r.client, r.instance)
 	if err != nil {
@@ -286,13 +283,15 @@ func checksum(data map[string][]byte) (string, error) {
 }
 
 func (r *SecurityconfigReconciler) determineAdminSecret() string {
-	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
-		return r.instance.Spec.Security.Config.AdminSecret.Name
-	} else if r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Transport != nil && r.instance.Spec.Security.Tls.Transport.Generate {
-		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
-	} else {
-		return ""
+	// TODO(joseb): Spec.General.DisableSSL should be checked here too
+	if r.instance.Spec.Security != nil {
+		if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
+			return r.instance.Spec.Security.Config.AdminSecret.Name
+		} else if r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Http != nil && r.instance.Spec.Security.Tls.Http.Generate {
+			return fmt.Sprintf("%s-admin-cert", r.instance.Name)
+		}
 	}
+	return ""
 }
 
 func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {
