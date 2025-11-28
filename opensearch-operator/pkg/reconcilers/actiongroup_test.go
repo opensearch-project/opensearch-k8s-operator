@@ -3,8 +3,9 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"net/http"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
@@ -76,6 +77,20 @@ var _ = Describe("actiongroup reconciler", func() {
 				},
 			},
 		}
+		// Mock admin credentials secret for all tests (available when CreateClientForCluster is invoked)
+		adminSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster-admin-password",
+				Namespace: "test-actiongroup",
+			},
+			Data: map[string][]byte{
+				"username": []byte("admin"),
+				"password": []byte("admin"),
+			},
+		}
+		mockClient.On("GetSecret", "test-cluster-admin-password", "test-actiongroup").Return(func(string, string) corev1.Secret {
+			return adminSecret
+		}, nil).Maybe()
 	})
 
 	JustBeforeEach(func() {
