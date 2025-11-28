@@ -2,9 +2,9 @@
 
 The OpenSearch Operator Helm chart for Kubernetes
 
-## Getting started
+The OpenSearch Operator Helm chart for Kubernetes
 
-The Operator can be easily installed using helm on any CNCF-certified Kubernetes cluster. Please refer to the [User Guide](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md) for more information.
+## Values
 
 ### Installation Using Helm
 

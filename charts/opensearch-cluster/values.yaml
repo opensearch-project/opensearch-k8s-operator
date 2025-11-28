@@ -163,6 +163,9 @@ cluster:
     # -- dashboards annotations
     annotations: {}
 
+    # -- dashboards pod topologySpreadConstraints
+    topologySpreadConstraints: []
+
     # -- dashboards Base Path for Opensearch Clusters running behind a reverse proxy
     basePath: ""
 
