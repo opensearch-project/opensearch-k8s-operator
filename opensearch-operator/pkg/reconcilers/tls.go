@@ -301,6 +301,11 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 			return err
 		}
 	}
+	if nodeSecret.Data == nil && generatePerNode {
+		// covers both the case where nodeSecret is new, or nodeSecret existed
+		// but was nil for some unknown reason (maybe a past failure)
+		nodeSecret.Data = make(map[string][]byte)
+	}
 
 	if !generatePerNode {
 		newCertData, err := r.generateNewCertIfNeeded(
@@ -332,8 +337,8 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 			return err
 		}
 
-		eg, _ := errgroup.WithContext(context.Background())
-		eg.SetLimit(max(SimultaneousCertGenerationCap, runtime.GOMAXPROCS(0)))
+		eg, _ := errgroup.WithContext(r.client.Context())
+		eg.SetLimit(min(SimultaneousCertGenerationCap, runtime.GOMAXPROCS(0)))
 
 		secretMutex := sync.Mutex{}
 
@@ -745,6 +750,9 @@ func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
 
 func getDaysRemainingFromCertificate(data []byte) (int, error) {
 	der, _ := pem.Decode(data)
+	if der == nil {
+		return -1, fmt.Errorf("failed to decode valid PEM from provided certificate data")
+	}
 	cert, err := x509.ParseCertificate(der.Bytes)
 	if err != nil {
 		return -1, err
