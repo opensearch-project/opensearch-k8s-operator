@@ -307,7 +307,7 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 			ca,
 			certDescription{
 				loggingName: "global",
-				certContext: CertContextHttp,
+				certContext: CertContextTransport,
 				commonName:  clusterName,
 				dnsNames: []string{
 					clusterName,
