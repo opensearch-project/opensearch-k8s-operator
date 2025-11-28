@@ -1294,18 +1294,21 @@ spec:
                             Required.
                           type: string
                         persistentVolumeClaim:
-                          description: PersistentVolumeClaim object to use to populate the volume
+                          description: PersistentVolumeClaim object to use to populate
+                            the volume
                           properties:
                             claimName:
                               description: |-
-                                The name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
                                 More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
                               type: string
                             readOnly:
                               description: |-
-                                Will force the ReadOnly setting in VolumeMounts.
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
                                 Default false.
                               type: boolean
+                          required:
+                          - claimName
                           type: object
                         projected:
                           description: Projected object to use to populate the volume
@@ -3059,6 +3062,7 @@ spec:
                         type: object
                     type: object
                   replicas:
+                    default: 1
                     format: int32
                     type: integer
                   resources:
@@ -3427,9 +3431,6 @@ spec:
                     type: array
                   version:
                     type: string
-                required:
-                - replicas
-                - version
                 type: object
               general:
                 description: |-
@@ -3593,18 +3594,21 @@ spec:
                             Required.
                           type: string
                         persistentVolumeClaim:
-                          description: PersistentVolumeClaim object to use to populate the volume
+                          description: PersistentVolumeClaim object to use to populate
+                            the volume
                           properties:
                             claimName:
                               description: |-
-                                The name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
                                 More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
                               type: string
                             readOnly:
                               description: |-
-                                Will force the ReadOnly setting in VolumeMounts.
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
                                 Default false.
                               type: boolean
+                          required:
+                          - claimName
                           type: object
                         projected:
                           description: Projected object to use to populate the volume
@@ -4116,6 +4120,11 @@ spec:
                             type: string
                         type: object
                     type: object
+                  operatorClusterURL:
+                    description: |-
+                      Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
+                      instead of the default internal Kubernetes service DNS name.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -6322,6 +6331,11 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          customFQDN:
+                            description: Custom FQDN to use for the HTTP certificate.
+                              If not set, the operator will use the default cluster
+                              DNS names.
+                            type: string
                           duration:
                             default: 8760h
                             description: Duration controls the validity period of
