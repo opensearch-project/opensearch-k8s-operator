@@ -304,6 +304,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 }
 
 func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult) {
+	lg := log.FromContext(r.ctx)
 	stsList, err := r.client.ListStatefulSets(client.InNamespace(r.instance.Namespace),
 		client.MatchingLabels{helpers.ClusterLabel: r.instance.Name})
 	if err != nil {
@@ -313,6 +314,20 @@ func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult
 
 	for _, sts := range stsList.Items {
 		if !builders.STSInNodePools(sts, r.instance.Spec.NodePools) {
+			allReady := true
+			for _, nodePool := range r.instance.Spec.NodePools {
+				stsName := builders.StsName(r.instance, &nodePool)
+				currentSts, err := r.client.GetStatefulSet(stsName, r.instance.Namespace)
+				if err != nil || currentSts.Status.AvailableReplicas != *currentSts.Spec.Replicas {
+					lg.Info(fmt.Sprintf("Waiting for statefulset to become ready: %s", stsName))
+					allReady = false
+					break
+				}
+			}
+			if !allReady {
+				result.Combine(&ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, nil)
+				continue
+			}
 			result.Combine(r.removeStatefulSet(sts))
 		}
 	}
