@@ -56,14 +56,17 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		env = append(env, cr.Spec.Dashboards.Env...)
 	}
 
+	// OpensearchCredentialsSecret is optional - check if Name is set
 	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
 		// Custom credentials supplied
 		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "username"}}})
 		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "password"}}})
 	} else {
-		// Default values from demo configuration
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", Value: "kibanaserver"})
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", Value: "kibanaserver"})
+		// Use generated Dashboards password secret (always available, regardless of security settings)
+		generatedSecretName := helpers.GeneratedDashboardsCredentialsSecretName(cr)
+		secretRef := corev1.LocalObjectReference{Name: generatedSecretName}
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: secretRef, Key: "username"}}})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: secretRef, Key: "password"}}})
 	}
 
 	labels := map[string]string{

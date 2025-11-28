@@ -9,6 +9,7 @@ rules:
   resources:
   - deployments
   - statefulsets
+  - statefulsets/status
   verbs:
   - create
   - delete

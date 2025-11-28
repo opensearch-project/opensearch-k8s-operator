@@ -6220,9 +6220,9 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       securityConfigSecret:
-                        description: Secret that contains the different yml files
-                          of the opensearch-security config (config.yml, internal_users.yml,
-                          ...)
+                        description: |-
+                          Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
+                          When omitted the operator seeds the cluster with its bundled defaults.
                         properties:
                           name:
                             default: ""
@@ -6448,6 +6448,8 @@ spec:
           status:
             description: ClusterStatus defines the observed state of Es
             properties:
+              adminsecretcreated:
+                type: boolean
               availableNodes:
                 description: AvailableNodes is the number of available instances.
                 format: int32
@@ -6467,6 +6469,8 @@ spec:
                       type: string
                   type: object
                 type: array
+              contextsecretcreated:
+                type: boolean
               health:
                 description: OpenSearchHealth is the health of the cluster as returned
                   by the health API.

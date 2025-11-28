@@ -301,7 +301,8 @@ type TlsSecret struct {
 }
 
 type SecurityConfig struct {
-	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	// Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
+	// When omitted the operator seeds the cluster with its bundled defaults.
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
 	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
@@ -379,8 +380,10 @@ type ClusterStatus struct {
 	Version          string            `json:"version,omitempty"`
 	Initialized      bool              `json:"initialized,omitempty"`
 	// AvailableNodes is the number of available instances.
-	AvailableNodes int32            `json:"availableNodes,omitempty"`
-	Health         OpenSearchHealth `json:"health,omitempty"`
+	AvailableNodes       int32            `json:"availableNodes,omitempty"`
+	Health               OpenSearchHealth `json:"health,omitempty"`
+	AdminSecretCreated   bool             `json:"adminsecretcreated,omitempty"`
+	ContextSecretCreated bool             `json:"contextsecretcreated,omitempty"`
 }
 
 // +kubebuilder:object:root=true
