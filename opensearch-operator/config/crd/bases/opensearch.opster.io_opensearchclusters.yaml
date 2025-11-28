@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: opensearchclusters.opensearch.opster.io
 spec:
   group: opensearch.opster.io
@@ -987,6 +987,12 @@ spec:
                             x-kubernetes-list-type: atomic
                         type: object
                     type: object
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    type: object
+                  initContainers:
+                    x-kubernetes-preserve-unknown-fields: true
                   jvm:
                     type: string
                   keystore:
@@ -1287,6 +1293,22 @@ spec:
                           description: Path in the container to mount the volume at.
                             Required.
                           type: string
+                        persistentVolumeClaim:
+                          description: PersistentVolumeClaim object to use to populate the volume
+                          properties:
+                            claimName:
+                              description: |-
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
+                                Default false.
+                              type: boolean
+                          required:
+                          - claimName
+                          type: object
                         projected:
                           description: Projected object to use to populate the volume
                           properties:
@@ -3039,6 +3061,7 @@ spec:
                         type: object
                     type: object
                   replicas:
+                    default: 1
                     format: int32
                     type: integer
                   resources:
@@ -3332,6 +3355,11 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      duration:
+                        default: 8760h
+                        description: Duration controls the validity period of generated
+                          certificates (e.g. "8760h", "720h").
+                        type: string
                       enable:
                         description: Enable HTTPS for Dashboards
                         type: boolean
@@ -3569,9 +3597,6 @@ spec:
                     type: array
                   version:
                     type: string
-                required:
-                - replicas
-                - version
                 type: object
               general:
                 description: |-
@@ -3734,6 +3759,22 @@ spec:
                           description: Path in the container to mount the volume at.
                             Required.
                           type: string
+                        persistentVolumeClaim:
+                          description: PersistentVolumeClaim object to use to populate the volume
+                          properties:
+                            claimName:
+                              description: |-
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
+                                Default false.
+                              type: boolean
+                          required:
+                          - claimName
+                          type: object
                         projected:
                           description: Projected object to use to populate the volume
                           properties:
@@ -4162,6 +4203,9 @@ spec:
                     type: string
                   defaultRepo:
                     type: string
+                  disableSSL:
+                    description: Disable SSL for the cluster
+                    type: boolean
                   drainDataNodes:
                     description: Drain data nodes controls whether to drain data notes
                       on rolling restart operations
@@ -4241,6 +4285,11 @@ spec:
                             type: string
                         type: object
                     type: object
+                  operatorClusterURL:
+                    description: |-
+                      Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
+                      instead of the default internal Kubernetes service DNS name.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -4674,6 +4723,7 @@ spec:
                   serviceName:
                     type: string
                   setVMMaxMapCount:
+                    default: true
                     type: boolean
                   snapshotRepositories:
                     items:
@@ -5847,6 +5897,8 @@ spec:
                         - name
                         type: object
                       type: array
+                    initContainers:
+                      x-kubernetes-preserve-unknown-fields: true
                     jvm:
                       type: string
                     labels:
@@ -5873,7 +5925,7 @@ spec:
                           x-kubernetes-int-or-string: true
                       type: object
                     persistence:
-                      description: PersistencConfig defines options for data persistence
+                      description: PersistenceConfig defines options for data persistence
                       properties:
                         emptyDir:
                           description: |-
@@ -5927,6 +5979,14 @@ spec:
                               items:
                                 type: string
                               type: array
+                            annotations:
+                              additionalProperties:
+                                type: string
+                              type: object
+                            labels:
+                              additionalProperties:
+                                type: string
+                              type: object
                             storageClass:
                               type: string
                           type: object
@@ -5955,6 +6015,10 @@ spec:
                           type: object
                         readiness:
                           properties:
+                            command:
+                              items:
+                                type: string
+                              type: array
                             failureThreshold:
                               format: int32
                               type: integer
@@ -5964,12 +6028,19 @@ spec:
                             periodSeconds:
                               format: int32
                               type: integer
+                            successThreshold:
+                              format: int32
+                              type: integer
                             timeoutSeconds:
                               format: int32
                               type: integer
                           type: object
                         startup:
                           properties:
+                            command:
+                              items:
+                                type: string
+                              type: array
                             failureThreshold:
                               format: int32
                               type: integer
@@ -6054,6 +6125,8 @@ spec:
                       items:
                         type: string
                       type: array
+                    sidecarContainers:
+                      x-kubernetes-preserve-unknown-fields: true
                     tolerations:
                       items:
                         description: |-
@@ -6297,8 +6370,8 @@ spec:
                       adminSecret:
                         description: TLS Secret that contains a client certificate
                           (tls.key, tls.crt, ca.crt) with admin rights in the opensearch
-                          cluster. Must be set if transport certificates are provided
-                          by user and not generated
+                          cluster. Must be set if http certificates are provided by
+                          user and not generated
                         properties:
                           name:
                             default: ""
@@ -6312,8 +6385,8 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       securityConfigSecret:
-                        description: Secret that contains the differnt yml files of
-                          the opensearch-security config (config.yml, internal_users.yml,
+                        description: Secret that contains the different yml files
+                          of the opensearch-security config (config.yml, internal_users.yml,
                           ...)
                         properties:
                           name:
@@ -6399,47 +6472,6 @@ spec:
                     properties:
                       http:
                         properties:
-                          caSecret:
-                            description: Optional, secret that contains the ca certificate
-                              as ca.crt. If this and generate=true is set the existing
-                              CA cert from that secret is used to generate the node
-                              certs. In this case must contain ca.crt and ca.key fields
-                            properties:
-                              name:
-                                default: ""
-                                description: |-
-                                  Name of the referent.
-                                  This field is effectively required, but due to backwards compatibility is
-                                  allowed to be empty. Instances of this type with an empty value here are
-                                  almost certainly wrong.
-                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                type: string
-                            type: object
-                            x-kubernetes-map-type: atomic
-                          generate:
-                            description: If set to true the operator will generate
-                              a CA and certificates for the cluster to use, if false
-                              secrets with existing certificates must be supplied
-                            type: boolean
-                          secret:
-                            description: Optional, name of a TLS secret that contains
-                              ca.crt, tls.key and tls.crt data. If ca.crt is in a
-                              different secret provide it via the caSecret field
-                            properties:
-                              name:
-                                default: ""
-                                description: |-
-                                  Name of the referent.
-                                  This field is effectively required, but due to backwards compatibility is
-                                  allowed to be empty. Instances of this type with an empty value here are
-                                  almost certainly wrong.
-                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
-                                type: string
-                            type: object
-                            x-kubernetes-map-type: atomic
-                        type: object
-                      transport:
-                        properties:
                           adminDn:
                             description: DNs of certificates that should have admin
                               access, mainly used for securityconfig updates via securityadmin.sh,
@@ -6464,6 +6496,67 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          customFQDN:
+                            description: Custom FQDN to use for the HTTP certificate.
+                              If not set, the operator will use the default cluster
+                              DNS names.
+                            type: string
+                          duration:
+                            default: 8760h
+                            description: Duration controls the validity period of
+                              generated certificates (e.g. "8760h", "720h").
+                            type: string
+                          generate:
+                            description: If set to true the operator will generate
+                              a CA and certificates for the cluster to use, if false
+                              secrets with existing certificates must be supplied
+                            type: boolean
+                          rotateDaysBeforeExpiry:
+                            default: -1
+                            description: Automatically rotate certificates before
+                              they expire, set to -1 to disable
+                            type: integer
+                          secret:
+                            description: Optional, name of a TLS secret that contains
+                              ca.crt, tls.key and tls.crt data. If ca.crt is in a
+                              different secret provide it via the caSecret field
+                            properties:
+                              name:
+                                default: ""
+                                description: |-
+                                  Name of the referent.
+                                  This field is effectively required, but due to backwards compatibility is
+                                  allowed to be empty. Instances of this type with an empty value here are
+                                  almost certainly wrong.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
+                        type: object
+                      transport:
+                        properties:
+                          caSecret:
+                            description: Optional, secret that contains the ca certificate
+                              as ca.crt. If this and generate=true is set the existing
+                              CA cert from that secret is used to generate the node
+                              certs. In this case must contain ca.crt and ca.key fields
+                            properties:
+                              name:
+                                default: ""
+                                description: |-
+                                  Name of the referent.
+                                  This field is effectively required, but due to backwards compatibility is
+                                  allowed to be empty. Instances of this type with an empty value here are
+                                  almost certainly wrong.
+                                  More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                type: string
+                            type: object
+                            x-kubernetes-map-type: atomic
+                          duration:
+                            default: 8760h
+                            description: Duration controls the validity period of
+                              generated certificates (e.g. "8760h", "720h").
+                            type: string
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
@@ -6478,6 +6571,11 @@ spec:
                           perNode:
                             description: Configure transport node certificate
                             type: boolean
+                          rotateDaysBeforeExpiry:
+                            default: -1
+                            description: Automatically rotate certificates before
+                              they expire, set to -1 to disable
+                            type: integer
                           secret:
                             description: Optional, name of a TLS secret that contains
                               ca.crt, tls.key and tls.crt data. If ca.crt is in a

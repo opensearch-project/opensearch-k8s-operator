@@ -7,9 +7,11 @@ import (
 	"time"
 
 	policyv1 "k8s.io/api/policy/v1"
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -20,6 +22,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	//+kubebuilder:scaffold:imports
 )
@@ -119,10 +122,10 @@ var _ = Describe("Cluster Reconciler", func() {
 			Expect(sm.Spec.Endpoints[0].Interval).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.ScrapeInterval))
 
 			// check if the ServiceMonitor is using the tlsConfig.insecureSkipVerify from the CRD declaration
-			Expect(sm.Spec.Endpoints[0].TLSConfig.InsecureSkipVerify).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify))
+			Expect(ptr.Deref(sm.Spec.Endpoints[0].TLSConfig.InsecureSkipVerify, false)).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.InsecureSkipVerify))
 
 			// check if the ServiceMonitor is using the tlsConfig.serverName from the CRD declaration
-			Expect(sm.Spec.Endpoints[0].TLSConfig.ServerName).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.ServerName))
+			Expect(ptr.Deref(sm.Spec.Endpoints[0].TLSConfig.ServerName, "")).Should(BeEquivalentTo(OpensearchCluster.Spec.General.Monitoring.TLSConfig.ServerName))
 
 			// check if tlsConfig is not defined in the CRD declaration the ServiceMonitor not deploy that part of the config
 			// Expect(sm.Spec.Endpoints[0].TLSConfig).To(BeNil())
@@ -521,6 +524,29 @@ var _ = Describe("Cluster Reconciler", func() {
 				}(nodePool)
 			}
 			wg.Wait()
+		})
+	})
+
+	When("Deleting cluster resources", func() {
+		It("should delete bootstrap PVC when cluster is deleted", func() {
+			// Create a cluster reconciler
+			reconcilerContext := reconcilers.NewReconcilerContext(record.NewFakeRecorder(1), &OpensearchCluster, OpensearchCluster.Spec.NodePools)
+			clusterReconciler := reconcilers.NewClusterReconciler(
+				k8sClient,
+				context.Background(),
+				record.NewFakeRecorder(1),
+				&reconcilerContext,
+				&OpensearchCluster,
+			)
+
+			// Call DeleteResources
+			result, err := clusterReconciler.DeleteResources()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			// Verify that the bootstrap PVC would be deleted (StateAbsent)
+			// The actual deletion would happen in a real cluster, but we can verify
+			// that the method doesn't error and returns the expected result
 		})
 	})
 })

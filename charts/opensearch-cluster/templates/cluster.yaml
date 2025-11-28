@@ -27,7 +27,9 @@ spec:
     serviceName: {{ .serviceName | default $clusterName }}
   {{- end }}
   {{- with .Values.cluster.initHelper }}
-  initHelper: {{ . | toYaml | nindent 4 }}
+  initHelper:
+    {{- omit . "image" | toYaml | nindent 4 }}
+    image: {{ .image }}:{{ .version }}
   {{- end }}
   {{- with .Values.cluster.nodePools }}
   nodePools: {{ . | toYaml | nindent 4 }}
@@ -45,16 +47,19 @@ spec:
         {{- with .tls.transport.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
         {{- end }}
-        {{- with .tls.transport.adminDn }}
-        adminDn: {{ . | toYaml | nindent 10 }}
-        {{- end }}
         {{- with .tls.transport.nodesDn }}
         nodesDn: {{ . | toYaml | nindent 10 }}
         {{- end }}
         {{- with .tls.transport.secret }}
         secret: {{ . | toYaml | nindent 10 }}
         {{- end }}
+        {{- if .tls.transport.duration }}
+        duration: {{ .tls.transport.duration | nindent 10 }}
+        {{- end }}
       http:
+        {{- with .tls.http.adminDn }}
+        adminDn: {{ . | toYaml | nindent 10 }}
+        {{- end }}
         {{- if .tls.http.generate }}
         generate: {{ .tls.http.generate }}
         {{- end }}
@@ -63,6 +68,9 @@ spec:
         {{- end }}
         {{- with .tls.http.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- if .tls.http.duration }}
+        duration: {{ .tls.http.duration | nindent 10 }}
         {{- end }}
     {{- with .config }}
     config: {{ . | toYaml | nindent 6 }}

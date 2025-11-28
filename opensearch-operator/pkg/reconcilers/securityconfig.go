@@ -11,8 +11,8 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,7 +33,7 @@ const (
 chmod +x $ADMIN;
 until curl -k --silent https://%s:%v;
 do
-echo 'Waiting to connect to the cluster'; sleep 120;
+echo 'Waiting to connect to the cluster'; sleep 20;
 done;`
 
 	ApplyAllYmlCmdTmpl = `count=0;

@@ -2,6 +2,8 @@ package reconcilers
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"strings"
@@ -11,10 +13,10 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
@@ -56,6 +58,12 @@ const (
 )
 
 func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
+	if r.instance.Spec.General.DisableSSL {
+		r.logger.Info("HTTP TLS is disabled. Disabling SSL for HTTP layer")
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.enabled", "false")
+		return ctrl.Result{}, nil
+	}
+
 	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil {
 		r.logger.Info("No security specified. Not doing anything")
 		return ctrl.Result{}, nil
@@ -103,12 +111,12 @@ func (r *TLSReconciler) handleTransport() error {
 
 func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 	// TODO: This should be refactored in the API - https://github.com/Opster/opensearch-k8s-operator/issues/569
-	tlsConfig := r.instance.Spec.Security.Tls.Transport
+	tlsConfig := r.instance.Spec.Security.Tls.Http
 	clusterName := r.instance.Name
 
 	var res *ctrl.Result
 	var certDN string
-	if tlsConfig.Generate {
+	if tlsConfig.Generate || (r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name == "") {
 		ca, err := r.getCACert()
 		if err != nil {
 			return nil, err
@@ -219,7 +227,7 @@ func (r *TLSReconciler) createAdminSecret(ca tls.Cert) (*ctrl.Result, error) {
 		return nil, nil
 	}
 
-	adminCert, err := ca.CreateAndSignCertificate("admin", r.instance.Name, nil)
+	adminCert, err := ca.CreateAndSignCertificate("admin", r.instance.Name, nil, r.resolveTransportCertDuration())
 	if err != nil {
 		r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
 		r.recorder.AnnotatedEventf(
@@ -254,7 +262,7 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 	clusterName := r.instance.Name
 	nodeSecretName := clusterName + "-transport-cert"
 
-	r.logger.Info("Generating certificates", "interface", "transport")
+	r.logger.Info("Reconciling certificates", "interface", "transport")
 	// r.recorder.Event(r.instance, "Normal", "Security", "Starting to generating certificates")
 
 	var ca tls.Cert
@@ -270,7 +278,24 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 
 	// Generate node cert, sign it and put it into secret
 	nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
-	if err != nil {
+	if err != nil && !k8serrors.IsNotFound(err) {
+		r.logger.Error(err, "Failed to get secret for transport certificate")
+		return err
+	}
+	certRenewal := false
+	if err == nil {
+		daysRemaining, err := parseCertificate(nodeSecret.Data[corev1.TLSCertKey])
+		if err != nil {
+			helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace, clusterName, "transport", "global").Set(float64(daysRemaining))
+		}
+		renewBeforeExpirationDays := r.instance.Spec.Security.Tls.Transport.RotateDaysBeforeExpiry
+		if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+			r.logger.Info("Renewing transport certificate", "node", "global")
+			certRenewal = true
+		}
+
+	}
+	if err != nil || certRenewal {
 		// Generate node cert and put it into secret
 		dnsNames := []string{
 			clusterName,
@@ -278,22 +303,27 @@ func (r *TLSReconciler) handleTransportGenerateGlobal() error {
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 		}
-		nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
+		nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames, r.resolveTransportCertDuration())
 		if err != nil {
 			r.logger.Error(err, "Failed to create node certificate", "interface", "transport")
 			return err
 		}
-		nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
-		if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
-			return err
+
+		if !certRenewal {
+			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS}
+			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
+				return err
+			}
 		}
+		nodeSecret.Data = nodeCert.SecretData(ca)
+
 		_, err = r.client.CreateSecret(&nodeSecret)
 		if err != nil {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "transport")
 			return err
 		}
 	}
-	// Tell cluster controller to mount secrets
+	// Tell the cluster controller to mount secrets
 	volume := corev1.Volume{Name: "transport-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName}}}
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
 	mount := corev1.VolumeMount{Name: "transport-cert", MountPath: "/usr/share/opensearch/config/tls-transport"}
@@ -353,7 +383,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			fmt.Sprintf("%s.%s.%s.svc.%s", bootstrapPodName, clusterName, namespace, helpers.ClusterDnsBase()),
 		}
-		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames)
+		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames, r.resolveTransportCertDuration())
 		if err != nil {
 			r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", bootstrapPodName)
 			//	r.recorder.Event(r.instance, "Normal", "Security", "Created transport certificates")
@@ -370,9 +400,25 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 			podName := fmt.Sprintf("%s-%s-%d", clusterName, nodePool.Component, i)
 			certName := fmt.Sprintf("%s.crt", podName)
 			keyName := fmt.Sprintf("%s.key", podName)
-			_, certExists := nodeSecret.Data[certName]
+			certData, certExists := nodeSecret.Data[certName]
+
+			certRenewal := false
+			if certExists && certData != nil {
+				daysRemaining, err := parseCertificate(certData)
+				if err != nil {
+					r.logger.Info("Failed to parse certificate", "interface", "transport", "node", podName)
+				} else {
+					helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace, clusterName, "transport", podName).Set(float64(daysRemaining))
+					renewBeforeExpirationDays := r.instance.Spec.Security.Tls.Transport.RotateDaysBeforeExpiry
+					if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+						r.logger.Info("Renewing transport certificate", "node", podName)
+						certRenewal = true
+					}
+				}
+			}
+
 			_, keyExists := nodeSecret.Data[keyName]
-			if certExists && keyExists {
+			if certExists && keyExists && !certRenewal {
 				continue
 			}
 			dnsNames := []string{
@@ -387,7 +433,7 @@ func (r *TLSReconciler) handleTransportGeneratePerNode() error {
 				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 				fmt.Sprintf("%s.%s.%s.svc.%s", podName, clusterName, namespace, helpers.ClusterDnsBase()),
 			}
-			nodeCert, err := ca.CreateAndSignCertificate(podName, clusterName, dnsNames)
+			nodeCert, err := ca.CreateAndSignCertificate(podName, clusterName, dnsNames, r.resolveTransportCertDuration())
 			if err != nil {
 				r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", podName)
 				return err
@@ -473,7 +519,7 @@ func (r *TLSReconciler) handleHttp() error {
 	nodeSecretName := clusterName + "-http-cert"
 
 	if tlsConfig.Generate {
-		r.logger.Info("Generating certificates", "interface", "http")
+		r.logger.Info("Reconciling certificates", "interface", "http")
 
 		var ca tls.Cert
 		var err error
@@ -488,8 +534,28 @@ func (r *TLSReconciler) handleHttp() error {
 
 		// Generate node cert, sign it and put it into secret
 		nodeSecret, err := r.client.GetSecret(nodeSecretName, namespace)
-		if err != nil {
+		if err != nil && !k8serrors.IsNotFound(err) {
+			r.logger.Error(err, "Failed to get secret for http certificate")
+			return err
+		}
+
+		certRenewal := false
+		if err == nil {
+			daysRemaining, err := parseCertificate(nodeSecret.Data[corev1.TLSCertKey])
+			if err == nil {
+				helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace, clusterName, "http", "global").Set(float64(daysRemaining))
+				renewBeforeExpirationDays := r.instance.Spec.Security.Tls.Http.RotateDaysBeforeExpiry
+				if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+					r.logger.Info("Renewing http certificate")
+					certRenewal = true
+				}
+			} else {
+				r.logger.Info("Failed to parse certificate", "interface", "http", "error", err)
+			}
+		}
+		if err != nil || certRenewal {
 			// Generate node cert and put it into secret
+			// Build default DNS names
 			dnsNames := []string{
 				clusterName,
 				r.instance.Spec.General.ServiceName,
@@ -498,17 +564,28 @@ func (r *TLSReconciler) handleHttp() error {
 				fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 				fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 			}
-			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames)
+
+			// Prepend custom FQDN if provided
+			if tlsConfig.CustomFQDN != nil && *tlsConfig.CustomFQDN != "" {
+				dnsNames = append([]string{*tlsConfig.CustomFQDN}, dnsNames...)
+			}
+
+			nodeCert, err := ca.CreateAndSignCertificate(clusterName, clusterName, dnsNames, r.resolveHttpCertDuration())
 			if err != nil {
 				r.logger.Error(err, "Failed to create node certificate", "interface", "http")
 				//		r.recorder.Event(r.instance, "Warning", "Security", "Failed to create node http certifice")
 
 				return err
 			}
-			nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS, Data: nodeCert.SecretData(ca)}
-			if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
-				return err
+
+			if !certRenewal {
+				nodeSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: nodeSecretName, Namespace: namespace}, Type: corev1.SecretTypeTLS}
+				if err := ctrl.SetControllerReference(r.instance, &nodeSecret, r.client.Scheme()); err != nil {
+					return err
+				}
 			}
+			nodeSecret.Data = nodeCert.SecretData(ca)
+
 			_, err = r.client.CreateSecret(&nodeSecret)
 			if err != nil {
 				r.logger.Error(err, "Failed to store node certificate in secret", "interface", "http")
@@ -578,4 +655,32 @@ func mountFolder(interfaceName string, name string, secretName string, reconcile
 func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+func parseCertificate(data []byte) (int, error) {
+	der, _ := pem.Decode(data)
+	cert, err := x509.ParseCertificate(der.Bytes)
+	if err != nil {
+		return -1, err
+	}
+	daysRemaining := int(time.Until(cert.NotAfter).Hours() / 24)
+	return daysRemaining, nil
+}
+
+func (r *TLSReconciler) resolveTransportCertDuration() time.Duration {
+	if r.instance.Spec.Security != nil && r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Transport != nil {
+		if r.instance.Spec.Security.Tls.Transport.Duration != nil {
+			return r.instance.Spec.Security.Tls.Transport.Duration.Duration
+		}
+	}
+	return 365 * 24 * time.Hour
+}
+
+func (r *TLSReconciler) resolveHttpCertDuration() time.Duration {
+	if r.instance.Spec.Security != nil && r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Http != nil {
+		if r.instance.Spec.Security.Tls.Http.Duration != nil {
+			return r.instance.Spec.Security.Tls.Http.Duration.Duration
+		}
+	}
+	return 365 * 24 * time.Hour
 }

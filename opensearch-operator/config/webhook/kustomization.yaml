@@ -1,0 +1,3 @@
+resources:
+- webhook.yaml
+- service.yaml

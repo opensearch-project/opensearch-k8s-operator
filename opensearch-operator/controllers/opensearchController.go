@@ -127,6 +127,8 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			if err != nil {
 				return ctrl.Result{}, err
 			}
+
+			helpers.DeleteClusterMetrics(req.Namespace, r.Instance.Name)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -139,7 +141,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	switch r.Instance.Status.Phase {
 	case opsterv1.PhasePending:
 		return r.reconcilePhasePending(ctx)
-	case opsterv1.PhaseRunning:
+	case opsterv1.PhaseRunning, opsterv1.PhaseUpgrading:
 		return r.reconcilePhaseRunning(ctx)
 	default:
 		// NOTHING WILL HAPPEN - DEFAULT
@@ -157,6 +159,7 @@ func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&corev1.Service{}).
 		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.StatefulSet{}).
+		Owns(&corev1.PersistentVolumeClaim{}).
 		Complete(r)
 }
 

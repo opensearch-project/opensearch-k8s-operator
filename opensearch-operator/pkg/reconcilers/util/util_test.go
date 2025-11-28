@@ -154,6 +154,20 @@ var _ = Describe("Additional volumes", func() {
 		})
 	})
 
+	When("PersistentVolumeClaim volume is added", func() {
+		It("Should have PersistentVolumeClaimVolumeSource fields", func() {
+			readOnly := true
+			volumeConfigs[0].PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
+				ClaimName: "testClaim",
+				ReadOnly:  readOnly,
+			}
+
+			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].PersistentVolumeClaim.ClaimName).To(Equal("testClaim"))
+			Expect(volume[0].PersistentVolumeClaim.ReadOnly).Should(BeTrue())
+		})
+	})
+
 	When("Projected volume is added", func() {
 		It("Should have ProjectedVolumeSource fields", func() {
 			volumeConfigs[0].Projected = &v1.ProjectedVolumeSource{
@@ -198,6 +212,53 @@ var _ = Describe("Additional volumes", func() {
 			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
+})
+
+var _ = Describe("OpensearchClusterURL", func() {
+	When("DisableSSL is false", func() {
+		It("should return https URL", func() {
+			cluster := &opsterv1.OpenSearchCluster{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: "test-service",
+						HttpPort:    9200,
+						DisableSSL:  false,
+					},
+				},
+			}
+			cluster.Name = "test-cluster"
+			cluster.Namespace = "test-namespace"
+
+			url := OpensearchClusterURL(cluster)
+			Expect(url).To(ContainSubstring("https://"))
+			Expect(url).To(ContainSubstring("test-service"))
+			Expect(url).To(ContainSubstring("test-namespace"))
+			Expect(url).To(ContainSubstring(":9200"))
+		})
+	})
+
+	When("DisableSSL is true", func() {
+		It("should return http URL", func() {
+			cluster := &opsterv1.OpenSearchCluster{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: "test-service",
+						HttpPort:    9200,
+						DisableSSL:  true,
+					},
+				},
+			}
+			cluster.Name = "test-cluster"
+			cluster.Namespace = "test-namespace"
+
+			url := OpensearchClusterURL(cluster)
+			Expect(url).To(ContainSubstring("http://"))
+			Expect(url).NotTo(ContainSubstring("https://"))
+			Expect(url).To(ContainSubstring("test-service"))
+			Expect(url).To(ContainSubstring("test-namespace"))
+			Expect(url).To(ContainSubstring(":9200"))
 		})
 	})
 })

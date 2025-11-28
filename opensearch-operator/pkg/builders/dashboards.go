@@ -124,9 +124,10 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-dashboards",
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        cr.Name + "-dashboards",
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -178,7 +179,11 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 
 func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
 	config["server.name"] = cr.Name + "-dashboards"
-	config["opensearch.ssl.verificationMode"] = "none"
+
+	// Don't override verificationMode
+	if _, ok := config["opensearch.ssl.verificationMode"]; !ok {
+		config["opensearch.ssl.verificationMode"] = "none"
+	}
 
 	if cr.Spec.Dashboards.BasePath != "" {
 		config["server.basePath"] = cr.Spec.Dashboards.BasePath

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	policyv1 "k8s.io/api/policy/v1"
@@ -12,8 +13,7 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/cisco-open/k8s-objectmatcher/patch"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
@@ -94,6 +94,15 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	passwordSecret := builders.PasswordSecret(r.instance, username, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
+
+	// Create bootstrap PVC for persistent storage
+	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPVC, r.client.Scheme()))
+	if r.instance.Status.Initialized {
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
+	} else {
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
+	}
 
 	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
@@ -193,6 +202,11 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			}
 			existing = *new
 		}
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+		if err != nil {
+			return result, err
+		}
+		existing.Status.ReadyReplicas = readyReplicas
 		// Check number of PVCs for nodepool
 		pvcCount, err := helpers.CountPVCsForNodePool(r.client, r.instance, &nodePool)
 		if err != nil {
@@ -325,6 +339,11 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			if err != nil {
 				return &ctrl.Result{Requeue: true}, err
 			}
+			readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+			if err != nil {
+				return &ctrl.Result{Requeue: true}, err
+			}
+			sts.Status.ReadyReplicas = readyReplicas
 		}
 
 		if helpers.HasDataRole(&nodePool) {
@@ -476,8 +495,10 @@ func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) er
 
 // UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
 func (r *ClusterReconciler) UpdateClusterStatus() error {
-	health := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
+	health, healthResponse := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
 	availableNodes := util.GetAvailableOpenSearchNodes(r.client, r.ctx, r.instance, r.logger)
+
+	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
 
 	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 		instance.Status.Health = health

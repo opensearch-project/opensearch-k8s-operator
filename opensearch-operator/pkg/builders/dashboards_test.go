@@ -13,7 +13,7 @@ import (
 
 var _ = Describe("Builders", func() {
 	When("building the dashboards deployment with annotations supplied", func() {
-		It("should populate the dashboard pod spec with annotations provided", func() {
+		It("should populate the dashboard pod and deployment spec with annotations provided", func() {
 			clusterName := "dashboards-add-annotations"
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -30,6 +30,10 @@ var _ = Describe("Builders", func() {
 			}
 			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Annotations).To(Equal(map[string]string{
+				"testAnnotationKey":  "testValue",
+				"testAnnotationKey2": "testValue2",
+			}))
+			Expect(result.ObjectMeta.Annotations).To(Equal(map[string]string{
 				"testAnnotationKey":  "testValue",
 				"testAnnotationKey2": "testValue2",
 			}))

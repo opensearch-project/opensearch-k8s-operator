@@ -513,4 +513,73 @@ var _ = Describe("snapshot policy reconciler", func() {
 			})
 		})
 	})
+
+	Context("CreateSnapshotPolicy", func() {
+		When("deletion schedule is different from creation schedule", func() {
+			BeforeEach(func() {
+				instance.Spec.Creation = opsterv1.SnapshotCreation{
+					Schedule: opsterv1.CronSchedule{
+						Cron: opsterv1.CronExpression{
+							Expression: "0 6 * * *", // 6:00 AM
+							Timezone:   "UTC",
+						},
+					},
+					TimeLimit: ptr.To("2h"),
+				}
+				instance.Spec.Deletion = &opsterv1.SnapshotDeletion{
+					Schedule: &opsterv1.CronSchedule{
+						Cron: opsterv1.CronExpression{
+							Expression: "0 8 * * *", // 8:00 AM
+							Timezone:   "UTC",
+						},
+					},
+					TimeLimit: ptr.To("2h"),
+					DeleteCondition: &opsterv1.SnapshotDeleteCondition{
+						MaxAge:   ptr.To("180d"),
+						MinCount: ptr.To(1),
+					},
+				}
+			})
+
+			It("should use deletion schedule, not creation schedule", func() {
+				policy, err := reconciler.CreateSnapshotPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).NotTo(BeNil())
+				Expect(policy.Deletion).NotTo(BeNil())
+				Expect(policy.Deletion.Schedule).NotTo(BeNil())
+				Expect(policy.Deletion.Schedule.Cron.Expression).To(Equal("0 8 * * *"))
+				Expect(policy.Deletion.Schedule.Cron.Timezone).To(Equal("UTC"))
+			})
+		})
+
+		When("deletion schedule is nil", func() {
+			BeforeEach(func() {
+				instance.Spec.Creation = opsterv1.SnapshotCreation{
+					Schedule: opsterv1.CronSchedule{
+						Cron: opsterv1.CronExpression{
+							Expression: "0 6 * * *",
+							Timezone:   "UTC",
+						},
+					},
+					TimeLimit: ptr.To("2h"),
+				}
+				instance.Spec.Deletion = &opsterv1.SnapshotDeletion{
+					Schedule:  nil, // No schedule
+					TimeLimit: ptr.To("2h"),
+					DeleteCondition: &opsterv1.SnapshotDeleteCondition{
+						MaxAge:   ptr.To("180d"),
+						MinCount: ptr.To(1),
+					},
+				}
+			})
+
+			It("should not set deletion schedule", func() {
+				policy, err := reconciler.CreateSnapshotPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).NotTo(BeNil())
+				Expect(policy.Deletion).NotTo(BeNil())
+				Expect(policy.Deletion.Schedule).To(BeNil())
+			})
+		})
+	})
 })

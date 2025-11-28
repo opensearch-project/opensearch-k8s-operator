@@ -1,0 +1,8 @@
+manager:
+  image:
+    repository: controller
+    tag: latest
+    pullPolicy: IfNotPresent
+# NOTE(joseb): disable validation webhooks
+webhook:
+  enabled: false
