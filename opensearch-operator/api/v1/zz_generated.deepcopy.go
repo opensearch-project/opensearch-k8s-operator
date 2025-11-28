@@ -155,7 +155,7 @@ func (in *AdditionalVolume) DeepCopyInto(out *AdditionalVolume) {
 	if in.PersistentVolumeClaim != nil {
 		in, out := &in.PersistentVolumeClaim, &out.PersistentVolumeClaim
 		*out = new(corev1.PersistentVolumeClaimVolumeSource)
-		(*in).DeepCopyInto(*out)
+		**out = **in
 	}
 	if in.Projected != nil {
 		in, out := &in.Projected, &out.Projected
@@ -821,6 +821,11 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 		in, out := &in.ImageSpec, &out.ImageSpec
 		*out = new(ImageSpec)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.SetVMMaxMapCount != nil {
+		in, out := &in.SetVMMaxMapCount, &out.SetVMMaxMapCount
+		*out = new(bool)
+		**out = **in
 	}
 	if in.DefaultRepo != nil {
 		in, out := &in.DefaultRepo, &out.DefaultRepo

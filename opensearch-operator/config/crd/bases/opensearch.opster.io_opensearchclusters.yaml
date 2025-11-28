@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.19.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: opensearchclusters.opensearch.opster.io
 spec:
   group: opensearch.opster.io
@@ -1294,7 +1294,8 @@ spec:
                             Required.
                           type: string
                         persistentVolumeClaim:
-                          description: PersistentVolumeClaim object to use to populate the volume
+                          description: PersistentVolumeClaim object to use to populate
+                            the volume
                           properties:
                             claimName:
                               description: |-
@@ -3593,7 +3594,8 @@ spec:
                             Required.
                           type: string
                         persistentVolumeClaim:
-                          description: PersistentVolumeClaim object to use to populate the volume
+                          description: PersistentVolumeClaim object to use to populate
+                            the volume
                           properties:
                             claimName:
                               description: |-
