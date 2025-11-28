@@ -80,6 +80,20 @@ var _ = Describe("actiongroup reconciler", func() {
 			},
 		}
 		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(cluster))
+		// Mock admin credentials secret for all tests (available when CreateClientForCluster is invoked)
+		adminSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster-admin-password",
+				Namespace: "test-actiongroup",
+			},
+			Data: map[string][]byte{
+				"username": []byte("admin"),
+				"password": []byte("admin"),
+			},
+		}
+		mockClient.On("GetSecret", "test-cluster-admin-password", "test-actiongroup").Return(func(string, string) corev1.Secret {
+			return adminSecret
+		}, nil).Maybe()
 	})
 
 	JustBeforeEach(func() {

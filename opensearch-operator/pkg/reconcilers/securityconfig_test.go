@@ -97,6 +97,22 @@ config:
 		}
 	}
 
+	// setupDashboardsCredentialsSecretMocks sets up mocks for dashboards credentials secret creation
+	setupDashboardsCredentialsSecretMocks := func(mockClient *k8s.MockK8sClient, clusterName string) {
+		dashboardsSecretName := clusterName + "-dashboards-password"
+		mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
+		mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
+			return secret.Name == dashboardsSecretName
+		})).Return(&ctrl.Result{}, nil)
+		mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{Name: dashboardsSecretName, Namespace: clusterName},
+			Data: map[string][]byte{
+				"username": []byte("kibanaserver"),
+				"password": []byte("test-password"),
+			},
+		}, nil).Once()
+	}
+
 	When("When Reconciling the securityconfig reconciler with no securityconfig provided in the spec", func() {
 		It("should not do anything", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -152,6 +168,7 @@ config:
 						},
 						Tls: &opsterv1.TlsConfig{
 							Transport: &opsterv1.TlsConfigTransport{Generate: true},
+							Http:      &opsterv1.TlsConfigHttp{Generate: true},
 						},
 					},
 				},
@@ -162,6 +179,7 @@ config:
 			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(*securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).
 				Return(corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{Name: generatedConfigName, Namespace: clusterName},
@@ -251,6 +269,7 @@ config:
 
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
 			mockClient.EXPECT().GetJob("securityconfig-withadminsecret-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -303,6 +322,7 @@ config:
 						Config: &opsterv1.SecurityConfig{
 							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig"},
 						},
+						// No TLS configured - admin certificate neither provided nor generation is enabled
 					},
 				},
 			}
@@ -315,7 +335,8 @@ config:
 				&spec,
 			)
 			_, err := underTest.Reconcile()
-			Expect(err).ToNot(HaveOccurred())
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(Equal("admin certificate neither provided nor generation is enabled"))
 			// Note: Not creating the update job is verified implicitly because the test would fail if any of the mock methods are called
 		})
 	})
@@ -336,6 +357,7 @@ config:
 						Config: &opsterv1.SecurityConfig{},
 						Tls: &opsterv1.TlsConfig{
 							Transport: &opsterv1.TlsConfigTransport{Generate: true},
+							Http:      &opsterv1.TlsConfigHttp{Generate: true},
 						},
 					},
 				},
@@ -354,8 +376,11 @@ config:
 			}
 
 			mockClient.On("GetSecret", generatedAdminName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
-			mockClient.On("CreateSecret", mock.AnythingOfType("*v1.Secret")).Return(&ctrl.Result{}, nil).Once()
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
+				return secret.Name == generatedAdminName
+			})).Return(&ctrl.Result{}, nil)
 			mockClient.On("GetSecret", generatedAdminName, clusterName).Return(autoAdminSecret, nil).Once()
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
 
 			mockClient.EXPECT().GetJob("no-securityconfig-tls-configured-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())

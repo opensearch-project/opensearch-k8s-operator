@@ -36,6 +36,23 @@ func newDashboardsReconciler(k8sClient *k8s.MockK8sClient, spec *opsterv1.OpenSe
 	return reconcilerContext, underTest
 }
 
+// setupDashboardsCredentialsSecretMocks sets up mocks for dashboards credentials secret creation
+func setupDashboardsCredentialsSecretMocks(mockClient *k8s.MockK8sClient, clusterName string) {
+	dashboardsSecretName := clusterName + "-dashboards-password"
+	mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
+	mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
+		return secret.Name == dashboardsSecretName
+	})).Return(&ctrl.Result{}, nil)
+	mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: dashboardsSecretName, Namespace: clusterName},
+		Data: map[string][]byte{
+			"username": []byte("kibanaserver"),
+			"password": []byte("test-password"),
+		},
+	}, nil).Once()
+	mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).Return(&ctrl.Result{}, nil)
+}
+
 var _ = Describe("Dashboards Reconciler", func() {
 
 	When("running the dashboards reconciler with TLS enabled and an existing cert in a single secret", func() {
@@ -70,6 +87,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 
 			_, underTest := newDashboardsReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
@@ -100,6 +118,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().GetSecret(clusterName+"-ca", clusterName).Return(corev1.Secret{}, NotFoundError())
 			mockClient.EXPECT().GetSecret(clusterName+"-dashboards-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -107,9 +126,13 @@ var _ = Describe("Dashboards Reconciler", func() {
 					return &ctrl.Result{}, nil
 				})
 			var createdSecret *corev1.Secret
-			mockClient.On("CreateSecret", mock.Anything).
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
+				return secret.Name == clusterName+"-dashboards-cert" || secret.Name == clusterName+"-ca"
+			})).
 				Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
-					createdSecret = secret
+					if secret.Name == clusterName+"-dashboards-cert" {
+						createdSecret = secret
+					}
 					return &ctrl.Result{}, nil
 				})
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
@@ -202,6 +225,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -253,6 +277,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -297,6 +322,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -350,6 +376,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
