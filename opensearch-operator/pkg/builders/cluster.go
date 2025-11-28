@@ -574,6 +574,7 @@ func NewSTSForNodePool(
 					ImagePullSecrets:          image.ImagePullSecrets,
 					PriorityClassName:         node.PriorityClassName,
 					SecurityContext:           podSecurityContext,
+					HostAliases:               cr.Spec.General.HostAliases,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -1017,6 +1018,12 @@ func NewBootstrapPod(
 		initContainers = append(initContainers, keystoreInitContainer)
 	}
 
+	// Use General.HostAliases by default, overwrite with Bootstrap.HostAliases if set
+	hostAliases := cr.Spec.General.HostAliases
+	if cr.Spec.Bootstrap.HostAliases != nil {
+		hostAliases = cr.Spec.Bootstrap.HostAliases
+	}
+
 	startUpCommand := "./opensearch-docker-entrypoint.sh"
 
 	// Use General.PluginsList by default, override with Bootstrap.PluginsList if set
@@ -1066,6 +1073,7 @@ func NewBootstrapPod(
 			Affinity:           cr.Spec.Bootstrap.Affinity,
 			ImagePullSecrets:   image.ImagePullSecrets,
 			SecurityContext:    podSecurityContext,
+			HostAliases:        hostAliases,
 		},
 	}
 
