@@ -52,7 +52,7 @@ type GeneralConfig struct {
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 	ServiceName    string `json:"serviceName"`
 	//+kubebuilder:default=true
-	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
+	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
 	// Disable SSL for the cluster
 	DisableSSL bool `json:"disableSSL,omitempty"`
