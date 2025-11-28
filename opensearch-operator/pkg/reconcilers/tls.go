@@ -273,49 +273,6 @@ func (r *TLSReconciler) adminSecretName() string {
 	return r.instance.Name + "-admin-cert"
 }
 
-func (r *TLSReconciler) generateNewTransportCertIfNeeded(
-	ca tls.Cert,
-	namespace string,
-	clusterName string,
-	commonName string,
-	certLoggingName string,
-	existingCertData []byte,
-	dnsNames []string,
-) (tls.Cert, error) {
-	certRenewal := false
-
-	if existingCertData != nil {
-		daysRemaining, err := getDaysRemainingFromCertificate(existingCertData)
-		if err != nil {
-			r.logger.Info("Failed to parse certificate", "interface", "transport", "node", certLoggingName)
-		} else {
-			helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace, clusterName, "transport", certLoggingName).Set(float64(daysRemaining))
-			renewBeforeExpirationDays := r.instance.Spec.Security.Tls.Transport.RotateDaysBeforeExpiry
-			if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
-				r.logger.Info("Renewing transport certificate", "node", certLoggingName)
-				certRenewal = true
-			}
-		}
-	}
-
-	if existingCertData != nil && !certRenewal {
-		return nil, nil
-	}
-
-	nodeCert, err := ca.CreateAndSignCertificate(
-		commonName,
-		clusterName,
-		dnsNames,
-		r.resolveTransportCertDuration(),
-	)
-
-	if err != nil {
-		r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", certLoggingName)
-		return nil, err
-	}
-	return nodeCert, nil
-}
-
 func (r *TLSReconciler) handleTransportGenerate(ca tls.Cert) error {
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
@@ -474,6 +431,49 @@ func (r *TLSReconciler) handleTransportGenerate(ca tls.Cert) error {
 	r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport/%s", CaCertKey))
 
 	return nil
+}
+
+func (r *TLSReconciler) generateNewTransportCertIfNeeded(
+	ca tls.Cert,
+	namespace string,
+	clusterName string,
+	commonName string,
+	certLoggingName string,
+	existingCertData []byte,
+	dnsNames []string,
+) (tls.Cert, error) {
+	certRenewal := false
+
+	if existingCertData != nil {
+		daysRemaining, err := getDaysRemainingFromCertificate(existingCertData)
+		if err != nil {
+			r.logger.Info("Failed to parse certificate", "interface", "transport", "node", certLoggingName)
+		} else {
+			helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace, clusterName, "transport", certLoggingName).Set(float64(daysRemaining))
+			renewBeforeExpirationDays := r.instance.Spec.Security.Tls.Transport.RotateDaysBeforeExpiry
+			if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+				r.logger.Info("Renewing transport certificate", "node", certLoggingName)
+				certRenewal = true
+			}
+		}
+	}
+
+	if existingCertData != nil && !certRenewal {
+		return nil, nil
+	}
+
+	nodeCert, err := ca.CreateAndSignCertificate(
+		commonName,
+		clusterName,
+		dnsNames,
+		r.resolveTransportCertDuration(),
+	)
+
+	if err != nil {
+		r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", certLoggingName)
+		return nil, err
+	}
+	return nodeCert, nil
 }
 
 func (r *TLSReconciler) generateBootstrapCertIfNeeded(
