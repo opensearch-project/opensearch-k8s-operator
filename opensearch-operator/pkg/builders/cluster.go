@@ -538,10 +538,6 @@ func NewSTSForNodePool(
 									Value: jvm,
 								},
 								{
-									Name:  "node.roles",
-									Value: strings.Join(selectedRoles, ","),
-								},
-								{
 									Name:  "http.port",
 									Value: fmt.Sprint(cr.Spec.General.HttpPort),
 								},
@@ -598,6 +594,18 @@ func NewSTSForNodePool(
 			Value: extraConfig[k],
 		})
 	}
+
+	// Add node.roles env var
+	// For coordinator-only nodes (empty roles), set to "[]" which OpenSearch 3.0+ properly handles as an empty array
+	nodeRolesValue := strings.Join(selectedRoles, ",")
+	if len(selectedRoles) == 0 {
+		nodeRolesValue = "[]"
+	}
+	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
+		Name:  "node.roles",
+		Value: nodeRolesValue,
+	})
+
 	// Append additional env vars from cr.Spec.NodePool.env
 	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
