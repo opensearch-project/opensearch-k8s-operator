@@ -301,11 +301,6 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 			return err
 		}
 	}
-	if nodeSecret.Data == nil && generatePerNode {
-		// covers both the case where nodeSecret is new, or nodeSecret existed
-		// but was nil for some unknown reason (maybe a past failure)
-		nodeSecret.Data = make(map[string][]byte)
-	}
 
 	if !generatePerNode {
 		newCertData, err := r.generateNewCertIfNeeded(
@@ -331,6 +326,11 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 		}
 
 	} else {
+		if nodeSecret.Data == nil {
+			// covers both the case where nodeSecret is new, or nodeSecret existed
+			// but was nil for some unknown reason (maybe a past failure)
+			nodeSecret.Data = make(map[string][]byte)
+		}
 		nodeSecret.Data[CaCertKey] = ca.CertData()
 
 		if err := r.generateBootstrapCertIfNeeded(ca, &nodeSecret); err != nil {
@@ -348,8 +348,10 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 				podName := fmt.Sprintf("%s-%s-%d", clusterName, nodePool.Component, i)
 				certName := fmt.Sprintf("%s.crt", podName)
 				keyName := fmt.Sprintf("%s.key", podName)
+				secretMutex.Lock()
 				certData := nodeSecret.Data[certName]
 				_, keyExists := nodeSecret.Data[keyName]
+				secretMutex.Unlock()
 				if certData != nil && !keyExists {
 					r.logger.Info("Node certificate exists but has no key, forcing regeneration",
 						"interface", "transport", "node", podName)

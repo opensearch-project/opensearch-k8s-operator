@@ -272,6 +272,7 @@ var _ = Describe("TLS Controller", func() {
 			}
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
 			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
 			mockClient.EXPECT().GetSecret(clusterName+"-transport-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
