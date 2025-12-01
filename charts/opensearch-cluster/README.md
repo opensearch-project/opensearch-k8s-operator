@@ -50,6 +50,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.dashboards.additionalConfig` | object | `{}` | Additional properties for opensearch_dashboards.yaml |
 | `cluster.dashboards.affinity` | object | `{}` | dashboards pod affinity rules |
 | `cluster.dashboards.annotations` | object | `{}` | dashboards annotations |
+| `cluster.dashboards.topologySpreadConstraints` | list | `[]` | dashboards pod topologySpreadConstraints |
 | `cluster.dashboards.basePath` | string | `""` | dashboards Base Path for Opensearch Clusters running behind a reverse proxy |
 | `cluster.dashboards.enable` | bool | `true` | Enable dashboards deployment |
 | `cluster.dashboards.env` | list | `[]` | dashboards pod env variables |
