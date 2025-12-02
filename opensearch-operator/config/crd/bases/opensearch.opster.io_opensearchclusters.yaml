@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: opensearchclusters.opensearch.opster.io
 spec:
   group: opensearch.opster.io
@@ -6605,6 +6605,13 @@ spec:
                         type: object
                       transport:
                         properties:
+                          adminDn:
+                            description: |-
+                              Deprecated: DNs of certificates that should have admin access. This field is deprecated and will be removed in a future version.
+                              For OpenSearch 2.0.0+, use security.tls.http.adminDn instead.
+                            items:
+                              type: string
+                            type: array
                           caSecret:
                             description: Optional, secret that contains the ca certificate
                               as ca.crt. If this and generate=true is set the existing

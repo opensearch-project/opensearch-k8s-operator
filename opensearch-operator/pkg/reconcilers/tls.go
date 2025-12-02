@@ -76,12 +76,6 @@ const (
 )
 
 func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
-	if r.instance.Spec.General.DisableSSL {
-		r.logger.Info("HTTP TLS is disabled. Disabling SSL for HTTP layer")
-		r.reconcilerContext.AddConfig("plugins.security.ssl.http.enabled", "false")
-		return ctrl.Result{}, nil
-	}
-
 	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil {
 		r.logger.Info("No security specified. Not doing anything")
 		return ctrl.Result{}, nil
@@ -123,25 +117,46 @@ func (r *TLSReconciler) handleTransport() error {
 }
 
 func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
-	tlsConfig := r.instance.Spec.Security.Tls.Http
 	clusterName := r.instance.Name
 
 	var res *ctrl.Result
 	var certDN string
-	if tlsConfig.Generate || (r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name == "") {
-		ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
-		if err != nil {
-			return nil, err
-		}
+	var shouldGenerate bool
 
-		res, err = r.createAdminSecret(ca)
-		if err != nil {
-			return nil, err
-		}
-		certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
+	if r.securityChangeVersion() {
+		tlsConfig := r.instance.Spec.Security.Tls.Http
+		shouldGenerate = tlsConfig.Generate || (r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name == "")
+		if shouldGenerate {
+			ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
+			if err != nil {
+				return nil, err
+			}
 
+			res, err = r.createAdminSecret(ca)
+			if err != nil {
+				return nil, err
+			}
+			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
+		} else {
+			certDN = strings.Join(tlsConfig.AdminDn, "\",\"")
+		}
 	} else {
-		certDN = strings.Join(tlsConfig.AdminDn, "\",\"")
+		tlsConfig := r.instance.Spec.Security.Tls.Transport
+		shouldGenerate = tlsConfig.Generate || (r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name == "")
+		if shouldGenerate {
+			ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
+			if err != nil {
+				return nil, err
+			}
+
+			res, err = r.createAdminSecret(ca)
+			if err != nil {
+				return nil, err
+			}
+			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
+		} else {
+			certDN = strings.Join(tlsConfig.AdminDn, "\",\"")
+		}
 	}
 
 	r.reconcilerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"%s\"]", certDN))
@@ -187,7 +202,7 @@ func (r *TLSReconciler) adminCAConfig() corev1.LocalObjectReference {
 
 func (r *TLSReconciler) reconcileAdminCert() bool {
 	if r.securityChangeVersion() {
-		return r.instance.Spec.Security.Tls.Http != nil && r.instance.Spec.Security.Tls.Transport != nil
+		return r.instance.Spec.Security.Tls.Http != nil && !r.instance.Spec.General.DisableSSL
 	}
 	return r.instance.Spec.Security.Tls.Transport != nil
 }
@@ -587,6 +602,11 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 }
 
 func (r *TLSReconciler) handleHttp() error {
+	if r.instance.Spec.General.DisableSSL {
+		r.logger.Info("HTTP TLS is disabled. Disabling SSL for HTTP layer")
+		r.reconcilerContext.AddConfig("plugins.security.ssl.http.enabled", "false")
+		return nil
+	}
 	tlsConfig := r.instance.Spec.Security.Tls.Http
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name

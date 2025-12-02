@@ -92,6 +92,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.security.tls.http.secret` | object | `{}` | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |
 | `cluster.security.tls.http.duration` | string | `"8760h"` | Duration controls the validity period of generated certificates (e.g. "8760h", "720h"). This is used only when generate is true. |
 | `cluster.security.tls.http.enableHotReload` | bool | `false` | Enable hot reloading of TLS certificates. |
+| `cluster.security.tls.transport.adminDn` | list | `[]` | DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided. This field is deprecated and will be removed in a future version. For OpenSearch 2.0.0+, use security.tls.http.adminDn instead. |
 | `cluster.security.tls.transport.caSecret` | object | `{}` | Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields |
 | `cluster.security.tls.transport.generate` | bool | `true` | If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied |
 | `cluster.security.tls.transport.nodesDn` | list | `[]` | Allowed Certificate DNs for nodes, only used when existing certificates are provided |

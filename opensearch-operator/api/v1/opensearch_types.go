@@ -267,6 +267,10 @@ type TlsConfigTransport struct {
 	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
+	// Deprecated: DNs of certificates that should have admin access. This field is deprecated and will be removed in a future version.
+	// For OpenSearch 2.0.0+, use security.tls.http.adminDn instead.
+	//+kubebuilder:deprecatedversion:warning="This field is deprecated and will be removed in a future version. Use security.tls.http.adminDn for OpenSearch 2.0.0+."
+	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsConfigHttp struct {
