@@ -1,5 +1,13 @@
 name: Functional tests
-on: [pull_request]
+on:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      enable_log_collection:
+        description: 'Enable log collection and publishing'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   operator:
@@ -16,9 +24,15 @@ jobs:
         with:
           version: v1
           k3d-name: opensearch-operator-tests
-          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: Disable kubelet eviction in k3d creation
+          k3d-args: >
+            --servers 1
+            --agents 2
+            -p 30000-30005:30000-30005@agent:0
+            --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
       - name: Run tests
+        id: operator_tests
         run: |
           set -e
           export CLUSTER_NAME=opensearch-operator-tests
@@ -57,14 +71,73 @@ jobs:
           ## Run tests
           go test ./operatortests -timeout 30m
 
+      - name: Collect operator logs
+        if: always() && (steps.operator_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        run: |
+          df -h
+          export CLUSTER_NAME=deploy-and-upgrade
+          cd opensearch-operator
+          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+
+          mkdir -p ../logs
+
+          echo "Collecting all pods list (first to see status)..."
+          kubectl get pods -n default -o wide > ../logs/all-pods.txt 2>&1 || true
+          echo "=== All Pods Status ==="
+          cat ../logs/all-pods.txt || true
+
+          echo "Collecting OpenSearchCluster resource status..."
+          kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
+
+          echo "Collecting events..."
+          kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
+
+          echo "Collecting pod descriptions..."
+          kubectl describe pods -n default -l control-plane=controller-manager > ../logs/operator-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opster.io/opensearch-cluster=deploy-and-upgrade > ../logs/opensearch-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opensearch.cluster.dashboards=deploy-and-upgrade > ../logs/dashboards-pods-describe.txt 2>&1 || true
+
+          echo "Collecting logs from OpenSearch operator pods..."
+          kubectl get pods -n default -l control-plane=controller-manager -o name 2>/dev/null | while read pod; do
+            pod_name=$(echo $pod | cut -d'/' -f2)
+            echo "Collecting logs from $pod_name"
+            kubectl logs -n default $pod_name > ../logs/operator-${pod_name}.log 2>&1 || true
+            kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
+          done
+
+          echo "Collecting logs from OpenSearch cluster pods..."
+          kubectl get pods -n default -l opster.io/opensearch-cluster=deploy-and-upgrade -o name 2>/dev/null | while read pod; do
+            pod_name=$(echo $pod | cut -d'/' -f2)
+            echo "Collecting logs from $pod_name"
+            kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
+            kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
+          done
+
+          echo "Collecting logs from OpenSearch Dashboards pods..."
+          kubectl get pods -n default -l opensearch.cluster.dashboards=deploy-and-upgrade -o name 2>/dev/null | while read pod; do
+            pod_name=$(echo $pod | cut -d'/' -f2)
+            echo "Collecting logs from $pod_name"
+            kubectl logs -n default $pod_name > ../logs/dashboards-${pod_name}.log 2>&1 || true
+            kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
+          done
+      - name: Publish logs
+        if: always() && (steps.operator_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-job-logs
+          path: logs/
+          retention-days: 7
+
   cluster-helm-chart:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         version:
-            - 2.13.0
-            - 1.3.16
+            - 3.1.0
+            - 2.19.2
+            - 1.3.20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -77,9 +150,15 @@ jobs:
         with:
           version: v1
           k3d-name: opensearch-operator-tests
-          k3d-args: --agents 2 -p 30000-30005:30000-30005@agent:0
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          # NOTE: Disable kubelet eviction in k3d creation
+          k3d-args: >
+            --servers 1
+            --agents 2
+            -p 30000-30005:30000-30005@agent:0
+            --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
       - name: Run tests
+        id: helm_tests
         run: |
           set -e
           export CLUSTER_NAME=opensearch-operator-tests
@@ -122,3 +201,61 @@ jobs:
 
           ## Run tests
           go test ./helmtests -timeout 15m
+
+      - name: Collect operator logs
+        if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        run: |
+          df -h
+          export CLUSTER_NAME=opensearch-operator-tests
+          cd opensearch-operator
+          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+
+          mkdir -p ../logs
+
+          echo "Collecting all pods list (first to see status)..."
+          kubectl get pods -n default -o wide > ../logs/all-pods.txt 2>&1 || true
+          echo "=== All Pods Status ==="
+          cat ../logs/all-pods.txt || true
+
+          echo "Collecting OpenSearchCluster resource status..."
+          kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
+
+          echo "Collecting events..."
+          kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
+
+          echo "Collecting pod descriptions..."
+          kubectl describe pods -n default -l control-plane=controller-manager > ../logs/operator-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opster.io/opensearch-cluster=opensearch-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opensearch.cluster.dashboards=opensearch-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
+
+          echo "Collecting logs from OpenSearch operator pods..."
+          kubectl get pods -n default -l control-plane=controller-manager -o name 2>/dev/null | while read pod; do
+            pod_name=$(echo $pod | cut -d'/' -f2)
+            echo "Collecting logs from $pod_name"
+            kubectl logs -n default $pod_name > ../logs/operator-${pod_name}.log 2>&1 || true
+            kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
+          done
+
+          echo "Collecting logs from OpenSearch cluster pods..."
+          kubectl get pods -n default -l opster.io/opensearch-cluster=opensearch-cluster -o name 2>/dev/null | while read pod; do
+            pod_name=$(echo $pod | cut -d'/' -f2)
+            echo "Collecting logs from $pod_name"
+            kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
+            kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
+          done
+
+          echo "Collecting logs from OpenSearch Dashboards pods..."
+          kubectl get pods -n default -l opensearch.cluster.dashboards=opensearch-cluster -o name 2>/dev/null | while read pod; do
+            pod_name=$(echo $pod | cut -d'/' -f2)
+            echo "Collecting logs from $pod_name"
+            kubectl logs -n default $pod_name > ../logs/dashboards-${pod_name}.log 2>&1 || true
+            kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
+          done
+      - name: Publish logs
+        if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-logs-${{ matrix.version }}
+          path: logs/
+          retention-days: 7

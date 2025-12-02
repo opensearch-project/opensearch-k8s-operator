@@ -60,8 +60,9 @@ var _ = Describe("users reconciler", func() {
 		}
 		password = &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      "test-password",
-				Namespace: "test-user",
+				Name:            "test-password",
+				Namespace:       "test-user",
+				ResourceVersion: "123456789",
 			},
 			Data: map[string][]byte{
 				"password": []byte("testpassword"),
@@ -231,7 +232,8 @@ var _ = Describe("users reconciler", func() {
 				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
 				userRequest := requests.User{
 					Attributes: map[string]string{
-						services.K8sAttributeField: "testuid",
+						services.K8sAttributeField:              "testuid",
+						services.K8sAttributeSecretVersionField: "123456789",
 					},
 				}
 				transport.RegisterResponder(
@@ -310,7 +312,8 @@ var _ = Describe("users reconciler", func() {
 			BeforeEach(func() {
 				userRequest := requests.User{
 					Attributes: map[string]string{
-						services.K8sAttributeField: "testuid",
+						services.K8sAttributeField:              "testuid",
+						services.K8sAttributeSecretVersionField: "123456789",
 					},
 				}
 				recorder = record.NewFakeRecorder(1)
@@ -360,6 +363,34 @@ var _ = Describe("users reconciler", func() {
 				for msg := range recorder.Events {
 					events = append(events, msg)
 				}
+				Expect(createdSecret).ToNot(BeNil())
+				Expect(len(events)).To(Equal(1))
+				Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s user updated in opensearch", opensearchAPIUpdated)))
+			})
+			It("should update the user password", func() {
+				instance.Spec.BackendRoles = []string{}
+				password.ResourceVersion = "987654321"
+				mockClient.EXPECT().GetSecret(mock.Anything, mock.Anything).Return(*password, nil)
+				var createdSecret *corev1.Secret
+				mockClient.On("CreateSecret", mock.Anything).
+					Return(func(secret *corev1.Secret) (*ctrl.Result, error) {
+						createdSecret = secret
+						return &ctrl.Result{}, nil
+					})
+
+				go func() {
+					defer GinkgoRecover()
+					defer close(recorder.Events)
+
+					_, err := reconciler.Reconcile()
+					Expect(err).ToNot(HaveOccurred())
+				}()
+
+				var events []string
+				for msg := range recorder.Events {
+					events = append(events, msg)
+				}
+
 				Expect(createdSecret).ToNot(BeNil())
 				Expect(len(events)).To(Equal(1))
 				Expect(events[0]).To(Equal(fmt.Sprintf("Normal %s user updated in opensearch", opensearchAPIUpdated)))

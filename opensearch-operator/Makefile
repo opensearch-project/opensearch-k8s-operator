@@ -1,6 +1,8 @@
 
 # Image URL to use all building/pushing image targets
 IMG ?= controller:latest
+# Namespace to deploy the operator to
+NAMESPACE ?= opensearch-operator-system
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.27
 PROJECT_PATH=$(CURDIR)
@@ -43,8 +45,13 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 	$(CONTROLLER_GEN) rbac:roleName=manager-role crd webhook paths="./..." output:crd:artifacts:config=config/crd/bases
 
 .PHONY: generate
-generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
+generate: controller-gen helm-docs ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations and helm-docs.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
+
+.PHONY: helm-docs
+helm-docs: ${HELM_DOCS}
+	${HELM_DOCS} -s file -c ../charts/opensearch-operator
+	${HELM_DOCS} -s file -c ../charts/opensearch-cluster
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
@@ -52,7 +59,7 @@ fmt: ## Run go fmt against code.
 
 .PHONY: lint
 lint:
-	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v1.57-alpine golangci-lint run -E gofmt --timeout=3m --exclude-dirs=opensearch-gateway/responses
+	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v2.1-alpine golangci-lint run --timeout=6m --skip-dirs="(^|/)responses($|/)" -v
 
 .PHONY: vet
 vet: ## Run go vet against code.
@@ -95,6 +102,7 @@ uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified 
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/default && $(KUSTOMIZE) edit set namespace ${NAMESPACE}
 	$(KUSTOMIZE) build config/default | kubectl apply -f -
 
 .PHONY: undeploy
@@ -114,11 +122,13 @@ KUSTOMIZE ?= $(LOCALBIN)/kustomize
 CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 MOCKERY ?= $(LOCALBIN)/mockery
+HELM_DOCS := $(LOCALBIN)/helm-docs
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
-CONTROLLER_TOOLS_VERSION ?= v0.14.0
-MOCKERY_VERSION ?= v2.42.1
+CONTROLLER_TOOLS_VERSION ?= v0.19.0
+MOCKERY_VERSION ?= v2.52.2
+HELM_DOCS_VERSION ?= 1.14.2
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -140,3 +150,9 @@ $(MOCKERY): $(LOCALBIN)
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.
 $(ENVTEST): $(LOCALBIN)
 	test -s $(LOCALBIN)/setup-envtest || GOBIN=$(LOCALBIN) go install sigs.k8s.io/controller-runtime/tools/setup-envtest@latest
+
+.PHONY: helm-docs
+helm-docs: $(HELM_DOCS) ## Download helm-docs locally if necessary.
+$(HELM_DOCS): $(LOCALBIN)
+	@curl -sL "https://github.com/norwoodj/helm-docs/releases/download/v$(HELM_DOCS_VERSION)/helm-docs_$(HELM_DOCS_VERSION)_$$(uname -s)_x86_64.tar.gz" | tar -xz -C $(LOCALBIN) helm-docs
+	@chmod +x $(HELM_DOCS)

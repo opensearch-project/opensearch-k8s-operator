@@ -22,12 +22,25 @@ import (
 	"os"
 	"strconv"
 
+	"strings"
+
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+
+	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
+	"sigs.k8s.io/controller-runtime/pkg/webhook"
+
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
+	opsterwebhook "github.com/Opster/opensearch-k8s-operator/opensearch-operator/webhook"
 	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+
+	"net/http"
+	_ "net/http/pprof"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -37,9 +50,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
-
-	"net/http"
-	_ "net/http/pprof"
 )
 
 var (
@@ -57,24 +67,46 @@ func init() {
 func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
+	var enableWebhooks bool
+	var webhookPort int
 	var probeAddr string
 	var watchNamespace string
 	var logLevel string
-	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
+	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
+	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "Enable validating webhooks for OpenSearch custom resources.")
+	flag.IntVar(&webhookPort, "webhook-port", 9443, "Port used by the validating webhook server.")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
-		"The namespace that controller manager is restricted to watch. If not set, default is to watch all namespaces.")
+		"The comma-separated list of namespaces that the controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
 
 	opts := zap.Options{
 		Development: false,
 		TimeEncoder: zapcore.ISO8601TimeEncoder,
 	}
+
+	messageKey := os.Getenv("OPERATOR_LOGGING_MESSAGE_KEY")
+	if messageKey != "" {
+		opts.EncoderConfigOptions = append(opts.EncoderConfigOptions, func(ec *zapcore.EncoderConfig) {
+			ec.MessageKey = messageKey
+		})
+	}
+
 	opts.BindFlags(flag.CommandLine)
 	flag.Parse()
+
+	var cacheOpts cache.Options
+	if watchNamespace != "" {
+		cacheOpts.DefaultNamespaces = map[string]cache.Config{
+			watchNamespace: {},
+		}
+		for watchNs := range strings.SplitSeq(watchNamespace, ",") {
+			cacheOpts.DefaultNamespaces[watchNs] = cache.Config{}
+		}
+	}
 
 	level, err := zapcore.ParseLevel(logLevel)
 	if err != nil {
@@ -98,19 +130,32 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	var webhookServer webhook.Server
+	if enableWebhooks {
+		webhookServer = webhook.NewServer(webhook.Options{
+			Port: webhookPort,
+		})
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
-		Scheme:                 scheme,
-		MetricsBindAddress:     metricsAddr,
-		Port:                   9443,
+		Scheme: scheme,
+		Metrics: metricsserver.Options{
+			BindAddress:    metricsAddr,
+			SecureServing:  true,
+			FilterProvider: filters.WithAuthenticationAndAuthorization,
+		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
-		Namespace:              watchNamespace,
+		Cache:                  cacheOpts,
+		WebhookServer:          webhookServer,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+
+	helpers.RegisterMetrics()
 
 	if err = (&controllers.OpenSearchClusterReconciler{
 		Client:   mgr.GetClient(),
@@ -185,7 +230,61 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchComponentTemplate")
 		os.Exit(1)
 	}
+	if err = (&controllers.OpensearchSnapshotPolicyReconciler{
+		Client:   mgr.GetClient(),
+		Scheme:   mgr.GetScheme(),
+		Recorder: mgr.GetEventRecorderFor("snapshotpolicy-controller"),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
+
+	// Setup webhook validators if enabled
+	if enableWebhooks {
+		if err = (&opsterwebhook.OpenSearchIndexTemplateValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchIndexTemplate")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchComponentTemplateValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchComponentTemplate")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchUserValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUser")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchRoleValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchRole")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchTenantValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchTenant")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchUserRoleBindingValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUserRoleBinding")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchActionGroupValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchActionGroup")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchISMPolicyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchISMPolicy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchSnapshotPolicyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchSnapshotPolicy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchClusterValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchCluster")
+			os.Exit(1)
+		}
+	} else {
+		setupLog.Info("Webhooks disabled; skipping webhook registration")
+	}
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {
 		setupLog.Error(err, "unable to set up health check")

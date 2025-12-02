@@ -55,6 +55,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 							Generate:             false,
 							TlsCertificateConfig: opsterv1.TlsCertificateConfig{Secret: corev1.LocalObjectReference{Name: secretName}},
 						},
+						Service: opsterv1.DashboardsServiceSpec{Labels: map[string]string{}},
 					},
 				},
 			}
@@ -92,6 +93,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 							Enable:   true,
 							Generate: true,
 						},
+						Service: opsterv1.DashboardsServiceSpec{Labels: map[string]string{}},
 					},
 				}}
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -138,6 +140,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable:                      true,
 						OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: credentialsSecret},
+						Service:                     opsterv1.DashboardsServiceSpec{Labels: map[string]string{}},
 					},
 				}}
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -193,6 +196,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 						AdditionalConfig: map[string]string{
 							"some-key": testConfig,
 						},
+						Service: opsterv1.DashboardsServiceSpec{Labels: map[string]string{}},
 					},
 				}}
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -241,6 +245,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 								Value: "TEST",
 							},
 						},
+						Service: opsterv1.DashboardsServiceSpec{Labels: map[string]string{}},
 					},
 				}}
 
@@ -285,6 +290,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 							Image:           &image,
 							ImagePullPolicy: &imagePullPolicy,
 						},
+						Service: opsterv1.DashboardsServiceSpec{Labels: map[string]string{}},
 					},
 				}}
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)

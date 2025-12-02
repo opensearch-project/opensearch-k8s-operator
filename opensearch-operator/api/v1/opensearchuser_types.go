@@ -68,6 +68,11 @@ type OpensearchUserList struct {
 	Items           []OpensearchUser `json:"items"`
 }
 
+// GetOpensearchRef returns the OpenSearch cluster reference
+func (u *OpensearchUser) GetOpensearchRef() corev1.LocalObjectReference {
+	return u.Spec.OpensearchRef
+}
+
 func init() {
 	SchemeBuilder.Register(&OpensearchUser{}, &OpensearchUserList{})
 }

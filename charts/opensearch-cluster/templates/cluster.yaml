@@ -17,17 +17,19 @@ spec:
   {{- end }}
   {{- with .Values.cluster.dashboards }}
   dashboards:
-    {{- . | toYaml | nindent 4 }}
+    {{- omit . "image" | toYaml | nindent 4 }}
     image: {{ .image }}:{{ .version }}
   {{- end }}
   {{- with .Values.cluster.general }}
   general:
-    {{- . | toYaml | nindent 4 }}
+    {{- omit . "image" "serviceName" | toYaml | nindent 4 }}
     image: {{ .image }}:{{ .version }}
     serviceName: {{ .serviceName | default $clusterName }}
   {{- end }}
   {{- with .Values.cluster.initHelper }}
-  initHelper: {{ . | toYaml | nindent 4 }}
+  initHelper:
+    {{- omit . "image" | toYaml | nindent 4 }}
+    image: {{ .image }}:{{ .version }}
   {{- end }}
   {{- with .Values.cluster.nodePools }}
   nodePools: {{ . | toYaml | nindent 4 }}
@@ -45,16 +47,22 @@ spec:
         {{- with .tls.transport.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
         {{- end }}
-        {{- with .tls.transport.adminDn }}
-        adminDn: {{ . | toYaml | nindent 10 }}
-        {{- end }}
         {{- with .tls.transport.nodesDn }}
         nodesDn: {{ . | toYaml | nindent 10 }}
         {{- end }}
         {{- with .tls.transport.secret }}
         secret: {{ . | toYaml | nindent 10 }}
         {{- end }}
+        {{- if .tls.transport.duration }}
+        duration: {{ .tls.transport.duration }}
+        {{- end }}
+        {{- if .tls.transport.enableHotReload }}
+        enableHotReload: {{ .tls.transport.enableHotReload }}
+        {{- end }}
       http:
+        {{- with .tls.http.adminDn }}
+        adminDn: {{ . | toYaml | nindent 10 }}
+        {{- end }}
         {{- if .tls.http.generate }}
         generate: {{ .tls.http.generate }}
         {{- end }}
@@ -63,6 +71,12 @@ spec:
         {{- end }}
         {{- with .tls.http.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- if .tls.http.duration }}
+        duration: {{ .tls.http.duration }}
+        {{- end }}
+        {{- if .tls.http.enableHotReload }}
+        enableHotReload: {{ .tls.http.enableHotReload }}
         {{- end }}
     {{- with .config }}
     config: {{ . | toYaml | nindent 6 }}

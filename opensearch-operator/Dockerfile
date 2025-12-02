@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.22.1 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24.4 AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -14,6 +14,7 @@ COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
 COPY pkg/   pkg/
+COPY webhook/ webhook/
 COPY opensearch-gateway/   opensearch-gateway/
 
 # Build

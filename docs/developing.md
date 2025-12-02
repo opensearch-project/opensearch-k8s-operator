@@ -4,7 +4,7 @@ This page provides information how to develop changes for the operator code. Ple
 
 ## Needed environment and tools
 
-The operator is developed in Go, as such you need a current Go toolkit (for Linux most distributions provide packages, otherwise get it from the [go homepage](https://go.dev/)). Please use version 1.22.1 as this version is used by the CI pipelines. You also need an editor/IDE, ideally with Go support. We recommend either [VS Code](https://code.visualstudio.com/) with the official Go extension or [GoLand](https://www.jetbrains.com/go/).
+The operator is developed in Go, as such you need a current Go toolkit (for Linux most distributions provide packages, otherwise get it from the [go homepage](https://go.dev/)). Please use version 1.24.4 as this version is used by the CI pipelines. You also need an editor/IDE, ideally with Go support. We recommend either [VS Code](https://code.visualstudio.com/) with the official Go extension or [GoLand](https://www.jetbrains.com/go/).
 
 Additional tools you will need:
 
@@ -89,8 +89,10 @@ To test your changes you can launch the operator locally. You need a running kub
 
 By default the operator produces logs in a JSON format. For easier reading during debugging you can switch the logging framework into a special development mode that switches off JSON and produces more details (stacktraces on warnings). Simply set the environment variable `OPERATOR_DEV_LOGGING=true` before running. E.g. to run locally with make: `OPERATOR_DEV_LOGGING=true make run`. If you want to enable this mode for a deployed operator use the `manager.extraEnv` helm chart values option to set the environment variable.
 
-Note that for some features the operator expects to be able to communicate directly with opensearch. This is not possible when the operator is running outside of kubernetes. In these cases you will need to deploy the operator to test it. Follow these steps:
-
+Note that for some features the operator expects to be able to communicate directly with opensearch. This could be achieved in 2 ways:
+1) Add Opensearch cluster DNS to your hosts file, e.g. `/etc/hosts`. Point it to localhost address.
+   E.g. `127.0.0.1 opensearch-primary.opensearch.svc.cluster.local`. Then port-forward `9200` and `9300` ports from kubernetes to your local env.
+2) Deploy the operator to remote cluster to test it. Follow these steps:
 * Run `make docker-build` to build the docker image
 * If needed import the image into your cluster (for k3d run `k3d image import controller:latest`)
 * Deploy the operator with helm by running `helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent`

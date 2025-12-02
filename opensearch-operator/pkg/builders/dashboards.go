@@ -16,7 +16,7 @@ import (
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
 func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, annotations map[string]string) *appsv1.Deployment {
-	var replicas int32 = cr.Spec.Dashboards.Replicas
+	var replicas = cr.Spec.Dashboards.Replicas
 	var port int32 = 5601
 	var mode int32 = 420
 	resources := cr.Spec.Dashboards.Resources
@@ -62,8 +62,8 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "password"}}})
 	} else {
 		// Default values from demo configuration
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", Value: "admin"})
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", Value: "admin"})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", Value: "kibanaserver"})
+		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", Value: "kibanaserver"})
 	}
 
 	labels := map[string]string{
@@ -124,9 +124,10 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-dashboards",
-			Namespace: cr.Namespace,
-			Labels:    labels,
+			Name:        cr.Name + "-dashboards",
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -163,12 +164,13 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 							SecurityContext: securityContext,
 						},
 					},
-					ServiceAccountName: cr.Spec.General.ServiceAccount,
-					ImagePullSecrets:   image.ImagePullSecrets,
-					NodeSelector:       cr.Spec.Dashboards.NodeSelector,
-					Tolerations:        cr.Spec.Dashboards.Tolerations,
-					Affinity:           cr.Spec.Dashboards.Affinity,
-					SecurityContext:    podSecurityContext,
+					ServiceAccountName:        cr.Spec.General.ServiceAccount,
+					ImagePullSecrets:          image.ImagePullSecrets,
+					NodeSelector:              cr.Spec.Dashboards.NodeSelector,
+					Tolerations:               cr.Spec.Dashboards.Tolerations,
+					Affinity:                  cr.Spec.Dashboards.Affinity,
+					TopologySpreadConstraints: cr.Spec.Dashboards.TopologySpreadConstraints,
+					SecurityContext:           podSecurityContext,
 				},
 			},
 		},
@@ -177,7 +179,11 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 
 func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
 	config["server.name"] = cr.Name + "-dashboards"
-	config["opensearch.ssl.verificationMode"] = "none"
+
+	// Don't override verificationMode
+	if _, ok := config["opensearch.ssl.verificationMode"]; !ok {
+		config["opensearch.ssl.verificationMode"] = "none"
+	}
 
 	if cr.Spec.Dashboards.BasePath != "" {
 		config["server.basePath"] = cr.Spec.Dashboards.BasePath
@@ -208,11 +214,19 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	}
 }
 
-func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster, customLabels map[string]string) *corev1.Service {
 	var port int32 = 5601
 
-	labels := map[string]string{
+	metadataLabels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
+	}
+	selectorLabels := map[string]string{
+		"opensearch.cluster.dashboards": cr.Name,
+	}
+
+	// Merge customLabels into metadataLabels only
+	for key, value := range customLabels {
+		metadataLabels[key] = value
 	}
 
 	return &corev1.Service{
@@ -223,7 +237,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        cr.Spec.General.ServiceName + "-dashboards",
 			Namespace:   cr.Namespace,
-			Labels:      labels,
+			Labels:      metadataLabels,
 			Annotations: cr.Spec.Dashboards.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
@@ -240,7 +254,7 @@ func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 					},
 				},
 			},
-			Selector: labels,
+			Selector: selectorLabels,
 		},
 	}
 }

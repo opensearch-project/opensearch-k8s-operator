@@ -31,7 +31,7 @@ type OpensearchTenantReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("tenant", req.NamespacedName)
-	r.Logger.Info("Reconciling OpensearchTenant")
+	r.Info("Reconciling OpensearchTenant")
 
 	r.Instance = &opsterv1.OpensearchTenant{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
@@ -48,7 +48,7 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 	if r.Instance.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Client.Update(ctx, r.Instance)
+		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -60,7 +60,7 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 				return ctrl.Result{}, err
 			}
 			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
-			return ctrl.Result{}, r.Client.Update(ctx, r.Instance)
+			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
 

@@ -1,12 +1,18 @@
 package helpers
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
+	"log"
 	"reflect"
 	"sort"
+	"strings"
 	"time"
+
+	"k8s.io/apimachinery/pkg/api/resource"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 
@@ -22,14 +28,19 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/selection"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
 	stsUpdateWaitTime = 30
-	updateStepTime    = 3
+	updateStepTime    = 2
 
 	stsRevisionLabel = "controller-revision-hash"
+
+	// Default UID and GID for OpenSearch containers
+	DefaultUID = int64(1000)
+	DefaultGID = int64(1000)
 )
 
 func ContainsString(slice []string, s string) bool {
@@ -39,6 +50,34 @@ func ContainsString(slice []string, s string) bool {
 		}
 	}
 	return false
+}
+
+// ClusterURL returns the URL for communicating with the OpenSearch cluster.
+// If OperatorClusterURL is specified, it uses that custom URL.
+// Otherwise, it constructs the default internal Kubernetes service DNS name.
+func ClusterURL(cluster *opsterv1.OpenSearchCluster) string {
+	httpPort := cluster.Spec.General.HttpPort
+	if httpPort == 0 {
+		httpPort = 9200 // default port
+	}
+
+	protocol := "https"
+	if cluster.Spec.General.DisableSSL {
+		protocol = "http"
+	}
+
+	if cluster.Spec.General.OperatorClusterURL != nil && *cluster.Spec.General.OperatorClusterURL != "" {
+		return fmt.Sprintf("%s://%s:%d", protocol, *cluster.Spec.General.OperatorClusterURL, httpPort)
+	}
+
+	// Default internal Kubernetes service DNS name
+	return fmt.Sprintf("%s://%s.%s.svc.%s:%d",
+		protocol,
+		cluster.Spec.General.ServiceName,
+		cluster.Namespace,
+		ClusterDnsBase(),
+		httpPort,
+	)
 }
 
 func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
@@ -148,13 +187,14 @@ func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatu
 }
 
 func MergeConfigs(left map[string]string, right map[string]string) map[string]string {
-	if left == nil {
-		return right
+	result := make(map[string]string)
+	for k, v := range left {
+		result[k] = v
 	}
 	for k, v := range right {
-		left[k] = v
+		result[k] = v
 	}
-	return left
+	return result
 }
 
 // Return the keys of the input map in sorted order
@@ -201,15 +241,26 @@ func MapClusterRole(role string, ver string) string {
 	if err != nil {
 		return role
 	}
-	clusterManagerVer, _ := version.NewVersion("2.0.0")
-	is2XVersion := osVer.GreaterThanOrEqual(clusterManagerVer)
-	if role == "master" && is2XVersion {
-		return "cluster_manager"
-	} else if role == "cluster_manager" && !is2XVersion {
-		return "master"
-	} else {
-		return role
+
+	majorVersion := osVer.Segments()[0]
+	roleMap := map[int]map[string]string{
+		1: {
+			"cluster_manager": "master",
+		},
+		2: {
+			"master": "cluster_manager",
+			"warm":   "search",
+		},
+		3: {
+			"master": "cluster_manager",
+		},
 	}
+
+	if mappedRole, ok := roleMap[majorVersion][role]; ok {
+		return mappedRole
+	}
+
+	return role
 }
 
 func MapClusterRoles(roles []string, version string) []string {
@@ -236,7 +287,7 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 // Count the number of pods running and ready and not terminating for a given nodePool
 func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
 	// Constrict selector from labels
-	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
+	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
 		return 0, err
 	}
@@ -255,7 +306,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearc
 	numReadyPods := 0
 	for _, pod := range list.Items {
 		// If DeletionTimestamp is set the pod is terminating
-		podReady := pod.ObjectMeta.DeletionTimestamp == nil
+		podReady := pod.DeletionTimestamp == nil
 		// Count the pod as not ready if one of its containers is not running or not ready
 		for _, container := range pod.Status.ContainerStatuses {
 			if !container.Ready || container.State.Running == nil {
@@ -269,9 +320,18 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearc
 	return numReadyPods, nil
 }
 
+// ReadyReplicasForNodePool returns the number of ready replicas derived from the actual running pods.
+func ReadyReplicasForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int32, error) {
+	numReadyPods, err := CountRunningPodsForNodePool(k8sClient, cr, nodePool)
+	if err != nil {
+		return 0, err
+	}
+	return int32(numReadyPods), nil
+}
+
 // Count the number of PVCs created for the given NodePool
 func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
-	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.ObjectMeta.Name})
+	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
 		return 0, err
 	}
@@ -289,46 +349,56 @@ func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluste
 }
 
 // Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
-func WaitForSTSDelete(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) error {
+func WaitForSTSDelete(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) error {
+	cond := func(ctx context.Context) (bool, error) {
+		_, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
+		if k8serrors.IsNotFound(err) {
+			return true, nil
+		}
+		return false, err
+	}
 	if err := k8sClient.DeleteStatefulSet(obj, true); err != nil {
 		return err
 	}
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		_, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
-		if err != nil {
-			return nil
-		}
-		time.Sleep(time.Second * updateStepTime)
-	}
-	return fmt.Errorf("failed to delete STS")
+	return wait.PollUntilContextTimeout(ctx, time.Second*updateStepTime, time.Second*stsUpdateWaitTime, true, cond)
 }
 
 // Wait for max 30s until a STS has at least the given number of replicas
-func WaitForSTSReplicas(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet, replicas int32) error {
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
+func WaitForSTSReplicas(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet, replicas int32) error {
+	cond := func(ctx context.Context) (bool, error) {
 		existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
-		if err == nil {
-			if existing.Status.Replicas >= replicas {
-				return nil
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return false, nil
 			}
+			return false, err
 		}
-		time.Sleep(time.Second * updateStepTime)
+		if existing.Status.Replicas >= replicas {
+			return true, nil
+		}
+		return false, nil
 	}
-	return fmt.Errorf("failed to wait for replicas")
+	return wait.PollUntilContextTimeout(ctx, time.Second*updateStepTime, time.Second*stsUpdateWaitTime, true, cond)
 }
 
-// Wait for max 30s until a STS has a normal status (CurrentRevision != "")
-func WaitForSTSStatus(k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
+func WaitForSTSStatus(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
+	var result appsv1.StatefulSet
+	cond := func(ctx context.Context) (bool, error) {
 		existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
-		if err == nil {
-			if existing.Status.CurrentRevision != "" {
-				return &existing, nil
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				return false, nil
 			}
+			return false, err
 		}
-		time.Sleep(time.Second * updateStepTime)
+		result = existing
+		if existing.Status.CurrentRevision != "" {
+			return true, nil
+		}
+		return false, nil
 	}
-	return nil, fmt.Errorf("failed to wait for STS")
+	err := wait.PollUntilContextTimeout(ctx, time.Second*updateStepTime, time.Second*stsUpdateWaitTime, true, cond)
+	return &result, err
 }
 
 // GetSTSForNodePool returns the corresponding sts for a given nodePool and cluster name
@@ -339,7 +409,7 @@ func GetSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clus
 }
 
 // DeleteSTSForNodePool deletes the sts for the corresponding nodePool
-func DeleteSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
+func DeleteSTSForNodePool(ctx context.Context, k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
 	sts, err := GetSTSForNodePool(k8sClient, nodePool, clusterName, clusterNamespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -352,16 +422,16 @@ func DeleteSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, c
 		return err
 	}
 
-	// Wait for the STS to actually be deleted
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		_, err := k8sClient.GetStatefulSet(sts.Name, sts.Namespace)
-		if err != nil {
-			return nil
-		}
-		time.Sleep(time.Second * updateStepTime)
-	}
-
-	return fmt.Errorf("failed to delete STS for nodepool %s", nodePool.Component)
+	// Wait for the STS to actually be deleted using context-aware polling
+	return wait.PollUntilContextTimeout(ctx, time.Second*updateStepTime, time.Second*stsUpdateWaitTime, true,
+		func(ctx context.Context) (bool, error) {
+			_, err := k8sClient.GetStatefulSet(sts.Name, sts.Namespace)
+			if k8serrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		},
+	)
 }
 
 // DeleteSecurityUpdateJob deletes the securityconfig update job
@@ -426,25 +496,23 @@ func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) pol
 	return newpdb
 }
 
-func CalculateJvmHeapSize(nodePool *opsterv1.NodePool) string {
-	jvmHeapSizeTemplate := "-Xmx%s -Xms%s"
-
-	if nodePool.Jvm == "" {
-		memoryLimit := nodePool.Resources.Requests.Memory()
-
-		// Memory request is not present
-		if memoryLimit.IsZero() {
-			return fmt.Sprintf(jvmHeapSizeTemplate, "512M", "512M")
-		}
-
-		// Set Java Heap size to half of the node pool memory size
-		megabytes := float64((memoryLimit.Value() / 2) / 1024.0 / 1024.0)
-
-		heapSize := fmt.Sprintf("%vM", megabytes)
-		return fmt.Sprintf(jvmHeapSizeTemplate, heapSize, heapSize)
+func AppendJvmHeapSizeSettings(jvm string, heapSizeSettings string) string {
+	if strings.Contains(jvm, "Xms") || strings.Contains(jvm, "Xmx") {
+		return jvm
 	}
+	if jvm == "" {
+		return heapSizeSettings
+	}
+	return fmt.Sprintf("%s %s", jvm, heapSizeSettings)
+}
 
-	return nodePool.Jvm
+func CalculateJvmHeapSizeSettings(memoryRequest *resource.Quantity) string {
+	var memoryRequestMb int64 = 512
+	if memoryRequest != nil && !memoryRequest.IsZero() {
+		memoryRequestMb = ((memoryRequest.Value() / 2.0) / 1024.0) / 1024.0
+	}
+	// Set Java Heap size to half of the node pool memory request for both Xms and Xmx
+	return fmt.Sprintf("-Xms%dM -Xmx%dM", memoryRequestMb, memoryRequestMb)
 }
 
 func IsUpgradeInProgress(status opsterv1.ClusterStatus) bool {
@@ -465,7 +533,7 @@ func IsUpgradeInProgress(status opsterv1.ClusterStatus) bool {
 }
 
 func ReplicaHostName(currentSts appsv1.StatefulSet, repNum int32) string {
-	return fmt.Sprintf("%s-%d", currentSts.ObjectMeta.Name, repNum)
+	return fmt.Sprintf("%s-%d", currentSts.Name, repNum)
 }
 
 func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
@@ -527,7 +595,7 @@ func GetDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNamesp
 }
 
 // DeleteDashboardsDeployment deletes the OSD deployment along with all its pods
-func DeleteDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNamespace string) error {
+func DeleteDashboardsDeployment(ctx context.Context, k8sClient k8s.K8sClient, clusterName, clusterNamespace string) error {
 	deploy, err := GetDashboardsDeployment(k8sClient, clusterName, clusterNamespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -540,15 +608,62 @@ func DeleteDashboardsDeployment(k8sClient k8s.K8sClient, clusterName, clusterNam
 		return err
 	}
 
-	// Wait for Dashboards deploy to delete
-	// We can use the same waiting time for sts as both have same termination grace period
-	for i := 1; i <= stsUpdateWaitTime/updateStepTime; i++ {
-		_, err := k8sClient.GetDeployment(deploy.Name, clusterNamespace)
-		if err != nil {
-			return nil
-		}
-		time.Sleep(time.Second * updateStepTime)
+	// Wait for Dashboards deploy to delete using context-aware polling
+	return wait.PollUntilContextTimeout(ctx, time.Second*updateStepTime, time.Second*stsUpdateWaitTime, true,
+		func(ctx context.Context) (bool, error) {
+			_, err := k8sClient.GetDeployment(deploy.Name, clusterNamespace)
+			if k8serrors.IsNotFound(err) {
+				return true, nil
+			}
+			return false, err
+		},
+	)
+}
+
+func SafeClose(c io.Closer) {
+	if err := c.Close(); err != nil {
+		log.Println("SafeClose error:", err)
+	}
+}
+
+// ResolveUidGid resolves the UID and GID using security context hierarchy
+// Priority: securityContext.runAsUser/Group > podSecurityContext.runAsUser/Group > defaults (1000:1000)
+func ResolveUidGid(cr *opsterv1.OpenSearchCluster) (uid, gid int64) {
+	uid = DefaultUID
+	gid = DefaultGID
+
+	if cr.Spec.General.SecurityContext != nil && cr.Spec.General.SecurityContext.RunAsUser != nil {
+		uid = *cr.Spec.General.SecurityContext.RunAsUser
+	} else if cr.Spec.General.PodSecurityContext != nil && cr.Spec.General.PodSecurityContext.RunAsUser != nil {
+		uid = *cr.Spec.General.PodSecurityContext.RunAsUser
 	}
 
-	return fmt.Errorf("failed to delete dashboards deployment for cluster %s", clusterName)
+	if cr.Spec.General.SecurityContext != nil && cr.Spec.General.SecurityContext.RunAsGroup != nil {
+		gid = *cr.Spec.General.SecurityContext.RunAsGroup
+	} else if cr.Spec.General.PodSecurityContext != nil && cr.Spec.General.PodSecurityContext.RunAsGroup != nil {
+		gid = *cr.Spec.General.PodSecurityContext.RunAsGroup
+	}
+
+	return uid, gid
+}
+
+// GetChownCommand creates a chown command with the given UID, GID, and path
+func GetChownCommand(uid, gid int64, path string) string {
+	return fmt.Sprintf("chown -R %d:%d %s", uid, gid, path)
+}
+
+// GenComponentTemplateName generates the component template name from the resource
+func GenComponentTemplateName(template *opsterv1.OpensearchComponentTemplate) string {
+	if template.Spec.Name != "" {
+		return template.Spec.Name
+	}
+	return template.Name
+}
+
+// GenIndexTemplateName generates the index template name from the resource
+func GenIndexTemplateName(template *opsterv1.OpensearchIndexTemplate) string {
+	if template.Spec.Name != "" {
+		return template.Spec.Name
+	}
+	return template.Name
 }

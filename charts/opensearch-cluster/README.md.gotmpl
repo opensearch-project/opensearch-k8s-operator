@@ -1,0 +1,21 @@
+{{ template "chart.header" . }}
+
+{{ template "chart.description" . }}
+
+{{ define "chart.valuesTableHtml" }}
+
+The following table lists the configurable parameters of the Helm chart.
+
+| Parameter | Type | Default | Description |
+| --- | ---- | ------- | ----------- |
+{{- range .Values }}
+| `{{ .Key }}` | {{ .Type }} | {{ .Default }} | {{ if .Description }}{{ .Description }}{{ else }}{{ .AutoDescription }}{{ end }} |
+{{- end }}
+
+Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
+
+{{ end }}
+
+{{ template "chart.valuesSectionHtml" . -}}
+
+Opensearch-cluster Helm Chart version: `{{ template "chart.version" . }}`

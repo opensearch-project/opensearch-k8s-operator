@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"io"
+	"k8s.io/utils/ptr"
 	"net/http"
 	"strconv"
 	"strings"
@@ -14,14 +16,14 @@ import (
 	"github.com/opensearch-project/opensearch-go"
 	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
-	"k8s.io/utils/pointer"
 )
 
 const (
 	headerContentType = "Content-Type"
 
-	jsonContentHeader = "application/json"
-	ismResource       = "_ism"
+	jsonContentHeader      = "application/json"
+	ismResource            = "_ism"
+	snapshotpolicyResource = "_sm"
 )
 
 var AdditionalSystemIndices = []string{
@@ -98,6 +100,8 @@ func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, e
 	client, err := opensearch.NewClient(config)
 	if err == nil {
 		service.client = client
+	} else {
+		return nil, err
 	}
 	pingReq := opensearchapi.PingRequest{}
 	pingRes, err := pingReq.Do(context.Background(), client)
@@ -115,7 +119,7 @@ func MainPage(client *opensearch.Client) (responses.MainResponse, error) {
 	infoRes, err := req.Do(context.Background(), client)
 	var response responses.MainResponse
 	if err == nil {
-		defer infoRes.Body.Close()
+		defer helpers.SafeClose(infoRes.Body)
 		err = json.NewDecoder(infoRes.Body).Decode(&response)
 	}
 	return response, err
@@ -128,7 +132,7 @@ func (client *OsClusterClient) GetHealth() (responses.ClusterHealthResponse, err
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.ClusterHealthResponse
 	if err == nil {
-		defer catNodesRes.Body.Close()
+		defer helpers.SafeClose(catNodesRes.Body)
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
 	}
 	return response, err
@@ -139,7 +143,7 @@ func (client *OsClusterClient) CatNodes() ([]responses.CatNodesResponse, error) 
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response []responses.CatNodesResponse
 	if err == nil {
-		defer catNodesRes.Body.Close()
+		defer helpers.SafeClose(catNodesRes.Body)
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
 	}
 	return response, err
@@ -150,7 +154,7 @@ func (client *OsClusterClient) NodesStats() (responses.NodesStatsResponse, error
 	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.NodesStatsResponse
 	if err == nil {
-		defer catNodesRes.Body.Close()
+		defer helpers.SafeClose(catNodesRes.Body)
 		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
 	}
 	return response, err
@@ -163,7 +167,7 @@ func (client *OsClusterClient) CatIndices() ([]responses.CatIndicesResponse, err
 	if err != nil {
 		return response, err
 	}
-	defer indicesRes.Body.Close()
+	defer helpers.SafeClose(indicesRes.Body)
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }
@@ -175,7 +179,7 @@ func (client *OsClusterClient) CatShards(headers []string) ([]responses.CatShard
 	if err != nil {
 		return response, err
 	}
-	defer indicesRes.Body.Close()
+	defer helpers.SafeClose(indicesRes.Body)
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }
@@ -191,7 +195,7 @@ func (client *OsClusterClient) CatNamedIndicesShards(headers []string, indices [
 	if err != nil {
 		return response, err
 	}
-	defer indicesRes.Body.Close()
+	defer helpers.SafeClose(indicesRes.Body)
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }
@@ -203,21 +207,21 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 	if err != nil {
 		return response, err
 	}
-	defer settingsRes.Body.Close()
+	defer helpers.SafeClose(settingsRes.Body)
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
 
 func (client *OsClusterClient) GetFlatClusterSettings() (responses.FlatClusterSettingsResponse, error) {
 	req := opensearchapi.ClusterGetSettingsRequest{
-		FlatSettings: pointer.Bool(true),
+		FlatSettings: ptr.To(true),
 	}
 	settingsRes, err := req.Do(context.Background(), client.client)
 	var response responses.FlatClusterSettingsResponse
 	if err != nil {
 		return response, err
 	}
-	defer settingsRes.Body.Close()
+	defer helpers.SafeClose(settingsRes.Body)
 
 	if settingsRes.IsError() {
 		return response, ErrClusterHealthGetFailed(settingsRes.String())
@@ -235,7 +239,7 @@ func (client *OsClusterClient) PutClusterSettings(settings responses.ClusterSett
 	if err != nil {
 		return response, err
 	}
-	defer settingsRes.Body.Close()
+	defer helpers.SafeClose(settingsRes.Body)
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
@@ -248,7 +252,7 @@ func (client *OsClusterClient) ReRouteShard(rerouteJson string) (responses.Clust
 	if err != nil {
 		return response, err
 	}
-	defer settingsRes.Body.Close()
+	defer helpers.SafeClose(settingsRes.Body)
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
@@ -263,7 +267,7 @@ func (client *OsClusterClient) GetClusterHealth() (responses.ClusterHealthRespon
 	if err != nil {
 		return health, err
 	}
-	defer resp.Body.Close()
+	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
 		return health, ErrClusterHealthGetFailed(resp.String())
@@ -284,7 +288,7 @@ func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	defer indicesRes.Body.Close()
+	defer helpers.SafeClose(indicesRes.Body)
 	if indicesRes.StatusCode == 404 {
 		return false, nil
 	} else if indicesRes.IsError() {
@@ -292,6 +296,12 @@ func (client *OsClusterClient) IndexExists(indexName string) (bool, error) {
 	}
 
 	return true, nil
+}
+
+// GetIndices retrieves indices matching the given pattern from OpenSearch
+func (client *OsClusterClient) GetIndices(ctx context.Context, pattern string) (*opensearchapi.Response, error) {
+	path := generateGetIndicesPath(pattern)
+	return doHTTPGet(ctx, client.client, path)
 }
 
 // GetSecurityResource performs an HTTP GET request to OS to fetch the security resource specified by name
@@ -336,6 +346,12 @@ func (client *OsClusterClient) DeleteISMConfig(ctx context.Context, name string)
 	return doHTTPDelete(ctx, client.client, path)
 }
 
+// AddPolicyToIndex performs an HTTP POST request to OS to add an ISM policy to an index
+func (client *OsClusterClient) AddPolicyToIndex(ctx context.Context, indexName string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathAddISMPolicyToIndex(ismResource, indexName)
+	return doHTTPPost(ctx, client.client, path, body)
+}
+
 // performs an HTTP GET request to OS to get the snapshot repository specified by name
 func (client *OsClusterClient) GetSnapshotRepository(ctx context.Context, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPathSnapshotRepository(name)
@@ -358,6 +374,46 @@ func (client *OsClusterClient) UpdateSnapshotRepository(ctx context.Context, nam
 func (client *OsClusterClient) DeleteSnapshotRepository(ctx context.Context, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPathSnapshotRepository(name)
 	return doHTTPDelete(ctx, client.client, path)
+}
+
+// GetSnapshotPolicyConfig performs an HTTP GET request to OS to create the Snapshot policy resource specified by name
+func (client *OsClusterClient) GetSnapshotPolicyConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotPolicies(snapshotpolicyResource, name)
+	return doHTTPGet(ctx, client.client, path)
+}
+
+// CreateSnapshotPolicyConfig performs an HTTP POST request to OS to create the Snapshot policy resource specified by name
+func (client *OsClusterClient) CreateSnapshotPolicyConfig(ctx context.Context, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotPolicies(snapshotpolicyResource, name)
+	return doHTTPPost(ctx, client.client, path, body)
+}
+
+// DeleteSnapshotPolicyConfig performs an HTTP DELETE request to OS to delete the Snapshot policy resource specified by name
+func (client *OsClusterClient) DeleteSnapshotPolicyConfig(ctx context.Context, name string) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotPolicies(snapshotpolicyResource, name)
+	return doHTTPDelete(ctx, client.client, path)
+}
+
+// UpdateSnapshotPolicyConfig performs an HTTP PUT request to OS to update the Snapshot policy resource specified by name
+func (client *OsClusterClient) UpdateSnapshotPolicyConfig(ctx context.Context, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPathSnapshotUpdatePolicies(snapshotpolicyResource, name, seqnumber, primterm)
+	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// generateGetIndicesPath generates a URI PATH for a specific resource endpoint and name
+// For example: pattern = example-*
+// URI PATH = '_cat/indices/example-*?format=json'
+func generateGetIndicesPath(pattern string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_cat") + 1 + len("indices") + 1 + len(pattern) + len("?format=json"))
+	path.WriteString("/")
+	path.WriteString("_cat")
+	path.WriteString("/")
+	path.WriteString("indices")
+	path.WriteString("/")
+	path.WriteString(pattern)
+	path.WriteString("?format=json")
+	return path
 }
 
 // generateAPIPathISM generates a URI PATH for a specific resource endpoint and name
@@ -398,6 +454,22 @@ func generateAPIPathUpdateISM(resource, name string, seqno, primaryterm int) str
 	return path
 }
 
+// generateAPIPathAddISMPolicyToIndex generates a URI PATH for adding ISM policy to an index
+// URI PATH = '_plugins/_ism/add/<indexName>'
+func generateAPIPathAddISMPolicyToIndex(resource, indexName string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("add") + 1 + len(indexName))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("add")
+	path.WriteString("/")
+	path.WriteString(indexName)
+	return path
+}
+
 // generateAPIPath generates a URI PATH for a specific resource endpoint and name
 // For example: resource = internalusers, name = example
 // URI PATH = '_plugins/_security/api/internalusers/example'
@@ -425,5 +497,43 @@ func generateAPIPathSnapshotRepository(name string) strings.Builder {
 	path.WriteString("_snapshot")
 	path.WriteString("/")
 	path.WriteString(name)
+	return path
+}
+
+// generateAPIPathSnapshotPolicies generates a URI PATH for a specific resource endpoint and name
+// For example: resource = _sm, name = example
+// URI PATH = '_plugins/_sm/policies/example'
+func generateAPIPathSnapshotPolicies(resource, name string) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("policies")
+	path.WriteString("/")
+	path.WriteString(name)
+	return path
+}
+
+// generateAPIPathSnapshotPolicies generates a URI PATH for a specific resource endpoint and name for updating the resource
+// For example: resource = _sm, name = example, seqno = 1, primaryterm = 0
+// URI PATH = '_plugins/_sm/policies/example'
+func generateAPIPathSnapshotUpdatePolicies(resource, name string, seqno, primaryterm int) strings.Builder {
+	var path strings.Builder
+	path.Grow(1 + len("_plugins") + 1 + len(resource) + 1 + len("policies") + 1 + len(name) + len("?if_seq_no=") + len(strconv.Itoa(seqno)) + len("&if_primary_term=") + len(strconv.Itoa(primaryterm)))
+	path.WriteString("/")
+	path.WriteString("_plugins")
+	path.WriteString("/")
+	path.WriteString(resource)
+	path.WriteString("/")
+	path.WriteString("policies")
+	path.WriteString("/")
+	path.WriteString(name)
+	path.WriteString("?if_seq_no=")
+	path.WriteString(strconv.Itoa(seqno))
+	path.WriteString("&if_primary_term=")
+	path.WriteString(strconv.Itoa(primaryterm))
 	return path
 }

@@ -2,8 +2,7 @@ package builders
 
 import (
 	"fmt"
-
-	"k8s.io/utils/pointer"
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
@@ -14,7 +13,7 @@ import (
 
 var _ = Describe("Builders", func() {
 	When("building the dashboards deployment with annotations supplied", func() {
-		It("should populate the dashboard pod spec with annotations provided", func() {
+		It("should populate the dashboard pod and deployment spec with annotations provided", func() {
 			clusterName := "dashboards-add-annotations"
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -34,8 +33,13 @@ var _ = Describe("Builders", func() {
 				"testAnnotationKey":  "testValue",
 				"testAnnotationKey2": "testValue2",
 			}))
+			Expect(result.ObjectMeta.Annotations).To(Equal(map[string]string{
+				"testAnnotationKey":  "testValue",
+				"testAnnotationKey2": "testValue2",
+			}))
 		})
 	})
+
 	When("building the dashboards deployment with labels supplied", func() {
 		It("should populate the dashboard pod spec with labels provided", func() {
 			clusterName := "dashboards-add-labels"
@@ -82,7 +86,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			result := NewDashboardsSvcForCr(&spec)
+			result := NewDashboardsSvcForCr(&spec, spec.Spec.Dashboards.Service.Labels)
 			Expect(result.Spec.Type).To(Equal(corev1.ServiceTypeLoadBalancer))
 			Expect(result.Spec.LoadBalancerSourceRanges).To(Equal(sourceRanges))
 			Expect(result.Annotations).To(Equal(map[string]string{
@@ -131,11 +135,11 @@ var _ = Describe("Builders", func() {
 			podSecurityContext := &corev1.PodSecurityContext{
 				RunAsUser:    &user,
 				RunAsGroup:   &user,
-				RunAsNonRoot: pointer.Bool(true),
+				RunAsNonRoot: ptr.To(true),
 			}
 			securityContext := &corev1.SecurityContext{
-				Privileged:               pointer.Bool(false),
-				AllowPrivilegeEscalation: pointer.Bool(false),
+				Privileged:               ptr.To(false),
+				AllowPrivilegeEscalation: ptr.To(false),
 			}
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
@@ -171,6 +175,67 @@ var _ = Describe("Builders", func() {
 			}
 			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccountName))
+		})
+	})
+
+	When("building the dashboards service with custom service labels supplied", func() {
+		It("should populate the service metadata.labels with the supplied service labels only", func() {
+			clusterName := "dashboards-service-labels"
+			serviceLabels := map[string]string{
+				"monitoring": "enabled",
+				"team":       "search",
+			}
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Service: opsterv1.DashboardsServiceSpec{
+							Type:   "ClusterIP",
+							Labels: serviceLabels,
+						},
+					},
+				},
+			}
+
+			result := NewDashboardsSvcForCr(&spec, serviceLabels)
+
+			expectedMetadataLabels := map[string]string{
+				"opensearch.cluster.dashboards": clusterName,
+				"monitoring":                    "enabled",
+				"team":                          "search",
+			}
+			expectedSelectorLabels := map[string]string{
+				"opensearch.cluster.dashboards": clusterName,
+			}
+
+			Expect(result.ObjectMeta.Labels).To(Equal(expectedMetadataLabels))
+			Expect(result.Spec.Selector).To(Equal(expectedSelectorLabels))
+		})
+	})
+
+	When("building the dashboards service without service labels", func() {
+		It("should default to only the dashboard selector label", func() {
+			clusterName := "dashboards-no-service-labels"
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable: true,
+						Service: opsterv1.DashboardsServiceSpec{
+							Type: "ClusterIP",
+							// Labels is nil
+						},
+					},
+				},
+			}
+
+			result := NewDashboardsSvcForCr(&spec, nil)
+
+			Expect(result.ObjectMeta.Labels).To(HaveKeyWithValue("opensearch.cluster.dashboards", clusterName))
+			Expect(result.Spec.Selector).To(HaveKeyWithValue("opensearch.cluster.dashboards", clusterName))
 		})
 	})
 })

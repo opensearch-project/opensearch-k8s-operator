@@ -13,9 +13,9 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -50,7 +50,7 @@ func NewConfigurationReconciler(
 
 func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
-		(r.reconcilerContext.OpenSearchConfig == nil || len(r.reconcilerContext.OpenSearchConfig) == 0) {
+		len(r.reconcilerContext.OpenSearchConfig) == 0 {
 		return ctrl.Result{}, nil
 	}
 	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
@@ -82,7 +82,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	data := sb.String()
 	result := reconciler.CombinedResult{}
 
-	if r.reconcilerContext.OpenSearchConfig != nil && len(r.reconcilerContext.OpenSearchConfig) != 0 {
+	if len(r.reconcilerContext.OpenSearchConfig) != 0 {
 		cm := r.buildConfigMap(data)
 		if err := ctrl.SetControllerReference(r.instance, cm, r.client.Scheme()); err != nil {
 			return ctrl.Result{}, err
@@ -124,8 +124,8 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		return result.Result, result.Err
 	}
 
-	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, addVolumes...)
-	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, addVolumeMounts...)
+	r.reconcilerContext.Volumes = append(addVolumes, r.reconcilerContext.Volumes...)
+	r.reconcilerContext.VolumeMounts = append(addVolumeMounts, r.reconcilerContext.VolumeMounts...)
 
 	for _, nodePool := range r.instance.Spec.NodePools {
 		result.Combine(r.createHashForNodePool(nodePool, data, addVolumeData))

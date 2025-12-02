@@ -6,9 +6,10 @@ import (
 	"path"
 	"strings"
 
+	"k8s.io/utils/ptr"
+
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/hashicorp/go-version"
-	"k8s.io/utils/pointer"
 )
 
 func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
@@ -32,7 +33,7 @@ func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 		defaultVersion = *cr.Spec.InitHelper.Version
 	}
 
-	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), defaultVersion))
 	return
 }
@@ -57,7 +58,7 @@ func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (
 		defaultRepo = *cr.Spec.General.DefaultRepo
 	}
 
-	result.Image = pointer.String(fmt.Sprintf("%s:%s",
+	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), version))
 	return
 }
@@ -79,8 +80,13 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 		defaultRepo = *cr.Spec.General.DefaultRepo
 	}
 
-	result.Image = pointer.String(fmt.Sprintf("%s:%s",
-		path.Join(defaultRepo, defaultImage), cr.Spec.Dashboards.Version))
+	version := cr.Spec.Dashboards.Version
+	if version == "" {
+		version = cr.Spec.General.Version
+	}
+
+	result.Image = ptr.To(fmt.Sprintf("%s:%s",
+		path.Join(defaultRepo, defaultImage), version))
 	return
 }
 
@@ -107,7 +113,7 @@ func ResolveOperatorSidecarImage(nodePool *opsterv1.NodePool) (result opsterv1.I
 	}
 
 	// otherwise fall back to default
-	result.Image = pointer.String(fmt.Sprintf("%s/%s:%s", defaultRepo, defaultImage, defaultVersion))
+	result.Image = ptr.To(fmt.Sprintf("%s/%s:%s", defaultRepo, defaultImage, defaultVersion))
 
 	return
 }
@@ -164,7 +170,7 @@ func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bo
 	if len(pluginsList) > 0 {
 		mainCommand = append(mainCommand, "/bin/bash", "-c")
 		for _, plugin := range pluginsList {
-			com = com + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
+			com = com + " '" + strings.ReplaceAll(plugin, "'", "\\'") + "'"
 		}
 
 		com = com + " && " + entrypoint
@@ -182,7 +188,7 @@ func BuildMainCommandOSD(installerBinary string, pluginsList []string, entrypoin
 
 	var com string
 	for _, plugin := range pluginsList {
-		com = com + installerBinary + " install" + " '" + strings.Replace(plugin, "'", "\\'", -1) + "'"
+		com = com + installerBinary + " install" + " '" + strings.ReplaceAll(plugin, "'", "\\'") + "'"
 		com = com + " && "
 	}
 	com = com + entrypoint

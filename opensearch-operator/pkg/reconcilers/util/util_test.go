@@ -89,7 +89,7 @@ var _ = Describe("Additional volumes", func() {
 		})
 	})
 
-	When("CSI volume is added", func() {
+	When("CSI readOnly volume is added", func() {
 		It("Should have CSIVolumeSource fields", func() {
 			readOnly := true
 			volumeConfigs[0].CSI = &v1.CSIVolumeSource{
@@ -106,6 +106,28 @@ var _ = Describe("Additional volumes", func() {
 			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
 			Expect(volume[0].CSI.Driver).To(Equal("testDriver"))
 			Expect(*volume[0].CSI.ReadOnly).Should(BeTrue())
+			Expect(volume[0].CSI.VolumeAttributes["secretProviderClass"]).To(Equal("testSecretProviderClass"))
+			Expect(volume[0].CSI.NodePublishSecretRef.Name).To(Equal("testSecret"))
+		})
+	})
+
+	When("CSI read-write volume is added", func() {
+		It("Should have CSIVolumeSource fields", func() {
+			readOnly := false
+			volumeConfigs[0].CSI = &v1.CSIVolumeSource{
+				Driver:   "testDriver",
+				ReadOnly: &readOnly,
+				VolumeAttributes: map[string]string{
+					"secretProviderClass": "testSecretProviderClass",
+				},
+				NodePublishSecretRef: &v1.LocalObjectReference{
+					Name: "testSecret",
+				},
+			}
+
+			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].CSI.Driver).To(Equal("testDriver"))
+			Expect(*volume[0].CSI.ReadOnly).Should(BeFalse())
 			Expect(volume[0].CSI.VolumeAttributes["secretProviderClass"]).To(Equal("testSecretProviderClass"))
 			Expect(volume[0].CSI.NodePublishSecretRef.Name).To(Equal("testSecret"))
 		})
@@ -129,6 +151,20 @@ var _ = Describe("Additional volumes", func() {
 			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
+
+	When("PersistentVolumeClaim volume is added", func() {
+		It("Should have PersistentVolumeClaimVolumeSource fields", func() {
+			readOnly := true
+			volumeConfigs[0].PersistentVolumeClaim = &v1.PersistentVolumeClaimVolumeSource{
+				ClaimName: "testClaim",
+				ReadOnly:  readOnly,
+			}
+
+			volume, _, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].PersistentVolumeClaim.ClaimName).To(Equal("testClaim"))
+			Expect(volume[0].PersistentVolumeClaim.ReadOnly).Should(BeTrue())
 		})
 	})
 
@@ -176,6 +212,72 @@ var _ = Describe("Additional volumes", func() {
 			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
 			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
+
+	When("NFS volume is added", func() {
+		It("Should have NFSVolumeSource fields and mount readOnly", func() {
+			volumeConfigs[0].NFS = &v1.NFSVolumeSource{
+				Server:   "10.0.0.1",
+				Path:     "/export/path",
+				ReadOnly: true,
+			}
+
+			volume, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].NFS.Server).To(Equal("10.0.0.1"))
+			Expect(volume[0].NFS.Path).To(Equal("/export/path"))
+			Expect(volume[0].NFS.ReadOnly).To(BeTrue())
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].ReadOnly).To(BeTrue())
+			Expect(volumeMount[0].SubPath).To(BeEmpty())
+
+		})
+	})
+})
+
+var _ = Describe("OpensearchClusterURL", func() {
+	When("DisableSSL is false", func() {
+		It("should return https URL", func() {
+			cluster := &opsterv1.OpenSearchCluster{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: "test-service",
+						HttpPort:    9200,
+						DisableSSL:  false,
+					},
+				},
+			}
+			cluster.Name = "test-cluster"
+			cluster.Namespace = "test-namespace"
+
+			url := OpensearchClusterURL(cluster)
+			Expect(url).To(ContainSubstring("https://"))
+			Expect(url).To(ContainSubstring("test-service"))
+			Expect(url).To(ContainSubstring("test-namespace"))
+			Expect(url).To(ContainSubstring(":9200"))
+		})
+	})
+
+	When("DisableSSL is true", func() {
+		It("should return http URL", func() {
+			cluster := &opsterv1.OpenSearchCluster{
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: "test-service",
+						HttpPort:    9200,
+						DisableSSL:  true,
+					},
+				},
+			}
+			cluster.Name = "test-cluster"
+			cluster.Namespace = "test-namespace"
+
+			url := OpensearchClusterURL(cluster)
+			Expect(url).To(ContainSubstring("http://"))
+			Expect(url).NotTo(ContainSubstring("https://"))
+			Expect(url).To(ContainSubstring("test-service"))
+			Expect(url).To(ContainSubstring("test-namespace"))
+			Expect(url).To(ContainSubstring(":9200"))
 		})
 	})
 })

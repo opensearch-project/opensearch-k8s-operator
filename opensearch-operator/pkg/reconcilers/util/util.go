@@ -9,6 +9,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"k8s.io/utils/ptr"
+
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
@@ -22,7 +25,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -128,10 +130,22 @@ func CreateAdditionalVolumes(
 			})
 		}
 		if volumeConfig.CSI != nil {
+			if volumeConfig.CSI.ReadOnly != nil {
+				readOnly = *volumeConfig.CSI.ReadOnly
+			}
 			retVolumes = append(retVolumes, corev1.Volume{
 				Name: volumeConfig.Name,
 				VolumeSource: corev1.VolumeSource{
 					CSI: volumeConfig.CSI,
+				},
+			})
+		}
+		if volumeConfig.PersistentVolumeClaim != nil {
+			readOnly = volumeConfig.PersistentVolumeClaim.ReadOnly
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: volumeConfig.PersistentVolumeClaim,
 				},
 			})
 		}
@@ -143,13 +157,21 @@ func CreateAdditionalVolumes(
 				},
 			})
 		}
+		if volumeConfig.NFS != nil {
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					NFS: volumeConfig.NFS,
+				},
+			})
+		}
 		if volumeConfig.RestartPods {
 			namesIndex[volumeConfig.Name] = i
 			names = append(names, volumeConfig.Name)
 		}
 
 		subPath := ""
-		// SubPaths are only supported for ConfigMaps, Secrets and CSI volumes
+		// SubPaths are only supported for ConfigMaps, Secrets, CSI and Projected volumes
 		if volumeConfig.ConfigMap != nil || volumeConfig.Secret != nil || volumeConfig.CSI != nil || volumeConfig.Projected != nil {
 			subPath = strings.TrimSpace(volumeConfig.SubPath)
 		}
@@ -212,13 +234,7 @@ func CreateAdditionalVolumes(
 }
 
 func OpensearchClusterURL(cluster *opsterv1.OpenSearchCluster) string {
-	return fmt.Sprintf(
-		"https://%s.%s.svc.%s:%v",
-		cluster.Spec.General.ServiceName,
-		cluster.Namespace,
-		helpers.ClusterDnsBase(),
-		cluster.Spec.General.HttpPort,
-	)
+	return helpers.ClusterURL(cluster)
 }
 
 func CreateClientForCluster(
@@ -286,7 +302,7 @@ func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int
 		if helpers.HasDataRole(&nodePool) {
 			sts, err := k8sClient.GetStatefulSet(builders.StsName(cr, &nodePool), cr.Namespace)
 			if err == nil {
-				count = count + pointer.Int32Deref(sts.Spec.Replicas, 1)
+				count = count + ptr.Deref(sts.Spec.Replicas, 1)
 			}
 		}
 	}
@@ -294,20 +310,21 @@ func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int
 }
 
 // GetClusterHealth returns the health of OpenSearch cluster
-func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) opsterv1.OpenSearchHealth {
+func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) (opsterv1.OpenSearchHealth, responses.ClusterHealthResponse) {
+	healthResponse := responses.ClusterHealthResponse{}
 	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, nil)
 	if err != nil {
 		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))
-		return opsterv1.OpenSearchUnknownHealth
+		return opsterv1.OpenSearchUnknownHealth, healthResponse
 	}
 
-	healthResponse, err := osClient.GetClusterHealth()
+	healthResponse, err = osClient.GetClusterHealth()
 	if err != nil {
 		lg.Error(err, "Failed to get OpenSearch health status")
-		return opsterv1.OpenSearchUnknownHealth
+		return opsterv1.OpenSearchUnknownHealth, healthResponse
 	}
 
-	return opsterv1.OpenSearchHealth(healthResponse.Status)
+	return opsterv1.OpenSearchHealth(healthResponse.Status), healthResponse
 }
 
 // GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
@@ -329,6 +346,12 @@ func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, c
 		}
 
 		if sts != nil {
+			readyReplicas, err := helpers.ReadyReplicasForNodePool(k8sClient, cluster, &nodePool)
+			if err != nil {
+				lg.V(1).Info(fmt.Sprintf("Failed to count ready pods for nodepool %s: %v", nodePool.Component, err))
+				return previousAvailableNodes
+			}
+			sts.Status.ReadyReplicas = readyReplicas
 			availableNodes += sts.Status.ReadyReplicas
 		}
 	}

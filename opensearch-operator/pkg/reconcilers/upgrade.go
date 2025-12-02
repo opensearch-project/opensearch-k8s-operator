@@ -11,9 +11,9 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
@@ -67,6 +67,13 @@ func NewUpgradeReconciler(
 func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	// If versions are in sync do nothing
 	if r.instance.Spec.General.Version == r.instance.Status.Version {
+		// If phase is UPGRADING but versions are in sync, set it back to RUNNING
+		if r.instance.Status.Phase == opsterv1.PhaseUpgrading {
+			err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+				instance.Status.Phase = opsterv1.PhaseRunning
+			})
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{}, nil
 	}
 
@@ -85,6 +92,16 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		r.logger.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Failed to validation version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
 		return ctrl.Result{}, err
+	}
+
+	// Set phase to UPGRADING if not already set
+	if r.instance.Status.Phase != opsterv1.PhaseUpgrading {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+			instance.Status.Phase = opsterv1.PhaseUpgrading
+		})
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 	}
 
 	var err error
@@ -120,6 +137,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		// Cleanup status after successful upgrade
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			instance.Status.Version = instance.Spec.General.Version
+			instance.Status.Phase = opsterv1.PhaseRunning
 			for _, pool := range instance.Spec.NodePools {
 				componentStatus := opsterv1.ComponentStatus{
 					Component:   componentNameUpgrader,
@@ -156,7 +174,7 @@ func (r *UpgradeReconciler) validateUpgrade() error {
 
 	// Don't allow version downgrades as they might cause unexpected issues
 	if new.LessThan(existing) {
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Error", "Upgrade", "Invalid version: specified version is more than 1 major version greater than existing")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Error", "Upgrade", "Invalid version: specified version is a downgrade")
 		return ErrVersionDowngrade
 	}
 
@@ -290,6 +308,12 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 	if err != nil {
 		return err
 	}
+
+	readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &pool)
+	if err != nil {
+		return err
+	}
+	sts.Status.ReadyReplicas = readyReplicas
 
 	dataCount := util.DataNodesCount(r.client, r.instance)
 	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {

@@ -9,9 +9,9 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -49,7 +49,7 @@ func NewSnapshotRepositoryReconciler(
 }
 
 func (r *SnapshotRepositoryReconciler) Reconcile() (ctrl.Result, error) {
-	if r.instance.Spec.General.SnapshotRepositories == nil || len(r.instance.Spec.General.SnapshotRepositories) == 0 {
+	if len(r.instance.Spec.General.SnapshotRepositories) == 0 {
 		// Skip reconcile if no repositories are configured
 		return ctrl.Result{}, nil
 	}

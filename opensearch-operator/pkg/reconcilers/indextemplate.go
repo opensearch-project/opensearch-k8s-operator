@@ -3,18 +3,18 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -60,7 +60,7 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 	var templateName string
 
 	defer func() {
-		if !pointer.BoolDeref(r.updateStatus, true) {
+		if !ptr.Deref(r.updateStatus, true) {
 			return
 		}
 		// When the reconciler is done, figure out what the state of the resource
@@ -119,7 +119,7 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 			return
 		}
 	} else {
-		if pointer.BoolDeref(r.updateStatus, true) {
+		if ptr.Deref(r.updateStatus, true) {
 			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 				instance := object.(*opsterv1.OpensearchIndexTemplate)
 				instance.Status.ManagedCluster = &r.cluster.UID
@@ -166,7 +166,7 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 			r.recorder.Event(r.instance, "Warning", opensearchAPIError, reason)
 			return
 		}
-		if pointer.BoolDeref(r.updateStatus, true) {
+		if ptr.Deref(r.updateStatus, true) {
 			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 				instance := object.(*opsterv1.OpensearchIndexTemplate)
 				instance.Status.ExistingIndexTemplate = &exists

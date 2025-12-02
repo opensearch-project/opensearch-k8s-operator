@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	policyv1 "k8s.io/api/policy/v1"
@@ -12,8 +13,7 @@ import (
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/cisco-open/k8s-objectmatcher/patch"
-	"github.com/cisco-open/operator-tools/pkg/reconciler"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
@@ -96,6 +96,15 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
 
+	// Create bootstrap PVC for persistent storage
+	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
+	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPVC, r.client.Scheme()))
+	if r.instance.Status.Initialized {
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
+	} else {
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
+	}
+
 	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
 	if r.instance.Status.Initialized {
@@ -168,18 +177,18 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				return result, err
 			}
 			// Wait for pods to appear
-			err = helpers.WaitForSTSReplicas(r.client, sts, nodePool.Replicas)
+			err = helpers.WaitForSTSReplicas(r.ctx, r.client, sts, nodePool.Replicas)
 			if err != nil {
 				return result, err
 			}
 			// Delete sts and recreate with normal PodManagementPolicy
-			if err := helpers.WaitForSTSDelete(r.client, sts); err != nil {
+			if err := helpers.WaitForSTSDelete(r.ctx, r.client, sts); err != nil {
 				return result, err
 			}
 			// Reset manifest, STS will be created by code below
 			sts.Spec.PodManagementPolicy = appsv1.OrderedReadyPodManagement
-			sts.ObjectMeta.ResourceVersion = ""
-			sts.ObjectMeta.UID = ""
+			sts.ResourceVersion = ""
+			sts.UID = ""
 		} else {
 			return &ctrl.Result{}, err
 		}
@@ -201,7 +210,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
 	if _, exists := existing.Spec.Selector.MatchLabels["opensearch.role"]; exists {
 		r.logger.Info(fmt.Sprintf("Deleting statefulset %s while orphaning pods to fix labels", existing.Name))
-		if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+		if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 			r.logger.Error(err, "Failed to delete Statefulset for nodePool "+nodePool.Component)
 			return result, err
 		}
@@ -213,16 +222,21 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Detect cluster failure and initiate parallel recovery
 	if helpers.ParallelRecoveryMode() &&
-		(nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil) {
+		(nodePool.Persistence == nil || nodePool.Persistence.PVC != nil) {
 		// This logic only works if the STS uses PVCs
 		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
 		if existing.Status.CurrentRevision == "" {
-			new, err := helpers.WaitForSTSStatus(r.client, &existing)
+			new, err := helpers.WaitForSTSStatus(r.ctx, r.client, &existing)
 			if err != nil {
 				return &ctrl.Result{Requeue: true}, err
 			}
 			existing = *new
 		}
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+		if err != nil {
+			return result, err
+		}
+		existing.Status.ReadyReplicas = readyReplicas
 		// Check number of PVCs for nodepool
 		pvcCount, err := helpers.CountPVCsForNodePool(r.client, r.instance, &nodePool)
 		if err != nil {
@@ -236,28 +250,28 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 					// Switch to Parallel to jumpstart the cluster
 					// First delete existing STS
-					if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+					if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 						r.logger.Error(err, "Failed to delete STS")
 						return result, err
 					}
 					// Recreate with PodManagementPolicy=Parallel
 					sts.Spec.PodManagementPolicy = appsv1.ParallelPodManagement
-					sts.ObjectMeta.ResourceVersion = ""
-					sts.ObjectMeta.UID = ""
+					sts.ResourceVersion = ""
+					sts.UID = ""
 					result, err = r.client.ReconcileResource(sts, reconciler.StatePresent)
 					if err != nil {
 						r.logger.Error(err, "Failed to create STS")
 						return result, err
 					}
 					// Wait for pods to appear
-					err := helpers.WaitForSTSReplicas(r.client, &existing, nodePool.Replicas)
+					err := helpers.WaitForSTSReplicas(r.ctx, r.client, &existing, nodePool.Replicas)
 					// Abort normal logic and requeue
 					return &ctrl.Result{Requeue: true}, err
 				}
 			} else if existing.Spec.PodManagementPolicy == appsv1.ParallelPodManagement {
 				// We are in Parallel mode but appear to not have a failure situation any longer. Switch back to normal mode
 				r.logger.Info(fmt.Sprintf("Ending recovery mode for nodepool %s", nodePool.Component))
-				if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+				if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 					r.logger.Error(err, "Failed to delete STS")
 					return result, err
 				}
@@ -276,7 +290,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 
 	// Default is PVC, or explicit check for PersistenceSource as PVC
 	// Handle volume resizing, but only if we are using PVCs
-	if nodePool.Persistence == nil || nodePool.Persistence.PersistenceSource.PVC != nil {
+	if nodePool.Persistence == nil || nodePool.Persistence.PVC != nil {
 		err := r.maybeUpdateVolumes(&existing, nodePool)
 		if err != nil {
 			return result, err
@@ -355,6 +369,11 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			if err != nil {
 				return &ctrl.Result{Requeue: true}, err
 			}
+			readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+			if err != nil {
+				return &ctrl.Result{Requeue: true}, err
+			}
+			sts.Status.ReadyReplicas = readyReplicas
 		}
 
 		if helpers.HasDataRole(&nodePool) {
@@ -375,7 +394,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 		lg.Info(fmt.Sprintf("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace))
 		lg.Info("Deleting all sts, dashboards and securityconfig job to re-create cluster")
 		for _, nodePool := range r.instance.Spec.NodePools {
-			err := helpers.DeleteSTSForNodePool(r.client, nodePool, clusterName, clusterNamespace)
+			err := helpers.DeleteSTSForNodePool(r.ctx, r.client, nodePool, clusterName, clusterNamespace)
 			if err != nil {
 				lg.Error(err, fmt.Sprintf("Failed to delete sts for nodePool %s", nodePool.Component))
 				return &ctrl.Result{Requeue: true}, err
@@ -384,7 +403,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 		// Also Delete Dashboards deployment so .kibana index can be recreated when cluster is started again
 		if r.instance.Spec.Dashboards.Enable {
-			err := helpers.DeleteDashboardsDeployment(r.client, clusterName, clusterNamespace)
+			err := helpers.DeleteDashboardsDeployment(r.ctx, r.client, clusterName, clusterNamespace)
 			if err != nil {
 				lg.Error(err, "Failed to delete OSD pod")
 				return &ctrl.Result{Requeue: true}, err
@@ -506,8 +525,10 @@ func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) er
 
 // UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
 func (r *ClusterReconciler) UpdateClusterStatus() error {
-	health := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
+	health, healthResponse := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
 	availableNodes := util.GetAvailableOpenSearchNodes(r.client, r.ctx, r.instance, r.logger)
+
+	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
 
 	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 		instance.Status.Health = health

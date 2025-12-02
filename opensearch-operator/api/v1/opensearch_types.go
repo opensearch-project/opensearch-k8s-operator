@@ -23,8 +23,9 @@ import (
 )
 
 const (
-	PhasePending = "PENDING"
-	PhaseRunning = "RUNNING"
+	PhasePending   = "PENDING"
+	PhaseRunning   = "RUNNING"
+	PhaseUpgrading = "UPGRADING"
 )
 
 // OpenSearchHealth is the health of the cluster as returned by the health API.
@@ -46,12 +47,15 @@ type GeneralConfig struct {
 	//+kubebuilder:default=9200
 	HttpPort int32 `json:"httpPort,omitempty"`
 	//+kubebuilder:validation:Enum=Opensearch;Op;OP;os;opensearch
-	Vendor           string  `json:"vendor,omitempty"`
-	Version          string  `json:"version,omitempty"`
-	ServiceAccount   string  `json:"serviceAccount,omitempty"`
-	ServiceName      string  `json:"serviceName"`
-	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
+	Vendor         string `json:"vendor,omitempty"`
+	Version        string `json:"version,omitempty"`
+	ServiceAccount string `json:"serviceAccount,omitempty"`
+	ServiceName    string `json:"serviceName"`
+	//+kubebuilder:default=true
+	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
+	// Disable SSL for the cluster
+	DisableSSL bool `json:"disableSSL,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
@@ -70,6 +74,9 @@ type GeneralConfig struct {
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the cluster pods' container
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
+	// instead of the default internal Kubernetes service DNS name.
+	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
 }
 
 type PdbConfig struct {
@@ -85,9 +92,9 @@ type InitHelperConfig struct {
 }
 
 type ProbesConfig struct {
-	Liveness  *ProbeConfig          `json:"liveness,omitempty"`
-	Readiness *ReadinessProbeConfig `json:"readiness,omitempty"`
-	Startup   *ProbeConfig          `json:"startup,omitempty"`
+	Liveness  *ProbeConfig        `json:"liveness,omitempty"`
+	Readiness *CommandProbeConfig `json:"readiness,omitempty"`
+	Startup   *CommandProbeConfig `json:"startup,omitempty"`
 }
 
 type ProbeConfig struct {
@@ -98,11 +105,13 @@ type ProbeConfig struct {
 	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
 }
 
-type ReadinessProbeConfig struct {
-	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
-	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
-	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
-	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+type CommandProbeConfig struct {
+	InitialDelaySeconds int32    `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32    `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32    `json:"timeoutSeconds,omitempty"`
+	SuccessThreshold    int32    `json:"successThreshold,omitempty"`
+	FailureThreshold    int32    `json:"failureThreshold,omitempty"`
+	Command             []string `json:"command,omitempty"`
 }
 
 type NodePool struct {
@@ -125,9 +134,15 @@ type NodePool struct {
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
 	OperatorSidecar           *OperatorSidecarConfig            `json:"operatorSidecar,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 }
 
-// PersistencConfig defines options for data persistence
+// PersistenceConfig defines options for data persistence
 type PersistenceConfig struct {
 	PersistenceSource `json:","`
 }
@@ -139,8 +154,10 @@ type PersistenceSource struct {
 }
 
 type PVCSource struct {
-	StorageClassName string                              `json:"storageClass,omitempty"`
+	StorageClassName *string                             `json:"storageClass,omitempty"`
 	AccessModes      []corev1.PersistentVolumeAccessMode `json:"accessModes,omitempty"`
+	Annotations      map[string]string                   `json:"annotations,omitempty"`
+	Labels           map[string]string                   `json:"labels,omitempty"`
 }
 
 // ConfMgmt defines which additional services will be deployed
@@ -172,8 +189,12 @@ type BootstrapConfig struct {
 	Jvm          string                      `json:"jvm,omitempty"`
 	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	Annotations      map[string]string `json:"annotations,omitempty"`
 	PluginsList      []string          `json:"pluginsList,omitempty"`
 	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
+	// +kubebuilder:pruning:PreserveUnknownFields
+	// +kubebuilder:validation:Schemaless
+	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 }
 
 type OperatorSidecarConfig struct {
@@ -187,30 +208,33 @@ type DashboardsServiceSpec struct {
 	// +kubebuilder:default=ClusterIP
 	Type                     corev1.ServiceType `json:"type,omitempty"`
 	LoadBalancerSourceRanges []string           `json:"loadBalancerSourceRanges,omitempty"`
+	Labels                   map[string]string  `json:"labels,omitempty"`
 }
 
 type DashboardsConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Enable     bool                        `json:"enable,omitempty"`
 	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
-	Replicas   int32                       `json:"replicas"`
-	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
-	Version    string                      `json:"version"`
+	//+kubebuilder:default=1
+	Replicas int32                `json:"replicas,omitempty"`
+	Tls      *DashboardsTlsConfig `json:"tls,omitempty"`
+	Version  string               `json:"version,omitempty"`
 	// Base Path for Opensearch Clusters running behind a reverse proxy
 	BasePath string `json:"basePath,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
-	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
-	Env                         []corev1.EnvVar             `json:"env,omitempty"`
-	AdditionalVolumes           []AdditionalVolume          `json:"additionalVolumes,omitempty"`
-	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
-	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
-	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
-	Labels                      map[string]string           `json:"labels,omitempty"`
-	Annotations                 map[string]string           `json:"annotations,omitempty"`
-	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
-	PluginsList                 []string                    `json:"pluginsList,omitempty"`
+	OpensearchCredentialsSecret corev1.LocalObjectReference       `json:"opensearchCredentialsSecret,omitempty"`
+	Env                         []corev1.EnvVar                   `json:"env,omitempty"`
+	AdditionalVolumes           []AdditionalVolume                `json:"additionalVolumes,omitempty"`
+	Tolerations                 []corev1.Toleration               `json:"tolerations,omitempty"`
+	NodeSelector                map[string]string                 `json:"nodeSelector,omitempty"`
+	Affinity                    *corev1.Affinity                  `json:"affinity,omitempty"`
+	Labels                      map[string]string                 `json:"labels,omitempty"`
+	Annotations                 map[string]string                 `json:"annotations,omitempty"`
+	Service                     DashboardsServiceSpec             `json:"service,omitempty"`
+	PluginsList                 []string                          `json:"pluginsList,omitempty"`
+	TopologySpreadConstraints   []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 	// Set security context for the dashboards pods
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the dashboards pods' container
@@ -222,7 +246,7 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
-	// foobar
+	// TLS certificate configuration
 	TlsCertificateConfig `json:",omitempty"`
 }
 
@@ -242,18 +266,28 @@ type TlsConfigTransport struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
-	PerNode              bool `json:"perNode,omitempty"`
+	PerNode bool `json:"perNode,omitempty"`
+	// Automatically rotate certificates before they expire, set to -1 to disable
+	//+kubebuilder:default=-1
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
+	//
 	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
-	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
-	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsConfigHttp struct {
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
-	Generate             bool `json:"generate,omitempty"`
+	Generate bool `json:"generate,omitempty"`
+	// Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names.
+	CustomFQDN *string `json:"customFQDN,omitempty"`
+	// Automatically rotate certificates before they expire, set to -1 to disable
+	//+kubebuilder:default=-1
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
+	//
 	TlsCertificateConfig `json:",omitempty"`
+	// DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided
+	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsCertificateConfig struct {
@@ -261,6 +295,11 @@ type TlsCertificateConfig struct {
 	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
 	// Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
 	CaSecret corev1.LocalObjectReference `json:"caSecret,omitempty"`
+	// Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
+	//+kubebuilder:default:="8760h"
+	Duration *metav1.Duration `json:"duration,omitempty"`
+	// Enable hot reloading of TLS certificates. When enabled, certificates are mounted as directories instead of using subPath, allowing Kubernetes to update certificate files when secrets are updated.
+	EnableHotReload bool `json:"enableHotReload,omitempty"`
 }
 
 // Reference to a secret
@@ -270,9 +309,9 @@ type TlsSecret struct {
 }
 
 type SecurityConfig struct {
-	// Secret that contains the differnt yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
-	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if transport certificates are provided by user and not generated
+	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
@@ -290,6 +329,7 @@ type ImageSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0) == 1",message="exactly one of secret, configMap, emptyDir, csi, projected, nfs must be set"
 type AdditionalVolume struct {
 	// Name to use for the volume. Required.
 	Name string `json:"name"`
@@ -305,8 +345,12 @@ type AdditionalVolume struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 	// CSI object to use to populate the volume
 	CSI *corev1.CSIVolumeSource `json:"csi,omitempty"`
+	// PersistentVolumeClaim object to use to populate the volume
+	PersistentVolumeClaim *corev1.PersistentVolumeClaimVolumeSource `json:"persistentVolumeClaim,omitempty"`
 	// Projected object to use to populate the volume
 	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
+	// NFS object to use to populate the volume
+	NFS *corev1.NFSVolumeSource `json:"nfs,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }

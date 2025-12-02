@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"net/http"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -17,7 +18,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -189,7 +189,7 @@ var _ = Describe("actiongroup reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingActionGroup = pointer.Bool(true)
+				instance.Status.ExistingActionGroup = ptr.To(true)
 			})
 
 			It("should do nothing", func() {
@@ -268,7 +268,7 @@ var _ = Describe("actiongroup reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingActionGroup = pointer.Bool(true)
+				instance.Status.ExistingActionGroup = ptr.To(true)
 			})
 			It("should do nothing", func() {
 				_, err := reconciler.Reconcile()
@@ -278,7 +278,7 @@ var _ = Describe("actiongroup reconciler", func() {
 
 		When("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingActionGroup = pointer.Bool(false)
+				instance.Status.ExistingActionGroup = ptr.To(false)
 			})
 
 			When("actiongroup exists in opensearch and is the same", func() {
@@ -412,7 +412,7 @@ var _ = Describe("actiongroup reconciler", func() {
 
 		When("existing status is true", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingActionGroup = pointer.Bool(true)
+				instance.Status.ExistingActionGroup = ptr.To(true)
 			})
 			It("should do nothing and exit", func() {
 				Expect(reconciler.Delete()).To(Succeed())
@@ -421,7 +421,7 @@ var _ = Describe("actiongroup reconciler", func() {
 
 		Context("existing status is false", func() {
 			BeforeEach(func() {
-				instance.Status.ExistingActionGroup = pointer.Bool(false)
+				instance.Status.ExistingActionGroup = ptr.To(false)
 			})
 
 			When("cluster does not exist", func() {
