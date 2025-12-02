@@ -58,12 +58,10 @@ jobs:
 
           ## Install helm chart
           helm install opensearch-operator ../charts/opensearch-operator \
-            --set manager.image.repository=controller \
-            --set manager.image.tag=latest \
-            --set manager.image.pullPolicy=IfNotPresent \
+            -f functionaltests/helmtests/ci-operator-values.yml \
             --set operatorSidecar.image=operator-sidecar:test \
             --namespace default --wait
-          
+
           cd functionaltests
 
           kubectl apply -f rbac.yaml
@@ -183,18 +181,15 @@ jobs:
 
           ## Install helm charts
           helm install opensearch-operator ../charts/opensearch-operator \
-            --set manager.image.repository=controller \
-            --set manager.image.tag=latest \
-            --set manager.image.pullPolicy=IfNotPresent \
+            -f functionaltests/helmtests/ci-operator-values.yml \
             --set operatorSidecar.image=operator-sidecar:test \
             --namespace default --wait
-          
-          kubectl apply -f functionaltests/rbac.yaml
 
+          kubectl apply -f functionaltests/rbac.yaml
           helm install opensearch-cluster ../charts/opensearch-cluster \
-            --set opensearchCluster.general.version=${{ matrix.version }} \
-            --set opensearchCluster.dashboards.version=${{ matrix.version }} \
-            -f functionaltests/helm-cluster-values.yaml \
+            --set cluster.general.version=${{ matrix.version }} \
+            --set cluster.dashboards.version=${{ matrix.version }} \
+            -f functionaltests/helmtests/ci-cluster-values.yml \
             --wait
 
           cd functionaltests

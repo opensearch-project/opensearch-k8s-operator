@@ -16,24 +16,19 @@ cd ../opensearch-operator
 make docker-build
 k3d image import -c $CLUSTER_NAME controller:latest
 
-## Install helm charts
+## Install helm chart
 helm install opensearch-operator ../charts/opensearch-operator \
-  --set manager.image.repository=controller \
-  --set manager.image.tag=latest \
-  --set manager.image.pullPolicy=IfNotPresent \
-  --set operatorSidecar.image=operator-sidecar:dev \
+  -f functionaltests/helmtests/ci-operator-values.yml \
+  --set operatorSidecar.image=operator-sidecar:test \
   --namespace default --wait
-          
-kubectl apply -f functionaltests/rbac.yaml
-
-helm install opensearch-cluster ../charts/opensearch-cluster \
-  -f functionaltests/helm-cluster-values.yaml \
-  --wait
 
 cd functionaltests
+
+kubectl apply -f rbac.yaml
 
 ## Run tests
 go test ./operatortests -timeout 30m
 go test ./helmtests -timeout 20m
+
 ## Delete k3d cluster
 k3d cluster delete $CLUSTER_NAME

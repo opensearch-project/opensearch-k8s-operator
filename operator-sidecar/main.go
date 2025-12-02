@@ -91,7 +91,9 @@ func main() {
 func healthserver(leader *atomic.Bool) {
 	// self health
 	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "OK")
+		if _, err := fmt.Fprintf(w, "OK"); err != nil {
+			fmt.Printf("Failed to write to response: %s", err)
+		}
 	})
 	// readiness of Opensearch cluster
 	http.HandleFunc("/cluster_readiness", func(w http.ResponseWriter, r *http.Request) {
@@ -99,7 +101,9 @@ func healthserver(leader *atomic.Bool) {
 		status, err := callClusterHealthEndpoint(isLeader)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
-			fmt.Fprintf(w, "Failed to check cluster health: %s: %s", status, err)
+			if _, err := fmt.Fprintf(w, "Failed to check cluster health: %s: %s", status, err); err != nil {
+				fmt.Printf("Failed to write to response: %s", err)
+			}
 			return
 		}
 		if isLeader {
@@ -108,11 +112,15 @@ func healthserver(leader *atomic.Bool) {
 			} else {
 				w.WriteHeader(http.StatusOK)
 			}
-			fmt.Fprintf(w, "Cluster status is %s", status)
+			if _, err := fmt.Fprintf(w, "Cluster status is %s", status); err != nil {
+				fmt.Printf("Failed to write to response: %s", err)
+			}
 		} else {
 			// if we are not the leader we are only concerned with if opensearch is reachable
 			w.WriteHeader(http.StatusOK)
-			fmt.Fprintf(w, "Cluster status is %s", status)
+			if _, err := fmt.Fprintf(w, "Cluster status is %s", status); err != nil {
+				fmt.Printf("Failed to write to response: %s", err)
+			}
 		}
 	})
 
@@ -158,7 +166,12 @@ func callClusterHealthEndpoint(checkStatus bool) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			fmt.Printf("Could not close response body: %s", err)
+		}
+	}()
+
 	// we care about the actual status only if we are the leader, otherwise reachability is enough
 	if checkStatus {
 		if resp.StatusCode == 200 {
