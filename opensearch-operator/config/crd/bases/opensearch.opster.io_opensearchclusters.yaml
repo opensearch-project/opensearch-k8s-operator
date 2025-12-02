@@ -1289,6 +1289,29 @@ spec:
                         name:
                           description: Name to use for the volume. Required.
                           type: string
+                        nfs:
+                          description: NFS object to use to populate the volume
+                          properties:
+                            path:
+                              description: |-
+                                path that is exported by the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly here will force the NFS export to be mounted with read-only permissions.
+                                Defaults to false.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: boolean
+                            server:
+                              description: |-
+                                server is the hostname or IP address of the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                          required:
+                          - path
+                          - server
+                          type: object
                         path:
                           description: Path in the container to mount the volume at.
                             Required.
@@ -1728,6 +1751,11 @@ spec:
                       - name
                       - path
                       type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of secret, configMap, emptyDir, csi,
+                          projected, nfs must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          == 1
                     type: array
                   affinity:
                     description: Affinity is a group of affinity scheduling rules.
@@ -3589,6 +3617,29 @@ spec:
                         name:
                           description: Name to use for the volume. Required.
                           type: string
+                        nfs:
+                          description: NFS object to use to populate the volume
+                          properties:
+                            path:
+                              description: |-
+                                path that is exported by the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly here will force the NFS export to be mounted with read-only permissions.
+                                Defaults to false.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: boolean
+                            server:
+                              description: |-
+                                server is the hostname or IP address of the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                          required:
+                          - path
+                          - server
+                          type: object
                         path:
                           description: Path in the container to mount the volume at.
                             Required.
@@ -4028,6 +4079,11 @@ spec:
                       - name
                       - path
                       type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of secret, configMap, emptyDir, csi,
+                          projected, nfs must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          == 1
                     type: array
                   annotations:
                     additionalProperties:

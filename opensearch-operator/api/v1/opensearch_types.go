@@ -321,6 +321,7 @@ type ImageSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0) == 1",message="exactly one of secret, configMap, emptyDir, csi, projected, nfs must be set"
 type AdditionalVolume struct {
 	// Name to use for the volume. Required.
 	Name string `json:"name"`
@@ -340,6 +341,8 @@ type AdditionalVolume struct {
 	PersistentVolumeClaim *corev1.PersistentVolumeClaimVolumeSource `json:"persistentVolumeClaim,omitempty"`
 	// Projected object to use to populate the volume
 	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
+	// NFS object to use to populate the volume
+	NFS *corev1.NFSVolumeSource `json:"nfs,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }

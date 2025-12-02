@@ -214,6 +214,25 @@ var _ = Describe("Additional volumes", func() {
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 		})
 	})
+
+	When("NFS volume is added", func() {
+		It("Should have NFSVolumeSource fields and mount readOnly", func() {
+			volumeConfigs[0].NFS = &v1.NFSVolumeSource{
+				Server:   "10.0.0.1",
+				Path:     "/export/path",
+				ReadOnly: true,
+			}
+
+			volume, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].NFS.Server).To(Equal("10.0.0.1"))
+			Expect(volume[0].NFS.Path).To(Equal("/export/path"))
+			Expect(volume[0].NFS.ReadOnly).To(BeTrue())
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].ReadOnly).To(BeTrue())
+			Expect(volumeMount[0].SubPath).To(BeEmpty())
+
+		})
+	})
 })
 
 var _ = Describe("OpensearchClusterURL", func() {
