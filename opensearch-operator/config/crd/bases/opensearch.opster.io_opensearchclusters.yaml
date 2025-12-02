@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: opensearchclusters.opensearch.opster.io
 spec:
   group: opensearch.opster.io
@@ -4267,9 +4267,6 @@ spec:
                     type: string
                   defaultRepo:
                     type: string
-                  disableSSL:
-                    description: Disable SSL for the cluster
-                    type: boolean
                   drainDataNodes:
                     description: Drain data nodes controls whether to drain data notes
                       on rolling restart operations
@@ -6576,6 +6573,17 @@ spec:
                               instead of using subPath, allowing Kubernetes to update
                               certificate files when secrets are updated.
                             type: boolean
+                          enabled:
+                            description: |-
+                              enabled controls if TLS should be enabled for the HTTP layer.
+
+                              If false: TLS is explicitly disabled for HTTP.
+
+                              If not set (default): TLS is enabled if HTTP configuration is provided, or if security.tls is set.
+                              If spec.general.disableSSL is true, this overrides to false.
+
+                              If true: TLS is explicitly enabled. HTTP configuration must be provided.
+                            type: boolean
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
@@ -6605,6 +6613,13 @@ spec:
                         type: object
                       transport:
                         properties:
+                          adminDn:
+                            description: |-
+                              Deprecated: DNs of certificates that should have admin access. This field is deprecated and will be removed in a future version.
+                              For OpenSearch 2.0.0+, use security.tls.http.adminDn instead.
+                            items:
+                              type: string
+                            type: array
                           caSecret:
                             description: Optional, secret that contains the ca certificate
                               as ca.crt. If this and generate=true is set the existing
@@ -6632,6 +6647,16 @@ spec:
                               When enabled, certificates are mounted as directories
                               instead of using subPath, allowing Kubernetes to update
                               certificate files when secrets are updated.
+                            type: boolean
+                          enabled:
+                            description: |-
+                              enabled controls if TLS should be enabled for the transport layer.
+
+                              If false: TLS is explicitly disabled for transport.
+
+                              If not set (default): TLS is enabled if transport configuration is provided, or if security.tls is set.
+
+                              If true: TLS is explicitly enabled. Transport configuration must be provided.
                             type: boolean
                           generate:
                             description: If set to true the operator will generate

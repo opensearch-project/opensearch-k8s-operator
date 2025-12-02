@@ -18,6 +18,7 @@ package webhook
 
 import (
 	"context"
+	"fmt"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -43,7 +44,8 @@ func (v *OpenSearchClusterValidator) SetupWithManager(mgr ctrl.Manager) error {
 }
 
 func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	return nil, nil
+	cluster := obj.(*opsterv1.OpenSearchCluster)
+	return v.validateTlsConfig(cluster)
 }
 
 func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
@@ -51,6 +53,34 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 
 	if !cluster.DeletionTimestamp.IsZero() {
 		return nil, nil
+	}
+
+	return v.validateTlsConfig(cluster)
+}
+
+func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opsterv1.OpenSearchCluster) (admission.Warnings, error) {
+	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
+		return nil, nil
+	}
+
+	tlsConfig := cluster.Spec.Security.Tls
+
+	// Validate transport TLS: if enabled=true, transport config must be provided
+	if tlsConfig.Transport != nil && tlsConfig.Transport.Enabled != nil && *tlsConfig.Transport.Enabled {
+		// Transport TLS is explicitly enabled, config is already provided (Transport != nil)
+		// Validation: if enabled=true, we need either Generate=true or existing certs via Secret
+		if !tlsConfig.Transport.Generate && tlsConfig.Transport.Secret.Name == "" {
+			return nil, fmt.Errorf("transport TLS is enabled but neither generate nor secret is provided")
+		}
+	}
+
+	// Validate HTTP TLS: if enabled=true, HTTP config must be provided
+	if tlsConfig.Http != nil && tlsConfig.Http.Enabled != nil && *tlsConfig.Http.Enabled {
+		// HTTP TLS is explicitly enabled, config is already provided (Http != nil)
+		// Validation: if enabled=true, we need either Generate=true or existing certs via Secret
+		if !tlsConfig.Http.Generate && tlsConfig.Http.Secret.Name == "" {
+			return nil, fmt.Errorf("HTTP TLS is enabled but neither generate nor secret is provided")
+		}
 	}
 
 	return nil, nil

@@ -3,13 +3,15 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"net/http"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -76,6 +78,11 @@ var _ = Describe("indextemplate reconciler", func() {
 					ServiceName: "test-cluster",
 					HttpPort:    9200,
 				},
+				Security: &opsterv1.Security{
+					Tls: &opsterv1.TlsConfig{
+						Http: &opsterv1.TlsConfigHttp{},
+					},
+				},
 				NodePools: []opsterv1.NodePool{
 					{
 						Component: "node",
@@ -87,7 +94,7 @@ var _ = Describe("indextemplate reconciler", func() {
 				},
 			},
 		}
-		clusterUrl = fmt.Sprintf("https://%s.%s.svc.cluster.local:9200/", cluster.Spec.General.ServiceName, cluster.Namespace)
+		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(cluster))
 	})
 
 	JustBeforeEach(func() {

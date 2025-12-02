@@ -236,14 +236,21 @@ var _ = Describe("Additional volumes", func() {
 })
 
 var _ = Describe("OpensearchClusterURL", func() {
-	When("DisableSSL is false", func() {
+	When("HTTP TLS is enabled", func() {
 		It("should return https URL", func() {
+			enabled := true
 			cluster := &opsterv1.OpenSearchCluster{
 				Spec: opsterv1.ClusterSpec{
 					General: opsterv1.GeneralConfig{
 						ServiceName: "test-service",
 						HttpPort:    9200,
-						DisableSSL:  false,
+					},
+					Security: &opsterv1.Security{
+						Tls: &opsterv1.TlsConfig{
+							Http: &opsterv1.TlsConfigHttp{
+								Enabled: &enabled,
+							},
+						},
 					},
 				},
 			}
@@ -258,14 +265,21 @@ var _ = Describe("OpensearchClusterURL", func() {
 		})
 	})
 
-	When("DisableSSL is true", func() {
+	When("HTTP TLS is disabled", func() {
 		It("should return http URL", func() {
+			enabled := false
 			cluster := &opsterv1.OpenSearchCluster{
 				Spec: opsterv1.ClusterSpec{
 					General: opsterv1.GeneralConfig{
 						ServiceName: "test-service",
 						HttpPort:    9200,
-						DisableSSL:  true,
+					},
+					Security: &opsterv1.Security{
+						Tls: &opsterv1.TlsConfig{
+							Http: &opsterv1.TlsConfigHttp{
+								Enabled: &enabled,
+							},
+						},
 					},
 				},
 			}

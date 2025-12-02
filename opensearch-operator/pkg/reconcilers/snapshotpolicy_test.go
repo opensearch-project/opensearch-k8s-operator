@@ -3,13 +3,15 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"net/http"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +32,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 		mockClient *k8s.MockK8sClient
 
 		// Objects
-		cluster *opsterv1.OpenSearchCluster
+		cluster    *opsterv1.OpenSearchCluster
+		clusterUrl string
 	)
 
 	BeforeEach(func() {
@@ -75,6 +78,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 				},
 			},
 		}
+		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(cluster))
 	})
 
 	JustBeforeEach(func() {
@@ -145,21 +149,13 @@ var _ = Describe("snapshot policy reconciler", func() {
 
 			transport.RegisterResponder(
 				http.MethodGet,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 			)
 
 			transport.RegisterResponder(
 				http.MethodHead,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Once(failMessage),
 			)
 		})
@@ -194,9 +190,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_sm/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(404, "Not Found").Once(),
@@ -204,9 +199,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodPost,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_sm/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(200, "OK").Once(),
@@ -234,9 +228,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_sm/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewErrorResponder(fmt.Errorf("failed to get policy")).Once(),
@@ -267,9 +260,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_sm/policies/%s",
+						clusterUrl,
 						instance.Spec.PolicyName,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.GetSnapshotPolicyResponse{
@@ -369,9 +361,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodGet,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_sm/policies/%s",
+								clusterUrl,
 								instance.Spec.PolicyName,
 							),
 							httpmock.NewJsonResponderOrPanic(200, map[string]interface{}{
@@ -385,9 +376,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodPut,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/?if_seq_no=0&if_primary_term=0",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_sm/policies/?if_seq_no=0&if_primary_term=0",
+								clusterUrl,
 							),
 							httpmock.NewStringResponder(200, "OK").Once(),
 						)
@@ -456,21 +446,13 @@ var _ = Describe("snapshot policy reconciler", func() {
 
 					transport.RegisterResponder(
 						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 					)
 
 					transport.RegisterResponder(
 						http.MethodHead,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 				})
@@ -480,9 +462,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodDelete,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_sm/policies/%s",
+								clusterUrl,
 								instance.Name,
 							),
 							httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
@@ -498,9 +479,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodDelete,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_sm/policies/%s",
+								clusterUrl,
 								instance.Name,
 							),
 							httpmock.NewStringResponder(200, "OK").Once(failMessage),

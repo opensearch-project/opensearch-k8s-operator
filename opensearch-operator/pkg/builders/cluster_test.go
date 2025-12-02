@@ -1268,10 +1268,17 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
-	When("DisableSSL is enabled", func() {
+	When("HTTP TLS is disabled", func() {
 		It("should use http protocol in URLForCluster", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			clusterObject.Spec.General.ServiceName = "opensearch"
 			clusterObject.Namespace = "default"
 			clusterObject.Spec.General.HttpPort = 9200
@@ -1283,7 +1290,14 @@ var _ = Describe("Builders", func() {
 
 		It("should use http protocol in probe commands", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
@@ -1299,7 +1313,14 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
 			clusterObject.Name = "test-cluster"
 			clusterObject.Namespace = "default"
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			clusterObject.Spec.General.Monitoring.Enable = true
 			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
 
