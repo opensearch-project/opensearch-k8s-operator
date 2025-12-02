@@ -14,10 +14,10 @@ manager:
   extraEnv: []
   resources:
     limits:
-      cpu: 200m
+      cpu: 1000m
       memory: 500Mi
     requests:
-      cpu: 100m
+      cpu: 200m
       memory: 350Mi
 
   livenessProbe:
