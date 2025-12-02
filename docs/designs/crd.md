@@ -413,6 +413,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>-</td>
       </tr><tr>
+        <td><b>topologySpreadConstraints</b></td>
+        <td>[]corev1.TopologySpreadConstraint</td>
+        <td>add topology spread contraints to dashboard pods</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
         <td><b>labels</b></td>
         <td>map[string]string</td>
         <td>Adds labels to dashboard pods</td>
