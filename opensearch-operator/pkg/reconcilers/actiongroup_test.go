@@ -218,7 +218,7 @@ var _ = Describe("actiongroup reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"%s/_plugins/_security/api/actiongroups/%s",
+						"%s_plugins/_security/api/actiongroups/%s",
 						clusterUrl,
 						instance.Name,
 					),
@@ -280,7 +280,7 @@ var _ = Describe("actiongroup reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(
-							"%s/_plugins/_security/api/actiongroups/%s",
+							"%s_plugins/_security/api/actiongroups/%s",
 							clusterUrl,
 							instance.Name,
 						),
@@ -308,7 +308,7 @@ var _ = Describe("actiongroup reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(
-							"%s/_plugins/_security/api/actiongroups/%s",
+							"%s_plugins/_security/api/actiongroups/%s",
 							clusterUrl,
 							instance.Name,
 						),
@@ -319,7 +319,7 @@ var _ = Describe("actiongroup reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodPut,
 						fmt.Sprintf(
-							"%s/_plugins/_security/api/actiongroups/%s",
+							"%s_plugins/_security/api/actiongroups/%s",
 							clusterUrl,
 							instance.Name,
 						),
@@ -349,7 +349,7 @@ var _ = Describe("actiongroup reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(
-							"%s/_plugins/_security/api/actiongroups/%s",
+							"%s_plugins/_security/api/actiongroups/%s",
 							clusterUrl,
 							instance.Name,
 						),
@@ -358,7 +358,7 @@ var _ = Describe("actiongroup reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodPut,
 						fmt.Sprintf(
-							"%s/_plugins/_security/api/actiongroups/%s",
+							"%s_plugins/_security/api/actiongroups/%s",
 							clusterUrl,
 							instance.Name,
 						),
@@ -432,7 +432,7 @@ var _ = Describe("actiongroup reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(
-							"%s/_plugins/_security/api/actiongroups/%s",
+							"%s_plugins/_security/api/actiongroups/%s",
 							clusterUrl,
 							instance.Name,
 						),
@@ -460,7 +460,7 @@ var _ = Describe("actiongroup reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(
-							"%s/_plugins/_security/api/actiongroups/%s",
+							"%s_plugins/_security/api/actiongroups/%s",
 							clusterUrl,
 							instance.Name,
 						),
@@ -469,7 +469,7 @@ var _ = Describe("actiongroup reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodDelete,
 						fmt.Sprintf(
-							"%s/_plugins/_security/api/actiongroups/%s",
+							"%s_plugins/_security/api/actiongroups/%s",
 							clusterUrl,
 							instance.Name,
 						),

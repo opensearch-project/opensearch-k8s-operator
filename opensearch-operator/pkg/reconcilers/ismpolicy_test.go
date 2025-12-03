@@ -239,7 +239,10 @@ var _ = Describe("ism policy reconciler", func() {
 					}
 					transport.RegisterResponder(
 						http.MethodGet,
-						clusterUrl,
+						fmt.Sprintf(
+							"%s_cat/indices/test-*",
+							clusterUrl,
+						),
 						httpmock.NewJsonResponderOrPanic(200, []map[string]interface{}{
 							{"index": indexName},
 						}),
@@ -283,7 +286,7 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodGet,
 							fmt.Sprintf(
-								"%s_plugins/_cat/indices/test-*",
+								"%s_cat/indices/test-*",
 								clusterUrl,
 							),
 							httpmock.NewErrorResponder(fmt.Errorf("failed to get indices")).Once(),
