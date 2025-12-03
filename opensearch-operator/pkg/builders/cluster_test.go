@@ -248,7 +248,7 @@ var _ = Describe("Builders", func() {
 			_ = os.Setenv(helpers.DnsBaseEnvVariable, customDns)
 
 			actualUrl := URLForCluster(&clusterObject)
-			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
+			expectedUrl := fmt.Sprintf("http://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
 
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
@@ -260,7 +260,7 @@ var _ = Describe("Builders", func() {
 
 			actualUrl := URLForCluster(&clusterObject)
 			// When HttpPort is 0 (default), ClusterURL should default to 9200
-			expectedUrl := fmt.Sprintf("https://%s:9200", customHost)
+			expectedUrl := fmt.Sprintf("http://%s:9200", customHost)
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 
@@ -1241,9 +1241,9 @@ var _ = Describe("Builders", func() {
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
 		})
 
 		It("should have custom command when set", func() {
