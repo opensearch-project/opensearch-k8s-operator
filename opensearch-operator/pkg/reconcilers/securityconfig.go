@@ -37,15 +37,21 @@ echo 'Waiting to connect to the cluster'; sleep 20;
 done;`
 
 	ApplyAllYmlCmdTmpl = `count=0;
-until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s -p %v || (( count++ >= 20 ));
-do
-sleep 20;
+until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s -p %v; do
+  if (( count++ >= 20 )); then
+    echo "Failed to apply securityconfig after 20 attempts";
+    exit 1;
+  fi;
+  sleep 20;
 done;`
 
 	ApplySingleYmlCmdTmpl = `count=0;
-until $ADMIN -cacert %s -cert %s -key %s -f %s -t %s -icl -nhnv -h %s -p %v || (( count++ >= 20 ));
-do
-sleep 20;
+until $ADMIN -cacert %s -cert %s -key %s -f %s -t %s -icl -nhnv -h %s -p %v; do
+  if (( count++ >= 20 )); then
+    echo "Failed to apply securityconfig after 20 attempts";
+    exit 1;
+  fi;
+  sleep 20;
 done;`
 )
 
