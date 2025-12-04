@@ -2,9 +2,11 @@ package helpers
 
 import (
 	"fmt"
-	"k8s.io/utils/ptr"
+	"os"
 	"path"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/hashicorp/go-version"
@@ -85,6 +87,34 @@ func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 
 	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), version))
+	return
+}
+
+func ResolveOperatorSidecarImage(nodePool *opsterv1.NodePool) (result opsterv1.ImageSpec) {
+	defaultRepo := "docker.io/opensearchproject"
+	defaultImage := "opensearch-operator-sidecar"
+	defaultVersion := "latest"
+
+	// if image is specified in nodePool, use that
+	if useCustomImage(nodePool.OperatorSidecar.ImageSpec, &result) {
+		return
+	}
+
+	// if image is specified via envvar (from helm chart), use that
+	image, exists := os.LookupEnv("OPERATOR_SIDECAR_IMAGE")
+	if exists && image != "" {
+		result.Image = &image
+		return
+	}
+
+	version, exists := os.LookupEnv("OPERATOR_SIDECAR_VERSION")
+	if exists && version != "" {
+		defaultVersion = version
+	}
+
+	// otherwise fall back to default
+	result.Image = ptr.To(fmt.Sprintf("%s/%s:%s", defaultRepo, defaultImage, defaultVersion))
+
 	return
 }
 

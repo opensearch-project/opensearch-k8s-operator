@@ -78,6 +78,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.loglevel` | string | `"info"` |  |
 | `manager.watchNamespace` | string | `nil` |  |
 | `manager.metricsBindAddress` | string | `"127.0.0.1:8080"` |  |
+| `operatorSidecar` | object | `{}` |  |
 | `installCRDs` | bool | `true` |  |
 | `serviceAccount.create` | bool | `true` |  |
 | `serviceAccount.name` | string | `""` |  |

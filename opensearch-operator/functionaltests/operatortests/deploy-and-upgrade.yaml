@@ -15,7 +15,13 @@ spec:
       name: ""
     podSecurityContext: {}
     replicas: 1
-    resources: {}
+    resources:
+      requests:
+         memory: "1Gi"
+         cpu: "500m"
+      limits:
+         memory: "1Gi"
+         cpu: "500m"
     securityContext: {}
     service:
       type: ClusterIP
@@ -39,6 +45,10 @@ spec:
     setVMMaxMapCount: true
     vendor: Opensearch
     version: 2.19.4
+    additionalConfig:
+      cluster.routing.allocation.disk.watermark.low: 500m
+      cluster.routing.allocation.disk.watermark.high: 300m
+      cluster.routing.allocation.disk.watermark.flood_stage: 100m
   initHelper:
     image: docker.io/busybox:1.36
     imagePullPolicy: IfNotPresent
@@ -54,7 +64,7 @@ spec:
         memory: 2Gi
       requests:
         cpu: 500m
-        memory: 2Gi
+        memory: 1Gi
     roles:
     - master
     - data

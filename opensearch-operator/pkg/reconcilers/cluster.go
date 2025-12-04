@@ -17,6 +17,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -164,6 +165,35 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		return &ctrl.Result{}, err
 	}
 
+	_, err := r.client.GetStatefulSet(sts.Name, sts.Namespace)
+	// If the operator sidecar is enabled we need special handling during initial start of the nodepool
+	if nodePool.OperatorSidecar != nil && nodePool.OperatorSidecar.Enable && err != nil {
+		// If this is the initial start of the nodepool, start pods in Parallel
+		if apierrors.IsNotFound(err) {
+			// Create initially with PodManagementPolicy Parallel
+			sts.Spec.PodManagementPolicy = appsv1.ParallelPodManagement
+			result, err := r.client.ReconcileResource(sts, reconciler.StatePresent)
+			if err != nil || result != nil {
+				return result, err
+			}
+			// Wait for pods to appear
+			err = helpers.WaitForSTSReplicas(r.ctx, r.client, sts, nodePool.Replicas)
+			if err != nil {
+				return result, err
+			}
+			// Delete sts and recreate with normal PodManagementPolicy
+			if err := helpers.WaitForSTSDelete(r.ctx, r.client, sts); err != nil {
+				return result, err
+			}
+			// Reset manifest, STS will be created by code below
+			sts.Spec.PodManagementPolicy = appsv1.OrderedReadyPodManagement
+			sts.ResourceVersion = ""
+			sts.UID = ""
+		} else {
+			return &ctrl.Result{}, err
+		}
+	}
+
 	// First ensure that the statefulset exists
 	result, err := r.client.ReconcileResource(sts, reconciler.StateCreated)
 	if err != nil || result != nil {
@@ -215,7 +245,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 			// A failure is assumed if n PVCs exist but less than n-1 pods (one missing pod is allowed for rolling restart purposes)
 			// We can assume the cluster is in a failure state and cannot recover on its own
 			if !helpers.IsUpgradeInProgress(r.instance.Status) &&
-				pvcCount >= int(nodePool.Replicas) && existing.Status.ReadyReplicas < nodePool.Replicas-1 {
+				pvcCount >= int(nodePool.Replicas) && existing.Status.Replicas < nodePool.Replicas-1 {
 				r.logger.Info(fmt.Sprintf("Detected recovery situation for nodepool %s: PVC count: %d, replicas: %d. Recreating STS with parallel mode", nodePool.Component, pvcCount, existing.Status.Replicas))
 				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 					// Switch to Parallel to jumpstart the cluster

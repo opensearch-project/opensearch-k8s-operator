@@ -89,9 +89,9 @@ else
   IFS=', ' read -r -a TARBALL_ARRAY <<< "$TARBALL"
 fi
 
-if [ "$PRODUCT" != "opensearch-operator-busybox" ] && [ "$PRODUCT" != "opensearch-operator" ]
+if [ "$PRODUCT" != "opensearch-operator-busybox" ] && [ "$PRODUCT" != "opensearch-operator" ] && [ "$PRODUCT" != "operator-sidecar" ]
 then
-    echo "Enter either 'opensearch-operator' or 'opensearch-operator-busybox' as product name for -p parameter"
+    echo "Enter either 'opensearch-operator' or 'opensearch-operator-busybox' or 'operator-sidecar' as product name for -p parameter"
     exit 1
 else
     PRODUCT_ALT=`echo $PRODUCT | sed 's@-@_@g'`

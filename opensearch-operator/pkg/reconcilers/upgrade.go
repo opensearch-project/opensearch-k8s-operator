@@ -406,7 +406,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		return err
 	}
 
-	return nil
+	return services.ReactivateShardAllocation(r.osClient)
 }
 
 func (r *UpgradeReconciler) setComponentConditions(conditions []string, component string) {

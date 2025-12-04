@@ -3,4 +3,5 @@ go 1.24.4
 use (
 	./opensearch-operator
 	./opensearch-operator/functionaltests
+	./operator-sidecar
 )

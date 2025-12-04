@@ -18,6 +18,10 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Docker Build
+        working-directory: ./opensearch-operator
         run: |
-          cd opensearch-operator
+          make docker-build-multiarch
+      - name: Docker Build Sidecar image
+        working-directory: ./operator-sidecar
+        run: |
           make docker-build-multiarch

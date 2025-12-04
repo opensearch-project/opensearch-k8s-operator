@@ -132,6 +132,7 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	OperatorSidecar           *OperatorSidecarConfig            `json:"operatorSidecar,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
@@ -194,6 +195,12 @@ type BootstrapConfig struct {
 	// +kubebuilder:validation:Schemaless
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 	HostAliases    []corev1.HostAlias `json:"hostAliases,omitempty"`
+}
+
+type OperatorSidecarConfig struct {
+	Enable           bool `json:"enable,omitempty"`
+	*ImageSpec       `json:",inline,omitempty"`
+	ReadinessPerPool bool `json:"readinessPerPool,omitempty"`
 }
 
 type DashboardsServiceSpec struct {

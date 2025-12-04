@@ -12,10 +12,17 @@ jobs:
         with:
           go-version-file: 'go.work'
           cache: false
-      - name: lint go
+      - name: lint opensearch-operator
         uses: golangci/golangci-lint-action@v8
         with:
           # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
           version: v2.1
           working-directory: opensearch-operator
           args: --timeout=6m --skip-dirs="(^|/)responses($|/)" -v
+      - name: lint operator-sidecar
+        uses: golangci/golangci-lint-action@v8
+        with:
+          # Required: the version of golangci-lint is required and must be specified without patch version: we always use the latest patch version.
+          version: v2.1
+          working-directory: operator-sidecar
+          args: --timeout=6m -v

@@ -581,6 +581,12 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>Updates the probes timeouts and thresholds config</td>
         <td>false</td>
         <td>-</td>
+      </tr><tr>
+        <td><b>operatorSidecar</b></td>
+        <td>OperatorSidecar</td>
+        <td>Special sidecar for each pod to deal with cluster-state-dependent readiness probes</td>
+        <td>false</td>
+        <td>-</td>
       </tr>
        </tr><tr>
         <td><b>initContainers</b></td>

@@ -59,7 +59,7 @@ fmt: ## Run go fmt against code.
 
 .PHONY: lint
 lint:
-	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v1.57-alpine golangci-lint run -E gofmt --timeout=3m --exclude-dirs=opensearch-gateway/responses
+	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v2.1-alpine golangci-lint run --timeout=6m --skip-dirs="(^|/)responses($|/)" -v
 
 .PHONY: vet
 vet: ## Run go vet against code.

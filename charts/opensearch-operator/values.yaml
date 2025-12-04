@@ -71,6 +71,11 @@ manager:
 
   metricsBindAddress: 127.0.0.1:8080
 
+# Configuration for the operator sidecar that can be added to opensearch pods
+operatorSidecar: {}
+  # full name and tag for an alternate image to use for the sidecar (e.g. someregistry.com/operator-sidecar:1.2.3)
+  # image:
+
 # Install the Custom Resource Definitions with Helm
 installCRDs: true
 
