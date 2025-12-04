@@ -13,6 +13,7 @@ import (
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/go-logr/logr"
+	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -212,43 +213,93 @@ func ReactivateShardAllocation(service *OsClusterClient) error {
 	return nil
 }
 
+// PreparePodForDeleteResult contains the result of preparing a pod for deletion
+type PreparePodForDeleteResult struct {
+	Ready            bool
+	OriginalReplicas map[string]int
+}
+
 func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, error) {
+	result, err := PreparePodForDeleteWithReplicas(service, lg, podName, drainNode, nodeCount)
+	return result.Ready, err
+}
+
+func PreparePodForDeleteWithReplicas(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (PreparePodForDeleteResult, error) {
+	result := PreparePodForDeleteResult{
+		Ready:            false,
+		OriginalReplicas: make(map[string]int),
+	}
 	if drainNode {
 		// If we are draining nodes then drain the working node
 		_, err := AppendExcludeNodeHost(service, podName)
 		if err != nil {
-			return false, err
+			return result, err
 		}
 
 		// If there are only 2 data nodes only check for system indices
 		if nodeCount == 2 {
 			systemIndices, err := GetExistingSystemIndices(service)
 			if err != nil {
-				return false, err
+				return result, err
 			}
 
 			systemPrimaries, err := HasIndexPrimariesOnNode(service, podName, systemIndices)
 			if err != nil {
-				return false, err
+				return result, err
 			}
 			lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
-			return !systemPrimaries, nil
+			result.Ready = !systemPrimaries
+			return result, nil
 		}
 
 		// Check if there are any shards on the node
 		nodeNotEmpty, err := HasShardsOnNode(service, podName)
 		if err != nil {
-			return false, err
+			return result, err
 		}
+
+		// If node is not empty, check for version mismatch deadlock
+		if nodeNotEmpty {
+			// Detect version mismatch deadlocks
+			deadlockedIndices, err := DetectVersionMismatchDeadlock(service, podName, lg)
+			if err != nil {
+				lg.V(1).Info(fmt.Sprintf("Could not check for version mismatch deadlock: %v", err))
+				// Continue with normal drain check
+			} else if len(deadlockedIndices) > 0 {
+				// Resolve deadlock by temporarily reducing replicas
+				originalReplicas, err := ResolveVersionMismatchDeadlock(service, deadlockedIndices, lg)
+				if err != nil {
+					lg.Error(err, "Failed to resolve version mismatch deadlock")
+					// Continue with normal drain check
+				} else {
+					// Store original replicas for restoration later
+					result.OriginalReplicas = originalReplicas
+					lg.Info(fmt.Sprintf("Resolved version mismatch deadlock for %d indices. Original replicas: %v",
+						len(originalReplicas), originalReplicas))
+					// Re-check if node is empty after resolving deadlock
+					nodeNotEmpty, err = HasShardsOnNode(service, podName)
+					if err != nil {
+						return result, err
+					}
+				}
+			}
+		}
+
 		// If the node isn't empty requeue to wait for shards to drain
-		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
-		return !nodeNotEmpty, nil
+		if nodeNotEmpty {
+			lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
+			result.Ready = false
+			return result, nil
+		}
+		result.Ready = true
+		return result, nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
 	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationPrimaries); err != nil {
-		return false, err
+		return result, err
 	}
-	return true, nil
+	result.Ready = true
+	return result, nil
 }
 
 func GetExistingSystemIndices(service *OsClusterClient) ([]string, error) {
@@ -540,4 +591,183 @@ func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, comp
 		return fmt.Errorf("response from API is %s", resp.Status())
 	}
 	return nil
+}
+
+// DetectVersionMismatchDeadlock checks if there are shards stuck due to version mismatch
+// Returns a map of index names that have stuck replicas
+func DetectVersionMismatchDeadlock(service *OsClusterClient, nodeName string, lg logr.Logger) (map[string]bool, error) {
+	deadlockedIndices := make(map[string]bool)
+
+	// Get all shards on the node
+	var headers []string
+	shards, err := service.CatShards(headers)
+	if err != nil {
+		return deadlockedIndices, err
+	}
+
+	// Check each replica shard on the node
+	for _, shard := range shards {
+		if shard.NodeName == nodeName && shard.PrimaryOrReplica == "r" {
+			// Parse shard number
+			shardNum := 0
+			if shard.Shard != "" {
+				_, err := fmt.Sscanf(shard.Shard, "%d", &shardNum)
+				if err != nil {
+					lg.V(1).Info(fmt.Sprintf("Could not parse shard number for %s[%s]: %v", shard.Index, shard.Shard, err))
+					continue
+				}
+			}
+
+			// Check allocation explain for this replica
+			explain, err := service.GetAllocationExplain(shard.Index, shardNum, false)
+			if err != nil {
+				lg.V(1).Info(fmt.Sprintf("Could not get allocation explain for %s[%d]: %v", shard.Index, shardNum, err))
+				continue
+			}
+
+			// Check if allocation is blocked by node_version decider
+			if explain.AllocateDecision != nil {
+				if explain.AllocateDecision.Decider == "node_version" &&
+					explain.AllocateDecision.Decision == "NO" &&
+					strings.Contains(explain.AllocateDecision.Explanation, "older than the primary version") {
+					lg.Info(fmt.Sprintf("Detected version mismatch deadlock for index %s shard %d: %s",
+						shard.Index, shardNum, explain.AllocateDecision.Explanation))
+					deadlockedIndices[shard.Index] = true
+				}
+			}
+		}
+	}
+
+	return deadlockedIndices, nil
+}
+
+// GetIndexReplicaCount gets the current number_of_replicas setting for an index
+func GetIndexReplicaCount(service *OsClusterClient, indexName string) (int, error) {
+	req := opensearchapi.IndicesGetSettingsRequest{
+		Index: []string{indexName},
+		Name:  []string{"index.number_of_replicas"},
+	}
+	resp, err := req.Do(context.Background(), service.client)
+	if err != nil {
+		return 0, err
+	}
+	defer helpers.SafeClose(resp.Body)
+
+	if resp.IsError() {
+		return 0, fmt.Errorf("failed to get index settings: %s", resp.String())
+	}
+
+	var settings map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&settings); err != nil {
+		return 0, err
+	}
+
+	// Navigate through the response structure
+	indexSettings, ok := settings[indexName].(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("unexpected response structure for index %s", indexName)
+	}
+
+	settingsMap, ok := indexSettings["settings"].(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("unexpected settings structure for index %s", indexName)
+	}
+
+	indexMap, ok := settingsMap["index"].(map[string]interface{})
+	if !ok {
+		return 0, fmt.Errorf("unexpected index settings structure for index %s", indexName)
+	}
+
+	replicasStr, ok := indexMap["number_of_replicas"].(string)
+	if !ok {
+		return 0, fmt.Errorf("number_of_replicas not found or not a string for index %s", indexName)
+	}
+
+	var replicas int
+	if _, err := fmt.Sscanf(replicasStr, "%d", &replicas); err != nil {
+		return 0, fmt.Errorf("could not parse number_of_replicas for index %s: %v", indexName, err)
+	}
+
+	return replicas, nil
+}
+
+// SetIndexReplicaCount sets the number_of_replicas for an index
+func SetIndexReplicaCount(service *OsClusterClient, indexName string, replicaCount int) error {
+	settings := map[string]interface{}{
+		"index": map[string]interface{}{
+			"number_of_replicas": replicaCount,
+		},
+	}
+
+	body := opensearchutil.NewJSONReader(settings)
+	req := opensearchapi.IndicesPutSettingsRequest{
+		Index: []string{indexName},
+		Body:  body,
+	}
+
+	resp, err := req.Do(context.Background(), service.client)
+	if err != nil {
+		return err
+	}
+	defer helpers.SafeClose(resp.Body)
+
+	if resp.IsError() {
+		return fmt.Errorf("failed to set index replicas: %s", resp.String())
+	}
+
+	return nil
+}
+
+// ResolveVersionMismatchDeadlock temporarily reduces replicas to 0 for deadlocked indices
+// Returns a map of index -> original replica count for restoration later
+func ResolveVersionMismatchDeadlock(service *OsClusterClient, deadlockedIndices map[string]bool, lg logr.Logger) (map[string]int, error) {
+	originalReplicas := make(map[string]int)
+
+	for indexName := range deadlockedIndices {
+		// Get current replica count
+		currentReplicas, err := GetIndexReplicaCount(service, indexName)
+		if err != nil {
+			lg.Error(err, fmt.Sprintf("Failed to get replica count for index %s", indexName))
+			continue
+		}
+
+		// Only reduce if replicas > 0
+		if currentReplicas > 0 {
+			originalReplicas[indexName] = currentReplicas
+			lg.Info(fmt.Sprintf("Temporarily reducing replicas for index %s from %d to 0 to resolve version mismatch deadlock",
+				indexName, currentReplicas))
+
+			if err := SetIndexReplicaCount(service, indexName, 0); err != nil {
+				lg.Error(err, fmt.Sprintf("Failed to reduce replicas for index %s", indexName))
+				delete(originalReplicas, indexName)
+				return originalReplicas, err
+			}
+		}
+	}
+
+	return originalReplicas, nil
+}
+
+// RestoreIndexReplicas restores the original replica count for indices
+func RestoreIndexReplicas(service *OsClusterClient, originalReplicas map[string]int, lg logr.Logger) error {
+	for indexName, replicaCount := range originalReplicas {
+		lg.Info(fmt.Sprintf("Restoring replicas for index %s to %d", indexName, replicaCount))
+		if err := SetIndexReplicaCount(service, indexName, replicaCount); err != nil {
+			lg.Error(err, fmt.Sprintf("Failed to restore replicas for index %s", indexName))
+			return err
+		}
+	}
+	return nil
+}
+
+// MergeReplicaMaps merges two replica maps, with the second map taking precedence for overlapping keys
+func MergeReplicaMaps(map1, map2 map[string]int) map[string]int {
+	result := make(map[string]int)
+	for k, v := range map1 {
+		result[k] = v
+	}
+	for k, v := range map2 {
+		result[k] = v
+	}
+	return result
 }
