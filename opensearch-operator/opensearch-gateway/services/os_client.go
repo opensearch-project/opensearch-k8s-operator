@@ -4,13 +4,15 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"fmt"
 	"io"
-	"k8s.io/utils/ptr"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"k8s.io/utils/ptr"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/opensearch-project/opensearch-go"
@@ -197,6 +199,41 @@ func (client *OsClusterClient) CatNamedIndicesShards(headers []string, indices [
 	}
 	defer helpers.SafeClose(indicesRes.Body)
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
+	return response, err
+}
+
+// GetAllocationExplain explains why a shard is or isn't allocated
+func (client *OsClusterClient) GetAllocationExplain(index string, shard int, primary bool) (responses.AllocationExplainResponse, error) {
+	var path strings.Builder
+	path.Grow(len("/_cluster/allocation/explain") + 50)
+	path.WriteString("/_cluster/allocation/explain")
+
+	body := map[string]interface{}{
+		"index":   index,
+		"shard":   shard,
+		"primary": primary,
+	}
+	bodyReader := opensearchutil.NewJSONReader(body)
+
+	httpReq, err := http.NewRequest(http.MethodPost, path.String(), bodyReader)
+	if err != nil {
+		return responses.AllocationExplainResponse{}, err
+	}
+	httpReq.Header.Add(headerContentType, jsonContentHeader)
+
+	httpRes, err := client.client.Perform(httpReq)
+	if err != nil {
+		return responses.AllocationExplainResponse{}, err
+	}
+	defer helpers.SafeClose(httpRes.Body)
+
+	// Check for HTTP errors
+	if httpRes.StatusCode >= 400 {
+		return responses.AllocationExplainResponse{}, ErrClusterHealthGetFailed(fmt.Sprintf("HTTP %d: %s", httpRes.StatusCode, httpRes.Status))
+	}
+
+	var response responses.AllocationExplainResponse
+	err = json.NewDecoder(httpRes.Body).Decode(&response)
 	return response, err
 }
 

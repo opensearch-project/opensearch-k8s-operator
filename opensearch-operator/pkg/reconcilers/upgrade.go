@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"time"
@@ -19,6 +20,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -31,9 +33,10 @@ var (
 )
 
 const (
-	componentNameUpgrader   = "Upgrader"
-	upgradeStatusPending    = "Pending"
-	upgradeStatusInProgress = "Upgrading"
+	componentNameUpgrader    = "Upgrader"
+	upgradeStatusPending     = "Pending"
+	upgradeStatusInProgress  = "Upgrading"
+	replicaRestoreAnnotation = "opster.io/reduced-replicas"
 )
 
 type UpgradeReconciler struct {
@@ -134,6 +137,12 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			RequeueAfter: 30 * time.Second,
 		}, err
 	case "Finished":
+		// Restore replicas before cleanup
+		if err := r.restoreReducedReplicas(); err != nil {
+			r.logger.Error(err, "Failed to restore reduced replicas after upgrade")
+			// Continue with upgrade completion even if replica restoration fails
+		}
+
 		// Cleanup status after successful upgrade
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			instance.Status.Version = instance.Spec.General.Version
@@ -373,16 +382,26 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		return err
 	}
 
-	ready, err = services.PreparePodForDelete(r.osClient, r.logger, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
+	// Use PreparePodForDeleteWithReplicas to get replica information
+	prepareResult, err := services.PreparePodForDeleteWithReplicas(r.osClient, r.logger, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		conditions = append(conditions, "Could not prepare pod for delete")
 		r.setComponentConditions(conditions, pool.Component)
 		return err
 	}
-	if !ready {
+	if !prepareResult.Ready {
 		conditions = append(conditions, "Waiting for node to drain")
 		r.setComponentConditions(conditions, pool.Component)
 		return nil
+	}
+
+	// Store original replica counts if any were reduced
+	if len(prepareResult.OriginalReplicas) > 0 {
+		err = r.storeReducedReplicas(prepareResult.OriginalReplicas)
+		if err != nil {
+			r.logger.Error(err, "Failed to store reduced replica information")
+			// Don't fail the upgrade if we can't store this, but log it
+		}
 	}
 
 	err = r.client.DeletePod(&corev1.Pod{
@@ -433,4 +452,113 @@ func (r *UpgradeReconciler) setComponentConditions(conditions []string, componen
 	if err != nil {
 		r.logger.Error(err, "Could not update status")
 	}
+}
+
+// storeReducedReplicas stores the original replica counts in cluster annotations
+func (r *UpgradeReconciler) storeReducedReplicas(newReplicas map[string]int) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get fresh instance
+		instance, err := r.client.GetOpenSearchCluster(r.instance.Name, r.instance.Namespace)
+		if err != nil {
+			return err
+		}
+
+		// Get existing replica map from annotations
+		existingReplicas := make(map[string]int)
+		if instance.Annotations != nil {
+			if replicaData, ok := instance.Annotations[replicaRestoreAnnotation]; ok {
+				if err := json.Unmarshal([]byte(replicaData), &existingReplicas); err != nil {
+					r.logger.V(1).Info(fmt.Sprintf("Could not parse existing replica annotation: %v", err))
+					existingReplicas = make(map[string]int)
+				}
+			}
+		}
+
+		// Merge with new replicas (new takes precedence)
+		for k, v := range newReplicas {
+			existingReplicas[k] = v
+		}
+
+		// Store back to annotations
+		replicaData, err := json.Marshal(existingReplicas)
+		if err != nil {
+			return err
+		}
+
+		if instance.Annotations == nil {
+			instance.Annotations = make(map[string]string)
+		}
+		instance.Annotations[replicaRestoreAnnotation] = string(replicaData)
+
+		// Update the cluster object using the underlying client
+		// We need to use the embedded client.Client from K8sClientImpl
+		if clientImpl, ok := r.client.(k8s.K8sClientImpl); ok {
+			return clientImpl.Update(r.ctx, &instance)
+		}
+		return fmt.Errorf("unable to access underlying client for update")
+	})
+}
+
+// restoreReducedReplicas restores replica counts from annotations and clears the annotation
+func (r *UpgradeReconciler) restoreReducedReplicas() error {
+	if r.osClient == nil {
+		var err error
+		r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.instance, nil)
+		if err != nil {
+			return fmt.Errorf("failed to create OpenSearch client: %w", err)
+		}
+	}
+
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		// Get fresh instance
+		instance, err := r.client.GetOpenSearchCluster(r.instance.Name, r.instance.Namespace)
+		if err != nil {
+			return err
+		}
+
+		// Check if we have replica data to restore
+		if instance.Annotations == nil {
+			return nil
+		}
+
+		replicaData, ok := instance.Annotations[replicaRestoreAnnotation]
+		if !ok || replicaData == "" {
+			return nil
+		}
+
+		// Parse replica map
+		originalReplicas := make(map[string]int)
+		if err := json.Unmarshal([]byte(replicaData), &originalReplicas); err != nil {
+			r.logger.Error(err, "Failed to parse replica restore annotation")
+			// Clear the annotation even if parsing fails
+			delete(instance.Annotations, replicaRestoreAnnotation)
+			if clientImpl, ok := r.client.(k8s.K8sClientImpl); ok {
+				return clientImpl.Update(r.ctx, &instance)
+			}
+			return fmt.Errorf("unable to access underlying client for update")
+		}
+
+		if len(originalReplicas) == 0 {
+			// No replicas to restore, just clear the annotation
+			delete(instance.Annotations, replicaRestoreAnnotation)
+			if clientImpl, ok := r.client.(k8s.K8sClientImpl); ok {
+				return clientImpl.Update(r.ctx, &instance)
+			}
+			return fmt.Errorf("unable to access underlying client for update")
+		}
+
+		// Restore replicas
+		r.logger.Info(fmt.Sprintf("Restoring replicas for %d indices after upgrade", len(originalReplicas)))
+		if err := services.RestoreIndexReplicas(r.osClient, originalReplicas, r.logger); err != nil {
+			r.logger.Error(err, "Failed to restore some replicas, will retry on next reconciliation")
+			return err
+		}
+
+		// Clear the annotation after successful restoration
+		delete(instance.Annotations, replicaRestoreAnnotation)
+		if clientImpl, ok := r.client.(k8s.K8sClientImpl); ok {
+			return clientImpl.Update(r.ctx, &instance)
+		}
+		return fmt.Errorf("unable to access underlying client for update")
+	})
 }
