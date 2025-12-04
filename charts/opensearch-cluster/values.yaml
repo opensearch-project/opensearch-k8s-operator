@@ -163,6 +163,9 @@ cluster:
     # -- dashboards annotations
     annotations: {}
 
+    # -- dashboards pod topologySpreadConstraints
+    topologySpreadConstraints: []
+
     # -- dashboards Base Path for Opensearch Clusters running behind a reverse proxy
     basePath: ""
 
@@ -352,6 +355,9 @@ cluster:
         # This is used only when generate is true.
         duration: "8760h"
 
+        # -- Enable hot reloading of TLS certificates.
+        enableHotReload: false
+
       transport:
         # -- Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing
         # CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
@@ -376,6 +382,9 @@ cluster:
         # -- Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
         # This is used only when generate is true.
         duration: "8760h"
+
+        # -- Enable hot reloading of TLS certificates.
+        enableHotReload: false
 
   # Opensearch Ingress configuration
   ingress:

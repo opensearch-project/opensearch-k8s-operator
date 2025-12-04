@@ -1308,10 +1308,50 @@ spec:
                         name:
                           description: Name to use for the volume. Required.
                           type: string
+                        nfs:
+                          description: NFS object to use to populate the volume
+                          properties:
+                            path:
+                              description: |-
+                                path that is exported by the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly here will force the NFS export to be mounted with read-only permissions.
+                                Defaults to false.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: boolean
+                            server:
+                              description: |-
+                                server is the hostname or IP address of the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                          required:
+                          - path
+                          - server
+                          type: object
                         path:
                           description: Path in the container to mount the volume at.
                             Required.
                           type: string
+                        persistentVolumeClaim:
+                          description: PersistentVolumeClaim object to use to populate
+                            the volume
+                          properties:
+                            claimName:
+                              description: |-
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
+                                Default false.
+                              type: boolean
+                          required:
+                          - claimName
+                          type: object
                         projected:
                           description: Projected object to use to populate the volume
                           properties:
@@ -1730,6 +1770,11 @@ spec:
                       - name
                       - path
                       type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of secret, configMap, emptyDir, csi,
+                          projected, nfs must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          == 1
                     type: array
                   affinity:
                     description: Affinity is a group of affinity scheduling rules.
@@ -3083,6 +3128,7 @@ spec:
                         type: object
                     type: object
                   replicas:
+                    default: 1
                     format: int32
                     type: integer
                   resources:
@@ -3384,6 +3430,12 @@ spec:
                       enable:
                         description: Enable HTTPS for Dashboards
                         type: boolean
+                      enableHotReload:
+                        description: Enable hot reloading of TLS certificates. When
+                          enabled, certificates are mounted as directories instead
+                          of using subPath, allowing Kubernetes to update certificate
+                          files when secrets are updated.
+                        type: boolean
                       generate:
                         description: Generate certificate, if false secret must be
                           provided
@@ -3445,9 +3497,6 @@ spec:
                     type: array
                   version:
                     type: string
-                required:
-                - replicas
-                - version
                 type: object
               general:
                 description: |-
@@ -3606,10 +3655,50 @@ spec:
                         name:
                           description: Name to use for the volume. Required.
                           type: string
+                        nfs:
+                          description: NFS object to use to populate the volume
+                          properties:
+                            path:
+                              description: |-
+                                path that is exported by the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly here will force the NFS export to be mounted with read-only permissions.
+                                Defaults to false.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: boolean
+                            server:
+                              description: |-
+                                server is the hostname or IP address of the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                          required:
+                          - path
+                          - server
+                          type: object
                         path:
                           description: Path in the container to mount the volume at.
                             Required.
                           type: string
+                        persistentVolumeClaim:
+                          description: PersistentVolumeClaim object to use to populate
+                            the volume
+                          properties:
+                            claimName:
+                              description: |-
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
+                                Default false.
+                              type: boolean
+                          required:
+                          - claimName
+                          type: object
                         projected:
                           description: Projected object to use to populate the volume
                           properties:
@@ -4028,6 +4117,11 @@ spec:
                       - name
                       - path
                       type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of secret, configMap, emptyDir, csi,
+                          projected, nfs must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          == 1
                     type: array
                   annotations:
                     additionalProperties:
@@ -4139,6 +4233,11 @@ spec:
                             type: string
                         type: object
                     type: object
+                  operatorClusterURL:
+                    description: |-
+                      Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
+                      instead of the default internal Kubernetes service DNS name.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -6345,11 +6444,22 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          customFQDN:
+                            description: Custom FQDN to use for the HTTP certificate.
+                              If not set, the operator will use the default cluster
+                              DNS names.
+                            type: string
                           duration:
                             default: 8760h
                             description: Duration controls the validity period of
                               generated certificates (e.g. "8760h", "720h").
                             type: string
+                          enableHotReload:
+                            description: Enable hot reloading of TLS certificates.
+                              When enabled, certificates are mounted as directories
+                              instead of using subPath, allowing Kubernetes to update
+                              certificate files when secrets are updated.
+                            type: boolean
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
@@ -6401,6 +6511,12 @@ spec:
                             description: Duration controls the validity period of
                               generated certificates (e.g. "8760h", "720h").
                             type: string
+                          enableHotReload:
+                            description: Enable hot reloading of TLS certificates.
+                              When enabled, certificates are mounted as directories
+                              instead of using subPath, allowing Kubernetes to update
+                              certificate files when secrets are updated.
+                            type: boolean
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false

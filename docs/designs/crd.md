@@ -425,6 +425,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>false</td>
         <td>-</td>
       </tr><tr>
+        <td><b>topologySpreadConstraints</b></td>
+        <td>[]corev1.TopologySpreadConstraint</td>
+        <td>add topology spread contraints to dashboard pods</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
         <td><b>labels</b></td>
         <td>map[string]string</td>
         <td>Adds labels to dashboard pods</td>
@@ -824,6 +830,13 @@ AdditionalVolume object define additional volume and volumeMount
       <td><b>projected</b></td>
       <td>corev1.ProjectedVolumeSource</td>
       <td>Defines the Projected object to be mounted</td>
+      <td>false</td>
+      <td>-</td>
+    </tr>
+    </tr><tr>
+      <td><b>persistentVolumeClaim</b></td>
+      <td>corev1.PersistentVolumeClaimVolumeSource</td>
+      <td>Defines the PersistentVolumeClaim object to be mounted</td>
       <td>false</td>
       <td>-</td>
     </tr>

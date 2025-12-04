@@ -152,10 +152,20 @@ func (in *AdditionalVolume) DeepCopyInto(out *AdditionalVolume) {
 		*out = new(corev1.CSIVolumeSource)
 		(*in).DeepCopyInto(*out)
 	}
+	if in.PersistentVolumeClaim != nil {
+		in, out := &in.PersistentVolumeClaim, &out.PersistentVolumeClaim
+		*out = new(corev1.PersistentVolumeClaimVolumeSource)
+		**out = **in
+	}
 	if in.Projected != nil {
 		in, out := &in.Projected, &out.Projected
 		*out = new(corev1.ProjectedVolumeSource)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.NFS != nil {
+		in, out := &in.NFS, &out.NFS
+		*out = new(corev1.NFSVolumeSource)
+		**out = **in
 	}
 }
 
@@ -653,6 +663,13 @@ func (in *DashboardsConfig) DeepCopyInto(out *DashboardsConfig) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
+	if in.TopologySpreadConstraints != nil {
+		in, out := &in.TopologySpreadConstraints, &out.TopologySpreadConstraints
+		*out = make([]corev1.TopologySpreadConstraint, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	if in.PodSecurityContext != nil {
 		in, out := &in.PodSecurityContext, &out.PodSecurityContext
 		*out = new(corev1.PodSecurityContext)
@@ -830,6 +847,11 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 		in, out := &in.ImageSpec, &out.ImageSpec
 		*out = new(ImageSpec)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.SetVMMaxMapCount != nil {
+		in, out := &in.SetVMMaxMapCount, &out.SetVMMaxMapCount
+		*out = new(bool)
+		**out = **in
 	}
 	if in.DefaultRepo != nil {
 		in, out := &in.DefaultRepo, &out.DefaultRepo

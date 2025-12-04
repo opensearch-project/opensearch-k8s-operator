@@ -140,11 +140,28 @@ func CreateAdditionalVolumes(
 				},
 			})
 		}
+		if volumeConfig.PersistentVolumeClaim != nil {
+			readOnly = volumeConfig.PersistentVolumeClaim.ReadOnly
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					PersistentVolumeClaim: volumeConfig.PersistentVolumeClaim,
+				},
+			})
+		}
 		if volumeConfig.Projected != nil {
 			retVolumes = append(retVolumes, corev1.Volume{
 				Name: volumeConfig.Name,
 				VolumeSource: corev1.VolumeSource{
 					Projected: volumeConfig.Projected,
+				},
+			})
+		}
+		if volumeConfig.NFS != nil {
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					NFS: volumeConfig.NFS,
 				},
 			})
 		}
@@ -154,7 +171,7 @@ func CreateAdditionalVolumes(
 		}
 
 		subPath := ""
-		// SubPaths are only supported for ConfigMaps, Secrets and CSI volumes
+		// SubPaths are only supported for ConfigMaps, Secrets, CSI and Projected volumes
 		if volumeConfig.ConfigMap != nil || volumeConfig.Secret != nil || volumeConfig.CSI != nil || volumeConfig.Projected != nil {
 			subPath = strings.TrimSpace(volumeConfig.SubPath)
 		}
@@ -329,6 +346,12 @@ func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, c
 		}
 
 		if sts != nil {
+			readyReplicas, err := helpers.ReadyReplicasForNodePool(k8sClient, cluster, &nodePool)
+			if err != nil {
+				lg.V(1).Info(fmt.Sprintf("Failed to count ready pods for nodepool %s: %v", nodePool.Component, err))
+				return previousAvailableNodes
+			}
+			sts.Status.ReadyReplicas = readyReplicas
 			availableNodes += sts.Status.ReadyReplicas
 		}
 	}

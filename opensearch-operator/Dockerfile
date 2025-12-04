@@ -14,6 +14,7 @@ COPY main.go main.go
 COPY api/ api/
 COPY controllers/ controllers/
 COPY pkg/   pkg/
+COPY webhook/ webhook/
 COPY opensearch-gateway/   opensearch-gateway/
 
 # Build

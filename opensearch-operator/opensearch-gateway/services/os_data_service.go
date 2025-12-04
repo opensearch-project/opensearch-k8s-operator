@@ -110,8 +110,17 @@ func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	if !ok || val == "" {
 		return true, err
 	}
-	valAsString := strings.ReplaceAll(val.(string), nodeNameToExclude, "")
-	valAsString = strings.ReplaceAll(valAsString, ",,", ",")
+	valAsString := val.(string)
+	// Split the comma-separated list, filter out the node to exclude, and rejoin
+	valArr := strings.Split(valAsString, ",")
+	var filteredArr []string
+	for _, name := range valArr {
+		trimmedName := strings.TrimSpace(name)
+		if trimmedName != "" && trimmedName != nodeNameToExclude {
+			filteredArr = append(filteredArr, trimmedName)
+		}
+	}
+	valAsString = strings.Join(filteredArr, ",")
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
 	_, err = service.PutClusterSettings(settings)
 	return err == nil, err

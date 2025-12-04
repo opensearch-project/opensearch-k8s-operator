@@ -14,10 +14,10 @@ manager:
   extraEnv: []
   resources:
     limits:
-      cpu: 200m
+      cpu: 1000m
       memory: 500Mi
     requests:
-      cpu: 100m
+      cpu: 200m
       memory: 350Mi
 
   livenessProbe:
@@ -77,7 +77,8 @@ installCRDs: true
 serviceAccount:
   # Specifies whether a service account should be created
   create: true
-  # Override the service account name. Defaults to opensearch-operator-controller-manager
+  # The name of the service account to use.
+  # If not set and create is true, a name is generated using the fullname template
   name: ""
 
 # kubeRbacProxy has been replaced with controller-runtime's built-in
@@ -87,8 +88,40 @@ serviceAccount:
 # kubeRbacProxy:
 #   enable: false
 
-## If this is set to true, RoleBindings will be used instead of ClusterRoleBindings, inorder to restrict ClusterRoles
-## to the namespace where the operator and OpenSearch cluster are in. In that case, specify the namespace where they
-## are in in manager.watchNamespace field.
-## If false, ClusterRoleBindings will be used
+## If this is set to true, RoleBindings will be used instead of ClusterRoleBindings, in order to restrict permissions
+## to the namespace where the operator and OpenSearch cluster are deployed. In that case, specify the namespace in the
+## manager.watchNamespace field.
+##
+## When useRoleBindings is true:
+## - Manager and proxy roles will be created as namespace-scoped Roles instead of ClusterRoles
+## - The metrics ClusterRole will NOT be created, as nonResourceURLs (like /metrics) cannot be used in namespace-scoped Roles
+## - The operator's /metrics endpoint is exposed via kube-apiserver and requires authentication (TokenReviews) and
+##   authorization (SubjectAccessReviews). If you need to access metrics with monitoring tools, you must create the
+##   appropriate ClusterRole and ClusterRoleBinding manually
+##
+## If false (default), ClusterRoleBindings will be used and the metrics ClusterRole will be created
 useRoleBindings: false
+
+# Webhook configuration
+webhook:
+  # Enable validation webhooks
+  enabled: true
+  # Port exposed by the webhook server container
+  port: 9443
+  # Failure policy for webhooks. Options: Fail, Ignore
+  failurePolicy: Fail
+  # Secret name for webhook TLS certificates (used when certManager.enabled is false)
+  # Defaults to: <release-name>-opensearch-operator-webhook-server-cert
+  # If certManager is disabled, you must manually create this secret with:
+  #   - tls.crt: The TLS certificate
+  #   - tls.key: The TLS private key
+  #   - ca.crt: The CA certificate (optional, for client verification)
+  # The certificate should be valid for:
+  #   - <release-name>-opensearch-operator-webhook-service.<namespace>.svc
+  #   - <release-name>-opensearch-operator-webhook-service.<namespace>.svc.cluster.local
+  secretName: ""
+  # Cert-manager configuration for webhook certificates
+  certManager:
+    # Enable cert-manager for automatic certificate management
+    # If set to false, you must manually create the TLS secret (see webhook.secretName above)
+    enabled: true

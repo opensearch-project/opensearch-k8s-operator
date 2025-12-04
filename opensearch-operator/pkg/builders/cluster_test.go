@@ -159,6 +159,18 @@ var _ = Describe("Builders", func() {
 				Value: "search",
 			}))
 		})
+		It("should set node.roles to [] for coordinator-only nodes (OpenSearch 3.0+)", func() {
+			clusterObject := ClusterDescWithVersion("3.0.0")
+			nodePool := opsterv1.NodePool{
+				Component: "coordinators",
+				Roles:     []string{},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "node.roles",
+				Value: "[]",
+			}))
+		})
 		It("should have annotations added to node", func() {
 			clusterObject := ClusterDescWithVersion("1.3.0")
 			nodePool := opsterv1.NodePool{

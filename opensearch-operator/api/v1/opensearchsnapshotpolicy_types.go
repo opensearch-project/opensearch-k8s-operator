@@ -131,6 +131,11 @@ type OpensearchSnapshotPolicyList struct {
 	Items           []OpensearchSnapshotPolicy `json:"items"`
 }
 
+// GetOpensearchRef returns the OpenSearch cluster reference
+func (sp *OpensearchSnapshotPolicy) GetOpensearchRef() corev1.LocalObjectReference {
+	return sp.Spec.OpensearchRef
+}
+
 func init() {
 	SchemeBuilder.Register(&OpensearchSnapshotPolicy{}, &OpensearchSnapshotPolicyList{})
 }

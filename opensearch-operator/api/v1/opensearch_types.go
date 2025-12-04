@@ -52,7 +52,7 @@ type GeneralConfig struct {
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 	ServiceName    string `json:"serviceName"`
 	//+kubebuilder:default=true
-	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
+	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
 	// Disable SSL for the cluster
 	DisableSSL bool `json:"disableSSL,omitempty"`
@@ -210,9 +210,10 @@ type DashboardsConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Enable     bool                        `json:"enable,omitempty"`
 	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
-	Replicas   int32                       `json:"replicas"`
-	Tls        *DashboardsTlsConfig        `json:"tls,omitempty"`
-	Version    string                      `json:"version"`
+	//+kubebuilder:default=1
+	Replicas int32                `json:"replicas,omitempty"`
+	Tls      *DashboardsTlsConfig `json:"tls,omitempty"`
+	Version  string               `json:"version,omitempty"`
 	// Base Path for Opensearch Clusters running behind a reverse proxy
 	BasePath string `json:"basePath,omitempty"`
 	// Additional properties for opensearch_dashboards.yaml
@@ -229,6 +230,7 @@ type DashboardsConfig struct {
 	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
 	PluginsList                 []string                    `json:"pluginsList,omitempty"`
 	HostAliases                 []corev1.HostAlias          `json:"hostAliases,omitempty"`
+	TopologySpreadConstraints   []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 	// Set security context for the dashboards pods
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the dashboards pods' container
@@ -292,6 +294,8 @@ type TlsCertificateConfig struct {
 	// Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
 	//+kubebuilder:default:="8760h"
 	Duration *metav1.Duration `json:"duration,omitempty"`
+	// Enable hot reloading of TLS certificates. When enabled, certificates are mounted as directories instead of using subPath, allowing Kubernetes to update certificate files when secrets are updated.
+	EnableHotReload bool `json:"enableHotReload,omitempty"`
 }
 
 // Reference to a secret
@@ -321,6 +325,7 @@ type ImageSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0) == 1",message="exactly one of secret, configMap, emptyDir, csi, projected, nfs must be set"
 type AdditionalVolume struct {
 	// Name to use for the volume. Required.
 	Name string `json:"name"`
@@ -336,8 +341,12 @@ type AdditionalVolume struct {
 	EmptyDir *corev1.EmptyDirVolumeSource `json:"emptyDir,omitempty"`
 	// CSI object to use to populate the volume
 	CSI *corev1.CSIVolumeSource `json:"csi,omitempty"`
+	// PersistentVolumeClaim object to use to populate the volume
+	PersistentVolumeClaim *corev1.PersistentVolumeClaimVolumeSource `json:"persistentVolumeClaim,omitempty"`
 	// Projected object to use to populate the volume
 	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
+	// NFS object to use to populate the volume
+	NFS *corev1.NFSVolumeSource `json:"nfs,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }

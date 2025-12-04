@@ -11,6 +11,7 @@ import (
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -537,10 +538,6 @@ func NewSTSForNodePool(
 									Value: jvm,
 								},
 								{
-									Name:  "node.roles",
-									Value: strings.Join(selectedRoles, ","),
-								},
-								{
 									Name:  "http.port",
 									Value: fmt.Sprint(cr.Spec.General.HttpPort),
 								},
@@ -598,10 +595,22 @@ func NewSTSForNodePool(
 			Value: extraConfig[k],
 		})
 	}
+
+	// Add node.roles env var
+	// For coordinator-only nodes (empty roles), set to "[]" which OpenSearch 3.0+ properly handles as an empty array
+	nodeRolesValue := strings.Join(selectedRoles, ",")
+	if len(selectedRoles) == 0 {
+		nodeRolesValue = "[]"
+	}
+	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
+		Name:  "node.roles",
+		Value: nodeRolesValue,
+	})
+
 	// Append additional env vars from cr.Spec.NodePool.env
 	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
-	if cr.Spec.General.SetVMMaxMapCount {
+	if cr.Spec.General.SetVMMaxMapCount != nil && *cr.Spec.General.SetVMMaxMapCount {
 		initHelperImage := helpers.ResolveInitHelperImage(cr)
 
 		sts.Spec.Template.Spec.InitContainers = append(sts.Spec.Template.Spec.InitContainers, corev1.Container{
@@ -1068,7 +1077,7 @@ func NewBootstrapPod(
 		},
 	}
 
-	if cr.Spec.General.SetVMMaxMapCount {
+	if cr.Spec.General.SetVMMaxMapCount != nil && *cr.Spec.General.SetVMMaxMapCount {
 		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
 			Name:            "init-sysctl",
 			Image:           initHelperImage.GetImage(),
@@ -1247,6 +1256,7 @@ func NewSecurityconfigUpdateJob(
 }
 
 func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) bool {
+	wrappedClient := k8s.NewK8sClient(k8sClient, ctx)
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
 		if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
@@ -1257,6 +1267,11 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 			}, sts); err != nil {
 				return false
 			}
+			readyReplicas, err := helpers.ReadyReplicasForNodePool(wrappedClient, cr, &nodePool)
+			if err != nil {
+				return false
+			}
+			sts.Status.ReadyReplicas = readyReplicas
 			if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
 				return false
 			}

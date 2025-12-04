@@ -51,6 +51,11 @@ type OpensearchTenantList struct {
 	Items           []OpensearchTenant `json:"items"`
 }
 
+// GetOpensearchRef returns the OpenSearch cluster reference
+func (t *OpensearchTenant) GetOpensearchRef() corev1.LocalObjectReference {
+	return t.Spec.OpensearchRef
+}
+
 func init() {
 	SchemeBuilder.Register(&OpensearchTenant{}, &OpensearchTenantList{})
 }
