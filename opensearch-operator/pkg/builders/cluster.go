@@ -648,6 +648,11 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 		annotations[key] = value
 	}
 
+	appProtocol := "https"
+	if cr.Spec.General.DisableSSL {
+		appProtocol = "http"
+	}
+
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -669,6 +674,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.HttpPort,
 					},
+					AppProtocol: &appProtocol,
 				},
 				{
 					Name:     "transport",
@@ -690,6 +696,12 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
+
+	httpAppProtocol := "https"
+	if cr.Spec.General.DisableSSL {
+		httpAppProtocol = "http"
+	}
+
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -710,6 +722,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.HttpPort,
 					},
+					AppProtocol: &httpAppProtocol,
 				},
 				{
 					Name:     "transport",
@@ -780,6 +793,11 @@ func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 		helpers.ClusterLabel: cr.Name,
 	}
 
+	appProtocol := "https"
+	if cr.Spec.General.DisableSSL {
+		appProtocol = "http"
+	}
+
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -799,6 +817,7 @@ func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 					TargetPort: intstr.IntOrString{
 						IntVal: cr.Spec.General.HttpPort,
 					},
+					AppProtocol: &appProtocol,
 				},
 			},
 			Selector: labels,
