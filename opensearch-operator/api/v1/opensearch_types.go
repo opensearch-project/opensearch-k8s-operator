@@ -54,8 +54,6 @@ type GeneralConfig struct {
 	//+kubebuilder:default=true
 	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
-	// Disable SSL for the cluster
-	DisableSSL bool `json:"disableSSL,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
@@ -256,6 +254,15 @@ type TlsConfig struct {
 }
 
 type TlsConfigTransport struct {
+	// enabled controls if TLS should be enabled for the transport layer.
+	//
+	// If false: TLS is explicitly disabled for transport.
+	//
+	// If not set (default): TLS is enabled if transport configuration is provided, or if security.tls is set.
+	//
+	// If true: TLS is explicitly enabled. Transport configuration must be provided.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
@@ -267,9 +274,23 @@ type TlsConfigTransport struct {
 	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
+	// Deprecated: DNs of certificates that should have admin access. This field is deprecated and will be removed in a future version.
+	// For OpenSearch 2.0.0+, use security.tls.http.adminDn instead.
+	//+kubebuilder:deprecatedversion:warning="This field is deprecated and will be removed in a future version. Use security.tls.http.adminDn for OpenSearch 2.0.0+."
+	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsConfigHttp struct {
+	// enabled controls if TLS should be enabled for the HTTP layer.
+	//
+	// If false: TLS is explicitly disabled for HTTP.
+	//
+	// If not set (default): TLS is enabled if HTTP configuration is provided, or if security.tls is set.
+	// If spec.general.disableSSL is true, this overrides to false.
+	//
+	// If true: TLS is explicitly enabled. HTTP configuration must be provided.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names.

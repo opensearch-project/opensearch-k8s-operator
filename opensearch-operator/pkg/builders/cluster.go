@@ -195,7 +195,7 @@ func NewSTSForNodePool(
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
 	probeProtocol := "https"
-	if cr.Spec.General.DisableSSL {
+	if !helpers.IsHttpTlsEnabled(cr) {
 		probeProtocol = "http"
 	}
 	startupProbeCommand := []string{
@@ -1340,7 +1340,7 @@ func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonito
 	}
 
 	scheme := "https"
-	if cr.Spec.General.DisableSSL {
+	if !helpers.IsHttpTlsEnabled(cr) {
 		scheme = "http"
 	}
 

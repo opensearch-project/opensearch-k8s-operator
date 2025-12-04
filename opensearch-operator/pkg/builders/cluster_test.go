@@ -248,7 +248,7 @@ var _ = Describe("Builders", func() {
 			_ = os.Setenv(helpers.DnsBaseEnvVariable, customDns)
 
 			actualUrl := URLForCluster(&clusterObject)
-			expectedUrl := fmt.Sprintf("https://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
+			expectedUrl := fmt.Sprintf("http://%s.%s.svc.%s:%d", serviceName, namespace, customDns, port)
 
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
@@ -260,7 +260,7 @@ var _ = Describe("Builders", func() {
 
 			actualUrl := URLForCluster(&clusterObject)
 			// When HttpPort is 0 (default), ClusterURL should default to 9200
-			expectedUrl := fmt.Sprintf("https://%s:9200", customHost)
+			expectedUrl := fmt.Sprintf("http://%s:9200", customHost)
 			Expect(actualUrl).To(Equal(expectedUrl))
 		})
 
@@ -1241,9 +1241,9 @@ var _ = Describe("Builders", func() {
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
-				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'https://localhost:9200'"}))
+				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
 		})
 
 		It("should have custom command when set", func() {
@@ -1268,10 +1268,17 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
-	When("DisableSSL is enabled", func() {
+	When("HTTP TLS is disabled", func() {
 		It("should use http protocol in URLForCluster", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			clusterObject.Spec.General.ServiceName = "opensearch"
 			clusterObject.Namespace = "default"
 			clusterObject.Spec.General.HttpPort = 9200
@@ -1283,7 +1290,14 @@ var _ = Describe("Builders", func() {
 
 		It("should use http protocol in probe commands", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			nodePool := opsterv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
@@ -1299,7 +1313,14 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
 			clusterObject.Name = "test-cluster"
 			clusterObject.Namespace = "default"
-			clusterObject.Spec.General.DisableSSL = true
+			enabled := false
+			clusterObject.Spec.Security = &opsterv1.Security{
+				Tls: &opsterv1.TlsConfig{
+					Http: &opsterv1.TlsConfigHttp{
+						Enabled: &enabled,
+					},
+				},
+			}
 			clusterObject.Spec.General.Monitoring.Enable = true
 			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
 

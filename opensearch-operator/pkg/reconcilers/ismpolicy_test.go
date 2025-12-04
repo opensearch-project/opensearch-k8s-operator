@@ -3,13 +3,15 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"net/http"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -30,7 +32,8 @@ var _ = Describe("ism policy reconciler", func() {
 		mockClient *k8s.MockK8sClient
 
 		// Objects
-		cluster *opsterv1.OpenSearchCluster
+		cluster    *opsterv1.OpenSearchCluster
+		clusterUrl string
 	)
 
 	BeforeEach(func() {
@@ -75,6 +78,7 @@ var _ = Describe("ism policy reconciler", func() {
 				},
 			},
 		}
+		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(cluster))
 	})
 
 	JustBeforeEach(func() {
@@ -146,21 +150,13 @@ var _ = Describe("ism policy reconciler", func() {
 
 			transport.RegisterResponder(
 				http.MethodGet,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 			)
 
 			transport.RegisterResponder(
 				http.MethodHead,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Once(failMessage),
 			)
 		})
@@ -193,9 +189,8 @@ var _ = Describe("ism policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_ism/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(404, "Not Found").Once(),
@@ -204,9 +199,8 @@ var _ = Describe("ism policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodPut,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_ism/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(200, "OK").Once(),
@@ -246,9 +240,8 @@ var _ = Describe("ism policy reconciler", func() {
 					transport.RegisterResponder(
 						http.MethodGet,
 						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/_cat/indices/test-*",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
+							"%s_cat/indices/test-*",
+							clusterUrl,
 						),
 						httpmock.NewJsonResponderOrPanic(200, []map[string]interface{}{
 							{"index": indexName},
@@ -262,9 +255,8 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodPost,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/add/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_ism/add/%s",
+								clusterUrl,
 								indexName,
 							),
 							httpmock.NewStringResponder(200, "OK").Once(),
@@ -294,9 +286,8 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodGet,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_cat/indices/test-*",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_cat/indices/test-*",
+								clusterUrl,
 							),
 							httpmock.NewErrorResponder(fmt.Errorf("failed to get indices")).Once(),
 						)
@@ -323,9 +314,8 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodPost,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/add/test-index-1",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_ism/add/test-index-1",
+								clusterUrl,
 							),
 							httpmock.NewErrorResponder(fmt.Errorf("failed to apply policy")).Once(),
 						)
@@ -355,9 +345,8 @@ var _ = Describe("ism policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_ism/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewErrorResponder(fmt.Errorf("failed to get policy")).Once(),
@@ -389,9 +378,8 @@ var _ = Describe("ism policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_ism/policies/%s",
+						clusterUrl,
 						instance.Spec.PolicyID,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.GetISMPolicyResponse{
@@ -491,9 +479,8 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodPut,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_ism/policies/%s",
+								clusterUrl,
 								instance.Spec.PolicyID,
 							),
 							httpmock.NewStringResponder(200, "OK").Once(),
@@ -767,21 +754,13 @@ var _ = Describe("ism policy reconciler", func() {
 
 					transport.RegisterResponder(
 						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 					)
 
 					transport.RegisterResponder(
 						http.MethodHead,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 				})
@@ -791,9 +770,8 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodDelete,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_ism/policies/%s",
+								clusterUrl,
 								instance.Name,
 							),
 							httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
@@ -810,9 +788,8 @@ var _ = Describe("ism policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodDelete,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_ism/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_ism/policies/%s",
+								clusterUrl,
 								instance.Name,
 							),
 							httpmock.NewStringResponder(200, "OK").Once(failMessage),

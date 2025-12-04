@@ -220,6 +220,7 @@ spec:
   security:
     tls: # Everything related to TLS configuration
       transport: # Configuration of the transport endpoint
+        enabled: true # Enable TLS for transport (default: true if transport config exists)
         generate: true # Have the operator generate and sign certificates
         perNode: true # Separate certificate per node
         # How long generated certificates are valid (default: 8760h = 1 year)
@@ -252,6 +253,7 @@ spec:
   security:
     tls: # Everything related to TLS configuration
       http: # Configuration of the HTTP endpoint
+        enabled: true # Enable TLS for HTTP (default: true if http config exists, false to disable)
         generate: true # Have the Operator generate and sign certificates
         customFQDN: "opensearch.example.com" # Optional: Custom FQDN for the certificate
         # How long generated certificates are valid (default: 8760h = 1 year)
@@ -264,6 +266,8 @@ spec:
 ```
 
 Again, you have the option of either letting the Operator generate and sign the certificates or providing your own. The only difference between node transport certificates and node HTTP/REST APIs is that per-node certificate are not possible here. In all other respects the two work the same way.
+
+**Note:** The `enabled` field controls whether TLS is enabled for the HTTP endpoint. If `enabled` is set to `false`, the cluster will use HTTP instead of HTTPS. If `enabled` is `nil` (not set), TLS is enabled by default when the HTTP config exists. To explicitly disable TLS, set `enabled: false`.
 
 When using generated certificates, you can optionally specify a `customFQDN` field to include a custom domain in the certificate's Subject Alternative Names (SAN) alongside the default cluster DNS names.
 

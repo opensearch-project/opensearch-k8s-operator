@@ -32,8 +32,9 @@ var _ = Describe("users reconciler", func() {
 		mockClient *k8s.MockK8sClient
 
 		// Objects
-		password *corev1.Secret
-		cluster  *opsterv1.OpenSearchCluster
+		password   *corev1.Secret
+		cluster    *opsterv1.OpenSearchCluster
+		clusterUrl string
 	)
 
 	BeforeEach(func() {
@@ -89,6 +90,7 @@ var _ = Describe("users reconciler", func() {
 				},
 			},
 		}
+		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(cluster))
 	})
 
 	JustBeforeEach(func() {
@@ -156,21 +158,13 @@ var _ = Describe("users reconciler", func() {
 
 			transport.RegisterResponder(
 				http.MethodGet,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 			)
 
 			transport.RegisterResponder(
 				http.MethodHead,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Once(failMessage),
 			)
 		})
@@ -239,9 +233,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.GetUserResponse{
@@ -274,9 +267,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.GetUserResponse{
@@ -323,9 +315,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.GetUserResponse{
@@ -335,9 +326,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodPut,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(200, "OK").Once(failMessage),
@@ -465,9 +455,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
@@ -475,9 +464,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodPut,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(200, "OK").Once(failMessage),
@@ -514,21 +502,13 @@ var _ = Describe("users reconciler", func() {
 		BeforeEach(func() {
 			transport.RegisterResponder(
 				http.MethodGet,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 			)
 
 			transport.RegisterResponder(
 				http.MethodHead,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Once(failMessage),
 			)
 		})
@@ -548,9 +528,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
@@ -569,9 +548,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.GetUserResponse{
@@ -596,9 +574,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.GetUserResponse{
@@ -608,9 +585,8 @@ var _ = Describe("users reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodDelete,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_security/api/internalusers/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_security/api/internalusers/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(200, "OK").Once(failMessage),

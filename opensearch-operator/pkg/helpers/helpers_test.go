@@ -25,7 +25,7 @@ var _ = Describe("ClusterURL", func() {
 		}
 
 		result := ClusterURL(cluster)
-		Expect(result).To(Equal("https://opensearch.example.com:9443"))
+		Expect(result).To(Equal("http://opensearch.example.com:9443"))
 	})
 
 	It("should use default internal DNS when operatorClusterURL is nil", func() {
@@ -40,7 +40,7 @@ var _ = Describe("ClusterURL", func() {
 		}
 
 		result := ClusterURL(cluster)
-		Expect(result).To(Equal("https://test.default.svc.cluster.local:9200"))
+		Expect(result).To(Equal("http://test.default.svc.cluster.local:9200"))
 	})
 
 	It("should use default port 9200 when HttpPort is 0", func() {
@@ -56,7 +56,7 @@ var _ = Describe("ClusterURL", func() {
 		}
 
 		result := ClusterURL(cluster)
-		Expect(result).To(Equal("https://opensearch.example.com:9200"))
+		Expect(result).To(Equal("http://opensearch.example.com:9200"))
 	})
 })
 

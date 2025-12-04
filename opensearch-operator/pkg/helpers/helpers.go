@@ -52,6 +52,26 @@ func ContainsString(slice []string, s string) bool {
 	return false
 }
 
+// IsHttpTlsEnabled determines if HTTP TLS is enabled for the cluster.
+// If enabled is nil (not set): enabled by default if HTTP config exists.
+// If enabled is true: explicitly enabled.
+// If enabled is false: explicitly disabled.
+func IsHttpTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
+	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
+		return false
+	}
+	httpConfig := cluster.Spec.Security.Tls.Http
+	if httpConfig == nil {
+		return false
+	}
+	// If explicitly set, use that value
+	if httpConfig.Enabled != nil {
+		return *httpConfig.Enabled
+	}
+	// Default: enabled if HTTP config is provided
+	return true
+}
+
 // ClusterURL returns the URL for communicating with the OpenSearch cluster.
 // If OperatorClusterURL is specified, it uses that custom URL.
 // Otherwise, it constructs the default internal Kubernetes service DNS name.
@@ -62,7 +82,8 @@ func ClusterURL(cluster *opsterv1.OpenSearchCluster) string {
 	}
 
 	protocol := "https"
-	if cluster.Spec.General.DisableSSL {
+	// Check if HTTP TLS is enabled
+	if !IsHttpTlsEnabled(cluster) {
 		protocol = "http"
 	}
 
