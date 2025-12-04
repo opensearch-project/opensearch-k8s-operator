@@ -235,6 +235,12 @@ GeneralConfig defines global Opensearch cluster configuration
         <td>List of additional volume mounts</td>
         <td>false</td>
         <td>-</td>
+      </tr><tr>
+        <td><b>hostAliases</b></td>
+        <td>[]corev1.HostAlias</td>
+        <td>Set the host aliases for the cluster pods.</td>
+        <td>false</td>
+        <td> - </td>
       </tr>
 </table>
 
@@ -309,6 +315,12 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>List of init containers that should be added to the bootstrap pod</td>
         <td>false</td>
         <td> [] </td>
+      </tr><tr>
+        <td><b>hostAliases</b></td>
+        <td>[]corev1.HostAlias</td>
+        <td>Set the host aliases for the bootstrap pods.</td>
+        <td>false</td>
+        <td> - </td>
       </tr>
 </table>
 
@@ -446,6 +458,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td><b>securityContext</b></td>
         <td>*corev1.SecurityContext</td>
         <td>Set the security context for the dashboards pods' containers.</td>
+        <td>false</td>
+        <td> - </td>
+      </tr><tr>
+        <td><b>hostAliases</b></td>
+        <td>[]corev1.HostAlias</td>
+        <td>Set the host aliases for the dashboards pods.</td>
         <td>false</td>
         <td> - </td>
       </tr>

@@ -697,6 +697,33 @@ Note that the bootstrap pod started during initial cluster setup uses the same (
 
 The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod.
 
+### Host Aliases for pods and containers
+
+You can add entries to Opensearch, Bootstrap and Dashboard pods /etc/hosts files using [HostAliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/).
+
+The structure is the same for both Opensearch pods (in `spec.general`) and the Dashboard pod (in `spec.dashboards`):
+
+```yaml
+spec:
+  general:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
+  dashboards:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
+  bootstrap:
+    hostAliases:
+    - hostnames:
+      - example.com
+      ip: 127.0.0.1
+```
+
+By default, the bootstrap pods will have the same hostAliases set as the Opensearch pods. To overwrite this, set the hostAliases in the bootstrap section.
+
 ### Labels or Annotations on OpenSearch nodes
 
 You can add additional labels or annotations on the nodepool configuration. This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint:

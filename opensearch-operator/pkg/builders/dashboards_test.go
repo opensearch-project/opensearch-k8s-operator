@@ -238,4 +238,28 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Selector).To(HaveKeyWithValue("opensearch.cluster.dashboards", clusterName))
 		})
 	})
+
+	When("configuring a host alias for the dashboards", func() {
+		It("should configure the host alias for the dashboard pods", func() {
+			hostNames := []string{"dummy.com"}
+			hostAlias := corev1.HostAlias{
+				IP:        "3.5.7.9",
+				Hostnames: hostNames,
+			}
+			spec := opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						ServiceName: "some-name",
+					},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable:      true,
+						HostAliases: []corev1.HostAlias{hostAlias},
+					},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
+		})
+	})
 })
