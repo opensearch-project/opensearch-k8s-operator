@@ -8,12 +8,12 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/big"
 	"reflect"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver"
 	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -82,16 +82,75 @@ func IsHttpTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
 	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
 		return false
 	}
-	httpConfig := cluster.Spec.Security.Tls.Http
-	if httpConfig == nil {
+	tlsConfig := cluster.Spec.Security.Tls.Http
+	if tlsConfig == nil {
 		return false
 	}
 	// If explicitly set, use that value
-	if httpConfig.Enabled != nil {
-		return *httpConfig.Enabled
+	if tlsConfig.Enabled != nil {
+		return *tlsConfig.Enabled
 	}
 	// Default: enabled if HTTP config is provided
 	return true
+}
+
+func CheckVersionConstraint(cluster *opsterv1.OpenSearchCluster, constraint string, defaultOnError bool, errMsg string) bool {
+	versionConstraint, err := semver.NewConstraint(constraint)
+	if err != nil {
+		panic(err)
+	}
+
+	version, err := semver.NewVersion(cluster.Spec.General.Version)
+	if err != nil {
+		log.Println(errMsg)
+		return defaultOnError
+	}
+	return versionConstraint.Check(version)
+}
+
+func SecurityChangeVersion(cluster *opsterv1.OpenSearchCluster) bool {
+	return CheckVersionConstraint(
+		cluster,
+		">=2.0.0",
+		true,
+		"unable to parse version, assuming >= 2.0.0",
+	)
+}
+
+func SupportsHotReload(cluster *opsterv1.OpenSearchCluster) bool {
+	return CheckVersionConstraint(
+		cluster,
+		">=2.19.1",
+		false,
+		"unable to parse version for hot reload check, assuming not supported",
+	)
+}
+
+// IsTransportTlsEnabled determines if transport TLS should be enabled.
+// If enabled is nil (not set): enabled by default if transport config exists.
+// If enabled is true: explicitly enabled.
+// If enabled is false: explicitly disabled.
+func IsTransportTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
+	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
+		return false
+	}
+	tlsConfig := cluster.Spec.Security.Tls.Transport
+	if tlsConfig == nil {
+		return false
+	}
+	// If explicitly set, use that value
+	if tlsConfig.Enabled != nil {
+		return *tlsConfig.Enabled
+	}
+	return true
+}
+
+func IsSecurityPluginEnabled(cr *opsterv1.OpenSearchCluster) bool {
+
+	if SecurityChangeVersion(cr) {
+		return IsHttpTlsEnabled(cr)
+	}
+	return IsTransportTlsEnabled(cr)
 }
 
 // ClusterURL returns the URL for communicating with the OpenSearch cluster.
@@ -196,25 +255,6 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	return val, ok
 }
 
-func generateRandomPassword(length int) (string, error) {
-	// Define the set of characters you want to use for the password
-	const charset = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-	var password []byte
-
-	for i := 0; i < length; i++ {
-		// Generate a random index for the charset
-		randomIndex, err := rand.Int(rand.Reader, big.NewInt(int64(len(charset))))
-		if err != nil {
-			return "", err
-		}
-
-		// Append the random character to the password slice
-		password = append(password, charset[randomIndex.Int64()])
-	}
-
-	return string(password), nil
-}
-
 func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
 	// Check if user provided AdminCredentialsSecret via Security.Config
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
@@ -232,10 +272,7 @@ func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSear
 		return nil, true, err
 	}
 
-	randomPassword, err := generateRandomPassword(15)
-	if err != nil {
-		return nil, true, err
-	}
+	randomPassword := rand.Text()
 
 	adminSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -967,12 +1004,9 @@ func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.Ope
 		return nil, true, err
 	}
 
-	randomPassword, err := generateRandomPassword(15)
-	if err != nil {
-		return nil, true, err
-	}
+	randomPassword := rand.Text()
 	// NOTE(joseb): we cannot set random password when security plugin is disabled.
-	if IsSecurityPluginDisabled(cr) {
+	if !IsSecurityPluginEnabled(cr) {
 		randomPassword = "kibanaserver"
 	}
 

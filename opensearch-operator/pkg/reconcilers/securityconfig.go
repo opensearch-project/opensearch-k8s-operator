@@ -95,7 +95,7 @@ func NewSecurityconfigReconciler(
 }
 
 func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
-	if helpers.IsSecurityPluginDisabled(r.instance) {
+	if !helpers.IsSecurityPluginEnabled(r.instance) {
 		r.logger.Info("Security plugin is disabled, skipping securityconfig reconciliation")
 		return ctrl.Result{}, nil
 	}
@@ -283,15 +283,12 @@ func checksum(data map[string][]byte) (string, error) {
 }
 
 func (r *SecurityconfigReconciler) determineAdminSecret() string {
-	// TODO(joseb): Spec.General.DisableSSL should be checked here too
 	if r.instance.Spec.Security != nil {
 		if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
 			return r.instance.Spec.Security.Config.AdminSecret.Name
-		} else if r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Http != nil && r.instance.Spec.Security.Tls.Http.Generate {
-			return fmt.Sprintf("%s-admin-cert", r.instance.Name)
 		}
 	}
-	return ""
+	return fmt.Sprintf("%s-admin-cert", r.instance.Name)
 }
 
 func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {

@@ -37,8 +37,3 @@ func GeneratedAdminCredentialsSecretName(cr *opsterv1.OpenSearchCluster) string 
 func GeneratedDashboardsCredentialsSecretName(cr *opsterv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-dashboards-password", cr.Name)
 }
-
-func IsSecurityPluginDisabled(cr *opsterv1.OpenSearchCluster) bool {
-	// NOTE(joseb): Need to define this condition properly
-	return cr.Spec.Security == nil || cr.Spec.General.DisableSSL
-}

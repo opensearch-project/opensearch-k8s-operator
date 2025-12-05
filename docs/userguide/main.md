@@ -1511,7 +1511,6 @@ When the security plugin is disabled (`spec.security.disable: true`), password m
 - You can now set a custom password for the admin user by providing `adminCredentialsSecret` with your desired password
 - The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in the bootstrap pod and all OpenSearch StatefulSet pods
 - This allows OpenSearch to use your custom password during initial setup, even when the security plugin is disabled
-- **Note:** Previously, custom passwords were not supported when the security plugin was disabled
 
 **Dashboards User:**
 - Custom passwords for the Dashboards user are **not supported** when the security plugin is disabled
