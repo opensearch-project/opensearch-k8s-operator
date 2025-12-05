@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha1"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -94,7 +95,8 @@ func NewSecurityconfigReconciler(
 }
 
 func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
-	if r.instance.Spec.Security == nil {
+	if !helpers.IsSecurityPluginEnabled(r.instance) {
+		r.logger.Info("Security plugin is disabled, skipping securityconfig reconciliation")
 		return ctrl.Result{}, nil
 	}
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
@@ -108,40 +110,73 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	clusterName := r.instance.Name
 	jobName := clusterName + "-securityconfig-update"
 
+	configSecretName = helpers.GeneratedSecurityConfigSecretName(r.instance)
+
+	// TODO(joseb): Check if admin certificate is provided or generated in webhook
 	if adminCertName == "" {
-		r.logger.Info("Cluster is running with demo certificates.")
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Notice - Cluster is running with demo certificates")
-		return ctrl.Result{}, nil
+		err := errors.New("admin certificate neither provided nor generation is enabled")
+		r.logger.Error(err, "Skipping securityconfig reconciliation")
+		return ctrl.Result{}, err
 	}
 
-	// Checking if Security Config values are empty and creates a default-securityconfig secret
-	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.SecurityconfigSecret.Name != "" {
-		// Use a user passed value of SecurityconfigSecret name
-		configSecretName = r.instance.Spec.Security.Config.SecurityconfigSecret.Name
-		// Wait for secret to be available
-		configSecret, err := r.client.GetSecret(configSecretName, namespace)
-		if err != nil {
-			if apierrors.IsNotFound(err) {
-				r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the securityconfig to be created", configSecretName))
-				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Notice - Waiting for secret '%s' that contains the securityconfig to be created", configSecretName)
-				return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
-			}
-			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
-		}
-
-		// Calculate checksum and check for changes
-		var checksumerr error
-		checksumval, checksumerr = checksum(configSecret.Data)
-		if checksumerr != nil {
-			return ctrl.Result{}, checksumerr
-		}
-		if err := r.securityconfigSubpaths(r.instance, &configSecret); err != nil {
-			return ctrl.Result{}, err
-		}
-		cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
-	} else {
-		r.logger.Info("Not passed any SecurityconfigSecret")
+	adminCredentialsSecret, managedByOperator, err := helpers.EnsureAdminCredentialsSecret(r.client, r.instance)
+	if err != nil {
+		r.logger.Error(err, "Unable to ensure admin credentials secret")
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 30}, err
 	}
+
+	if managedByOperator != r.instance.Status.AdminSecretCreated {
+		updateErr := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+			instance.Status.AdminSecretCreated = managedByOperator
+		})
+		if updateErr != nil {
+			r.logger.Error(updateErr, "Unable to update admin secret creation status")
+			return ctrl.Result{}, updateErr
+		}
+	}
+
+	generatedConfigSecret, err := helpers.BuildGeneratedSecurityConfigSecret(r.client, r.instance, adminCredentialsSecret)
+	if err != nil {
+		r.logger.Error(err, "Unable to build generated security config secret")
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 30}, err
+	}
+
+	if err := ctrl.SetControllerReference(r.instance, generatedConfigSecret, r.client.Scheme()); err != nil {
+		return ctrl.Result{}, err
+	}
+	if _, err := r.client.ReconcileResource(generatedConfigSecret, reconciler.StatePresent); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if !r.instance.Status.ContextSecretCreated {
+		updateErr := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+			instance.Status.ContextSecretCreated = true
+		})
+		if updateErr != nil {
+			r.logger.Error(updateErr, "Unable to update security context secret creation status")
+			return ctrl.Result{}, updateErr
+		}
+	}
+
+	configSecret, err := r.client.GetSecret(configSecretName, namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			r.logger.Info(fmt.Sprintf("Waiting for generated secret '%s' that contains the securityconfig to be created", configSecretName))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Waiting for generated secret '%s' that contains the securityconfig", configSecretName)
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
+		}
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
+	}
+
+	var checksumerr error
+	checksumval, checksumerr = checksum(configSecret.Data)
+	if checksumerr != nil {
+		return ctrl.Result{}, checksumerr
+	}
+	if err := r.securityconfigSubpaths(r.instance, &configSecret); err != nil {
+		return ctrl.Result{}, err
+	}
+	cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
 
 	job, err := r.client.GetJob(jobName, namespace)
 	if err == nil {
@@ -248,13 +283,18 @@ func checksum(data map[string][]byte) (string, error) {
 }
 
 func (r *SecurityconfigReconciler) determineAdminSecret() string {
-	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
-		return r.instance.Spec.Security.Config.AdminSecret.Name
-	} else if r.instance.Spec.Security.Tls != nil && r.instance.Spec.Security.Tls.Transport != nil && r.instance.Spec.Security.Tls.Transport.Generate {
-		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
-	} else {
-		return ""
+	if r.instance.Spec.Security != nil {
+		if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
+			return r.instance.Spec.Security.Config.AdminSecret.Name
+		}
 	}
+	// Webhook validation ensures that if security plugin is enabled and no AdminSecret is provided,
+	// then TLS Generate must be true. So we can safely return the default admin cert name.
+	if helpers.IsSecurityPluginEnabled(r.instance) {
+		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
+	}
+	// Security plugin is not enabled, no admin cert needed
+	return ""
 }
 
 func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {

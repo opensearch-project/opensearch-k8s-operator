@@ -181,7 +181,19 @@ var _ = Describe("TLS Controller", func() {
 					},
 				},
 				}}}
+			data := map[string][]byte{
+				"ca.crt": []byte("ca.crt"),
+				"ca.key": []byte("ca.key"),
+			}
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "casecret-http", Namespace: clusterName},
+				Data:       data,
+			}
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret("casecret-http", clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
 			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
@@ -199,13 +211,22 @@ var _ = Describe("TLS Controller", func() {
 			Expect(value).To(Equal("[\"CN=mycn\",\"CN=othercn\"]"))
 			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
 			Expect(exists).To(BeTrue())
-			Expect(value).To(Equal("[\"CN=admin1\",\"CN=admin2\"]"))
+			Expect(value).To(Equal("[\"CN=admin,OU=" + clusterName + "\"]"))
 		})
 	})
 
 	Context("When Reconciling the TLS configuration with external per-node certificates", func() {
 		It("Should not create secrets but only mount them", func() {
 			clusterName := "tls-test-existingsecretspernode"
+
+			caSecretName := clusterName + "-ca"
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"ca.crt": []byte("ca.crt"),
+					"ca.key": []byte("ca.key"),
+				},
+			}
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
@@ -226,6 +247,11 @@ var _ = Describe("TLS Controller", func() {
 				},
 				}}}
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
 			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
@@ -301,6 +327,14 @@ var _ = Describe("TLS Controller", func() {
 	Context("When Reconciling the TLS configuration with same CaSecret and Secret names", func() {
 		It("Should mount only one secret as directory", func() {
 			clusterName := "tls-same-secrets"
+			caSecretName := "same-secret"
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"ca.crt": []byte("ca.crt"),
+					"ca.key": []byte("ca.key"),
+				},
+			}
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -318,13 +352,17 @@ var _ = Describe("TLS Controller", func() {
 							Generate: false,
 							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 								Secret:   corev1.LocalObjectReference{Name: "same-secret"},
-								CaSecret: corev1.LocalObjectReference{Name: "same-secret"}, // Same name
+								CaSecret: corev1.LocalObjectReference{Name: caSecretName}, // Same name
 							},
 						},
 					},
 					},
 				}}
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
 			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
@@ -340,6 +378,14 @@ var _ = Describe("TLS Controller", func() {
 	Context("When Reconciling the TLS configuration with hot reload enabled", func() {
 		It("Should enable hot reload configuration for supported versions", func() {
 			clusterName := "tls-hotreload"
+			caSecretName := "casecret-http"
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"ca.crt": []byte("ca.crt"),
+					"ca.key": []byte("ca.key"),
+				},
+			}
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -358,7 +404,7 @@ var _ = Describe("TLS Controller", func() {
 							Generate: false,
 							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 								Secret:          corev1.LocalObjectReference{Name: "cert-http"},
-								CaSecret:        corev1.LocalObjectReference{Name: "casecret-http"},
+								CaSecret:        corev1.LocalObjectReference{Name: caSecretName},
 								EnableHotReload: true,
 							},
 						},
@@ -366,6 +412,10 @@ var _ = Describe("TLS Controller", func() {
 					},
 				}}
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
 			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
@@ -378,6 +428,14 @@ var _ = Describe("TLS Controller", func() {
 
 		It("Should not enable hot reload configuration for unsupported versions", func() {
 			clusterName := "tls-hotreload-unsupported"
+			caSecretName := "casecret-http"
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"ca.crt": []byte("ca.crt"),
+					"ca.key": []byte("ca.key"),
+				},
+			}
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -396,7 +454,7 @@ var _ = Describe("TLS Controller", func() {
 							Generate: false,
 							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
 								Secret:          corev1.LocalObjectReference{Name: "cert-http"},
-								CaSecret:        corev1.LocalObjectReference{Name: "casecret-http"},
+								CaSecret:        corev1.LocalObjectReference{Name: caSecretName},
 								EnableHotReload: true,
 							},
 						},
@@ -404,6 +462,10 @@ var _ = Describe("TLS Controller", func() {
 					},
 				}}
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
 			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())

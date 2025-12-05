@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver"
+	"golang.org/x/crypto/bcrypt"
+	"gopkg.in/yaml.v2"
 	"k8s.io/apimachinery/pkg/api/resource"
 
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
@@ -43,6 +47,24 @@ const (
 	DefaultGID = int64(1000)
 )
 
+type User struct {
+	Hash         string   `yaml:"hash"`
+	Reserved     bool     `yaml:"reserved"`
+	BackendRoles []string `yaml:"backend_roles,omitempty"`
+	Description  string   `yaml:"description"`
+}
+
+type Meta struct {
+	Type          string `yaml:"type"`
+	ConfigVersion int    `yaml:"config_version"`
+}
+
+type InternalUserConfig struct {
+	Meta         Meta  `yaml:"_meta"`
+	Admin        User  `yaml:"admin"`
+	Kibanaserver *User `yaml:"kibanaserver,omitempty"`
+}
+
 func ContainsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
@@ -60,16 +82,75 @@ func IsHttpTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
 	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
 		return false
 	}
-	httpConfig := cluster.Spec.Security.Tls.Http
-	if httpConfig == nil {
+	tlsConfig := cluster.Spec.Security.Tls.Http
+	if tlsConfig == nil {
 		return false
 	}
 	// If explicitly set, use that value
-	if httpConfig.Enabled != nil {
-		return *httpConfig.Enabled
+	if tlsConfig.Enabled != nil {
+		return *tlsConfig.Enabled
 	}
 	// Default: enabled if HTTP config is provided
 	return true
+}
+
+func CheckVersionConstraint(cluster *opsterv1.OpenSearchCluster, constraint string, defaultOnError bool, errMsg string) bool {
+	versionConstraint, err := semver.NewConstraint(constraint)
+	if err != nil {
+		panic(err)
+	}
+
+	version, err := semver.NewVersion(cluster.Spec.General.Version)
+	if err != nil {
+		log.Println(errMsg)
+		return defaultOnError
+	}
+	return versionConstraint.Check(version)
+}
+
+func SecurityChangeVersion(cluster *opsterv1.OpenSearchCluster) bool {
+	return CheckVersionConstraint(
+		cluster,
+		">=2.0.0",
+		true,
+		"unable to parse version, assuming >= 2.0.0",
+	)
+}
+
+func SupportsHotReload(cluster *opsterv1.OpenSearchCluster) bool {
+	return CheckVersionConstraint(
+		cluster,
+		">=2.19.1",
+		false,
+		"unable to parse version for hot reload check, assuming not supported",
+	)
+}
+
+// IsTransportTlsEnabled determines if transport TLS should be enabled.
+// If enabled is nil (not set): enabled by default if transport config exists.
+// If enabled is true: explicitly enabled.
+// If enabled is false: explicitly disabled.
+func IsTransportTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
+	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
+		return false
+	}
+	tlsConfig := cluster.Spec.Security.Tls.Transport
+	if tlsConfig == nil {
+		return false
+	}
+	// If explicitly set, use that value
+	if tlsConfig.Enabled != nil {
+		return *tlsConfig.Enabled
+	}
+	return true
+}
+
+func IsSecurityPluginEnabled(cr *opsterv1.OpenSearchCluster) bool {
+
+	if SecurityChangeVersion(cr) {
+		return IsHttpTlsEnabled(cr)
+	}
+	return IsTransportTlsEnabled(cr)
 }
 
 // ClusterURL returns the URL for communicating with the OpenSearch cluster.
@@ -174,23 +255,222 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	return val, ok
 }
 
-func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (string, string, error) {
+func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
+	// Check if user provided AdminCredentialsSecret via Security.Config
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
-		// Read credentials from secret
-		credentialsSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
+		secret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
+		return &secret, false, err
+	}
+
+	// Always generate/administer the admin credentials secret
+	generatedName := GeneratedAdminCredentialsSecretName(cr)
+	secret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err == nil {
+		return &secret, true, nil
+	}
+	if !k8serrors.IsNotFound(err) {
+		return nil, true, err
+	}
+
+	randomPassword := rand.Text()
+
+	adminSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generatedName,
+			Namespace: cr.Namespace,
+		},
+		StringData: map[string]string{
+			"username": "admin",
+			"password": randomPassword,
+		},
+	}
+	if _, err := k8sClient.CreateSecret(adminSecret); err != nil {
+		return nil, true, err
+	}
+
+	createdSecret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err != nil {
+		return nil, true, err
+	}
+	return &createdSecret, true, nil
+}
+
+func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, adminSecret *corev1.Secret) (*corev1.Secret, error) {
+	baseData, err := defaultSecurityconfigData()
+	if err != nil {
+		return nil, err
+	}
+
+	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.SecurityconfigSecret.Name != "" {
+		userSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.SecurityconfigSecret.Name, cr.Namespace)
 		if err != nil {
+			return nil, err
+		}
+		for key, value := range userSecret.Data {
+			baseData[key] = append([]byte(nil), value...)
+		}
+	}
+
+	adminPassword, passwordExists := adminSecret.Data["password"]
+	if !passwordExists {
+		return nil, errors.New("admin credentials secret missing password field")
+	}
+
+	dashboardsSecret, _, err := EnsureDashboardsCredentialsSecret(k8sClient, cr)
+	if err != nil {
+		return nil, err
+	}
+	var dashboardsPassword []byte
+	if dashboardsSecret != nil {
+		if pwd, exists := dashboardsSecret.Data["password"]; exists {
+			dashboardsPassword = pwd
+		}
+	}
+	if len(dashboardsPassword) == 0 {
+		return nil, errors.New("dashboards credentials secret missing password field")
+	}
+
+	internalUsers, ok := baseData["internal_users.yml"]
+	if !ok {
+		return nil, errors.New("securityconfig missing internal_users.yml")
+	}
+
+	generatedName := GeneratedSecurityConfigSecretName(cr)
+	var existingGenerated *corev1.Secret
+	existingSecret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err == nil {
+		existingGenerated = &existingSecret
+	} else if !k8serrors.IsNotFound(err) {
+		return nil, err
+	}
+
+	var adminHashOverride, dashboardsHashOverride string
+	if existingGenerated != nil {
+		if existingInternal, exists := existingGenerated.Data["internal_users.yml"]; exists {
+			var existingConfig InternalUserConfig
+			if err := yaml.Unmarshal(existingInternal, &existingConfig); err == nil {
+				if existingConfig.Admin.Hash != "" && bcrypt.CompareHashAndPassword([]byte(existingConfig.Admin.Hash), adminPassword) == nil {
+					adminHashOverride = existingConfig.Admin.Hash
+				}
+				if existingConfig.Kibanaserver != nil && existingConfig.Kibanaserver.Hash != "" {
+					if bcrypt.CompareHashAndPassword([]byte(existingConfig.Kibanaserver.Hash), dashboardsPassword) == nil {
+						dashboardsHashOverride = existingConfig.Kibanaserver.Hash
+					}
+				}
+			}
+		}
+	}
+
+	internalUsers, err = applyUserHashes(internalUsers, adminPassword, adminHashOverride, dashboardsPassword, dashboardsHashOverride)
+	if err != nil {
+		return nil, err
+	}
+	baseData["internal_users.yml"] = internalUsers
+
+	secret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generatedName,
+			Namespace: cr.Namespace,
+		},
+		Data: baseData,
+		Type: corev1.SecretTypeOpaque,
+	}
+
+	return secret, nil
+}
+
+func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
+	var data InternalUserConfig
+	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
+		return nil, err
+	}
+
+	var adminHash string
+	if adminHashOverride != "" {
+		adminHash = adminHashOverride
+	} else {
+		hashed, err := bcrypt.GenerateFromPassword(adminPassword, 12)
+		if err != nil {
+			return nil, err
+		}
+		adminHash = string(hashed)
+	}
+	data.Admin.Hash = adminHash
+
+	if !data.Admin.Reserved {
+		data.Admin.Reserved = true
+	}
+	if len(data.Admin.BackendRoles) == 0 {
+		data.Admin.BackendRoles = []string{"admin"}
+	} else {
+		found := false
+		for _, role := range data.Admin.BackendRoles {
+			if role == "admin" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			data.Admin.BackendRoles = append(data.Admin.BackendRoles, "admin")
+		}
+	}
+
+	if data.Kibanaserver == nil {
+		data.Kibanaserver = &User{}
+	}
+
+	var dashboardsHash string
+	if dashboardsHashOverride != "" {
+		dashboardsHash = dashboardsHashOverride
+	} else {
+		hashed, err := bcrypt.GenerateFromPassword(dashboardsPassword, 12)
+		if err != nil {
+			return nil, err
+		}
+		dashboardsHash = string(hashed)
+	}
+	data.Kibanaserver.Hash = dashboardsHash
+	if !data.Kibanaserver.Reserved {
+		data.Kibanaserver.Reserved = true
+	}
+	if data.Kibanaserver.Description == "" {
+		data.Kibanaserver.Description = "Demo user for the OpenSearch Dashboards server"
+	}
+
+	modifiedYaml, err := yaml.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	return modifiedYaml, nil
+}
+
+func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (string, string, error) {
+	// Check if user provided AdminCredentialsSecret via Security.Config
+	var secretName string
+	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
+		secretName = cr.Spec.Security.Config.AdminCredentialsSecret.Name
+	} else {
+		secretName = GeneratedAdminCredentialsSecretName(cr)
+	}
+
+	credentialsSecret, err := k8sClient.GetSecret(secretName, cr.Namespace)
+	if err != nil {
+		if k8serrors.IsNotFound(err) && secretName == GeneratedAdminCredentialsSecretName(cr) {
+			credentialsSecretPtr, _, createErr := EnsureAdminCredentialsSecret(k8sClient, cr)
+			if createErr != nil {
+				return "", "", createErr
+			}
+			credentialsSecret = *credentialsSecretPtr
+		} else {
 			return "", "", err
 		}
-		username, usernameExists := credentialsSecret.Data["username"]
-		password, passwordExists := credentialsSecret.Data["password"]
-		if !usernameExists || !passwordExists {
-			return "", "", errors.New("username or password field missing")
-		}
-		return string(username), string(password), nil
-	} else {
-		// Use default demo credentials
-		return "admin", "admin", nil
 	}
+	username, usernameExists := credentialsSecret.Data["username"]
+	password, passwordExists := credentialsSecret.Data["password"]
+	if !usernameExists || !passwordExists {
+		return "", "", errors.New("username or password field missing")
+	}
+	return string(username), string(password), nil
 }
 
 func GetByDescriptionAndComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
@@ -687,4 +967,66 @@ func GenIndexTemplateName(template *opsterv1.OpensearchIndexTemplate) string {
 		return template.Spec.Name
 	}
 	return template.Name
+}
+
+func DiscoverRandomAdminSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, error) {
+	if cr.Spec.Security == nil || cr.Spec.Security.Config == nil {
+		return nil, fmt.Errorf("security config is not defined")
+	}
+	if cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
+		return nil, fmt.Errorf("admin credentials secret managed by user")
+	}
+	secret, err := k8sClient.GetSecret(GeneratedAdminCredentialsSecretName(cr), cr.Namespace)
+	return &secret, err
+}
+
+func DiscoverRandomContextSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, error) {
+	secret, err := k8sClient.GetSecret(GeneratedSecurityConfigSecretName(cr), cr.Namespace)
+	return &secret, err
+}
+
+// EnsureDashboardsCredentialsSecret ensures a credentials secret exists for Dashboards.
+// It generates a separate password for Dashboards (not the admin password).
+func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
+	// Check if user provided OpensearchCredentialsSecret via Dashboards config
+	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
+		secret, err := k8sClient.GetSecret(cr.Spec.Dashboards.OpensearchCredentialsSecret.Name, cr.Namespace)
+		return &secret, false, err
+	}
+
+	// Always generate/administer the Dashboards credentials secret
+	generatedName := GeneratedDashboardsCredentialsSecretName(cr)
+	secret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err == nil {
+		return &secret, true, nil
+	}
+	if !k8serrors.IsNotFound(err) {
+		return nil, true, err
+	}
+
+	randomPassword := rand.Text()
+	// NOTE(joseb): we cannot set random password when security plugin is disabled.
+	if !IsSecurityPluginEnabled(cr) {
+		randomPassword = "kibanaserver"
+	}
+
+	dashboardsSecret := &corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      generatedName,
+			Namespace: cr.Namespace,
+		},
+		StringData: map[string]string{
+			"username": "kibanaserver",
+			"password": randomPassword,
+		},
+	}
+	if _, err := k8sClient.CreateSecret(dashboardsSecret); err != nil {
+		return nil, true, err
+	}
+
+	createdSecret, err := k8sClient.GetSecret(generatedName, cr.Namespace)
+	if err != nil {
+		return nil, true, err
+	}
+	return &createdSecret, true, nil
 }

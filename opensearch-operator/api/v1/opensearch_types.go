@@ -217,17 +217,17 @@ type DashboardsConfig struct {
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
-	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
-	Env                         []corev1.EnvVar             `json:"env,omitempty"`
-	AdditionalVolumes           []AdditionalVolume          `json:"additionalVolumes,omitempty"`
-	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
-	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
-	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
-	Labels                      map[string]string           `json:"labels,omitempty"`
-	Annotations                 map[string]string           `json:"annotations,omitempty"`
-	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
-	PluginsList                 []string                    `json:"pluginsList,omitempty"`
-	HostAliases                 []corev1.HostAlias          `json:"hostAliases,omitempty"`
+	OpensearchCredentialsSecret corev1.LocalObjectReference       `json:"opensearchCredentialsSecret,omitempty"`
+	Env                         []corev1.EnvVar                   `json:"env,omitempty"`
+	AdditionalVolumes           []AdditionalVolume                `json:"additionalVolumes,omitempty"`
+	Tolerations                 []corev1.Toleration               `json:"tolerations,omitempty"`
+	NodeSelector                map[string]string                 `json:"nodeSelector,omitempty"`
+	Affinity                    *corev1.Affinity                  `json:"affinity,omitempty"`
+	Labels                      map[string]string                 `json:"labels,omitempty"`
+	Annotations                 map[string]string                 `json:"annotations,omitempty"`
+	Service                     DashboardsServiceSpec             `json:"service,omitempty"`
+	PluginsList                 []string                          `json:"pluginsList,omitempty"`
+	HostAliases                 []corev1.HostAlias                `json:"hostAliases,omitempty"`
 	TopologySpreadConstraints   []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 	// Set security context for the dashboards pods
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
@@ -289,7 +289,6 @@ type TlsConfigHttp struct {
 	// If false: TLS is explicitly disabled for HTTP.
 	//
 	// If not set (default): TLS is enabled if HTTP configuration is provided, or if security.tls is set.
-	// If spec.general.disableSSL is true, this overrides to false.
 	//
 	// If true: TLS is explicitly enabled. HTTP configuration must be provided.
 	// +optional
@@ -326,7 +325,8 @@ type TlsSecret struct {
 }
 
 type SecurityConfig struct {
-	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	// Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
+	// When omitted the operator seeds the cluster with its bundled defaults.
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
 	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
@@ -407,8 +407,10 @@ type ClusterStatus struct {
 	Version          string            `json:"version,omitempty"`
 	Initialized      bool              `json:"initialized,omitempty"`
 	// AvailableNodes is the number of available instances.
-	AvailableNodes int32            `json:"availableNodes,omitempty"`
-	Health         OpenSearchHealth `json:"health,omitempty"`
+	AvailableNodes       int32            `json:"availableNodes,omitempty"`
+	Health               OpenSearchHealth `json:"health,omitempty"`
+	AdminSecretCreated   bool             `json:"adminsecretcreated,omitempty"`
+	ContextSecretCreated bool             `json:"contextsecretcreated,omitempty"`
 }
 
 // +kubebuilder:object:root=true
