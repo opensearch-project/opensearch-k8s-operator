@@ -6637,7 +6637,6 @@ spec:
                               If false: TLS is explicitly disabled for HTTP.
 
                               If not set (default): TLS is enabled if HTTP configuration is provided, or if security.tls is set.
-                              If spec.general.disableSSL is true, this overrides to false.
 
                               If true: TLS is explicitly enabled. HTTP configuration must be provided.
                             type: boolean

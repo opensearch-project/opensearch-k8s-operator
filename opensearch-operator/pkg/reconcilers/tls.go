@@ -90,7 +90,7 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
-	// Handle HTTP TLS: check enabled field, with disableSSL as backward compatibility override
+	// Handle HTTP TLS: check enabled field
 	if r.isHttpTlsEnabled(tlsConfig) {
 		if err := r.handleHttp(); err != nil {
 			return ctrl.Result{}, err

@@ -649,7 +649,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 	}
 
 	appProtocol := "https"
-	if cr.Spec.General.DisableSSL {
+	if !helpers.IsHttpTlsEnabled(cr) {
 		appProtocol = "http"
 	}
 
@@ -698,7 +698,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	}
 
 	httpAppProtocol := "https"
-	if cr.Spec.General.DisableSSL {
+	if !helpers.IsHttpTlsEnabled(cr) {
 		httpAppProtocol = "http"
 	}
 
@@ -794,7 +794,7 @@ func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	}
 
 	appProtocol := "https"
-	if cr.Spec.General.DisableSSL {
+	if !helpers.IsHttpTlsEnabled(cr) {
 		appProtocol = "http"
 	}
 
