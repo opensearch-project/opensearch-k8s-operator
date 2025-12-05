@@ -288,7 +288,13 @@ func (r *SecurityconfigReconciler) determineAdminSecret() string {
 			return r.instance.Spec.Security.Config.AdminSecret.Name
 		}
 	}
-	return fmt.Sprintf("%s-admin-cert", r.instance.Name)
+	// Webhook validation ensures that if security plugin is enabled and no AdminSecret is provided,
+	// then TLS Generate must be true. So we can safely return the default admin cert name.
+	if helpers.IsSecurityPluginEnabled(r.instance) {
+		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
+	}
+	// Security plugin is not enabled, no admin cert needed
+	return ""
 }
 
 func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {

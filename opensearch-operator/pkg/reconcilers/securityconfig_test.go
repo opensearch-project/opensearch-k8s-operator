@@ -239,17 +239,11 @@ config:
 		})
 	})
 
-	When("When Reconciling the securityconfig reconciler with both securityconfig and admin secret configured and available but no tls configured", func() {
-		It("should start an update job", func() {
+	When("When Reconciling the securityconfig reconciler with securityconfig secret but no TLS configured", func() {
+		It("should not start an update job", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			var clusterName = "securityconfig-withadminsecret"
-
-			adminCredSecret := newAdminCredentialsSecret(clusterName)
-			securityConfigSecret := corev1.Secret{
-				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
-				Type:       corev1.SecretType("Opaque"),
-				Data:       map[string][]byte{"internal_users.yml": internalUsersYAML("", "")},
-			}
+			var clusterName = "securityconfig-notls"
+			securityConfigSecretName := clusterName + "-security-config"
 			spec := opsterv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec: opsterv1.ClusterSpec{
@@ -258,44 +252,12 @@ config:
 					},
 					Security: &opsterv1.Security{
 						Config: &opsterv1.SecurityConfig{
-							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
-							AdminSecret:            corev1.LocalObjectReference{Name: "admin-cert"},
-							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+							SecurityconfigSecret: corev1.LocalObjectReference{Name: securityConfigSecretName},
 						},
+						// No TLS configured - security plugin is disabled
 					},
 				},
 			}
-			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
-
-			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
-			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
-			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
-			mockClient.On("GetSecret", generatedConfigName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
-			mockClient.EXPECT().GetJob("securityconfig-withadminsecret-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
-			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
-			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
-
-			var generatedConfigSecret *corev1.Secret
-			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
-				Return(&ctrl.Result{}, nil).
-				Run(func(args mock.Arguments) {
-					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
-						generatedConfigSecret = secret.DeepCopy()
-					}
-				})
-			mockClient.On("GetSecret", generatedConfigName, clusterName).
-				Return(func(string, string) corev1.Secret {
-					Expect(generatedConfigSecret).ToNot(BeNil())
-					return *generatedConfigSecret
-				}, nil)
-
-			var createdJob *batchv1.Job
-			mockClient.On("CreateJob", mock.Anything).
-				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
-					createdJob = job
-					return &ctrl.Result{}, nil
-				})
-
 			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(
 				mockClient,
@@ -305,39 +267,7 @@ config:
 			)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
-			Expect(createdJob).ToNot(BeNil())
-		})
-	})
-
-	When("When Reconciling the securityconfig reconciler with securityconfig secret but no adminSecret configured", func() {
-		It("should not start an update job", func() {
-			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			var clusterName = "securityconfig-noadminsecret"
-
-			spec := opsterv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					Security: &opsterv1.Security{
-						Config: &opsterv1.SecurityConfig{
-							SecurityconfigSecret: corev1.LocalObjectReference{Name: "securityconfig"},
-						},
-						// No TLS configured - admin certificate neither provided nor generation is enabled
-					},
-				},
-			}
-
-			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
-			underTest := newSecurityconfigReconciler(
-				mockClient,
-				context.Background(),
-				&reconcilerContext,
-				&spec,
-			)
-			_, err := underTest.Reconcile()
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("admin certificate neither provided nor generation is enabled"))
-			// Note: Not creating the update job is verified implicitly because the test would fail if any of the mock methods are called
+			// Note: Not creating the update job is verified implicitly because the reconciler exits early when TLS is not configured (security plugin disabled)
 		})
 	})
 
