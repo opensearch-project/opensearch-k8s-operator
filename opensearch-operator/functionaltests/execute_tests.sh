@@ -2,7 +2,13 @@
 CLUSTER_NAME=opensearch-operator-tests
 
 ## Setup k3d cluster and prepare kubeconfig
-k3d cluster create $CLUSTER_NAME --agents 2 --kubeconfig-switch-context=false --kubeconfig-update-default=false -p "30000-30005:30000-30005@agent:0" --image=rancher/k3s:v1.22.17-k3s1
+k3d cluster create $CLUSTER_NAME \
+    --servers 1 --agents 2 \
+    -p "30000-30005:30000-30005@agent:0" \
+    --k3s-arg "--kubelet-arg=eviction-hard=nodefs.available<1Mi@all" \
+    --kubeconfig-switch-context=false \
+    --kubeconfig-update-default=false \
+    --image=rancher/k3s:v1.34.1-k3s1
 k3d kubeconfig get $CLUSTER_NAME > kubeconfig
 export KUBECONFIG=$(pwd)/kubeconfig
 
@@ -14,8 +20,13 @@ make docker-build
 k3d image import -c $CLUSTER_NAME controller:latest
 
 ## Install helm chart
-helm install opensearch-operator ../charts/opensearch-operator --set manager.image.repository=controller --set manager.image.tag=latest --set manager.image.pullPolicy=IfNotPresent --namespace default --wait
-helm install opensearch-cluster ../charts/opensearch-cluster --set OpenSearchClusterSpec.enabled=true --wait
+helm install opensearch-operator ../charts/opensearch-operator \
+          -f functionaltests/helmtests/ci-operator-values.yml \
+          --namespace default --wait
+
+helm install opensearch-cluster ../charts/opensearch-cluster \
+            -f functionaltests/helmtests/ci-cluster-values.yml \
+            --wait
 
 cd functionaltests
 
