@@ -28,6 +28,12 @@ spec:
         name: ""
     version: 2.19.4
   general:
+    additionalConfig:
+      # Lower thresholds to avoid tests failing on
+      # resource-constrained environments like Github Action runners
+      cluster.routing.allocation.disk.watermark.low: 500m
+      cluster.routing.allocation.disk.watermark.high: 300m
+      cluster.routing.allocation.disk.watermark.flood_stage: 100m
     drainDataNodes: true
     httpPort: 9200
     monitoring:
