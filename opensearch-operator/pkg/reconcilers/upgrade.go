@@ -101,6 +101,9 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			instance.Status.Phase = opsterv1.PhaseUpgrading
 		})
 		if err != nil {
+			r.logger.Error(err, "Could not update status")
+			return ctrl.Result{}, err
+		}
 			return ctrl.Result{}, err
 		}
 	}
@@ -109,6 +112,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 
 	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.instance, nil)
 	if err != nil {
+		r.logger.Error(err, "Could not create client for cluster")
 		return ctrl.Result{}, err
 	}
 
@@ -348,6 +352,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 	// If upgrade on this node pool is complete update status and return
 	if sts.Status.UpdatedReplicas == lo.FromPtrOr(sts.Spec.Replicas, 1) {
 		if err = services.ReactivateShardAllocation(r.osClient); err != nil {
+			r.logger.Error(err, "Could not reactivate shard allocation")
 			return err
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade of node pool '%s'", pool.Component)
@@ -369,6 +374,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 
 	workingPod, err := helpers.WorkingPodForRollingRestart(r.client, &sts)
 	if err != nil {
+		r.logger.Error(err, "Could not find working pod")
 		conditions = append(conditions, "Could not find working pod")
 		r.setComponentConditions(conditions, pool.Component)
 		return err
@@ -376,6 +382,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 
 	ready, err = services.PreparePodForDelete(r.osClient, r.logger, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
+		r.logger.Error(err, "Could not prepare pod for delete")
 		conditions = append(conditions, "Could not prepare pod for delete")
 		r.setComponentConditions(conditions, pool.Component)
 		return err
@@ -393,6 +400,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		},
 	})
 	if err != nil {
+		r.logger.Error(err, "Could not delete pod")
 		conditions = append(conditions, "Could not delete pod")
 		r.setComponentConditions(conditions, pool.Component)
 		return err
