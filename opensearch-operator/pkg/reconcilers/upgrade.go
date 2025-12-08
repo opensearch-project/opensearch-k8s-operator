@@ -34,6 +34,7 @@ const (
 	componentNameUpgrader   = "Upgrader"
 	upgradeStatusPending    = "Pending"
 	upgradeStatusInProgress = "Upgrading"
+	upgradeStatusFinished   = "Finished"
 )
 
 type UpgradeReconciler struct {
@@ -133,7 +134,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			Requeue:      true,
 			RequeueAfter: 30 * time.Second,
 		}, err
-	case "Finished":
+	case upgradeStatusFinished:
 		// Cleanup status after successful upgrade
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			instance.Status.Version = instance.Spec.General.Version
@@ -267,7 +268,7 @@ func (r *UpgradeReconciler) findNextNodePoolForUpgrade() (opsterv1.NodePool, ops
 	// If we get here all nodes should be upgraded
 	return opsterv1.NodePool{}, opsterv1.ComponentStatus{
 		Component: componentNameUpgrader,
-		Status:    "Finished",
+		Status:    upgradeStatusFinished,
 	}
 }
 
