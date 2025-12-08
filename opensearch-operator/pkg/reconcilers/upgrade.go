@@ -411,7 +411,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 
 	// If we are draining nodes remove the exclusion after the pod is deleted
 	if r.instance.Spec.General.DrainDataNodes {
-		_, err = services.RemoveExcludeNodeHost(r.osClient, workingPod)
+		_, err = services.RemoveExcludeNodeHost(r.osClient, r.logger, workingPod)
 		return err
 	}
 

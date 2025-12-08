@@ -73,12 +73,13 @@ func HasIndexPrimariesOnNode(service *OsClusterClient, nodeName string, indices 
 	return false, err
 }
 
-func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (bool, error) {
+func AppendExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToExclude string) (bool, error) {
 	response, err := service.GetClusterSettings()
 	if err != nil {
 		return false, err
 	}
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
+	lg.V(1).Info(fmt.Sprintf("Excluding from allocation node: %s , currently excluded: %s", nodeNameToExclude, val))
 	valAsString := nodeNameToExclude
 	if ok && val != "" {
 		// Test whether name is already excluded
@@ -98,15 +99,19 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	}
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
 	_, err = service.PutClusterSettings(settings)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not exclude from allocation node %s", nodeNameToExclude))
+	}
 	return err == nil, err
 }
 
-func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (bool, error) {
+func RemoveExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToExclude string) (bool, error) {
 	response, err := service.GetClusterSettings()
 	if err != nil {
 		return false, err
 	}
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
+	lg.V(1).Info(fmt.Sprintf("Removing allocation exclusion for node: %s , currently excluded: %s", nodeNameToExclude, val))
 	if !ok || val == "" {
 		return true, err
 	}
@@ -123,6 +128,9 @@ func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	valAsString = strings.Join(filteredArr, ",")
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
 	_, err = service.PutClusterSettings(settings)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not remove allocation exclusion for node %s", nodeNameToExclude))
+	}
 	return err == nil, err
 }
 
@@ -226,7 +234,7 @@ func ReactivateShardAllocation(service *OsClusterClient) error {
 func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, error) {
 	if drainNode {
 		// If we are draining nodes then drain the working node
-		_, err := AppendExcludeNodeHost(service, podName)
+		_, err := AppendExcludeNodeHost(service, lg, podName)
 		if err != nil {
 			return false, err
 		}
