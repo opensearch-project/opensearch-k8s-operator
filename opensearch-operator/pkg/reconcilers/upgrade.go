@@ -116,18 +116,20 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// Start the nodepool upgrade loop
+
 	// Fetch the working nodepool
-	nodePool, currentStatus := r.findNextNodePoolForUpgrade()
+	nodePool, componentStatus := r.findNextNodePoolForUpgrade()
 
 	// Work on the current nodepool as appropriate
-	switch currentStatus.Status {
+	switch componentStatus.Status {
 	case upgradeStatusPending:
 		// Set it to upgrading and requeue
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
-			currentStatus.Status = upgradeStatusInProgress
-			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, currentStatus)
+			componentStatus.Status = upgradeStatusInProgress
+			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, componentStatus)
 		})
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", currentStatus.Description)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", componentStatus.Description)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
