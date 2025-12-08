@@ -233,6 +233,11 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 		return response, err
 	}
 	defer helpers.SafeClose(settingsRes.Body)
+
+	if settingsRes.IsError() {
+		return response, ErrClusterSettingsGetFailed(settingsRes.String())
+	}
+
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
@@ -249,7 +254,7 @@ func (client *OsClusterClient) GetFlatClusterSettings() (responses.FlatClusterSe
 	defer helpers.SafeClose(settingsRes.Body)
 
 	if settingsRes.IsError() {
-		return response, ErrClusterHealthGetFailed(settingsRes.String())
+		return response, ErrClusterSettingsGetFailed(settingsRes.String())
 	}
 
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
@@ -265,6 +270,11 @@ func (client *OsClusterClient) PutClusterSettings(settings responses.ClusterSett
 		return response, err
 	}
 	defer helpers.SafeClose(settingsRes.Body)
+
+	if settingsRes.IsError() {
+		return response, ErrClusterSettingsPutFailed(settingsRes.String())
+	}
+
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }

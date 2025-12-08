@@ -24,6 +24,10 @@ func ErrClusterSettingsGetFailed(resp string) error {
 	return fmt.Errorf("get error %w: %s", ErrClusterSettingsOperation, resp)
 }
 
+func ErrClusterSettingsPutFailed(resp string) error {
+	return fmt.Errorf("put error %w: %s", ErrClusterSettingsOperation, resp)
+}
+
 func ErrCatIndicesFailed(resp string) error {
 	return fmt.Errorf("%w: %s", ErrCatIndicesOperation, resp)
 }
