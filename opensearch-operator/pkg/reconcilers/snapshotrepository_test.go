@@ -12,6 +12,7 @@ import (
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -68,6 +69,20 @@ var _ = Describe("snapshot repositories reconciler", func() {
 			},
 		}
 		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(instance))
+		// Mock admin credentials secret for all tests (available when CreateClientForCluster is invoked)
+		adminSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-snapshotrepo-admin-password",
+				Namespace: "test",
+			},
+			Data: map[string][]byte{
+				"username": []byte("admin"),
+				"password": []byte("admin"),
+			},
+		}
+		mockClient.On("GetSecret", "test-snapshotrepo-admin-password", "test").Return(func(string, string) corev1.Secret {
+			return adminSecret
+		}, nil).Maybe()
 	})
 
 	JustBeforeEach(func() {

@@ -21,6 +21,7 @@ import (
 	"fmt"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -80,6 +81,27 @@ func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opsterv1.OpenSea
 		// Validation: if enabled=true, we need either Generate=true or existing certs via Secret
 		if !tlsConfig.Http.Generate && tlsConfig.Http.Secret.Name == "" {
 			return nil, fmt.Errorf("HTTP TLS is enabled but neither generate nor secret is provided")
+		}
+	}
+
+	// Validate admin secret name: if AdminSecret is empty, tls generate should be true.
+	if helpers.IsSecurityPluginEnabled(cluster) {
+		if cluster.Spec.Security.Config != nil && cluster.Spec.Security.Config.AdminSecret.Name != "" {
+			return nil, nil
+		} else {
+			if helpers.SecurityChangeVersion(cluster) {
+				if tlsConfig.Http != nil && tlsConfig.Http.Generate {
+					return nil, nil
+				} else {
+					return nil, fmt.Errorf("admin secret name is not provided but http.tls generate is not true")
+				}
+			} else {
+				if tlsConfig.Transport != nil && tlsConfig.Transport.Generate {
+					return nil, nil
+				} else {
+					return nil, fmt.Errorf("admin secret name is not provided but transport.tls generate is not true")
+				}
+			}
 		}
 	}
 
