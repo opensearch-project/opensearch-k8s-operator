@@ -31,6 +31,36 @@ const (
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
+// GetDefaultAffinity returns default pod anti-affinity that prefers to avoid
+// co-locating pods from the same cluster on a single node.
+func GetDefaultAffinity(clusterName string) *corev1.Affinity {
+	return &corev1.Affinity{
+		PodAntiAffinity: &corev1.PodAntiAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+				{
+					Weight: 100,
+					PodAffinityTerm: corev1.PodAffinityTerm{
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								helpers.ClusterLabel: clusterName,
+							},
+						},
+						TopologyKey: "kubernetes.io/hostname",
+					},
+				},
+			},
+		},
+	}
+}
+
+// getAffinity returns the provided affinity if set, otherwise returns default affinity
+func getAffinity(affinity *corev1.Affinity, clusterName string) *corev1.Affinity {
+	if affinity != nil {
+		return affinity
+	}
+	return GetDefaultAffinity(clusterName)
+}
+
 func NewSTSForNodePool(
 	username string,
 	cr *opsterv1.OpenSearchCluster,
@@ -580,7 +610,7 @@ func NewSTSForNodePool(
 					ServiceAccountName:        cr.Spec.General.ServiceAccount,
 					NodeSelector:              node.NodeSelector,
 					Tolerations:               node.Tolerations,
-					Affinity:                  node.Affinity,
+					Affinity:                  getAffinity(node.Affinity, cr.Name),
 					TopologySpreadConstraints: node.TopologySpreadConstraints,
 					ImagePullSecrets:          image.ImagePullSecrets,
 					PriorityClassName:         node.PriorityClassName,
@@ -1113,7 +1143,7 @@ func NewBootstrapPod(
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,
 			Tolerations:        cr.Spec.Bootstrap.Tolerations,
-			Affinity:           cr.Spec.Bootstrap.Affinity,
+			Affinity:           getAffinity(cr.Spec.Bootstrap.Affinity, cr.Name),
 			ImagePullSecrets:   image.ImagePullSecrets,
 			SecurityContext:    podSecurityContext,
 			HostAliases:        hostAliases,
