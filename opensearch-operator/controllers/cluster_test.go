@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -171,6 +172,9 @@ var _ = Describe("Cluster Reconciler", func() {
 				go func(nodePool opsterv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
+					// Calculate expected node.roles value
+					mappedRoles := helpers.MapClusterRoles(nodePool.Roles, OpensearchCluster.Spec.General.Version)
+					expectedNodeRoles := strings.Join(mappedRoles, ",")
 					Eventually(Object(&appsv1.StatefulSet{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      clusterName + "-" + nodePool.Component,
@@ -183,7 +187,7 @@ var _ = Describe("Cluster Reconciler", func() {
 								corev1.ResourceCPU:    resource.MustParse("500m"),
 								corev1.ResourceMemory: resource.MustParse("2Gi"),
 							}),
-							HaveEnv("foo", "bar"),
+							HaveEnv("node.roles", expectedNodeRoles),
 							HaveVolumeMounts(
 								"test-secret",
 								"test-cm",
@@ -213,18 +217,16 @@ var _ = Describe("Cluster Reconciler", func() {
 			wg.Wait()
 		})
 
-		It("should set nodepool specific config", func() {
-			sts := &appsv1.StatefulSet{}
+		It("should set general additionalConfig in configmap", func() {
+			cm := &corev1.ConfigMap{}
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{
-					Name:      fmt.Sprintf("%s-client", OpensearchCluster.Name),
+					Name:      fmt.Sprintf("%s-config", OpensearchCluster.Name),
 					Namespace: OpensearchCluster.Namespace,
-				}, sts)
+				}, cm)
 			}, timeout, interval).Should(Succeed())
-			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
-				Name:  "baz",
-				Value: "bat",
-			}))
+			Expect(cm.Data).To(HaveKey("opensearch.yml"))
+			Expect(cm.Data["opensearch.yml"]).To(ContainSubstring("foo: bar"))
 		})
 
 		It("should set nodepool additional user defined env vars", func() {
