@@ -170,7 +170,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 					ImagePullSecrets:          image.ImagePullSecrets,
 					NodeSelector:              cr.Spec.Dashboards.NodeSelector,
 					Tolerations:               cr.Spec.Dashboards.Tolerations,
-					Affinity:                  cr.Spec.Dashboards.Affinity,
+					Affinity:                  getAffinity(cr.Spec.Dashboards.Affinity, cr.Name),
 					SecurityContext:           podSecurityContext,
 					HostAliases:               cr.Spec.Dashboards.HostAliases,
 					TopologySpreadConstraints: cr.Spec.Dashboards.TopologySpreadConstraints,
