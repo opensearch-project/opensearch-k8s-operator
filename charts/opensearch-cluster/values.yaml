@@ -125,8 +125,8 @@ cluster:
 
   # cluster boostrap pod configuration
   bootstrap:
-    # -- bootstrap additional configuration, key-value pairs that will be added to the opensearch.yml configuration
-    additionalConfig: {}
+    # -- bootstrap pod env variables
+    env: []
 
     # -- bootstrap pod affinity rules
     affinity: {}

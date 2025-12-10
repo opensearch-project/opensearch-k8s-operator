@@ -297,12 +297,6 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>false</td>
         <td>-Xmx512M -Xms512M</td>
       </tr><tr>
-        <td><b>additionalConfig</b></td>
-        <td>string</td>
-        <td>Added extra items to opensearch.yml in the bootstrap pod</td>
-        <td>map[string]string</td>
-        <td>general.additionalConfig</td>
-      </tr><tr>
         <td><b>env</b></td>
         <td>[]corev1.Env</td>
         <td>add user defined environment variables to bootstrap pod</td>
@@ -382,6 +376,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>Opensearch-dashboards version</td>
         <td>false</td>
         <td>latest</td>
+      </tr><tr>
+        <td><b>additionalConfig</b></td>
+        <td>string</td>
+        <td>Added extra items to opensearch.yml</td>
+        <td>string</td>
+        <td></td>
       </tr><tr>
         <td><b>Tls</b></td>
         <td>DashboardsTlsConfig</td>
