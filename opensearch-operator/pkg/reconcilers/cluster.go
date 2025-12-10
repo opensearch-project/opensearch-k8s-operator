@@ -17,6 +17,8 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -121,7 +123,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Status.Initialized {
 		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
 	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StatePresent))
+		result.Combine(r.reconcileBootstrapPod(bootstrapPod))
 	}
 
 	for _, nodePool := range r.instance.Spec.NodePools {
@@ -516,4 +518,57 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 		instance.Status.Health = health
 		instance.Status.AvailableNodes = availableNodes
 	})
+}
+
+// reconcileBootstrapPod handles bootstrap pod reconciliation with recreation for any changes
+func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
+	// Check if bootstrap pod exists
+	existingPod, err := r.client.GetPod(desiredPod.Name, desiredPod.Namespace)
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return &ctrl.Result{}, err
+	}
+
+	if k8serrors.IsNotFound(err) {
+		// Pod doesn't exist, create it
+		r.logger.Info("Creating bootstrap pod", "pod", desiredPod.Name)
+		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+	}
+
+	updatePod := desiredPod.DeepCopy()
+	if _, err := r.client.ReconcileResource(updatePod, reconciler.StatePresent); err != nil {
+		if isImmutablePodUpdateErr(err) {
+			r.logger.Info("Bootstrap pod update touched immutable fields, recreating pod", "pod", desiredPod.Name)
+			return r.recreateBootstrapPod(&existingPod, desiredPod)
+		}
+		r.logger.Error(err, "Failed to update bootstrap pod", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+
+	return &ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {
+	if err := r.client.DeletePod(existingPod); err != nil {
+		r.logger.Error(err, "Failed to delete existing bootstrap pod", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+	if err := r.client.WaitForPodDeletion(desiredPod.Name, desiredPod.Namespace); err != nil {
+		r.logger.Error(err, "Timeout waiting for bootstrap pod deletion", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+
+	r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
+	return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+}
+
+func isImmutablePodUpdateErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if statusErr, ok := err.(*k8serrors.StatusError); ok {
+		if statusErr.ErrStatus.Reason == metav1.StatusReasonInvalid && strings.Contains(statusErr.ErrStatus.Message, "pod updates may not change") {
+			return true
+		}
+	}
+	return strings.Contains(err.Error(), "pod updates may not change")
 }
