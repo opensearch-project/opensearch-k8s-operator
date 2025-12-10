@@ -71,7 +71,6 @@ func NewSTSForNodePool(
 	configChecksum string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
-	extraConfig map[string]string,
 ) *appsv1.StatefulSet {
 	// To make sure disksize is not passed as empty
 	var disksize resource.Quantity
@@ -631,15 +630,6 @@ func NewSTSForNodePool(
 		},
 	}
 
-	// Append additional config to env vars
-	keys := helpers.SortedKeys(extraConfig)
-	for _, k := range keys {
-		sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-			Name:  k,
-			Value: extraConfig[k],
-		})
-	}
-
 	// Add node.roles env var
 	// For coordinator-only nodes (empty roles), set to "[]" which OpenSearch 3.0+ properly handles as an empty array
 	nodeRolesValue := strings.Join(selectedRoles, ",")
@@ -972,18 +962,8 @@ func NewBootstrapPod(
 		},
 	})
 
-	// Append additional config to env vars, use General.AdditionalConfig by default, overwrite with Bootstrap.AdditionalConfig
-	extraConfig := cr.Spec.General.AdditionalConfig
-	if cr.Spec.Bootstrap.AdditionalConfig != nil {
-		extraConfig = cr.Spec.Bootstrap.AdditionalConfig
-	}
-
-	keys := helpers.SortedKeys(extraConfig)
-	for _, k := range keys {
-		env = append(env, corev1.EnvVar{
-			Name:  k,
-			Value: extraConfig[k],
-		})
+	if cr.Spec.Bootstrap.Env != nil {
+		env = append(env, cr.Spec.Bootstrap.Env...)
 	}
 
 	var initContainers []corev1.Container

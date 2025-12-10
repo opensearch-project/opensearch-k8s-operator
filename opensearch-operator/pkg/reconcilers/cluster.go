@@ -162,8 +162,6 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}, nil
 	}
 
-	extraConfig := helpers.MergeConfigs(r.instance.Spec.General.AdditionalConfig, nodePool.AdditionalConfig)
-
 	sts := builders.NewSTSForNodePool(
 		username,
 		r.instance,
@@ -171,7 +169,6 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		nodePoolConfig.ConfigHash,
 		r.reconcilerContext.Volumes,
 		r.reconcilerContext.VolumeMounts,
-		extraConfig,
 	)
 	if err := ctrl.SetControllerReference(r.instance, sts, r.client.Scheme()); err != nil {
 		return &ctrl.Result{}, err

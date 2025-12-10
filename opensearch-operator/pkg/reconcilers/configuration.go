@@ -50,7 +50,8 @@ func NewConfigurationReconciler(
 
 func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
-		len(r.reconcilerContext.OpenSearchConfig) == 0 {
+		len(r.reconcilerContext.OpenSearchConfig) == 0 &&
+		len(r.instance.Spec.General.AdditionalConfig) == 0 {
 		return ctrl.Result{}, nil
 	}
 	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
@@ -58,7 +59,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	if len(r.reconcilerContext.OpenSearchConfig) > 0 {
+	if helpers.IsSecurityPluginEnabled(r.instance) {
 		// Add some default config for the security plugin
 		r.reconcilerContext.AddConfig("plugins.security.audit.type", "internal_opensearch")
 		r.reconcilerContext.AddConfig("plugins.security.enable_snapshot_restore_privilege", "true")
@@ -66,7 +67,11 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
+	}
 
+	// Add additional config from the CR
+	for k, v := range r.instance.Spec.General.AdditionalConfig {
+		r.reconcilerContext.AddConfig(k, v)
 	}
 
 	var sb strings.Builder
