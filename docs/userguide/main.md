@@ -649,7 +649,7 @@ If you are using emptyDir, it is recommended that you set `spec.general.drainDat
 
 #### HostPath
 
-As a last option you can hose a `hostPath`. Please note that hostPath is strongly discouraged, and if you do choose this option, then you must also configure affinity for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host.
+As a last option you can use a `hostPath`. Please note that hostPath is strongly discouraged. By default, the operator applies pod anti-affinity to prevent multiple pods from scheduling on the same node, which helps when using hostPath. However, if you need stricter control, you can configure explicit affinity rules for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host.
 
 ```yaml
 nodePools:
@@ -794,6 +794,55 @@ spec:
       roles:
         - "master"
 ```
+
+### Pod Affinity
+
+By default, the operator applies pod anti-affinity rules to prevent multiple pods from the same OpenSearch cluster from being scheduled on the same node. This improves high availability by reducing the risk of multiple pods being affected by a single node failure.
+
+The default anti-affinity uses `PreferredDuringSchedulingIgnoredDuringExecution`, which is a soft preference that won't prevent scheduling if no other nodes are available, but will prefer to spread pods across nodes.
+
+You can override this default behavior by explicitly setting the `affinity` field in your node pool, bootstrap, or dashboards configuration:
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      roles:
+        - "master"
+        - "data"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  opster.io/opensearch-cluster: my-cluster
+              topologyKey: kubernetes.io/hostname
+  bootstrap:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  opster.io/opensearch-cluster: my-cluster
+              topologyKey: kubernetes.io/hostname
+  dashboards:
+    enable: true
+    affinity:
+      podAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: opensearch-dashboards
+              topologyKey: kubernetes.io/zone
+```
+
+If you set an explicit `affinity`, it will completely replace the default anti-affinity behavior. To disable anti-affinity entirely, you can set `affinity: {}`.
 
 ### Sidecar Containers
 
