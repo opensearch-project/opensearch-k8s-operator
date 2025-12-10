@@ -299,11 +299,11 @@ func (in *BootstrapConfig) DeepCopyInto(out *BootstrapConfig) {
 		*out = new(corev1.Affinity)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.AdditionalConfig != nil {
-		in, out := &in.AdditionalConfig, &out.AdditionalConfig
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
+	if in.Env != nil {
+		in, out := &in.Env, &out.Env
+		*out = make([]corev1.EnvVar, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
 	if in.Annotations != nil {
@@ -1180,13 +1180,6 @@ func (in *NodePool) DeepCopyInto(out *NodePool) {
 		in, out := &in.Persistence, &out.Persistence
 		*out = new(PersistenceConfig)
 		(*in).DeepCopyInto(*out)
-	}
-	if in.AdditionalConfig != nil {
-		in, out := &in.AdditionalConfig, &out.AdditionalConfig
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
 	}
 	if in.Labels != nil {
 		in, out := &in.Labels, &out.Labels
