@@ -267,6 +267,12 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>false</td>
         <td>-</td>
       </tr><tr>
+        <td><b>diskSize</b></td>
+        <td>resource.Quantity</td>
+        <td> bootstrap pod data disk size </td>
+        <td>false</td>
+        <td> 1Gi </td>
+      </tr><tr>
         <td><b>tolerations</b></td>
         <td>[]corev1.Toleration</td>
         <td>add toleration to bootstrap pod</td>
@@ -501,10 +507,10 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>1</td>
       </tr><tr>
         <td><b>diskSize</b></td>
-        <td>string</td>
+        <td>resource.Quantity</td>
         <td> nodePool data disk size </td>
         <td>true</td>
-        <td> - </td>
+        <td> 30Gi </td>
       </tr><tr>
         <td><b>NodeSelector</b></td>
         <td>map[string]string</td>

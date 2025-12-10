@@ -24,9 +24,12 @@ import (
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
+var (
+	DefaultDiskSize = resource.MustParse("30Gi")
+)
+
 const (
 	ConfigurationChecksumAnnotation  = "opster.io/config"
-	DefaultDiskSize                  = "30Gi"
 	defaultMonitoringPlugin          = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
@@ -71,8 +74,8 @@ func NewSTSForNodePool(
 	extraConfig map[string]string,
 ) *appsv1.StatefulSet {
 	// To make sure disksize is not passed as empty
-	var disksize string
-	if len(node.DiskSize) == 0 {
+	var disksize resource.Quantity
+	if node.DiskSize.IsZero() {
 		disksize = DefaultDiskSize
 	} else {
 		disksize = node.DiskSize
@@ -129,7 +132,7 @@ func NewSTSForNodePool(
 				}(),
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(disksize),
+						corev1.ResourceStorage: disksize,
 					},
 				},
 				StorageClassName: func() *string {
@@ -1218,11 +1221,9 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 
 	// Use default storage class and ReadWriteOnce access mode
 	// The bootstrap pod only needs a small amount of storage for cluster metadata
-	storageSize := "1Gi"
-	if cr.Spec.Bootstrap.Resources.Requests != nil {
-		if size, exists := cr.Spec.Bootstrap.Resources.Requests["storage"]; exists {
-			storageSize = size.String()
-		}
+	storageSize := resource.MustParse("1Gi")
+	if !cr.Spec.Bootstrap.DiskSize.IsZero() {
+		storageSize = cr.Spec.Bootstrap.DiskSize
 	}
 
 	return &corev1.PersistentVolumeClaim{
@@ -1237,7 +1238,7 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 			},
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(storageSize),
+					corev1.ResourceStorage: storageSize,
 				},
 			},
 		},
