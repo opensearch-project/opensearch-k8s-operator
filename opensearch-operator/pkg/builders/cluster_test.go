@@ -883,11 +883,7 @@ var _ = Describe("Builders", func() {
 
 		It("should use custom storage size from bootstrap resources", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.Bootstrap.Resources = corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("2Gi"),
-				},
-			}
+			clusterObject.Spec.Bootstrap.DiskSize = resource.MustParse("2Gi")
 			result := NewBootstrapPVC(&clusterObject)
 
 			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("2Gi")))
