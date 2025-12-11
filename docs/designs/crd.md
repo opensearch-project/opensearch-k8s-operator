@@ -171,10 +171,10 @@ GeneralConfig defines global Opensearch cluster configuration
         <td></td>
       </tr><tr>
         <td><b>additionalConfig</b></td>
-        <td>string</td>
-        <td>Added extra items to opensearch.yml</td>
-        <td>string</td>
-        <td></td>
+        <td>map[string]string</td>
+        <td>Extra items to add to opensearch.yml. These settings are added to a shared configmap that is mounted to all node pools. Settings must be provided as a map of strings (use flat form). If a nodepool has its own additionalConfig, it will be merged with this (nodepool settings override general settings).</td>
+        <td>false</td>
+        <td>{}</td>
       </tr><tr>
         <td><b>annotations</b></td>
         <td>map[string]string</td>
@@ -600,6 +600,13 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>List of init containers that should be added to the nodepool pods</td>
         <td>false</td>
         <td> [] </td>
+      </tr>
+       </tr><tr>
+        <td><b>additionalConfig</b></td>
+        <td>map[string]string</td>
+        <td>Extra items to add to opensearch.yml for this specific nodepool. These settings are merged with spec.general.additionalConfig (nodepool settings override general settings). When specified, this nodepool will get its own configmap with the merged configuration. Settings must be provided as a map of strings (use flat form).</td>
+        <td>false</td>
+        <td>{}</td>
       </tr>
 </table>
 
