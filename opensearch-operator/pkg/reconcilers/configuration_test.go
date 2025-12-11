@@ -254,9 +254,10 @@ var _ = Describe("Configuration Controller", func() {
 			var sharedCm *corev1.ConfigMap
 			var nodesCm *corev1.ConfigMap
 			for _, cm := range createdConfigMaps {
-				if cm.Name == clusterName+"-config" {
+				switch cm.Name {
+				case clusterName + "-config":
 					sharedCm = cm
-				} else if cm.Name == clusterName+"-nodes-config" {
+				case clusterName + "-nodes-config":
 					nodesCm = cm
 				}
 			}
