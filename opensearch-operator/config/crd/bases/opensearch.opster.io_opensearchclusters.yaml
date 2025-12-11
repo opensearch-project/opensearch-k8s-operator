@@ -5091,6 +5091,12 @@ spec:
               nodePools:
                 items:
                   properties:
+                    additionalConfig:
+                      additionalProperties:
+                        type: string
+                      description: Extra items to add to the opensearch.yml for this
+                        nodepool (merged with general.additionalConfig)
+                      type: object
                     affinity:
                       description: Affinity is a group of affinity scheduling rules.
                       properties:

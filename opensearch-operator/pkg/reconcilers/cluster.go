@@ -162,13 +162,52 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}, nil
 	}
 
+	// Use per-nodepool volumes if this nodepool has AdditionalConfig
+	volumes := r.reconcilerContext.Volumes
+	volumeMounts := r.reconcilerContext.VolumeMounts
+	if len(nodePool.AdditionalConfig) > 0 {
+		// Remove shared config volume and mount (if present) to override with nodepool-specific config
+		filteredVolumes := make([]corev1.Volume, 0, len(volumes))
+		for _, vol := range volumes {
+			if vol.Name != "config" {
+				filteredVolumes = append(filteredVolumes, vol)
+			}
+		}
+		volumes = filteredVolumes
+
+		filteredVolumeMounts := make([]corev1.VolumeMount, 0, len(volumeMounts))
+		for _, mount := range volumeMounts {
+			if mount.Name != "config" {
+				filteredVolumeMounts = append(filteredVolumeMounts, mount)
+			}
+		}
+		volumeMounts = filteredVolumeMounts
+
+		// Add per-nodepool configmap volume (overrides shared config)
+		volumes = append(volumes, corev1.Volume{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-%s-config", r.instance.Name, nodePool.Component),
+					},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "config",
+			MountPath: "/usr/share/opensearch/config/opensearch.yml",
+			SubPath:   "opensearch.yml",
+		})
+	}
+
 	sts := builders.NewSTSForNodePool(
 		username,
 		r.instance,
 		nodePool,
 		nodePoolConfig.ConfigHash,
-		r.reconcilerContext.Volumes,
-		r.reconcilerContext.VolumeMounts,
+		volumes,
+		volumeMounts,
 	)
 	if err := ctrl.SetControllerReference(r.instance, sts, r.client.Scheme()); err != nil {
 		return &ctrl.Result{}, err

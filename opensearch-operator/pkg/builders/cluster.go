@@ -962,6 +962,7 @@ func NewBootstrapPod(
 		},
 	})
 
+	// Add Bootstrap.Env
 	if cr.Spec.Bootstrap.Env != nil {
 		env = append(env, cr.Spec.Bootstrap.Env...)
 	}

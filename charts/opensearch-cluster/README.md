@@ -81,6 +81,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.initHelper.version` | string | `"1.36"` | initHelper version |
 | `cluster.nodePools` | list | `[{"annotations":{},"component":"masters","diskSize":"30Gi","replicas":3,"resources":{"limits":{"cpu":"500m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"2Gi"}},"roles":["master","data"],"sidecarContainers":[]}]` | Opensearch nodes configuration |
 | `cluster.nodePools[0].annotations` | object | `{}` | node pool pod annotations |
+| `cluster.nodePools[0].diskSize` | string | `"30Gi"` | Extra items to add to opensearch.yml for this specific nodepool (merged with general.additionalConfig) additionalConfig: {} |
 | `cluster.nodePools[0].sidecarContainers` | list | `[]` | These containers will be deployed as sidecars in the same pod as the OpenSearch container |
 | `cluster.security.config.adminCredentialsSecret` | object | `{}` | Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided. |
 | `cluster.security.config.adminSecret` | object | `{}` | TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated |
