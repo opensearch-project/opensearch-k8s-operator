@@ -18,6 +18,7 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -116,7 +117,7 @@ type CommandProbeConfig struct {
 type NodePool struct {
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
-	DiskSize                  string                            `json:"diskSize,omitempty"`
+	DiskSize                  resource.Quantity                 `json:"diskSize,omitempty"`
 	Resources                 corev1.ResourceRequirements       `json:"resources,omitempty"`
 	Jvm                       string                            `json:"jvm,omitempty"`
 	Roles                     []string                          `json:"roles"`
@@ -194,6 +195,7 @@ type BootstrapConfig struct {
 	// +kubebuilder:validation:Schemaless
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
 	HostAliases    []corev1.HostAlias `json:"hostAliases,omitempty"`
+	DiskSize       resource.Quantity  `json:"diskSize,omitempty"`
 }
 
 type DashboardsServiceSpec struct {

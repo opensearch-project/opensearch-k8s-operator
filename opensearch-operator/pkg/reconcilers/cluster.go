@@ -19,7 +19,6 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -445,8 +444,10 @@ func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result
 }
 
 func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opsterv1.NodePool) error {
-	if nodePool.DiskSize == "" { // Default case
-		nodePool.DiskSize = builders.DefaultDiskSize
+	// Use default if DiskSize is zero (not set)
+	nodePoolDiskSize := nodePool.DiskSize
+	if nodePoolDiskSize.IsZero() {
+		nodePoolDiskSize = builders.DefaultDiskSize
 	}
 
 	// If we are changing from ephemeral storage to persistent
@@ -459,11 +460,6 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 	}
 
 	existingDisk := lo.FromPtr(existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage())
-	nodePoolDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
-	if err != nil {
-		r.logger.Error(err, fmt.Sprintf("Invalid diskSize '%s' for nodepool %s", nodePool.DiskSize, nodePool.Component))
-		return err
-	}
 
 	if existingDisk.Equal(nodePoolDiskSize) {
 		return nil

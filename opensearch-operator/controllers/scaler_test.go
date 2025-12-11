@@ -2,14 +2,16 @@ package controllers
 
 import (
 	"context"
-	"k8s.io/utils/ptr"
 	"time"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -147,7 +149,7 @@ var _ = Describe("Scaler Reconciler", func() {
 					return err
 				}
 				if OpensearchCluster.Spec.NodePools[0].Persistence == nil || OpensearchCluster.Spec.NodePools[0].Persistence.PVC != nil {
-					OpensearchCluster.Spec.NodePools[0].DiskSize = "32Gi"
+					OpensearchCluster.Spec.NodePools[0].DiskSize = resource.MustParse("32Gi")
 				}
 
 				return k8sClient.Update(context.Background(), &OpensearchCluster)
