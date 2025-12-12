@@ -878,6 +878,14 @@ func NewBootstrapPod(
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
+
+	// Merge Bootstrap.Labels into labels
+	if cr.Spec.Bootstrap.Labels != nil {
+		for k, v := range cr.Spec.Bootstrap.Labels {
+			labels[k] = v
+		}
+	}
+
 	resources := cr.Spec.Bootstrap.Resources
 
 	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(cr.Spec.Bootstrap.Resources.Requests.Memory())
@@ -1150,6 +1158,7 @@ func NewBootstrapPod(
 			ImagePullSecrets:   image.ImagePullSecrets,
 			SecurityContext:    podSecurityContext,
 			HostAliases:        hostAliases,
+			PriorityClassName:  cr.Spec.Bootstrap.PriorityClassName,
 		},
 	}
 
@@ -1287,24 +1296,39 @@ func NewSecurityconfigUpdateJob(
 	image := helpers.ResolveImage(instance, &node)
 	securityContext := instance.Spec.General.SecurityContext
 	podSecurityContext := instance.Spec.General.PodSecurityContext
-	resources := instance.Spec.Security.GetConfig().GetUpdateJob().Resources
+	updateJobConfig := instance.Spec.Security.GetConfig().GetUpdateJob()
+	resources := updateJobConfig.Resources
+	priorityClassName := updateJobConfig.PriorityClassName
+
+	// Build labels for Job and Pod template
+	jobLabels := map[string]string{
+		helpers.JobLabel: jobName,
+	}
+	podLabels := map[string]string{
+		helpers.JobLabel: jobName,
+	}
+
+	// Merge user-provided labels
+	if updateJobConfig.Labels != nil {
+		for k, v := range updateJobConfig.Labels {
+			jobLabels[k] = v
+			podLabels[k] = v
+		}
+	}
+
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        jobName,
 			Namespace:   namespace,
 			Annotations: annotations,
-			Labels: map[string]string{
-				helpers.JobLabel: jobName,
-			},
+			Labels:      jobLabels,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: jobName,
-					Labels: map[string]string{
-						helpers.JobLabel: jobName,
-					},
+					Name:   jobName,
+					Labels: podLabels,
 				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
@@ -1323,6 +1347,7 @@ func NewSecurityconfigUpdateJob(
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ImagePullSecrets:   image.ImagePullSecrets,
 					SecurityContext:    podSecurityContext,
+					PriorityClassName:  priorityClassName,
 				},
 			},
 		},
