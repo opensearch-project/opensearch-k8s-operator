@@ -30,7 +30,7 @@ var (
 
 const (
 	ConfigurationChecksumAnnotation  = "opster.io/config"
-	defaultMonitoringPlugin          = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
+	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
 
