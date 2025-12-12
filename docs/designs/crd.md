@@ -684,9 +684,9 @@ Monitoring defines Opensearch monitoring configuration
       </tr><tr>
         <td><b>pluginURL</b></td>
         <td>string</td>
-        <td>Define offline link to Aiven Plugin</td>
+        <td>Define offline link to monitoring Plugin</td>
         <td>false</td>
-        <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
+        <td>https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
       </tr><tr>
         <td><b>tlsConfig</b></td>
         <td>map[]</td>
