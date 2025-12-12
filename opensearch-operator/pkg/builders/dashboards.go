@@ -174,6 +174,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 					SecurityContext:           podSecurityContext,
 					HostAliases:               cr.Spec.Dashboards.HostAliases,
 					TopologySpreadConstraints: cr.Spec.Dashboards.TopologySpreadConstraints,
+					PriorityClassName:         cr.Spec.Dashboards.PriorityClassName,
 				},
 			},
 		},

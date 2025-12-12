@@ -189,13 +189,15 @@ type BootstrapConfig struct {
 	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	Annotations      map[string]string `json:"annotations,omitempty"`
+	Labels           map[string]string `json:"labels,omitempty"`
 	PluginsList      []string          `json:"pluginsList,omitempty"`
 	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
-	InitContainers []corev1.Container `json:"initContainers,omitempty"`
-	HostAliases    []corev1.HostAlias `json:"hostAliases,omitempty"`
-	DiskSize       resource.Quantity  `json:"diskSize,omitempty"`
+	InitContainers    []corev1.Container `json:"initContainers,omitempty"`
+	HostAliases       []corev1.HostAlias `json:"hostAliases,omitempty"`
+	DiskSize          resource.Quantity  `json:"diskSize,omitempty"`
+	PriorityClassName string             `json:"priorityClassName,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
@@ -234,7 +236,8 @@ type DashboardsConfig struct {
 	// Set security context for the dashboards pods
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the dashboards pods' container
-	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	SecurityContext   *corev1.SecurityContext `json:"securityContext,omitempty"`
+	PriorityClassName string                  `json:"priorityClassName,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -339,7 +342,9 @@ type SecurityConfig struct {
 
 // Specific configs for the SecurityConfig update job
 type SecurityUpdateJobConfig struct {
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	Resources         corev1.ResourceRequirements `json:"resources,omitempty"`
+	PriorityClassName string                      `json:"priorityClassName,omitempty"`
+	Labels            map[string]string           `json:"labels,omitempty"`
 }
 
 type ImageSpec struct {
