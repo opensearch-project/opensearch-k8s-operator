@@ -369,7 +369,7 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 	}
 
 	if r.instance.Spec.General.DrainDataNodes {
-		_, err = services.RemoveExcludeNodeHost(r.osClient, c.podName)
+		_, err = services.RemoveExcludeNodeHost(r.osClient, r.logger, c.podName)
 		return ctrl.Result{}, err
 	}
 	return ctrl.Result{}, nil

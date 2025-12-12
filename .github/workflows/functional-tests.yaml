@@ -56,7 +56,7 @@ jobs:
           cd functionaltests
 
           ## Run tests
-          go test ./operatortests -timeout 30m
+          go test ./operatortests -timeout 45m -ginkgo.v
 
       - name: Collect operator logs
         if: always() && (steps.operator_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))

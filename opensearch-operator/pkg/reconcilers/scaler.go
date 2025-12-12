@@ -3,8 +3,9 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"time"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
@@ -205,7 +206,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 		return true, err
 	}
 
-	success, err := services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	success, err := services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
 	if !success || err != nil {
 		lg.Error(err, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to remove node exclude - Group-%s , node  %s", nodePoolGroupName, lastReplicaNodeName)
@@ -227,7 +228,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	// -----  Now start remove node ------
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
 
-	excluded, err := services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	excluded, err := services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
 		return err
@@ -338,7 +339,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 
 	workingOrdinal := ptr.Deref(sts.Spec.Replicas, 1) - 1
 	lastReplicaNodeName := helpers.ReplicaHostName(sts, workingOrdinal)
-	_, err = services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	_, err = services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
 		return nil, err
@@ -364,7 +365,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 		if err != nil {
 			return result, err
 		}
-		_, err = services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+		_, err = services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
 		if err != nil {
 			lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
 		}
@@ -377,7 +378,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 		return result, err
 	}
 
-	_, err = services.RemoveExcludeNodeHost(clusterClient, lastReplicaNodeName)
+	_, err = services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
 	}
