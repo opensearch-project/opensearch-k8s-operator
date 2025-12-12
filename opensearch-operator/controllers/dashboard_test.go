@@ -3,9 +3,10 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"time"
+
 	sts "k8s.io/api/apps/v1"
 	"k8s.io/utils/ptr"
-	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -19,7 +20,7 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var _ = Describe("Dashboards Reconciler", func() {
+var _ = Describe("Dashboards Reconciler", Ordered, func() {
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
