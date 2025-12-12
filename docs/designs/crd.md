@@ -378,10 +378,10 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>latest</td>
       </tr><tr>
         <td><b>additionalConfig</b></td>
-        <td>string</td>
+        <td>map[string]string</td>
         <td>Added extra items to opensearch.yml</td>
-        <td>string</td>
-        <td></td>
+        <td>false</td>
+        <td>{}</td>
       </tr><tr>
         <td><b>Tls</b></td>
         <td>DashboardsTlsConfig</td>

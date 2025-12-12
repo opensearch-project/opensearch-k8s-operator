@@ -266,7 +266,8 @@ cluster:
       # -- node pool pod annotations
       annotations: {}
       # -- Extra items to add to opensearch.yml for this specific nodepool (merged with general.additionalConfig)
-      # additionalConfig: {}
+      additionalConfig: {}
+
       diskSize: "30Gi"
       replicas: 3
       roles:
