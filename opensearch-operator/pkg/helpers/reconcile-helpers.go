@@ -2,9 +2,10 @@ package helpers
 
 import (
 	"fmt"
-	"k8s.io/utils/ptr"
 	"path"
 	"strings"
+
+	"k8s.io/utils/ptr"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/hashicorp/go-version"
@@ -110,7 +111,11 @@ func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
 	var httpPort int32
 	var securityConfigPort int32
 	var securityConfigPath string
-	versionPassed, _ := version.NewVersion(instance.Spec.General.Version)
+	versionPassed, err := version.NewVersion(instance.Spec.General.Version)
+	if err != nil {
+		// If version parsing fails, default to 1.x behavior
+		versionPassed = nil
+	}
 	constraints, _ := version.NewConstraint(">= 2.0")
 
 	if instance.Spec.General.HttpPort > 0 {
@@ -119,7 +124,33 @@ func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
 		httpPort = 9200
 	}
 
-	if constraints.Check(versionPassed) {
+	// Check if version is >= 2.0, handling prerelease versions correctly
+	// For prerelease versions like "3.0.0-testing", we need to compare the base version
+	isVersion2OrHigher := false
+	if versionPassed != nil {
+		// Get the segments (major, minor, patch) to create a base version without prerelease
+		segments := versionPassed.Segments()
+		if len(segments) > 0 {
+			// Create a base version string from segments (e.g., "3.0.0" from "3.0.0-testing")
+			// Always include at least major.minor to ensure proper comparison with ">= 2.0"
+			major := segments[0]
+			minor := 0
+			if len(segments) > 1 {
+				minor = segments[1]
+			}
+			patch := 0
+			if len(segments) > 2 {
+				patch = segments[2]
+			}
+			baseVersionStr := fmt.Sprintf("%d.%d.%d", major, minor, patch)
+			baseVersion, err := version.NewVersion(baseVersionStr)
+			if err == nil {
+				isVersion2OrHigher = constraints.Check(baseVersion)
+			}
+		}
+	}
+
+	if isVersion2OrHigher {
 		securityConfigPort = httpPort
 		securityConfigPath = "/usr/share/opensearch/config/opensearch-security"
 	} else {
