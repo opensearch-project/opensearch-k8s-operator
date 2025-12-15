@@ -48,6 +48,24 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen helm-docs ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations and helm-docs.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+.PHONY: docs
+docs: crd-ref-docs manifests ## Generate CRD API reference documentation.
+	@echo "Generating CRD documentation..."
+	@mkdir -p ../docs/designs
+	@if [ -f ../docs/designs/crd-ref-docs-config.yaml ]; then \
+		$(CRD_REF_DOCS) \
+			--source-path=$(CURDIR)/api \
+			--config=../docs/designs/crd-ref-docs-config.yaml \
+			--renderer=markdown \
+			--output-path=../docs/designs/crd.md; \
+	else \
+		$(CRD_REF_DOCS) \
+			--source-path=$(CURDIR)/api \
+			--renderer=markdown \
+			--output-path=../docs/designs/crd.md; \
+	fi
+	@echo "CRD documentation generated at ../docs/designs/crd.md"
+
 .PHONY: helm-docs
 helm-docs: ${HELM_DOCS}
 	${HELM_DOCS} -s file -c ../charts/opensearch-operator
@@ -123,12 +141,14 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 MOCKERY ?= $(LOCALBIN)/mockery
 HELM_DOCS := $(LOCALBIN)/helm-docs
+CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
 CONTROLLER_TOOLS_VERSION ?= v0.19.0
 MOCKERY_VERSION ?= v2.52.2
 HELM_DOCS_VERSION ?= 1.14.2
+CRD_REF_DOCS_VERSION ?= v0.2.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -156,3 +176,8 @@ helm-docs: $(HELM_DOCS) ## Download helm-docs locally if necessary.
 $(HELM_DOCS): $(LOCALBIN)
 	@curl -sL "https://github.com/norwoodj/helm-docs/releases/download/v$(HELM_DOCS_VERSION)/helm-docs_$(HELM_DOCS_VERSION)_$$(uname -s)_x86_64.tar.gz" | tar -xz -C $(LOCALBIN) helm-docs
 	@chmod +x $(HELM_DOCS)
+
+.PHONY: crd-ref-docs
+crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
+$(CRD_REF_DOCS): $(LOCALBIN)
+	test -s $(LOCALBIN)/crd-ref-docs || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@$(CRD_REF_DOCS_VERSION)
