@@ -118,6 +118,8 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		Cleanup(name)
+		if !ShouldSkipCleanup() {
+			Cleanup(name)
+		}
 	})
 })
