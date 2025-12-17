@@ -20,7 +20,7 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var _ = Describe("TLS Reconciler", func() {
+var _ = Describe("TLS Reconciler", Ordered, func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "cluster-test-tls"
