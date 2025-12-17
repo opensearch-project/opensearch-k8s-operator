@@ -299,13 +299,6 @@ func (in *BootstrapConfig) DeepCopyInto(out *BootstrapConfig) {
 		*out = new(corev1.Affinity)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.AdditionalConfig != nil {
-		in, out := &in.AdditionalConfig, &out.AdditionalConfig
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
 	if in.Annotations != nil {
 		in, out := &in.Annotations, &out.Annotations
 		*out = make(map[string]string, len(*in))
@@ -328,6 +321,13 @@ func (in *BootstrapConfig) DeepCopyInto(out *BootstrapConfig) {
 	if in.Keystore != nil {
 		in, out := &in.Keystore, &out.Keystore
 		*out = make([]KeystoreValue, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.Env != nil {
+		in, out := &in.Env, &out.Env
+		*out = make([]corev1.EnvVar, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -1188,13 +1188,6 @@ func (in *NodePool) DeepCopyInto(out *NodePool) {
 		*out = new(PersistenceConfig)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.AdditionalConfig != nil {
-		in, out := &in.AdditionalConfig, &out.AdditionalConfig
-		*out = make(map[string]string, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
-	}
 	if in.Labels != nil {
 		in, out := &in.Labels, &out.Labels
 		*out = make(map[string]string, len(*in))
@@ -1225,6 +1218,13 @@ func (in *NodePool) DeepCopyInto(out *NodePool) {
 		in, out := &in.Probes, &out.Probes
 		*out = new(ProbesConfig)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.AdditionalConfig != nil {
+		in, out := &in.AdditionalConfig, &out.AdditionalConfig
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 	if in.SidecarContainers != nil {
 		in, out := &in.SidecarContainers, &out.SidecarContainers

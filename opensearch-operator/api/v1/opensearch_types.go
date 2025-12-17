@@ -126,13 +126,14 @@ type NodePool struct {
 	Affinity                  *corev1.Affinity                  `json:"affinity,omitempty"`
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 	Persistence               *PersistenceConfig                `json:"persistence,omitempty"`
-	AdditionalConfig          map[string]string                 `json:"additionalConfig,omitempty"`
 	Labels                    map[string]string                 `json:"labels,omitempty"`
 	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// Extra items to add to the opensearch.yml for this nodepool (merged with general.additionalConfig)
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
@@ -186,12 +187,11 @@ type BootstrapConfig struct {
 	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
-	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
-	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
-	Annotations      map[string]string `json:"annotations,omitempty"`
-	Labels           map[string]string `json:"labels,omitempty"`
-	PluginsList      []string          `json:"pluginsList,omitempty"`
-	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
+	Annotations  map[string]string           `json:"annotations,omitempty"`
+	Labels       map[string]string           `json:"labels,omitempty"`
+	PluginsList  []string                    `json:"pluginsList,omitempty"`
+	Keystore     []KeystoreValue             `json:"keystore,omitempty"`
+	Env          []corev1.EnvVar             `json:"env,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	InitContainers    []corev1.Container `json:"initContainers,omitempty"`

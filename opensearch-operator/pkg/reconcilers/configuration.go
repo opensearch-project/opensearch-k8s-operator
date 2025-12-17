@@ -49,8 +49,19 @@ func NewConfigurationReconciler(
 }
 
 func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
+	// Check if we have any config to process
+	hasGeneralConfig := len(r.instance.Spec.General.AdditionalConfig) > 0
+	hasNodePoolConfig := false
+	for _, nodePool := range r.instance.Spec.NodePools {
+		if len(nodePool.AdditionalConfig) > 0 {
+			hasNodePoolConfig = true
+			break
+		}
+	}
+
 	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
-		len(r.reconcilerContext.OpenSearchConfig) == 0 {
+		len(r.reconcilerContext.OpenSearchConfig) == 0 &&
+		!hasGeneralConfig && !hasNodePoolConfig {
 		return ctrl.Result{}, nil
 	}
 	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
@@ -58,7 +69,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	if len(r.reconcilerContext.OpenSearchConfig) > 0 {
+	if helpers.IsSecurityPluginEnabled(r.instance) {
 		// Add some default config for the security plugin
 		r.reconcilerContext.AddConfig("plugins.security.audit.type", "internal_opensearch")
 		r.reconcilerContext.AddConfig("plugins.security.enable_snapshot_restore_privilege", "true")
@@ -66,24 +77,34 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
-
 	}
 
-	var sb strings.Builder
-	keys := make([]string, 0, len(r.reconcilerContext.OpenSearchConfig))
-	for key := range r.reconcilerContext.OpenSearchConfig {
-		keys = append(keys, key)
+	// Add General.AdditionalConfig to reconciler context (for base config)
+	for k, v := range r.instance.Spec.General.AdditionalConfig {
+		r.reconcilerContext.AddConfig(k, v)
 	}
-	sort.Strings(keys)
 
-	for _, key := range keys {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", key, r.reconcilerContext.OpenSearchConfig[key]))
+	// Helper function to build config string from a map
+	buildConfigString := func(config map[string]string) string {
+		var sb strings.Builder
+		keys := make([]string, 0, len(config))
+		for key := range config {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
+		}
+		return sb.String()
 	}
-	data := sb.String()
+
 	result := reconciler.CombinedResult{}
 
+	// Always create shared configmap if General.AdditionalConfig exists (for bootstrap and security update jobs)
+	// This is needed even when per-nodepool configmaps are created
 	if len(r.reconcilerContext.OpenSearchConfig) != 0 {
-		cm := r.buildConfigMap(data)
+		baseData := buildConfigString(r.reconcilerContext.OpenSearchConfig)
+		cm := r.buildConfigMap(baseData)
 		if err := ctrl.SetControllerReference(r.instance, cm, r.client.Scheme()); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -93,6 +114,8 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 			return result.Result, result.Err
 		}
 
+		// Add shared volume and mount for shared configmap (used by bootstrap and security update jobs)
+		// Nodepools with AdditionalConfig will override this with their own per-nodepool configmap
 		volume := corev1.Volume{
 			Name: "config",
 			VolumeSource: corev1.VolumeSource{
@@ -113,6 +136,33 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 	}
 
+	// Create per-nodepool configmaps only for nodepools that have AdditionalConfig
+	for _, nodePool := range r.instance.Spec.NodePools {
+		if len(nodePool.AdditionalConfig) > 0 {
+			// Start with base config (system configs + General.AdditionalConfig)
+			mergedConfig := make(map[string]string)
+			for k, v := range r.reconcilerContext.OpenSearchConfig {
+				mergedConfig[k] = v
+			}
+			// Merge NodePool.AdditionalConfig (overrides General.AdditionalConfig)
+			for k, v := range nodePool.AdditionalConfig {
+				mergedConfig[k] = v
+			}
+
+			nodePoolData := buildConfigString(mergedConfig)
+			cmName := fmt.Sprintf("%s-%s-config", r.instance.Name, nodePool.Component)
+			cm := r.buildConfigMapForNodePool(nodePoolData, cmName)
+			if err := ctrl.SetControllerReference(r.instance, cm, r.client.Scheme()); err != nil {
+				return ctrl.Result{}, err
+			}
+
+			result.Combine(r.client.CreateConfigMap(cm))
+			if result.Err != nil {
+				return result.Result, result.Err
+			}
+		}
+	}
+
 	// Generate additional volumes
 	addVolumes, addVolumeMounts, addVolumeData, err := util.CreateAdditionalVolumes(
 		r.client,
@@ -128,16 +178,30 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	r.reconcilerContext.VolumeMounts = append(addVolumeMounts, r.reconcilerContext.VolumeMounts...)
 
 	for _, nodePool := range r.instance.Spec.NodePools {
-		result.Combine(r.createHashForNodePool(nodePool, data, addVolumeData))
+		// Build merged config for hash calculation
+		mergedConfig := make(map[string]string)
+		for k, v := range r.reconcilerContext.OpenSearchConfig {
+			mergedConfig[k] = v
+		}
+		// Merge NodePool.AdditionalConfig (overrides General.AdditionalConfig)
+		for k, v := range nodePool.AdditionalConfig {
+			mergedConfig[k] = v
+		}
+		dataToUse := buildConfigString(mergedConfig)
+		result.Combine(r.createHashForNodePool(nodePool, dataToUse, addVolumeData))
 	}
 
 	return result.Result, result.Err
 }
 
 func (r *ConfigurationReconciler) buildConfigMap(data string) *corev1.ConfigMap {
+	return r.buildConfigMapForNodePool(data, fmt.Sprintf("%s-config", r.instance.Name))
+}
+
+func (r *ConfigurationReconciler) buildConfigMapForNodePool(data string, name string) *corev1.ConfigMap {
 	return &corev1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-config", r.instance.Name),
+			Name:      name,
 			Namespace: r.instance.Namespace,
 		},
 		Data: map[string]string{

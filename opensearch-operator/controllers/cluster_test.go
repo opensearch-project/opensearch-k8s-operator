@@ -3,6 +3,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -171,6 +172,9 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 				go func(nodePool opsterv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
+					// Calculate expected node.roles value
+					mappedRoles := helpers.MapClusterRoles(nodePool.Roles, OpensearchCluster.Spec.General.Version)
+					expectedNodeRoles := strings.Join(mappedRoles, ",")
 					Eventually(Object(&appsv1.StatefulSet{
 						ObjectMeta: metav1.ObjectMeta{
 							Name:      clusterName + "-" + nodePool.Component,
@@ -183,7 +187,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 								corev1.ResourceCPU:    resource.MustParse("500m"),
 								corev1.ResourceMemory: resource.MustParse("2Gi"),
 							}),
-							HaveEnv("foo", "bar"),
+							HaveEnv("node.roles", expectedNodeRoles),
 							HaveVolumeMounts(
 								"test-secret",
 								"test-cm",
@@ -213,7 +217,33 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			wg.Wait()
 		})
 
-		It("should set nodepool specific config", func() {
+		It("should set general additionalConfig in configmap", func() {
+			cm := &corev1.ConfigMap{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-config", OpensearchCluster.Name),
+					Namespace: OpensearchCluster.Namespace,
+				}, cm)
+			}, timeout, interval).Should(Succeed())
+			Expect(cm.Data).To(HaveKey("opensearch.yml"))
+			Expect(cm.Data["opensearch.yml"]).To(ContainSubstring("foo: bar"))
+		})
+
+		It("should set nodepool additionalConfig in per-nodepool configmap", func() {
+			cm := &corev1.ConfigMap{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-client-config", OpensearchCluster.Name),
+					Namespace: OpensearchCluster.Namespace,
+				}, cm)
+			}, timeout, interval).Should(Succeed())
+			Expect(cm.Data).To(HaveKey("opensearch.yml"))
+			// Should contain both general and nodepool config (merged)
+			Expect(cm.Data["opensearch.yml"]).To(ContainSubstring("foo: bar"))
+			Expect(cm.Data["opensearch.yml"]).To(ContainSubstring("baz: bat"))
+		})
+
+		It("should mount per-nodepool configmap volume when nodepool has additionalConfig", func() {
 			sts := &appsv1.StatefulSet{}
 			Eventually(func() error {
 				return k8sClient.Get(context.Background(), types.NamespacedName{
@@ -221,10 +251,41 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 					Namespace: OpensearchCluster.Namespace,
 				}, sts)
 			}, timeout, interval).Should(Succeed())
-			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
-				Name:  "baz",
-				Value: "bat",
-			}))
+			// Should have config volume pointing to per-nodepool configmap
+			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, fmt.Sprintf("%s-client-config", OpensearchCluster.Name), "config")).Should(BeTrue())
+			// Should NOT have shared configmap volume (it should be removed)
+			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, fmt.Sprintf("%s-config", OpensearchCluster.Name), "config")).Should(BeFalse())
+			// Verify only one "config" volume exists
+			configVolumeCount := 0
+			for _, vol := range sts.Spec.Template.Spec.Volumes {
+				if vol.Name == "config" {
+					configVolumeCount++
+				}
+			}
+			Expect(configVolumeCount).To(Equal(1))
+		})
+
+		It("should mount shared configmap volume when nodepool does not have additionalConfig", func() {
+			// Test master nodepool (no AdditionalConfig)
+			sts := &appsv1.StatefulSet{}
+			Eventually(func() error {
+				return k8sClient.Get(context.Background(), types.NamespacedName{
+					Name:      fmt.Sprintf("%s-master", OpensearchCluster.Name),
+					Namespace: OpensearchCluster.Namespace,
+				}, sts)
+			}, timeout, interval).Should(Succeed())
+			// Should have config volume pointing to shared configmap
+			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, fmt.Sprintf("%s-config", OpensearchCluster.Name), "config")).Should(BeTrue())
+			// Should NOT have per-nodepool configmap volume
+			Expect(helpers.CheckVolumeExists(sts.Spec.Template.Spec.Volumes, sts.Spec.Template.Spec.Containers[0].VolumeMounts, fmt.Sprintf("%s-master-config", OpensearchCluster.Name), "config")).Should(BeFalse())
+			// Verify only one "config" volume exists
+			configVolumeCount := 0
+			for _, vol := range sts.Spec.Template.Spec.Volumes {
+				if vol.Name == "config" {
+					configVolumeCount++
+				}
+			}
+			Expect(configVolumeCount).To(Equal(1))
 		})
 
 		It("should set nodepool additional user defined env vars", func() {
