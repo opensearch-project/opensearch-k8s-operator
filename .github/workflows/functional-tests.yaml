@@ -3,8 +3,8 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      enable_log_collection:
-        description: 'Enable log collection and publishing'
+      enable_debug_tmate:
+        description: 'Enable interactive tmate debug session on operator test failure'
         required: false
         type: boolean
         default: false
@@ -15,6 +15,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect debug commit
+        id: debug_commit
+        if: github.event_name == 'pull_request'
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          TARGET_COMMIT="${PR_HEAD_SHA}"
+          echo "Using commit for debug detection: $TARGET_COMMIT"
+          msg="$(git show -s --format=%B "$TARGET_COMMIT")"
+          echo "Commit message:"
+          echo "$msg"
+          if echo "$msg" | grep -iq "debug"; then
+            echo "is_debug=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_debug=false" >> "$GITHUB_OUTPUT"
+          fi
       # https://github.com/actions/runner-images/issues/2840#issuecomment-790492173
       - name: Remove unnecessary files
         run: |
@@ -63,8 +81,16 @@ jobs:
           ## Run tests
           SKIP_CLEANUP=true go test ./operatortests -timeout 40m
 
+      # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled for workflow_dispatch
+      - name: Debug with tmate (operator tests)
+        if: steps.operator_tests.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || (github.event_name == 'workflow_dispatch' && inputs.enable_debug_tmate == true))
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
+        with:
+          limit-access-to-actor: true
+
       - name: Collect operator logs
-        if: always() && (steps.operator_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        if: always() && steps.operator_tests.outcome == 'failure'
         run: |
           df -h
           export CLUSTER_NAME=opensearch-operator-tests
@@ -114,7 +140,7 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
           done
       - name: Publish logs
-        if: always() && (steps.operator_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        if: always() && steps.operator_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: operator-job-logs
@@ -187,7 +213,7 @@ jobs:
           go test ./helmtests -timeout 15m
 
       - name: Collect operator logs
-        if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        if: always() && steps.helm_tests.outcome == 'failure'
         run: |
           df -h
           export CLUSTER_NAME=opensearch-operator-tests
@@ -237,7 +263,7 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
           done
       - name: Publish logs
-        if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        if: always() && steps.helm_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: operator-logs-${{ matrix.version }}
