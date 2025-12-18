@@ -83,7 +83,7 @@ jobs:
 
       # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled for workflow_dispatch
       - name: Debug with tmate (operator tests)
-        if: steps.operator_tests.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || (github.event_name == 'workflow_dispatch' && inputs.enable_debug_tmate == true))
+        if: always() && (steps.operator_tests.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || (github.event_name == 'workflow_dispatch' && inputs.enable_debug_tmate == true)))
         uses: mxschmitt/action-tmate@v3
         timeout-minutes: 30
         with:
