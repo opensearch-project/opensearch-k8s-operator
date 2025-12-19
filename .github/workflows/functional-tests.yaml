@@ -65,22 +65,17 @@ jobs:
           ## Prepare kubeconfig
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-
           ## Build controller docker image
           make docker-build
-
           ## Import controller docker image
           k3d image import -c $CLUSTER_NAME controller:latest
-
           ## Install helm chart
           helm install opensearch-operator ../charts/opensearch-operator \
           -f functionaltests/helmtests/ci-operator-values.yml \
           --namespace default --wait
           cd functionaltests
-
           ## Run tests
           SKIP_CLEANUP=true go test ./operatortests -timeout 40m
-
       # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled for workflow_dispatch
       - name: Debug with tmate (operator tests)
         if: always() && (steps.operator_tests.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || (github.event_name == 'workflow_dispatch' && inputs.enable_debug_tmate == true)))
@@ -88,7 +83,6 @@ jobs:
         timeout-minutes: 30
         with:
           limit-access-to-actor: true
-
       - name: Collect operator logs
         if: always() && steps.operator_tests.outcome == 'failure'
         run: |
@@ -97,25 +91,19 @@ jobs:
           cd opensearch-operator
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-
           mkdir -p ../logs
-
           echo "Collecting all pods list (first to see status)..."
           kubectl get pods -n default -o wide > ../logs/all-pods.txt 2>&1 || true
           echo "=== All Pods Status ==="
           cat ../logs/all-pods.txt || true
-
           echo "Collecting OpenSearchCluster resource status..."
           kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
-
           echo "Collecting events..."
           kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
-
           echo "Collecting pod descriptions..."
           kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
           kubectl describe pods -n default -l opster.io/opensearch-cluster=deploy-and-upgrade > ../logs/opensearch-pods-describe.txt 2>&1 || true
           kubectl describe pods -n default -l opensearch.cluster.dashboards=deploy-and-upgrade > ../logs/dashboards-pods-describe.txt 2>&1 || true
-
           echo "Collecting logs from OpenSearch operator pods..."
           kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
@@ -123,7 +111,6 @@ jobs:
             kubectl logs -n default $pod_name > ../logs/operator-${pod_name}.log 2>&1 || true
             kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
           done
-
           echo "Collecting logs from OpenSearch cluster pods..."
           kubectl get pods -n default -l opster.io/opensearch-cluster=deploy-and-upgrade -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
@@ -131,7 +118,6 @@ jobs:
             kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
             kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
           done
-
           echo "Collecting logs from OpenSearch Dashboards pods..."
           kubectl get pods -n default -l opensearch.cluster.dashboards=deploy-and-upgrade -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
@@ -191,13 +177,10 @@ jobs:
           ## Prepare kubeconfig
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-
           ## Build controller docker image
           make docker-build
-
           ## Import controller docker image
           k3d image import -c $CLUSTER_NAME controller:latest
-
           ## Install helm chart
           helm install opensearch-operator ../charts/opensearch-operator \
           -f functionaltests/helmtests/ci-operator-values.yml \
@@ -208,10 +191,8 @@ jobs:
             -f functionaltests/helmtests/ci-cluster-values.yml \
             --wait
           cd functionaltests
-
           ## Run tests
           go test ./helmtests -timeout 15m
-
       - name: Collect operator logs
         if: always() && steps.helm_tests.outcome == 'failure'
         run: |
@@ -220,25 +201,19 @@ jobs:
           cd opensearch-operator
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-
           mkdir -p ../logs
-
           echo "Collecting all pods list (first to see status)..."
           kubectl get pods -n default -o wide > ../logs/all-pods.txt 2>&1 || true
           echo "=== All Pods Status ==="
           cat ../logs/all-pods.txt || true
-
           echo "Collecting OpenSearchCluster resource status..."
           kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
-
           echo "Collecting events..."
           kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
-
           echo "Collecting pod descriptions..."
           kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
           kubectl describe pods -n default -l opster.io/opensearch-cluster=opensearch-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
           kubectl describe pods -n default -l opensearch.cluster.dashboards=opensearch-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
-
           echo "Collecting logs from OpenSearch operator pods..."
           kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
@@ -246,7 +221,6 @@ jobs:
             kubectl logs -n default $pod_name > ../logs/operator-${pod_name}.log 2>&1 || true
             kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
           done
-
           echo "Collecting logs from OpenSearch cluster pods..."
           kubectl get pods -n default -l opster.io/opensearch-cluster=opensearch-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
@@ -254,7 +228,6 @@ jobs:
             kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
             kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
           done
-
           echo "Collecting logs from OpenSearch Dashboards pods..."
           kubectl get pods -n default -l opensearch.cluster.dashboards=opensearch-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
