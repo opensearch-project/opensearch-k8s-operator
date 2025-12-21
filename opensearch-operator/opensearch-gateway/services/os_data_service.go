@@ -668,8 +668,10 @@ func DetectShardStuckVersionMismatch(service *OsClusterClient, shard responses.C
 	return hasNodeVersionMismatch, nil
 }
 
-// Before performing an upgrade, deprecated settings that will be removed
-// in the upgraded version shall be removed in order not to cause a deadlock.
+// While performing the upgrade, settings that have been removed in the newer version will be
+// archived. If updating settings while archived settings are in place, the update will be rejected
+// and the upgrade procedure may deadlock.
+// Therefore, this function takes a best effort to remove some common archived settings.
 func DeleteUnsupportedClusterSettings(service *OsClusterClient, newVersion string) error {
 	settingsToDelete, err := DetermineUnsupportedClusterSettings(newVersion)
 	if err != nil {
@@ -680,8 +682,8 @@ func DeleteUnsupportedClusterSettings(service *OsClusterClient, newVersion strin
 	return err
 }
 
-// Determines which of the current settings will not be supported by the
-// new version.
+// Determines archived settings that shall be removed to avoid failure when updating cluster settings
+// during an upgrade.
 // The list included here is best-effort and not guaranteed to be kept up to date
 func DetermineUnsupportedClusterSettings(newVersion string) (responses.ClusterSettingsResponse, error) {
 	settingsToDelete := responses.ClusterSettingsResponse{
@@ -691,12 +693,6 @@ func DetermineUnsupportedClusterSettings(newVersion string) (responses.ClusterSe
 	var removedSettingsByVersion = map[string][]string{
 		"3.0.0": {
 			// https://github.com/opensearch-project/index-management/pull/963
-			"opendistro.index_state_management.metadata_service.enabled",
-			"opendistro.index_state_management.metadata_migration.status",
-			"opendistro.index_state_management.template_migration.control",
-			"plugins.index_state_management.metadata_service.enabled",
-			"plugins.index_state_management.metadata_migration.status",
-			"plugins.index_state_management.template_migration.control",
 			"archived.opendistro.index_state_management.metadata_service.enabled",
 			"archived.opendistro.index_state_management.metadata_migration.status",
 			"archived.opendistro.index_state_management.template_migration.control",
