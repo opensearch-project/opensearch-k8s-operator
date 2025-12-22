@@ -28,6 +28,10 @@ spec:
         name: ""
     version: 2.19.4
   general:
+    additionalConfig:
+      cluster.routing.allocation.disk.watermark.low: 500m
+      cluster.routing.allocation.disk.watermark.high: 300m
+      cluster.routing.allocation.disk.watermark.flood_stage: 100m
     drainDataNodes: true
     httpPort: 9200
     monitoring:
