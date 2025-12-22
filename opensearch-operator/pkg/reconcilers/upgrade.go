@@ -327,6 +327,16 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		return nil
 	}
 
+	// Delete deprecated settings that have been removed in the updated version
+	// NOTE: This needs to be called before each pod delete, since some settings are being re-applied automatically during node restart.
+	// NOTE: This can be removed if OpenSearch 2.x stops erroring on archived settings
+	// See https://github.com/opensearch-project/OpenSearch/issues/18515
+	err = services.DeleteUnsupportedClusterSettings(r.osClient, r.instance.Spec.General.Version)
+	if err != nil {
+		r.logger.Error(err, "Could not delete unsupported cluster settings")
+		return err
+	}
+
 	ready, condition, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
 	if err != nil {
 		r.logger.Error(err, "Could not check opensearch cluster status")
@@ -370,16 +380,6 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 	if err != nil {
 		conditions = append(conditions, "Could not find working pod")
 		r.setComponentConditions(conditions, pool.Component)
-		return err
-	}
-
-	// Delete deprecated settings that have been removed in the updated version
-	// NOTE: This needs to be called before each pod delete, since some settings are being re-applied automatically during node restart.
-	// NOTE: This can be removed if OpenSearch 2.x stops erroring on archived settings
-	// See https://github.com/opensearch-project/OpenSearch/issues/18515
-	err = services.DeleteUnsupportedClusterSettings(r.osClient, r.instance.Spec.General.Version)
-	if err != nil {
-		r.logger.Error(err, "Could not delete unsupported cluster settings")
 		return err
 	}
 
