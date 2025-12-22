@@ -171,10 +171,10 @@ GeneralConfig defines global Opensearch cluster configuration
         <td></td>
       </tr><tr>
         <td><b>additionalConfig</b></td>
-        <td>string</td>
-        <td>Added extra items to opensearch.yml</td>
-        <td>string</td>
-        <td></td>
+        <td>map[string]string</td>
+        <td>Extra items to add to opensearch.yml. These settings are added to a shared configmap that is mounted to all node pools. Settings must be provided as a map of strings (use flat form). If a nodepool has its own additionalConfig, it will be merged with this (nodepool settings override general settings).</td>
+        <td>false</td>
+        <td>{}</td>
       </tr><tr>
         <td><b>annotations</b></td>
         <td>map[string]string</td>
@@ -267,6 +267,12 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>false</td>
         <td>-</td>
       </tr><tr>
+        <td><b>diskSize</b></td>
+        <td>resource.Quantity</td>
+        <td> bootstrap pod data disk size </td>
+        <td>false</td>
+        <td> 1Gi </td>
+      </tr><tr>
         <td><b>tolerations</b></td>
         <td>[]corev1.Toleration</td>
         <td>add toleration to bootstrap pod</td>
@@ -291,11 +297,11 @@ Bootstrap defines Opensearch bootstrap pod configuration
         <td>false</td>
         <td>-Xmx512M -Xms512M</td>
       </tr><tr>
-        <td><b>additionalConfig</b></td>
-        <td>string</td>
-        <td>Added extra items to opensearch.yml in the bootstrap pod</td>
-        <td>map[string]string</td>
-        <td>general.additionalConfig</td>
+        <td><b>env</b></td>
+        <td>[]corev1.Env</td>
+        <td>add user defined environment variables to bootstrap pod</td>
+        <td>false</td>
+        <td> - </td>
       </tr><tr>
         <td><b>keystore</b></td>
         <td>[]opsterv1.KeystoreValue</td>
@@ -370,6 +376,12 @@ Dashboards defines Opensearch-Dashboard configuration and deployment
         <td>Opensearch-dashboards version</td>
         <td>false</td>
         <td>latest</td>
+      </tr><tr>
+        <td><b>additionalConfig</b></td>
+        <td>map[string]string</td>
+        <td>Added extra items to opensearch.yml</td>
+        <td>false</td>
+        <td>{}</td>
       </tr><tr>
         <td><b>Tls</b></td>
         <td>DashboardsTlsConfig</td>
@@ -501,10 +513,10 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>1</td>
       </tr><tr>
         <td><b>diskSize</b></td>
-        <td>string</td>
+        <td>resource.Quantity</td>
         <td> nodePool data disk size </td>
         <td>true</td>
-        <td> - </td>
+        <td> 30Gi </td>
       </tr><tr>
         <td><b>NodeSelector</b></td>
         <td>map[string]string</td>
@@ -588,6 +600,13 @@ Every NodePool is defining different Opensearch Nodes StatefulSet
         <td>List of init containers that should be added to the nodepool pods</td>
         <td>false</td>
         <td> [] </td>
+      </tr>
+       </tr><tr>
+        <td><b>additionalConfig</b></td>
+        <td>map[string]string</td>
+        <td>Extra items to add to opensearch.yml for this specific nodepool. These settings are merged with spec.general.additionalConfig (nodepool settings override general settings). When specified, this nodepool will get its own configmap with the merged configuration. Settings must be provided as a map of strings (use flat form).</td>
+        <td>false</td>
+        <td>{}</td>
       </tr>
 </table>
 
@@ -678,9 +697,9 @@ Monitoring defines Opensearch monitoring configuration
       </tr><tr>
         <td><b>pluginURL</b></td>
         <td>string</td>
-        <td>Define offline link to Aiven Plugin</td>
+        <td>Define offline link to monitoring Plugin</td>
         <td>false</td>
-        <td>https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
+        <td>https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/<YOUR_CLUSTER_VERSION>/prometheus-exporter-<YOUR_CLUSTER_VERSION>.zip/</td>
       </tr><tr>
         <td><b>tlsConfig</b></td>
         <td>map[]</td>

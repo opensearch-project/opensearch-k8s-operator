@@ -24,12 +24,45 @@ import (
 
 /// package that declare and build all the resources that related to the OpenSearch cluster ///
 
+var (
+	DefaultDiskSize = resource.MustParse("30Gi")
+)
+
 const (
 	ConfigurationChecksumAnnotation  = "opster.io/config"
-	DefaultDiskSize                  = "30Gi"
-	defaultMonitoringPlugin          = "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/%s.0/prometheus-exporter-%s.0.zip"
+	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
+
+// GetDefaultAffinity returns default pod anti-affinity that prefers to avoid
+// co-locating pods from the same cluster on a single node.
+func GetDefaultAffinity(clusterName string) *corev1.Affinity {
+	return &corev1.Affinity{
+		PodAntiAffinity: &corev1.PodAntiAffinity{
+			PreferredDuringSchedulingIgnoredDuringExecution: []corev1.WeightedPodAffinityTerm{
+				{
+					Weight: 100,
+					PodAffinityTerm: corev1.PodAffinityTerm{
+						LabelSelector: &metav1.LabelSelector{
+							MatchLabels: map[string]string{
+								helpers.ClusterLabel: clusterName,
+							},
+						},
+						TopologyKey: "kubernetes.io/hostname",
+					},
+				},
+			},
+		},
+	}
+}
+
+// getAffinity returns the provided affinity if set, otherwise returns default affinity
+func getAffinity(affinity *corev1.Affinity, clusterName string) *corev1.Affinity {
+	if affinity != nil {
+		return affinity
+	}
+	return GetDefaultAffinity(clusterName)
+}
 
 func NewSTSForNodePool(
 	username string,
@@ -38,11 +71,10 @@ func NewSTSForNodePool(
 	configChecksum string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
-	extraConfig map[string]string,
 ) *appsv1.StatefulSet {
 	// To make sure disksize is not passed as empty
-	var disksize string
-	if len(node.DiskSize) == 0 {
+	var disksize resource.Quantity
+	if node.DiskSize.IsZero() {
 		disksize = DefaultDiskSize
 	} else {
 		disksize = node.DiskSize
@@ -99,7 +131,7 @@ func NewSTSForNodePool(
 				}(),
 				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
-						corev1.ResourceStorage: resource.MustParse(disksize),
+						corev1.ResourceStorage: disksize,
 					},
 				},
 				StorageClassName: func() *string {
@@ -580,7 +612,7 @@ func NewSTSForNodePool(
 					ServiceAccountName:        cr.Spec.General.ServiceAccount,
 					NodeSelector:              node.NodeSelector,
 					Tolerations:               node.Tolerations,
-					Affinity:                  node.Affinity,
+					Affinity:                  getAffinity(node.Affinity, cr.Name),
 					TopologySpreadConstraints: node.TopologySpreadConstraints,
 					ImagePullSecrets:          image.ImagePullSecrets,
 					PriorityClassName:         node.PriorityClassName,
@@ -596,15 +628,6 @@ func NewSTSForNodePool(
 			}(),
 			ServiceName: cr.Spec.General.ServiceName,
 		},
-	}
-
-	// Append additional config to env vars
-	keys := helpers.SortedKeys(extraConfig)
-	for _, k := range keys {
-		sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, corev1.EnvVar{
-			Name:  k,
-			Value: extraConfig[k],
-		})
 	}
 
 	// Add node.roles env var
@@ -845,6 +868,14 @@ func NewBootstrapPod(
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
+
+	// Merge Bootstrap.Labels into labels
+	if cr.Spec.Bootstrap.Labels != nil {
+		for k, v := range cr.Spec.Bootstrap.Labels {
+			labels[k] = v
+		}
+	}
+
 	resources := cr.Spec.Bootstrap.Resources
 
 	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(cr.Spec.Bootstrap.Resources.Requests.Memory())
@@ -931,18 +962,9 @@ func NewBootstrapPod(
 		},
 	})
 
-	// Append additional config to env vars, use General.AdditionalConfig by default, overwrite with Bootstrap.AdditionalConfig
-	extraConfig := cr.Spec.General.AdditionalConfig
-	if cr.Spec.Bootstrap.AdditionalConfig != nil {
-		extraConfig = cr.Spec.Bootstrap.AdditionalConfig
-	}
-
-	keys := helpers.SortedKeys(extraConfig)
-	for _, k := range keys {
-		env = append(env, corev1.EnvVar{
-			Name:  k,
-			Value: extraConfig[k],
-		})
+	// Add Bootstrap.Env
+	if cr.Spec.Bootstrap.Env != nil {
+		env = append(env, cr.Spec.Bootstrap.Env...)
 	}
 
 	var initContainers []corev1.Container
@@ -1113,10 +1135,11 @@ func NewBootstrapPod(
 			ServiceAccountName: cr.Spec.General.ServiceAccount,
 			NodeSelector:       cr.Spec.Bootstrap.NodeSelector,
 			Tolerations:        cr.Spec.Bootstrap.Tolerations,
-			Affinity:           cr.Spec.Bootstrap.Affinity,
+			Affinity:           getAffinity(cr.Spec.Bootstrap.Affinity, cr.Name),
 			ImagePullSecrets:   image.ImagePullSecrets,
 			SecurityContext:    podSecurityContext,
 			HostAliases:        hostAliases,
+			PriorityClassName:  cr.Spec.Bootstrap.PriorityClassName,
 		},
 	}
 
@@ -1188,11 +1211,9 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 
 	// Use default storage class and ReadWriteOnce access mode
 	// The bootstrap pod only needs a small amount of storage for cluster metadata
-	storageSize := "1Gi"
-	if cr.Spec.Bootstrap.Resources.Requests != nil {
-		if size, exists := cr.Spec.Bootstrap.Resources.Requests["storage"]; exists {
-			storageSize = size.String()
-		}
+	storageSize := resource.MustParse("1Gi")
+	if !cr.Spec.Bootstrap.DiskSize.IsZero() {
+		storageSize = cr.Spec.Bootstrap.DiskSize
 	}
 
 	return &corev1.PersistentVolumeClaim{
@@ -1207,7 +1228,7 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 			},
 			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse(storageSize),
+					corev1.ResourceStorage: storageSize,
 				},
 			},
 		},
@@ -1256,24 +1277,39 @@ func NewSecurityconfigUpdateJob(
 	image := helpers.ResolveImage(instance, &node)
 	securityContext := instance.Spec.General.SecurityContext
 	podSecurityContext := instance.Spec.General.PodSecurityContext
-	resources := instance.Spec.Security.GetConfig().GetUpdateJob().Resources
+	updateJobConfig := instance.Spec.Security.GetConfig().GetUpdateJob()
+	resources := updateJobConfig.Resources
+	priorityClassName := updateJobConfig.PriorityClassName
+
+	// Build labels for Job and Pod template
+	jobLabels := map[string]string{
+		helpers.JobLabel: jobName,
+	}
+	podLabels := map[string]string{
+		helpers.JobLabel: jobName,
+	}
+
+	// Merge user-provided labels
+	if updateJobConfig.Labels != nil {
+		for k, v := range updateJobConfig.Labels {
+			jobLabels[k] = v
+			podLabels[k] = v
+		}
+	}
+
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        jobName,
 			Namespace:   namespace,
 			Annotations: annotations,
-			Labels: map[string]string{
-				helpers.JobLabel: jobName,
-			},
+			Labels:      jobLabels,
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit: &backoffLimit,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Name: jobName,
-					Labels: map[string]string{
-						helpers.JobLabel: jobName,
-					},
+					Name:   jobName,
+					Labels: podLabels,
 				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
@@ -1292,6 +1328,7 @@ func NewSecurityconfigUpdateJob(
 					RestartPolicy:      corev1.RestartPolicyNever,
 					ImagePullSecrets:   image.ImagePullSecrets,
 					SecurityContext:    podSecurityContext,
+					PriorityClassName:  priorityClassName,
 				},
 			},
 		},

@@ -18,6 +18,7 @@ package v1
 
 import (
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -116,7 +117,7 @@ type CommandProbeConfig struct {
 type NodePool struct {
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
-	DiskSize                  string                            `json:"diskSize,omitempty"`
+	DiskSize                  resource.Quantity                 `json:"diskSize,omitempty"`
 	Resources                 corev1.ResourceRequirements       `json:"resources,omitempty"`
 	Jvm                       string                            `json:"jvm,omitempty"`
 	Roles                     []string                          `json:"roles"`
@@ -125,13 +126,14 @@ type NodePool struct {
 	Affinity                  *corev1.Affinity                  `json:"affinity,omitempty"`
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 	Persistence               *PersistenceConfig                `json:"persistence,omitempty"`
-	AdditionalConfig          map[string]string                 `json:"additionalConfig,omitempty"`
 	Labels                    map[string]string                 `json:"labels,omitempty"`
 	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// Extra items to add to the opensearch.yml for this nodepool (merged with general.additionalConfig)
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
@@ -185,15 +187,17 @@ type BootstrapConfig struct {
 	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
-	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
-	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
-	Annotations      map[string]string `json:"annotations,omitempty"`
-	PluginsList      []string          `json:"pluginsList,omitempty"`
-	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
+	Annotations  map[string]string           `json:"annotations,omitempty"`
+	Labels       map[string]string           `json:"labels,omitempty"`
+	PluginsList  []string                    `json:"pluginsList,omitempty"`
+	Keystore     []KeystoreValue             `json:"keystore,omitempty"`
+	Env          []corev1.EnvVar             `json:"env,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
-	InitContainers []corev1.Container `json:"initContainers,omitempty"`
-	HostAliases    []corev1.HostAlias `json:"hostAliases,omitempty"`
+	InitContainers    []corev1.Container `json:"initContainers,omitempty"`
+	HostAliases       []corev1.HostAlias `json:"hostAliases,omitempty"`
+	DiskSize          resource.Quantity  `json:"diskSize,omitempty"`
+	PriorityClassName string             `json:"priorityClassName,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
@@ -232,7 +236,8 @@ type DashboardsConfig struct {
 	// Set security context for the dashboards pods
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the dashboards pods' container
-	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	SecurityContext   *corev1.SecurityContext `json:"securityContext,omitempty"`
+	PriorityClassName string                  `json:"priorityClassName,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -337,7 +342,9 @@ type SecurityConfig struct {
 
 // Specific configs for the SecurityConfig update job
 type SecurityUpdateJobConfig struct {
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	Resources         corev1.ResourceRequirements `json:"resources,omitempty"`
+	PriorityClassName string                      `json:"priorityClassName,omitempty"`
+	Labels            map[string]string           `json:"labels,omitempty"`
 }
 
 type ImageSpec struct {

@@ -194,7 +194,9 @@ nodePools:
       some.other.config: foobar
 ```
 
-Using `spec.general.additionalConfig` you can add settings to all nodes, using `nodePools[].additionalConfig` you can add settings to only a pool of nodes. The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`. The value of `spec.general.additionalConfig` is also used for configuring the bootstrap pod. To overwrite the values of the bootstrap pod, set the field `spec.bootstrap.additionalConfig`.
+Using `spec.general.additionalConfig` you can add settings that will be applied to all nodes in the cluster. The settings are added to a shared configmap that is mounted to all node pools. If you need nodepool-specific configuration, you can use `nodePools[].additionalConfig` which will be merged with `spec.general.additionalConfig` for that specific nodepool (nodepool settings override general settings). When a nodepool has `additionalConfig` specified, it will get its own configmap with the merged configuration.
+
+The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`.
 
 Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If want to avoid that please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
 
@@ -302,7 +304,7 @@ general:
   pluginsList:
     [
       "repository-s3",
-      "https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip",
+      "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip",
     ]
 ```
 
@@ -649,7 +651,7 @@ If you are using emptyDir, it is recommended that you set `spec.general.drainDat
 
 #### HostPath
 
-As a last option you can hose a `hostPath`. Please note that hostPath is strongly discouraged, and if you do choose this option, then you must also configure affinity for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host.
+As a last option you can use a `hostPath`. Please note that hostPath is strongly discouraged. By default, the operator applies pod anti-affinity to prevent multiple pods from scheduling on the same node, which helps when using hostPath. However, if you need stricter control, you can configure explicit affinity rules for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host.
 
 ```yaml
 nodePools:
@@ -794,6 +796,55 @@ spec:
       roles:
         - "master"
 ```
+
+### Pod Affinity
+
+By default, the operator applies pod anti-affinity rules to prevent multiple pods from the same OpenSearch cluster from being scheduled on the same node. This improves high availability by reducing the risk of multiple pods being affected by a single node failure.
+
+The default anti-affinity uses `PreferredDuringSchedulingIgnoredDuringExecution`, which is a soft preference that won't prevent scheduling if no other nodes are available, but will prefer to spread pods across nodes.
+
+You can override this default behavior by explicitly setting the `affinity` field in your node pool, bootstrap, or dashboards configuration:
+
+```yaml
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      roles:
+        - "master"
+        - "data"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  opster.io/opensearch-cluster: my-cluster
+              topologyKey: kubernetes.io/hostname
+  bootstrap:
+    affinity:
+      podAntiAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  opster.io/opensearch-cluster: my-cluster
+              topologyKey: kubernetes.io/hostname
+  dashboards:
+    enable: true
+    affinity:
+      podAffinity:
+        preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchLabels:
+                  app: opensearch-dashboards
+              topologyKey: kubernetes.io/zone
+```
+
+If you set an explicit `affinity`, it will completely replace the default anti-affinity behavior. To disable anti-affinity entirely, you can set `affinity: {}`.
 
 ### Sidecar Containers
 
@@ -1519,8 +1570,8 @@ When the security plugin is disabled (`spec.security.disable: true`), password m
 
 ## Adding Opensearch Monitoring to your cluster
 
-The operator allows you to install and enable the [Aiven monitoring plugin for OpenSearch](https://github.com/aiven/prometheus-exporter-plugin-for-opensearch) on your cluster as a built-in feature. If enabled the operator will install the aiven plugin into the opensearch pods and generate a Prometheus ServiceMonitor object to configure the plugin for scraping.
-This feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: `https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip`) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below in the example will be used if no `pluginUrl` is specified.
+The operator allows you to install and enable the [Prometheus exporter plugin for OpenSearch](https://github.com/opensearch-project/opensearch-prometheus-exporter) on your cluster as a built-in feature. If enabled the operator will install the  plugin into the opensearch pods and generate a Prometheus ServiceMonitor object to configure the plugin for scraping.
+This feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: `https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip`) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below in the example will be used if no `pluginUrl` is specified.
 
 By default the Opensearch admin user will be used to access the monitoring API. If you want to use a separate user with limited permissions you need to create that user using either of the following options:
 
@@ -1544,7 +1595,7 @@ spec:
         someLabelKey: someLabelValue
       scrapeInterval: 30s # The scrape interval for Prometheus
       monitoringUserSecret: monitoring-user-secret # Optional, name of a secret with username/password for prometheus to acces the plugin metrics endpoint with, defaults to the admin user
-      pluginUrl: https://github.com/aiven/prometheus-exporter-plugin-for-opensearch/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugin
+      pluginUrl: https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugin
       tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor, only the following provided options can be set currently
         serverName: "testserver.test.local"
         insecureSkipVerify: true # The operator currently does not allow configuring the ServiceMonitor with certificates, so this needs to be set

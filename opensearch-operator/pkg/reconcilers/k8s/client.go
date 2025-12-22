@@ -2,14 +2,18 @@ package k8s
 
 import (
 	"context"
+	"fmt"
+	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +46,7 @@ type K8sClient interface {
 	GetPod(name, namespace string) (corev1.Pod, error)
 	DeletePod(pod *corev1.Pod) error
 	ListPods(listOptions *client.ListOptions) (corev1.PodList, error)
+	WaitForPodDeletion(podName, namespace string) error
 	GetPVC(name, namespace string) (corev1.PersistentVolumeClaim, error)
 	UpdatePVC(pvc *corev1.PersistentVolumeClaim) error
 	ListPVCs(listOptions *client.ListOptions) (corev1.PersistentVolumeClaimList, error)
@@ -241,6 +246,35 @@ func (c K8sClientImpl) Scheme() *runtime.Scheme {
 
 func (c K8sClientImpl) Context() context.Context {
 	return c.ctx
+}
+
+// WaitForPodDeletion waits for a pod to be deleted from the Kubernetes API using PollUntilContextTimeout
+func (c K8sClientImpl) WaitForPodDeletion(podName, namespace string) error {
+	interval := 500 * time.Millisecond
+	timeout := 30 * time.Second
+
+	err := wait.PollUntilContextTimeout(c.ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
+		_, err := c.GetPod(podName, namespace)
+		if k8serrors.IsNotFound(err) {
+			log.FromContext(c.ctx).V(1).Info("Pod deleted successfully", "pod", podName)
+			return true, nil
+		}
+		if err != nil {
+			log.FromContext(c.ctx).V(1).Info("Error checking pod deletion, will retry", "pod", podName, "error", err)
+			return false, nil
+		}
+		log.FromContext(c.ctx).V(2).Info("Pod still exists, continuing to wait", "pod", podName)
+		return false, nil
+	})
+
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			return fmt.Errorf("timeout waiting for pod %s deletion after %v", podName, timeout)
+		}
+		return fmt.Errorf("error waiting for pod %s deletion: %w", podName, err)
+	}
+
+	return nil
 }
 
 // Validate K8sClientImpl implements the interface

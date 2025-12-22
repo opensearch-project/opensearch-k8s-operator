@@ -211,7 +211,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					},
 				},
 				Replicas: 3,
-				DiskSize: "32Gi",
+				DiskSize: resource.MustParse("32Gi"),
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -239,7 +239,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			}, {
 				Component: "nodes",
 				Replicas:  3,
-				DiskSize:  "32Gi",
+				DiskSize:  resource.MustParse("32Gi"),
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -253,7 +253,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 			}, {
 				Component: "client",
 				Replicas:  3,
-				DiskSize:  "32Gi",
+				DiskSize:  resource.MustParse("32Gi"),
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),

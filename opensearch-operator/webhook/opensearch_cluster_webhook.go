@@ -50,13 +50,66 @@ func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj run
 }
 
 func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	cluster := newObj.(*opsterv1.OpenSearchCluster)
+	oldCluster := oldObj.(*opsterv1.OpenSearchCluster)
+	newCluster := newObj.(*opsterv1.OpenSearchCluster)
 
-	if !cluster.DeletionTimestamp.IsZero() {
+	if !newCluster.DeletionTimestamp.IsZero() {
 		return nil, nil
 	}
 
-	return v.validateTlsConfig(cluster)
+	// Validate storage class changes - storage class is immutable in StatefulSets
+	if err := v.validateStorageClassChanges(oldCluster, newCluster); err != nil {
+		return nil, err
+	}
+
+	return v.validateTlsConfig(newCluster)
+}
+
+func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, newCluster *opsterv1.OpenSearchCluster) error {
+	// Create a map of old node pools by component name for easy lookup
+	oldNodePools := make(map[string]*opsterv1.NodePool)
+	for i := range oldCluster.Spec.NodePools {
+		nodePool := &oldCluster.Spec.NodePools[i]
+		oldNodePools[nodePool.Component] = nodePool
+	}
+
+	// Check each new node pool for storage class changes
+	for _, newNodePool := range newCluster.Spec.NodePools {
+		oldNodePool, exists := oldNodePools[newNodePool.Component]
+		if !exists {
+			// New node pool, no validation needed
+			continue
+		}
+
+		// Get old storage class
+		var oldStorageClass *string
+		if oldNodePool.Persistence != nil && oldNodePool.Persistence.PVC != nil {
+			oldStorageClass = oldNodePool.Persistence.PVC.StorageClassName
+		}
+
+		// Get new storage class
+		var newStorageClass *string
+		if newNodePool.Persistence != nil && newNodePool.Persistence.PVC != nil {
+			newStorageClass = newNodePool.Persistence.PVC.StorageClassName
+		}
+
+		// Compare storage classes (handling nil cases)
+		oldSC := ""
+		if oldStorageClass != nil {
+			oldSC = *oldStorageClass
+		}
+		newSC := ""
+		if newStorageClass != nil {
+			newSC = *newStorageClass
+		}
+
+		// Reject if storage class has changed
+		if oldSC != newSC {
+			return fmt.Errorf("storage class cannot be changed for node pool '%s' (was '%s', attempting to change to '%s'). Storage class is immutable in StatefulSets. Please delete the cluster and recreate it with the new storage class", newNodePool.Component, oldSC, newSC)
+		}
+	}
+
+	return nil
 }
 
 func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opsterv1.OpenSearchCluster) (admission.Warnings, error) {

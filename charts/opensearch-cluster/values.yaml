@@ -125,8 +125,8 @@ cluster:
 
   # cluster boostrap pod configuration
   bootstrap:
-    # -- bootstrap additional configuration, key-value pairs that will be added to the opensearch.yml configuration
-    additionalConfig: {}
+    # -- bootstrap pod env variables
+    env: []
 
     # -- bootstrap pod affinity rules
     affinity: {}
@@ -265,6 +265,9 @@ cluster:
     - component: masters
       # -- node pool pod annotations
       annotations: {}
+      # -- Extra items to add to opensearch.yml for this specific nodepool (merged with general.additionalConfig)
+      additionalConfig: {}
+
       diskSize: "30Gi"
       replicas: 3
       roles:
