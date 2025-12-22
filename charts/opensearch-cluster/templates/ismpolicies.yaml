@@ -11,6 +11,9 @@ metadata:
   {{- end }}
   labels: {{ $labels | nindent 4 }}
 spec:
+  {{- if .applyToExistingIndices }}
+  applyToExistingIndices: {{ .applyToExistingIndices }}
+  {{- end }}
   defaultState: {{ .defaultState }}
   description: {{ .description }}
   {{- with .states }}
