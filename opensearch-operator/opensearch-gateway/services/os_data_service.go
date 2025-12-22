@@ -545,21 +545,21 @@ func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, comp
 
 // Determines which of the current settings will not be supported by the
 // new version.
-// The list included here is best-effort and not guaranteed to be kept up to date
+// This function maintains a list of deprecated/removed cluster settings per major version.
+// When upgrading between major versions (e.g., 2.x -> 3.x, 3.x -> 4.x), these settings
+// must be removed before the upgrade to prevent deadlocks and errors.
+// The list is maintained per major version upgrade and will be extended for future upgrades.
 func DetermineUnsupportedClusterSettings(newVersion string) (responses.ClusterSettingsResponse, error) {
 	settingsToDelete := responses.ClusterSettingsResponse{
 		Transient:  make(map[string]interface{}),
 		Persistent: make(map[string]interface{}),
 	}
+	// Settings removed per major version upgrade
+	// This list will be extended for future major version upgrades (e.g., 4.0.0, 5.0.0)
 	var removedSettingsByVersion = map[string][]string{
 		"3.0.0": {
+			// Settings removed when upgrading from 2.x to 3.x
 			// https://github.com/opensearch-project/index-management/pull/963
-			"opendistro.index_state_management.metadata_service.enabled",
-			"opendistro.index_state_management.metadata_migration.status",
-			"opendistro.index_state_management.template_migration.control",
-			"plugins.index_state_management.metadata_service.enabled",
-			"plugins.index_state_management.metadata_migration.status",
-			"plugins.index_state_management.template_migration.control",
 			"archived.opendistro.index_state_management.metadata_service.enabled",
 			"archived.opendistro.index_state_management.metadata_migration.status",
 			"archived.opendistro.index_state_management.template_migration.control",

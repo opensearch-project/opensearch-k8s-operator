@@ -327,9 +327,11 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		return nil
 	}
 
-	// Delete deprecated settings that have been removed in the updated version
-	// NOTE: This needs to be called before each pod delete, since some settings are being re-applied automatically during node restart.
-	// NOTE: This can be removed if OpenSearch 2.x stops erroring on archived settings
+	// Delete deprecated settings that have been removed in the updated version.
+	// This is required for major version upgrades (e.g., 2.x -> 3.x) to prevent deadlocks
+	// and errors when OpenSearch encounters archived/removed settings.
+	// NOTE: This needs to be called before each pod delete, since some settings are being
+	// re-applied automatically during node restart.
 	// See https://github.com/opensearch-project/OpenSearch/issues/18515
 	err = services.DeleteUnsupportedClusterSettings(r.osClient, r.instance.Spec.General.Version)
 	if err != nil {
