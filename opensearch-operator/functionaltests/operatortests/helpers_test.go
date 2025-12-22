@@ -7,6 +7,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	. "github.com/onsi/gomega"
@@ -51,6 +52,14 @@ func CreateKubernetesObjects(name string) error {
 		log.Fatal("eof ", err)
 	}
 	return nil
+}
+
+// ShouldSkipCleanup checks if cleanup should be skipped based on the SKIP_CLEANUP environment variable.
+// Returns true if SKIP_CLEANUP is set to "true", "1", or "yes" (case-insensitive).
+// Defaults to false (cleanup enabled) if the variable is not set or has any other value.
+func ShouldSkipCleanup() bool {
+	skipCleanup := strings.ToLower(strings.TrimSpace(os.Getenv("SKIP_CLEANUP")))
+	return skipCleanup == "true" || skipCleanup == "1" || skipCleanup == "yes"
 }
 
 func Cleanup(name string) {
