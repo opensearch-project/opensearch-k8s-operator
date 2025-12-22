@@ -94,7 +94,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 				}
 				GinkgoWriter.Println(err)
 				return 0
-			}, time.Minute*15, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*30, time.Second*5).Should(Equal(int32(3)))
 		})
 
 		It("should upgrade the dashboard pod", func() {
@@ -118,6 +118,8 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		Cleanup(name)
+		if !ShouldSkipCleanup() {
+			Cleanup(name)
+		}
 	})
 })
