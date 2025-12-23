@@ -154,6 +154,80 @@ var _ = Describe("ism policy reconciler", func() {
 		})
 	})
 
+	When("cluster is ready but opensearch is not reachable", func() {
+		BeforeEach(func() {
+			cluster.Status.Phase = opsterv1.PhaseRunning
+			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
+			recorder = record.NewFakeRecorder(1)
+
+			// Simulate connection failure during product check (GET request)
+			// This happens before the ping when OpenSearch client is being initialized
+			transport.RegisterResponder(
+				http.MethodGet,
+				clusterUrl,
+				httpmock.NewErrorResponder(fmt.Errorf("connection refused")).Once(failMessage),
+			)
+		})
+
+		It("should handle client creation failure gracefully without panic", func() {
+			go func() {
+				defer GinkgoRecover()
+				defer close(recorder.Events)
+				result, err := reconciler.Reconcile()
+				Expect(err).To(HaveOccurred())
+				Expect(result.Requeue).To(BeTrue())
+				Expect(result.RequeueAfter).To(Equal(opensearchClusterRequeueAfter))
+			}()
+			var events []string
+			for msg := range recorder.Events {
+				events = append(events, msg)
+			}
+			Expect(len(events)).To(Equal(1))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s error creating opensearch client", opensearchError)))
+		})
+	})
+
+	When("cluster is ready but ping fails after client creation", func() {
+		BeforeEach(func() {
+			cluster.Status.Phase = opsterv1.PhaseRunning
+			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
+			recorder = record.NewFakeRecorder(1)
+
+			// Allow product check to succeed but ping to fail
+			// This simulates cluster accepting initial connection but then becoming unreachable
+			transport.RegisterResponder(
+				http.MethodGet,
+				clusterUrl,
+				httpmock.NewStringResponder(200, `{"version":{"number":"2.0.0"}}`).Once(failMessage),
+			)
+
+			transport.RegisterResponder(
+				http.MethodHead,
+				clusterUrl,
+				httpmock.NewErrorResponder(fmt.Errorf("i/o timeout")).Once(failMessage),
+			)
+		})
+
+		It("should handle ping failure gracefully without panic", func() {
+			go func() {
+				defer GinkgoRecover()
+				defer close(recorder.Events)
+				result, err := reconciler.Reconcile()
+				Expect(err).To(HaveOccurred())
+				Expect(result.Requeue).To(BeTrue())
+				Expect(result.RequeueAfter).To(Equal(opensearchClusterRequeueAfter))
+			}()
+			var events []string
+			for msg := range recorder.Events {
+				events = append(events, msg)
+			}
+			Expect(len(events)).To(Equal(1))
+			Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s error creating opensearch client", opensearchError)))
+		})
+	})
+
 	Context("cluster is ready", func() {
 		extraContextCalls := 1
 		BeforeEach(func() {
