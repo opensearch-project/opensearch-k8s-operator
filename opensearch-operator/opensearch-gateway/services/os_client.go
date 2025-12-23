@@ -4,13 +4,14 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"io"
-	"k8s.io/utils/ptr"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"k8s.io/utils/ptr"
 
 	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/opensearch-project/opensearch-go"
@@ -200,6 +201,30 @@ func (client *OsClusterClient) CatNamedIndicesShards(headers []string, indices [
 	return response, err
 }
 
+// GetAllocationExplain explains why a shard is or isn't allocated
+func (client *OsClusterClient) GetAllocationExplain(index string, shard int, primary bool) (responses.AllocationExplainResponse, error) {
+	body := map[string]interface{}{
+		"index":   index,
+		"shard":   shard,
+		"primary": primary,
+	}
+	bodyReader := opensearchutil.NewJSONReader(body)
+	req := opensearchapi.ClusterAllocationExplainRequest{Body: bodyReader}
+	explainRes, err := req.Do(context.Background(), client.client)
+	if err != nil {
+		return responses.AllocationExplainResponse{}, err
+	}
+	defer helpers.SafeClose(explainRes.Body)
+
+	if explainRes.IsError() {
+		return responses.AllocationExplainResponse{}, ErrClusterAllocationExplainGetFailed(explainRes.String())
+	}
+
+	var response responses.AllocationExplainResponse
+	err = json.NewDecoder(explainRes.Body).Decode(&response)
+	return response, err
+}
+
 func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsResponse, error) {
 	req := opensearchapi.ClusterGetSettingsRequest{Pretty: true}
 	settingsRes, err := req.Do(context.Background(), client.client)
@@ -208,6 +233,11 @@ func (client *OsClusterClient) GetClusterSettings() (responses.ClusterSettingsRe
 		return response, err
 	}
 	defer helpers.SafeClose(settingsRes.Body)
+
+	if settingsRes.IsError() {
+		return response, ErrClusterSettingsGetFailed(settingsRes.String())
+	}
+
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }
@@ -224,7 +254,7 @@ func (client *OsClusterClient) GetFlatClusterSettings() (responses.FlatClusterSe
 	defer helpers.SafeClose(settingsRes.Body)
 
 	if settingsRes.IsError() {
-		return response, ErrClusterHealthGetFailed(settingsRes.String())
+		return response, ErrClusterSettingsGetFailed(settingsRes.String())
 	}
 
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
@@ -240,6 +270,11 @@ func (client *OsClusterClient) PutClusterSettings(settings responses.ClusterSett
 		return response, err
 	}
 	defer helpers.SafeClose(settingsRes.Body)
+
+	if settingsRes.IsError() {
+		return response, ErrClusterSettingsPutFailed(settingsRes.String())
+	}
+
 	err = json.NewDecoder(settingsRes.Body).Decode(&response)
 	return response, err
 }

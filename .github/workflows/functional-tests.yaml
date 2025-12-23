@@ -75,7 +75,7 @@ jobs:
           --namespace default --wait
           cd functionaltests
           ## Run tests
-          SKIP_CLEANUP=true go test ./operatortests -timeout 40m
+          SKIP_CLEANUP=true go test ./operatortests -timeout 40m -ginkgo.v
       # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled for workflow_dispatch
       - name: Debug with tmate (operator tests)
         if: always() && (steps.operator_tests.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || (github.event_name == 'workflow_dispatch' && inputs.enable_debug_tmate == true)))

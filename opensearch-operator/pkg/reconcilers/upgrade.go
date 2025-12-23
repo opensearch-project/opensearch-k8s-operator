@@ -34,6 +34,7 @@ const (
 	componentNameUpgrader   = "Upgrader"
 	upgradeStatusPending    = "Pending"
 	upgradeStatusInProgress = "Upgrading"
+	upgradeStatusFinished   = "Finished"
 )
 
 type UpgradeReconciler struct {
@@ -100,6 +101,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			instance.Status.Phase = opsterv1.PhaseUpgrading
 		})
 		if err != nil {
+			r.logger.Error(err, "Could not update status")
 			return ctrl.Result{}, err
 		}
 	}
@@ -108,21 +110,24 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 
 	r.osClient, err = util.CreateClientForCluster(r.client, r.ctx, r.instance, nil)
 	if err != nil {
+		r.logger.Error(err, "Could not create client for cluster")
 		return ctrl.Result{}, err
 	}
 
+	// Start the nodepool upgrade loop
+
 	// Fetch the working nodepool
-	nodePool, currentStatus := r.findNextNodePoolForUpgrade()
+	nodePool, componentStatus := r.findNextNodePoolForUpgrade()
 
 	// Work on the current nodepool as appropriate
-	switch currentStatus.Status {
+	switch componentStatus.Status {
 	case upgradeStatusPending:
 		// Set it to upgrading and requeue
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
-			currentStatus.Status = upgradeStatusInProgress
-			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, currentStatus)
+			componentStatus.Status = upgradeStatusInProgress
+			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, componentStatus)
 		})
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", currentStatus.Description)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", componentStatus.Description)
 		return ctrl.Result{
 			Requeue:      true,
 			RequeueAfter: 15 * time.Second,
@@ -133,7 +138,7 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			Requeue:      true,
 			RequeueAfter: 30 * time.Second,
 		}, err
-	case "Finished":
+	case upgradeStatusFinished:
 		// Cleanup status after successful upgrade
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
 			instance.Status.Version = instance.Spec.General.Version
@@ -267,7 +272,7 @@ func (r *UpgradeReconciler) findNextNodePoolForUpgrade() (opsterv1.NodePool, ops
 	// If we get here all nodes should be upgraded
 	return opsterv1.NodePool{}, opsterv1.ComponentStatus{
 		Component: componentNameUpgrader,
-		Status:    "Finished",
+		Status:    upgradeStatusFinished,
 	}
 }
 
@@ -327,6 +332,18 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		return nil
 	}
 
+	// Delete deprecated settings that have been archived in the updated version
+	// NOTE: This needs to be called before each pod delete, since some settings are being re-applied automatically during node restart.
+	// NOTE: This can be removed if OpenSearch 2.x stops erroring on archived settings
+	// See https://github.com/opensearch-project/OpenSearch/issues/18515
+	err = services.DeleteUnsupportedClusterSettings(r.osClient, r.instance.Spec.General.Version)
+	if err != nil {
+		r.logger.Error(err, "Could not delete unsupported cluster settings")
+		conditions = append(conditions, "Could not delete unsupported cluster settings")
+		r.setComponentConditions(conditions, pool.Component)
+		return err
+	}
+
 	ready, condition, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
 	if err != nil {
 		r.logger.Error(err, "Could not check opensearch cluster status")
@@ -347,6 +364,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 	// If upgrade on this node pool is complete update status and return
 	if sts.Status.UpdatedReplicas == lo.FromPtrOr(sts.Spec.Replicas, 1) {
 		if err = services.ReactivateShardAllocation(r.osClient); err != nil {
+			r.logger.Error(err, "Could not reactivate shard allocation")
 			return err
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade of node pool '%s'", pool.Component)
@@ -368,6 +386,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 
 	workingPod, err := helpers.WorkingPodForRollingRestart(r.client, &sts)
 	if err != nil {
+		r.logger.Error(err, "Could not find working pod")
 		conditions = append(conditions, "Could not find working pod")
 		r.setComponentConditions(conditions, pool.Component)
 		return err
@@ -375,6 +394,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 
 	ready, err = services.PreparePodForDelete(r.osClient, r.logger, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
+		r.logger.Error(err, "Could not prepare pod for delete")
 		conditions = append(conditions, "Could not prepare pod for delete")
 		r.setComponentConditions(conditions, pool.Component)
 		return err
@@ -392,6 +412,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 		},
 	})
 	if err != nil {
+		r.logger.Error(err, "Could not delete pod")
 		conditions = append(conditions, "Could not delete pod")
 		r.setComponentConditions(conditions, pool.Component)
 		return err
@@ -402,7 +423,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opsterv1.NodePool) error {
 
 	// If we are draining nodes remove the exclusion after the pod is deleted
 	if r.instance.Spec.General.DrainDataNodes {
-		_, err = services.RemoveExcludeNodeHost(r.osClient, workingPod)
+		_, err = services.RemoveExcludeNodeHost(r.osClient, r.logger, workingPod)
 		return err
 	}
 

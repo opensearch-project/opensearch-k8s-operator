@@ -2,6 +2,7 @@ package operatortests
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -13,6 +14,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+type NodePoolStatus struct {
+	Updated int32
+	Ready   int32
+}
+
+func (status NodePoolStatus) String() string {
+	return fmt.Sprintf("Updated: %d, Ready: %d", status.Updated, status.Ready)
+}
 
 var _ = Describe("DeployAndUpgrade", Ordered, func() {
 	name := "deploy-and-upgrade"
@@ -31,7 +41,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					return sts.Status.ReadyReplicas
 				}
 				return 0
-			}, time.Minute*15, time.Second*5).Should(Equal(int32(3)))
+			}, time.Minute*20, time.Second*5).Should(Equal(int32(3)))
 		})
 
 		It("should have a ready dashboards pod", func() {
@@ -68,7 +78,7 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 				return ""
 			}, time.Minute*3, time.Second*5).Should(Equal("docker.io/opensearchproject/opensearch:3.3.0"))
 
-			Eventually(func() int32 {
+			Eventually(func() NodePoolStatus {
 				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-masters", Namespace: namespace}, &sts)
 				if err == nil {
 					GinkgoWriter.Printf("%+v\n", sts.Status)
@@ -90,11 +100,11 @@ var _ = Describe("DeployAndUpgrade", Ordered, func() {
 					k8sClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: namespace}, cluster)
 					GinkgoWriter.Printf("Cluster: %+v\n", cluster.Status)
 
-					return sts.Status.UpdatedReplicas
+					return NodePoolStatus{Updated: sts.Status.UpdatedReplicas, Ready: sts.Status.ReadyReplicas}
 				}
 				GinkgoWriter.Println(err)
-				return 0
-			}, time.Minute*30, time.Second*5).Should(Equal(int32(3)))
+				return NodePoolStatus{}
+			}, time.Minute*30, time.Second*5).Should(Equal(NodePoolStatus{Updated: 3, Ready: 3}))
 		})
 
 		It("should upgrade the dashboard pod", func() {
