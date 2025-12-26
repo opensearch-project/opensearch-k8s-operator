@@ -164,8 +164,9 @@ type PVCSource struct {
 type ConfMgmt struct {
 	AutoScaler bool `json:"autoScaler,omitempty"`
 	VerUpdate  bool `json:"VerUpdate,omitempty"`
-	//+kubebuilder:default=true
-	SmartScaler bool `json:"smartScaler,omitempty"`
+	// +kubebuilder:default=true
+	// +kubebuilder:validation:Required
+	SmartScaler bool `json:"smartScaler"`
 }
 
 type MonitoringConfig struct {
