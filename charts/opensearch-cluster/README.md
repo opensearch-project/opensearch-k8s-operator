@@ -46,7 +46,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.bootstrap.nodeSelector` | object | `{}` | bootstrap pod node selectors |
 | `cluster.bootstrap.resources` | object | `{}` | bootstrap pod cpu and memory resources |
 | `cluster.bootstrap.tolerations` | list | `[]` | bootstrap pod tolerations |
-| `cluster.confMgmt.smartScaler` | bool | `false` | Enable nodes to be safely removed from the cluster |
+| `cluster.confMgmt.smartScaler` | bool | `true` | Enable nodes to be safely removed from the cluster |
 | `cluster.dashboards.additionalConfig` | object | `{}` | Additional properties for opensearch_dashboards.yaml |
 | `cluster.dashboards.affinity` | object | `{}` | dashboards pod affinity rules |
 | `cluster.dashboards.annotations` | object | `{}` | dashboards annotations |
