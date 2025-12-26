@@ -33,10 +33,10 @@ var _ = Describe("DataIntegrityScaling", func() {
 			Expect(err).NotTo(HaveOccurred())
 			GinkgoWriter.Printf("  + Data integrity verified before scaling\n")
 
-			By("Scaling up data node pool: 2 -> 4 replicas")
+			By("Scaling up data node pool: 3 -> 4 replicas")
 			err = operations.ScaleNodePool(clusterName, "data", 4)
 			Expect(err).NotTo(HaveOccurred())
-			GinkgoWriter.Printf("  + Scale request submitted: data node pool 2 -> 4 replicas\n")
+			GinkgoWriter.Printf("  + Scale request submitted: data node pool 3 -> 4 replicas\n")
 
 			By("Waiting for scaling to complete (4/4 replicas ready)")
 			err = operations.WaitForNodePoolReady(clusterName, "data", 4, time.Minute*15)
@@ -57,15 +57,15 @@ var _ = Describe("DataIntegrityScaling", func() {
 			Expect(err).NotTo(HaveOccurred())
 			GinkgoWriter.Printf("  + Cluster health verified\n")
 
-			By("Scaling back down to 2 replicas")
-			err = operations.ScaleNodePool(clusterName, "data", 2)
+			By("Scaling back down to 3 replicas")
+			err = operations.ScaleNodePool(clusterName, "data", 3)
 			Expect(err).NotTo(HaveOccurred())
-			GinkgoWriter.Printf("  + Scale down request submitted: 4 -> 2 replicas\n")
+			GinkgoWriter.Printf("  + Scale down request submitted: 4 -> 3 replicas\n")
 
 			By("Waiting for scale down to complete")
-			err = operations.WaitForNodePoolReady(clusterName, "data", 2, time.Minute*10)
+			err = operations.WaitForNodePoolReady(clusterName, "data", 3, time.Minute*10)
 			Expect(err).NotTo(HaveOccurred())
-			GinkgoWriter.Printf("  + Scale down completed: 2/2 replicas ready\n")
+			GinkgoWriter.Printf("  + Scale down completed: 3/3 replicas ready\n")
 		})
 	})
 
@@ -82,15 +82,15 @@ var _ = Describe("DataIntegrityScaling", func() {
 			Expect(err).NotTo(HaveOccurred())
 			GinkgoWriter.Printf("  + Data integrity verified before scaling\n")
 
-			By("Scaling down data node pool: 2 -> 1 replica")
-			err = operations.ScaleNodePool(clusterName, "data", 1)
+			By("Scaling down data node pool: 3 -> 2 replica")
+			err = operations.ScaleNodePool(clusterName, "data", 2)
 			Expect(err).NotTo(HaveOccurred())
-			GinkgoWriter.Printf("  + Scale down request submitted: 2 -> 1 replica\n")
+			GinkgoWriter.Printf("  + Scale down request submitted: 3 -> 2 replica\n")
 
-			By("Waiting for scaling to complete (1/1 replica ready)")
-			err = operations.WaitForNodePoolReady(clusterName, "data", 1, time.Minute*10)
+			By("Waiting for scaling to complete (2/2 replica ready)")
+			err = operations.WaitForNodePoolReady(clusterName, "data", 2, time.Minute*10)
 			Expect(err).NotTo(HaveOccurred())
-			GinkgoWriter.Printf("  + Scaling completed: 1/1 replica ready\n")
+			GinkgoWriter.Printf("  + Scaling completed: 2/2 replica ready\n")
 
 			By("Reconnecting to cluster")
 			err = dataManager.Reconnect()
@@ -107,16 +107,15 @@ var _ = Describe("DataIntegrityScaling", func() {
 			Expect(err).NotTo(HaveOccurred())
 			GinkgoWriter.Printf("  + Cluster health verified\n")
 
-			By("Scaling back up to 2 replicas")
-			err = operations.ScaleNodePool(clusterName, "data", 2)
+			By("Scaling back up to 3 replicas")
+			err = operations.ScaleNodePool(clusterName, "data", 3)
 			Expect(err).NotTo(HaveOccurred())
-			GinkgoWriter.Printf("  + Scale up request submitted: 1 -> 2 replicas\n")
+			GinkgoWriter.Printf("  + Scale up request submitted: 2 -> 3 replicas\n")
 
 			By("Waiting for scale up to complete")
-			err = operations.WaitForNodePoolReady(clusterName, "data", 2, time.Minute*10)
+			err = operations.WaitForNodePoolReady(clusterName, "data", 3, time.Minute*10)
 			Expect(err).NotTo(HaveOccurred())
-			GinkgoWriter.Printf("  + Scale up completed: 2/2 replicas ready\n")
+			GinkgoWriter.Printf("  + Scale up completed: 3/3 replicas ready\n")
 		})
 	})
 })
-
