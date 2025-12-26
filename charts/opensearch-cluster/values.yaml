@@ -150,7 +150,7 @@ cluster:
   # cluster additional services
   confMgmt:
     # -- Enable nodes to be safely removed from the cluster
-    smartScaler: false
+    smartScaler: true
 
   # cluster dashboards configuration
   dashboards:

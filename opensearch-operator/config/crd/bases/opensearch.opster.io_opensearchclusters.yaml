@@ -1278,6 +1278,7 @@ spec:
                   autoScaler:
                     type: boolean
                   smartScaler:
+                    default: true
                     type: boolean
                 type: object
               dashboards:

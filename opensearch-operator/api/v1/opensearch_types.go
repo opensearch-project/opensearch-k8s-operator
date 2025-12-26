@@ -162,8 +162,9 @@ type PVCSource struct {
 
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
-	AutoScaler  bool `json:"autoScaler,omitempty"`
-	VerUpdate   bool `json:"VerUpdate,omitempty"`
+	AutoScaler bool `json:"autoScaler,omitempty"`
+	VerUpdate  bool `json:"VerUpdate,omitempty"`
+	//+kubebuilder:default=true
 	SmartScaler bool `json:"smartScaler,omitempty"`
 }
 
