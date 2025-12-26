@@ -37,7 +37,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			By("Adding new data node pool")
 			newNodePool := opsterv1.NodePool{
 				Component: "data-nodes",
-				Replicas:  2,
+				Replicas:  3,
 				DiskSize:  resource.MustParse("1Gi"),
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
@@ -96,7 +96,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			By("Step 1: Adding new data node pool")
 			newDataNodePool := opsterv1.NodePool{
 				Component: "data-nodes-new",
-				Replicas:  2,
+				Replicas:  3,
 				DiskSize:  resource.MustParse("1Gi"),
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
