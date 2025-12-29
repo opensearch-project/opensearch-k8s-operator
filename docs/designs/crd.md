@@ -255,7 +255,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `autoScaler` _boolean_ |  |  |  |
 | `VerUpdate` _boolean_ |  |  |  |
-| `smartScaler` _boolean_ |  | true |  |
+| `smartScaler` _boolean_ |  | true | Required: \{\} <br /> |
 
 
 #### Cron
