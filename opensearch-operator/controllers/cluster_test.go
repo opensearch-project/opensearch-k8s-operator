@@ -452,8 +452,8 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 
 			// Update the opensearch object
 			OpensearchCluster.Spec.NodePools = OpensearchCluster.Spec.NodePools[:2]
-			OpensearchCluster.Spec.General.Version = "3.3.0"
-			OpensearchCluster.Spec.General.PluginsList[0] = "http://foo-plugin-3.3.0"
+			OpensearchCluster.Spec.General.Version = "3.4.0"
+			OpensearchCluster.Spec.General.PluginsList[0] = "http://foo-plugin-3.4.0"
 			Expect(k8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
 
 			Eventually(func() bool {
@@ -474,7 +474,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 					if err != nil {
 						return false
 					}
-					return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.3.0"
+					return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.4.0"
 				}).Should(BeTrue())
 			}
 		})
@@ -507,7 +507,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 					}, sts); err != nil {
 					return false
 				}
-				return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.3.0"
+				return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.4.0"
 			}, timeout, interval).Should(BeTrue())
 		})
 		It("should update any plugin URLs", func() {
@@ -521,7 +521,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 					}, sts); err != nil {
 					return false
 				}
-				return ArrayElementContains(sts.Spec.Template.Spec.Containers[0].Command, "http://foo-plugin-3.3.0")
+				return ArrayElementContains(sts.Spec.Template.Spec.Containers[0].Command, "http://foo-plugin-3.4.0")
 			}, timeout, interval).Should(BeTrue())
 		})
 	})
@@ -562,7 +562,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&OpensearchCluster), &OpensearchCluster); err != nil {
 					return false
 				}
-				return OpensearchCluster.Status.Version == "3.3.0"
+				return OpensearchCluster.Status.Version == "3.4.0"
 			}, timeout, interval)
 		})
 		It("should update all the node pools", func() {
@@ -580,7 +580,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 						}, sts); err != nil {
 							return false
 						}
-						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.3.0"
+						return sts.Spec.Template.Spec.Containers[0].Image == "docker.io/opensearchproject/opensearch:3.4.0"
 					}, timeout, interval).Should(BeTrue())
 				}(nodePool)
 			}

@@ -25,7 +25,7 @@ The data integrity test suite verifies that data remains intact during various c
 
 ### Test Files
 
-- **`upgrade_test.go`** - Tests data integrity during version upgrades (2.19.4 → 3.3.0)
+- **`upgrade_test.go`** - Tests data integrity during version upgrades (2.19.4 → 3.4.0)
 - **`scaling_test.go`** - Tests data integrity when scaling node pools up and down
 - **`nodepool_operations_test.go`** - Tests data integrity when adding, removing, or replacing node pools
 - **`multiple_operations_test.go`** - Tests data integrity through multiple sequential operations
@@ -127,7 +127,7 @@ All tests use the `setupDataIntegrityTest()` helper function which:
 The test uses the `test-cluster.yaml` file which defines:
 - Cluster name: `test-cluster`
 - Initial version: 2.19.4
-- Upgrade version: 3.3.0
+- Upgrade version: 3.4.0
 - 3 master/data nodes
 - 1 dashboard replica
 - TLS enabled (auto-generated)

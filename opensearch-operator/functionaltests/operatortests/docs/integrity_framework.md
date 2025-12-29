@@ -90,12 +90,12 @@ Expect(err).NotTo(HaveOccurred())
 
 ```go
 // Upgrade cluster
-err := operations.UpgradeCluster("my-cluster", "3.3.0", "3.3.0")
+err := operations.UpgradeCluster("my-cluster", "3.4.0", "3.4.0")
 Expect(err).NotTo(HaveOccurred())
 
 // Wait for upgrade
 err = operations.WaitForUpgradeComplete("my-cluster", 
-    "docker.io/opensearchproject/opensearch:3.3.0", time.Minute*15)
+    "docker.io/opensearchproject/opensearch:3.4.0", time.Minute*15)
 Expect(err).NotTo(HaveOccurred())
 
 // Reconnect and validate
@@ -144,7 +144,7 @@ Expect(err).NotTo(HaveOccurred())
 The test suite is organized into separate files by operation type:
 
 ### `upgrade_test.go`
-- **Upgrade test** - Tests data integrity during version upgrade (2.19.4 → 3.3.0)
+- **Upgrade test** - Tests data integrity during version upgrade (2.19.4 → 3.4.0)
 
 ### `scaling_test.go`
 - **Scale up** - Tests data integrity when scaling up node pools

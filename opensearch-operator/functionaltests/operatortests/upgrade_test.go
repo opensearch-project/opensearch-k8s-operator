@@ -32,13 +32,13 @@ var _ = Describe("DataIntegrityUpgrade", func() {
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Data integrity verified before upgrade\n")
 
-		By("Upgrading cluster: OpenSearch 2.19.4 -> 3.3.0, Dashboards 2.19.4 -> 3.3.0")
-		err = operations.UpgradeCluster(clusterName, "3.3.0", "3.3.0")
+		By("Upgrading cluster: OpenSearch 2.19.4 -> 3.4.0, Dashboards 2.19.4 -> 3.4.0")
+		err = operations.UpgradeCluster(clusterName, "3.4.0", "3.4.0")
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Upgrade request submitted\n")
 
 		By("Waiting for OpenSearch upgrade to complete (all master pods running new image)")
-		err = operations.WaitForUpgradeComplete(clusterName, "docker.io/opensearchproject/opensearch:3.3.0", time.Minute*30)
+		err = operations.WaitForUpgradeComplete(clusterName, "docker.io/opensearchproject/opensearch:3.4.0", time.Minute*30)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + OpenSearch upgrade completed successfully\n")
 
@@ -63,4 +63,3 @@ var _ = Describe("DataIntegrityUpgrade", func() {
 		GinkgoWriter.Printf("  + Cluster health verified\n")
 	})
 })
-

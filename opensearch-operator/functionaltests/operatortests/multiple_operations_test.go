@@ -51,9 +51,9 @@ var _ = Describe("DataIntegrityMultipleOperations", func() {
 		Expect(err).NotTo(HaveOccurred())
 		if version == "2.19.4" {
 			By("Upgrading cluster")
-			err = operations.UpgradeCluster(clusterName, "3.3.0", "3.3.0")
+			err = operations.UpgradeCluster(clusterName, "3.4.0", "3.4.0")
 			Expect(err).NotTo(HaveOccurred())
-			err = operations.WaitForUpgradeComplete(clusterName, "docker.io/opensearchproject/opensearch:3.3.0", time.Minute*15)
+			err = operations.WaitForUpgradeComplete(clusterName, "docker.io/opensearchproject/opensearch:3.4.0", time.Minute*15)
 			Expect(err).NotTo(HaveOccurred())
 			err = dataManager.Reconnect()
 			Expect(err).NotTo(HaveOccurred())

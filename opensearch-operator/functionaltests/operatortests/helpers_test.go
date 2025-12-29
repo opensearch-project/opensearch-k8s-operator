@@ -326,7 +326,7 @@ func setupDataIntegrityTest(clusterName, namespace string) (*TestDataManager, *C
 	}, time.Minute*15, time.Second*5).Should(BeTrue())
 	GinkgoWriter.Printf("  + Master node pool ready: 3/3 replicas\n")
 
-	By("Waiting for data node pool to be ready (2 replicas)")
+	By("Waiting for data node pool to be ready (3 replicas)")
 	Eventually(func() bool {
 		sts := appsv1.StatefulSet{}
 		err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-data", Namespace: namespace}, &sts)
@@ -334,12 +334,12 @@ func setupDataIntegrityTest(clusterName, namespace string) (*TestDataManager, *C
 			return false
 		}
 		ready := sts.Status.ReadyReplicas
-		if ready < 2 {
-			GinkgoWriter.Printf("    Data nodes: %d/2 ready\n", ready)
+		if ready < 3 {
+			GinkgoWriter.Printf("    Data nodes: %d/3 ready\n", ready)
 		}
-		return ready == 2
+		return ready == 3
 	}, time.Minute*15, time.Second*5).Should(BeTrue())
-	GinkgoWriter.Printf("  + Data node pool ready: 2/2 replicas\n")
+	GinkgoWriter.Printf("  + Data node pool ready: 3/3 replicas\n")
 
 	By("Initializing test data manager")
 	dataManager, err := NewTestDataManager(k8sClient, clusterName, namespace)
