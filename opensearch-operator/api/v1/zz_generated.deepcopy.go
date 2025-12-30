@@ -928,6 +928,8 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 	if in.OperatorClusterURL != nil {
 		in, out := &in.OperatorClusterURL, &out.OperatorClusterURL
 		*out = new(string)
+		**out = **in
+	}
 	if in.PersistentVolumeClaimRetentionPolicy != nil {
 		in, out := &in.PersistentVolumeClaimRetentionPolicy, &out.PersistentVolumeClaimRetentionPolicy
 		*out = new(appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy)
