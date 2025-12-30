@@ -642,10 +642,16 @@ func DetectShardStuckVersionMismatch(service *OsClusterClient, shard responses.C
 
 	// Check if allocation is blocked by node_version decider
 	// Detect these two cases:
-	// 1. the shard is unassigned and cannot be assigned to any node, due to version misnatch
+	// 1. the shard is unassigned and cannot be assigned to any node, due to version mismatch
 	// 2. the shard is assigned, shall be moved, but cannot be moved to another node
-	isStuck := (explain.CurrentState == "unassigned" && explain.CanAllocate == "no") ||
-		(explain.CurrentState == "assigned" && explain.CanRemainOnCurrentNode == "no" && explain.CanMoveToOtherNode == "no")
+	isUnassignedAndCannotAllocate := explain.CurrentState == "unassigned" && explain.CanAllocate == "no"
+
+	isAssignedOrStarted := explain.CurrentState == "assigned" || explain.CurrentState == "started"
+	cannotRemainOnCurrentNode := explain.CanRemainOnCurrentNode == "no"
+	cannotMoveToOtherNode := explain.CanMoveToOtherNode == "no"
+	isAssignedButCannotMove := isAssignedOrStarted && cannotRemainOnCurrentNode && cannotMoveToOtherNode
+
+	isStuck := isUnassignedAndCannotAllocate || isAssignedButCannotMove
 	if !isStuck {
 		return false, nil
 	}
