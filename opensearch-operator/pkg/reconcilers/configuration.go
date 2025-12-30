@@ -11,13 +11,11 @@ import (
 
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -222,22 +220,11 @@ func (r *ConfigurationReconciler) createHashForNodePool(nodePool opsterv1.NodePo
 		}, nil
 	}
 
-	// If an upgrade is in process we want to wait to schedule non data nodes
-	// data nodes will be picked up by the rolling restarter, or the upgrade
-	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
-		if !helpers.HasDataRole(&nodePool) {
-			sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
-			if k8serrors.IsNotFound(err) {
-				nodePoolHash.ConfigHash = generateHash(combinedData)
-			} else if err != nil {
-				return nil, err
-			} else {
-				nodePoolHash.ConfigHash = sts.Spec.Template.Annotations[builders.ConfigurationChecksumAnnotation]
-			}
-		}
-	} else {
-		nodePoolHash.ConfigHash = generateHash(combinedData)
-	}
+	// Calculate the hash for all node pools, including during upgrade.
+	// This ensures the config hash annotation is set correctly during upgrade
+	// and won't need to be updated after upgrade completes, preventing unnecessary
+	// StatefulSet revisions and rolling restarts.
+	nodePoolHash.ConfigHash = generateHash(combinedData)
 
 	r.reconcilerContext.replaceNodePoolHash(nodePoolHash)
 	return nil, nil
