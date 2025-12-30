@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -140,6 +141,12 @@ type NodePool struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+	// PodManagementPolicy controls how pods are created during initial scale up,
+	// when replacing pods on nodes, or when scaling down.
+	// OrderedReady (default): pods are created in order and wait for previous pod to be Ready
+	// Parallel: all pods are created at once without waiting
+	// +kubebuilder:validation:Enum=OrderedReady;Parallel
+	PodManagementPolicy appsv1.PodManagementPolicyType `json:"podManagementPolicy,omitempty"`
 }
 
 // PersistenceConfig defines options for data persistence
