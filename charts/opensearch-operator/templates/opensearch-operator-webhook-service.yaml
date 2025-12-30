@@ -14,5 +14,5 @@ spec:
     protocol: TCP
     name: webhook
   selector:
-    control-plane: controller-manager
+    {{- include "opensearch-operator.selectorLabels" . | nindent 4 }}
 {{- end }}
