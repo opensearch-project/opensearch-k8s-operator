@@ -1,27 +1,51 @@
-name: Functional tests
+name: Reusable Functional Test
+
 on:
-  pull_request:
-  workflow_dispatch:
+  workflow_call:
     inputs:
-      enable_debug_tmate:
-        description: 'Enable interactive tmate debug session on operator test failure'
+      test_focus:
+        description: 'Ginkgo focus pattern for test selection'
+        required: true
+        type: string
+      test_timeout:
+        description: 'Test timeout duration'
+        required: false
+        type: string
+        default: '40m'
+      test_name:
+        description: 'Display name for the test job'
+        required: true
+        type: string
+      enable_debug:
+        description: 'Enable debug mode'
         required: false
         type: boolean
         default: false
 
 jobs:
-  cluster-helm-chart:
+  functional-test:
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        version:
-            - 3.4.0
-            - 2.19.4
-            - 1.3.20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Detect debug commit
+        id: debug_commit
+        if: github.event_name == 'pull_request'
+        env:
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          TARGET_COMMIT="${PR_HEAD_SHA}"
+          echo "Using commit for debug detection: $TARGET_COMMIT"
+          msg="$(git show -s --format=%B "$TARGET_COMMIT")"
+          echo "Commit message:"
+          echo "$msg"
+          if echo "$msg" | grep -iq "debug"; then
+            echo "is_debug=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is_debug=false" >> "$GITHUB_OUTPUT"
+          fi
       # https://github.com/actions/runner-images/issues/2840#issuecomment-790492173
       - name: Remove unnecessary files
         run: |
@@ -44,7 +68,7 @@ jobs:
             -p 30000-30005:30000-30005@agent:0
             --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
       - name: Run tests
-        id: helm_tests
+        id: functional_tests
         run: |
           set -e
           export CLUSTER_NAME=opensearch-operator-tests
@@ -62,16 +86,18 @@ jobs:
           helm install opensearch-operator ../charts/opensearch-operator \
           -f functionaltests/helmtests/ci-operator-values.yml \
           --namespace default --wait
-          helm install opensearch-cluster ../charts/opensearch-cluster \
-            --set cluster.general.version=${{ matrix.version }} \
-            --set cluster.dashboards.version=${{ matrix.version }} \
-            -f functionaltests/helmtests/ci-cluster-values.yml \
-            --wait
           cd functionaltests
-          ## Run tests
-          go test ./helmtests -timeout 15m
+          ## Run tests with focus pattern
+          SKIP_CLEANUP=true go test ./operatortests -ginkgo.focus="${{ inputs.test_focus }}" -timeout ${{ inputs.test_timeout }}
+      # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled
+      - name: Debug with tmate (${{ inputs.test_name }})
+        if: always() && (steps.functional_tests.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || inputs.enable_debug == true))
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
+        with:
+          limit-access-to-actor: true
       - name: Collect operator logs
-        if: always() && steps.helm_tests.outcome == 'failure'
+        if: always() && steps.functional_tests.outcome == 'failure'
         run: |
           df -h
           export CLUSTER_NAME=opensearch-operator-tests
@@ -89,8 +115,8 @@ jobs:
           kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
           echo "Collecting pod descriptions..."
           kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opster.io/opensearch-cluster=opensearch-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opensearch.cluster.dashboards=opensearch-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opster.io/opensearch-cluster=test-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opensearch.cluster.dashboards=test-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
           echo "Collecting logs from OpenSearch operator pods..."
           kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
@@ -99,64 +125,24 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
           done
           echo "Collecting logs from OpenSearch cluster pods..."
-          kubectl get pods -n default -l opster.io/opensearch-cluster=opensearch-cluster -o name 2>/dev/null | while read pod; do
+          kubectl get pods -n default -l opster.io/opensearch-cluster=test-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
             echo "Collecting logs from $pod_name"
             kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
             kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
           done
           echo "Collecting logs from OpenSearch Dashboards pods..."
-          kubectl get pods -n default -l opensearch.cluster.dashboards=opensearch-cluster -o name 2>/dev/null | while read pod; do
+          kubectl get pods -n default -l opensearch.cluster.dashboards=test-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
             echo "Collecting logs from $pod_name"
             kubectl logs -n default $pod_name > ../logs/dashboards-${pod_name}.log 2>&1 || true
             kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
           done
       - name: Publish logs
-        if: always() && steps.helm_tests.outcome == 'failure'
+        if: always() && steps.functional_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
-          name: operator-logs-${{ matrix.version }}
+          name: ${{ inputs.test_name }}-logs
           path: logs/
           retention-days: 7
 
-  data-integrity-upgrade:
-    uses: ./.github/workflows/reusable-functional-test.yaml
-    with:
-      test_focus: "DataIntegrityUpgrade"
-      test_timeout: "30m"
-      test_name: "data-integrity-upgrade"
-      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
-
-  data-integrity-scaling:
-    uses: ./.github/workflows/reusable-functional-test.yaml
-    with:
-      test_focus: "DataIntegrityScaling"
-      test_timeout: "30m"
-      test_name: "data-integrity-scaling"
-      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
-
-  # TODO: Uncomment this when we have big runners
-  # data-integrity-nodepool:
-  #   uses: ./.github/workflows/reusable-functional-test.yaml
-  #   with:
-  #     test_focus: "DataIntegrityNodePoolOperations"
-  #     test_timeout: "30m"
-  #     test_name: "data-integrity-nodepool"
-  #     enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
-
-  data-integrity-multiple-ops:
-    uses: ./.github/workflows/reusable-functional-test.yaml
-    with:
-      test_focus: "DataIntegrityMultipleOperations"
-      test_timeout: "30m"
-      test_name: "data-integrity-multiple-ops"
-      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
-
-  operator-other-tests:
-    uses: ./.github/workflows/reusable-functional-test.yaml
-    with:
-      test_focus: "dummy"
-      test_timeout: "10m"
-      test_name: "operator-other-tests"
-      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}

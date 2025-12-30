@@ -26,6 +26,8 @@ var _ = Describe("dummy", Ordered, func() {
 	})
 
 	AfterAll(func() {
-		Cleanup(name)
+		if !ShouldSkipCleanup() {
+			Cleanup(name)
+		}
 	})
 })
