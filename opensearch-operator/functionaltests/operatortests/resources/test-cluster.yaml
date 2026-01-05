@@ -1,13 +1,14 @@
 apiVersion: opensearch.opster.io/v1
 kind: OpenSearchCluster
 metadata:
-  name: deploy-and-upgrade
+  name: test-cluster
   namespace: default
 spec:
   bootstrap:
     affinity: {}
     resources: {}
-  confMgmt: {}
+  confMgmt:
+    smartScaler: true
   dashboards:
     affinity: {}
     enable: true
@@ -52,7 +53,7 @@ spec:
     version: "1.36"
   nodePools:
   - component: masters
-    diskSize: 30Gi
+    diskSize: 1Gi
     replicas: 3
     resources:
       limits:
@@ -63,6 +64,17 @@ spec:
         memory: 2Gi
     roles:
     - master
+  - component: data
+    diskSize: 1Gi
+    replicas: 3
+    resources:
+      limits:
+        cpu: 500m
+        memory: 2Gi
+      requests:
+        cpu: 500m
+        memory: 2Gi
+    roles:
     - data
   security:
     config:
