@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -77,6 +78,8 @@ type GeneralConfig struct {
 	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
 	// instead of the default internal Kubernetes service DNS name.
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
+	// Set the retention policy for the cluster PVCs
+	PersistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
 }
 
 type PdbConfig struct {
