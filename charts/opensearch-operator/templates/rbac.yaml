@@ -418,6 +418,274 @@ rules:
   - opensearchsnapshotpolicies/finalizers
   verbs:
   - update
+# New API group: opensearch.org (migration target)
+- apiGroups:
+  - opensearch.org
+  resources:
+  - events
+  verbs:
+  - create
+  - patch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchactiongroups
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchactiongroups/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchactiongroups/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchclusters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchclusters/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchclusters/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchcomponenttemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchcomponenttemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchcomponenttemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchindextemplates
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchindextemplates/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchindextemplates/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchroles
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchroles/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchroles/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchtenants
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchtenants/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchtenants/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchuserrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchuserrolebindings/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchuserrolebindings/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchismpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchismpolicies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchismpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchusers
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchusers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchusers/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchsnapshotpolicies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchsnapshotpolicies/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - opensearch.org
+  resources:
+  - opensearchsnapshotpolicies/finalizers
+  verbs:
+  - update
 {{- if not .Values.useRoleBindings }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

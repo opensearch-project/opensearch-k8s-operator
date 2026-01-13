@@ -4,8 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"time"
+
+	"k8s.io/utils/ptr"
 
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"

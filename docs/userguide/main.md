@@ -2,6 +2,8 @@
 
 This guide is intended for users of the Opensearch Operator. If you want to contribute to the development of the Operator, please see the [Design documents](../designs/high-level.md) and the [Developer guide](../developing.md) instead.
 
+> **API Group Migration Notice**: The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Please see the [Migration Guide](./migration-guide.md) for details.
+
 ## Installation
 
 The Operator can be easily installed using Helm:
@@ -32,7 +34,7 @@ An OpenSearch cluster can be easily deployed using Helm. Follow the instructions
 Create a file `cluster.yaml` with the following content:
 
 ```yaml
-apiVersion: opensearch.opster.io/v1
+apiVersion: opensearch.org/v1  # or opensearch.opster.io/v1 (deprecated)
 kind: OpenSearchCluster
 metadata:
   name: my-first-cluster
@@ -74,7 +76,7 @@ Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch 
 Run `kubectl port-forward svc/my-first-cluster-dashboards 5601`, then open [http://localhost:5601](http://localhost:5601) in your browser and log in with the default demo credentials `admin / admin`.
 Alternatively, if you want to access the OpenSearch REST API, run: `kubectl port-forward svc/my-first-cluster 9200`. Then open a second terminal and run: `curl -k -u admin:admin https://localhost:9200/_cat/nodes?v`. You should see the three deployed pods listed.
 
-If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The Operator will then clean up and delete any Kubernetes resources created for the cluster. Note that this will not delete the persistent volumes for the cluster, in most cases. For a complete cleanup, run: `kubectl delete pvc -l opster.io/opensearch-cluster=my-first-cluster` to also delete the PVCs.
+If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The Operator will then clean up and delete any Kubernetes resources created for the cluster. Note that this will not delete the persistent volumes for the cluster, in most cases. For a complete cleanup, run: `kubectl delete pvc -l opensearch.org/opensearch-cluster=my-first-cluster` to also delete the PVCs.
 
 The minimal cluster you deployed in this section is only intended for demo purposes. Please see the next sections on how to configure and manage the different aspects of your cluster.
 

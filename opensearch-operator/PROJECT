@@ -2,69 +2,75 @@
 # This file is used to track the info used to scaffold your project
 # and allow the plugins properly work.
 # More info: https://book.kubebuilder.io/reference/project-config.html
-domain: opensearch.opster.io
+domain: opensearch.org
 layout:
 - go.kubebuilder.io/v3
 projectName: opensearch-operator
 repo: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator
 resources:
+# Legacy opensearch.opster.io API group resources (deprecated)
 - api:
     crdVersion: v1
     namespaced: true
   controller: true
   domain: opensearch.opster.io
-  group: opster
-  kind: OpenSearchCluster
-  path: opensearch.opster.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.opster.io
-  group: opster
-  kind: OpensearchUser
-  path: opensearch.opster.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.opster.io
-  group: opster
-  kind: OpensearchRole
-  path: opensearch.opster.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.opster.io
-  group: opster
-  kind: OpensearchUserRoleBinding
-  path: opensearch.opster.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.opster.io
-  group: opster
-  kind: OpensearchIndexTemplate
-  path: opensearch.opster.io/api/v1
-  version: v1
-- api:
-    crdVersion: v1
-    namespaced: true
-  controller: true
-  domain: opensearch.opster.io
-  group: opster
-  kind: OpensearchComponentTemplate
-  path: opensearch.opster.io/api/v1
-  version: v1
-- domain: opensearch.opster.io
   group: opensearch.opster.io
-  kind: OpensearchISMPolicy
+  kind: OpenSearchCluster
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpensearchUser
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpensearchRole
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpensearchUserRoleBinding
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpensearchTenant
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpensearchActionGroup
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpenSearchISMPolicy
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
   version: v1
 - api:
     crdVersion: v1
@@ -74,5 +80,114 @@ resources:
   group: opensearch.opster.io
   kind: OpensearchSnapshotPolicy
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpensearchIndexTemplate
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.opster.io
+  group: opensearch.opster.io
+  kind: OpensearchComponentTemplate
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
+  version: v1
+# New opensearch.org API group resources
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpenSearchCluster
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpensearchUser
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpensearchRole
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpensearchUserRoleBinding
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpensearchTenant
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpensearchActionGroup
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpenSearchISMPolicy
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpensearchSnapshotPolicy
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpensearchIndexTemplate
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
+  version: v1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: opensearch.org
+  group: opensearch.org
+  kind: OpensearchComponentTemplate
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 version: "3"

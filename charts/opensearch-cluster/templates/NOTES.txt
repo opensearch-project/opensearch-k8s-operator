@@ -6,7 +6,7 @@
   {{- end }}
 {{- end }}
 {{- else }}
-  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "opster.io/opensearch-cluster={{ .Values.cluster.name | default (include "opensearch-cluster.name" .) }}" -o jsonpath="{.items[0].metadata.name}")
+  export POD_NAME=$(kubectl get pods --namespace {{ .Release.Namespace }} -l "opensearch.org/opensearch-cluster={{ .Values.cluster.name | default (include "opensearch-cluster.name" .) }}" -o jsonpath="{.items[0].metadata.name}")
   export CONTAINER_PORT=$(kubectl get pod --namespace {{ .Release.Namespace }} $POD_NAME -o jsonpath="{.spec.containers[0].ports[0].containerPort}")
   kubectl --namespace {{ .Release.Namespace }} port-forward $POD_NAME 9200:$CONTAINER_PORT
   curl https://127.0.0.1:9200 -k

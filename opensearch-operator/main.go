@@ -42,6 +42,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -60,6 +61,7 @@ var (
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(opsterv1.AddToScheme(scheme))
+	utilruntime.Must(opensearchv1.AddToScheme(scheme))
 	utilruntime.Must(monitoring.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -236,6 +238,151 @@ func main() {
 		Recorder: mgr.GetEventRecorderFor("snapshotpolicy-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
+		os.Exit(1)
+	}
+
+	// Migration controllers for opensearch.opster.io -> opensearch.org migration
+	if err = (&controllers.ClusterMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.UserMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "UserMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.RoleMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RoleMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.UserRoleBindingMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "UserRoleBindingMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.TenantMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TenantMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ActionGroupMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ActionGroupMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ISMPolicyMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ISMPolicyMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.SnapshotPolicyMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SnapshotPolicyMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.IndexTemplateMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "IndexTemplateMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ComponentTemplateMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ComponentTemplateMigration")
+		os.Exit(1)
+	}
+
+	// Reverse migration controllers for opensearch.org -> opensearch.opster.io
+	// These watch NEW API group and create OLD API resources so existing controllers can reconcile
+	if err = (&controllers.ClusterReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.UserReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "UserReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.RoleReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RoleReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.UserRoleBindingReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "UserRoleBindingReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.TenantReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TenantReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ActionGroupReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ActionGroupReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ISMPolicyReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ISMPolicyReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.SnapshotPolicyReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SnapshotPolicyReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.IndexTemplateReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "IndexTemplateReverseMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ComponentTemplateReverseMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ComponentTemplateReverseMigration")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

@@ -1,0 +1,15 @@
+apiVersion: opensearch.org/v1
+kind: OpensearchRole
+metadata:
+  name: opensearch-role-sample
+spec:
+  opensearchCluster:
+    name: opensearch-sample
+  clusterPermissions:
+    - cluster_monitor
+  indexPermissions:
+    - indexPatterns:
+        - "logs-*"
+      allowedActions:
+        - read
+        - search

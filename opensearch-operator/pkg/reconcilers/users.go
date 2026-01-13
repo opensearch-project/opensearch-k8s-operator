@@ -3,9 +3,10 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"time"
+
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
-	"time"
 
 	"github.com/go-logr/logr"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
