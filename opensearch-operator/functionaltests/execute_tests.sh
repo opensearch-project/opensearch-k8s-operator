@@ -32,6 +32,6 @@ cd functionaltests
 
 ## Run tests
 go test ./operatortests -timeout 45m -ginkgo.v
-go test ./helmtests -timeout 20m
+go test ./helmtests -timeout 20m -test.v -ginkgo.v
 ## Delete k3d cluster
 k3d cluster delete $CLUSTER_NAME

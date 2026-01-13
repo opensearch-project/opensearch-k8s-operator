@@ -1,4 +1,4 @@
-module github.com/Opster/opensearch-k8s-operator/opensearch-operator
+module github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator
 
 go 1.24.4
 
@@ -22,6 +22,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0
 	golang.org/x/crypto v0.45.0
+	golang.org/x/sync v0.18.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.33.1
 	k8s.io/apiextensions-apiserver v0.33.1
@@ -87,7 +88,6 @@ require (
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.27.0 // indirect
-	golang.org/x/sync v0.18.0 // indirect
 	golang.org/x/sys v0.38.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect

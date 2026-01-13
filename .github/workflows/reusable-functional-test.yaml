@@ -88,7 +88,7 @@ jobs:
           --namespace default --wait
           cd functionaltests
           ## Run tests with focus pattern
-          SKIP_CLEANUP=true go test ./operatortests -ginkgo.focus="${{ inputs.test_focus }}" -timeout ${{ inputs.test_timeout }}
+          SKIP_CLEANUP=true go test ./operatortests -ginkgo.focus="${{ inputs.test_focus }}" -timeout ${{ inputs.test_timeout }} -test.v -ginkgo.v
       # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled
       - name: Debug with tmate (${{ inputs.test_name }})
         if: always() && (steps.functional_tests.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || inputs.enable_debug == true))

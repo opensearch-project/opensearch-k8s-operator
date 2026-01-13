@@ -3,7 +3,7 @@
 package k8s
 
 import (
-	apiv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	apiv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -16,7 +16,7 @@ import (
 
 	reconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	reconciler "github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
+	reconciler "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 
 	runtime "k8s.io/apimachinery/pkg/runtime"
 

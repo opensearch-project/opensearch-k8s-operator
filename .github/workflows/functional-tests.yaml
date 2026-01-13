@@ -69,7 +69,7 @@ jobs:
             --wait
           cd functionaltests
           ## Run tests
-          go test ./helmtests -timeout 15m
+          go test ./helmtests -timeout 15m -test.v -ginkgo.v
       - name: Collect operator logs
         if: always() && steps.helm_tests.outcome == 'failure'
         run: |
