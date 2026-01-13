@@ -1,6 +1,6 @@
 module github.com/Opster/opensearch-k8s-operator/functionaltests
 
-go 1.24.4
+go 1.24.11
 
 require (
 	github.com/Opster/opensearch-k8s-operator/opensearch-operator v0.0.0-20250618201830-61fae951a751
