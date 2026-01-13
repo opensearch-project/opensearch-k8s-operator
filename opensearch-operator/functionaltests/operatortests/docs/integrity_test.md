@@ -52,7 +52,7 @@ The test creates realistic test data across three indices:
 
 - k3d installed and configured
 - Helm installed
-- Go 1.24.4 or later
+- Go 1.24.11 or later
 - Docker (for building operator image)
 
 ### Local Execution
@@ -84,7 +84,7 @@ go test ./operatortests -ginkgo.focus="DataIntegrity" -timeout 60m
 
 ### CI/CD Execution
 
-The test will run automatically as part of the functional tests workflow in GitHub Actions when:                                                                  
+The test will run automatically as part of the functional tests workflow in GitHub Actions when:
 - A pull request is created
 - The workflow is manually triggered
 
@@ -202,10 +202,10 @@ var _ = Describe("DataIntegrityMyOperation", func() {
         // Import test data
         testData, err := dataManager.ImportTestData(getDefaultTestData())
         Expect(err).NotTo(HaveOccurred())
-        
+
         // Perform your operation
         // ...
-        
+
         // Verify data integrity
         err = dataManager.ValidateDataIntegrity(testData)
         Expect(err).NotTo(HaveOccurred())
