@@ -6,7 +6,7 @@ domain: opensearch.opster.io
 layout:
 - go.kubebuilder.io/v3
 projectName: opensearch-operator
-repo: github.com/Opster/opensearch-k8s-operator/opensearch-operator
+repo: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator
 resources:
 - api:
     crdVersion: v1
@@ -73,6 +73,6 @@ resources:
   domain: opensearch.opster.io
   group: opensearch.opster.io
   kind: OpensearchSnapshotPolicy
-  path: github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1
+  path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1
   version: v1
 version: "3"

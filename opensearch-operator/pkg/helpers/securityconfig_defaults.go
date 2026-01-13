@@ -4,7 +4,7 @@ import (
 	"embed"
 	"fmt"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 var defaultSecurityConfigFilenames = []string{
