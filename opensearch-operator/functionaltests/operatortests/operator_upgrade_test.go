@@ -137,7 +137,7 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Data integrity verified before upgrade\n")
 
 		By("Verifying cluster health")
-		err = dataManager.ValidateClusterHealth(true) // Allow yellow
+		err = dataManager.ValidateClusterHealth(false) // no yellow allowed
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Cluster health verified\n")
 
@@ -164,7 +164,7 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Reconnected to cluster\n")
 
 		// Verify cluster health
-		err = dataManager.ValidateClusterHealth(true) // Allow yellow
+		err = dataManager.ValidateClusterHealth(false) // no yellow allowed
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Cluster health verified after upgrade\n")
 
