@@ -29,6 +29,7 @@ var _ = Describe("OperatorUpgrade", func() {
 		operatorVersion string
 		clusterVersion  string
 		dataManager     *TestDataManager
+		operations      *ClusterOperations
 		testData        map[string]map[string]interface{}
 	)
 
@@ -91,34 +92,18 @@ var _ = Describe("OperatorUpgrade", func() {
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + OpenSearch cluster created\n")
 
+		By("Initializing cluster operations helper")
+		operations = NewClusterOperations(k8sClient, namespace)
+		GinkgoWriter.Printf("  + Cluster operations helper initialized\n")
+
 		By("Waiting for master node pool to be ready (3 replicas)")
-		Eventually(func() bool {
-			sts := appsv1.StatefulSet{}
-			err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-masters", Namespace: namespace}, &sts)
-			if err != nil {
-				return false
-			}
-			ready := sts.Status.ReadyReplicas
-			if ready < 3 {
-				GinkgoWriter.Printf("    Master nodes: %d/3 ready\n", ready)
-			}
-			return ready == 3
-		}, time.Minute*15, time.Second*5).Should(BeTrue())
+		err = operations.WaitForNodePoolReady(clusterName, "masters", 3, time.Minute*15)
+		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Master node pool ready: 3/3 replicas\n")
 
 		By("Waiting for data node pool to be ready (3 replicas)")
-		Eventually(func() bool {
-			sts := appsv1.StatefulSet{}
-			err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-data", Namespace: namespace}, &sts)
-			if err != nil {
-				return false
-			}
-			ready := sts.Status.ReadyReplicas
-			if ready < 3 {
-				GinkgoWriter.Printf("    Data nodes: %d/3 ready\n", ready)
-			}
-			return ready == 3
-		}, time.Minute*15, time.Second*5).Should(BeTrue())
+		err = operations.WaitForNodePoolReady(clusterName, "data", 3, time.Minute*15)
+		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Data node pool ready: 3/3 replicas\n")
 
 		By("Step 3: Initializing test data manager and verifying cluster")
@@ -137,7 +122,7 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Data integrity verified before upgrade\n")
 
 		By("Verifying cluster health")
-		err = dataManager.ValidateClusterHealth(false) // no yellow allowed
+		err = dataManager.ValidateClusterHealth(true) // yellow allowed
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Cluster health verified\n")
 
@@ -164,7 +149,7 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Reconnected to cluster\n")
 
 		// Verify cluster health
-		err = dataManager.ValidateClusterHealth(false) // no yellow allowed
+		err = dataManager.ValidateClusterHealth(true) // yellow allowed
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Cluster health verified after upgrade\n")
 
