@@ -80,11 +80,13 @@ This ensures that once migration starts, users are guided to use the new API gro
 
 ## Manual Migration Steps
 
-For a clean migration without relying on automatic sync:
+**Important Note**: You cannot change the API version of existing Kubernetes resources. Once a resource is created with `opensearch.opster.io/v1`, you cannot edit it to use `opensearch.org/v1`. The migration controller automatically handles this by creating new resources with the new API version.
 
-### Step 1: Verify Resource Readiness
+However, if you want to create new resources directly using the new API group (for example, in new deployments or when creating resources from scratch), follow these steps:
 
-Before migration, ensure all resources are in ready status:
+### Step 1: Verify Existing Resource Readiness (if migrating existing resources)
+
+If you have existing resources using the old API group, the migration controller will automatically create new resources. Before this happens, ensure all existing resources are in ready status:
 
 ```bash
 # Check cluster status
@@ -94,20 +96,11 @@ kubectl get opensearchclusters.opensearch.opster.io -o jsonpath='{.items[*].stat
 kubectl get opensearchusers.opensearch.opster.io -o jsonpath='{.items[*].status.state}'
 ```
 
-### Step 2: Update API Version in Manifests
+The migration controller will wait until resources are ready before creating the new API group resources.
 
-Change your manifest files from:
+### Step 2: Use New API Version in New Manifests
 
-```yaml
-apiVersion: opensearch.opster.io/v1
-kind: OpenSearchCluster
-metadata:
-  name: my-cluster
-spec:
-  # ... your spec
-```
-
-To:
+When creating new resources (not modifying existing ones), use the new API version in your manifest files:
 
 ```yaml
 apiVersion: opensearch.org/v1
@@ -115,12 +108,14 @@ kind: OpenSearchCluster
 metadata:
   name: my-cluster
 spec:
-  # ... your spec (unchanged)
+  # ... your spec
 ```
 
-### Step 3: Update Labels and Annotations
+**Note**: For existing resources, the migration controller automatically creates corresponding `opensearch.org/v1` resources. You do not need to manually create them.
 
-If you're using label selectors, update the domain:
+### Step 3: Update Labels and Annotations (for new resources)
+
+If you're creating new resources and using label selectors, use the new label domain:
 
 | Old Label | New Label |
 |-----------|-----------|
@@ -128,31 +123,35 @@ If you're using label selectors, update the domain:
 | `opster.io/opensearch-nodepool` | `opensearch.org/opensearch-nodepool` |
 | `opster.io/opensearch-job` | `opensearch.org/opensearch-job` |
 
-### Step 4: Update Helm Values (if using Helm)
+### Step 4: Update Helm Values (for new deployments)
 
-If deploying via Helm, the `opensearch-cluster` chart now supports configurable API group:
+If deploying new resources via Helm, the `opensearch-cluster` chart now defaults to the new API group:
 
 ```yaml
 # values.yaml
 apiGroup: opensearch.org  # Default (recommended)
-# apiGroup: opensearch.opster.io  # Legacy (deprecated)
+# apiGroup: opensearch.opster.io  # Legacy (deprecated, only for existing resources)
 ```
 
 ### Step 5: Apply New Resources
 
+For new resources (not existing ones):
+
 ```bash
 kubectl apply -f your-cluster.yaml
 ```
+
+**For existing resources**: The migration controller automatically creates the new API group resources. You don't need to manually apply anything.
 
 ### Step 6: Verify Migration
 
 Check that both old and new resources exist and are synced:
 
 ```bash
-# Old API group
+# Old API group (existing resources)
 kubectl get opensearchclusters.opensearch.opster.io
 
-# New API group
+# New API group (created automatically by migration controller or manually)
 kubectl get opensearchclusters.opensearch.org
 
 # Check status sync
@@ -161,9 +160,9 @@ kubectl get opensearchclusters.opensearch.org my-cluster -o jsonpath='{.status.p
 # Both should show the same phase
 ```
 
-### Step 7: Remove Old Resources (Optional)
+### Step 7: Remove Old Resources (Optional, after migration)
 
-Once you've verified the new resources are working correctly and status is synced:
+Once you've verified the new resources are working correctly and status is synced, you can optionally remove the old resources:
 
 ```bash
 # Remove old API resources
@@ -171,7 +170,10 @@ Once you've verified the new resources are working correctly and status is synce
 kubectl delete opensearchclusters.opensearch.opster.io <cluster-name>
 ```
 
-**Important**: The old resource can only be deleted if the corresponding new resource exists. This ensures migration has completed successfully.
+**Important**: 
+- The old resource can only be deleted if the corresponding new resource exists. This ensures migration has completed successfully.
+- Deleting the old resource will not affect the new resource - they operate independently after migration.
+- The migration controller automatically handles the deletion of old resources when new resources are deleted.
 
 ## Resource Mapping
 
@@ -377,7 +379,11 @@ If you need to rollback to the old API group:
 
 ### Q: How do I update my CI/CD pipelines?
 
-**A**: Update any manifests or Helm values to use `opensearch.org`. The Helm chart defaults to the new API group. Update any scripts or automation that reference the old API group.
+**A**: Update any manifests or Helm values to use `opensearch.org` for **new resources**. The Helm chart defaults to the new API group. For existing resources, the migration controller handles the migration automatically. Update any scripts or automation that create new resources to reference the new API group.
+
+### Q: Can I manually change the API version of an existing resource?
+
+**A**: No. Kubernetes does not allow changing the API version of an existing resource. You cannot edit a resource's API version. The migration controller automatically creates new resources with the new API version based on your existing resources. Once the new resources are created, you can optionally delete the old ones.
 
 ### Q: Why is my resource not migrating?
 
