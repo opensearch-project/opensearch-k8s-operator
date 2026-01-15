@@ -30,8 +30,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 const (
@@ -53,8 +53,10 @@ type ClusterMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/finalizers,verbs=update
 
 func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -227,6 +229,7 @@ func (r *ClusterMigrationReconciler) handleOldClusterDeletion(ctx context.Contex
 
 func (r *ClusterMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("clustermigration").
 		For(&opsterv1.OpenSearchCluster{}).
 		Complete(r)
 }
@@ -239,8 +242,10 @@ type UserMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchusers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchusers/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchusers/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchusers,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchusers/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchusers/finalizers,verbs=update
 
 func (r *UserMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpensearchUser, opensearchv1.OpensearchUser](ctx, r.Client, req, "OpensearchUser")
@@ -248,6 +253,7 @@ func (r *UserMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 func (r *UserMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("usermigration").
 		For(&opsterv1.OpensearchUser{}).
 		Complete(r)
 }
@@ -260,8 +266,10 @@ type RoleMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchroles,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchroles/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchroles/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchroles,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchroles/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchroles/finalizers,verbs=update
 
 func (r *RoleMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpensearchRole, opensearchv1.OpensearchRole](ctx, r.Client, req, "OpensearchRole")
@@ -269,6 +277,7 @@ func (r *RoleMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Reques
 
 func (r *RoleMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("rolemigration").
 		For(&opsterv1.OpensearchRole{}).
 		Complete(r)
 }
@@ -281,8 +290,10 @@ type UserRoleBindingMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchuserrolebindings/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchuserrolebindings,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchuserrolebindings/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchuserrolebindings/finalizers,verbs=update
 
 func (r *UserRoleBindingMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpensearchUserRoleBinding, opensearchv1.OpensearchUserRoleBinding](ctx, r.Client, req, "OpensearchUserRoleBinding")
@@ -290,6 +301,7 @@ func (r *UserRoleBindingMigrationReconciler) Reconcile(ctx context.Context, req 
 
 func (r *UserRoleBindingMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("userrolebindingmigration").
 		For(&opsterv1.OpensearchUserRoleBinding{}).
 		Complete(r)
 }
@@ -302,8 +314,10 @@ type TenantMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchtenants,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchtenants/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchtenants/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchtenants,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchtenants/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchtenants/finalizers,verbs=update
 
 func (r *TenantMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpensearchTenant, opensearchv1.OpensearchTenant](ctx, r.Client, req, "OpensearchTenant")
@@ -311,6 +325,7 @@ func (r *TenantMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 func (r *TenantMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("tenantmigration").
 		For(&opsterv1.OpensearchTenant{}).
 		Complete(r)
 }
@@ -323,8 +338,10 @@ type ActionGroupMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchactiongroups,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchactiongroups/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchactiongroups/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchactiongroups,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchactiongroups/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchactiongroups/finalizers,verbs=update
 
 func (r *ActionGroupMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpensearchActionGroup, opensearchv1.OpensearchActionGroup](ctx, r.Client, req, "OpensearchActionGroup")
@@ -332,6 +349,7 @@ func (r *ActionGroupMigrationReconciler) Reconcile(ctx context.Context, req ctrl
 
 func (r *ActionGroupMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("actiongroupmigration").
 		For(&opsterv1.OpensearchActionGroup{}).
 		Complete(r)
 }
@@ -344,8 +362,10 @@ type ISMPolicyMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchismpolicies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchismpolicies/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchismpolicies/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchismpolicies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchismpolicies/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchismpolicies/finalizers,verbs=update
 
 func (r *ISMPolicyMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpenSearchISMPolicy, opensearchv1.OpenSearchISMPolicy](ctx, r.Client, req, "OpenSearchISMPolicy")
@@ -353,6 +373,7 @@ func (r *ISMPolicyMigrationReconciler) Reconcile(ctx context.Context, req ctrl.R
 
 func (r *ISMPolicyMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("ismpolicymigration").
 		For(&opsterv1.OpenSearchISMPolicy{}).
 		Complete(r)
 }
@@ -365,8 +386,10 @@ type SnapshotPolicyMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchsnapshotpolicies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchsnapshotpolicies/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchsnapshotpolicies/finalizers,verbs=update
 
 func (r *SnapshotPolicyMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpensearchSnapshotPolicy, opensearchv1.OpensearchSnapshotPolicy](ctx, r.Client, req, "OpensearchSnapshotPolicy")
@@ -374,6 +397,7 @@ func (r *SnapshotPolicyMigrationReconciler) Reconcile(ctx context.Context, req c
 
 func (r *SnapshotPolicyMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("snapshotpolicymigration").
 		For(&opsterv1.OpensearchSnapshotPolicy{}).
 		Complete(r)
 }
@@ -386,8 +410,10 @@ type IndexTemplateMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchindextemplates/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchindextemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchindextemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchindextemplates/finalizers,verbs=update
 
 func (r *IndexTemplateMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpensearchIndexTemplate, opensearchv1.OpensearchIndexTemplate](ctx, r.Client, req, "OpensearchIndexTemplate")
@@ -395,6 +421,7 @@ func (r *IndexTemplateMigrationReconciler) Reconcile(ctx context.Context, req ct
 
 func (r *IndexTemplateMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("indextemplatemigration").
 		For(&opsterv1.OpensearchIndexTemplate{}).
 		Complete(r)
 }
@@ -407,8 +434,10 @@ type ComponentTemplateMigrationReconciler struct {
 
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchcomponenttemplates/finalizers,verbs=update
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchcomponenttemplates,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchcomponenttemplates/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchcomponenttemplates/finalizers,verbs=update
 
 func (r *ComponentTemplateMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	return reconcileGenericMigration[opsterv1.OpensearchComponentTemplate, opensearchv1.OpensearchComponentTemplate](ctx, r.Client, req, "OpensearchComponentTemplate")
@@ -416,6 +445,7 @@ func (r *ComponentTemplateMigrationReconciler) Reconcile(ctx context.Context, re
 
 func (r *ComponentTemplateMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		Named("componenttemplatemigration").
 		For(&opsterv1.OpensearchComponentTemplate{}).
 		Complete(r)
 }

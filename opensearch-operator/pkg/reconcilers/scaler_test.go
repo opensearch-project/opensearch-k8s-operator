@@ -5,7 +5,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -15,7 +15,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func newScalerReconciler(client *k8s.MockK8sClient, spec *opsterv1.OpenSearchCluster) *ScalerReconciler {
+func newScalerReconciler(client *k8s.MockK8sClient, spec *opensearchv1.OpenSearchCluster) *ScalerReconciler {
 	reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, spec, spec.Spec.NodePools)
 	underTest := &ScalerReconciler{
 		client:            client,
@@ -34,15 +34,15 @@ var _ = Describe("Scaler Controller", func() {
 			clusterName := "test-cluster"
 			clusterNamespace := "test-namespace"
 
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: clusterNamespace,
 					UID:       "dummyuid",
 				},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					NodePools: []opsterv1.NodePool{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{},
+					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
 							Replicas:  3,
@@ -71,15 +71,15 @@ var _ = Describe("Scaler Controller", func() {
 			clusterNamespace := "test-namespace"
 			wrongNamespace := clusterName // This would be the bug: using cluster name as namespace
 
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: clusterNamespace,
 					UID:       "dummyuid",
 				},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					NodePools: []opsterv1.NodePool{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{},
+					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
 							Replicas:  3,

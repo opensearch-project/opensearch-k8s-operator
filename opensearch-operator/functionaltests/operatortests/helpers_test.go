@@ -11,11 +11,11 @@ import (
 	"sync"
 	"time"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -206,7 +206,7 @@ func WaitForClusterReady(k8sClient client.Client, clusterName, namespace string,
 		case <-ctx.Done():
 			return fmt.Errorf("timeout waiting for cluster to be ready")
 		default:
-			cluster := &opsterv1.OpenSearchCluster{}
+			cluster := &opensearchv1.OpenSearchCluster{}
 			if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: namespace}, cluster); err != nil {
 				time.Sleep(2 * time.Second)
 				continue
@@ -244,7 +244,7 @@ var (
 
 // getAccessibleClusterURL returns a cluster URL that can be accessed from outside the k3d cluster.
 // For k3d clusters, we expose the OpenSearch service via a NodePort and access it through localhost.
-func getAccessibleClusterURL(k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) (string, error) {
+func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.OpenSearchCluster) (string, error) {
 	httpPort := cluster.Spec.General.HttpPort
 	if httpPort == 0 {
 		httpPort = 9200

@@ -11,7 +11,7 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -37,8 +37,8 @@ type IsmPolicyReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opsterv1.OpenSearchISMPolicy
-	cluster  *opsterv1.OpenSearchCluster
+	instance *opensearchv1.OpenSearchISMPolicy
+	cluster  *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
 
@@ -46,7 +46,7 @@ func NewIsmReconciler(
 	ctx context.Context,
 	client client.Client,
 	recorder record.EventRecorder,
-	instance *opsterv1.OpenSearchISMPolicy,
+	instance *opensearchv1.OpenSearchISMPolicy,
 	opts ...ReconcilerOption,
 ) *IsmPolicyReconciler {
 	options := ReconcilerOptions{}
@@ -72,21 +72,21 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opsterv1.OpenSearchISMPolicy)
+			instance := object.(*opensearchv1.OpenSearchISMPolicy)
 			instance.Status.Reason = reason
 			if retErr != nil {
-				instance.Status.State = opsterv1.OpensearchISMPolicyError
+				instance.Status.State = opensearchv1.OpensearchISMPolicyError
 			}
 			// Requeue after is 10 seconds if waiting for OpenSearch cluster
 			if retResult.Requeue && retResult.RequeueAfter == opensearchClusterRequeueAfter {
-				instance.Status.State = opsterv1.OpensearchISMPolicyPending
+				instance.Status.State = opensearchv1.OpensearchISMPolicyPending
 			}
 			if retErr == nil && retResult.Requeue {
-				instance.Status.State = opsterv1.OpensearchISMPolicyCreated
+				instance.Status.State = opensearchv1.OpensearchISMPolicyCreated
 				instance.Status.PolicyId = policyId
 			}
 			if reason == opensearchIsmPolicyExists {
-				instance.Status.State = opsterv1.OpensearchISMPolicyIgnored
+				instance.Status.State = opensearchv1.OpensearchISMPolicyIgnored
 			}
 		})
 
@@ -131,7 +131,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 
 	if ptr.Deref(r.updateStatus, true) {
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpenSearchISMPolicy).Status.ManagedCluster = &r.cluster.UID
+			object.(*opensearchv1.OpenSearchISMPolicy).Status.ManagedCluster = &r.cluster.UID
 		})
 		if retErr != nil {
 			reason = fmt.Sprintf("failed to update status: %s", retErr)
@@ -144,7 +144,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	}
 
 	// Check cluster is ready
-	if r.cluster.Status.Phase != opsterv1.PhaseRunning {
+	if r.cluster.Status.Phase != opensearchv1.PhaseRunning {
 		r.logger.Info("opensearch cluster is not running, requeueing")
 		reason = "waiting for opensearch cluster status to be running"
 		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
@@ -210,7 +210,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}
 		// Mark the ISM Policy as not pre-existing (created by the operator)
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(false)
+			object.(*opensearchv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(false)
 		})
 		if retErr != nil {
 			reason = "failed to update custom resource object"
@@ -242,7 +242,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	// If the ISM policy exists in OpenSearch cluster and was not created by the operator, update the status and return
 	if r.instance.Status.ExistingISMPolicy == nil || *r.instance.Status.ExistingISMPolicy {
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opsterv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(true)
+			object.(*opensearchv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(true)
 		})
 		if retErr != nil {
 			reason = "failed to update custom resource object"
@@ -364,7 +364,7 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 						newAction := requests.AliasAction{}
 						newAliasDetails := requests.AliasDetails{}
 
-						copyAliasDetails := func(src *opsterv1.AliasDetails) {
+						copyAliasDetails := func(src *opensearchv1.AliasDetails) {
 							newAliasDetails.Aliases = src.Aliases
 							newAliasDetails.Index = src.Index
 							newAliasDetails.IsWriteIndex = src.IsWriteIndex

@@ -8,10 +8,10 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/hashicorp/go-version"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 )
 
-func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
+func ResolveInitHelperImage(cr *opensearchv1.OpenSearchCluster) (result opensearchv1.ImageSpec) {
 	defaultRepo := "docker.io"
 	defaultImage := "busybox"
 	defaultVersion := "latest"
@@ -37,59 +37,63 @@ func ResolveInitHelperImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.Ima
 	return
 }
 
-func ResolveImage(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (result opsterv1.ImageSpec) {
+func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (result opensearchv1.ImageSpec) {
+	if cr == nil {
+		return
+	}
+
+	version := cr.Spec.General.Version
 	defaultRepo := "docker.io/opensearchproject"
+	if cr.Spec.General.DefaultRepo != nil {
+		defaultRepo = *cr.Spec.General.DefaultRepo
+	}
+	imageSpec := cr.Spec.General.ImageSpec
+
 	defaultImage := "opensearch"
 
 	// If a general custom image is specified, use it.
-	if cr.Spec.General.ImageSpec != nil {
-		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
+	if imageSpec != nil {
+		if useCustomImage(imageSpec, &result) {
 			return
 		}
 	}
 
-	// Default to version from spec
-	version := cr.Spec.General.Version
-
 	// If a different image repo is requested, use that with the default image
 	// name and version tag.
-	if cr.Spec.General.DefaultRepo != nil {
-		defaultRepo = *cr.Spec.General.DefaultRepo
-	}
-
 	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), version))
 	return
 }
 
-func ResolveDashboardsImage(cr *opsterv1.OpenSearchCluster) (result opsterv1.ImageSpec) {
+func ResolveDashboardsImage(cr *opensearchv1.OpenSearchCluster) (result opensearchv1.ImageSpec) {
+	if cr == nil {
+		return
+	}
+
 	defaultRepo := "docker.io/opensearchproject"
 	defaultImage := "opensearch-dashboards"
-
-	// If a custom dashboard image is specified, use it.
-	if cr.Spec.Dashboards.ImageSpec != nil {
-		if useCustomImage(cr.Spec.Dashboards.ImageSpec, &result) {
-			return
-		}
-	}
-
-	// If a different image repo is requested, use that with the default image
-	// name and version tag.
-	if cr.Spec.General.DefaultRepo != nil {
-		defaultRepo = *cr.Spec.General.DefaultRepo
-	}
-
 	version := cr.Spec.Dashboards.Version
 	if version == "" {
 		version = cr.Spec.General.Version
 	}
+	if cr.Spec.General.DefaultRepo != nil {
+		defaultRepo = *cr.Spec.General.DefaultRepo
+	}
+	imageSpec := cr.Spec.Dashboards.ImageSpec
+
+	// If a custom dashboard image is specified, use it.
+	if imageSpec != nil {
+		if useCustomImage(imageSpec, &result) {
+			return
+		}
+	}
 
 	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), version))
 	return
 }
 
-func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageSpec) bool {
+func useCustomImage(customImageSpec *opensearchv1.ImageSpec, result *opensearchv1.ImageSpec) bool {
 	if customImageSpec != nil {
 		if customImageSpec.ImagePullPolicy != nil {
 			result.ImagePullPolicy = customImageSpec.ImagePullPolicy
@@ -107,7 +111,7 @@ func useCustomImage(customImageSpec *opsterv1.ImageSpec, result *opsterv1.ImageS
 }
 
 // Function to help identify httpPort, securityConfigPort and securityConfigPath for 1.x and 2.x OpenSearch Operator.
-func VersionCheck(instance *opsterv1.OpenSearchCluster) (int32, int32, string) {
+func VersionCheck(instance *opensearchv1.OpenSearchCluster) (int32, int32, string) {
 	var httpPort int32
 	var securityConfigPort int32
 	var securityConfigPath string

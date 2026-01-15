@@ -3,7 +3,7 @@ package reconcilers
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 )
 
@@ -11,7 +11,7 @@ var _ = Describe("RollingRestart Reconciler", func() {
 	Describe("hasManagerRole", func() {
 		Context("with cluster_manager role", func() {
 			It("should return true", func() {
-				nodePool := opsterv1.NodePool{
+				nodePool := opensearchv1.NodePool{
 					Component: "master",
 					Roles:     []string{"cluster_manager"},
 				}
@@ -21,7 +21,7 @@ var _ = Describe("RollingRestart Reconciler", func() {
 
 		Context("with master role", func() {
 			It("should return true", func() {
-				nodePool := opsterv1.NodePool{
+				nodePool := opensearchv1.NodePool{
 					Component: "master",
 					Roles:     []string{"master"},
 				}
@@ -31,7 +31,7 @@ var _ = Describe("RollingRestart Reconciler", func() {
 
 		Context("with data role only", func() {
 			It("should return false", func() {
-				nodePool := opsterv1.NodePool{
+				nodePool := opensearchv1.NodePool{
 					Component: "data",
 					Roles:     []string{"data"},
 				}
@@ -41,7 +41,7 @@ var _ = Describe("RollingRestart Reconciler", func() {
 
 		Context("with no roles", func() {
 			It("should return false", func() {
-				nodePool := opsterv1.NodePool{
+				nodePool := opensearchv1.NodePool{
 					Component: "coordinating",
 					Roles:     []string{},
 				}
@@ -53,7 +53,7 @@ var _ = Describe("RollingRestart Reconciler", func() {
 	Describe("hasDataRole", func() {
 		Context("with data role", func() {
 			It("should return true", func() {
-				nodePool := opsterv1.NodePool{
+				nodePool := opensearchv1.NodePool{
 					Component: "data",
 					Roles:     []string{"data"},
 				}
@@ -63,7 +63,7 @@ var _ = Describe("RollingRestart Reconciler", func() {
 
 		Context("with cluster_manager role only", func() {
 			It("should return false", func() {
-				nodePool := opsterv1.NodePool{
+				nodePool := opensearchv1.NodePool{
 					Component: "master",
 					Roles:     []string{"cluster_manager"},
 				}
@@ -73,7 +73,7 @@ var _ = Describe("RollingRestart Reconciler", func() {
 
 		Context("with multiple roles including data", func() {
 			It("should return true", func() {
-				nodePool := opsterv1.NodePool{
+				nodePool := opensearchv1.NodePool{
 					Component: "coordinating",
 					Roles:     []string{"data", "ingest"},
 				}
@@ -83,7 +83,7 @@ var _ = Describe("RollingRestart Reconciler", func() {
 
 		Context("with no roles", func() {
 			It("should return false", func() {
-				nodePool := opsterv1.NodePool{
+				nodePool := opensearchv1.NodePool{
 					Component: "coordinating",
 					Roles:     []string{},
 				}

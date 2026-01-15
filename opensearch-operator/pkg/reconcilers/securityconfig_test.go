@@ -7,7 +7,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"golang.org/x/crypto/bcrypt"
@@ -27,7 +27,7 @@ func newSecurityconfigReconciler(
 	client *k8s.MockK8sClient,
 	ctx context.Context,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 ) *SecurityconfigReconciler {
 	return &SecurityconfigReconciler{
 		client:            client,
@@ -116,9 +116,9 @@ config:
 	When("When Reconciling the securityconfig reconciler with no securityconfig provided in the spec", func() {
 		It("should not do anything", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}},
+				Spec:       opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{}},
 			}
 
 			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
@@ -154,25 +154,25 @@ config:
 				},
 			}
 			existingInternalUsers := internalUsersYAML(string(existingHash), defaultKibanaServerHash)
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
 						Version:     "2.3",
 					},
-					Security: &opsterv1.Security{
-						Config: &opsterv1.SecurityConfig{
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
 							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
 							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
 						},
-						Tls: &opsterv1.TlsConfig{
-							Transport: &opsterv1.TlsConfigTransport{Generate: true},
-							Http:      &opsterv1.TlsConfigHttp{Generate: true},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
 						},
 					},
 				},
-				Status: opsterv1.ClusterStatus{
+				Status: opensearchv1.ClusterStatus{
 					Initialized: true,
 				},
 			}
@@ -244,14 +244,14 @@ config:
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			var clusterName = "securityconfig-notls"
 			securityConfigSecretName := clusterName + "-security-config"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						Version: "2.3",
 					},
-					Security: &opsterv1.Security{
-						Config: &opsterv1.SecurityConfig{
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
 							SecurityconfigSecret: corev1.LocalObjectReference{Name: securityConfigSecretName},
 						},
 						// No TLS configured - security plugin is disabled
@@ -276,18 +276,18 @@ config:
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			var clusterName = "no-securityconfig-tls-configured"
 
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
 						Version:     "2.3",
 					},
-					Security: &opsterv1.Security{
-						Config: &opsterv1.SecurityConfig{},
-						Tls: &opsterv1.TlsConfig{
-							Transport: &opsterv1.TlsConfigTransport{Generate: true},
-							Http:      &opsterv1.TlsConfigHttp{Generate: true},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
 						},
 					},
 				},

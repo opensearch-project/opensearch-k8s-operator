@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchtenant,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchtenants,verbs=create;update,versions=v1,name=vopensearchtenant.opensearch.opster.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-opensearch-org-v1-opensearchtenant,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.org,resources=opensearchtenants,verbs=create;update,versions=v1,name=vopensearchtenant.opensearch.org,admissionReviewVersions=v1
 
 type OpenSearchTenantValidator struct {
 	Client  client.Client
@@ -40,13 +41,13 @@ func (v *OpenSearchTenantValidator) SetupWithManager(mgr ctrl.Manager) error {
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpensearchTenant{}).
+		For(&opensearchv1.OpensearchTenant{}).
 		Complete()
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchTenantValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	tenant := obj.(*opsterv1.OpensearchTenant)
+	tenant := obj.(*opensearchv1.OpensearchTenant)
 
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, tenant); err != nil {
@@ -58,8 +59,8 @@ func (v *OpenSearchTenantValidator) ValidateCreate(ctx context.Context, obj runt
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchTenantValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldTenant := oldObj.(*opsterv1.OpensearchTenant)
-	newTenant := newObj.(*opsterv1.OpensearchTenant)
+	oldTenant := oldObj.(*opensearchv1.OpensearchTenant)
+	newTenant := newObj.(*opensearchv1.OpensearchTenant)
 
 	// Validate that the OpenSearch cluster reference hasn't changed
 	if err := v.validateClusterReferenceUnchanged(oldTenant, newTenant); err != nil {
@@ -76,22 +77,30 @@ func (v *OpenSearchTenantValidator) ValidateDelete(ctx context.Context, obj runt
 }
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
-func (v *OpenSearchTenantValidator) validateClusterReference(ctx context.Context, tenant *opsterv1.OpensearchTenant) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+func (v *OpenSearchTenantValidator) validateClusterReference(ctx context.Context, tenant *opensearchv1.OpensearchTenant) error {
+	// Try new API group first
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      tenant.Spec.OpensearchRef.Name,
 		Namespace: tenant.Namespace,
 	}, cluster)
 
 	if err != nil {
-		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", tenant.Spec.OpensearchRef.Name, err)
+		// Fall back to old API group for backward compatibility
+		oldCluster := &opsterv1.OpenSearchCluster{}
+		if err := v.Client.Get(ctx, types.NamespacedName{
+			Name:      tenant.Spec.OpensearchRef.Name,
+			Namespace: tenant.Namespace,
+		}, oldCluster); err != nil {
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", tenant.Spec.OpensearchRef.Name, err)
+		}
 	}
 
 	return nil
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
-func (v *OpenSearchTenantValidator) validateClusterReferenceUnchanged(old, new *opsterv1.OpensearchTenant) error {
+func (v *OpenSearchTenantValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchTenant) error {
 	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
 		return fmt.Errorf("cannot change the cluster a tenant refers to")
 	}

@@ -8,7 +8,7 @@ import (
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -22,7 +22,7 @@ var _ = Describe("snapshot repositories reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *SnapshotRepositoryReconciler
-		instance   *opsterv1.OpenSearchCluster
+		instance   *opensearchv1.OpenSearchCluster
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 		clusterUrl string
@@ -35,16 +35,16 @@ var _ = Describe("snapshot repositories reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opsterv1.OpenSearchCluster{
+		instance = &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-snapshotrepo",
 				Namespace: "test",
 			},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
 					ServiceName: "test-snapshotrepo",
 					HttpPort:    9200,
-					SnapshotRepositories: []opsterv1.SnapshotRepoConfig{
+					SnapshotRepositories: []opensearchv1.SnapshotRepoConfig{
 						{
 							Name: repoName,
 							Type: "fs",
@@ -54,7 +54,7 @@ var _ = Describe("snapshot repositories reconciler", func() {
 						},
 					},
 				},
-				NodePools: []opsterv1.NodePool{
+				NodePools: []opensearchv1.NodePool{
 					{
 						Component: "node",
 						Roles: []string{
@@ -64,8 +64,8 @@ var _ = Describe("snapshot repositories reconciler", func() {
 					},
 				},
 			},
-			Status: opsterv1.ClusterStatus{
-				Phase: opsterv1.PhasePending,
+			Status: opensearchv1.ClusterStatus{
+				Phase: opensearchv1.PhasePending,
 			},
 		}
 		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(instance))
@@ -100,7 +100,7 @@ var _ = Describe("snapshot repositories reconciler", func() {
 
 	When("cluster is not ready", func() {
 		BeforeEach(func() {
-			instance.Status.Phase = opsterv1.PhasePending
+			instance.Status.Phase = opensearchv1.PhasePending
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should wait for the cluster to be running", func() {
@@ -123,8 +123,8 @@ var _ = Describe("snapshot repositories reconciler", func() {
 	Context("cluster is ready", func() {
 		extraContextCalls := 1
 		BeforeEach(func() {
-			instance.Status.Phase = opsterv1.PhaseRunning
-			instance.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+			instance.Status.Phase = opensearchv1.PhaseRunning
+			instance.Status.ComponentsStatus = []opensearchv1.ComponentStatus{}
 
 			transport.RegisterResponder(
 				http.MethodGet,

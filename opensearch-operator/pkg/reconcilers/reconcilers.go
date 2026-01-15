@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/client-go/tools/record"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -59,7 +59,7 @@ type ReconcilerContext struct {
 	DashboardsConfig map[string]string
 	OpenSearchConfig map[string]string
 	recorder         record.EventRecorder
-	instance         *opsterv1.OpenSearchCluster
+	instance         *opensearchv1.OpenSearchCluster
 }
 
 type NodePoolHash struct {
@@ -67,7 +67,7 @@ type NodePoolHash struct {
 	ConfigHash string
 }
 
-func NewReconcilerContext(recorder record.EventRecorder, instance *opsterv1.OpenSearchCluster, nodepools []opsterv1.NodePool) ReconcilerContext {
+func NewReconcilerContext(recorder record.EventRecorder, instance *opensearchv1.OpenSearchCluster, nodepools []opensearchv1.NodePool) ReconcilerContext {
 	var nodePoolHashes []NodePoolHash
 	for _, nodepool := range nodepools {
 		nodePoolHashes = append(nodePoolHashes, NodePoolHash{
@@ -126,11 +126,11 @@ func (c *ReconcilerContext) replaceNodePoolHash(newConfig NodePoolHash) {
 
 func UpdateComponentStatus(
 	k8sClient k8s.K8sClient,
-	cluster *opsterv1.OpenSearchCluster,
-	status *opsterv1.ComponentStatus,
+	cluster *opensearchv1.OpenSearchCluster,
+	status *opensearchv1.ComponentStatus,
 ) error {
 	if status != nil {
-		return k8sClient.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(cluster), func(instance *opsterv1.OpenSearchCluster) {
+		return k8sClient.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(cluster), func(instance *opensearchv1.OpenSearchCluster) {
 			found := false
 			for idx, value := range instance.Status.ComponentsStatus {
 				if value.Component == status.Component {

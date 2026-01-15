@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -73,7 +73,7 @@ type SecurityconfigReconciler struct {
 	client            k8s.K8sClient
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
 }
 
@@ -82,7 +82,7 @@ func NewSecurityconfigReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *SecurityconfigReconciler {
 	return &SecurityconfigReconciler{
@@ -126,7 +126,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	if managedByOperator != r.instance.Status.AdminSecretCreated {
-		updateErr := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		updateErr := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.AdminSecretCreated = managedByOperator
 		})
 		if updateErr != nil {
@@ -149,7 +149,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	if !r.instance.Status.ContextSecretCreated {
-		updateErr := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		updateErr := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.ContextSecretCreated = true
 		})
 		if updateErr != nil {
@@ -226,7 +226,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 // BuildCmdArg builds the command for the securityconfig-update job for each individual ymls present in the
 // securityconfig secret. yml files which are not present in the secret are not applied/updated
-func BuildCmdArg(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret, log logr.Logger) string {
+func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret, log logr.Logger) string {
 	clusterHostName := BuildClusterSvcHostName(instance)
 	httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(instance)
 
@@ -302,7 +302,7 @@ func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.OpenSearchCluster, secret *corev1.Secret) error {
+func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret) error {
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, corev1.Volume{
 		Name: "securityconfig",
 		VolumeSource: corev1.VolumeSource{
@@ -331,6 +331,6 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opsterv1.Ope
 }
 
 // BuildClusterSvcHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}
-func BuildClusterSvcHostName(instance *opsterv1.OpenSearchCluster) string {
+func BuildClusterSvcHostName(instance *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s.svc.%s", builders.DnsOfService(instance), helpers.ClusterDnsBase())
 }

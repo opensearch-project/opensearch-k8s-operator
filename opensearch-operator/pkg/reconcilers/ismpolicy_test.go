@@ -10,7 +10,7 @@ import (
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
@@ -27,12 +27,12 @@ var _ = Describe("ism policy reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *IsmPolicyReconciler
-		instance   *opsterv1.OpenSearchISMPolicy
+		instance   *opensearchv1.OpenSearchISMPolicy
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
 		// Objects
-		cluster    *opsterv1.OpenSearchCluster
+		cluster    *opensearchv1.OpenSearchCluster
 		clusterUrl string
 	)
 
@@ -40,34 +40,34 @@ var _ = Describe("ism policy reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opsterv1.OpenSearchISMPolicy{
+		instance = &opensearchv1.OpenSearchISMPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-policy",
 				Namespace: "test-policy",
 				UID:       types.UID("testuid"),
 			},
-			Spec: opsterv1.OpenSearchISMPolicySpec{
+			Spec: opensearchv1.OpenSearchISMPolicySpec{
 				PolicyID: "test-policy",
 				OpensearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 			},
-			Status: opsterv1.OpensearchISMPolicyStatus{
+			Status: opensearchv1.OpensearchISMPolicyStatus{
 				PolicyId: "test-policy",
 			},
 		}
 
-		cluster = &opsterv1.OpenSearchCluster{
+		cluster = &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
 				Namespace: "test-policy",
 			},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
 					ServiceName: "test-cluster",
 					HttpPort:    9200,
 				},
-				NodePools: []opsterv1.NodePool{
+				NodePools: []opensearchv1.NodePool{
 					{
 						Component: "node",
 						Roles: []string{
@@ -111,7 +111,7 @@ var _ = Describe("ism policy reconciler", func() {
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
 			instance.Spec.OpensearchRef.Name = "doesnotexist"
-			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should wait for the cluster to exist", func() {
@@ -156,8 +156,8 @@ var _ = Describe("ism policy reconciler", func() {
 
 	When("cluster is ready but opensearch is not reachable", func() {
 		BeforeEach(func() {
-			cluster.Status.Phase = opsterv1.PhaseRunning
-			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+			cluster.Status.Phase = opensearchv1.PhaseRunning
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{}
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 			recorder = record.NewFakeRecorder(1)
 
@@ -190,8 +190,8 @@ var _ = Describe("ism policy reconciler", func() {
 
 	When("cluster is ready but ping fails after client creation", func() {
 		BeforeEach(func() {
-			cluster.Status.Phase = opsterv1.PhaseRunning
-			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+			cluster.Status.Phase = opensearchv1.PhaseRunning
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{}
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 			recorder = record.NewFakeRecorder(1)
 
@@ -231,8 +231,8 @@ var _ = Describe("ism policy reconciler", func() {
 	Context("cluster is ready", func() {
 		extraContextCalls := 1
 		BeforeEach(func() {
-			cluster.Status.Phase = opsterv1.PhaseRunning
-			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+			cluster.Status.Phase = opensearchv1.PhaseRunning
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{}
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 			recorder = record.NewFakeRecorder(1)
 
@@ -322,7 +322,7 @@ var _ = Describe("ism policy reconciler", func() {
 				indexName := "test-index-1"
 				BeforeEach(func() {
 					instance.Spec.ApplyToExistingIndices = ptr.To(true)
-					instance.Spec.ISMTemplate = &opsterv1.ISMTemplate{
+					instance.Spec.ISMTemplate = &opensearchv1.ISMTemplate{
 						IndexPatterns: []string{"test-*"},
 					}
 					transport.RegisterResponder(
@@ -599,7 +599,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 	Context("CreateISMPolicy Shrink Action Validation", func() {
 		var (
-			originalInstanceSpec opsterv1.OpenSearchISMPolicySpec
+			originalInstanceSpec opensearchv1.OpenSearchISMPolicySpec
 		)
 
 		BeforeEach(func() {
@@ -625,12 +625,12 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("a Shrink action is configured correctly with NumNewShards", func() {
 			BeforeEach(func() {
-				instance.Spec.States = []opsterv1.State{
+				instance.Spec.States = []opensearchv1.State{
 					{
 						Name: "hot",
-						Actions: []opsterv1.Action{
+						Actions: []opensearchv1.Action{
 							{
-								Shrink: &opsterv1.Shrink{
+								Shrink: &opensearchv1.Shrink{
 									NumNewShards: ptr.To(1),
 								},
 							},
@@ -653,12 +653,12 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("a Shrink action is configured correctly with MaxShardSize", func() {
 			BeforeEach(func() {
-				instance.Spec.States = []opsterv1.State{
+				instance.Spec.States = []opensearchv1.State{
 					{
 						Name: "hot",
-						Actions: []opsterv1.Action{
+						Actions: []opensearchv1.Action{
 							{
-								Shrink: &opsterv1.Shrink{
+								Shrink: &opensearchv1.Shrink{
 									MaxShardSize: ptr.To("1gb"),
 								},
 							},
@@ -681,12 +681,12 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("a Shrink action is configured correctly with PercentageOfSourceShards", func() {
 			BeforeEach(func() {
-				instance.Spec.States = []opsterv1.State{
+				instance.Spec.States = []opensearchv1.State{
 					{
 						Name: "hot",
-						Actions: []opsterv1.Action{
+						Actions: []opensearchv1.Action{
 							{
-								Shrink: &opsterv1.Shrink{
+								Shrink: &opensearchv1.Shrink{
 									PercentageOfSourceShards: ptr.To[int64](50),
 								},
 							},
@@ -709,12 +709,12 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("a Shrink action is configured with NumNewShards and MaxShardSize", func() {
 			BeforeEach(func() {
-				instance.Spec.States = []opsterv1.State{
+				instance.Spec.States = []opensearchv1.State{
 					{
 						Name: "hot",
-						Actions: []opsterv1.Action{
+						Actions: []opensearchv1.Action{
 							{
-								Shrink: &opsterv1.Shrink{
+								Shrink: &opensearchv1.Shrink{
 									NumNewShards: ptr.To(1),
 									MaxShardSize: ptr.To("1gb"),
 								},
@@ -732,12 +732,12 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("a Shrink action is configured with NumNewShards and PercentageOfSourceShards", func() {
 			BeforeEach(func() {
-				instance.Spec.States = []opsterv1.State{
+				instance.Spec.States = []opensearchv1.State{
 					{
 						Name: "hot",
-						Actions: []opsterv1.Action{
+						Actions: []opensearchv1.Action{
 							{
-								Shrink: &opsterv1.Shrink{
+								Shrink: &opensearchv1.Shrink{
 									NumNewShards:             ptr.To(1),
 									PercentageOfSourceShards: ptr.To[int64](50),
 								},
@@ -755,12 +755,12 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("a Shrink action is configured with MaxShardSize and PercentageOfSourceShards", func() {
 			BeforeEach(func() {
-				instance.Spec.States = []opsterv1.State{
+				instance.Spec.States = []opensearchv1.State{
 					{
 						Name: "hot",
-						Actions: []opsterv1.Action{
+						Actions: []opensearchv1.Action{
 							{
-								Shrink: &opsterv1.Shrink{
+								Shrink: &opensearchv1.Shrink{
 									MaxShardSize:             ptr.To("1gb"),
 									PercentageOfSourceShards: ptr.To[int64](50),
 								},
@@ -778,12 +778,12 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("a Shrink action is configured with none of the required parameters", func() {
 			BeforeEach(func() {
-				instance.Spec.States = []opsterv1.State{
+				instance.Spec.States = []opensearchv1.State{
 					{
 						Name: "hot",
-						Actions: []opsterv1.Action{
+						Actions: []opensearchv1.Action{
 							{
-								Shrink: &opsterv1.Shrink{
+								Shrink: &opensearchv1.Shrink{
 									// No fields set
 								},
 							},
@@ -824,7 +824,7 @@ var _ = Describe("ism policy reconciler", func() {
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
 					instance.Spec.OpensearchRef.Name = "doesnotexist"
-					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
+					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 
 				It("should do nothing and exit", func() {
@@ -835,8 +835,8 @@ var _ = Describe("ism policy reconciler", func() {
 			Context("cluster is ready", func() {
 				// extraContextCalls := 1
 				BeforeEach(func() {
-					cluster.Status.Phase = opsterv1.PhaseRunning
-					cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+					cluster.Status.Phase = opensearchv1.PhaseRunning
+					cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{}
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 					recorder = record.NewFakeRecorder(1)
 

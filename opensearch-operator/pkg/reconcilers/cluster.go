@@ -11,7 +11,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 
 	"github.com/go-logr/logr"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -31,7 +31,7 @@ type ClusterReconciler struct {
 	ctx               context.Context
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
 }
 
@@ -40,7 +40,7 @@ func NewClusterReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *ClusterReconciler {
 	return &ClusterReconciler{
@@ -135,7 +135,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	// if Version isn't set we set it now to check for upgrades later.
 	if r.instance.Status.Version == "" {
-		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.Version = r.instance.Spec.General.Version
 		})
 		result.CombineErr(err)
@@ -152,7 +152,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
+func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodePool, username string) (*ctrl.Result, error) {
 	found, nodePoolConfig := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
 
 	// If config hasn't been set up for the node pool requeue
@@ -359,7 +359,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 	// If any scaling operation is going on, don't do anything
 	for _, nodePool := range r.instance.Spec.NodePools {
-		componentStatus := opsterv1.ComponentStatus{
+		componentStatus := opensearchv1.ComponentStatus{
 			Component:   "Scaler",
 			Description: nodePool.Component,
 		}
@@ -430,7 +430,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			// Dashboards deployment will be recreated normally through the reconcile cycle
 		}
 
-		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.Initialized = false
 		})
 		if err != nil {
@@ -450,7 +450,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 	return &ctrl.Result{}, nil
 }
 
-func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result, error) {
+func (r *ClusterReconciler) handlePDB(nodePool *opensearchv1.NodePool) (*ctrl.Result, error) {
 	pdb := policyv1.PodDisruptionBudget{}
 
 	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
@@ -479,7 +479,7 @@ func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result
 	}
 }
 
-func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opsterv1.NodePool) error {
+func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opensearchv1.NodePool) error {
 	// Use default if DiskSize is zero (not set)
 	nodePoolDiskSize := nodePool.DiskSize
 	if nodePoolDiskSize.IsZero() {
@@ -546,7 +546,7 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 
 	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
 
-	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.Health = health
 		instance.Status.AvailableNodes = availableNodes
 	})

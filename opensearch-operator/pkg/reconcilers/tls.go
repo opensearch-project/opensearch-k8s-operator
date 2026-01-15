@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -47,7 +47,7 @@ type certDescription struct {
 type TLSReconciler struct {
 	client            k8s.K8sClient
 	reconcilerContext *ReconcilerContext
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
 	pki               tls.PKI
 	recorder          record.EventRecorder
@@ -57,7 +57,7 @@ func NewTLSReconciler(
 	client client.Client,
 	ctx context.Context,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *TLSReconciler {
 	return &TLSReconciler{
@@ -111,7 +111,7 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 // If enabled is nil (not set): enabled by default if transport config exists.
 // If enabled is true: explicitly enabled.
 // If enabled is false: explicitly disabled.
-func (r *TLSReconciler) isTransportTlsEnabled(config *opsterv1.TlsConfig) bool {
+func (r *TLSReconciler) isTransportTlsEnabled(config *opensearchv1.TlsConfig) bool {
 	if config == nil {
 		return false
 	}
@@ -129,7 +129,7 @@ func (r *TLSReconciler) isTransportTlsEnabled(config *opsterv1.TlsConfig) bool {
 // If enabled is nil (not set): enabled by default if HTTP config exists.
 // If enabled is true: explicitly enabled.
 // If enabled is false: explicitly disabled.
-func (r *TLSReconciler) isHttpTlsEnabled(config *opsterv1.TlsConfig) bool {
+func (r *TLSReconciler) isHttpTlsEnabled(config *opensearchv1.TlsConfig) bool {
 	if config == nil {
 		return false
 	}

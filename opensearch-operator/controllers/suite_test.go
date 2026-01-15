@@ -25,12 +25,13 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"testing"
+
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/phayes/freeport"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -89,7 +90,7 @@ var _ = BeforeSuite(func() {
 
 	err = scheme.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = opsterv1.AddToScheme(scheme.Scheme)
+	err = opensearchv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})

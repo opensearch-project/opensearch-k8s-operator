@@ -5,7 +5,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -22,7 +22,7 @@ var _ = BeforeSuite(func() {
 
 	err := scheme.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
-	err = opsterv1.AddToScheme(scheme.Scheme)
+	err = opensearchv1.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 })
 

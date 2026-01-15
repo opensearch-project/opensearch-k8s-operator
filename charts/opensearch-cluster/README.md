@@ -8,6 +8,7 @@ The following table lists the configurable parameters of the Helm chart.
 
 | Parameter | Type | Default | Description |
 | --- | ---- | ------- | ----------- |
+| `apiGroup` | string | `"opensearch.org"` | API group for OpenSearch CRDs. Use "opensearch.org" (recommended) or "opensearch.opster.io" (legacy) |
 | `nameOverride` | string | `""` |  |
 | `fullnameOverride` | string | `""` |  |
 | `serviceAccount.create` | bool | `false` | Create Service Account |

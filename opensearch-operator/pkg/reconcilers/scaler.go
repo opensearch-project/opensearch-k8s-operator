@@ -7,7 +7,7 @@ import (
 
 	"k8s.io/utils/ptr"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -26,7 +26,7 @@ type ScalerReconciler struct {
 	ctx               context.Context
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	ReconcilerOptions
 }
 
@@ -35,7 +35,7 @@ func NewScalerReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...ReconcilerOption,
 ) *ScalerReconciler {
 	options := ReconcilerOptions{}
@@ -68,7 +68,7 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	return results.Result, results.Err
 }
 
-func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool, error) {
+func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (bool, error) {
 	lg := log.FromContext(r.ctx)
 	namespace := r.instance.Namespace
 	sts_name := builders.StsName(r.instance, nodePool)
@@ -84,7 +84,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	}
 	currentSts.Status.ReadyReplicas = readyReplicas
 
-	componentStatus := opsterv1.ComponentStatus{
+	componentStatus := opensearchv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Running",
 		Description: nodePool.Component,
@@ -96,7 +96,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	if desireReplicaDiff == 0 {
 		// If a scaling operation was started before for this nodePool
 		if found {
-			err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+			err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 				if currentSts.Status.ReadyReplicas != nodePool.Replicas {
 					// Change the status to waiting while the pods are coming up or getting deleted
 					componentStatus.Status = "Waiting"
@@ -118,7 +118,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opsterv1.NodePool) (bool,
 	// Also the status is set to 'Running' if it fails to exclude node for some reason
 	if !found || currentStatus.Status == "Running" {
 		// Change the status to running, to indicate that a scaling operation for this nodePool has started
-		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 		})
 		if err != nil {
@@ -175,7 +175,7 @@ func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePo
 	return false, nil
 }
 
-func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (bool, error) {
+func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (bool, error) {
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas--
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
@@ -188,7 +188,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 		return true, err
 	}
 	lg.Info(fmt.Sprintf("Group: %s, Removed node %s", nodePoolGroupName, lastReplicaNodeName))
-	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 	})
 	if err != nil {
@@ -215,7 +215,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opsterv1.ComponentStatu
 	return false, err
 }
 
-func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
+func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
@@ -234,14 +234,14 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		return err
 	}
 	if excluded {
-		componentStatus := opsterv1.ComponentStatus{
+		componentStatus := opensearchv1.ComponentStatus{
 			Component:   "Scaler",
 			Status:      "Excluded",
 			Description: nodePoolGroupName,
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished to Exclude %s/%s", r.instance.Namespace, r.instance.Name)
 		lg.Info(fmt.Sprintf("Group: %s, Excluded node: %s", nodePoolGroupName, lastReplicaNodeName))
-		err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 		})
 		if err != nil {
@@ -253,14 +253,14 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 		return err
 	}
 
-	componentStatus := opsterv1.ComponentStatus{
+	componentStatus := opensearchv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Running",
 		Description: nodePoolGroupName,
 	}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start sacle %s/%s from %d to %d", r.instance.Namespace, r.instance.Name, *currentSts.Spec.Replicas, *currentSts.Spec.Replicas-1)
 	lg.Info(fmt.Sprintf("Group: %s, Failed to exclude node: %s", nodePoolGroupName, lastReplicaNodeName))
-	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 	})
 	if err != nil {
@@ -272,7 +272,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opsterv1.ComponentStatus, c
 	return err
 }
 
-func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
+func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
@@ -287,13 +287,13 @@ func (r *ScalerReconciler) drainNode(currentStatus opsterv1.ComponentStatus, cur
 		return err
 	}
 
-	componentStatus := opsterv1.ComponentStatus{
+	componentStatus := opensearchv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Drained",
 		Description: nodePoolGroupName,
 	}
 	lg.Info(fmt.Sprintf("Group: %s, Node %s is drained", nodePoolGroupName, lastReplicaNodeName))
-	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 	})
 	if err != nil {

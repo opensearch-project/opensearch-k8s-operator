@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-go"
+	"github.com/opensearch-project/opensearch-go/opensearchapi"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-go"
-	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -23,7 +23,7 @@ type TestDataManager struct {
 	osClient    *services.OsClusterClient
 	osClientRaw *opensearch.Client
 	k8sClient   client.Client
-	cluster     *opsterv1.OpenSearchCluster
+	cluster     *opensearchv1.OpenSearchCluster
 	namespace   string
 }
 
@@ -35,7 +35,7 @@ func NewTestDataManager(k8sClient client.Client, clusterName, namespace string) 
 	}
 
 	// Get cluster
-	cluster := &opsterv1.OpenSearchCluster{}
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: namespace}, cluster)
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func NewTestDataManager(k8sClient client.Client, clusterName, namespace string) 
 // Reconnect reconnects to the cluster (useful after operations that might change cluster state)
 func (m *TestDataManager) Reconnect() error {
 	// Get fresh cluster info
-	cluster := &opsterv1.OpenSearchCluster{}
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := m.k8sClient.Get(context.Background(), client.ObjectKey{Name: m.cluster.Name, Namespace: m.namespace}, cluster)
 	if err != nil {
 		return err

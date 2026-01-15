@@ -3,7 +3,7 @@ package helpers
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,10 +13,10 @@ import (
 var _ = Describe("ClusterURL", func() {
 	It("should use operatorClusterURL when provided", func() {
 		customHost := "opensearch.example.com"
-		cluster := &opsterv1.OpenSearchCluster{
+		cluster := &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
 					OperatorClusterURL: &customHost,
 					HttpPort:           9443,
 					ServiceName:        "test",
@@ -29,10 +29,10 @@ var _ = Describe("ClusterURL", func() {
 	})
 
 	It("should use default internal DNS when operatorClusterURL is nil", func() {
-		cluster := &opsterv1.OpenSearchCluster{
+		cluster := &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
 					HttpPort:    9200,
 					ServiceName: "test",
 				},
@@ -45,10 +45,10 @@ var _ = Describe("ClusterURL", func() {
 
 	It("should use default port 9200 when HttpPort is 0", func() {
 		customHost := "opensearch.example.com"
-		cluster := &opsterv1.OpenSearchCluster{
+		cluster := &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
 					OperatorClusterURL: &customHost,
 					ServiceName:        "test",
 				},
@@ -65,9 +65,9 @@ var _ = Describe("Helper Functions", func() {
 	Describe("ResolveUidGid", func() {
 		Context("when no security context is specified", func() {
 			It("should return default values", func() {
-				cluster := &opsterv1.OpenSearchCluster{
-					Spec: opsterv1.ClusterSpec{
-						General: opsterv1.GeneralConfig{},
+				cluster := &opensearchv1.OpenSearchCluster{
+					Spec: opensearchv1.ClusterSpec{
+						General: opensearchv1.GeneralConfig{},
 					},
 				}
 
@@ -79,9 +79,9 @@ var _ = Describe("Helper Functions", func() {
 
 		Context("when only container security context is specified", func() {
 			It("should use container security context values", func() {
-				cluster := &opsterv1.OpenSearchCluster{
-					Spec: opsterv1.ClusterSpec{
-						General: opsterv1.GeneralConfig{
+				cluster := &opensearchv1.OpenSearchCluster{
+					Spec: opensearchv1.ClusterSpec{
+						General: opensearchv1.GeneralConfig{
 							SecurityContext: &corev1.SecurityContext{
 								RunAsUser:  ptr.To(int64(2000)),
 								RunAsGroup: ptr.To(int64(2000)),
@@ -98,9 +98,9 @@ var _ = Describe("Helper Functions", func() {
 
 		Context("when only pod security context is specified", func() {
 			It("should use pod security context values", func() {
-				cluster := &opsterv1.OpenSearchCluster{
-					Spec: opsterv1.ClusterSpec{
-						General: opsterv1.GeneralConfig{
+				cluster := &opensearchv1.OpenSearchCluster{
+					Spec: opensearchv1.ClusterSpec{
+						General: opensearchv1.GeneralConfig{
 							PodSecurityContext: &corev1.PodSecurityContext{
 								RunAsUser:  ptr.To(int64(1500)),
 								RunAsGroup: ptr.To(int64(1500)),
@@ -117,9 +117,9 @@ var _ = Describe("Helper Functions", func() {
 
 		Context("when both security contexts are specified", func() {
 			It("should prioritize container security context over pod security context", func() {
-				cluster := &opsterv1.OpenSearchCluster{
-					Spec: opsterv1.ClusterSpec{
-						General: opsterv1.GeneralConfig{
+				cluster := &opensearchv1.OpenSearchCluster{
+					Spec: opensearchv1.ClusterSpec{
+						General: opensearchv1.GeneralConfig{
 							PodSecurityContext: &corev1.PodSecurityContext{
 								RunAsUser:  ptr.To(int64(1500)),
 								RunAsGroup: ptr.To(int64(1500)),
@@ -140,9 +140,9 @@ var _ = Describe("Helper Functions", func() {
 
 		Context("when security contexts have partial values", func() {
 			It("should use container UID and pod GID when container GID is missing", func() {
-				cluster := &opsterv1.OpenSearchCluster{
-					Spec: opsterv1.ClusterSpec{
-						General: opsterv1.GeneralConfig{
+				cluster := &opensearchv1.OpenSearchCluster{
+					Spec: opensearchv1.ClusterSpec{
+						General: opensearchv1.GeneralConfig{
 							PodSecurityContext: &corev1.PodSecurityContext{
 								RunAsUser:  ptr.To(int64(1500)),
 								RunAsGroup: ptr.To(int64(1800)),
@@ -161,9 +161,9 @@ var _ = Describe("Helper Functions", func() {
 			})
 
 			It("should use defaults when only empty security contexts are provided", func() {
-				cluster := &opsterv1.OpenSearchCluster{
-					Spec: opsterv1.ClusterSpec{
-						General: opsterv1.GeneralConfig{
+				cluster := &opensearchv1.OpenSearchCluster{
+					Spec: opensearchv1.ClusterSpec{
+						General: opensearchv1.GeneralConfig{
 							PodSecurityContext: &corev1.PodSecurityContext{},
 							SecurityContext:    &corev1.SecurityContext{},
 						},

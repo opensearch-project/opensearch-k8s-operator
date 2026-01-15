@@ -9,7 +9,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/go-logr/logr"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -29,8 +29,8 @@ type UserReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opsterv1.OpensearchUser
-	cluster  *opsterv1.OpenSearchCluster
+	instance *opensearchv1.OpensearchUser
+	cluster  *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
 
@@ -38,7 +38,7 @@ func NewUserReconciler(
 	client client.Client,
 	ctx context.Context,
 	recorder record.EventRecorder,
-	instance *opsterv1.OpensearchUser,
+	instance *opensearchv1.OpensearchUser,
 	opts ...ReconcilerOption,
 ) *UserReconciler {
 	options := ReconcilerOptions{}
@@ -64,16 +64,16 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opsterv1.OpensearchUser)
+			instance := object.(*opensearchv1.OpensearchUser)
 			instance.Status.Reason = reason
 			if retErr != nil {
-				instance.Status.State = opsterv1.OpensearchUserStateError
+				instance.Status.State = opensearchv1.OpensearchUserStateError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				instance.Status.State = opsterv1.OpensearchUserStatePending
+				instance.Status.State = opensearchv1.OpensearchUserStatePending
 			}
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				instance.Status.State = opsterv1.OpensearchUserStateCreated
+				instance.Status.State = opensearchv1.OpensearchUserStateCreated
 			}
 		})
 		if err != nil {
@@ -113,7 +113,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	} else {
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opsterv1.OpensearchUser)
+				instance := object.(*opensearchv1.OpensearchUser)
 				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
@@ -125,7 +125,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	}
 
 	// Check cluster is ready
-	if r.cluster.Status.Phase != opsterv1.PhaseRunning {
+	if r.cluster.Status.Phase != opensearchv1.PhaseRunning {
 		r.logger.Info("opensearch cluster is not running, requeueing")
 		reason = "waiting for opensearch cluster status to be running"
 		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
