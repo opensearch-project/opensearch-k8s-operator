@@ -28,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -61,9 +62,20 @@ type ClusterMigrationReconciler struct {
 func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	// First check if this is a new cluster event (deletion)
+	newCluster := &opensearchv1.OpenSearchCluster{}
+	err := r.Get(ctx, req.NamespacedName, newCluster)
+	if err == nil {
+		// This is a new cluster - check if it's being deleted
+		if !newCluster.DeletionTimestamp.IsZero() {
+			return r.handleNewClusterDeletion(ctx, newCluster)
+		}
+		// If new cluster exists and is not being deleted, continue to check old cluster
+	}
+
 	// Try to get the old API group resource
 	oldCluster := &opsterv1.OpenSearchCluster{}
-	err := r.Get(ctx, req.NamespacedName, oldCluster)
+	err = r.Get(ctx, req.NamespacedName, oldCluster)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -87,11 +99,15 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		}
 	}
 
-	// Check if new API group resource exists
-	newCluster := &opensearchv1.OpenSearchCluster{}
+	// Re-check if new API group resource exists (in case it was just created)
 	err = r.Get(ctx, req.NamespacedName, newCluster)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			// Check if old cluster is in ready status before migrating
+			if !isClusterReady(oldCluster) {
+				logger.Info("Old cluster is not ready, skipping migration", "name", oldCluster.Name, "phase", oldCluster.Status.Phase)
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
 			// Create new API group resource
 			logger.Info("Creating new API group resource from old", "name", oldCluster.Name, "namespace", oldCluster.Namespace)
 			return r.createNewFromOld(ctx, oldCluster)
@@ -203,21 +219,47 @@ func (r *ClusterMigrationReconciler) syncStatusNewToOld(ctx context.Context, old
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
+func (r *ClusterMigrationReconciler) handleNewClusterDeletion(ctx context.Context, newCluster *opensearchv1.OpenSearchCluster) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// When new cluster is deleted, delete the corresponding old cluster
+	oldCluster := &opsterv1.OpenSearchCluster{}
+	err := r.Get(ctx, types.NamespacedName{Name: newCluster.Name, Namespace: newCluster.Namespace}, oldCluster)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Old cluster doesn't exist, nothing to do
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("Deleting old cluster due to new cluster deletion", "name", oldCluster.Name)
+	if err := r.Delete(ctx, oldCluster); err != nil && !errors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
 func (r *ClusterMigrationReconciler) handleOldClusterDeletion(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	if containsString(oldCluster.Finalizers, MigrationFinalizer) {
-		// Delete the new API group resource
+		// Check if corresponding new cluster exists before allowing deletion
 		newCluster := &opensearchv1.OpenSearchCluster{}
 		err := r.Get(ctx, types.NamespacedName{Name: oldCluster.Name, Namespace: oldCluster.Namespace}, newCluster)
-		if err == nil {
-			logger.Info("Deleting new API group resource due to old resource deletion", "name", oldCluster.Name)
-			if err := r.Delete(ctx, newCluster); err != nil && !errors.IsNotFound(err) {
-				return ctrl.Result{}, err
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// New cluster doesn't exist - prevent deletion by not removing finalizer
+				logger.Info("Cannot delete old cluster: corresponding new cluster does not exist", "name", oldCluster.Name)
+				// Requeue to retry after new cluster is created
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 			}
+			return ctrl.Result{}, err
 		}
 
-		// Remove finalizer
+		// New cluster exists, safe to remove finalizer and allow deletion
+		logger.Info("Removing migration finalizer from old cluster", "name", oldCluster.Name)
 		oldCluster.Finalizers = removeString(oldCluster.Finalizers, MigrationFinalizer)
 		if err := r.Update(ctx, oldCluster); err != nil {
 			return ctrl.Result{}, err
@@ -231,6 +273,7 @@ func (r *ClusterMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("clustermigration").
 		For(&opsterv1.OpenSearchCluster{}).
+		Watches(&opensearchv1.OpenSearchCluster{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -255,6 +298,7 @@ func (r *UserMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("usermigration").
 		For(&opsterv1.OpensearchUser{}).
+		Watches(&opensearchv1.OpensearchUser{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -279,6 +323,7 @@ func (r *RoleMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("rolemigration").
 		For(&opsterv1.OpensearchRole{}).
+		Watches(&opensearchv1.OpensearchRole{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -303,6 +348,7 @@ func (r *UserRoleBindingMigrationReconciler) SetupWithManager(mgr ctrl.Manager) 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("userrolebindingmigration").
 		For(&opsterv1.OpensearchUserRoleBinding{}).
+		Watches(&opensearchv1.OpensearchUserRoleBinding{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -327,6 +373,7 @@ func (r *TenantMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("tenantmigration").
 		For(&opsterv1.OpensearchTenant{}).
+		Watches(&opensearchv1.OpensearchTenant{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -351,6 +398,7 @@ func (r *ActionGroupMigrationReconciler) SetupWithManager(mgr ctrl.Manager) erro
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("actiongroupmigration").
 		For(&opsterv1.OpensearchActionGroup{}).
+		Watches(&opensearchv1.OpensearchActionGroup{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -375,6 +423,7 @@ func (r *ISMPolicyMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("ismpolicymigration").
 		For(&opsterv1.OpenSearchISMPolicy{}).
+		Watches(&opensearchv1.OpenSearchISMPolicy{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -399,6 +448,7 @@ func (r *SnapshotPolicyMigrationReconciler) SetupWithManager(mgr ctrl.Manager) e
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("snapshotpolicymigration").
 		For(&opsterv1.OpensearchSnapshotPolicy{}).
+		Watches(&opensearchv1.OpensearchSnapshotPolicy{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -423,6 +473,7 @@ func (r *IndexTemplateMigrationReconciler) SetupWithManager(mgr ctrl.Manager) er
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("indextemplatemigration").
 		For(&opsterv1.OpensearchIndexTemplate{}).
+		Watches(&opensearchv1.OpensearchIndexTemplate{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -447,6 +498,7 @@ func (r *ComponentTemplateMigrationReconciler) SetupWithManager(mgr ctrl.Manager
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("componenttemplatemigration").
 		For(&opsterv1.OpensearchComponentTemplate{}).
+		Watches(&opensearchv1.OpensearchComponentTemplate{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -460,9 +512,20 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 }](ctx context.Context, c client.Client, req ctrl.Request, resourceKind string) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
+	// First check if this is a new resource event (deletion)
+	newResource := NewPtr(new(NewType))
+	err := c.Get(ctx, req.NamespacedName, newResource)
+	if err == nil {
+		// This is a new resource - check if it's being deleted
+		if !newResource.GetDeletionTimestamp().IsZero() {
+			return handleGenericNewDeletion[OldType, NewType, OldPtr, NewPtr](ctx, c, newResource, req, resourceKind)
+		}
+		// If new resource exists and is not being deleted, continue to check old resource
+	}
+
 	// Get old resource
 	oldResource := OldPtr(new(OldType))
-	err := c.Get(ctx, req.NamespacedName, oldResource)
+	err = c.Get(ctx, req.NamespacedName, oldResource)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			return ctrl.Result{}, nil
@@ -474,7 +537,7 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 
 	// Handle deletion
 	if !oldResource.GetDeletionTimestamp().IsZero() {
-		return handleGenericDeletion[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req)
+		return handleGenericDeletion[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req, resourceKind)
 	}
 
 	// Add finalizer if not present
@@ -485,11 +548,15 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 		}
 	}
 
-	// Check if new resource exists
-	newResource := NewPtr(new(NewType))
+	// Re-check if new resource exists (in case it was just created)
 	err = c.Get(ctx, req.NamespacedName, newResource)
 	if err != nil {
 		if errors.IsNotFound(err) {
+			// Check if old resource is in ready status before migrating
+			if !isGenericResourceReady(oldResource, resourceKind) {
+				logger.Info("Old resource is not ready, skipping migration", "kind", resourceKind, "name", req.Name)
+				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+			}
 			// Create new resource
 			logger.Info("Creating new API group resource from old", "kind", resourceKind, "name", req.Name)
 			return createGenericNewFromOld[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req)
@@ -567,27 +634,59 @@ func syncGenericOldToNew[OldType, NewType any, OldPtr interface {
 	return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
 }
 
+func handleGenericNewDeletion[OldType, NewType any, OldPtr interface {
+	*OldType
+	client.Object
+}, NewPtr interface {
+	*NewType
+	client.Object
+}](ctx context.Context, c client.Client, newResource NewPtr, req ctrl.Request, resourceKind string) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// When new resource is deleted, delete the corresponding old resource
+	oldResource := OldPtr(new(OldType))
+	err := c.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, oldResource)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			// Old resource doesn't exist, nothing to do
+			return ctrl.Result{}, nil
+		}
+		return ctrl.Result{}, err
+	}
+
+	logger.Info("Deleting old resource due to new resource deletion", "kind", resourceKind, "name", req.Name)
+	if err := c.Delete(ctx, oldResource); err != nil && !errors.IsNotFound(err) {
+		return ctrl.Result{}, err
+	}
+
+	return ctrl.Result{}, nil
+}
+
 func handleGenericDeletion[OldType, NewType any, OldPtr interface {
 	*OldType
 	client.Object
 }, NewPtr interface {
 	*NewType
 	client.Object
-}](ctx context.Context, c client.Client, oldResource OldPtr, req ctrl.Request) (ctrl.Result, error) {
+}](ctx context.Context, c client.Client, oldResource OldPtr, req ctrl.Request, resourceKind string) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	if containsString(oldResource.GetFinalizers(), MigrationFinalizer) {
-		// Delete new resource
+		// Check if corresponding new resource exists before allowing deletion
 		newResource := NewPtr(new(NewType))
 		err := c.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, newResource)
-		if err == nil {
-			logger.Info("Deleting new API group resource due to old resource deletion", "name", req.Name)
-			if err := c.Delete(ctx, newResource); err != nil && !errors.IsNotFound(err) {
-				return ctrl.Result{}, err
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// New resource doesn't exist - prevent deletion by not removing finalizer
+				logger.Info("Cannot delete old resource: corresponding new resource does not exist", "kind", resourceKind, "name", req.Name)
+				// Requeue to retry after new resource is created
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 			}
+			return ctrl.Result{}, err
 		}
 
-		// Remove finalizer
+		// New resource exists, safe to remove finalizer and allow deletion
+		logger.Info("Removing migration finalizer from old resource", "kind", resourceKind, "name", req.Name)
 		oldResource.SetFinalizers(removeString(oldResource.GetFinalizers(), MigrationFinalizer))
 		if err := c.Update(ctx, oldResource); err != nil {
 			return ctrl.Result{}, err
@@ -598,6 +697,38 @@ func handleGenericDeletion[OldType, NewType any, OldPtr interface {
 }
 
 // Helper functions
+func isClusterReady(cluster *opsterv1.OpenSearchCluster) bool {
+	// Only migrate when cluster is in RUNNING phase
+	return cluster.Status.Phase == opsterv1.PhaseRunning
+}
+
+func isGenericResourceReady(resource client.Object, resourceKind string) bool {
+	// Use type assertion to check status based on resource type
+	switch r := resource.(type) {
+	case *opsterv1.OpensearchUser:
+		return r.Status.State == opsterv1.OpensearchUserStateCreated
+	case *opsterv1.OpensearchRole:
+		return r.Status.State == opsterv1.OpensearchRoleStateCreated
+	case *opsterv1.OpensearchUserRoleBinding:
+		return r.Status.State == opsterv1.OpensearchUserRoleBindingStateCreated
+	case *opsterv1.OpensearchTenant:
+		return r.Status.State == opsterv1.OpensearchTenantCreated
+	case *opsterv1.OpensearchActionGroup:
+		return r.Status.State == opsterv1.OpensearchActionGroupCreated
+	case *opsterv1.OpenSearchISMPolicy:
+		return r.Status.State == opsterv1.OpensearchISMPolicyCreated
+	case *opsterv1.OpensearchSnapshotPolicy:
+		return r.Status.State == opsterv1.OpensearchSnapshotPolicyCreated
+	case *opsterv1.OpensearchIndexTemplate:
+		return r.Status.State == opsterv1.OpensearchIndexTemplateCreated
+	case *opsterv1.OpensearchComponentTemplate:
+		return r.Status.State == opsterv1.OpensearchComponentTemplateCreated
+	default:
+		// If we can't determine the type, assume not ready to be safe
+		return false
+	}
+}
+
 func containsString(slice []string, s string) bool {
 	for _, item := range slice {
 		if item == s {
