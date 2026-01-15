@@ -13,25 +13,70 @@ resources:
 - bases/opensearch.opster.io_opensearchismpolicies.yaml
 - bases/crd-servicemonitor.yaml
 - bases/opensearch.opster.io_opensearchsnapshotpolicies.yaml
+- bases/opensearch.org_opensearchclusters.yaml
+- bases/opensearch.org_opensearchusers.yaml
+- bases/opensearch.org_opensearchroles.yaml
+- bases/opensearch.org_opensearchuserrolebindings.yaml
+- bases/opensearch.org_opensearchtenants.yaml
+- bases/opensearch.org_opensearchactiongroups.yaml
+- bases/opensearch.org_opensearchismpolicies.yaml
+- bases/opensearch.org_opensearchsnapshotpolicies.yaml
+- bases/opensearch.org_opensearchindextemplates.yaml
+- bases/opensearch.org_opensearchcomponenttemplates.yaml
+
 #+kubebuilder:scaffold:crdkustomizeresource
 
 patches:
 # [WEBHOOK] To enable webhook, uncomment all the sections with [WEBHOOK] prefix.
 # patches here are for enabling the conversion webhook for each CRD
+# Old API group (opensearch.opster.io)
 #- path: patches/webhook_in_opensearch.yaml
 #- path: patches/webhook_in_opensearchusers.yaml
 #- path: patches/webhook_in_opensearchroles.yaml
 #- path: patches/webhook_in_opensearchuserrolebindings.yaml
+#- path: patches/webhook_in_opensearchtenants.yaml
+#- path: patches/webhook_in_opensearchactiongroups.yaml
+#- path: patches/webhook_in_opensearchismpolicies.yaml
 #- path: patches/webhook_in_opensearchsnapshotpolicies.yaml
+#- path: patches/webhook_in_opensearchindextemplates.yaml
+#- path: patches/webhook_in_opensearchcomponenttemplates.yaml
+# New API group (opensearch.org)
+#- path: patches/webhook_in_opensearch_org.yaml
+#- path: patches/webhook_in_opensearchusers_org.yaml
+#- path: patches/webhook_in_opensearchroles_org.yaml
+#- path: patches/webhook_in_opensearchuserrolebindings_org.yaml
+#- path: patches/webhook_in_opensearchtenants_org.yaml
+#- path: patches/webhook_in_opensearchactiongroups_org.yaml
+#- path: patches/webhook_in_opensearchismpolicies_org.yaml
+#- path: patches/webhook_in_opensearchsnapshotpolicies_org.yaml
+#- path: patches/webhook_in_opensearchindextemplates_org.yaml
+#- path: patches/webhook_in_opensearchcomponenttemplates_org.yaml
 #+kubebuilder:scaffold:crdkustomizewebhookpatch
 
 # [CERTMANAGER] To enable webhook, uncomment all the sections with [CERTMANAGER] prefix.
 # patches here are for enabling the CA injection for each CRD
+# Old API group (opensearch.opster.io)
 - path: patches/cainjection_in_opensearch.yaml
 - path: patches/cainjection_in_opensearchusers.yaml
 - path: patches/cainjection_in_opensearchroles.yaml
 - path: patches/cainjection_in_opensearchuserrolebindings.yaml
+- path: patches/cainjection_in_opensearchtenants.yaml
+- path: patches/cainjection_in_opensearchactiongroups.yaml
+- path: patches/cainjection_in_opensearchismpolicies.yaml
 - path: patches/cainjection_in_opensearchsnapshotpolicies.yaml
+- path: patches/cainjection_in_opensearchindextemplates.yaml
+- path: patches/cainjection_in_opensearchcomponenttemplates.yaml
+# New API group (opensearch.org)
+- path: patches/cainjection_in_opensearch_org.yaml
+- path: patches/cainjection_in_opensearchusers_org.yaml
+- path: patches/cainjection_in_opensearchroles_org.yaml
+- path: patches/cainjection_in_opensearchuserrolebindings_org.yaml
+- path: patches/cainjection_in_opensearchtenants_org.yaml
+- path: patches/cainjection_in_opensearchactiongroups_org.yaml
+- path: patches/cainjection_in_opensearchismpolicies_org.yaml
+- path: patches/cainjection_in_opensearchsnapshotpolicies_org.yaml
+- path: patches/cainjection_in_opensearchindextemplates_org.yaml
+- path: patches/cainjection_in_opensearchcomponenttemplates_org.yaml
 #+kubebuilder:scaffold:crdkustomizecainjectionpatch
 
 # the following config is for teaching kustomize how to do kustomization for CRDs.

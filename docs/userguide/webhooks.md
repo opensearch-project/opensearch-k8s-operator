@@ -26,11 +26,11 @@ The operator provides validation webhooks for the following OpenSearch CRDs:
 The webhook names follow a specific naming convention:
 
 - **Prefix `v`**: Stands for "validating" (indicating these are ValidatingWebhookConfigurations)
-- **Suffix `.opensearch.opster.io`**: Uses the same domain as the operator's API group (`opensearch.opster.io`), ensuring consistency across the operator's resources
+- **Suffix `.opensearch.org`**: Uses the same domain as the operator's API group (`opensearch.org`), ensuring consistency across the operator's resources
 
 For example:
-- `vopensearchcluster.opensearch.opster.io` - Validating webhook for OpenSearchCluster resources
-- `vopensearchuser.opensearch.opster.io` - Validating webhook for OpenSearchUser resources
+- `vopensearchcluster.opensearch.org` - Validating webhook for OpenSearchCluster resources
+- `vopensearchuser.opensearch.org` - Validating webhook for OpenSearchUser resources
 
 This naming convention aligns with the operator's domain and makes it clear that these webhooks belong to the OpenSearch operator.
 

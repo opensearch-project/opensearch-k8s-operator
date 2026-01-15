@@ -148,7 +148,7 @@ func main() {
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
+		LeaderElectionID:       "a867c7dc.opensearch.org",
 		Cache:                  cacheOpts,
 		WebhookServer:          webhookServer,
 	})

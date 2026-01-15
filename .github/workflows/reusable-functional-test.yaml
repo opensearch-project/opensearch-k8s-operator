@@ -115,7 +115,7 @@ jobs:
           kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
           echo "Collecting pod descriptions..."
           kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opster.io/opensearch-cluster=test-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opensearch.org/opensearch-cluster=test-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
           kubectl describe pods -n default -l opensearch.cluster.dashboards=test-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
           echo "Collecting logs from OpenSearch operator pods..."
           kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
@@ -125,7 +125,7 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
           done
           echo "Collecting logs from OpenSearch cluster pods..."
-          kubectl get pods -n default -l opster.io/opensearch-cluster=test-cluster -o name 2>/dev/null | while read pod; do
+          kubectl get pods -n default -l opensearch.org/opensearch-cluster=test-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
             echo "Collecting logs from $pod_name"
             kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
