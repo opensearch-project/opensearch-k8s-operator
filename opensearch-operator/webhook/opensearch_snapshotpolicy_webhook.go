@@ -41,6 +41,7 @@ func (v *OpenSearchSnapshotPolicyValidator) SetupWithManager(mgr ctrl.Manager) e
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&opensearchv1.OpensearchSnapshotPolicy{}).
+		WithValidator(v).
 		Complete()
 }
 

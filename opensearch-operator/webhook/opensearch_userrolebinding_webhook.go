@@ -42,6 +42,7 @@ func (v *OpenSearchUserRoleBindingValidator) SetupWithManager(mgr ctrl.Manager) 
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&opensearchv1.OpensearchUserRoleBinding{}).
+		WithValidator(v).
 		Complete()
 }
 

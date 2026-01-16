@@ -42,6 +42,7 @@ func (v *OpenSearchActionGroupValidator) SetupWithManager(mgr ctrl.Manager) erro
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&opensearchv1.OpensearchActionGroup{}).
+		WithValidator(v).
 		Complete()
 }
 

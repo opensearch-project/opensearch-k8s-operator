@@ -3,9 +3,7 @@
 package k8s
 
 import (
-	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	appsv1 "k8s.io/api/apps/v1"
-
 	batchv1 "k8s.io/api/batch/v1"
 
 	client "sigs.k8s.io/controller-runtime/pkg/client"
@@ -13,6 +11,8 @@ import (
 	context "context"
 
 	mock "github.com/stretchr/testify/mock"
+
+	opensearch_orgv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 
 	reconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -733,22 +733,22 @@ func (_c *MockK8sClient_GetJob_Call) RunAndReturn(run func(string, string) (batc
 }
 
 // GetOpenSearchCluster provides a mock function with given fields: name, namespace
-func (_m *MockK8sClient) GetOpenSearchCluster(name string, namespace string) (opensearchv1.OpenSearchCluster, error) {
+func (_m *MockK8sClient) GetOpenSearchCluster(name string, namespace string) (opensearch_orgv1.OpenSearchCluster, error) {
 	ret := _m.Called(name, namespace)
 
 	if len(ret) == 0 {
 		panic("no return value specified for GetOpenSearchCluster")
 	}
 
-	var r0 opensearchv1.OpenSearchCluster
+	var r0 opensearch_orgv1.OpenSearchCluster
 	var r1 error
-	if rf, ok := ret.Get(0).(func(string, string) (opensearchv1.OpenSearchCluster, error)); ok {
+	if rf, ok := ret.Get(0).(func(string, string) (opensearch_orgv1.OpenSearchCluster, error)); ok {
 		return rf(name, namespace)
 	}
-	if rf, ok := ret.Get(0).(func(string, string) opensearchv1.OpenSearchCluster); ok {
+	if rf, ok := ret.Get(0).(func(string, string) opensearch_orgv1.OpenSearchCluster); ok {
 		r0 = rf(name, namespace)
 	} else {
-		r0 = ret.Get(0).(opensearchv1.OpenSearchCluster)
+		r0 = ret.Get(0).(opensearch_orgv1.OpenSearchCluster)
 	}
 
 	if rf, ok := ret.Get(1).(func(string, string) error); ok {
@@ -779,12 +779,12 @@ func (_c *MockK8sClient_GetOpenSearchCluster_Call) Run(run func(name string, nam
 	return _c
 }
 
-func (_c *MockK8sClient_GetOpenSearchCluster_Call) Return(_a0 opensearchv1.OpenSearchCluster, _a1 error) *MockK8sClient_GetOpenSearchCluster_Call {
+func (_c *MockK8sClient_GetOpenSearchCluster_Call) Return(_a0 opensearch_orgv1.OpenSearchCluster, _a1 error) *MockK8sClient_GetOpenSearchCluster_Call {
 	_c.Call.Return(_a0, _a1)
 	return _c
 }
 
-func (_c *MockK8sClient_GetOpenSearchCluster_Call) RunAndReturn(run func(string, string) (opensearchv1.OpenSearchCluster, error)) *MockK8sClient_GetOpenSearchCluster_Call {
+func (_c *MockK8sClient_GetOpenSearchCluster_Call) RunAndReturn(run func(string, string) (opensearch_orgv1.OpenSearchCluster, error)) *MockK8sClient_GetOpenSearchCluster_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1409,7 +1409,7 @@ func (_c *MockK8sClient_UdateObjectStatus_Call) RunAndReturn(run func(client.Obj
 }
 
 // UpdateOpenSearchClusterStatus provides a mock function with given fields: key, f
-func (_m *MockK8sClient) UpdateOpenSearchClusterStatus(key types.NamespacedName, f func(*opensearchv1.OpenSearchCluster)) error {
+func (_m *MockK8sClient) UpdateOpenSearchClusterStatus(key types.NamespacedName, f func(*opensearch_orgv1.OpenSearchCluster)) error {
 	ret := _m.Called(key, f)
 
 	if len(ret) == 0 {
@@ -1417,7 +1417,7 @@ func (_m *MockK8sClient) UpdateOpenSearchClusterStatus(key types.NamespacedName,
 	}
 
 	var r0 error
-	if rf, ok := ret.Get(0).(func(types.NamespacedName, func(*opensearchv1.OpenSearchCluster)) error); ok {
+	if rf, ok := ret.Get(0).(func(types.NamespacedName, func(*opensearch_orgv1.OpenSearchCluster)) error); ok {
 		r0 = rf(key, f)
 	} else {
 		r0 = ret.Error(0)
@@ -1433,14 +1433,14 @@ type MockK8sClient_UpdateOpenSearchClusterStatus_Call struct {
 
 // UpdateOpenSearchClusterStatus is a helper method to define mock.On call
 //   - key types.NamespacedName
-//   - f func(*opensearchv1.OpenSearchCluster)
+//   - f func(*opensearch_orgv1.OpenSearchCluster)
 func (_e *MockK8sClient_Expecter) UpdateOpenSearchClusterStatus(key interface{}, f interface{}) *MockK8sClient_UpdateOpenSearchClusterStatus_Call {
 	return &MockK8sClient_UpdateOpenSearchClusterStatus_Call{Call: _e.mock.On("UpdateOpenSearchClusterStatus", key, f)}
 }
 
-func (_c *MockK8sClient_UpdateOpenSearchClusterStatus_Call) Run(run func(key types.NamespacedName, f func(*opensearchv1.OpenSearchCluster))) *MockK8sClient_UpdateOpenSearchClusterStatus_Call {
+func (_c *MockK8sClient_UpdateOpenSearchClusterStatus_Call) Run(run func(key types.NamespacedName, f func(*opensearch_orgv1.OpenSearchCluster))) *MockK8sClient_UpdateOpenSearchClusterStatus_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(types.NamespacedName), args[1].(func(*opensearchv1.OpenSearchCluster)))
+		run(args[0].(types.NamespacedName), args[1].(func(*opensearch_orgv1.OpenSearchCluster)))
 	})
 	return _c
 }
@@ -1450,7 +1450,7 @@ func (_c *MockK8sClient_UpdateOpenSearchClusterStatus_Call) Return(_a0 error) *M
 	return _c
 }
 
-func (_c *MockK8sClient_UpdateOpenSearchClusterStatus_Call) RunAndReturn(run func(types.NamespacedName, func(*opensearchv1.OpenSearchCluster)) error) *MockK8sClient_UpdateOpenSearchClusterStatus_Call {
+func (_c *MockK8sClient_UpdateOpenSearchClusterStatus_Call) RunAndReturn(run func(types.NamespacedName, func(*opensearch_orgv1.OpenSearchCluster)) error) *MockK8sClient_UpdateOpenSearchClusterStatus_Call {
 	_c.Call.Return(run)
 	return _c
 }

@@ -43,6 +43,7 @@ func (v *OpenSearchComponentTemplateValidator) SetupWithManager(mgr ctrl.Manager
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&opensearchv1.OpensearchComponentTemplate{}).
+		WithValidator(v).
 		Complete()
 }
 

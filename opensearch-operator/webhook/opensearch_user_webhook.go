@@ -42,6 +42,7 @@ func (v *OpenSearchUserValidator) SetupWithManager(mgr ctrl.Manager) error {
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
 		For(&opensearchv1.OpensearchUser{}).
+		WithValidator(v).
 		Complete()
 }
 

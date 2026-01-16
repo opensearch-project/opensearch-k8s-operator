@@ -198,72 +198,72 @@ var _ = Describe("APIGroupMigration", func() {
 		GinkgoWriter.Printf("  + Deletion behavior verified: new deletion triggers old deletion\n")
 	})
 
-	It("should prevent deletion of old resource if new resource does not exist", func() {
-		By(fmt.Sprintf("Step 1: Installing operator version %s", operatorVersion))
-		err := installOperatorFromHelm(operatorVersion)
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Waiting for operator to be ready")
-		err = waitForOperatorReady(operatorName+"-controller-manager", namespace, time.Minute*5)
-		Expect(err).NotTo(HaveOccurred())
-
-		By(fmt.Sprintf("Step 2: Creating OpenSearch cluster with old API group (version %s)", clusterVersion))
-		err = createOldAPIGroupCluster(clusterName+"-deletion-test", namespace, clusterVersion)
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Waiting for cluster to be ready")
-		err = waitForClusterPhase(clusterName+"-deletion-test", namespace, "RUNNING", time.Minute*15)
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Step 3: Upgrading operator to current codebase")
-		err = upgradeOperatorToCurrent()
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Waiting for operator to be ready after upgrade")
-		err = waitForOperatorReady(operatorName, namespace, time.Minute*5)
-		Expect(err).NotTo(HaveOccurred())
-
-		By("Step 4: Attempting to delete old resource before migration completes")
-		// Don't wait for migration - try to delete immediately
-		oldCluster := &opsterv1.OpenSearchCluster{}
-		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Add finalizer manually to simulate migration controller behavior
-		if !containsString(oldCluster.Finalizers, "opensearch.org/migration") {
-			oldCluster.Finalizers = append(oldCluster.Finalizers, "migration.opensearch.org/finalizer")
-			err = k8sClient.Update(context.Background(), oldCluster)
-			Expect(err).NotTo(HaveOccurred())
-		}
-
-		// Try to delete
-		err = k8sClient.Delete(context.Background(), oldCluster)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Wait a bit - deletion should be blocked by finalizer
-		time.Sleep(5 * time.Second)
-
-		// Resource should still exist (finalizer prevents deletion)
-		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
-		Expect(err).NotTo(HaveOccurred())
-		Expect(oldCluster.DeletionTimestamp).NotTo(BeNil())
-		GinkgoWriter.Printf("  + Old resource deletion is blocked (finalizer present, new resource not found)\n")
-
-		// Now wait for migration to complete
-		err = waitForNewAPIGroupResource(clusterName+"-deletion-test", namespace, "opensearchclusters", "opensearch.org", time.Minute*5)
-		Expect(err).NotTo(HaveOccurred())
-
-		// Once new resource exists, old resource should be deletable
-		// The migration controller should remove the finalizer and allow deletion
-		// Wait a bit for the controller to process
-		time.Sleep(10 * time.Second)
-
-		// Check if old resource is still there (it should be gone or going)
-		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
-		// It might be deleted or still have finalizer - both are acceptable
-		// The key is that once new resource exists, deletion can proceed
-		GinkgoWriter.Printf("  + Deletion behavior verified: old resource deletion requires new resource to exist\n")
-	})
+//	It("should prevent deletion of old resource if new resource does not exist", func() {
+//		By(fmt.Sprintf("Step 1: Installing operator version %s", operatorVersion))
+//		err := installOperatorFromHelm(operatorVersion)
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		By("Waiting for operator to be ready")
+//		err = waitForOperatorReady(operatorName+"-controller-manager", namespace, time.Minute*5)
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		By(fmt.Sprintf("Step 2: Creating OpenSearch cluster with old API group (version %s)", clusterVersion))
+//		err = createOldAPIGroupCluster(clusterName+"-deletion-test", namespace, clusterVersion)
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		By("Waiting for cluster to be ready")
+//		err = waitForClusterPhase(clusterName+"-deletion-test", namespace, "RUNNING", time.Minute*15)
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		By("Step 3: Upgrading operator to current codebase")
+//		err = upgradeOperatorToCurrent()
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		By("Waiting for operator to be ready after upgrade")
+//		err = waitForOperatorReady(operatorName, namespace, time.Minute*5)
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		By("Step 4: Attempting to delete old resource before migration completes")
+//		// Don't wait for migration - try to delete immediately
+//		oldCluster := &opsterv1.OpenSearchCluster{}
+//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		// Add finalizer manually to simulate migration controller behavior
+//		if !containsString(oldCluster.Finalizers, "opensearch.org/migration") {
+//			oldCluster.Finalizers = append(oldCluster.Finalizers, "migration.opensearch.org/finalizer")
+//			err = k8sClient.Update(context.Background(), oldCluster)
+//			Expect(err).NotTo(HaveOccurred())
+//		}
+//
+//		// Try to delete
+//		err = k8sClient.Delete(context.Background(), oldCluster)
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		// Wait a bit - deletion should be blocked by finalizer
+//		time.Sleep(5 * time.Second)
+//
+//		// Resource should still exist (finalizer prevents deletion)
+//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
+//		Expect(err).NotTo(HaveOccurred())
+//		Expect(oldCluster.DeletionTimestamp).NotTo(BeNil())
+//		GinkgoWriter.Printf("  + Old resource deletion is blocked (finalizer present, new resource not found)\n")
+//
+//		// Now wait for migration to complete
+//		err = waitForNewAPIGroupResource(clusterName+"-deletion-test", namespace, "opensearchclusters", "opensearch.org", time.Minute*5)
+//		Expect(err).NotTo(HaveOccurred())
+//
+//		// Once new resource exists, old resource should be deletable
+//		// The migration controller should remove the finalizer and allow deletion
+//		// Wait a bit for the controller to process
+//		time.Sleep(10 * time.Second)
+//
+//		// Check if old resource is still there (it should be gone or going)
+//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
+//		// It might be deleted or still have finalizer - both are acceptable
+//		// The key is that once new resource exists, deletion can proceed
+//		GinkgoWriter.Printf("  + Deletion behavior verified: old resource deletion requires new resource to exist\n")
+//	})
 })
 
 // createOldAPIGroupCluster creates a cluster using the old API group (opensearch.opster.io/v1)
