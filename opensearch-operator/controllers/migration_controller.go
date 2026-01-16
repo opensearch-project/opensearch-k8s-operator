@@ -37,13 +37,18 @@ import (
 
 const (
 	// Migration annotations
-	MigratedFromAnnotation       = "opensearch.org/migrated-from"
-	MigrationTimestampAnnotation = "opensearch.org/migration-timestamp"
-	SourceUIDAnnotation          = "opensearch.org/source-uid"
-	MigrationSyncAnnotation      = "opensearch.org/migration-sync"
+	MigratedFromAnnotation         = "opensearch.org/migrated-from"
+	MigrationTimestampAnnotation   = "opensearch.org/migration-timestamp"
+	SourceUIDAnnotation            = "opensearch.org/source-uid"
+	MigrationSyncAnnotation        = "opensearch.org/migration-sync"
+	DeletedByNewResourceAnnotation = "opensearch.org/deleted-by-new-resource"
 
 	// Finalizer for migration
 	MigrationFinalizer = "opensearch.org/migration"
+
+	// Old finalizers that need to be removed during deletion
+	OldClusterFinalizer  = "Opensearch"                // Old cluster finalizer (it is dummy because old one is same as new one) corresponding myFinalizerName)
+	OldResourceFinalizer = "opster.io/opensearch-data" // Old resource finalizer (User, Role, etc.) coresponding to OpensearchFinalizer)
 )
 
 // ClusterMigrationReconciler reconciles OpenSearchCluster resources between old and new API groups
@@ -62,13 +67,50 @@ type ClusterMigrationReconciler struct {
 func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// First check if this is a new cluster event (deletion)
+	// First check if this is a new cluster event
 	newCluster := &opensearchv1.OpenSearchCluster{}
 	err := r.Get(ctx, req.NamespacedName, newCluster)
 	if err == nil {
+		// Add migration finalizer to new cluster if not present
+		// This ensures we can handle deletion even after main reconciler removes its finalizer
+		if !containsString(newCluster.Finalizers, MigrationFinalizer) {
+			newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
+			if err := r.Update(ctx, newCluster); err != nil {
+				return ctrl.Result{}, err
+			}
+			// Requeue to process deletion if needed
+			return ctrl.Result{Requeue: true}, nil
+		}
+
 		// This is a new cluster - check if it's being deleted
 		if !newCluster.DeletionTimestamp.IsZero() {
-			return r.handleNewClusterDeletion(ctx, newCluster)
+			// Check if the main reconciler has finished cleanup (finalizer removed)
+			// The main reconciler removes the "Opensearch" finalizer after cleanup
+			hasMainFinalizer := false
+			for _, finalizer := range newCluster.Finalizers {
+				if finalizer == "Opensearch" {
+					hasMainFinalizer = true
+					break
+				}
+			}
+			// Only delete old CR if new CR is fully deleted (no main finalizer)
+			// This ensures the main reconciler has finished cleaning up external resources
+			if !hasMainFinalizer {
+				result, err := r.handleNewClusterDeletion(ctx, newCluster)
+				if err != nil {
+					return result, err
+				}
+				// Remove migration finalizer to allow new CR to be deleted
+				newCluster.Finalizers = removeString(newCluster.Finalizers, MigrationFinalizer)
+				if err := r.Update(ctx, newCluster); err != nil {
+					return ctrl.Result{}, err
+				}
+				return ctrl.Result{}, nil
+			}
+			// New CR still has finalizer - main reconciler is still cleaning up
+			// Requeue to wait for cleanup to complete
+			logger.Info("New cluster deletion in progress, waiting for main reconciler to finish cleanup", "name", newCluster.Name)
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 		// If new cluster exists and is not being deleted, continue to check old cluster
 	}
@@ -233,6 +275,18 @@ func (r *ClusterMigrationReconciler) handleNewClusterDeletion(ctx context.Contex
 		return ctrl.Result{}, err
 	}
 
+	// Add annotation to mark that this deletion was triggered by new cluster deletion
+	// This allows handleOldClusterDeletion to distinguish between:
+	// 1. Old CR manually deleted before migration (should wait for migration)
+	// 2. Old CR deleted because new CR was deleted (should allow deletion)
+	if oldCluster.Annotations == nil {
+		oldCluster.Annotations = make(map[string]string)
+	}
+	oldCluster.Annotations[DeletedByNewResourceAnnotation] = "true"
+	if err := r.Update(ctx, oldCluster); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	logger.Info("Deleting old cluster due to new cluster deletion", "name", oldCluster.Name)
 	if err := r.Delete(ctx, oldCluster); err != nil && !errors.IsNotFound(err) {
 		return ctrl.Result{}, err
@@ -245,22 +299,38 @@ func (r *ClusterMigrationReconciler) handleOldClusterDeletion(ctx context.Contex
 	logger := log.FromContext(ctx)
 
 	if containsString(oldCluster.Finalizers, MigrationFinalizer) {
-		// Check if corresponding new cluster exists before allowing deletion
+		// Check if corresponding new cluster exists
 		newCluster := &opensearchv1.OpenSearchCluster{}
 		err := r.Get(ctx, types.NamespacedName{Name: oldCluster.Name, Namespace: oldCluster.Namespace}, newCluster)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				// New cluster doesn't exist - prevent deletion by not removing finalizer
-				logger.Info("Cannot delete old cluster: corresponding new cluster does not exist", "name", oldCluster.Name)
+				// New cluster doesn't exist
+				// Check if this deletion was triggered by new cluster deletion (has annotation)
+				// vs manually deleted before migration (no annotation)
+				if oldCluster.Annotations != nil && oldCluster.Annotations[DeletedByNewResourceAnnotation] == "true" {
+					// Old cluster deletion was triggered by new cluster deletion - safe to allow
+					logger.Info("Old cluster deletion triggered by new cluster deletion, allowing deletion", "name", oldCluster.Name)
+					// Remove all finalizers (migration finalizer and old finalizers)
+					oldCluster.Finalizers = removeString(oldCluster.Finalizers, MigrationFinalizer)
+					oldCluster.Finalizers = removeString(oldCluster.Finalizers, OldClusterFinalizer)
+					if err := r.Update(ctx, oldCluster); err != nil {
+						return ctrl.Result{}, err
+					}
+					return ctrl.Result{}, nil
+				}
+				// Old cluster was manually deleted before migration - prevent deletion
+				logger.Info("Cannot delete old cluster: corresponding new cluster does not exist (migration not completed)", "name", oldCluster.Name)
 				// Requeue to retry after new cluster is created
 				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 			}
 			return ctrl.Result{}, err
 		}
 
-		// New cluster exists, safe to remove finalizer and allow deletion
-		logger.Info("Removing migration finalizer from old cluster", "name", oldCluster.Name)
+		// New cluster exists, safe to remove finalizers and allow deletion
+		logger.Info("Removing finalizers from old cluster", "name", oldCluster.Name)
+		// Remove all finalizers (migration finalizer and old finalizers)
 		oldCluster.Finalizers = removeString(oldCluster.Finalizers, MigrationFinalizer)
+		oldCluster.Finalizers = removeString(oldCluster.Finalizers, OldClusterFinalizer)
 		if err := r.Update(ctx, oldCluster); err != nil {
 			return ctrl.Result{}, err
 		}
@@ -512,13 +582,50 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 }](ctx context.Context, c client.Client, req ctrl.Request, resourceKind string) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
-	// First check if this is a new resource event (deletion)
+	// First check if this is a new resource event
 	newResource := NewPtr(new(NewType))
 	err := c.Get(ctx, req.NamespacedName, newResource)
 	if err == nil {
+		// Add migration finalizer to new resource if not present
+		// This ensures we can handle deletion even after main reconciler removes its finalizer
+		if !containsString(newResource.GetFinalizers(), MigrationFinalizer) {
+			newResource.SetFinalizers(append(newResource.GetFinalizers(), MigrationFinalizer))
+			if err := c.Update(ctx, newResource); err != nil {
+				return ctrl.Result{}, err
+			}
+			// Requeue to process deletion if needed
+			return ctrl.Result{Requeue: true}, nil
+		}
+
 		// This is a new resource - check if it's being deleted
 		if !newResource.GetDeletionTimestamp().IsZero() {
-			return handleGenericNewDeletion[OldType, NewType, OldPtr, NewPtr](ctx, c, newResource, req, resourceKind)
+			// Check if the resource still has other finalizers (cleanup in progress)
+			// Only delete old resource if new resource has no other finalizers (only migration finalizer remains)
+			otherFinalizers := false
+			for _, finalizer := range newResource.GetFinalizers() {
+				if finalizer != MigrationFinalizer {
+					otherFinalizers = true
+					break
+				}
+			}
+			if otherFinalizers {
+				// New resource still has other finalizers - main reconciler is still cleaning up
+				// Requeue to wait for cleanup to complete
+				logger.Info("New resource deletion in progress, waiting for other finalizers to be removed", "kind", resourceKind, "name", req.Name)
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			}
+			// New resource only has migration finalizer - main reconciler finished cleanup
+			// Safe to delete old resource
+			result, err := handleGenericNewDeletion[OldType, NewType, OldPtr, NewPtr](ctx, c, newResource, req, resourceKind)
+			if err != nil {
+				return result, err
+			}
+			// Remove migration finalizer to allow new resource to be deleted
+			newResource.SetFinalizers(removeString(newResource.GetFinalizers(), MigrationFinalizer))
+			if err := c.Update(ctx, newResource); err != nil {
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{}, nil
 		}
 		// If new resource exists and is not being deleted, continue to check old resource
 	}
@@ -654,6 +761,20 @@ func handleGenericNewDeletion[OldType, NewType any, OldPtr interface {
 		return ctrl.Result{}, err
 	}
 
+	// Add annotation to mark that this deletion was triggered by new resource deletion
+	// This allows handleGenericDeletion to distinguish between:
+	// 1. Old resource manually deleted before migration (should wait for migration)
+	// 2. Old resource deleted because new resource was deleted (should allow deletion)
+	if oldResource.GetAnnotations() == nil {
+		oldResource.SetAnnotations(make(map[string]string))
+	}
+	annotations := oldResource.GetAnnotations()
+	annotations[DeletedByNewResourceAnnotation] = "true"
+	oldResource.SetAnnotations(annotations)
+	if err := c.Update(ctx, oldResource); err != nil {
+		return ctrl.Result{}, err
+	}
+
 	logger.Info("Deleting old resource due to new resource deletion", "kind", resourceKind, "name", req.Name)
 	if err := c.Delete(ctx, oldResource); err != nil && !errors.IsNotFound(err) {
 		return ctrl.Result{}, err
@@ -672,22 +793,41 @@ func handleGenericDeletion[OldType, NewType any, OldPtr interface {
 	logger := log.FromContext(ctx)
 
 	if containsString(oldResource.GetFinalizers(), MigrationFinalizer) {
-		// Check if corresponding new resource exists before allowing deletion
+		// Check if corresponding new resource exists
 		newResource := NewPtr(new(NewType))
 		err := c.Get(ctx, types.NamespacedName{Name: req.Name, Namespace: req.Namespace}, newResource)
 		if err != nil {
 			if errors.IsNotFound(err) {
-				// New resource doesn't exist - prevent deletion by not removing finalizer
-				logger.Info("Cannot delete old resource: corresponding new resource does not exist", "kind", resourceKind, "name", req.Name)
+				// New resource doesn't exist
+				// Check if this deletion was triggered by new resource deletion (has annotation)
+				// vs manually deleted before migration (no annotation)
+				annotations := oldResource.GetAnnotations()
+				if annotations != nil && annotations[DeletedByNewResourceAnnotation] == "true" {
+					// Old resource deletion was triggered by new resource deletion - safe to allow
+					logger.Info("Old resource deletion triggered by new resource deletion, allowing deletion", "kind", resourceKind, "name", req.Name)
+					// Remove all finalizers (migration finalizer and old finalizers)
+					finalizers := removeString(oldResource.GetFinalizers(), MigrationFinalizer)
+					finalizers = removeString(finalizers, OldResourceFinalizer)
+					oldResource.SetFinalizers(finalizers)
+					if err := c.Update(ctx, oldResource); err != nil {
+						return ctrl.Result{}, err
+					}
+					return ctrl.Result{}, nil
+				}
+				// Old resource was manually deleted before migration - prevent deletion
+				logger.Info("Cannot delete old resource: corresponding new resource does not exist (migration not completed)", "kind", resourceKind, "name", req.Name)
 				// Requeue to retry after new resource is created
 				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 			}
 			return ctrl.Result{}, err
 		}
 
-		// New resource exists, safe to remove finalizer and allow deletion
-		logger.Info("Removing migration finalizer from old resource", "kind", resourceKind, "name", req.Name)
-		oldResource.SetFinalizers(removeString(oldResource.GetFinalizers(), MigrationFinalizer))
+		// New resource exists, safe to remove finalizers and allow deletion
+		logger.Info("Removing finalizers from old resource", "kind", resourceKind, "name", req.Name)
+		// Remove all finalizers (migration finalizer and old finalizers)
+		finalizers := removeString(oldResource.GetFinalizers(), MigrationFinalizer)
+		finalizers = removeString(finalizers, OldResourceFinalizer)
+		oldResource.SetFinalizers(finalizers)
 		if err := c.Update(ctx, oldResource); err != nil {
 			return ctrl.Result{}, err
 		}

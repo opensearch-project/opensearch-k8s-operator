@@ -21,6 +21,17 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// init sets SKIP_SUITE_SETUP for operator upgrade tests so BeforeSuite skips creating test-cluster
+// This runs when the package is loaded, before BeforeSuite executes
+// Only sets it if not already set (allows manual override)
+func init() {
+	if os.Getenv("SKIP_SUITE_SETUP") == "" {
+		// Set SKIP_SUITE_SETUP to prevent BeforeSuite from creating test-cluster
+		// Operator upgrade tests manage their own operator and clusters
+		os.Setenv("SKIP_SUITE_SETUP", "true")
+	}
+}
+
 var _ = Describe("OperatorUpgrade", func() {
 	var (
 		clusterName     = "upgrade-test-cluster"
@@ -185,13 +196,13 @@ func installOperatorFromHelm(version string) error {
 		return fmt.Errorf("failed to update helm repo: %w", err)
 	}
 
-	// Install operator
-	cmd = exec.Command("helm", "install", "opensearch-operator", "opensearch-operator/opensearch-operator",
+	// Use upgrade --install to handle case where operator is already installed
+	cmd = exec.Command("helm", "upgrade", "--install", "opensearch-operator", "opensearch-operator/opensearch-operator",
 		"--version", version,
 		"--namespace", "default",
 		"--wait",
 		"--timeout", "5m",
-		"--set", "webhook.enabled=false", // Disable webhooks for testing
+		"--set", "webhook.enabled=true", // Enable webhooks for testing
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -230,7 +241,7 @@ func upgradeOperatorToCurrent() error {
 		"--namespace", "default",
 		"--wait",
 		"--timeout", "5m",
-		"--set", "webhook.enabled=false",
+		"--set", "webhook.enabled=true",
 		"--set", "manager.image.repository=controller",
 		"--set", "manager.image.tag=latest",
 		"--set", "manager.image.pullPolicy=IfNotPresent",

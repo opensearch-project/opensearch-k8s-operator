@@ -72,6 +72,14 @@ jobs:
             --agents 2
             -p 30000-30005:30000-30005@agent:0
             --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
+      - name: Install cert-manager
+        run: |
+          export CLUSTER_NAME=opensearch-operator-tests
+          cd opensearch-operator
+          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.yaml
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
       - name: Run operator upgrade test
         id: operator_upgrade_test
         env:
