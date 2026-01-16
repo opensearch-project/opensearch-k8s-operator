@@ -85,6 +85,7 @@ jobs:
         env:
           OPERATOR_STABLE_VERSION: ${{ steps.get_latest_release.outputs.operator_version }}
           CLUSTER_VERSION: ${{ matrix.cluster_version }}
+          SKIP_SUITE_SETUP: "true"
         run: |
           set -e
           export CLUSTER_NAME=opensearch-operator-tests

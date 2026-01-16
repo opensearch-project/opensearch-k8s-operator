@@ -95,6 +95,10 @@ jobs:
           -f functionaltests/helmtests/ci-operator-values.yml \
           --namespace default --wait
           cd functionaltests
+          ## Set SKIP_SUITE_SETUP for migration and upgrade tests
+          if [ "${{ inputs.test_focus }}" == "APIGroupMigration" ] || [ "${{ inputs.test_focus }}" == "OperatorUpgrade" ]; then
+            export SKIP_SUITE_SETUP=true
+          fi
           ## Run tests with focus pattern
           SKIP_CLEANUP=true go test ./operatortests -ginkgo.focus="${{ inputs.test_focus }}" -timeout ${{ inputs.test_timeout }} -test.v -ginkgo.v
       # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled

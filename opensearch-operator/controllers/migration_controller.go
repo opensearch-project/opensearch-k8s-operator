@@ -47,7 +47,7 @@ const (
 	MigrationFinalizer = "opensearch.org/migration"
 
 	// Old finalizers that need to be removed during deletion
-	OldClusterFinalizer  = "Opensearch"                // Old cluster finalizer (it is dummy because old one is same as new one) corresponding myFinalizerName)
+	OldClusterFinalizer  = "Opster"                    // Old cluster finalizer corresponding myFinalizerName
 	OldResourceFinalizer = "opster.io/opensearch-data" // Old resource finalizer (User, Role, etc.) coresponding to OpensearchFinalizer)
 )
 

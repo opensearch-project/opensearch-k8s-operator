@@ -21,16 +21,10 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// init sets SKIP_SUITE_SETUP for operator upgrade tests so BeforeSuite skips creating test-cluster
-// This runs when the package is loaded, before BeforeSuite executes
-// Only sets it if not already set (allows manual override)
-func init() {
-	if os.Getenv("SKIP_SUITE_SETUP") == "" {
-		// Set SKIP_SUITE_SETUP to prevent BeforeSuite from creating test-cluster
-		// Operator upgrade tests manage their own operator and clusters
-		os.Setenv("SKIP_SUITE_SETUP", "true")
-	}
-}
+// Note: Operator upgrade tests manage their own operator and clusters.
+// Set SKIP_SUITE_SETUP=true environment variable when running these tests
+// to prevent the shared BeforeSuite from creating test-cluster.
+// Example: SKIP_SUITE_SETUP=true ginkgo --focus "OperatorUpgrade"
 
 var _ = Describe("OperatorUpgrade", func() {
 	var (
