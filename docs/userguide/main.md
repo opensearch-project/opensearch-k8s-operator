@@ -890,7 +890,7 @@ Sidecar containers share the same network namespace and storage volumes as the O
 
 ### Additional Volumes
 
-Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, or CSI volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
+Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, CSI volumes, NFS, or hostPath volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files or custom certificates). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
 
 ```yaml
 spec:
@@ -929,6 +929,11 @@ spec:
           server: 192.168.1.233
           path: /export/backups/opensearch
           readOnly: false # Optional, defaults to false
+      - name: host-certs
+        path: /usr/share/opensearch/config/host-certs
+        hostPath:
+          path: /etc/ssl/certs
+          type: Directory
   dashboards:
     additionalVolumes:
       - name: example-secret
@@ -972,6 +977,21 @@ spec:
 ```
 
 The defined volumes are added to all pods of the opensearch cluster. It is currently not possible to define them per nodepool.
+
+#### HostPath Volume Support
+
+HostPath volumes allow mounting files or directories from the host node's filesystem into OpenSearch pods:
+
+```yaml
+spec:
+  general:
+    additionalVolumes:
+      - name: host-path-volume
+        path: /path/to/mount
+        hostPath:
+          path: /host/path
+          type: Directory  # Optional: Directory, File, etc.
+```
 
 ### Adding environment variables to pods
 
