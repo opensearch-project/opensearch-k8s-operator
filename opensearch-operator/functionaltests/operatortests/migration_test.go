@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -811,12 +812,12 @@ func cleanupMigrationTestResources(clusterName, namespace string) {
 			// Check if PVC belongs to any of our test clusters
 			for _, cn := range clusterNames {
 				// Check new API group label
-				if pvc.Labels["opensearch.org/opensearch-cluster"] == cn {
+				if pvc.Labels[helpers.ClusterLabel] == cn {
 					shouldDelete = true
 					break
 				}
 				// Check old API group label (if it exists)
-				if pvc.Labels["opster.io/opensearch-cluster"] == cn {
+				if pvc.Labels[helpers.OldClusterLabel] == cn {
 					shouldDelete = true
 					break
 				}

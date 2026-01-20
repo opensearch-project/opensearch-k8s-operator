@@ -278,7 +278,7 @@ func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.Open
 	// Use appropriate label based on API group
 	clusterLabel := helpers.ClusterLabel // "opensearch.org/opensearch-cluster"
 	if useOldAPI {
-		clusterLabel = "opster.io/opensearch-cluster"
+		clusterLabel = helpers.OldClusterLabel
 	}
 	selector := map[string]string{
 		clusterLabel: cluster.Name,
@@ -293,7 +293,7 @@ func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.Open
 		// If that failed, try the other label (in case pods have both labels during migration)
 		otherLabel := helpers.ClusterLabel
 		if !useOldAPI {
-			otherLabel = "opster.io/opensearch-cluster"
+			otherLabel = helpers.OldClusterLabel
 		}
 		otherSelector := map[string]string{
 			otherLabel: cluster.Name,
