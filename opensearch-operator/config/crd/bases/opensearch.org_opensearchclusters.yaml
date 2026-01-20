@@ -4439,6 +4439,71 @@ spec:
                     description: Drain data nodes controls whether to drain data notes
                       on rolling restart operations
                     type: boolean
+                  grpc:
+                    description: gRPC API configuration for OpenSearch
+                    properties:
+                      bindHost:
+                        description: Bind host addresses for the gRPC server. Can
+                          be distinct from publish hosts.
+                        items:
+                          type: string
+                        type: array
+                      enable:
+                        description: Enable gRPC transport. When enabled, gRPC APIs
+                          will be available.
+                        type: boolean
+                      host:
+                        description: Host addresses the gRPC server will bind to.
+                          If not specified, defaults to ["0.0.0.0"].
+                        items:
+                          type: string
+                        type: array
+                      keepaliveTimeout:
+                        description: Amount of time to wait for keepalive ping acknowledgment
+                          before closing the connection (e.g., "1s").
+                        type: string
+                      maxConcurrentConnectionCalls:
+                        description: Maximum number of simultaneous in-flight requests
+                          allowed per client connection.
+                        format: int32
+                        type: integer
+                      maxConnectionAge:
+                        description: Maximum age a connection can reach before being
+                          gracefully closed (e.g., "500ms", "2m").
+                        type: string
+                      maxConnectionIdle:
+                        description: Maximum duration for which a connection can be
+                          idle before being closed (e.g., "2m").
+                        type: string
+                      maxMsgSize:
+                        description: Maximum inbound message size for gRPC requests
+                          (e.g., "10mb", "10485760").
+                        type: string
+                      nettyExecutorCount:
+                        description: Number of threads in the fork-join pool for processing
+                          gRPC service calls.
+                        format: int32
+                        type: integer
+                      nettyWorkerCount:
+                        description: Number of Netty worker threads for the gRPC server.
+                          Controls concurrency and parallelism.
+                        format: int32
+                        type: integer
+                      port:
+                        description: Port range for gRPC transport (e.g., "9400-9500").
+                          If not specified, defaults to "9400-9500".
+                        type: string
+                      publishHost:
+                        description: Publish hostnames or IPs for client connections.
+                        items:
+                          type: string
+                        type: array
+                      publishPort:
+                        description: Publish port number that this node uses to publish
+                          itself to peers for gRPC transport.
+                        format: int32
+                        type: integer
+                    type: object
                   hostAliases:
                     items:
                       description: |-

@@ -1,0 +1,60 @@
+# Example: OpenSearch cluster with gRPC API enabled
+# This example shows how to enable and configure gRPC APIs in OpenSearch
+# gRPC APIs are available starting from OpenSearch 3.0, with Bulk and k-NN search
+# generally available from version 3.2
+
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster-grpc
+  namespace: default
+spec:
+  general:
+    serviceName: my-cluster-grpc
+    httpPort: 9200
+    version: "3.2.0"  # gRPC Bulk and k-NN are GA from 3.2
+    vendor: "opensearch"
+    # Enable and configure gRPC API
+    grpc:
+      enable: true
+      # Port range for gRPC (defaults to "9400-9500" if not specified)
+      port: "9400-9500"
+      # Optional: Advanced gRPC settings
+      # host: ["0.0.0.0"]  # Host addresses to bind to
+      # bindHost: ["0.0.0.0", "::"]  # Bind host addresses
+      # publishHost: ["thisnode.example.com"]  # Publish hostnames for client connections
+      # publishPort: 9400  # Publish port number
+      # nettyWorkerCount: 4  # Number of Netty worker threads
+      # nettyExecutorCount: 32  # Number of threads in fork-join pool
+      # maxConcurrentConnectionCalls: 200  # Max in-flight requests per connection
+      # maxConnectionAge: "500ms"  # Max connection age
+      # maxConnectionIdle: "2m"  # Max idle connection duration
+      # keepaliveTimeout: "1s"  # Keepalive ping timeout
+      # maxMsgSize: "10mb"  # Maximum inbound message size
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "20Gi"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
+      roles:
+        - "cluster_manager"
+        - "data"
+    - component: nodes
+      replicas: 3
+      diskSize: "20Gi"
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "500m"
+      roles:
+        - "data"
+

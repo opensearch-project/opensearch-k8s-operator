@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"k8s.io/utils/ptr"
@@ -590,16 +591,26 @@ func NewSTSForNodePool(
 							Image:           image.GetImage(),
 							ImagePullPolicy: image.GetImagePullPolicy(),
 							Resources:       node.Resources,
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "http",
-									ContainerPort: cr.Spec.General.HttpPort,
-								},
-								{
-									Name:          "transport",
-									ContainerPort: 9300,
-								},
-							},
+							Ports: func() []corev1.ContainerPort {
+								ports := []corev1.ContainerPort{
+									{
+										Name:          "http",
+										ContainerPort: cr.Spec.General.HttpPort,
+									},
+									{
+										Name:          "transport",
+										ContainerPort: 9300,
+									},
+								}
+								// Add gRPC port if enabled
+								if grpcPort := getGrpcPort(cr); grpcPort > 0 {
+									ports = append(ports, corev1.ContainerPort{
+										Name:          "grpc",
+										ContainerPort: grpcPort,
+									})
+								}
+								return ports
+							}(),
 							StartupProbe:    &startupProbe,
 							LivenessProbe:   &livenessProbe,
 							ReadinessProbe:  &readinessProbe,
@@ -748,44 +759,60 @@ func NewServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 			Annotations: cr.Spec.General.Annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{
-					Name:     "http",
-					Protocol: "TCP",
-					Port:     cr.Spec.General.HttpPort,
-					TargetPort: intstr.IntOrString{
-						IntVal: cr.Spec.General.HttpPort,
+			Ports: func() []corev1.ServicePort {
+				ports := []corev1.ServicePort{
+					{
+						Name:     "http",
+						Protocol: "TCP",
+						Port:     cr.Spec.General.HttpPort,
+						TargetPort: intstr.IntOrString{
+							IntVal: cr.Spec.General.HttpPort,
+						},
+						AppProtocol: &httpAppProtocol,
 					},
-					AppProtocol: &httpAppProtocol,
-				},
-				{
-					Name:     "transport",
-					Protocol: "TCP",
-					Port:     9300,
-					TargetPort: intstr.IntOrString{
-						IntVal: 9300,
-						StrVal: "9300",
+					{
+						Name:     "transport",
+						Protocol: "TCP",
+						Port:     9300,
+						TargetPort: intstr.IntOrString{
+							IntVal: 9300,
+							StrVal: "9300",
+						},
 					},
-				},
-				{
-					Name:     "metrics",
-					Protocol: "TCP",
-					Port:     9600,
-					TargetPort: intstr.IntOrString{
-						IntVal: 9600,
-						StrVal: "9600",
+					{
+						Name:     "metrics",
+						Protocol: "TCP",
+						Port:     9600,
+						TargetPort: intstr.IntOrString{
+							IntVal: 9600,
+							StrVal: "9600",
+						},
 					},
-				},
-				{
-					Name:     "rca",
-					Protocol: "TCP",
-					Port:     9650,
-					TargetPort: intstr.IntOrString{
-						IntVal: 9650,
-						StrVal: "9650",
+					{
+						Name:     "rca",
+						Protocol: "TCP",
+						Port:     9650,
+						TargetPort: intstr.IntOrString{
+							IntVal: 9650,
+							StrVal: "9650",
+						},
 					},
-				},
-			},
+				}
+				// Add gRPC port if enabled
+				if grpcPort := getGrpcPort(cr); grpcPort > 0 {
+					grpcAppProtocol := "grpc"
+					ports = append(ports, corev1.ServicePort{
+						Name:     "grpc",
+						Protocol: "TCP",
+						Port:     grpcPort,
+						TargetPort: intstr.IntOrString{
+							IntVal: grpcPort,
+						},
+						AppProtocol: &grpcAppProtocol,
+					})
+				}
+				return ports
+			}(),
 			Selector: labels,
 			Type:     "",
 		},
@@ -1114,16 +1141,26 @@ func NewBootstrapPod(
 					Image:           image.GetImage(),
 					ImagePullPolicy: image.GetImagePullPolicy(),
 					Resources:       resources,
-					Ports: []corev1.ContainerPort{
-						{
-							Name:          "http",
-							ContainerPort: cr.Spec.General.HttpPort,
-						},
-						{
-							Name:          "transport",
-							ContainerPort: 9300,
-						},
-					},
+					Ports: func() []corev1.ContainerPort {
+						ports := []corev1.ContainerPort{
+							{
+								Name:          "http",
+								ContainerPort: cr.Spec.General.HttpPort,
+							},
+							{
+								Name:          "transport",
+								ContainerPort: 9300,
+							},
+						}
+						// Add gRPC port if enabled
+						if grpcPort := getGrpcPort(cr); grpcPort > 0 {
+							ports = append(ports, corev1.ContainerPort{
+								Name:          "grpc",
+								ContainerPort: grpcPort,
+							})
+						}
+						return ports
+					}(),
 					StartupProbe:    &probe,
 					LivenessProbe:   &probe,
 					VolumeMounts:    volumeMounts,
@@ -1169,6 +1206,31 @@ func PortForCluster(cr *opensearchv1.OpenSearchCluster) int32 {
 		httpPort = cr.Spec.General.HttpPort
 	}
 	return httpPort
+}
+
+// getGrpcPort extracts the first port from the gRPC port configuration
+// Port can be a range like "9400-9500" or a single port like "9400"
+// Returns the first port in the range, or 9400 as default
+func getGrpcPort(cr *opensearchv1.OpenSearchCluster) int32 {
+	grpcConfig := cr.Spec.General.Grpc
+	if grpcConfig == nil || !grpcConfig.Enable {
+		return 0
+	}
+
+	port := grpcConfig.Port
+	if port == "" {
+		port = "9400-9500"
+	}
+
+	// Extract first port from range (e.g., "9400-9500" -> 9400)
+	parts := strings.Split(port, "-")
+	if len(parts) > 0 {
+		if firstPort, err := strconv.ParseInt(parts[0], 10, 32); err == nil && firstPort > 0 {
+			return int32(firstPort)
+		}
+	}
+
+	return 9400 // Default
 }
 
 func URLForCluster(cr *opensearchv1.OpenSearchCluster) string {
