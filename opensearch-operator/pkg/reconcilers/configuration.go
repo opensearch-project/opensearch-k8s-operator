@@ -79,6 +79,9 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
 	}
 
+	// Process gRPC configuration
+	r.processGrpcConfig()
+
 	// Add General.AdditionalConfig to reconciler context (for base config)
 	for k, v := range r.instance.Spec.General.AdditionalConfig {
 		r.reconcilerContext.AddConfig(k, v)
@@ -251,4 +254,89 @@ func generateHash(source []byte) string {
 	hash := sha1.New()
 	hash.Write(source)
 	return hex.EncodeToString(hash.Sum(nil))
+}
+
+// processGrpcConfig processes gRPC configuration and adds it to opensearch.yml
+func (r *ConfigurationReconciler) processGrpcConfig() {
+	grpcConfig := r.instance.Spec.General.Grpc
+	if grpcConfig == nil || !grpcConfig.Enable {
+		return
+	}
+
+	// Set aux.transport.types to use transport-grpc
+	r.reconcilerContext.AddConfig("aux.transport.types", "[transport-grpc]")
+
+	// Set port if specified, otherwise use default
+	port := grpcConfig.Port
+	if port == "" {
+		port = "9400-9500"
+	}
+	r.reconcilerContext.AddConfig("aux.transport.transport-grpc.port", fmt.Sprintf("'%s'", port))
+
+	// Set host addresses
+	if len(grpcConfig.Host) > 0 {
+		hostList := make([]string, len(grpcConfig.Host))
+		for i, h := range grpcConfig.Host {
+			hostList[i] = fmt.Sprintf(`"%s"`, h)
+		}
+		r.reconcilerContext.AddConfig("grpc.host", fmt.Sprintf("[%s]", strings.Join(hostList, ", ")))
+	}
+
+	// Set bind host
+	if len(grpcConfig.BindHost) > 0 {
+		bindHostList := make([]string, len(grpcConfig.BindHost))
+		for i, h := range grpcConfig.BindHost {
+			bindHostList[i] = fmt.Sprintf(`"%s"`, h)
+		}
+		r.reconcilerContext.AddConfig("grpc.bind_host", fmt.Sprintf("[%s]", strings.Join(bindHostList, ", ")))
+	}
+
+	// Set publish host
+	if len(grpcConfig.PublishHost) > 0 {
+		publishHostList := make([]string, len(grpcConfig.PublishHost))
+		for i, h := range grpcConfig.PublishHost {
+			publishHostList[i] = fmt.Sprintf(`"%s"`, h)
+		}
+		r.reconcilerContext.AddConfig("grpc.publish_host", fmt.Sprintf("[%s]", strings.Join(publishHostList, ", ")))
+	}
+
+	// Set publish port
+	if grpcConfig.PublishPort != nil {
+		r.reconcilerContext.AddConfig("grpc.publish_port", fmt.Sprintf("%d", *grpcConfig.PublishPort))
+	}
+
+	// Set Netty worker count
+	if grpcConfig.NettyWorkerCount != nil {
+		r.reconcilerContext.AddConfig("grpc.netty.worker_count", fmt.Sprintf("%d", *grpcConfig.NettyWorkerCount))
+	}
+
+	// Set Netty executor count
+	if grpcConfig.NettyExecutorCount != nil {
+		r.reconcilerContext.AddConfig("grpc.netty.executor_count", fmt.Sprintf("%d", *grpcConfig.NettyExecutorCount))
+	}
+
+	// Set max concurrent connection calls
+	if grpcConfig.MaxConcurrentConnectionCalls != nil {
+		r.reconcilerContext.AddConfig("grpc.netty.max_concurrent_connection_calls", fmt.Sprintf("%d", *grpcConfig.MaxConcurrentConnectionCalls))
+	}
+
+	// Set max connection age
+	if grpcConfig.MaxConnectionAge != "" {
+		r.reconcilerContext.AddConfig("grpc.netty.max_connection_age", grpcConfig.MaxConnectionAge)
+	}
+
+	// Set max connection idle
+	if grpcConfig.MaxConnectionIdle != "" {
+		r.reconcilerContext.AddConfig("grpc.netty.max_connection_idle", grpcConfig.MaxConnectionIdle)
+	}
+
+	// Set keepalive timeout
+	if grpcConfig.KeepaliveTimeout != "" {
+		r.reconcilerContext.AddConfig("grpc.netty.keepalive_timeout", grpcConfig.KeepaliveTimeout)
+	}
+
+	// Set max message size
+	if grpcConfig.MaxMsgSize != "" {
+		r.reconcilerContext.AddConfig("grpc.netty.max_msg_size", grpcConfig.MaxMsgSize)
+	}
 }
