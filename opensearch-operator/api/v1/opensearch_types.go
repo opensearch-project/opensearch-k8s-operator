@@ -77,8 +77,6 @@ type GeneralConfig struct {
 	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
 	// instead of the default internal Kubernetes service DNS name.
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
-	// gRPC API configuration for OpenSearch
-	Grpc *GrpcConfig `json:"grpc,omitempty"`
 }
 
 type PdbConfig struct {
@@ -394,36 +392,6 @@ type SnapshotRepoConfig struct {
 	Name     string            `json:"name"`
 	Type     string            `json:"type"`
 	Settings map[string]string `json:"settings,omitempty"`
-}
-
-// GrpcConfig defines gRPC API configuration for OpenSearch
-type GrpcConfig struct {
-	// Enable gRPC transport. When enabled, gRPC APIs will be available.
-	Enable bool `json:"enable,omitempty"`
-	// Port range for gRPC transport (e.g., "9400-9500"). If not specified, defaults to "9400-9500".
-	Port string `json:"port,omitempty"`
-	// Host addresses the gRPC server will bind to. If not specified, defaults to ["0.0.0.0"].
-	Host []string `json:"host,omitempty"`
-	// Bind host addresses for the gRPC server. Can be distinct from publish hosts.
-	BindHost []string `json:"bindHost,omitempty"`
-	// Publish hostnames or IPs for client connections.
-	PublishHost []string `json:"publishHost,omitempty"`
-	// Publish port number that this node uses to publish itself to peers for gRPC transport.
-	PublishPort *int32 `json:"publishPort,omitempty"`
-	// Number of Netty worker threads for the gRPC server. Controls concurrency and parallelism.
-	NettyWorkerCount *int32 `json:"nettyWorkerCount,omitempty"`
-	// Number of threads in the fork-join pool for processing gRPC service calls.
-	NettyExecutorCount *int32 `json:"nettyExecutorCount,omitempty"`
-	// Maximum number of simultaneous in-flight requests allowed per client connection.
-	MaxConcurrentConnectionCalls *int32 `json:"maxConcurrentConnectionCalls,omitempty"`
-	// Maximum age a connection can reach before being gracefully closed (e.g., "500ms", "2m").
-	MaxConnectionAge string `json:"maxConnectionAge,omitempty"`
-	// Maximum duration for which a connection can be idle before being closed (e.g., "2m").
-	MaxConnectionIdle string `json:"maxConnectionIdle,omitempty"`
-	// Amount of time to wait for keepalive ping acknowledgment before closing the connection (e.g., "1s").
-	KeepaliveTimeout string `json:"keepaliveTimeout,omitempty"`
-	// Maximum inbound message size for gRPC requests (e.g., "10mb", "10485760").
-	MaxMsgSize string `json:"maxMsgSize,omitempty"`
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster
