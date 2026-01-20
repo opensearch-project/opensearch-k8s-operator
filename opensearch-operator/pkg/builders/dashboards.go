@@ -160,6 +160,7 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 							},
 							StartupProbe:    &probe,
 							LivenessProbe:   &probe,
+							ReadinessProbe:  &probe,
 							Env:             env,
 							VolumeMounts:    volumeMounts,
 							Command:         mainCommand,
