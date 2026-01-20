@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"time"
 
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -33,6 +34,7 @@ import (
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	k8s "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 )
 
 const (
@@ -115,50 +117,57 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 		// If new cluster exists and is not being deleted, continue to check old cluster
 	}
 
-	// Try to get the old API group resource
+	// Check if this is an old cluster event
 	oldCluster := &opsterv1.OpenSearchCluster{}
 	err = r.Get(ctx, req.NamespacedName, oldCluster)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return ctrl.Result{}, nil
+	if err == nil {
+		// This is an old cluster event
+		// Handle deletion
+		if !oldCluster.DeletionTimestamp.IsZero() {
+			return r.handleOldClusterDeletion(ctx, oldCluster)
 		}
-		return ctrl.Result{}, err
-	}
 
-	// Log deprecation warning for old API group usage
-	logger.Info("DEPRECATION WARNING: opensearch.opster.io API group is deprecated. Please migrate to opensearch.org/v1.")
+		// Add finalizer if not present
+		if !containsString(oldCluster.Finalizers, MigrationFinalizer) {
+			oldCluster.Finalizers = append(oldCluster.Finalizers, MigrationFinalizer)
+			if err := r.Update(ctx, oldCluster); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 
-	// Handle deletion
-	if !oldCluster.DeletionTimestamp.IsZero() {
-		return r.handleOldClusterDeletion(ctx, oldCluster)
-	}
-
-	// Add finalizer if not present
-	if !containsString(oldCluster.Finalizers, MigrationFinalizer) {
-		oldCluster.Finalizers = append(oldCluster.Finalizers, MigrationFinalizer)
-		if err := r.Update(ctx, oldCluster); err != nil {
+		// Check if new cluster exists
+		newCluster := &opensearchv1.OpenSearchCluster{}
+		err = r.Get(ctx, req.NamespacedName, newCluster)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// Check if old cluster has annotation indicating new cluster was deleted
+				// If so, don't recreate - wait for old cluster to be deleted
+				if oldCluster.Annotations != nil && oldCluster.Annotations[DeletedByNewResourceAnnotation] == "true" {
+					logger.Info("New cluster was deleted, old cluster marked for deletion - not recreating", "name", oldCluster.Name)
+					// Old cluster should be deleted soon - just requeue to wait
+					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+				}
+				// Check if old cluster is in ready status before migrating
+				if !isClusterReady(oldCluster) {
+					logger.Info("Old cluster is not ready, skipping migration", "name", oldCluster.Name, "phase", oldCluster.Status.Phase)
+					return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+				}
+				// Create new API group resource
+				logger.Info("Creating new API group resource from old", "name", oldCluster.Name, "namespace", oldCluster.Namespace)
+				return r.createNewFromOld(ctx, oldCluster)
+			}
 			return ctrl.Result{}, err
 		}
+
+		// Sync changes from old to new
+		return r.syncOldToNew(ctx, oldCluster, newCluster)
 	}
 
-	// Re-check if new API group resource exists (in case it was just created)
-	err = r.Get(ctx, req.NamespacedName, newCluster)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Check if old cluster is in ready status before migrating
-			if !isClusterReady(oldCluster) {
-				logger.Info("Old cluster is not ready, skipping migration", "name", oldCluster.Name, "phase", oldCluster.Status.Phase)
-				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-			}
-			// Create new API group resource
-			logger.Info("Creating new API group resource from old", "name", oldCluster.Name, "namespace", oldCluster.Namespace)
-			return r.createNewFromOld(ctx, oldCluster)
-		}
-		return ctrl.Result{}, err
+	// Neither old nor new cluster found
+	if errors.IsNotFound(err) {
+		return ctrl.Result{}, nil
 	}
-
-	// Sync changes from old to new
-	return r.syncOldToNew(ctx, oldCluster, newCluster)
+	return ctrl.Result{}, err
 }
 
 func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster) (ctrl.Result, error) {
@@ -203,7 +212,33 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("Created new API group resource", "name", newCluster.Name, "namespace", newCluster.Namespace)
+	// Copy status from old to new cluster (status can only be set after creation)
+	// Use UpdateOpenSearchClusterStatus helper for conflict handling
+	oldStatusBytes, err := json.Marshal(oldCluster.Status)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to marshal old cluster status: %w", err)
+	}
+
+	var newStatus opensearchv1.ClusterStatus
+	if err := json.Unmarshal(oldStatusBytes, &newStatus); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to unmarshal to new cluster status: %w", err)
+	}
+
+	// Ensure ComponentsStatus is not nil (required by new CRD validation)
+	if newStatus.ComponentsStatus == nil {
+		newStatus.ComponentsStatus = []opensearchv1.ComponentStatus{}
+	}
+
+	// Use UpdateOpenSearchClusterStatus helper method
+	k8sClient := k8s.NewK8sClient(r.Client, ctx)
+	finalStatus := newStatus // Capture for closure
+	if err := k8sClient.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(newCluster), func(instance *opensearchv1.OpenSearchCluster) {
+		instance.Status = finalStatus
+	}); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update new cluster status: %w", err)
+	}
+
+	logger.Info("Created new API group resource with status", "name", newCluster.Name, "namespace", newCluster.Namespace)
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
@@ -249,9 +284,16 @@ func (r *ClusterMigrationReconciler) syncStatusNewToOld(ctx context.Context, old
 		return ctrl.Result{}, fmt.Errorf("failed to unmarshal to old cluster status: %w", err)
 	}
 
-	// Check if status is different
+	// Ensure ComponentsStatus is not nil (required by old CRD validation)
+	// If it's nil, initialize it to an empty slice
+	if newStatus.ComponentsStatus == nil {
+		newStatus.ComponentsStatus = []opsterv1.ComponentStatus{}
+	}
+
+	// Check if status is different (compare after fixing ComponentsStatus)
+	newStatusBytes, _ := json.Marshal(newStatus)
 	oldStatusBytes, _ := json.Marshal(oldCluster.Status)
-	if string(statusBytes) != string(oldStatusBytes) {
+	if string(newStatusBytes) != string(oldStatusBytes) {
 		oldCluster.Status = newStatus
 		if err := r.Status().Update(ctx, oldCluster); err != nil {
 			return ctrl.Result{}, err
@@ -630,49 +672,60 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 		// If new resource exists and is not being deleted, continue to check old resource
 	}
 
-	// Get old resource
+	// Check if this is an old resource event
 	oldResource := OldPtr(new(OldType))
 	err = c.Get(ctx, req.NamespacedName, oldResource)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			return ctrl.Result{}, nil
+	if err == nil {
+		// This is an old resource event
+		logger.Info("DEPRECATION WARNING: opensearch.opster.io API group is deprecated", "kind", resourceKind)
+
+		// Handle deletion
+		if !oldResource.GetDeletionTimestamp().IsZero() {
+			return handleGenericDeletion[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req, resourceKind)
 		}
-		return ctrl.Result{}, err
-	}
 
-	logger.Info("DEPRECATION WARNING: opensearch.opster.io API group is deprecated", "kind", resourceKind)
+		// Add finalizer if not present
+		if !containsString(oldResource.GetFinalizers(), MigrationFinalizer) {
+			oldResource.SetFinalizers(append(oldResource.GetFinalizers(), MigrationFinalizer))
+			if err := c.Update(ctx, oldResource); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 
-	// Handle deletion
-	if !oldResource.GetDeletionTimestamp().IsZero() {
-		return handleGenericDeletion[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req, resourceKind)
-	}
-
-	// Add finalizer if not present
-	if !containsString(oldResource.GetFinalizers(), MigrationFinalizer) {
-		oldResource.SetFinalizers(append(oldResource.GetFinalizers(), MigrationFinalizer))
-		if err := c.Update(ctx, oldResource); err != nil {
+		// Check if new resource exists
+		newResource := NewPtr(new(NewType))
+		err = c.Get(ctx, req.NamespacedName, newResource)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// Check if old resource has annotation indicating new resource was deleted
+				// If so, don't recreate - wait for old resource to be deleted
+				annotations := oldResource.GetAnnotations()
+				if annotations != nil && annotations[DeletedByNewResourceAnnotation] == "true" {
+					logger.Info("New resource was deleted, old resource marked for deletion - not recreating", "kind", resourceKind, "name", req.Name)
+					// Old resource should be deleted soon - just requeue to wait
+					return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+				}
+				// Check if old resource is in ready status before migrating
+				if !isGenericResourceReady(oldResource, resourceKind) {
+					logger.Info("Old resource is not ready, skipping migration", "kind", resourceKind, "name", req.Name)
+					return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
+				}
+				// Create new resource
+				logger.Info("Creating new API group resource from old", "kind", resourceKind, "name", req.Name)
+				return createGenericNewFromOld[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req)
+			}
 			return ctrl.Result{}, err
 		}
+
+		// Sync old to new
+		return syncGenericOldToNew[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, newResource)
 	}
 
-	// Re-check if new resource exists (in case it was just created)
-	err = c.Get(ctx, req.NamespacedName, newResource)
-	if err != nil {
-		if errors.IsNotFound(err) {
-			// Check if old resource is in ready status before migrating
-			if !isGenericResourceReady(oldResource, resourceKind) {
-				logger.Info("Old resource is not ready, skipping migration", "kind", resourceKind, "name", req.Name)
-				return ctrl.Result{RequeueAfter: 30 * time.Second}, nil
-			}
-			// Create new resource
-			logger.Info("Creating new API group resource from old", "kind", resourceKind, "name", req.Name)
-			return createGenericNewFromOld[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req)
-		}
-		return ctrl.Result{}, err
+	// Neither old nor new resource found
+	if errors.IsNotFound(err) {
+		return ctrl.Result{}, nil
 	}
-
-	// Sync old to new
-	return syncGenericOldToNew[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, newResource)
+	return ctrl.Result{}, err
 }
 
 func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
@@ -717,6 +770,14 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 	// Clear finalizers on new resource
 	newResource.SetFinalizers(nil)
 
+	// Save the old status before clearing it (we'll set it after creation)
+	// The status was already copied during JSON unmarshal, so get it from newResource
+	// Use reflection to get and save the status value
+	oldStatusValue := getStatusFieldValue(newResource)
+
+	// Clear status temporarily for creation (status can only be set after creation)
+	clearStatusField(newResource)
+
 	if err := c.Create(ctx, newResource); err != nil {
 		if errors.IsAlreadyExists(err) {
 			logger.Info("New API group resource already exists", "name", req.Name)
@@ -725,7 +786,22 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 		return ctrl.Result{}, err
 	}
 
-	logger.Info("Created new API group resource", "name", req.Name, "namespace", req.Namespace)
+	// Copy status from old to new, but clear ManagedCluster so reconciler can set it to new cluster UID
+	if oldStatusValue != nil {
+		// Use UdateObjectStatus helper method for conflict handling
+		k8sClient := k8s.NewK8sClient(c, ctx)
+		statusToSet := oldStatusValue // Capture for closure
+		if err := k8sClient.UdateObjectStatus(newResource, func(instance client.Object) {
+			// Set the status back
+			setStatusFieldValue(instance, statusToSet)
+			// Clear ManagedCluster so reconciler can set it to new cluster UID
+			clearManagedClusterField(instance)
+		}); err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to update new resource status: %w", err)
+		}
+	}
+
+	logger.Info("Created new API group resource with status", "name", req.Name, "namespace", req.Namespace)
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
@@ -866,6 +942,77 @@ func isGenericResourceReady(resource client.Object, resourceKind string) bool {
 	default:
 		// If we can't determine the type, assume not ready to be safe
 		return false
+	}
+}
+
+// getStatusFieldValue uses reflection to get the Status field value from a resource
+func getStatusFieldValue(obj client.Object) interface{} {
+	val := reflect.ValueOf(obj)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	statusField := val.FieldByName("Status")
+	if statusField.IsValid() {
+		// Return a copy of the status value
+		statusType := statusField.Type()
+		newStatus := reflect.New(statusType).Elem()
+		newStatus.Set(statusField)
+		return newStatus.Interface()
+	}
+	return nil
+}
+
+// setStatusFieldValue uses reflection to set the Status field value on a resource
+func setStatusFieldValue(obj client.Object, statusValue interface{}) {
+	val := reflect.ValueOf(obj)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	statusField := val.FieldByName("Status")
+	if statusField.IsValid() && statusField.CanSet() && statusValue != nil {
+		statusVal := reflect.ValueOf(statusValue)
+		if statusVal.Kind() == reflect.Ptr {
+			statusVal = statusVal.Elem()
+		}
+		statusField.Set(statusVal)
+	}
+}
+
+// clearStatusField uses reflection to clear the Status field from a resource
+// This is needed during migration to reset ManagedCluster so the reconciler can set it to the correct new cluster UID
+func clearStatusField(obj client.Object) {
+	val := reflect.ValueOf(obj)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	statusField := val.FieldByName("Status")
+	if statusField.IsValid() && statusField.CanSet() {
+		// Set Status to its zero value
+		statusField.Set(reflect.Zero(statusField.Type()))
+	}
+}
+
+// clearManagedClusterField uses reflection to clear only the ManagedCluster field from the Status
+// This allows other status fields to be preserved while resetting the cluster reference
+func clearManagedClusterField(obj client.Object) {
+	val := reflect.ValueOf(obj)
+	if val.Kind() == reflect.Ptr {
+		val = val.Elem()
+	}
+
+	statusField := val.FieldByName("Status")
+	if !statusField.IsValid() {
+		return
+	}
+
+	// Get the ManagedCluster field from Status
+	managedClusterField := statusField.FieldByName("ManagedCluster")
+	if managedClusterField.IsValid() && managedClusterField.CanSet() {
+		// Set ManagedCluster to nil
+		managedClusterField.Set(reflect.Zero(managedClusterField.Type()))
 	}
 }
 

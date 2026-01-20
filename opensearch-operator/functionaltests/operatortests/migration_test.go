@@ -107,6 +107,11 @@ var _ = Describe("APIGroupMigration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Test CRDs created with old API group\n")
 
+		By("Waiting for all old CRDs to be ready before upgrading operator")
+		err = waitForOldAPIGroupCRDsReady(namespace, time.Minute*5)
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Printf("  + All old CRDs are ready\n")
+
 		By("Step 4: Upgrading operator to current codebase (uses opensearch.org/v1)")
 		err = upgradeOperatorToCurrent()
 		Expect(err).NotTo(HaveOccurred())
@@ -192,72 +197,72 @@ var _ = Describe("APIGroupMigration", func() {
 		GinkgoWriter.Printf("  + Deletion behavior verified: new deletion triggers old deletion\n")
 	})
 
-//	It("should prevent deletion of old resource if new resource does not exist", func() {
-//		By(fmt.Sprintf("Step 1: Installing operator version %s", operatorVersion))
-//		err := installOperatorFromHelm(operatorVersion)
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		By("Waiting for operator to be ready")
-//		err = waitForOperatorReady(operatorName+"-controller-manager", namespace, time.Minute*5)
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		By(fmt.Sprintf("Step 2: Creating OpenSearch cluster with old API group (version %s)", clusterVersion))
-//		err = createOldAPIGroupCluster(clusterName+"-deletion-test", namespace, clusterVersion)
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		By("Waiting for cluster to be ready")
-//		err = waitForClusterPhase(clusterName+"-deletion-test", namespace, "RUNNING", time.Minute*15)
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		By("Step 3: Upgrading operator to current codebase")
-//		err = upgradeOperatorToCurrent()
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		By("Waiting for operator to be ready after upgrade")
-//		err = waitForOperatorReady(operatorName, namespace, time.Minute*5)
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		By("Step 4: Attempting to delete old resource before migration completes")
-//		// Don't wait for migration - try to delete immediately
-//		oldCluster := &opsterv1.OpenSearchCluster{}
-//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		// Add finalizer manually to simulate migration controller behavior
-//		if !containsString(oldCluster.Finalizers, "opensearch.org/migration") {
-//			oldCluster.Finalizers = append(oldCluster.Finalizers, "migration.opensearch.org/finalizer")
-//			err = k8sClient.Update(context.Background(), oldCluster)
-//			Expect(err).NotTo(HaveOccurred())
-//		}
-//
-//		// Try to delete
-//		err = k8sClient.Delete(context.Background(), oldCluster)
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		// Wait a bit - deletion should be blocked by finalizer
-//		time.Sleep(5 * time.Second)
-//
-//		// Resource should still exist (finalizer prevents deletion)
-//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
-//		Expect(err).NotTo(HaveOccurred())
-//		Expect(oldCluster.DeletionTimestamp).NotTo(BeNil())
-//		GinkgoWriter.Printf("  + Old resource deletion is blocked (finalizer present, new resource not found)\n")
-//
-//		// Now wait for migration to complete
-//		err = waitForNewAPIGroupResource(clusterName+"-deletion-test", namespace, "opensearchclusters", "opensearch.org", time.Minute*5)
-//		Expect(err).NotTo(HaveOccurred())
-//
-//		// Once new resource exists, old resource should be deletable
-//		// The migration controller should remove the finalizer and allow deletion
-//		// Wait a bit for the controller to process
-//		time.Sleep(10 * time.Second)
-//
-//		// Check if old resource is still there (it should be gone or going)
-//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
-//		// It might be deleted or still have finalizer - both are acceptable
-//		// The key is that once new resource exists, deletion can proceed
-//		GinkgoWriter.Printf("  + Deletion behavior verified: old resource deletion requires new resource to exist\n")
-//	})
+	//	It("should prevent deletion of old resource if new resource does not exist", func() {
+	//		By(fmt.Sprintf("Step 1: Installing operator version %s", operatorVersion))
+	//		err := installOperatorFromHelm(operatorVersion)
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		By("Waiting for operator to be ready")
+	//		err = waitForOperatorReady(operatorName+"-controller-manager", namespace, time.Minute*5)
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		By(fmt.Sprintf("Step 2: Creating OpenSearch cluster with old API group (version %s)", clusterVersion))
+	//		err = createOldAPIGroupCluster(clusterName+"-deletion-test", namespace, clusterVersion)
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		By("Waiting for cluster to be ready")
+	//		err = waitForClusterPhase(clusterName+"-deletion-test", namespace, "RUNNING", time.Minute*15)
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		By("Step 3: Upgrading operator to current codebase")
+	//		err = upgradeOperatorToCurrent()
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		By("Waiting for operator to be ready after upgrade")
+	//		err = waitForOperatorReady(operatorName, namespace, time.Minute*5)
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		By("Step 4: Attempting to delete old resource before migration completes")
+	//		// Don't wait for migration - try to delete immediately
+	//		oldCluster := &opsterv1.OpenSearchCluster{}
+	//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		// Add finalizer manually to simulate migration controller behavior
+	//		if !containsString(oldCluster.Finalizers, "opensearch.org/migration") {
+	//			oldCluster.Finalizers = append(oldCluster.Finalizers, "migration.opensearch.org/finalizer")
+	//			err = k8sClient.Update(context.Background(), oldCluster)
+	//			Expect(err).NotTo(HaveOccurred())
+	//		}
+	//
+	//		// Try to delete
+	//		err = k8sClient.Delete(context.Background(), oldCluster)
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		// Wait a bit - deletion should be blocked by finalizer
+	//		time.Sleep(5 * time.Second)
+	//
+	//		// Resource should still exist (finalizer prevents deletion)
+	//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
+	//		Expect(err).NotTo(HaveOccurred())
+	//		Expect(oldCluster.DeletionTimestamp).NotTo(BeNil())
+	//		GinkgoWriter.Printf("  + Old resource deletion is blocked (finalizer present, new resource not found)\n")
+	//
+	//		// Now wait for migration to complete
+	//		err = waitForNewAPIGroupResource(clusterName+"-deletion-test", namespace, "opensearchclusters", "opensearch.org", time.Minute*5)
+	//		Expect(err).NotTo(HaveOccurred())
+	//
+	//		// Once new resource exists, old resource should be deletable
+	//		// The migration controller should remove the finalizer and allow deletion
+	//		// Wait a bit for the controller to process
+	//		time.Sleep(10 * time.Second)
+	//
+	//		// Check if old resource is still there (it should be gone or going)
+	//		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-deletion-test", Namespace: namespace}, oldCluster)
+	//		// It might be deleted or still have finalizer - both are acceptable
+	//		// The key is that once new resource exists, deletion can proceed
+	//		GinkgoWriter.Printf("  + Deletion behavior verified: old resource deletion requires new resource to exist\n")
+	//	})
 })
 
 // createOldAPIGroupCluster creates a cluster using the old API group (opensearch.opster.io/v1)
@@ -527,6 +532,96 @@ func waitForClusterPhase(clusterName, namespace, phase string, timeout time.Dura
 			newCluster := &opensearchv1.OpenSearchCluster{}
 			err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: namespace}, newCluster)
 			if err == nil && newCluster.Status.Phase == phase {
+				return nil
+			}
+		}
+	}
+}
+
+// waitForOldAPIGroupCRDsReady waits for all old API group CRDs to be ready before upgrading operator
+func waitForOldAPIGroupCRDsReady(namespace string, timeout time.Duration) error {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+
+	// List of CRDs to check: name, kind, expected state
+	crdsToCheck := []struct {
+		name          string
+		kind          string
+		expectedState string
+	}{
+		{"migration-test-action-group", "OpensearchActionGroup", "CREATED"},
+		{"migration-test-role", "OpensearchRole", "CREATED"},
+		{"migration-test-user", "OpensearchUser", "CREATED"},
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			// On timeout, check which CRDs are not ready for better error message
+			var notReady []string
+			for _, crd := range crdsToCheck {
+				obj := &unstructured.Unstructured{}
+				obj.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "opensearch.opster.io",
+					Version: "v1",
+					Kind:    crd.kind,
+				})
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: crd.name, Namespace: namespace}, obj)
+				if err != nil {
+					notReady = append(notReady, fmt.Sprintf("%s (not found)", crd.name))
+					continue
+				}
+
+				state, found, _ := unstructured.NestedString(obj.Object, "status", "state")
+				if !found {
+					notReady = append(notReady, fmt.Sprintf("%s (no status)", crd.name))
+				} else if state == "ERROR" {
+					reason, _, _ := unstructured.NestedString(obj.Object, "status", "reason")
+					notReady = append(notReady, fmt.Sprintf("%s (ERROR: %s)", crd.name, reason))
+				} else if state != crd.expectedState {
+					notReady = append(notReady, fmt.Sprintf("%s (state: %s, expected: %s)", crd.name, state, crd.expectedState))
+				}
+			}
+			return fmt.Errorf("timeout waiting for old API group CRDs to be ready. Not ready: %v", notReady)
+		case <-ticker.C:
+			allReady := true
+			for _, crd := range crdsToCheck {
+				obj := &unstructured.Unstructured{}
+				obj.SetGroupVersionKind(schema.GroupVersionKind{
+					Group:   "opensearch.opster.io",
+					Version: "v1",
+					Kind:    crd.kind,
+				})
+				err := k8sClient.Get(context.Background(), client.ObjectKey{Name: crd.name, Namespace: namespace}, obj)
+				if err != nil {
+					allReady = false
+					continue
+				}
+
+				// Check status.state field
+				state, found, err := unstructured.NestedString(obj.Object, "status", "state")
+				if err != nil || !found {
+					allReady = false
+					continue
+				}
+
+				// Fail early if any resource is in ERROR state
+				if state == "ERROR" {
+					reason, _, _ := unstructured.NestedString(obj.Object, "status", "reason")
+					return fmt.Errorf("CRD %s/%s is in ERROR state: %s", crd.kind, crd.name, reason)
+				}
+
+				// Accept CREATED or IGNORED as ready states
+				if state != crd.expectedState && state != "IGNORED" {
+					allReady = false
+					continue
+				}
+			}
+
+			if allReady {
 				return nil
 			}
 		}

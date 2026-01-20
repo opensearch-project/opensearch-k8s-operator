@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
@@ -20,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -328,13 +330,47 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 
-	// Finally we enforce the desired state
-	return r.client.ReconcileResource(sts, reconciler.StatePresent)
+	// NOTE: This is needed for migration from opster.io/v1 to opensearch.org/v1. Update labels on orphaned pods to match the new StatefulSet's selector
+	// to ensure they can be adopted by the new StatefulSet and counted correctly
+	if err := r.updateOrphanedPodLabels(&existing, sts, &nodePool); err != nil {
+		r.logger.Error(err, "Failed to update orphaned pod labels", "statefulset", sts.Name)
+	}
+
+	// Try to enforce the desired state - if it fails due to immutable field changes,
+	// handle it with rolling pod deletion (similar to maybeUpdateVolumes pattern)
+	result, err = r.client.ReconcileResource(sts, reconciler.StatePresent)
+	if err != nil {
+		// Check if this is an immutable field change error that requires recreation
+		if r.isImmutableFieldChangeError(err) {
+			r.logger.Info(fmt.Sprintf("Detected immutable field change error, recreating StatefulSet %s/%s", sts.Namespace, sts.Name))
+			// Delete StatefulSet with orphan (pods remain) - following maybeUpdateVolumes pattern
+			if err := r.deleteSTSWithOrphan(&existing); err != nil {
+				return &ctrl.Result{}, err
+			}
+			// Reconcile resource again to create the new StatefulSet
+			return r.client.ReconcileResource(sts, reconciler.StatePresent)
+		}
+		// Return other errors as-is
+		return result, err
+	}
+	return result, nil
 }
 
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+// isImmutableFieldChangeError checks if an error is due to immutable field changes in StatefulSet
+// The error is already wrapped by the generic reconciler with ImmutableFieldChangeErrorHelp message,
+// so we can simply check if the error message contains that constant.
+func (r *ClusterReconciler) isImmutableFieldChangeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// The generic reconciler wraps the error with ImmutableFieldChangeErrorHelp message
+	// when immutable field changes are detected, so we just need to check for that message
+	return strings.Contains(err.Error(), reconciler.ImmutableFieldChangeErrorHelp)
 }
 
 // isEmptyDirCluster returns true only if every nodePool is using emptyDir
@@ -536,6 +572,59 @@ func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) er
 		r.logger.Info("Failed to delete statefulset" + existing.Name)
 		return err
 	}
+	return nil
+}
+
+// updateOrphanedPodLabels updates labels on orphaned pods to match the new StatefulSet's selector
+// This ensures they can be adopted by the new StatefulSet and counted correctly by ReadyReplicasForNodePool
+func (r *ClusterReconciler) updateOrphanedPodLabels(oldSTS *appsv1.StatefulSet, newSTS *appsv1.StatefulSet, nodePool *opensearchv1.NodePool) error {
+	// Get the old selector labels
+	oldSelector := oldSTS.Spec.Selector.MatchLabels
+	// Get the new selector labels
+	newSelector := newSTS.Spec.Selector.MatchLabels
+
+	// If labels haven't changed, no need to update
+	if reflect.DeepEqual(oldSelector, newSelector) {
+		return nil
+	}
+
+	// List pods that match the old selector (orphaned pods)
+	oldSelectorMap := make(map[string]string)
+	for k, v := range oldSelector {
+		oldSelectorMap[k] = v
+	}
+	selector := labels.SelectorFromSet(oldSelectorMap)
+	podList, err := r.client.ListPods(&client.ListOptions{
+		Namespace:     oldSTS.Namespace,
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list orphaned pods: %w", err)
+	}
+
+	// Update labels on each orphaned pod to match the new selector
+	for _, pod := range podList.Items {
+		// Skip pods that are being deleted
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		// Merge new selector labels and StatefulSet labels
+		labelsToUpdate := make(map[string]string)
+		for k, v := range newSelector {
+			labelsToUpdate[k] = v
+		}
+		// Also update any other labels that might have changed
+		for k, v := range newSTS.Labels {
+			labelsToUpdate[k] = v
+		}
+		if err := r.client.UpdatePodLabels(&pod, labelsToUpdate); err != nil {
+			r.logger.Error(err, "Failed to update pod labels", "pod", pod.Name)
+			// Continue with other pods even if one fails
+			continue
+		}
+		r.logger.Info("Updated labels on orphaned pod", "pod", pod.Name, "oldLabels", oldSelector, "newLabels", newSelector)
+	}
+
 	return nil
 }
 

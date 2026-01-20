@@ -22,7 +22,7 @@ The operator includes a migration controller that automatically handles the tran
 2. **Readiness Check**: Migration only occurs when the old resource is in a ready status:
    - **Clusters**: Must be in `RUNNING` phase
    - **Other Resources**: Must be in `CREATED` state (not `PENDING`, `ERROR`, or `IGNORED`)
-3. **Spec Sync**: Changes to old API resources are automatically synced to new API resources
+3. **Spec Change**: Spec changes to old API resources are not allowed by webhooks
 4. **Status Sync**: Status is synchronized from new resources back to old resources (new → old direction)
 5. **Deletion Behavior**:
    - **Deleting new resource** → Automatically deletes the corresponding old resource
@@ -239,7 +239,7 @@ If automatic migration isn't working:
 
 2. **Check the operator logs for migration controller**:
    ```bash
-   kubectl logs -n opensearch-operator-system deployment/opensearch-operator-controller-manager | grep -i migration
+   kubectl logs -n opensearch-operator-system deployment/opensearch-operator | grep -i migration
    ```
 
 3. **Look for readiness messages**:
@@ -258,7 +258,7 @@ If status isn't syncing between old and new resources:
 
 1. Check that the migration controller is running:
    ```bash
-   kubectl get pods -n opensearch-operator-system | grep controller-manager
+   kubectl get pods -n opensearch-operator-system | grep opensearch-operator
    ```
 
 2. Verify RBAC permissions for both API groups:
@@ -268,7 +268,7 @@ If status isn't syncing between old and new resources:
 
 3. Look for errors in the controller logs:
    ```bash
-   kubectl logs -n opensearch-operator-system deployment/opensearch-operator-controller-manager | grep -i "status\|sync"
+   kubectl logs -n opensearch-operator-system deployment/opensearch-operator | grep -i "status\|sync"
    ```
 
 ### Webhook Errors
@@ -316,21 +316,21 @@ If deletion of old resource is blocked:
 
 3. **Check migration controller logs** for details:
    ```bash
-   kubectl logs -n opensearch-operator-system deployment/opensearch-operator-controller-manager | grep -i "cannot delete"
+   kubectl logs -n opensearch-operator-system deployment/opensearch-operator | grep -i "cannot delete"
    ```
 
 ## Rollback
 
 If you need to rollback to the old API group:
 
-1. Set Helm value to use legacy API:
+1. Uninstall operator 3.x and install the operator 2.x
+
+2. Set Helm value to use legacy API:
    ```yaml
    apiGroup: opensearch.opster.io
    ```
 
-2. Or manually change manifests back to `opensearch.opster.io/v1`
-
-3. The migration controller will continue to sync from old to new, but you can use the old API group during the deprecation period
+3. Or manually change manifests back to `opensearch.opster.io/v1`
 
 **Note**: Once you've migrated to the new API group, we recommend staying on it. The old API group will be removed in a future release.
 

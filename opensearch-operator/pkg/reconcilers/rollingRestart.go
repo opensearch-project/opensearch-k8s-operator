@@ -115,6 +115,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, 1) {
+			r.logger.Info("StatefulSet is not ready", "name", sts.Name, "namespace", sts.Namespace, "readyReplicas", sts.Status.ReadyReplicas, "desiredReplicas", ptr.Deref(sts.Spec.Replicas, 1))
 			return ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: 10 * time.Second,

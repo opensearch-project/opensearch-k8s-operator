@@ -47,6 +47,7 @@ type K8sClient interface {
 	DeletePod(pod *corev1.Pod) error
 	ListPods(listOptions *client.ListOptions) (corev1.PodList, error)
 	WaitForPodDeletion(podName, namespace string) error
+	UpdatePodLabels(pod *corev1.Pod, newLabels map[string]string) error
 	GetPVC(name, namespace string) (corev1.PersistentVolumeClaim, error)
 	UpdatePVC(pvc *corev1.PersistentVolumeClaim) error
 	ListPVCs(listOptions *client.ListOptions) (corev1.PersistentVolumeClaimList, error)
@@ -276,6 +277,19 @@ func (c K8sClientImpl) WaitForPodDeletion(podName, namespace string) error {
 	}
 
 	return nil
+}
+
+// UpdatePodLabels updates the labels on a pod with the provided new labels
+func (c K8sClientImpl) UpdatePodLabels(pod *corev1.Pod, newLabels map[string]string) error {
+	podCopy := pod.DeepCopy()
+	if podCopy.Labels == nil {
+		podCopy.Labels = make(map[string]string)
+	}
+	// Update labels
+	for k, v := range newLabels {
+		podCopy.Labels[k] = v
+	}
+	return c.Update(c.ctx, podCopy)
 }
 
 // Validate K8sClientImpl implements the interface

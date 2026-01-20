@@ -1501,6 +1501,53 @@ func (_c *MockK8sClient_UpdatePVC_Call) RunAndReturn(run func(*v1.PersistentVolu
 	return _c
 }
 
+// UpdatePodLabels provides a mock function with given fields: pod, newLabels
+func (_m *MockK8sClient) UpdatePodLabels(pod *v1.Pod, newLabels map[string]string) error {
+	ret := _m.Called(pod, newLabels)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdatePodLabels")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*v1.Pod, map[string]string) error); ok {
+		r0 = rf(pod, newLabels)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_UpdatePodLabels_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdatePodLabels'
+type MockK8sClient_UpdatePodLabels_Call struct {
+	*mock.Call
+}
+
+// UpdatePodLabels is a helper method to define mock.On call
+//   - pod *v1.Pod
+//   - newLabels map[string]string
+func (_e *MockK8sClient_Expecter) UpdatePodLabels(pod interface{}, newLabels interface{}) *MockK8sClient_UpdatePodLabels_Call {
+	return &MockK8sClient_UpdatePodLabels_Call{Call: _e.mock.On("UpdatePodLabels", pod, newLabels)}
+}
+
+func (_c *MockK8sClient_UpdatePodLabels_Call) Run(run func(pod *v1.Pod, newLabels map[string]string)) *MockK8sClient_UpdatePodLabels_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*v1.Pod), args[1].(map[string]string))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_UpdatePodLabels_Call) Return(_a0 error) *MockK8sClient_UpdatePodLabels_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_UpdatePodLabels_Call) RunAndReturn(run func(*v1.Pod, map[string]string) error) *MockK8sClient_UpdatePodLabels_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdateSecret provides a mock function with given fields: secret
 func (_m *MockK8sClient) UpdateSecret(secret *v1.Secret) error {
 	ret := _m.Called(secret)
