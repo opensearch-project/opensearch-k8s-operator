@@ -1,162 +1,165 @@
-name: Operator Upgrade Test
+# NOTE(joseb): This workflow is ignored due to CRD API version changes make this test incompatible.
+#       We will enable this after the last stable version uses opensearch.org/v1.
 
-on:
-  pull_request:
-  workflow_dispatch:
-    inputs:
-      enable_debug_tmate:
-        description: 'Enable interactive tmate debug session on operator upgrade test failure'
-        required: false
-        type: boolean
-        default: false
+# name: Operator Upgrade Test
 
-jobs:
-  operator-upgrade:
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        cluster_version:
-          - "2.19.4"
-          - "3.4.0"
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Get latest stable operator version
-        id: get_latest_release
-        run: |
-          # Get the latest release tag (excluding pre-releases)
-          LATEST_RELEASE=$(curl -s https://api.github.com/repos/opensearch-project/opensearch-k8s-operator/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | sed 's/^v//')
-          if [ -z "$LATEST_RELEASE" ]; then
-            echo "Failed to get latest release, using fallback version 2.8.0"
-            LATEST_RELEASE="2.8.0"
-          fi
-          echo "Latest stable operator version: $LATEST_RELEASE"
-          echo "operator_version=$LATEST_RELEASE" >> $GITHUB_OUTPUT
-      - name: Detect debug commit
-        id: debug_commit
-        if: github.event_name == 'pull_request'
-        env:
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-        run: |
-          TARGET_COMMIT="${PR_HEAD_SHA}"
-          echo "Using commit for debug detection: $TARGET_COMMIT"
-          msg="$(git show -s --format=%B "$TARGET_COMMIT")"
-          echo "Commit message:"
-          echo "$msg"
-          if echo "$msg" | grep -iq "debug"; then
-            echo "is_debug=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "is_debug=false" >> "$GITHUB_OUTPUT"
-          fi
-      # https://github.com/actions/runner-images/issues/2840#issuecomment-790492173
-      - name: Remove unnecessary files
-        run: |
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.work'
-          cache: false
-      - uses: nolar/setup-k3d-k3s@v1
-        with:
-          version: v1
-          k3d-name: opensearch-operator-tests
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          # NOTE: Disable kubelet eviction in k3d creation
-          k3d-args: >
-            --servers 1
-            --agents 2
-            -p 30000-30005:30000-30005@agent:0
-            --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
-      - name: Install cert-manager
-        run: |
-          export CLUSTER_NAME=opensearch-operator-tests
-          cd opensearch-operator
-          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
-          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.yaml
-          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
-      - name: Run operator upgrade test
-        id: operator_upgrade_test
-        env:
-          OPERATOR_STABLE_VERSION: ${{ steps.get_latest_release.outputs.operator_version }}
-          CLUSTER_VERSION: ${{ matrix.cluster_version }}
-          SKIP_SUITE_SETUP: "true"
-        run: |
-          set -e
-          export CLUSTER_NAME=opensearch-operator-tests
-          ## Check disk to avoid failed shard assignments due to watermarking
-          df -h
-          cd opensearch-operator
-          ## Prepare kubeconfig
-          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
-          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-          ## Build controller docker image
-          make docker-build
-          ## Import controller docker image
-          k3d image import -c $CLUSTER_NAME controller:latest
-          cd functionaltests
-          ## Run operator upgrade test
-          SKIP_CLEANUP=true go test ./operatortests -ginkgo.focus="OperatorUpgrade" -timeout 60m -ginkgo.v
-      # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled
-      - name: Debug with tmate (operator-upgrade)
-        if: always() && (steps.operator_upgrade_test.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || github.event.inputs.enable_debug_tmate == 'true'))
-        uses: mxschmitt/action-tmate@v3
-        timeout-minutes: 30
-        with:
-          limit-access-to-actor: true
-      - name: Collect operator logs
-        if: always() && steps.operator_upgrade_test.outcome == 'failure'
-        run: |
-          df -h
-          export CLUSTER_NAME=opensearch-operator-tests
-          cd opensearch-operator
-          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
-          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-          mkdir -p ../logs
-          echo "Collecting all pods list (first to see status)..."
-          kubectl get pods -n default -o wide > ../logs/all-pods.txt 2>&1 || true
-          echo "=== All Pods Status ==="
-          cat ../logs/all-pods.txt || true
-          echo "Collecting OpenSearchCluster resource status..."
-          kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
-          echo "Collecting events..."
-          kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
-          echo "Collecting pod descriptions..."
-          kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opensearch.org/opensearch-cluster=upgrade-test-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opensearch.cluster.dashboards=upgrade-test-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
-          echo "Collecting logs from OpenSearch operator pods..."
-          kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
-            pod_name=$(echo $pod | cut -d'/' -f2)
-            echo "Collecting logs from $pod_name"
-            kubectl logs -n default $pod_name > ../logs/operator-${pod_name}.log 2>&1 || true
-            kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
-          done
-          echo "Collecting logs from OpenSearch cluster pods..."
-          kubectl get pods -n default -l opensearch.org/opensearch-cluster=upgrade-test-cluster -o name 2>/dev/null | while read pod; do
-            pod_name=$(echo $pod | cut -d'/' -f2)
-            echo "Collecting logs from $pod_name"
-            kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
-            kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
-          done
-          echo "Collecting logs from OpenSearch Dashboards pods..."
-          kubectl get pods -n default -l opensearch.cluster.dashboards=upgrade-test-cluster -o name 2>/dev/null | while read pod; do
-            pod_name=$(echo $pod | cut -d'/' -f2)
-            echo "Collecting logs from $pod_name"
-            kubectl logs -n default $pod_name > ../logs/dashboards-${pod_name}.log 2>&1 || true
-            kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
-          done
-      - name: Publish logs
-        if: always() && steps.operator_upgrade_test.outcome == 'failure'
-        uses: actions/upload-artifact@v4
-        with:
-          name: operator-upgrade-logs-${{ matrix.cluster_version }}
-          path: logs/
-          retention-days: 7
+# on:
+#   pull_request:
+#   workflow_dispatch:
+#     inputs:
+#       enable_debug_tmate:
+#         description: 'Enable interactive tmate debug session on operator upgrade test failure'
+#         required: false
+#         type: boolean
+#         default: false
+
+# jobs:
+#   operator-upgrade:
+#     runs-on: ubuntu-latest
+#     strategy:
+#       fail-fast: false
+#       matrix:
+#         cluster_version:
+#           - "2.19.4"
+#           - "3.4.0"
+#     steps:
+#       - name: Checkout code
+#         uses: actions/checkout@v4
+#         with:
+#           fetch-depth: 0
+#       - name: Get latest stable operator version
+#         id: get_latest_release
+#         run: |
+#           # Get the latest release tag (excluding pre-releases)
+#           LATEST_RELEASE=$(curl -s https://api.github.com/repos/opensearch-project/opensearch-k8s-operator/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | sed 's/^v//')
+#           if [ -z "$LATEST_RELEASE" ]; then
+#             echo "Failed to get latest release, using fallback version 2.8.0"
+#             LATEST_RELEASE="2.8.0"
+#           fi
+#           echo "Latest stable operator version: $LATEST_RELEASE"
+#           echo "operator_version=$LATEST_RELEASE" >> $GITHUB_OUTPUT
+#       - name: Detect debug commit
+#         id: debug_commit
+#         if: github.event_name == 'pull_request'
+#         env:
+#           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+#         run: |
+#           TARGET_COMMIT="${PR_HEAD_SHA}"
+#           echo "Using commit for debug detection: $TARGET_COMMIT"
+#           msg="$(git show -s --format=%B "$TARGET_COMMIT")"
+#           echo "Commit message:"
+#           echo "$msg"
+#           if echo "$msg" | grep -iq "debug"; then
+#             echo "is_debug=true" >> "$GITHUB_OUTPUT"
+#           else
+#             echo "is_debug=false" >> "$GITHUB_OUTPUT"
+#           fi
+#       # https://github.com/actions/runner-images/issues/2840#issuecomment-790492173
+#       - name: Remove unnecessary files
+#         run: |
+#           sudo rm -rf /usr/share/dotnet
+#           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
+#       - name: Setup go
+#         uses: actions/setup-go@v5
+#         with:
+#           go-version-file: 'go.work'
+#           cache: false
+#       - uses: nolar/setup-k3d-k3s@v1
+#         with:
+#           version: v1
+#           k3d-name: opensearch-operator-tests
+#           github-token: ${{ secrets.GITHUB_TOKEN }}
+#           # NOTE: Disable kubelet eviction in k3d creation
+#           k3d-args: >
+#             --servers 1
+#             --agents 2
+#             -p 30000-30005:30000-30005@agent:0
+#             --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
+#       - name: Install cert-manager
+#         run: |
+#           export CLUSTER_NAME=opensearch-operator-tests
+#           cd opensearch-operator
+#           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+#           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+#           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.yaml
+#           kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
+#       - name: Run operator upgrade test
+#         id: operator_upgrade_test
+#         env:
+#           OPERATOR_STABLE_VERSION: ${{ steps.get_latest_release.outputs.operator_version }}
+#           CLUSTER_VERSION: ${{ matrix.cluster_version }}
+#           SKIP_SUITE_SETUP: "true"
+#         run: |
+#           set -e
+#           export CLUSTER_NAME=opensearch-operator-tests
+#           ## Check disk to avoid failed shard assignments due to watermarking
+#           df -h
+#           cd opensearch-operator
+#           ## Prepare kubeconfig
+#           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+#           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+#           ## Build controller docker image
+#           make docker-build
+#           ## Import controller docker image
+#           k3d image import -c $CLUSTER_NAME controller:latest
+#           cd functionaltests
+#           ## Run operator upgrade test
+#           SKIP_CLEANUP=true go test ./operatortests -ginkgo.focus="OperatorUpgrade" -timeout 60m -ginkgo.v
+#       # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled
+#       - name: Debug with tmate (operator-upgrade)
+#         if: always() && (steps.operator_upgrade_test.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || github.event.inputs.enable_debug_tmate == 'true'))
+#         uses: mxschmitt/action-tmate@v3
+#         timeout-minutes: 30
+#         with:
+#           limit-access-to-actor: true
+#       - name: Collect operator logs
+#         if: always() && steps.operator_upgrade_test.outcome == 'failure'
+#         run: |
+#           df -h
+#           export CLUSTER_NAME=opensearch-operator-tests
+#           cd opensearch-operator
+#           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+#           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+#           mkdir -p ../logs
+#           echo "Collecting all pods list (first to see status)..."
+#           kubectl get pods -n default -o wide > ../logs/all-pods.txt 2>&1 || true
+#           echo "=== All Pods Status ==="
+#           cat ../logs/all-pods.txt || true
+#           echo "Collecting OpenSearchCluster resource status..."
+#           kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
+#           echo "Collecting events..."
+#           kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
+#           echo "Collecting pod descriptions..."
+#           kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
+#           kubectl describe pods -n default -l opensearch.org/opensearch-cluster=upgrade-test-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
+#           kubectl describe pods -n default -l opensearch.cluster.dashboards=upgrade-test-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
+#           echo "Collecting logs from OpenSearch operator pods..."
+#           kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
+#             pod_name=$(echo $pod | cut -d'/' -f2)
+#             echo "Collecting logs from $pod_name"
+#             kubectl logs -n default $pod_name > ../logs/operator-${pod_name}.log 2>&1 || true
+#             kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
+#           done
+#           echo "Collecting logs from OpenSearch cluster pods..."
+#           kubectl get pods -n default -l opensearch.org/opensearch-cluster=upgrade-test-cluster -o name 2>/dev/null | while read pod; do
+#             pod_name=$(echo $pod | cut -d'/' -f2)
+#             echo "Collecting logs from $pod_name"
+#             kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
+#             kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
+#           done
+#           echo "Collecting logs from OpenSearch Dashboards pods..."
+#           kubectl get pods -n default -l opensearch.cluster.dashboards=upgrade-test-cluster -o name 2>/dev/null | while read pod; do
+#             pod_name=$(echo $pod | cut -d'/' -f2)
+#             echo "Collecting logs from $pod_name"
+#             kubectl logs -n default $pod_name > ../logs/dashboards-${pod_name}.log 2>&1 || true
+#             kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
+#           done
+#       - name: Publish logs
+#         if: always() && steps.operator_upgrade_test.outcome == 'failure'
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: operator-upgrade-logs-${{ matrix.cluster_version }}
+#           path: logs/
+#           retention-days: 7
 
 

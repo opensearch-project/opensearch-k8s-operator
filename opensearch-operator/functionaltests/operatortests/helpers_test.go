@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -145,7 +144,14 @@ func ExposePodViaNodePort(selector map[string]string, namespace string, nodePort
 	// Check if service already exists
 	err := k8sClient.Get(context.Background(), client.ObjectKey{Name: serviceName, Namespace: namespace}, &service)
 	if err == nil {
-		// Service already exists, return success
+		// Service already exists - check if selector matches
+		if !mapsEqual(service.Spec.Selector, selector) {
+			// Selector doesn't match, update it
+			service.Spec.Selector = selector
+			if err := k8sClient.Update(context.Background(), &service); err != nil {
+				return fmt.Errorf("failed to update NodePort service selector: %w", err)
+			}
+		}
 		return nil
 	}
 	if !apierrors.IsNotFound(err) {
@@ -173,6 +179,19 @@ func ExposePodViaNodePort(selector map[string]string, namespace string, nodePort
 		},
 	}
 	return k8sClient.Create(context.Background(), &service)
+}
+
+// mapsEqual compares two maps for equality
+func mapsEqual(a, b map[string]string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }
 
 func CleanUpNodePort(namespace string, nodePort int32) error {
@@ -214,7 +233,7 @@ func WaitForClusterReady(k8sClient client.Client, clusterName, namespace string,
 
 			// Check if cluster is ready (you might need to adjust this based on your cluster status)
 			// For now, we'll just check if we can connect
-			manager, err := NewTestDataManager(k8sClient, clusterName, namespace)
+			manager, err := NewTestDataManager(k8sClient, clusterName, namespace, false)
 			if err == nil {
 				health, err := manager.osClient.GetHealth()
 				if err == nil && (health.Status == "green" || health.Status == "yellow") {
@@ -237,14 +256,14 @@ func getContextWithLogger() context.Context {
 }
 
 var (
-	nodePortOnce sync.Once
-	nodePortURL  string
-	nodePortErr  error
+	nodePortURL string
+	nodePortErr error
 )
 
 // getAccessibleClusterURL returns a cluster URL that can be accessed from outside the k3d cluster.
 // For k3d clusters, we expose the OpenSearch service via a NodePort and access it through localhost.
-func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.OpenSearchCluster) (string, error) {
+// useOldAPI: true to use old API group label (opster.io/opensearch-cluster), false for new API group label (opensearch.org/opensearch-cluster)
+func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.OpenSearchCluster, useOldAPI bool) (string, error) {
 	httpPort := cluster.Spec.General.HttpPort
 	if httpPort == 0 {
 		httpPort = 9200
@@ -256,18 +275,34 @@ func getAccessibleClusterURL(k8sClient client.Client, cluster *opensearchv1.Open
 
 	const nodePort int32 = 30000 // must match k3d port mapping (30000-30005)
 
-	// Expose the OpenSearch HTTP service via NodePort exactly once
-	nodePortOnce.Do(func() {
-		selector := map[string]string{
-			helpers.ClusterLabel: cluster.Name,
-		}
+	// Use appropriate label based on API group
+	clusterLabel := helpers.ClusterLabel // "opensearch.org/opensearch-cluster"
+	if useOldAPI {
+		clusterLabel = "opster.io/opensearch-cluster"
+	}
+	selector := map[string]string{
+		clusterLabel: cluster.Name,
+	}
 
-		// Ignore errors in subsequent calls; NodePort is created once
-		nodePortErr = ExposePodViaNodePort(selector, cluster.Namespace, nodePort, httpPort)
-		if nodePortErr == nil {
-			nodePortURL = fmt.Sprintf("%s://127.0.0.1:%d", protocol, nodePort)
+	// Expose the OpenSearch HTTP service via NodePort
+	// ExposePodViaNodePort will update the selector if the service already exists with a different selector
+	nodePortErr = ExposePodViaNodePort(selector, cluster.Namespace, nodePort, httpPort)
+	if nodePortErr == nil {
+		nodePortURL = fmt.Sprintf("%s://127.0.0.1:%d", protocol, nodePort)
+	} else {
+		// If that failed, try the other label (in case pods have both labels during migration)
+		otherLabel := helpers.ClusterLabel
+		if !useOldAPI {
+			otherLabel = "opster.io/opensearch-cluster"
 		}
-	})
+		otherSelector := map[string]string{
+			otherLabel: cluster.Name,
+		}
+		if err := ExposePodViaNodePort(otherSelector, cluster.Namespace, nodePort, httpPort); err == nil {
+			nodePortURL = fmt.Sprintf("%s://127.0.0.1:%d", protocol, nodePort)
+			nodePortErr = nil
+		}
+	}
 
 	if nodePortErr != nil {
 		return "", nodePortErr
@@ -342,7 +377,7 @@ func setupDataIntegrityTest(clusterName, namespace string) (*TestDataManager, *C
 	GinkgoWriter.Printf("  + Data node pool ready: 3/3 replicas\n")
 
 	By("Initializing test data manager")
-	dataManager, err := NewTestDataManager(k8sClient, clusterName, namespace)
+	dataManager, err := NewTestDataManager(k8sClient, clusterName, namespace, false)
 	Expect(err).NotTo(HaveOccurred())
 	GinkgoWriter.Printf("  + Test data manager initialized\n")
 

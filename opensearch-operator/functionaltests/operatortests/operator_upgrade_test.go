@@ -112,7 +112,8 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Data node pool ready: 3/3 replicas\n")
 
 		By("Step 3: Initializing test data manager and verifying cluster")
-		dataManager, err = NewTestDataManager(k8sClient, clusterName, namespace)
+		// Use new API group (opensearch.org/v1)
+		dataManager, err = NewTestDataManager(k8sClient, clusterName, namespace, false)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Test data manager initialized\n")
 
@@ -148,8 +149,8 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Operator is ready after upgrade\n")
 
 		By("Step 6: Verifying cluster is still functional after upgrade")
-		// Reconnect to cluster
-		err = dataManager.Reconnect()
+		// Reconnect to cluster using new API group
+		err = dataManager.Reconnect(false)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Reconnected to cluster\n")
 

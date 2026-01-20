@@ -59,7 +59,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Reconnecting to cluster")
-			err = dataManager.Reconnect()
+			err = dataManager.Reconnect(false)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying data integrity after adding node pool")
@@ -118,7 +118,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Reconnecting and verifying data after adding new data node pool")
-			err = dataManager.Reconnect()
+			err = dataManager.Reconnect(false)
 			Expect(err).NotTo(HaveOccurred())
 			err = dataManager.ValidateDataIntegrity(testData)
 			Expect(err).NotTo(HaveOccurred())
@@ -133,7 +133,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			time.Sleep(15 * time.Second)
 
 			By("Reconnecting and verifying data after removing old data node pool")
-			err = dataManager.Reconnect()
+			err = dataManager.Reconnect(false)
 			Expect(err).NotTo(HaveOccurred())
 			err = dataManager.ValidateDataIntegrity(testData)
 			Expect(err).NotTo(HaveOccurred())

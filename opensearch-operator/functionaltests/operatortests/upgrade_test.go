@@ -48,7 +48,7 @@ var _ = Describe("DataIntegrityUpgrade", func() {
 		GinkgoWriter.Printf("  + Dashboards upgrade completed successfully\n")
 
 		By("Reconnecting to cluster after upgrade")
-		err = dataManager.Reconnect()
+		err = dataManager.Reconnect(false)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Reconnected to cluster\n")
 

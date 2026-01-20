@@ -34,6 +34,8 @@ var _ = Describe("APIGroupMigration", func() {
 		operatorVersion string
 		clusterVersion  string
 		operations      *ClusterOperations
+		dataManager     *TestDataManager
+		testData        map[string]map[string]interface{}
 	)
 
 	BeforeEach(func() {
@@ -102,7 +104,28 @@ var _ = Describe("APIGroupMigration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Cluster is in RUNNING phase\n")
 
-		By("Step 3: Creating test CRDs with old API group")
+		By("Step 3: Initializing test data manager and verifying cluster before migration")
+		// Use old API group before migration
+		dataManager, err = NewTestDataManager(k8sClient, clusterName, namespace, true)
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Printf("  + Test data manager initialized (using old API group)\n")
+
+		By("Importing test data into OpenSearch indices")
+		testData, err = dataManager.ImportTestData(getDefaultTestData())
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Printf("  + Test data imported: %d indices\n", len(getDefaultTestData()))
+
+		By("Verifying data integrity before migration")
+		err = dataManager.ValidateDataIntegrity(testData)
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Printf("  + Data integrity verified before migration\n")
+
+		By("Verifying cluster health before migration")
+		err = dataManager.ValidateClusterHealth(true) // yellow allowed
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Printf("  + Cluster health verified before migration\n")
+
+		By("Step 4: Creating test CRDs with old API group")
 		err = createOldAPIGroupTestCRDs(clusterName, namespace)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Test CRDs created with old API group\n")
@@ -112,7 +135,7 @@ var _ = Describe("APIGroupMigration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + All old CRDs are ready\n")
 
-		By("Step 4: Upgrading operator to current codebase (uses opensearch.org/v1)")
+		By("Step 5: Upgrading operator to current codebase (uses opensearch.org/v1)")
 		err = upgradeOperatorToCurrent()
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Operator upgrade initiated\n")
@@ -122,7 +145,7 @@ var _ = Describe("APIGroupMigration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Operator is ready after upgrade\n")
 
-		By("Step 5: Verifying migration controller created new API group resources")
+		By("Step 6: Verifying migration controller created new API group resources")
 		// Wait for migration to complete
 		err = waitForNewAPIGroupResource(clusterName, namespace, "opensearchclusters", "opensearch.org", time.Minute*5)
 		Expect(err).NotTo(HaveOccurred())
@@ -140,7 +163,7 @@ var _ = Describe("APIGroupMigration", func() {
 		Expect(newCluster.Annotations["opensearch.org/migrated-from"]).To(Equal("opensearch.opster.io/v1"))
 		GinkgoWriter.Printf("  + Migration annotations verified\n")
 
-		By("Step 6: Verifying both old and new resources exist")
+		By("Step 7: Verifying both old and new resources exist")
 		// Old resource should still exist
 		err = k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: namespace}, oldCluster)
 		Expect(err).NotTo(HaveOccurred())
@@ -151,7 +174,7 @@ var _ = Describe("APIGroupMigration", func() {
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + New API group resource exists\n")
 
-		By("Step 7: Verifying status synchronization")
+		By("Step 8: Verifying status synchronization")
 		// Wait a bit for status sync
 		time.Sleep(10 * time.Second)
 
@@ -166,7 +189,29 @@ var _ = Describe("APIGroupMigration", func() {
 		Expect(newCluster.Status.Phase).To(Equal(oldCluster.Status.Phase))
 		GinkgoWriter.Printf("  + Status synchronized: phase=%s\n", newCluster.Status.Phase)
 
-		By("Step 8: Verifying test CRDs were migrated")
+		By("Step 9: Verifying cluster is still functional after migration")
+		// Reconnect to cluster using new API group after migration
+		err = dataManager.Reconnect(false)
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Printf("  + Reconnected to cluster (using new API group)\n")
+
+		// Verify cluster health
+		err = dataManager.ValidateClusterHealth(true) // yellow allowed
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Printf("  + Cluster health verified after migration\n")
+
+		// Verify data integrity
+		err = dataManager.ValidateDataIntegrity(testData)
+		Expect(err).NotTo(HaveOccurred())
+		GinkgoWriter.Printf("  + Data integrity verified after migration\n")
+
+		// Test that we can still perform operations on the cluster
+		health, err := dataManager.osClient.GetHealth()
+		Expect(err).NotTo(HaveOccurred())
+		Expect(health.Status).To(BeElementOf("green", "yellow"))
+		GinkgoWriter.Printf("  + Cluster operations verified: status=%s\n", health.Status)
+
+		By("Step 10: Verifying test CRDs were migrated")
 		// Wait for CRD migration
 		err = waitForNewAPIGroupResource("migration-test-action-group", namespace, "opensearchactiongroups", "opensearch.org", time.Minute*2)
 		Expect(err).NotTo(HaveOccurred())
@@ -179,7 +224,7 @@ var _ = Describe("APIGroupMigration", func() {
 
 		GinkgoWriter.Printf("  + All test CRDs migrated successfully\n")
 
-		By("Step 9: Testing deletion behavior - deleting new resource should delete old resource")
+		By("Step 11: Testing deletion behavior - deleting new resource should delete old resource")
 		// Delete new cluster
 		err = k8sClient.Delete(context.Background(), newCluster)
 		Expect(err).NotTo(HaveOccurred())
