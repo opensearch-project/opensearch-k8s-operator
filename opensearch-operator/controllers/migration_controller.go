@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
@@ -229,11 +230,21 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 		newStatus.ComponentsStatus = []opensearchv1.ComponentStatus{}
 	}
 
-	// Use UpdateOpenSearchClusterStatus helper method
-	k8sClient := k8s.NewK8sClient(r.Client, ctx)
-	finalStatus := newStatus // Capture for closure
-	if err := k8sClient.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(newCluster), func(instance *opensearchv1.OpenSearchCluster) {
-		instance.Status = finalStatus
+	// Copy status from old to new cluster (status can only be set after creation)
+	// For the initial status copy right after creation, use a regular Update since there's no risk of spec conflict
+	// Use retry to handle cases where the resource might not be immediately available (especially in tests)
+	if err := retry.OnError(retry.DefaultRetry, func(err error) bool {
+		// Retry on NotFound errors (resource might not be immediately available)
+		return errors.IsNotFound(err)
+	}, func() error {
+		// Get the newly created cluster
+		createdCluster := &opensearchv1.OpenSearchCluster{}
+		if err := r.Get(ctx, client.ObjectKeyFromObject(newCluster), createdCluster); err != nil {
+			return err
+		}
+		// Update status
+		createdCluster.Status = newStatus
+		return r.Update(ctx, createdCluster)
 	}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update new cluster status: %w", err)
 	}

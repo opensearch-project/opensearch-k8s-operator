@@ -29,7 +29,7 @@ func NewClusterOperations(k8sClient client.Client, namespace string) *ClusterOpe
 // UpgradeCluster upgrades the cluster to the specified version
 func (co *ClusterOperations) UpgradeCluster(clusterName string, opensearchVersion, dashboardsVersion string) error {
 	cluster := unstructured.Unstructured{}
-	cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpenSearchCluster"})
+	cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.org", Version: "v1", Kind: "OpenSearchCluster"})
 
 	err := co.k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: co.namespace}, &cluster)
 	if err != nil {
