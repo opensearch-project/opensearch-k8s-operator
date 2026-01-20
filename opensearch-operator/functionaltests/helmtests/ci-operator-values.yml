@@ -3,6 +3,8 @@ manager:
     repository: controller
     tag: latest
     pullPolicy: IfNotPresent
-# NOTE(joseb): disable validation webhooks
+# Enable validation webhooks with cert-manager
 webhook:
-  enabled: false
+  enabled: true
+  certManager:
+    enabled: true

@@ -5,20 +5,20 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	v1 "k8s.io/api/core/v1"
 )
 
 var _ = Describe("Additional volumes", func() {
 	namespace := "Additional volume test"
-	var volumeConfigs []opsterv1.AdditionalVolume
+	var volumeConfigs []opensearchv1.AdditionalVolume
 	var mockClient *k8s.MockK8sClient
 
 	BeforeEach(func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		mockClient.EXPECT().Context().Return(context.Background())
-		volumeConfigs = []opsterv1.AdditionalVolume{
+		volumeConfigs = []opensearchv1.AdditionalVolume{
 			{
 				Name: "myVolume",
 				Path: "myPath/a/b",
@@ -239,15 +239,15 @@ var _ = Describe("OpensearchClusterURL", func() {
 	When("HTTP TLS is enabled", func() {
 		It("should return https URL", func() {
 			enabled := true
-			cluster := &opsterv1.OpenSearchCluster{
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+			cluster := &opensearchv1.OpenSearchCluster{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: "test-service",
 						HttpPort:    9200,
 					},
-					Security: &opsterv1.Security{
-						Tls: &opsterv1.TlsConfig{
-							Http: &opsterv1.TlsConfigHttp{
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
 								Enabled: &enabled,
 							},
 						},
@@ -268,15 +268,15 @@ var _ = Describe("OpensearchClusterURL", func() {
 	When("HTTP TLS is disabled", func() {
 		It("should return http URL", func() {
 			enabled := false
-			cluster := &opsterv1.OpenSearchCluster{
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+			cluster := &opensearchv1.OpenSearchCluster{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: "test-service",
 						HttpPort:    9200,
 					},
-					Security: &opsterv1.Security{
-						Tls: &opsterv1.TlsConfig{
-							Http: &opsterv1.TlsConfigHttp{
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
 								Enabled: &enabled,
 							},
 						},

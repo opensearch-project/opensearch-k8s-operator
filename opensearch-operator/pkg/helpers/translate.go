@@ -1,12 +1,12 @@
 package helpers
 
 import (
-	v1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 )
 
 // TranslateIndexTemplateToRequest rewrites the CRD format to the gateway format
-func TranslateIndexTemplateToRequest(spec v1.OpensearchIndexTemplateSpec) requests.IndexTemplate {
+func TranslateIndexTemplateToRequest(spec opensearchv1.OpensearchIndexTemplateSpec) requests.IndexTemplate {
 	request := requests.IndexTemplate{
 		IndexPatterns: spec.IndexPatterns,
 		DataStream:    TranslateDatastreamToRequest(spec.DataStream),
@@ -25,7 +25,7 @@ func TranslateIndexTemplateToRequest(spec v1.OpensearchIndexTemplateSpec) reques
 }
 
 // TranslateComponentTemplateToRequest rewrites the CRD format to the gateway format
-func TranslateComponentTemplateToRequest(spec v1.OpensearchComponentTemplateSpec) requests.ComponentTemplate {
+func TranslateComponentTemplateToRequest(spec opensearchv1.OpensearchComponentTemplateSpec) requests.ComponentTemplate {
 	request := requests.ComponentTemplate{
 		Template: TranslateIndexToRequest(spec.Template),
 		Version:  spec.Version,
@@ -38,7 +38,7 @@ func TranslateComponentTemplateToRequest(spec v1.OpensearchComponentTemplateSpec
 }
 
 // TranslateDatastreamToRequest rewrites the CRD format to the gateway format
-func TranslateDatastreamToRequest(spec *v1.OpensearchDatastreamSpec) *requests.Datastream {
+func TranslateDatastreamToRequest(spec *opensearchv1.OpensearchDatastreamSpec) *requests.Datastream {
 	if spec == nil {
 		return nil
 	}
@@ -51,7 +51,7 @@ func TranslateDatastreamToRequest(spec *v1.OpensearchDatastreamSpec) *requests.D
 }
 
 // TranslateIndexToRequest rewrites the CRD format to the gateway format
-func TranslateIndexToRequest(spec v1.OpensearchIndexSpec) requests.Index {
+func TranslateIndexToRequest(spec opensearchv1.OpensearchIndexSpec) requests.Index {
 	aliases := make(map[string]requests.IndexAlias)
 	for key, val := range spec.Aliases {
 		aliases[key] = requests.IndexAlias{

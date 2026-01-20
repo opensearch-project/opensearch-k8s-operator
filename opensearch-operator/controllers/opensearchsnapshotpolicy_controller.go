@@ -19,7 +19,7 @@ package controllers
 import (
 	"context"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -36,14 +36,16 @@ import (
 type OpensearchSnapshotPolicyReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Instance *opsterv1.OpensearchSnapshotPolicy
+	Instance *opensearchv1.OpensearchSnapshotPolicy
 	logr.Logger
 	Recorder record.EventRecorder
 }
 
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchsnapshotpolicies,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchsnapshotpolicies/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchsnapshotpolicies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchsnapshotpolicies,verbs=get;list;watch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -58,7 +60,7 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 	r.Logger = log.FromContext(ctx).WithValues("snapshotpolicy", req.NamespacedName)
 	r.Info("Reconciling OpensearchSnapshotPolicy")
 
-	r.Instance = &opsterv1.OpensearchSnapshotPolicy{}
+	r.Instance = &opensearchv1.OpensearchSnapshotPolicy{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -95,7 +97,7 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpensearchSnapshotPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.OpensearchSnapshotPolicy{}).
-		Owns(&opsterv1.OpenSearchCluster{}).
+		For(&opensearchv1.OpensearchSnapshotPolicy{}).
+		Owns(&opensearchv1.OpenSearchCluster{}).
 		Complete(r)
 }

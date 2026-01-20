@@ -4,7 +4,7 @@ import (
 	"embed"
 	"fmt"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 )
 
 var defaultSecurityConfigFilenames = []string{
@@ -26,14 +26,14 @@ func defaultSecurityconfigData() (map[string][]byte, error) {
 	return data, nil
 }
 
-func GeneratedSecurityConfigSecretName(cr *opsterv1.OpenSearchCluster) string {
+func GeneratedSecurityConfigSecretName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-security-config-generated", cr.Name)
 }
 
-func GeneratedAdminCredentialsSecretName(cr *opsterv1.OpenSearchCluster) string {
+func GeneratedAdminCredentialsSecretName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-admin-password", cr.Name)
 }
 
-func GeneratedDashboardsCredentialsSecretName(cr *opsterv1.OpenSearchCluster) string {
+func GeneratedDashboardsCredentialsSecretName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-dashboards-password", cr.Name)
 }

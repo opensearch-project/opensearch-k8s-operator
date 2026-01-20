@@ -1,7 +1,7 @@
 package helpers
 
 import (
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
@@ -55,7 +55,7 @@ func DeleteClusterMetrics(namespace string, clusterName string) {
 	ClusterShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 }
 
-func UpdateClusterInfo(instance *opsterv1.OpenSearchCluster, health opsterv1.OpenSearchHealth, healthResponse responses.ClusterHealthResponse) {
+func UpdateClusterInfo(instance *opensearchv1.OpenSearchCluster, health opensearchv1.OpenSearchHealth, healthResponse responses.ClusterHealthResponse) {
 	namespace := instance.Namespace
 	clusterName := instance.Name
 
@@ -65,18 +65,18 @@ func UpdateClusterInfo(instance *opsterv1.OpenSearchCluster, health opsterv1.Ope
 
 	var value float64
 	switch health {
-	case opsterv1.OpenSearchRedHealth:
+	case opensearchv1.OpenSearchRedHealth:
 		value = 2
-	case opsterv1.OpenSearchYellowHealth:
+	case opensearchv1.OpenSearchYellowHealth:
 		value = 1
-	case opsterv1.OpenSearchGreenHealth:
+	case opensearchv1.OpenSearchGreenHealth:
 		value = 0
 	default:
 		value = -1
 	}
 	ClusterHealth.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName}).Set(value)
 
-	if health != opsterv1.OpenSearchUnknownHealth {
+	if health != opensearchv1.OpenSearchUnknownHealth {
 		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "active"}).Set(float64(healthResponse.ActiveShards))
 		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "relocating"}).Set(float64(healthResponse.RelocatingShards))
 		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "initializing"}).Set(float64(healthResponse.InitializingShards))

@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -25,7 +25,7 @@ type SnapshotRepositoryReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opsterv1.OpenSearchCluster
+	instance *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
 
@@ -33,7 +33,7 @@ func NewSnapshotRepositoryReconciler(
 	client client.Client,
 	ctx context.Context,
 	recorder record.EventRecorder,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...ReconcilerOption,
 ) *SnapshotRepositoryReconciler {
 	options := ReconcilerOptions{}
@@ -57,7 +57,7 @@ func (r *SnapshotRepositoryReconciler) Reconcile() (ctrl.Result, error) {
 	var retErr error
 
 	// Check cluster is ready
-	if r.instance.Status.Phase != opsterv1.PhaseRunning {
+	if r.instance.Status.Phase != opensearchv1.PhaseRunning {
 		r.logger.Info("opensearch cluster is not running, requeueing")
 		reason = "waiting for opensearch cluster status to be running"
 		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
@@ -91,7 +91,7 @@ func (r *SnapshotRepositoryReconciler) Reconcile() (ctrl.Result, error) {
 	}
 }
 
-func (r *SnapshotRepositoryReconciler) ReconcileRepository(repoConfig *opsterv1.SnapshotRepoConfig) error {
+func (r *SnapshotRepositoryReconciler) ReconcileRepository(repoConfig *opensearchv1.SnapshotRepoConfig) error {
 	newSnapshotRepository := mapSnapshotRepository(repoConfig)
 
 	existingRepository, retErr := services.GetSnapshotRepository(r.ctx, r.osClient, repoConfig.Name)
@@ -141,7 +141,7 @@ func (r *SnapshotRepositoryReconciler) Delete() error {
 	return nil
 }
 
-func mapSnapshotRepository(repository *opsterv1.SnapshotRepoConfig) requests.SnapshotRepository {
+func mapSnapshotRepository(repository *opensearchv1.SnapshotRepoConfig) requests.SnapshotRepository {
 	return requests.SnapshotRepository{
 		Type:     repository.Type,
 		Settings: repository.Settings,

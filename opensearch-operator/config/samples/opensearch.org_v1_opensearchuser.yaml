@@ -1,0 +1,10 @@
+apiVersion: opensearch.org/v1
+kind: OpensearchUser
+metadata:
+  name: opensearch-user-sample
+spec:
+  opensearchCluster:
+    name: opensearch-sample
+  passwordFrom:
+    name: opensearch-user-secret
+    key: password

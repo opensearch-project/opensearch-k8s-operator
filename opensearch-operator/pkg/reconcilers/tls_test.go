@@ -6,7 +6,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/stretchr/testify/mock"
@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func newTLSReconciler(k8sClient *k8s.MockK8sClient, spec *opsterv1.OpenSearchCluster) (*ReconcilerContext, *TLSReconciler) {
+func newTLSReconciler(k8sClient *k8s.MockK8sClient, spec *opensearchv1.OpenSearchCluster) (*ReconcilerContext, *TLSReconciler) {
 	reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, spec, spec.Spec.NodePools)
 	underTest := &TLSReconciler{
 		client:            k8sClient,
@@ -39,13 +39,13 @@ var _ = Describe("TLS Controller", func() {
 			transportSecretName := clusterName + "-transport-cert"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{Generate: true},
-						Http:      &opsterv1.TlsConfigHttp{Generate: true},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{},
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+						Http:      &opensearchv1.TlsConfigHttp{Generate: true},
 					}},
 				},
 			}
@@ -84,15 +84,15 @@ var _ = Describe("TLS Controller", func() {
 			transportSecretName := clusterName + "-transport-cert"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{Generate: true, PerNode: true},
-						Http:      &opsterv1.TlsConfigHttp{Generate: true},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{},
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{Generate: true, PerNode: true},
+						Http:      &opensearchv1.TlsConfigHttp{Generate: true},
 					}},
-					NodePools: []opsterv1.NodePool{
+					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
 							Replicas:  3,
@@ -160,20 +160,20 @@ var _ = Describe("TLS Controller", func() {
 	Context("When Reconciling the TLS configuration with external certificates", func() {
 		It("Should not create secrets but only mount them", func() {
 			clusterName := "tls-test-existingsecrets"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{Version: "2.8.0"}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{Version: "2.8.0"}, Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+					Transport: &opensearchv1.TlsConfigTransport{
 						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
 							CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
 						},
 						NodesDn: []string{"CN=mycn", "CN=othercn"},
 					},
-					Http: &opsterv1.TlsConfigHttp{
+					Http: &opensearchv1.TlsConfigHttp{
 						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							Secret:   corev1.LocalObjectReference{Name: "cert-http"},
 							CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
 						},
@@ -227,20 +227,20 @@ var _ = Describe("TLS Controller", func() {
 					"ca.key": []byte("ca.key"),
 				},
 			}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{}, Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+					Transport: &opensearchv1.TlsConfigTransport{
 						Generate: false,
 						PerNode:  true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							Secret: corev1.LocalObjectReference{Name: "my-transport-certs"},
 						},
 						NodesDn: []string{"CN=mycn", "CN=othercn"},
 					},
-					Http: &opsterv1.TlsConfigHttp{
+					Http: &opensearchv1.TlsConfigHttp{
 						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							Secret: corev1.LocalObjectReference{Name: "my-http-certs"},
 						},
 					},
@@ -270,19 +270,19 @@ var _ = Describe("TLS Controller", func() {
 		It("Should create certificates using that CA", func() {
 			clusterName := "tls-withca"
 			caSecretName := clusterName + "-myca"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{Version: "2.8.0"}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{Version: "2.8.0"}, Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+					Transport: &opensearchv1.TlsConfigTransport{
 						Generate: true,
 						PerNode:  true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
 						},
 					},
-					Http: &opsterv1.TlsConfigHttp{
+					Http: &opensearchv1.TlsConfigHttp{
 						Generate: true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
 						},
 					},
@@ -335,22 +335,22 @@ var _ = Describe("TLS Controller", func() {
 					"ca.key": []byte("ca.key"),
 				},
 			}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{Version: "2.8.0"},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.8.0"},
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{
 							Generate: false,
-							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 								Secret:   corev1.LocalObjectReference{Name: "same-secret"},
 								CaSecret: corev1.LocalObjectReference{Name: "same-secret"}, // Same name
 							},
 							NodesDn: []string{"CN=mycn"},
 						},
-						Http: &opsterv1.TlsConfigHttp{
+						Http: &opensearchv1.TlsConfigHttp{
 							Generate: false,
-							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 								Secret:   corev1.LocalObjectReference{Name: "same-secret"},
 								CaSecret: corev1.LocalObjectReference{Name: caSecretName}, // Same name
 							},
@@ -386,23 +386,23 @@ var _ = Describe("TLS Controller", func() {
 					"ca.key": []byte("ca.key"),
 				},
 			}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{Version: "2.19.1"}, // Version that supports hot reload
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.19.1"}, // Version that supports hot reload
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{
 							Generate: false,
-							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 								Secret:          corev1.LocalObjectReference{Name: "cert-transport"},
 								CaSecret:        corev1.LocalObjectReference{Name: "casecret-transport"},
 								EnableHotReload: true,
 							},
 							NodesDn: []string{"CN=mycn"},
 						},
-						Http: &opsterv1.TlsConfigHttp{
+						Http: &opensearchv1.TlsConfigHttp{
 							Generate: false,
-							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 								Secret:          corev1.LocalObjectReference{Name: "cert-http"},
 								CaSecret:        corev1.LocalObjectReference{Name: caSecretName},
 								EnableHotReload: true,
@@ -436,23 +436,23 @@ var _ = Describe("TLS Controller", func() {
 					"ca.key": []byte("ca.key"),
 				},
 			}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{Version: "2.18.0"}, // Version that doesn't support hot reload
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.18.0"}, // Version that doesn't support hot reload
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{
 							Generate: false,
-							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 								Secret:          corev1.LocalObjectReference{Name: "cert-transport"},
 								CaSecret:        corev1.LocalObjectReference{Name: "casecret-transport"},
 								EnableHotReload: true,
 							},
 							NodesDn: []string{"CN=mycn"},
 						},
-						Http: &opsterv1.TlsConfigHttp{
+						Http: &opensearchv1.TlsConfigHttp{
 							Generate: false,
-							TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 								Secret:          corev1.LocalObjectReference{Name: "cert-http"},
 								CaSecret:        corev1.LocalObjectReference{Name: caSecretName},
 								EnableHotReload: true,
@@ -483,16 +483,16 @@ var _ = Describe("TLS Controller", func() {
 			caSecretName := clusterName + "-ca"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
 						HttpPort:    9200,
 					},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{Generate: true},
-						Http: &opsterv1.TlsConfigHttp{
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+						Http: &opensearchv1.TlsConfigHttp{
 							Generate:   true,
 							CustomFQDN: &customFQDN,
 						},
@@ -536,16 +536,16 @@ var _ = Describe("TLS Controller", func() {
 			caSecretName := clusterName + "-ca"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
 						HttpPort:    9200,
 					},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{Generate: true},
-						Http: &opsterv1.TlsConfigHttp{
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+						Http: &opensearchv1.TlsConfigHttp{
 							Generate:   true,
 							CustomFQDN: &emptyFQDN,
 						},

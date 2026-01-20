@@ -2,11 +2,12 @@ package builders
 
 import (
 	"fmt"
+
 	"k8s.io/utils/ptr"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -15,11 +16,11 @@ var _ = Describe("Builders", func() {
 	When("building the dashboards deployment with annotations supplied", func() {
 		It("should populate the dashboard pod and deployment spec with annotations provided", func() {
 			clusterName := "dashboards-add-annotations"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opsterv1.DashboardsConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable: true,
 						Annotations: map[string]string{
 							"testAnnotationKey":  "testValue",
@@ -43,11 +44,11 @@ var _ = Describe("Builders", func() {
 	When("building the dashboards deployment with labels supplied", func() {
 		It("should populate the dashboard pod spec with labels provided", func() {
 			clusterName := "dashboards-add-labels"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opsterv1.DashboardsConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable: true,
 						Labels: map[string]string{
 							"testLabelKey":  "testValue",
@@ -69,17 +70,17 @@ var _ = Describe("Builders", func() {
 		It("should populate the service with the correct type and source ranges", func() {
 			clusterName := "dashboards-add-service-type-load-balancer"
 			sourceRanges := []string{"10.0.0.0/24"}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opsterv1.DashboardsConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable: true,
 						Annotations: map[string]string{
 							"testAnnotationKey":  "testValue",
 							"testAnnotationKey2": "testValue2",
 						},
-						Service: opsterv1.DashboardsServiceSpec{
+						Service: opensearchv1.DashboardsServiceSpec{
 							Type:                     "LoadBalancer",
 							LoadBalancerSourceRanges: sourceRanges,
 						},
@@ -101,11 +102,11 @@ var _ = Describe("Builders", func() {
 			pluginA := "some-plugin"
 			pluginB := "another-plugin"
 
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: "some-name"},
-					Dashboards: opsterv1.DashboardsConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable:      true,
 						PluginsList: []string{pluginA, pluginB},
 					},
@@ -141,11 +142,11 @@ var _ = Describe("Builders", func() {
 				Privileged:               ptr.To(false),
 				AllowPrivilegeEscalation: ptr.To(false),
 			}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: "some-name"},
-					Dashboards: opsterv1.DashboardsConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable:             true,
 						PodSecurityContext: podSecurityContext,
 						SecurityContext:    securityContext,
@@ -161,14 +162,14 @@ var _ = Describe("Builders", func() {
 	When("configuring a serviceaccount for the cluster", func() {
 		It("should configure the serviceaccount for the dashboard pods", func() {
 			const serviceAccountName = "my-serviceaccount"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName:    "some-name",
 						ServiceAccount: serviceAccountName,
 					},
-					Dashboards: opsterv1.DashboardsConfig{
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable: true,
 					},
 				},
@@ -185,13 +186,13 @@ var _ = Describe("Builders", func() {
 				"monitoring": "enabled",
 				"team":       "search",
 			}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opsterv1.DashboardsConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable: true,
-						Service: opsterv1.DashboardsServiceSpec{
+						Service: opensearchv1.DashboardsServiceSpec{
 							Type:   "ClusterIP",
 							Labels: serviceLabels,
 						},
@@ -218,13 +219,13 @@ var _ = Describe("Builders", func() {
 	When("building the dashboards service without service labels", func() {
 		It("should default to only the dashboard selector label", func() {
 			clusterName := "dashboards-no-service-labels"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{ServiceName: clusterName},
-					Dashboards: opsterv1.DashboardsConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable: true,
-						Service: opsterv1.DashboardsServiceSpec{
+						Service: opensearchv1.DashboardsServiceSpec{
 							Type: "ClusterIP",
 							// Labels is nil
 						},
@@ -246,13 +247,13 @@ var _ = Describe("Builders", func() {
 				IP:        "3.5.7.9",
 				Hostnames: hostNames,
 			}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: "some-name",
 					},
-					Dashboards: opsterv1.DashboardsConfig{
+					Dashboards: opensearchv1.DashboardsConfig{
 						Enable:      true,
 						HostAliases: []corev1.HostAlias{hostAlias},
 					},

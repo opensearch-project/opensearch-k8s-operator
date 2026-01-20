@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -29,7 +29,7 @@ func NewClusterOperations(k8sClient client.Client, namespace string) *ClusterOpe
 // UpgradeCluster upgrades the cluster to the specified version
 func (co *ClusterOperations) UpgradeCluster(clusterName string, opensearchVersion, dashboardsVersion string) error {
 	cluster := unstructured.Unstructured{}
-	cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.opster.io", Version: "v1", Kind: "OpenSearchCluster"})
+	cluster.SetGroupVersionKind(schema.GroupVersionKind{Group: "opensearch.org", Version: "v1", Kind: "OpenSearchCluster"})
 
 	err := co.k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: co.namespace}, &cluster)
 	if err != nil {
@@ -44,7 +44,7 @@ func (co *ClusterOperations) UpgradeCluster(clusterName string, opensearchVersio
 
 // ScaleNodePool scales a node pool to the specified number of replicas
 func (co *ClusterOperations) ScaleNodePool(clusterName, componentName string, replicas int32) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := co.k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: co.namespace}, cluster)
 	if err != nil {
 		return err
@@ -62,8 +62,8 @@ func (co *ClusterOperations) ScaleNodePool(clusterName, componentName string, re
 }
 
 // AddNodePool adds a new node pool to the cluster
-func (co *ClusterOperations) AddNodePool(clusterName string, nodePool opsterv1.NodePool) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+func (co *ClusterOperations) AddNodePool(clusterName string, nodePool opensearchv1.NodePool) error {
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := co.k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: co.namespace}, cluster)
 	if err != nil {
 		return err
@@ -82,14 +82,14 @@ func (co *ClusterOperations) AddNodePool(clusterName string, nodePool opsterv1.N
 
 // RemoveNodePool removes a node pool from the cluster
 func (co *ClusterOperations) RemoveNodePool(clusterName, componentName string) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := co.k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: co.namespace}, cluster)
 	if err != nil {
 		return err
 	}
 
 	// Find and remove the node pool
-	newNodePools := []opsterv1.NodePool{}
+	newNodePools := []opensearchv1.NodePool{}
 	found := false
 	for _, np := range cluster.Spec.NodePools {
 		if np.Component == componentName {
@@ -198,7 +198,7 @@ func (co *ClusterOperations) WaitForDashboardsReady(clusterName string, timeout 
 
 // GetNodePoolReplicas returns the current number of replicas for a node pool
 func (co *ClusterOperations) GetNodePoolReplicas(clusterName, componentName string) (int32, error) {
-	cluster := &opsterv1.OpenSearchCluster{}
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := co.k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: co.namespace}, cluster)
 	if err != nil {
 		return 0, err
@@ -215,7 +215,7 @@ func (co *ClusterOperations) GetNodePoolReplicas(clusterName, componentName stri
 
 // GetClusterVersion returns the current OpenSearch version
 func (co *ClusterOperations) GetClusterVersion(clusterName string) (string, error) {
-	cluster := &opsterv1.OpenSearchCluster{}
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := co.k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: co.namespace}, cluster)
 	if err != nil {
 		return "", err

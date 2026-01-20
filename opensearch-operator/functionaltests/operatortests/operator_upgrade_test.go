@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -20,6 +20,11 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
+
+// Note: Operator upgrade tests manage their own operator and clusters.
+// Set SKIP_SUITE_SETUP=true environment variable when running these tests
+// to prevent the shared BeforeSuite from creating test-cluster.
+// Example: SKIP_SUITE_SETUP=true ginkgo --focus "OperatorUpgrade"
 
 var _ = Describe("OperatorUpgrade", func() {
 	var (
@@ -52,7 +57,7 @@ var _ = Describe("OperatorUpgrade", func() {
 		if !ShouldSkipCleanup() {
 			// Clean up cluster
 			By("Cleaning up OpenSearchCluster")
-			cluster := &opsterv1.OpenSearchCluster{}
+			cluster := &opensearchv1.OpenSearchCluster{}
 			err := k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName, Namespace: namespace}, cluster)
 			if err == nil {
 				_ = k8sClient.Delete(context.Background(), cluster)
@@ -107,7 +112,8 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Data node pool ready: 3/3 replicas\n")
 
 		By("Step 3: Initializing test data manager and verifying cluster")
-		dataManager, err = NewTestDataManager(k8sClient, clusterName, namespace)
+		// Use new API group (opensearch.org/v1)
+		dataManager, err = NewTestDataManager(k8sClient, clusterName, namespace, false)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Test data manager initialized\n")
 
@@ -143,8 +149,8 @@ var _ = Describe("OperatorUpgrade", func() {
 		GinkgoWriter.Printf("  + Operator is ready after upgrade\n")
 
 		By("Step 6: Verifying cluster is still functional after upgrade")
-		// Reconnect to cluster
-		err = dataManager.Reconnect()
+		// Reconnect to cluster using new API group
+		err = dataManager.Reconnect(false)
 		Expect(err).NotTo(HaveOccurred())
 		GinkgoWriter.Printf("  + Reconnected to cluster\n")
 
@@ -185,13 +191,13 @@ func installOperatorFromHelm(version string) error {
 		return fmt.Errorf("failed to update helm repo: %w", err)
 	}
 
-	// Install operator
-	cmd = exec.Command("helm", "install", "opensearch-operator", "opensearch-operator/opensearch-operator",
+	// Use upgrade --install to handle case where operator is already installed
+	cmd = exec.Command("helm", "upgrade", "--install", "opensearch-operator", "opensearch-operator/opensearch-operator",
 		"--version", version,
 		"--namespace", "default",
 		"--wait",
 		"--timeout", "5m",
-		"--set", "webhook.enabled=false", // Disable webhooks for testing
+		"--set", "webhook.enabled=true", // Enable webhooks for testing
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
@@ -230,7 +236,7 @@ func upgradeOperatorToCurrent() error {
 		"--namespace", "default",
 		"--wait",
 		"--timeout", "5m",
-		"--set", "webhook.enabled=false",
+		"--set", "webhook.enabled=true",
 		"--set", "manager.image.repository=controller",
 		"--set", "manager.image.tag=latest",
 		"--set", "manager.image.pullPolicy=IfNotPresent",
@@ -284,13 +290,13 @@ func waitForOperatorReady(name, namespace string, timeout time.Duration) error {
 
 // createUpgradeTestCluster creates a test cluster for upgrade testing
 func createUpgradeTestCluster(clusterName, namespace, version string) error {
-	cluster := &opsterv1.OpenSearchCluster{
+	cluster := &opensearchv1.OpenSearchCluster{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: namespace,
 		},
-		Spec: opsterv1.ClusterSpec{
-			General: opsterv1.GeneralConfig{
+		Spec: opensearchv1.ClusterSpec{
+			General: opensearchv1.GeneralConfig{
 				Version:     version,
 				HttpPort:    9200,
 				Vendor:      "Opensearch",
@@ -301,12 +307,12 @@ func createUpgradeTestCluster(clusterName, namespace, version string) error {
 					"cluster.routing.allocation.disk.watermark.flood_stage": "100m",
 				},
 			},
-			Dashboards: opsterv1.DashboardsConfig{
+			Dashboards: opensearchv1.DashboardsConfig{
 				Enable:   true,
 				Version:  version,
 				Replicas: 1,
 			},
-			NodePools: []opsterv1.NodePool{
+			NodePools: []opensearchv1.NodePool{
 				{
 					Component: "masters",
 					Replicas:  3,
@@ -340,12 +346,12 @@ func createUpgradeTestCluster(clusterName, namespace, version string) error {
 					},
 				},
 			},
-			Security: &opsterv1.Security{
-				Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
+			Security: &opensearchv1.Security{
+				Tls: &opensearchv1.TlsConfig{
+					Transport: &opensearchv1.TlsConfigTransport{
 						Generate: true,
 					},
-					Http: &opsterv1.TlsConfigHttp{
+					Http: &opensearchv1.TlsConfigHttp{
 						Generate: true,
 					},
 				},
@@ -361,7 +367,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	// Create ActionGroup
 	actionGroup := &unstructured.Unstructured{}
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchActionGroup",
 	})
@@ -392,7 +398,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	// Create Role
 	role := &unstructured.Unstructured{}
 	role.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchRole",
 	})
@@ -437,7 +443,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	// Create User
 	user := &unstructured.Unstructured{}
 	user.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchUser",
 	})
@@ -470,7 +476,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	// Verify ActionGroup
 	actionGroup := &unstructured.Unstructured{}
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchActionGroup",
 	})
@@ -482,7 +488,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	// Verify Role
 	role := &unstructured.Unstructured{}
 	role.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchRole",
 	})
@@ -494,7 +500,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	// Verify User
 	user := &unstructured.Unstructured{}
 	user.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchUser",
 	})
@@ -511,7 +517,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	// Delete ActionGroup
 	actionGroup := &unstructured.Unstructured{}
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchActionGroup",
 	})
@@ -522,7 +528,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	// Delete Role
 	role := &unstructured.Unstructured{}
 	role.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchRole",
 	})
@@ -533,7 +539,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	// Delete User
 	user := &unstructured.Unstructured{}
 	user.SetGroupVersionKind(schema.GroupVersionKind{
-		Group:   "opensearch.opster.io",
+		Group:   "opensearch.org",
 		Version: "v1",
 		Kind:    "OpensearchUser",
 	})

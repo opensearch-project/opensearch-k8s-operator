@@ -3,14 +3,14 @@ package helpers
 import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 )
 
 var _ = DescribeTable("versionCheck reconciler",
 	func(version string, specifiedHttpPort int32, expectedHttpPort int32, expectedSecurityConfigPort int32, expectedSecurityConfigPath string) {
-		instance := &opsterv1.OpenSearchCluster{
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
+		instance := &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
 					Version:  version,
 					HttpPort: specifiedHttpPort,
 				},

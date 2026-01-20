@@ -1,8 +1,9 @@
 {{- $labels := include "opensearch-cluster.labels" . }}
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- $apiGroup := $.Values.apiGroup | default "opensearch.org" }}
 {{- range .Values.actionGroups }}
 ---
-apiVersion: opensearch.opster.io/v1
+apiVersion: {{ $apiGroup }}/v1
 kind: OpensearchActionGroup
 metadata:
   name: {{ .name }}

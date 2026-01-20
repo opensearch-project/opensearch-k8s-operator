@@ -9,28 +9,28 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-func ClusterDescWithVersion(version string) opsterv1.OpenSearchCluster {
-	return opsterv1.OpenSearchCluster{
-		Spec: opsterv1.ClusterSpec{
-			General: opsterv1.GeneralConfig{
+func ClusterDescWithVersion(version string) opensearchv1.OpenSearchCluster {
+	return opensearchv1.OpenSearchCluster{
+		Spec: opensearchv1.ClusterSpec{
+			General: opensearchv1.GeneralConfig{
 				Version: version,
 			},
 		},
 	}
 }
 
-func ClusterDescWithKeystoreSecret(secretName string, keyMappings map[string]string) opsterv1.OpenSearchCluster {
-	return opsterv1.OpenSearchCluster{
-		Spec: opsterv1.ClusterSpec{
-			General: opsterv1.GeneralConfig{
-				Keystore: []opsterv1.KeystoreValue{
+func ClusterDescWithKeystoreSecret(secretName string, keyMappings map[string]string) opensearchv1.OpenSearchCluster {
+	return opensearchv1.OpenSearchCluster{
+		Spec: opensearchv1.ClusterSpec{
+			General: opensearchv1.GeneralConfig{
+				Keystore: []opensearchv1.KeystoreValue{
 					{
 						Secret: corev1.LocalObjectReference{
 							Name: secretName,
@@ -43,11 +43,11 @@ func ClusterDescWithKeystoreSecret(secretName string, keyMappings map[string]str
 	}
 }
 
-func ClusterDescWithBootstrapKeystoreSecret(secretName string, keyMappings map[string]string) opsterv1.OpenSearchCluster {
-	return opsterv1.OpenSearchCluster{
-		Spec: opsterv1.ClusterSpec{
-			Bootstrap: opsterv1.BootstrapConfig{
-				Keystore: []opsterv1.KeystoreValue{
+func ClusterDescWithBootstrapKeystoreSecret(secretName string, keyMappings map[string]string) opensearchv1.OpenSearchCluster {
+	return opensearchv1.OpenSearchCluster{
+		Spec: opensearchv1.ClusterSpec{
+			Bootstrap: opensearchv1.BootstrapConfig{
+				Keystore: []opensearchv1.KeystoreValue{
 					{
 						Secret: corev1.LocalObjectReference{
 							Name: secretName,
@@ -60,13 +60,13 @@ func ClusterDescWithBootstrapKeystoreSecret(secretName string, keyMappings map[s
 	}
 }
 
-func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, bootstrapEnv []corev1.EnvVar) opsterv1.OpenSearchCluster {
-	return opsterv1.OpenSearchCluster{
-		Spec: opsterv1.ClusterSpec{
-			General: opsterv1.GeneralConfig{
+func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, bootstrapEnv []corev1.EnvVar) opensearchv1.OpenSearchCluster {
+	return opensearchv1.OpenSearchCluster{
+		Spec: opensearchv1.ClusterSpec{
+			General: opensearchv1.GeneralConfig{
 				AdditionalConfig: addtitionalConfig,
 			},
-			Bootstrap: opsterv1.BootstrapConfig{
+			Bootstrap: opensearchv1.BootstrapConfig{
 				Env: bootstrapEnv,
 			},
 		},
@@ -77,13 +77,13 @@ var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool", func() {
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(1))
 		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
@@ -101,7 +101,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should only use valid roles", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
@@ -113,7 +113,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should convert the master role", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"master"},
 			}
@@ -125,7 +125,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should convert the cluster_manager role", func() {
 			clusterObject := ClusterDescWithVersion("1.3.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 			}
@@ -137,7 +137,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should accept the warm role", func() {
 			clusterObject := ClusterDescWithVersion("3.0.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"warm"},
 			}
@@ -149,7 +149,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should convert the warm role", func() {
 			clusterObject := ClusterDescWithVersion("2.0.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"warm"},
 			}
@@ -161,7 +161,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set node.roles to [] for coordinator-only nodes (OpenSearch 3.0+)", func() {
 			clusterObject := ClusterDescWithVersion("3.0.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "coordinators",
 				Roles:     []string{},
 			}
@@ -173,7 +173,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should have annotations added to node", func() {
 			clusterObject := ClusterDescWithVersion("1.3.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 				Annotations: map[string]string{
@@ -188,7 +188,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should have annotations added to sts", func() {
 			clusterObject := ClusterDescWithVersion("1.3.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 				Annotations: map[string]string{
@@ -203,7 +203,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should have a priority class name added to the node", func() {
 			clusterObject := ClusterDescWithVersion("1.3.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component:         "masters",
 				Roles:             []string{"cluster_manager"},
 				PriorityClassName: "default",
@@ -215,23 +215,23 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
 			clusterObject.Spec.General.DefaultRepo = &customRepository
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:latest"))
 		})
 		It("should use InitHelper.Image as InitHelper image if configured", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			customImage := "mycustomrepo.cr/custombusybox:1.2.3"
-			clusterObject.Spec.InitHelper = opsterv1.InitHelperConfig{
-				ImageSpec: &opsterv1.ImageSpec{
+			clusterObject.Spec.InitHelper = opensearchv1.InitHelperConfig{
+				ImageSpec: &opensearchv1.ImageSpec{
 					Image: &customImage,
 				},
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/custombusybox:1.2.3"))
 		})
 		It("should use defaults when no custom image is configured for InitHelper image", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("docker.io/busybox:latest"))
 		})
 		It("should use a custom dns name when env variable is set as cluster url", func() {
@@ -270,7 +270,7 @@ var _ = Describe("Builders", func() {
 			pluginB := "another-plugin"
 
 			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 
 			installCmd := fmt.Sprintf(
 				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
@@ -291,7 +291,7 @@ var _ = Describe("Builders", func() {
 
 		It("should add experimental flag when the node.roles contains search and the version is below 2.7", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
@@ -309,7 +309,7 @@ var _ = Describe("Builders", func() {
 
 		It("should not add experimental flag when the node.roles contains search and the version is 2.7 or above", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
@@ -339,19 +339,19 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.Spec.General.PodSecurityContext = podSecurityContext
 			clusterObject.Spec.General.SecurityContext = securityContext
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 			}
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
 		It("should use default storageclass if no persistence specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -365,12 +365,12 @@ var _ = Describe("Builders", func() {
 		})
 		It("should use default storageClass when persistence is specified without storageClass", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
-					PVC: &opsterv1.PVCSource{
+				Persistence: &opensearchv1.PersistenceConfig{PersistenceSource: opensearchv1.PersistenceSource{
+					PVC: &opensearchv1.PVCSource{
 						AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					},
 				}},
@@ -384,12 +384,12 @@ var _ = Describe("Builders", func() {
 		It("should create empty storageClassName when explicitly set to empty", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			emptyString := ""
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
-					PVC: &opsterv1.PVCSource{
+				Persistence: &opensearchv1.PersistenceConfig{PersistenceSource: opensearchv1.PersistenceSource{
+					PVC: &opensearchv1.PVCSource{
 						StorageClassName: &emptyString,
 						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					},
@@ -404,12 +404,12 @@ var _ = Describe("Builders", func() {
 		It("should use specific storageClassName when provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			specificClass := "fast-ssd"
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{
-					PVC: &opsterv1.PVCSource{
+				Persistence: &opensearchv1.PersistenceConfig{PersistenceSource: opensearchv1.PersistenceSource{
+					PVC: &opensearchv1.PVCSource{
 						StorageClassName: &specificClass,
 						AccessModes:      []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
 					},
@@ -423,7 +423,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set jvm to half of memory request when memory request is set and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("2Gi"),
@@ -438,7 +438,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set jvm to half of memory request when memory request is fraction and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("1.5Gi"),
@@ -454,7 +454,7 @@ var _ = Describe("Builders", func() {
 
 		It("should set jvm to half of memory request when memory request is set in G and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceMemory: resource.MustParse("2G"),
@@ -469,7 +469,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set jvm to default when memory request and jvm are not provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{}
+			nodePool := opensearchv1.NodePool{}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "OPENSEARCH_JAVA_OPTS",
@@ -478,7 +478,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set NodePool.Jvm as jvm when it jvm is provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Jvm: "-Xms1024M -Xmx1024M",
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
@@ -489,7 +489,7 @@ var _ = Describe("Builders", func() {
 		})
 		It("should set NodePool.jvm as jvm when jvm and memory request are provided", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Jvm: "-Xms1024M -Xmx1024M",
 				Resources: corev1.ResourceRequirements{
 					Requests: corev1.ResourceList{
@@ -506,7 +506,7 @@ var _ = Describe("Builders", func() {
 
 		It("should include sidecar containers when specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
 				SidecarContainers: []corev1.Container{
@@ -560,7 +560,7 @@ var _ = Describe("Builders", func() {
 				Name:  "custom-init",
 				Image: "custom-init:latest",
 			}
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				InitContainers: []corev1.Container{initContainer},
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
@@ -583,7 +583,7 @@ var _ = Describe("Builders", func() {
 				Name:  "custom-init2",
 				Image: "custom-init2:latest",
 			}
-			result := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{
 				Roles:          []string{"cluster_manager"},
 				InitContainers: []corev1.Container{initContainer1, initContainer2},
 			}, "foobar", nil, nil)
@@ -790,13 +790,13 @@ var _ = Describe("Builders", func() {
 		})
 		When("Constructing a bootstrap pod with Volumes", func() {
 			It("should include all the required volumes and mounts", func() {
-				clusterObject := opsterv1.OpenSearchCluster{
+				clusterObject := opensearchv1.OpenSearchCluster{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      "test-cluster",
 						Namespace: "test-namespace",
 					},
-					Spec: opsterv1.ClusterSpec{
-						General: opsterv1.GeneralConfig{
+					Spec: opensearchv1.ClusterSpec{
+						General: opensearchv1.GeneralConfig{
 							PluginsList: []string{"repository-s3"},
 						},
 					},
@@ -887,7 +887,7 @@ var _ = Describe("Builders", func() {
 		It("should create a proper initContainer", func() {
 			mockSecretName := "some-secret"
 			clusterObject := ClusterDescWithKeystoreSecret(mockSecretName, nil)
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
@@ -908,7 +908,7 @@ var _ = Describe("Builders", func() {
 		It("should mount the prefilled keystore into the opensearch container", func() {
 			mockSecretName := "some-secret"
 			clusterObject := ClusterDescWithKeystoreSecret(mockSecretName, nil)
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
@@ -929,7 +929,7 @@ var _ = Describe("Builders", func() {
 				oldKey: newKey,
 			}
 			clusterObject := ClusterDescWithKeystoreSecret(mockSecretName, keyMappings)
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "foobar", "ingest"},
 			}
@@ -950,7 +950,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceName = "foobar"
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -971,7 +971,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar-v1v2"
 			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"master", "data"},
@@ -992,7 +992,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar-v1"
 			clusterObject.Spec.General.ServiceName = "foobar-v1"
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"master", "data"},
@@ -1015,7 +1015,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.Command = customCommand
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -1034,7 +1034,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = "foobar"
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceAccount = serviceAccount
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -1052,10 +1052,10 @@ var _ = Describe("Builders", func() {
 	When("building services with annotations", func() {
 		It("should populate the NewServiceForCR function with ", func() {
 			clusterName := "opensearch"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
 						Annotations: map[string]string{
 							"testAnnotationKey":  "testValue",
@@ -1073,7 +1073,7 @@ var _ = Describe("Builders", func() {
 
 		It("should populate the NewHeadlessServiceForNodePool function with ", func() {
 			clusterName := "opensearch"
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -1081,10 +1081,10 @@ var _ = Describe("Builders", func() {
 					"testAnnotationKey": "testValue",
 				},
 			}
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
 						Annotations: map[string]string{
 							"testAnnotationKey2": "testValue2",
@@ -1103,7 +1103,7 @@ var _ = Describe("Builders", func() {
 	When("Using custom probe timeouts and thresholds for OpenSearch startup", func() {
 		It("should have default probes timeouts and thresholds", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
@@ -1129,17 +1129,17 @@ var _ = Describe("Builders", func() {
 
 		It("should have use probes timeouts and thresholds as in given config only for single value change", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
-				Probes: &opsterv1.ProbesConfig{
-					Liveness: &opsterv1.ProbeConfig{
+				Probes: &opensearchv1.ProbesConfig{
+					Liveness: &opensearchv1.ProbeConfig{
 						FailureThreshold: 15,
 					},
-					Startup: &opsterv1.CommandProbeConfig{
+					Startup: &opensearchv1.CommandProbeConfig{
 						FailureThreshold: 11,
 					},
-					Readiness: &opsterv1.CommandProbeConfig{
+					Readiness: &opensearchv1.CommandProbeConfig{
 						FailureThreshold: 9,
 					},
 				},
@@ -1166,25 +1166,25 @@ var _ = Describe("Builders", func() {
 
 		It("should have use probes timeouts and thresholds as in given config only for all values changed", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
-				Probes: &opsterv1.ProbesConfig{
-					Liveness: &opsterv1.ProbeConfig{
+				Probes: &opensearchv1.ProbesConfig{
+					Liveness: &opensearchv1.ProbeConfig{
 						InitialDelaySeconds: 12,
 						TimeoutSeconds:      6,
 						PeriodSeconds:       25,
 						SuccessThreshold:    2,
 						FailureThreshold:    15,
 					},
-					Startup: &opsterv1.CommandProbeConfig{
+					Startup: &opensearchv1.CommandProbeConfig{
 						InitialDelaySeconds: 14,
 						TimeoutSeconds:      7,
 						PeriodSeconds:       27,
 						SuccessThreshold:    3,
 						FailureThreshold:    11,
 					},
-					Readiness: &opsterv1.CommandProbeConfig{
+					Readiness: &opensearchv1.CommandProbeConfig{
 						InitialDelaySeconds: 65,
 						TimeoutSeconds:      34,
 						PeriodSeconds:       33,
@@ -1217,7 +1217,7 @@ var _ = Describe("Builders", func() {
 	When("Using custom command for OpenSearch probes", func() {
 		It("should have default command when not set", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
 			}
@@ -1230,14 +1230,14 @@ var _ = Describe("Builders", func() {
 
 		It("should have custom command when set", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"search"},
-				Probes: &opsterv1.ProbesConfig{
-					Startup: &opsterv1.CommandProbeConfig{
+				Probes: &opensearchv1.ProbesConfig{
+					Startup: &opensearchv1.CommandProbeConfig{
 						Command: []string{"/bin/bash", "-c", "echo 'startup'"},
 					},
-					Readiness: &opsterv1.CommandProbeConfig{
+					Readiness: &opensearchv1.CommandProbeConfig{
 						Command: []string{"/bin/bash", "-c", "echo 'ready'"},
 					},
 				},
@@ -1254,9 +1254,9 @@ var _ = Describe("Builders", func() {
 		It("should use http protocol in URLForCluster", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
 			enabled := false
-			clusterObject.Spec.Security = &opsterv1.Security{
-				Tls: &opsterv1.TlsConfig{
-					Http: &opsterv1.TlsConfigHttp{
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Tls: &opensearchv1.TlsConfig{
+					Http: &opensearchv1.TlsConfigHttp{
 						Enabled: &enabled,
 					},
 				},
@@ -1273,14 +1273,14 @@ var _ = Describe("Builders", func() {
 		It("should use http protocol in probe commands", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")
 			enabled := false
-			clusterObject.Spec.Security = &opsterv1.Security{
-				Tls: &opsterv1.TlsConfig{
-					Http: &opsterv1.TlsConfigHttp{
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Tls: &opensearchv1.TlsConfig{
+					Http: &opensearchv1.TlsConfigHttp{
 						Enabled: &enabled,
 					},
 				},
 			}
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Component: "masters",
 				Roles:     []string{"cluster_manager"},
 			}
@@ -1296,9 +1296,9 @@ var _ = Describe("Builders", func() {
 			clusterObject.Name = "test-cluster"
 			clusterObject.Namespace = "default"
 			enabled := false
-			clusterObject.Spec.Security = &opsterv1.Security{
-				Tls: &opsterv1.TlsConfig{
-					Http: &opsterv1.TlsConfigHttp{
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Tls: &opensearchv1.TlsConfig{
+					Http: &opensearchv1.TlsConfigHttp{
 						Enabled: &enabled,
 					},
 				},
@@ -1314,7 +1314,7 @@ var _ = Describe("Builders", func() {
 	When("Configuring InitHelper Resources", func() {
 		It("should propagate Resources to all init containers", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.InitHelper = opsterv1.InitHelperConfig{
+			clusterObject.Spec.InitHelper = opensearchv1.InitHelperConfig{
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("1"),
@@ -1326,7 +1326,7 @@ var _ = Describe("Builders", func() {
 					},
 				},
 			}
-			nodePoolSts := NewSTSForNodePool("foobar", &clusterObject, opsterv1.NodePool{}, "foobar", nil, nil)
+			nodePoolSts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			for _, container := range nodePoolSts.Spec.Template.Spec.InitContainers {
 				Expect(container.Resources).To(Equal(clusterObject.Spec.InitHelper.Resources))
 			}
@@ -1340,9 +1340,9 @@ var _ = Describe("Builders", func() {
 	When("Configuring Security Config UpdateJob Resources", func() {
 		It("should propagate Resources to the Security Config UpdateJob", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.Security = &opsterv1.Security{
-				Config: &opsterv1.SecurityConfig{
-					UpdateJob: opsterv1.SecurityUpdateJobConfig{
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Config: &opensearchv1.SecurityConfig{
+					UpdateJob: opensearchv1.SecurityUpdateJobConfig{
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
 								corev1.ResourceCPU:    resource.MustParse("1"),
@@ -1363,9 +1363,9 @@ var _ = Describe("Builders", func() {
 
 		It("should propagate Resources to the Security Config UpdateJob if partially configured", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.Security = &opsterv1.Security{
-				Config: &opsterv1.SecurityConfig{
-					UpdateJob: opsterv1.SecurityUpdateJobConfig{
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Config: &opensearchv1.SecurityConfig{
+					UpdateJob: opensearchv1.SecurityUpdateJobConfig{
 						Resources: corev1.ResourceRequirements{
 							Limits: corev1.ResourceList{
 								corev1.ResourceCPU: resource.MustParse("1"),
@@ -1391,7 +1391,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = "foobar"
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.HostAliases = []corev1.HostAlias{hostAlias}
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -1420,7 +1420,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.HostAliases = []corev1.HostAlias{hostAlias}
 			clusterObject.Spec.Bootstrap.HostAliases = []corev1.HostAlias{bootstrapHostAlias}
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},
@@ -1443,7 +1443,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = "foobar"
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.Bootstrap.HostAliases = []corev1.HostAlias{bootstrapHostAlias}
-			nodePool := opsterv1.NodePool{
+			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
 				Roles:     []string{"cluster_manager", "data"},

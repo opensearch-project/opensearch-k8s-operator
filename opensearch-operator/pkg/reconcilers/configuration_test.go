@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	corev1 "k8s.io/api/core/v1"
@@ -22,7 +22,7 @@ func newConfigurationReconciler(
 	client *k8s.MockK8sClient,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 ) *ConfigurationReconciler {
 	return &ConfigurationReconciler{
 		client:            client,
@@ -42,15 +42,15 @@ var _ = Describe("Configuration Controller", func() {
 		It("should not create a configmap ", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: clusterName,
 					UID:       "dummyuid",
 				},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					NodePools: []opsterv1.NodePool{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{},
+					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "test",
 							Roles: []string{
@@ -79,15 +79,15 @@ var _ = Describe("Configuration Controller", func() {
 		It("should create a configmap ", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: clusterName,
 					UID:       "dummyuid",
 				},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					NodePools: []opsterv1.NodePool{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{},
+					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "test",
 							Roles: []string{
@@ -135,19 +135,19 @@ var _ = Describe("Configuration Controller", func() {
 		It("should create a shared configmap", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: clusterName,
 					UID:       "dummyuid",
 				},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						AdditionalConfig: map[string]string{
 							"general.config": "general-value",
 						},
 					},
-					NodePools: []opsterv1.NodePool{
+					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "test",
 							Roles: []string{
@@ -191,20 +191,20 @@ var _ = Describe("Configuration Controller", func() {
 		It("should create both shared and per-nodepool configmaps with merged config", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName,
 					Namespace: clusterName,
 					UID:       "dummyuid",
 				},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						AdditionalConfig: map[string]string{
 							"general.config": "general-value",
 							"shared.config":  "shared-value",
 						},
 					},
-					NodePools: []opsterv1.NodePool{
+					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
 							Roles: []string{

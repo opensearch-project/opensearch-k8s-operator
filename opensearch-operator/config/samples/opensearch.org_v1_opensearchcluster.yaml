@@ -1,0 +1,15 @@
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: opensearch-sample
+spec:
+  general:
+    serviceName: opensearch
+    version: 2.11.0
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: 30Gi
+      roles:
+        - cluster_manager
+        - data

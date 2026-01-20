@@ -44,7 +44,7 @@ var _ = Describe("DataIntegrityScaling", func() {
 			GinkgoWriter.Printf("  + Scaling completed: 4/4 replicas ready\n")
 
 			By("Reconnecting to cluster")
-			err = dataManager.Reconnect()
+			err = dataManager.Reconnect(false)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying data integrity after scaling")
@@ -93,7 +93,7 @@ var _ = Describe("DataIntegrityScaling", func() {
 			GinkgoWriter.Printf("  + Scaling completed: 2/2 replica ready\n")
 
 			By("Reconnecting to cluster")
-			err = dataManager.Reconnect()
+			err = dataManager.Reconnect(false)
 			Expect(err).NotTo(HaveOccurred())
 			GinkgoWriter.Printf("  + Reconnected to cluster\n")
 

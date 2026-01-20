@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchuser,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchusers,verbs=create;update,versions=v1,name=vopensearchuser.opensearch.opster.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-opensearch-org-v1-opensearchuser,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.org,resources=opensearchusers,verbs=create;update,versions=v1,name=vopensearchuser.opensearch.org,admissionReviewVersions=v1
 
 type OpenSearchUserValidator struct {
 	Client  client.Client
@@ -40,13 +41,14 @@ func (v *OpenSearchUserValidator) SetupWithManager(mgr ctrl.Manager) error {
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpensearchUser{}).
+		For(&opensearchv1.OpensearchUser{}).
+		WithValidator(v).
 		Complete()
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchUserValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	user := obj.(*opsterv1.OpensearchUser)
+	user := obj.(*opensearchv1.OpensearchUser)
 
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, user); err != nil {
@@ -63,8 +65,8 @@ func (v *OpenSearchUserValidator) ValidateCreate(ctx context.Context, obj runtim
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchUserValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldUser := oldObj.(*opsterv1.OpensearchUser)
-	newUser := newObj.(*opsterv1.OpensearchUser)
+	oldUser := oldObj.(*opensearchv1.OpensearchUser)
+	newUser := newObj.(*opensearchv1.OpensearchUser)
 
 	// Validate that the OpenSearch cluster reference hasn't changed
 	if err := v.validateClusterReferenceUnchanged(oldUser, newUser); err != nil {
@@ -86,22 +88,30 @@ func (v *OpenSearchUserValidator) ValidateDelete(ctx context.Context, obj runtim
 }
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
-func (v *OpenSearchUserValidator) validateClusterReference(ctx context.Context, user *opsterv1.OpensearchUser) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+func (v *OpenSearchUserValidator) validateClusterReference(ctx context.Context, user *opensearchv1.OpensearchUser) error {
+	// Try new API group first
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      user.Spec.OpensearchRef.Name,
 		Namespace: user.Namespace,
 	}, cluster)
 
 	if err != nil {
-		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", user.Spec.OpensearchRef.Name, err)
+		// Fall back to old API group for backward compatibility
+		oldCluster := &opsterv1.OpenSearchCluster{}
+		if err := v.Client.Get(ctx, types.NamespacedName{
+			Name:      user.Spec.OpensearchRef.Name,
+			Namespace: user.Namespace,
+		}, oldCluster); err != nil {
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", user.Spec.OpensearchRef.Name, err)
+		}
 	}
 
 	return nil
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
-func (v *OpenSearchUserValidator) validateClusterReferenceUnchanged(old, new *opsterv1.OpensearchUser) error {
+func (v *OpenSearchUserValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchUser) error {
 	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
 		return fmt.Errorf("cannot change the cluster a user refers to")
 	}
@@ -109,7 +119,7 @@ func (v *OpenSearchUserValidator) validateClusterReferenceUnchanged(old, new *op
 }
 
 // validatePasswordReference validates that password reference is provided
-func (v *OpenSearchUserValidator) validatePasswordReference(user *opsterv1.OpensearchUser) error {
+func (v *OpenSearchUserValidator) validatePasswordReference(user *opensearchv1.OpensearchUser) error {
 	if user.Spec.PasswordFrom.Name == "" {
 		return fmt.Errorf("passwordFrom.name must be specified")
 	}

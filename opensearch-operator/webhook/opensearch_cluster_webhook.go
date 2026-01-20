@@ -20,7 +20,7 @@ import (
 	"context"
 	"fmt"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -28,7 +28,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchcluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchclusters,verbs=create;update,versions=v1,name=vopensearchcluster.opensearch.opster.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-opensearch-org-v1-opensearchcluster,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.org,resources=opensearchclusters,verbs=create;update,versions=v1,name=vopensearchcluster.opensearch.org,admissionReviewVersions=v1
 
 type OpenSearchClusterValidator struct {
 	Client  client.Client
@@ -39,19 +39,19 @@ func (v *OpenSearchClusterValidator) SetupWithManager(mgr ctrl.Manager) error {
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpenSearchCluster{}).
+		For(&opensearchv1.OpenSearchCluster{}).
 		WithValidator(v).
 		Complete()
 }
 
 func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	cluster := obj.(*opsterv1.OpenSearchCluster)
+	cluster := obj.(*opensearchv1.OpenSearchCluster)
 	return v.validateTlsConfig(cluster)
 }
 
 func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldCluster := oldObj.(*opsterv1.OpenSearchCluster)
-	newCluster := newObj.(*opsterv1.OpenSearchCluster)
+	oldCluster := oldObj.(*opensearchv1.OpenSearchCluster)
+	newCluster := newObj.(*opensearchv1.OpenSearchCluster)
 
 	if !newCluster.DeletionTimestamp.IsZero() {
 		return nil, nil
@@ -65,9 +65,9 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 	return v.validateTlsConfig(newCluster)
 }
 
-func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, newCluster *opsterv1.OpenSearchCluster) error {
+func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
 	// Create a map of old node pools by component name for easy lookup
-	oldNodePools := make(map[string]*opsterv1.NodePool)
+	oldNodePools := make(map[string]*opensearchv1.NodePool)
 	for i := range oldCluster.Spec.NodePools {
 		nodePool := &oldCluster.Spec.NodePools[i]
 		oldNodePools[nodePool.Component] = nodePool
@@ -112,7 +112,7 @@ func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, new
 	return nil
 }
 
-func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opsterv1.OpenSearchCluster) (admission.Warnings, error) {
+func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opensearchv1.OpenSearchCluster) (admission.Warnings, error) {
 	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
 		return nil, nil
 	}

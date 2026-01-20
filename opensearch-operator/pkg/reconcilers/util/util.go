@@ -13,7 +13,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/go-logr/logr"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -61,7 +61,7 @@ func CheckEquels(from_env *appsv1.StatefulSetSpec, from_crd *appsv1.StatefulSetS
 	}
 }
 
-func ReadOrGenerateCaCert(pki tls.PKI, k8sClient k8s.K8sClient, instance *opsterv1.OpenSearchCluster) (tls.Cert, error) {
+func ReadOrGenerateCaCert(pki tls.PKI, k8sClient k8s.K8sClient, instance *opensearchv1.OpenSearchCluster) (tls.Cert, error) {
 	namespace := instance.Namespace
 	clusterName := instance.Name
 	secretName := clusterName + "-ca"
@@ -92,7 +92,7 @@ func ReadOrGenerateCaCert(pki tls.PKI, k8sClient k8s.K8sClient, instance *opster
 func CreateAdditionalVolumes(
 	k8sClient k8s.K8sClient,
 	namespace string,
-	volumeConfigs []opsterv1.AdditionalVolume,
+	volumeConfigs []opensearchv1.AdditionalVolume,
 ) (
 	retVolumes []corev1.Volume,
 	retVolumeMounts []corev1.VolumeMount,
@@ -234,14 +234,14 @@ func CreateAdditionalVolumes(
 	return
 }
 
-func OpensearchClusterURL(cluster *opsterv1.OpenSearchCluster) string {
+func OpensearchClusterURL(cluster *opensearchv1.OpenSearchCluster) string {
 	return helpers.ClusterURL(cluster)
 }
 
 func CreateClientForCluster(
 	k8sClient k8s.K8sClient,
 	ctx context.Context,
-	cluster *opsterv1.OpenSearchCluster,
+	cluster *opensearchv1.OpenSearchCluster,
 	transport http.RoundTripper,
 ) (*services.OsClusterClient, error) {
 	lg := log.FromContext(ctx)
@@ -275,7 +275,7 @@ func FetchOpensearchCluster(
 	k8sClient k8s.K8sClient,
 	ctx context.Context,
 	ref types.NamespacedName,
-) (*opsterv1.OpenSearchCluster, error) {
+) (*opensearchv1.OpenSearchCluster, error) {
 	cluster, err := k8sClient.GetOpenSearchCluster(ref.Name, ref.Namespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -297,7 +297,7 @@ func GetSha1Sum(data []byte) (string, error) {
 	return hex.EncodeToString(hasher.Sum(nil)), nil
 }
 
-func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int32 {
+func DataNodesCount(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) int32 {
 	count := int32(0)
 	for _, nodePool := range cr.Spec.NodePools {
 		if helpers.HasDataRole(&nodePool) {
@@ -311,25 +311,25 @@ func DataNodesCount(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) int
 }
 
 // GetClusterHealth returns the health of OpenSearch cluster
-func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) (opsterv1.OpenSearchHealth, responses.ClusterHealthResponse) {
+func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, lg logr.Logger) (opensearchv1.OpenSearchHealth, responses.ClusterHealthResponse) {
 	healthResponse := responses.ClusterHealthResponse{}
 	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, nil)
 	if err != nil {
 		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))
-		return opsterv1.OpenSearchUnknownHealth, healthResponse
+		return opensearchv1.OpenSearchUnknownHealth, healthResponse
 	}
 
 	healthResponse, err = osClient.GetClusterHealth()
 	if err != nil {
 		lg.Error(err, "Failed to get OpenSearch health status")
-		return opsterv1.OpenSearchUnknownHealth, healthResponse
+		return opensearchv1.OpenSearchUnknownHealth, healthResponse
 	}
 
-	return opsterv1.OpenSearchHealth(healthResponse.Status), healthResponse
+	return opensearchv1.OpenSearchHealth(healthResponse.Status), healthResponse
 }
 
 // GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
-func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, cluster *opsterv1.OpenSearchCluster, lg logr.Logger) int32 {
+func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, lg logr.Logger) int32 {
 	clusterName := cluster.Name
 	clusterNamespace := cluster.Namespace
 

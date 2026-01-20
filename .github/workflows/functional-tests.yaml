@@ -43,6 +43,14 @@ jobs:
             --agents 2
             -p 30000-30005:30000-30005@agent:0
             --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
+      - name: Install cert-manager
+        run: |
+          export CLUSTER_NAME=opensearch-operator-tests
+          cd opensearch-operator
+          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.yaml
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
       - name: Run tests
         id: helm_tests
         run: |
@@ -89,7 +97,7 @@ jobs:
           kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
           echo "Collecting pod descriptions..."
           kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opster.io/opensearch-cluster=opensearch-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opensearch.org/opensearch-cluster=opensearch-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
           kubectl describe pods -n default -l opensearch.cluster.dashboards=opensearch-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
           echo "Collecting logs from OpenSearch operator pods..."
           kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
@@ -99,7 +107,7 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
           done
           echo "Collecting logs from OpenSearch cluster pods..."
-          kubectl get pods -n default -l opster.io/opensearch-cluster=opensearch-cluster -o name 2>/dev/null | while read pod; do
+          kubectl get pods -n default -l opensearch.org/opensearch-cluster=opensearch-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
             echo "Collecting logs from $pod_name"
             kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
@@ -159,4 +167,12 @@ jobs:
       test_focus: "dummy"
       test_timeout: "10m"
       test_name: "operator-other-tests"
+      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
+
+  api-group-migration:
+    uses: ./.github/workflows/reusable-functional-test.yaml
+    with:
+      test_focus: "APIGroupMigration"
+      test_timeout: "40m"
+      test_name: "api-group-migration"
       enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}

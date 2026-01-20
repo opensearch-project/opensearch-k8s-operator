@@ -109,7 +109,7 @@ Expect(err).NotTo(HaveOccurred())
 ### Add Node Pool with Data Validation
 
 ```go
-newNodePool := opsterv1.NodePool{
+newNodePool := opensearchv1.NodePool{
     Component: "data-nodes",
     Replicas:  2,
     DiskSize:  "30Gi",

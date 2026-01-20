@@ -13,7 +13,7 @@ import (
 	. "github.com/kralicky/kmatch"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -169,7 +169,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
 				By(fmt.Sprintf("checking %s nodepool", nodePool.Component))
-				go func(nodePool opsterv1.NodePool) {
+				go func(nodePool opensearchv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					// Calculate expected node.roles value
@@ -342,7 +342,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
 				By(fmt.Sprintf("checking %s nodepool initial master", nodePool.Component))
-				go func(nodePool opsterv1.NodePool) {
+				go func(nodePool opensearchv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					Eventually(func() []corev1.EnvVar {
@@ -392,7 +392,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
 				By(fmt.Sprintf("checking %s nodepool initial master", nodePool.Component))
-				go func(nodePool opsterv1.NodePool) {
+				go func(nodePool opensearchv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					Eventually(func() []corev1.EnvVar {
@@ -482,7 +482,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 
 	When("A node pool is upgrading", func() {
 		Specify("updating the status should succeed", func() {
-			status := opsterv1.ComponentStatus{
+			status := opensearchv1.ComponentStatus{
 				Component:   "Upgrader",
 				Description: "nodes",
 				Status:      "Upgrading",
@@ -527,17 +527,17 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 	})
 	When("a cluster is upgraded", func() {
 		Specify("updating the status should succeed", func() {
-			currentStatus := opsterv1.ComponentStatus{
+			currentStatus := opensearchv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgrading",
 				Description: "nodes",
 			}
-			componentStatus := opsterv1.ComponentStatus{
+			componentStatus := opensearchv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgraded",
 				Description: "nodes",
 			}
-			masterComponentStatus := opsterv1.ComponentStatus{
+			masterComponentStatus := opensearchv1.ComponentStatus{
 				Component:   "Upgrader",
 				Status:      "Upgraded",
 				Description: "master",
@@ -569,7 +569,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			wg := sync.WaitGroup{}
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
-				go func(nodePool opsterv1.NodePool) {
+				go func(nodePool opensearchv1.NodePool) {
 					defer GinkgoRecover()
 					defer wg.Done()
 					Eventually(func() bool {

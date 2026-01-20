@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchsnapshotpolicy,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchsnapshotpolicies,verbs=create;update,versions=v1,name=vopensearchsnapshotpolicy.opensearch.opster.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-opensearch-org-v1-opensearchsnapshotpolicy,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.org,resources=opensearchsnapshotpolicies,verbs=create;update,versions=v1,name=vopensearchsnapshotpolicy.opensearch.org,admissionReviewVersions=v1
 
 type OpenSearchSnapshotPolicyValidator struct {
 	Client  client.Client
@@ -39,12 +40,13 @@ func (v *OpenSearchSnapshotPolicyValidator) SetupWithManager(mgr ctrl.Manager) e
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpensearchSnapshotPolicy{}).
+		For(&opensearchv1.OpensearchSnapshotPolicy{}).
+		WithValidator(v).
 		Complete()
 }
 
 func (v *OpenSearchSnapshotPolicyValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	policy := obj.(*opsterv1.OpensearchSnapshotPolicy)
+	policy := obj.(*opensearchv1.OpensearchSnapshotPolicy)
 
 	if err := v.validateClusterReference(ctx, policy); err != nil {
 		return nil, err
@@ -66,8 +68,8 @@ func (v *OpenSearchSnapshotPolicyValidator) ValidateCreate(ctx context.Context, 
 }
 
 func (v *OpenSearchSnapshotPolicyValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldPolicy := oldObj.(*opsterv1.OpensearchSnapshotPolicy)
-	newPolicy := newObj.(*opsterv1.OpensearchSnapshotPolicy)
+	oldPolicy := oldObj.(*opensearchv1.OpensearchSnapshotPolicy)
+	newPolicy := newObj.(*opensearchv1.OpensearchSnapshotPolicy)
 
 	if err := v.validateClusterReferenceUnchanged(oldPolicy, newPolicy); err != nil {
 		return nil, err
@@ -96,27 +98,35 @@ func (v *OpenSearchSnapshotPolicyValidator) ValidateDelete(ctx context.Context, 
 	return nil, nil
 }
 
-func (v *OpenSearchSnapshotPolicyValidator) validateClusterReference(ctx context.Context, policy *opsterv1.OpensearchSnapshotPolicy) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+func (v *OpenSearchSnapshotPolicyValidator) validateClusterReference(ctx context.Context, policy *opensearchv1.OpensearchSnapshotPolicy) error {
+	// Try new API group first
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      policy.Spec.OpensearchRef.Name,
 		Namespace: policy.Namespace,
 	}, cluster)
 
 	if err != nil {
-		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpensearchRef.Name, err)
+		// Fall back to old API group for backward compatibility
+		oldCluster := &opsterv1.OpenSearchCluster{}
+		if err := v.Client.Get(ctx, types.NamespacedName{
+			Name:      policy.Spec.OpensearchRef.Name,
+			Namespace: policy.Namespace,
+		}, oldCluster); err != nil {
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpensearchRef.Name, err)
+		}
 	}
 	return nil
 }
 
-func (v *OpenSearchSnapshotPolicyValidator) validateClusterReferenceUnchanged(old, new *opsterv1.OpensearchSnapshotPolicy) error {
+func (v *OpenSearchSnapshotPolicyValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchSnapshotPolicy) error {
 	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
 		return fmt.Errorf("cannot change the cluster a snapshot policy refers to")
 	}
 	return nil
 }
 
-func (v *OpenSearchSnapshotPolicyValidator) validatePolicyNameUnchanged(old, new *opsterv1.OpensearchSnapshotPolicy) error {
+func (v *OpenSearchSnapshotPolicyValidator) validatePolicyNameUnchanged(old, new *opensearchv1.OpensearchSnapshotPolicy) error {
 	if old.Status.SnapshotPolicyName != "" && old.Status.SnapshotPolicyName != new.Spec.PolicyName {
 		return fmt.Errorf("cannot change the snapshot policy name")
 	}

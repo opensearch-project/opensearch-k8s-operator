@@ -3,9 +3,9 @@ package operatortests
 import (
 	"time"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 )
@@ -35,7 +35,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Adding new data node pool")
-			newNodePool := opsterv1.NodePool{
+			newNodePool := opensearchv1.NodePool{
 				Component: "data-nodes",
 				Replicas:  3,
 				DiskSize:  resource.MustParse("1Gi"),
@@ -59,7 +59,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Reconnecting to cluster")
-			err = dataManager.Reconnect()
+			err = dataManager.Reconnect(false)
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Verifying data integrity after adding node pool")
@@ -94,7 +94,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Step 1: Adding new data node pool")
-			newDataNodePool := opsterv1.NodePool{
+			newDataNodePool := opensearchv1.NodePool{
 				Component: "data-nodes-new",
 				Replicas:  3,
 				DiskSize:  resource.MustParse("1Gi"),
@@ -118,7 +118,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			By("Reconnecting and verifying data after adding new data node pool")
-			err = dataManager.Reconnect()
+			err = dataManager.Reconnect(false)
 			Expect(err).NotTo(HaveOccurred())
 			err = dataManager.ValidateDataIntegrity(testData)
 			Expect(err).NotTo(HaveOccurred())
@@ -133,7 +133,7 @@ var _ = Describe("DataIntegrityNodePoolOperations", func() {
 			time.Sleep(15 * time.Second)
 
 			By("Reconnecting and verifying data after removing old data node pool")
-			err = dataManager.Reconnect()
+			err = dataManager.Reconnect(false)
 			Expect(err).NotTo(HaveOccurred())
 			err = dataManager.ValidateDataIntegrity(testData)
 			Expect(err).NotTo(HaveOccurred())

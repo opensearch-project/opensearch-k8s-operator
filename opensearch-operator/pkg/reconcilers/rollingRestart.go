@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/go-logr/logr"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -37,7 +37,7 @@ type candidate struct {
 	podName  string
 	podNS    string
 	sts      appsv1.StatefulSet
-	nodePool opsterv1.NodePool
+	nodePool opensearchv1.NodePool
 	isMaster bool
 	ordinal  int
 }
@@ -45,7 +45,7 @@ type candidate struct {
 type RollingRestartReconciler struct {
 	client            k8s.K8sClient
 	ctx               context.Context
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
 	osClient          *services.OsClusterClient
 	recorder          record.EventRecorder
@@ -57,7 +57,7 @@ func NewRollingRestartReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *RollingRestartReconciler {
 	return &RollingRestartReconciler{
@@ -115,6 +115,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, 1) {
+			r.logger.Info("StatefulSet is not ready", "name", sts.Name, "namespace", sts.Namespace, "readyReplicas", sts.Status.ReadyReplicas, "desiredReplicas", ptr.Deref(sts.Spec.Replicas, 1))
 			return ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: 10 * time.Second,
@@ -376,16 +377,16 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 }
 
 func (r *RollingRestartReconciler) updateStatus(status string) error {
-	return UpdateComponentStatus(r.client, r.instance, &opsterv1.ComponentStatus{
+	return UpdateComponentStatus(r.client, r.instance, &opensearchv1.ComponentStatus{
 		Component:   componentName,
 		Status:      status,
 		Description: "",
 	})
 }
 
-func (r *RollingRestartReconciler) findStatus() *opsterv1.ComponentStatus {
+func (r *RollingRestartReconciler) findStatus() *opensearchv1.ComponentStatus {
 	comp := r.instance.Status.ComponentsStatus
-	_, found := helpers.FindFirstPartial(comp, opsterv1.ComponentStatus{
+	_, found := helpers.FindFirstPartial(comp, opensearchv1.ComponentStatus{
 		Component: componentName,
 	}, helpers.GetByComponent)
 	if found {

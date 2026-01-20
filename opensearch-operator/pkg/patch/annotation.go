@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-const LastAppliedConfig = "opster.io/last-applied"
+const LastAppliedConfig = "opensearch.org/last-applied"
 
 var DefaultAnnotator = NewAnnotator(LastAppliedConfig)
 

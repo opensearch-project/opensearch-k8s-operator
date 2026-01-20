@@ -9,7 +9,7 @@ import (
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	appsv1 "k8s.io/api/apps/v1"
@@ -29,7 +29,7 @@ var (
 )
 
 const (
-	ConfigurationChecksumAnnotation  = "opster.io/config"
+	ConfigurationChecksumAnnotation  = "opensearch.org/config"
 	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
@@ -66,8 +66,8 @@ func getAffinity(affinity *corev1.Affinity, clusterName string) *corev1.Affinity
 
 func NewSTSForNodePool(
 	username string,
-	cr *opsterv1.OpenSearchCluster,
-	node opsterv1.NodePool,
+	cr *opensearchv1.OpenSearchCluster,
+	node opensearchv1.NodePool,
 	configChecksum string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
@@ -666,7 +666,7 @@ func NewSTSForNodePool(
 	return sts
 }
 
-func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) *corev1.Service {
+func NewHeadlessServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel:  cr.Name,
 		helpers.NodePoolLabel: nodePool.Component,
@@ -726,7 +726,7 @@ func NewHeadlessServiceForNodePool(cr *opsterv1.OpenSearchCluster, nodePool *ops
 	}
 }
 
-func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -792,7 +792,7 @@ func NewServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	}
 }
 
-func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewDiscoveryServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -822,7 +822,7 @@ func NewDiscoveryServiceForCR(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 	}
 }
 
-func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
+func NewNodePortService(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -861,7 +861,7 @@ func NewNodePortService(cr *opsterv1.OpenSearchCluster) *corev1.Service {
 }
 
 func NewBootstrapPod(
-	cr *opsterv1.OpenSearchCluster,
+	cr *opensearchv1.OpenSearchCluster,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
 ) *corev1.Pod {
@@ -1163,7 +1163,7 @@ func NewBootstrapPod(
 	return pod
 }
 
-func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
+func PortForCluster(cr *opensearchv1.OpenSearchCluster) int32 {
 	httpPort := int32(9200)
 	if cr.Spec.General.HttpPort > 0 {
 		httpPort = cr.Spec.General.HttpPort
@@ -1171,11 +1171,11 @@ func PortForCluster(cr *opsterv1.OpenSearchCluster) int32 {
 	return httpPort
 }
 
-func URLForCluster(cr *opsterv1.OpenSearchCluster) string {
+func URLForCluster(cr *opensearchv1.OpenSearchCluster) string {
 	return helpers.ClusterURL(cr)
 }
 
-func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *corev1.Secret {
+func PasswordSecret(cr *opensearchv1.OpenSearchCluster, username, password string) *corev1.Secret {
 	return &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      fmt.Sprintf("%s-admin-password", cr.Name),
@@ -1188,23 +1188,23 @@ func PasswordSecret(cr *opsterv1.OpenSearchCluster, username, password string) *
 	}
 }
 
-func DnsOfService(cr *opsterv1.OpenSearchCluster) string {
+func DnsOfService(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s.%s", cr.Spec.General.ServiceName, cr.Namespace)
 }
 
-func StsName(cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) string {
+func StsName(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) string {
 	return cr.Name + "-" + nodePool.Component
 }
 
-func DiscoveryServiceName(cr *opsterv1.OpenSearchCluster) string {
+func DiscoveryServiceName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-discovery", cr.Name)
 }
 
-func BootstrapPodName(cr *opsterv1.OpenSearchCluster) string {
+func BootstrapPodName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-bootstrap-0", cr.Name)
 }
 
-func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeClaim {
+func NewBootstrapPVC(cr *opensearchv1.OpenSearchCluster) *corev1.PersistentVolumeClaim {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}
@@ -1235,7 +1235,7 @@ func NewBootstrapPVC(cr *opsterv1.OpenSearchCluster) *corev1.PersistentVolumeCla
 	}
 }
 
-func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool {
+func STSInNodePools(sts appsv1.StatefulSet, nodepools []opensearchv1.NodePool) bool {
 	for _, nodepool := range nodepools {
 		if sts.Labels[helpers.NodePoolLabel] == nodepool.Component {
 			return true
@@ -1245,7 +1245,7 @@ func STSInNodePools(sts appsv1.StatefulSet, nodepools []opsterv1.NodePool) bool 
 }
 
 func NewSecurityconfigUpdateJob(
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	jobName string,
 	namespace string,
 	checksum string,
@@ -1255,7 +1255,7 @@ func NewSecurityconfigUpdateJob(
 	volumeMounts []corev1.VolumeMount,
 ) batchv1.Job {
 	// Dummy node spec required to resolve image
-	node := opsterv1.NodePool{
+	node := opensearchv1.NodePool{
 		Component: "securityconfig",
 	}
 
@@ -1335,7 +1335,7 @@ func NewSecurityconfigUpdateJob(
 	}
 }
 
-func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.OpenSearchCluster) bool {
+func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearchv1.OpenSearchCluster) bool {
 	wrappedClient := k8s.NewK8sClient(k8sClient, ctx)
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
@@ -1361,7 +1361,7 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 	return true
 }
 
-func NewServiceMonitor(cr *opsterv1.OpenSearchCluster) *monitoring.ServiceMonitor {
+func NewServiceMonitor(cr *opensearchv1.OpenSearchCluster) *monitoring.ServiceMonitor {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,
 	}

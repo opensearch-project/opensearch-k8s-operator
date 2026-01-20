@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
@@ -11,7 +12,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 
 	"github.com/go-logr/logr"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -20,6 +21,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -31,7 +33,7 @@ type ClusterReconciler struct {
 	ctx               context.Context
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
 }
 
@@ -40,7 +42,7 @@ func NewClusterReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *ClusterReconciler {
 	return &ClusterReconciler{
@@ -135,7 +137,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	// if Version isn't set we set it now to check for upgrades later.
 	if r.instance.Status.Version == "" {
-		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.Version = r.instance.Spec.General.Version
 		})
 		result.CombineErr(err)
@@ -152,7 +154,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
+func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodePool, username string) (*ctrl.Result, error) {
 	found, nodePoolConfig := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
 
 	// If config hasn't been set up for the node pool requeue
@@ -328,13 +330,47 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 
-	// Finally we enforce the desired state
-	return r.client.ReconcileResource(sts, reconciler.StatePresent)
+	// NOTE: This is needed for migration from opster.io/v1 to opensearch.org/v1. Update labels on orphaned pods to match the new StatefulSet's selector
+	// to ensure they can be adopted by the new StatefulSet and counted correctly
+	if err := r.updateOrphanedPodLabels(&existing, sts, &nodePool); err != nil {
+		r.logger.Error(err, "Failed to update orphaned pod labels", "statefulset", sts.Name)
+	}
+
+	// Try to enforce the desired state - if it fails due to immutable field changes,
+	// handle it with rolling pod deletion (similar to maybeUpdateVolumes pattern)
+	result, err = r.client.ReconcileResource(sts, reconciler.StatePresent)
+	if err != nil {
+		// Check if this is an immutable field change error that requires recreation
+		if r.isImmutableFieldChangeError(err) {
+			r.logger.Info(fmt.Sprintf("Detected immutable field change error, recreating StatefulSet %s/%s", sts.Namespace, sts.Name))
+			// Delete StatefulSet with orphan (pods remain) - following maybeUpdateVolumes pattern
+			if err := r.deleteSTSWithOrphan(&existing); err != nil {
+				return &ctrl.Result{}, err
+			}
+			// Reconcile resource again to create the new StatefulSet
+			return r.client.ReconcileResource(sts, reconciler.StatePresent)
+		}
+		// Return other errors as-is
+		return result, err
+	}
+	return result, nil
 }
 
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+// isImmutableFieldChangeError checks if an error is due to immutable field changes in StatefulSet
+// The error is already wrapped by the generic reconciler with ImmutableFieldChangeErrorHelp message,
+// so we can simply check if the error message contains that constant.
+func (r *ClusterReconciler) isImmutableFieldChangeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// The generic reconciler wraps the error with ImmutableFieldChangeErrorHelp message
+	// when immutable field changes are detected, so we just need to check for that message
+	return strings.Contains(err.Error(), reconciler.ImmutableFieldChangeErrorHelp)
 }
 
 // isEmptyDirCluster returns true only if every nodePool is using emptyDir
@@ -359,7 +395,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 	// If any scaling operation is going on, don't do anything
 	for _, nodePool := range r.instance.Spec.NodePools {
-		componentStatus := opsterv1.ComponentStatus{
+		componentStatus := opensearchv1.ComponentStatus{
 			Component:   "Scaler",
 			Description: nodePool.Component,
 		}
@@ -430,7 +466,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			// Dashboards deployment will be recreated normally through the reconcile cycle
 		}
 
-		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.Initialized = false
 		})
 		if err != nil {
@@ -450,7 +486,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 	return &ctrl.Result{}, nil
 }
 
-func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result, error) {
+func (r *ClusterReconciler) handlePDB(nodePool *opensearchv1.NodePool) (*ctrl.Result, error) {
 	pdb := policyv1.PodDisruptionBudget{}
 
 	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
@@ -479,7 +515,7 @@ func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result
 	}
 }
 
-func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opsterv1.NodePool) error {
+func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opensearchv1.NodePool) error {
 	// Use default if DiskSize is zero (not set)
 	nodePoolDiskSize := nodePool.DiskSize
 	if nodePoolDiskSize.IsZero() {
@@ -539,6 +575,59 @@ func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) er
 	return nil
 }
 
+// updateOrphanedPodLabels updates labels on orphaned pods to match the new StatefulSet's selector
+// This ensures they can be adopted by the new StatefulSet and counted correctly by ReadyReplicasForNodePool
+func (r *ClusterReconciler) updateOrphanedPodLabels(oldSTS *appsv1.StatefulSet, newSTS *appsv1.StatefulSet, nodePool *opensearchv1.NodePool) error {
+	// Get the old selector labels
+	oldSelector := oldSTS.Spec.Selector.MatchLabels
+	// Get the new selector labels
+	newSelector := newSTS.Spec.Selector.MatchLabels
+
+	// If labels haven't changed, no need to update
+	if reflect.DeepEqual(oldSelector, newSelector) {
+		return nil
+	}
+
+	// List pods that match the old selector (orphaned pods)
+	oldSelectorMap := make(map[string]string)
+	for k, v := range oldSelector {
+		oldSelectorMap[k] = v
+	}
+	selector := labels.SelectorFromSet(oldSelectorMap)
+	podList, err := r.client.ListPods(&client.ListOptions{
+		Namespace:     oldSTS.Namespace,
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list orphaned pods: %w", err)
+	}
+
+	// Update labels on each orphaned pod to match the new selector
+	for _, pod := range podList.Items {
+		// Skip pods that are being deleted
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		// Merge new selector labels and StatefulSet labels
+		labelsToUpdate := make(map[string]string)
+		for k, v := range newSelector {
+			labelsToUpdate[k] = v
+		}
+		// Also update any other labels that might have changed
+		for k, v := range newSTS.Labels {
+			labelsToUpdate[k] = v
+		}
+		if err := r.client.UpdatePodLabels(&pod, labelsToUpdate); err != nil {
+			r.logger.Error(err, "Failed to update pod labels", "pod", pod.Name)
+			// Continue with other pods even if one fails
+			continue
+		}
+		r.logger.Info("Updated labels on orphaned pod", "pod", pod.Name, "oldLabels", oldSelector, "newLabels", newSelector)
+	}
+
+	return nil
+}
+
 // UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
 func (r *ClusterReconciler) UpdateClusterStatus() error {
 	health, healthResponse := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
@@ -546,7 +635,7 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 
 	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
 
-	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.Health = health
 		instance.Status.AvailableNodes = availableNodes
 	})

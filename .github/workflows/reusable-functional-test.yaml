@@ -67,6 +67,14 @@ jobs:
             --agents 2
             -p 30000-30005:30000-30005@agent:0
             --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
+      - name: Install cert-manager
+        run: |
+          export CLUSTER_NAME=opensearch-operator-tests
+          cd opensearch-operator
+          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.yaml
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
       - name: Run tests
         id: functional_tests
         run: |
@@ -87,6 +95,10 @@ jobs:
           -f functionaltests/helmtests/ci-operator-values.yml \
           --namespace default --wait
           cd functionaltests
+          ## Set SKIP_SUITE_SETUP for migration and upgrade tests
+          if [ "${{ inputs.test_focus }}" == "APIGroupMigration" ] || [ "${{ inputs.test_focus }}" == "OperatorUpgrade" ]; then
+            export SKIP_SUITE_SETUP=true
+          fi
           ## Run tests with focus pattern
           SKIP_CLEANUP=true go test ./operatortests -ginkgo.focus="${{ inputs.test_focus }}" -timeout ${{ inputs.test_timeout }} -test.v -ginkgo.v
       # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled
@@ -115,7 +127,7 @@ jobs:
           kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
           echo "Collecting pod descriptions..."
           kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opster.io/opensearch-cluster=test-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opensearch.org/opensearch-cluster=test-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
           kubectl describe pods -n default -l opensearch.cluster.dashboards=test-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
           echo "Collecting logs from OpenSearch operator pods..."
           kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
@@ -125,7 +137,7 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
           done
           echo "Collecting logs from OpenSearch cluster pods..."
-          kubectl get pods -n default -l opster.io/opensearch-cluster=test-cluster -o name 2>/dev/null | while read pod; do
+          kubectl get pods -n default -l opensearch.org/opensearch-cluster=test-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
             echo "Collecting logs from $pod_name"
             kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true

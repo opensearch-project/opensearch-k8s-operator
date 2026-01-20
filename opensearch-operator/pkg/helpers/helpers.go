@@ -23,7 +23,7 @@ import (
 	policyv1 "k8s.io/api/policy/v1"
 
 	version "github.com/hashicorp/go-version"
-	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
@@ -78,7 +78,10 @@ func ContainsString(slice []string, s string) bool {
 // If enabled is nil (not set): enabled by default if HTTP config exists.
 // If enabled is true: explicitly enabled.
 // If enabled is false: explicitly disabled.
-func IsHttpTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
+func IsHttpTlsEnabled(cluster *opensearchv1.OpenSearchCluster) bool {
+	if cluster == nil {
+		return false
+	}
 	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
 		return false
 	}
@@ -94,7 +97,7 @@ func IsHttpTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
 	return true
 }
 
-func CheckVersionConstraint(cluster *opsterv1.OpenSearchCluster, constraint string, defaultOnError bool, errMsg string) bool {
+func CheckVersionConstraint(cluster *opensearchv1.OpenSearchCluster, constraint string, defaultOnError bool, errMsg string) bool {
 	versionConstraint, err := semver.NewConstraint(constraint)
 	if err != nil {
 		panic(err)
@@ -108,7 +111,7 @@ func CheckVersionConstraint(cluster *opsterv1.OpenSearchCluster, constraint stri
 	return versionConstraint.Check(version)
 }
 
-func SecurityChangeVersion(cluster *opsterv1.OpenSearchCluster) bool {
+func SecurityChangeVersion(cluster *opensearchv1.OpenSearchCluster) bool {
 	return CheckVersionConstraint(
 		cluster,
 		">=2.0.0",
@@ -117,7 +120,7 @@ func SecurityChangeVersion(cluster *opsterv1.OpenSearchCluster) bool {
 	)
 }
 
-func SupportsHotReload(cluster *opsterv1.OpenSearchCluster) bool {
+func SupportsHotReload(cluster *opensearchv1.OpenSearchCluster) bool {
 	return CheckVersionConstraint(
 		cluster,
 		">=2.19.1",
@@ -130,7 +133,10 @@ func SupportsHotReload(cluster *opsterv1.OpenSearchCluster) bool {
 // If enabled is nil (not set): enabled by default if transport config exists.
 // If enabled is true: explicitly enabled.
 // If enabled is false: explicitly disabled.
-func IsTransportTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
+func IsTransportTlsEnabled(cluster *opensearchv1.OpenSearchCluster) bool {
+	if cluster == nil {
+		return false
+	}
 	if cluster.Spec.Security == nil || cluster.Spec.Security.Tls == nil {
 		return false
 	}
@@ -145,8 +151,7 @@ func IsTransportTlsEnabled(cluster *opsterv1.OpenSearchCluster) bool {
 	return true
 }
 
-func IsSecurityPluginEnabled(cr *opsterv1.OpenSearchCluster) bool {
-
+func IsSecurityPluginEnabled(cr *opensearchv1.OpenSearchCluster) bool {
 	if SecurityChangeVersion(cr) {
 		return IsHttpTlsEnabled(cr)
 	}
@@ -156,8 +161,16 @@ func IsSecurityPluginEnabled(cr *opsterv1.OpenSearchCluster) bool {
 // ClusterURL returns the URL for communicating with the OpenSearch cluster.
 // If OperatorClusterURL is specified, it uses that custom URL.
 // Otherwise, it constructs the default internal Kubernetes service DNS name.
-func ClusterURL(cluster *opsterv1.OpenSearchCluster) string {
+func ClusterURL(cluster *opensearchv1.OpenSearchCluster) string {
+	if cluster == nil {
+		return ""
+	}
+
+	namespace := cluster.Namespace
+	serviceName := cluster.Spec.General.ServiceName
 	httpPort := cluster.Spec.General.HttpPort
+	operatorClusterURL := cluster.Spec.General.OperatorClusterURL
+
 	if httpPort == 0 {
 		httpPort = 9200 // default port
 	}
@@ -168,15 +181,15 @@ func ClusterURL(cluster *opsterv1.OpenSearchCluster) string {
 		protocol = "http"
 	}
 
-	if cluster.Spec.General.OperatorClusterURL != nil && *cluster.Spec.General.OperatorClusterURL != "" {
-		return fmt.Sprintf("%s://%s:%d", protocol, *cluster.Spec.General.OperatorClusterURL, httpPort)
+	if operatorClusterURL != nil && *operatorClusterURL != "" {
+		return fmt.Sprintf("%s://%s:%d", protocol, *operatorClusterURL, httpPort)
 	}
 
 	// Default internal Kubernetes service DNS name
 	return fmt.Sprintf("%s://%s.%s.svc.%s:%d",
 		protocol,
-		cluster.Spec.General.ServiceName,
-		cluster.Namespace,
+		serviceName,
+		namespace,
 		ClusterDnsBase(),
 		httpPort,
 	)
@@ -188,7 +201,7 @@ func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 	return f
 }
 
-func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
+func RemoveIt(ss opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
 	for idx, v := range ssSlice {
 		if ComponentStatusEqual(v, ss) {
 			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
@@ -197,21 +210,21 @@ func RemoveIt(ss opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) [
 	return ssSlice
 }
 
-func Replace(remove opsterv1.ComponentStatus, add opsterv1.ComponentStatus, ssSlice []opsterv1.ComponentStatus) []opsterv1.ComponentStatus {
+func Replace(remove opensearchv1.ComponentStatus, add opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
 	removedSlice := RemoveIt(remove, ssSlice)
 	fullSliced := append(removedSlice, add)
 	return fullSliced
 }
 
-func ComponentStatusEqual(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) bool {
+func ComponentStatusEqual(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) bool {
 	return left.Component == right.Component && left.Description == right.Description && left.Status == right.Status
 }
 
 func FindFirstPartial(
-	arr []opsterv1.ComponentStatus,
-	item opsterv1.ComponentStatus,
-	predicator func(opsterv1.ComponentStatus, opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool),
-) (opsterv1.ComponentStatus, bool) {
+	arr []opensearchv1.ComponentStatus,
+	item opensearchv1.ComponentStatus,
+	predicator func(opensearchv1.ComponentStatus, opensearchv1.ComponentStatus) (opensearchv1.ComponentStatus, bool),
+) (opensearchv1.ComponentStatus, bool) {
 	for i := 0; i < len(arr); i++ {
 		itemInArr, found := predicator(arr[i], item)
 		if found {
@@ -222,11 +235,11 @@ func FindFirstPartial(
 }
 
 func FindAllPartial(
-	arr []opsterv1.ComponentStatus,
-	item opsterv1.ComponentStatus,
-	predicator func(opsterv1.ComponentStatus, opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool),
-) []opsterv1.ComponentStatus {
-	var result []opsterv1.ComponentStatus
+	arr []opensearchv1.ComponentStatus,
+	item opensearchv1.ComponentStatus,
+	predicator func(opensearchv1.ComponentStatus, opensearchv1.ComponentStatus) (opensearchv1.ComponentStatus, bool),
+) []opensearchv1.ComponentStatus {
+	var result []opensearchv1.ComponentStatus
 
 	for i := 0; i < len(arr); i++ {
 		itemInArr, found := predicator(arr[i], item)
@@ -255,7 +268,7 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	return val, ok
 }
 
-func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
+func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
 	// Check if user provided AdminCredentialsSecret via Security.Config
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
 		secret, err := k8sClient.GetSecret(cr.Spec.Security.Config.AdminCredentialsSecret.Name, cr.Namespace)
@@ -295,7 +308,7 @@ func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSear
 	return &createdSecret, true, nil
 }
 
-func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, adminSecret *corev1.Secret) (*corev1.Secret, error) {
+func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, adminSecret *corev1.Secret) (*corev1.Secret, error) {
 	baseData, err := defaultSecurityconfigData()
 	if err != nil {
 		return nil, err
@@ -444,7 +457,7 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 	return modifiedYaml, nil
 }
 
-func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (string, string, error) {
+func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (string, string, error) {
 	// Check if user provided AdminCredentialsSecret via Security.Config
 	var secretName string
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
@@ -473,14 +486,14 @@ func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster
 	return string(username), string(password), nil
 }
 
-func GetByDescriptionAndComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
+func GetByDescriptionAndComponent(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) (opensearchv1.ComponentStatus, bool) {
 	if left.Description == right.Description && left.Component == right.Component {
 		return left, true
 	}
 	return right, false
 }
 
-func GetByComponent(left opsterv1.ComponentStatus, right opsterv1.ComponentStatus) (opsterv1.ComponentStatus, bool) {
+func GetByComponent(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) (opensearchv1.ComponentStatus, bool) {
 	if left.Component == right.Component {
 		return left, true
 	}
@@ -586,7 +599,7 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 }
 
 // Count the number of pods running and ready and not terminating for a given nodePool
-func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
+func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
 	// Constrict selector from labels
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
@@ -622,7 +635,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearc
 }
 
 // ReadyReplicasForNodePool returns the number of ready replicas derived from the actual running pods.
-func ReadyReplicasForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int32, error) {
+func ReadyReplicasForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int32, error) {
 	numReadyPods, err := CountRunningPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
@@ -631,7 +644,7 @@ func ReadyReplicasForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCl
 }
 
 // Count the number of PVCs created for the given NodePool
-func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster, nodePool *opsterv1.NodePool) (int, error) {
+func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
 		return 0, err
@@ -703,14 +716,14 @@ func WaitForSTSStatus(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.
 }
 
 // GetSTSForNodePool returns the corresponding sts for a given nodePool and cluster name
-func GetSTSForNodePool(k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) (*appsv1.StatefulSet, error) {
+func GetSTSForNodePool(k8sClient k8s.K8sClient, nodePool opensearchv1.NodePool, clusterName, clusterNamespace string) (*appsv1.StatefulSet, error) {
 	stsName := clusterName + "-" + nodePool.Component
 	existing, err := k8sClient.GetStatefulSet(stsName, clusterNamespace)
 	return &existing, err
 }
 
 // DeleteSTSForNodePool deletes the sts for the corresponding nodePool
-func DeleteSTSForNodePool(ctx context.Context, k8sClient k8s.K8sClient, nodePool opsterv1.NodePool, clusterName, clusterNamespace string) error {
+func DeleteSTSForNodePool(ctx context.Context, k8sClient k8s.K8sClient, nodePool opensearchv1.NodePool, clusterName, clusterNamespace string) error {
 	sts, err := GetSTSForNodePool(k8sClient, nodePool, clusterName, clusterNamespace)
 	if err != nil {
 		if k8serrors.IsNotFound(err) {
@@ -749,11 +762,11 @@ func DeleteSecurityUpdateJob(k8sClient k8s.K8sClient, clusterName, clusterNamesp
 	return k8sClient.DeleteJob(&job)
 }
 
-func HasDataRole(nodePool *opsterv1.NodePool) bool {
+func HasDataRole(nodePool *opensearchv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "data")
 }
 
-func HasManagerRole(nodePool *opsterv1.NodePool) bool {
+func HasManagerRole(nodePool *opensearchv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
 }
 
@@ -776,15 +789,23 @@ func CompareVersions(v1 string, v2 string) bool {
 	return err == nil && ver1.LessThan(ver2)
 }
 
-func ComposePDB(cr *opsterv1.OpenSearchCluster, nodepool *opsterv1.NodePool) policyv1.PodDisruptionBudget {
+func ComposePDB(cr *opensearchv1.OpenSearchCluster, nodepool *opensearchv1.NodePool) policyv1.PodDisruptionBudget {
+	if cr == nil || nodepool == nil {
+		return policyv1.PodDisruptionBudget{}
+	}
+
+	clusterName := cr.Name
+	namespace := cr.Namespace
+	component := nodepool.Component
+
 	matchLabels := map[string]string{
-		ClusterLabel:  cr.Name,
-		NodePoolLabel: nodepool.Component,
+		ClusterLabel:  clusterName,
+		NodePoolLabel: component,
 	}
 	newpdb := policyv1.PodDisruptionBudget{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-" + nodepool.Component + "-pdb",
-			Namespace: cr.Namespace,
+			Name:      clusterName + "-" + component + "-pdb",
+			Namespace: namespace,
 		},
 		Spec: policyv1.PodDisruptionBudgetSpec{
 			MinAvailable:   nodepool.Pdb.MinAvailable,
@@ -816,8 +837,8 @@ func CalculateJvmHeapSizeSettings(memoryRequest *resource.Quantity) string {
 	return fmt.Sprintf("-Xms%dM -Xmx%dM", memoryRequestMb, memoryRequestMb)
 }
 
-func IsUpgradeInProgress(status opsterv1.ClusterStatus) bool {
-	componentStatus := opsterv1.ComponentStatus{
+func IsUpgradeInProgress(status opensearchv1.ClusterStatus) bool {
+	componentStatus := opensearchv1.ComponentStatus{
 		Component: "Upgrader",
 	}
 	foundStatus := FindAllPartial(status.ComponentsStatus, componentStatus, GetByComponent)
@@ -929,7 +950,7 @@ func SafeClose(c io.Closer) {
 
 // ResolveUidGid resolves the UID and GID using security context hierarchy
 // Priority: securityContext.runAsUser/Group > podSecurityContext.runAsUser/Group > defaults (1000:1000)
-func ResolveUidGid(cr *opsterv1.OpenSearchCluster) (uid, gid int64) {
+func ResolveUidGid(cr *opensearchv1.OpenSearchCluster) (uid, gid int64) {
 	uid = DefaultUID
 	gid = DefaultGID
 
@@ -954,7 +975,7 @@ func GetChownCommand(uid, gid int64, path string) string {
 }
 
 // GenComponentTemplateName generates the component template name from the resource
-func GenComponentTemplateName(template *opsterv1.OpensearchComponentTemplate) string {
+func GenComponentTemplateName(template *opensearchv1.OpensearchComponentTemplate) string {
 	if template.Spec.Name != "" {
 		return template.Spec.Name
 	}
@@ -962,14 +983,14 @@ func GenComponentTemplateName(template *opsterv1.OpensearchComponentTemplate) st
 }
 
 // GenIndexTemplateName generates the index template name from the resource
-func GenIndexTemplateName(template *opsterv1.OpensearchIndexTemplate) string {
+func GenIndexTemplateName(template *opensearchv1.OpensearchIndexTemplate) string {
 	if template.Spec.Name != "" {
 		return template.Spec.Name
 	}
 	return template.Name
 }
 
-func DiscoverRandomAdminSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, error) {
+func DiscoverRandomAdminSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (*corev1.Secret, error) {
 	if cr.Spec.Security == nil || cr.Spec.Security.Config == nil {
 		return nil, fmt.Errorf("security config is not defined")
 	}
@@ -980,14 +1001,14 @@ func DiscoverRandomAdminSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchC
 	return &secret, err
 }
 
-func DiscoverRandomContextSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, error) {
+func DiscoverRandomContextSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (*corev1.Secret, error) {
 	secret, err := k8sClient.GetSecret(GeneratedSecurityConfigSecretName(cr), cr.Namespace)
 	return &secret, err
 }
 
 // EnsureDashboardsCredentialsSecret ensures a credentials secret exists for Dashboards.
 // It generates a separate password for Dashboards (not the admin password).
-func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opsterv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
+func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
 	// Check if user provided OpensearchCredentialsSecret via Dashboards config
 	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
 		secret, err := k8sClient.GetSecret(cr.Spec.Dashboards.OpensearchCredentialsSecret.Name, cr.Namespace)

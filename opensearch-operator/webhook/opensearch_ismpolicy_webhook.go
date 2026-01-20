@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchismpolicy,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchismpolicies,verbs=create;update,versions=v1,name=vopensearchismpolicy.opensearch.opster.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-opensearch-org-v1-opensearchismpolicy,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.org,resources=opensearchismpolicies,verbs=create;update,versions=v1,name=vopensearchismpolicy.opensearch.org,admissionReviewVersions=v1
 
 type OpenSearchISMPolicyValidator struct {
 	Client  client.Client
@@ -39,12 +40,13 @@ func (v *OpenSearchISMPolicyValidator) SetupWithManager(mgr ctrl.Manager) error 
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpenSearchISMPolicy{}).
+		For(&opensearchv1.OpenSearchISMPolicy{}).
+		WithValidator(v).
 		Complete()
 }
 
 func (v *OpenSearchISMPolicyValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	policy := obj.(*opsterv1.OpenSearchISMPolicy)
+	policy := obj.(*opensearchv1.OpenSearchISMPolicy)
 
 	if err := v.validateClusterReference(ctx, policy); err != nil {
 		return nil, err
@@ -66,8 +68,8 @@ func (v *OpenSearchISMPolicyValidator) ValidateCreate(ctx context.Context, obj r
 }
 
 func (v *OpenSearchISMPolicyValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldPolicy := oldObj.(*opsterv1.OpenSearchISMPolicy)
-	newPolicy := newObj.(*opsterv1.OpenSearchISMPolicy)
+	oldPolicy := oldObj.(*opensearchv1.OpenSearchISMPolicy)
+	newPolicy := newObj.(*opensearchv1.OpenSearchISMPolicy)
 
 	if err := v.validateClusterReferenceUnchanged(oldPolicy, newPolicy); err != nil {
 		return nil, err
@@ -96,27 +98,35 @@ func (v *OpenSearchISMPolicyValidator) ValidateDelete(ctx context.Context, obj r
 	return nil, nil
 }
 
-func (v *OpenSearchISMPolicyValidator) validateClusterReference(ctx context.Context, policy *opsterv1.OpenSearchISMPolicy) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+func (v *OpenSearchISMPolicyValidator) validateClusterReference(ctx context.Context, policy *opensearchv1.OpenSearchISMPolicy) error {
+	// Try new API group first
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      policy.Spec.OpensearchRef.Name,
 		Namespace: policy.Namespace,
 	}, cluster)
 
 	if err != nil {
-		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpensearchRef.Name, err)
+		// Fall back to old API group for backward compatibility
+		oldCluster := &opsterv1.OpenSearchCluster{}
+		if err := v.Client.Get(ctx, types.NamespacedName{
+			Name:      policy.Spec.OpensearchRef.Name,
+			Namespace: policy.Namespace,
+		}, oldCluster); err != nil {
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpensearchRef.Name, err)
+		}
 	}
 	return nil
 }
 
-func (v *OpenSearchISMPolicyValidator) validateClusterReferenceUnchanged(old, new *opsterv1.OpenSearchISMPolicy) error {
+func (v *OpenSearchISMPolicyValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpenSearchISMPolicy) error {
 	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
 		return fmt.Errorf("cannot change the cluster an ISM policy refers to")
 	}
 	return nil
 }
 
-func (v *OpenSearchISMPolicyValidator) validatePolicyIDUnchanged(old, new *opsterv1.OpenSearchISMPolicy) error {
+func (v *OpenSearchISMPolicyValidator) validatePolicyIDUnchanged(old, new *opensearchv1.OpenSearchISMPolicy) error {
 	if old.Status.PolicyId != "" {
 		newPolicyID := new.Spec.PolicyID
 		if newPolicyID == "" {
@@ -129,7 +139,7 @@ func (v *OpenSearchISMPolicyValidator) validatePolicyIDUnchanged(old, new *opste
 	return nil
 }
 
-func (v *OpenSearchISMPolicyValidator) validateDefaultStateExists(policy *opsterv1.OpenSearchISMPolicy) error {
+func (v *OpenSearchISMPolicyValidator) validateDefaultStateExists(policy *opensearchv1.OpenSearchISMPolicy) error {
 	for _, state := range policy.Spec.States {
 		if state.Name == policy.Spec.DefaultState {
 			return nil

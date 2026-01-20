@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchrole,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchroles,verbs=create;update,versions=v1,name=vopensearchrole.opensearch.opster.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-opensearch-org-v1-opensearchrole,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.org,resources=opensearchroles,verbs=create;update,versions=v1,name=vopensearchrole.opensearch.org,admissionReviewVersions=v1
 
 type OpenSearchRoleValidator struct {
 	Client  client.Client
@@ -40,13 +41,14 @@ func (v *OpenSearchRoleValidator) SetupWithManager(mgr ctrl.Manager) error {
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpensearchRole{}).
+		For(&opensearchv1.OpensearchRole{}).
+		WithValidator(v).
 		Complete()
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchRoleValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	role := obj.(*opsterv1.OpensearchRole)
+	role := obj.(*opensearchv1.OpensearchRole)
 
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, role); err != nil {
@@ -63,8 +65,8 @@ func (v *OpenSearchRoleValidator) ValidateCreate(ctx context.Context, obj runtim
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchRoleValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldRole := oldObj.(*opsterv1.OpensearchRole)
-	newRole := newObj.(*opsterv1.OpensearchRole)
+	oldRole := oldObj.(*opensearchv1.OpensearchRole)
+	newRole := newObj.(*opensearchv1.OpensearchRole)
 
 	// Validate that the OpenSearch cluster reference hasn't changed
 	if err := v.validateClusterReferenceUnchanged(oldRole, newRole); err != nil {
@@ -86,22 +88,30 @@ func (v *OpenSearchRoleValidator) ValidateDelete(ctx context.Context, obj runtim
 }
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
-func (v *OpenSearchRoleValidator) validateClusterReference(ctx context.Context, role *opsterv1.OpensearchRole) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+func (v *OpenSearchRoleValidator) validateClusterReference(ctx context.Context, role *opensearchv1.OpensearchRole) error {
+	// Try new API group first
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      role.Spec.OpensearchRef.Name,
 		Namespace: role.Namespace,
 	}, cluster)
 
 	if err != nil {
-		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", role.Spec.OpensearchRef.Name, err)
+		// Fall back to old API group for backward compatibility
+		oldCluster := &opsterv1.OpenSearchCluster{}
+		if err := v.Client.Get(ctx, types.NamespacedName{
+			Name:      role.Spec.OpensearchRef.Name,
+			Namespace: role.Namespace,
+		}, oldCluster); err != nil {
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", role.Spec.OpensearchRef.Name, err)
+		}
 	}
 
 	return nil
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
-func (v *OpenSearchRoleValidator) validateClusterReferenceUnchanged(old, new *opsterv1.OpensearchRole) error {
+func (v *OpenSearchRoleValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchRole) error {
 	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
 		return fmt.Errorf("cannot change the cluster a role refers to")
 	}
@@ -109,7 +119,7 @@ func (v *OpenSearchRoleValidator) validateClusterReferenceUnchanged(old, new *op
 }
 
 // validatePermissions validates that at least one permission is defined
-func (v *OpenSearchRoleValidator) validatePermissions(role *opsterv1.OpensearchRole) error {
+func (v *OpenSearchRoleValidator) validatePermissions(role *opensearchv1.OpensearchRole) error {
 	hasPermissions := len(role.Spec.ClusterPermissions) > 0 ||
 		len(role.Spec.IndexPermissions) > 0 ||
 		len(role.Spec.TenantPermissions) > 0

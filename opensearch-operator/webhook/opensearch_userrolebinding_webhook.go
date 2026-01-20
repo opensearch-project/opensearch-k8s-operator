@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -28,7 +29,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
-//+kubebuilder:webhook:path=/validate-opensearch-opster-io-v1-opensearchuserrolebinding,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.opster.io,resources=opensearchuserrolebindings,verbs=create;update,versions=v1,name=vopensearchuserrolebinding.opensearch.opster.io,admissionReviewVersions=v1
+//+kubebuilder:webhook:path=/validate-opensearch-org-v1-opensearchuserrolebinding,mutating=false,failurePolicy=fail,sideEffects=None,groups=opensearch.org,resources=opensearchuserrolebindings,verbs=create;update,versions=v1,name=vopensearchuserrolebinding.opensearch.org,admissionReviewVersions=v1
 
 type OpenSearchUserRoleBindingValidator struct {
 	Client  client.Client
@@ -40,13 +41,14 @@ func (v *OpenSearchUserRoleBindingValidator) SetupWithManager(mgr ctrl.Manager) 
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opsterv1.OpensearchUserRoleBinding{}).
+		For(&opensearchv1.OpensearchUserRoleBinding{}).
+		WithValidator(v).
 		Complete()
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchUserRoleBindingValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	binding := obj.(*opsterv1.OpensearchUserRoleBinding)
+	binding := obj.(*opensearchv1.OpensearchUserRoleBinding)
 
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, binding); err != nil {
@@ -68,8 +70,8 @@ func (v *OpenSearchUserRoleBindingValidator) ValidateCreate(ctx context.Context,
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchUserRoleBindingValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldBinding := oldObj.(*opsterv1.OpensearchUserRoleBinding)
-	newBinding := newObj.(*opsterv1.OpensearchUserRoleBinding)
+	oldBinding := oldObj.(*opensearchv1.OpensearchUserRoleBinding)
+	newBinding := newObj.(*opensearchv1.OpensearchUserRoleBinding)
 
 	// Validate that the OpenSearch cluster reference hasn't changed
 	if err := v.validateClusterReferenceUnchanged(oldBinding, newBinding); err != nil {
@@ -96,22 +98,30 @@ func (v *OpenSearchUserRoleBindingValidator) ValidateDelete(ctx context.Context,
 }
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
-func (v *OpenSearchUserRoleBindingValidator) validateClusterReference(ctx context.Context, binding *opsterv1.OpensearchUserRoleBinding) error {
-	cluster := &opsterv1.OpenSearchCluster{}
+func (v *OpenSearchUserRoleBindingValidator) validateClusterReference(ctx context.Context, binding *opensearchv1.OpensearchUserRoleBinding) error {
+	// Try new API group first
+	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      binding.Spec.OpensearchRef.Name,
 		Namespace: binding.Namespace,
 	}, cluster)
 
 	if err != nil {
-		return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", binding.Spec.OpensearchRef.Name, err)
+		// Fall back to old API group for backward compatibility
+		oldCluster := &opsterv1.OpenSearchCluster{}
+		if err := v.Client.Get(ctx, types.NamespacedName{
+			Name:      binding.Spec.OpensearchRef.Name,
+			Namespace: binding.Namespace,
+		}, oldCluster); err != nil {
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", binding.Spec.OpensearchRef.Name, err)
+		}
 	}
 
 	return nil
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
-func (v *OpenSearchUserRoleBindingValidator) validateClusterReferenceUnchanged(old, new *opsterv1.OpensearchUserRoleBinding) error {
+func (v *OpenSearchUserRoleBindingValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchUserRoleBinding) error {
 	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
 		return fmt.Errorf("cannot change the cluster a user role binding refers to")
 	}
@@ -119,7 +129,7 @@ func (v *OpenSearchUserRoleBindingValidator) validateClusterReferenceUnchanged(o
 }
 
 // validateSubjects validates that at least one of users or backendRoles is specified
-func (v *OpenSearchUserRoleBindingValidator) validateSubjects(binding *opsterv1.OpensearchUserRoleBinding) error {
+func (v *OpenSearchUserRoleBindingValidator) validateSubjects(binding *opensearchv1.OpensearchUserRoleBinding) error {
 	if len(binding.Spec.Users) == 0 && len(binding.Spec.BackendRoles) == 0 {
 		return fmt.Errorf("at least one of users or backendRoles must be specified")
 	}
