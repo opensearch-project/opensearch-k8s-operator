@@ -4,46 +4,37 @@
 
 The Kubernetes OpenSearch Operator is used for automating the deployment, provisioning, management, and orchestration of OpenSearch clusters and OpenSearch dashboards.
 
+> **API Group Migration Notice:** The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Please see the Migration Guide for details.
+
 ## Getting started
 
-The Operator can be easily installed using helm on any CNCF-certified Kubernetes cluster. Please refer to the [User Guide](./docs/userguide/main.md) for installation instructions.
-
-## Roadmap
-
-- Auto-Scaler.
-- OpenShift support.
-- Data-prepper support.
-
-## Current feature list
-
-Features:
-
-- [x] Deploy a new OS cluster.
-- [x] Ability to deploy multiple clusters.
-- [x] Spin up OS dashboards.
-- [x] Configuration of all node roles (master, data, coordinating..).
-- [x] Scale the cluster resources (manually), per nodes' role group.
-- [x] Drain strategy for scale down.
-- [x] Version updates.
-- [x] Change nodes' memory allocation and limits.
-- [x] Secured installation features.
-- [x] Certificate management.
-- [x] Rolling restarts - through API.
-- [x] Scaling nodes' disks - increase disk size.
-- [x] Cluster configurations and nodes' settings updates.
-- [x] Operator Monitoring, with Prometheus and Grafana.
-
-
-## Installation
-
-The Operator can be easily installed using Helm:
+The Operator can be easily installed using Helm on any CNCF-certified Kubernetes cluster:
 
 1. Add the helm repo: `helm repo add opensearch-operator https://opensearch-project.github.io/opensearch-k8s-operator/`
 2. Install the Operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
 
-## OpenSearch Kubernetes Operator installation & demo video
+After installation, you can deploy your first OpenSearch cluster by creating an `OpenSearchCluster` custom resource. Please refer to the [User Guide](./docs/userguide/main.md) for detailed instructions and configuration options.
 
-[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://player.vimeo.com/video/708641527)
+## Video Tutorial
+
+Learn how to install and use the operator with the [OpenSearch Kubernetes Operator Tutorial Series on YouTube](https://pulse.support/kb/running-opensearch-on-kubernetes-video-tutorial-series).
+
+[![Watch the video](https://github.com/user-attachments/assets/3e8881b4-4b93-4322-86e2-f46baa01cad0)](https://pulse.support/kb/running-opensearch-on-kubernetes-video-tutorial-series)
+
+
+## Features
+
+- Deploy and manage OpenSearch clusters with multiple node pools
+- Deploy and configure OpenSearch Dashboards
+- Configure all node roles (cluster_manager, data, ingest, coordinating, etc.)
+- Scale cluster resources manually, per node pool
+- Rolling version upgrades with quorum-safe restarts
+- Online volume expansion for disk scaling
+- Certificate management with TLS hot reloading
+- Multi-namespace support for managing clusters across organizational boundaries
+- Automatic TLS certificate generation and management
+- TLS certificate hot reloading without pod restarts
+- Plugin installation during bootstrap phase
 
 ## Compatibility
 
@@ -52,9 +43,9 @@ The opensearch k8s operator aims to be compatible to all supported opensearch ve
 
 | Operator Version                                            | Min Supported Opensearch Version | Max Supported Opensearch Version | Comment                                    |
 | ----------------------------------------------------------- |----------------------------------| -------------------------------- | ------------------------------------------ |
+| 3.0.0                                                       | 2.19.2                           | latest 3.x                       | Supports the latest OpenSearch 3.x version. |
 | 2.8.0                                                       | 2.19.2                           | latest 3.x                       | Supports the latest OpenSearch 3.x version. |
 | 2.7.0<br>2.6.1<br>2.6.0<br>2.5.1<br>2.5.0                    | 1.3.x                            | 2.19.2                       | Supports the OpenSearch 2.19.2 version. |
-
 
 
 This table only lists versions that have been explicitly tested with the operator, the operator will not prevent you from using other versions. Newer minor versions (2.x) not listed here generally also work but you should proceed with caution and test it out in a non-production environment first.
