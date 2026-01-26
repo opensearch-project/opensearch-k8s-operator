@@ -32,8 +32,6 @@ Learn how to install and use the operator with the [OpenSearch Kubernetes Operat
 - Online volume expansion for disk scaling
 - Certificate management with TLS hot reloading
 - Multi-namespace support for managing clusters across organizational boundaries
-- Automatic TLS certificate generation and management
-- TLS certificate hot reloading without pod restarts
 - Plugin installation during bootstrap phase
 
 ## Compatibility
