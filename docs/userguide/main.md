@@ -13,7 +13,7 @@ The Operator can be easily installed using Helm:
 
 Follow the instructions in this video to install the Operator:
 
-[![Watch the video](https://opster.com/wp-content/uploads/2022/05/Operator-Installation-Tutorial.png)](https://player.vimeo.com/video/708641527)
+[![Watch the video](https://github.com/user-attachments/assets/3e8881b4-4b93-4322-86e2-f46baa01cad0)](https://pulse.support/kb/running-opensearch-on-kubernetes-video-tutorial-series)
 
 A few notes on operator releases:
 
@@ -34,7 +34,7 @@ An OpenSearch cluster can be easily deployed using Helm. Follow the instructions
 Create a file `cluster.yaml` with the following content:
 
 ```yaml
-apiVersion: opensearch.org/v1  # or opensearch.opster.io/v1 (deprecated)
+apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
 metadata:
   name: my-first-cluster
