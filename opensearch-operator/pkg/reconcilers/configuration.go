@@ -6,9 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -87,16 +87,11 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 	// Helper function to build config string from a map
 	buildConfigString := func(config map[string]string) string {
-		var sb strings.Builder
-		keys := make([]string, 0, len(config))
-		for key := range config {
-			keys = append(keys, key)
+		data, err := yaml.Marshal(config)
+		if err != nil {
+			return ""
 		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
-		}
-		return sb.String()
+		return string(data)
 	}
 
 	result := reconciler.CombinedResult{}
