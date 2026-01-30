@@ -502,6 +502,7 @@ _Appears in:_
 | `serviceName` _string_ |  |  |  |
 | `setVMMaxMapCount` _boolean_ |  | true |  |
 | `defaultRepo` _string_ |  |  |  |
+| `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
 | `additionalConfig` _object (keys:string, values:string)_ | Extra items to add to the opensearch.yml |  |  |
 | `annotations` _object (keys:string, values:string)_ | Adds support for annotations in services |  |  |
 | `drainDataNodes` _boolean_ | Drain data nodes controls whether to drain data notes on rolling restart operations |  |  |
@@ -2282,6 +2283,7 @@ _Appears in:_
 | `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
 | `grpc` _[GrpcConfig](#grpcconfig)_ | gRPC API configuration for OpenSearch |  |  |
+| `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
 
 
 #### GrpcConfig

@@ -1380,6 +1380,60 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("configuring hostNetwork for the cluster", func() {
+		It("should set hostNetwork on the statefulset pods when enabled", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.HostNetwork = true
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.HostNetwork).To(BeTrue())
+		})
+
+		It("should not set hostNetwork on the statefulset pods when disabled", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.HostNetwork = false
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.HostNetwork).To(BeFalse())
+		})
+
+		It("should set hostNetwork on the bootstrap pod when enabled", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.HostNetwork = true
+
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(pod.Spec.HostNetwork).To(BeTrue())
+		})
+
+		It("should not set hostNetwork on the bootstrap pod when disabled", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.HostNetwork = false
+
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(pod.Spec.HostNetwork).To(BeFalse())
+		})
+
+		It("should set hostNetwork on the securityconfig update job when enabled", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.HostNetwork = true
+
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "cmd", nil, nil)
+			Expect(job.Spec.Template.Spec.HostNetwork).To(BeTrue())
+		})
+	})
+
 	When("configuring a host alias for the cluster", func() {
 		It("should configure the host alias for the statefulset and bootstrap pods", func() {
 			hostNames := []string{"dummy.com"}
