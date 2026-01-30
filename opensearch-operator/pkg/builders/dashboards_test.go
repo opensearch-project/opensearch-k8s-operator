@@ -263,4 +263,40 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
 		})
 	})
+
+	When("configuring hostNetwork for the dashboards", func() {
+		It("should set hostNetwork on the dashboard pods when enabled", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: "some-name",
+						HostNetwork: true,
+					},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable: true,
+					},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.HostNetwork).To(BeTrue())
+		})
+
+		It("should not set hostNetwork on the dashboard pods when disabled", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: "some-name",
+						HostNetwork: false,
+					},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable: true,
+					},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.HostNetwork).To(BeFalse())
+		})
+	})
 })

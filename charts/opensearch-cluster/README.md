@@ -31,6 +31,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.general.monitoring.pluginUrl` | string | `""` | Custom URL for the monitoring plugin |
 | `cluster.general.monitoring.scrapeInterval` | string | `"30s"` | How often to scrape metrics |
 | `cluster.general.monitoring.tlsConfig` | object | `{}` | Override the tlsConfig of the generated ServiceMonitor |
+| `cluster.general.hostNetwork` | bool | `false` |  |
 | `cluster.general.pluginsList` | list | `[]` | List of Opensearch plugins to install |
 | `cluster.general.podSecurityContext` | object | `{}` | Opensearch pod security context configuration |
 | `cluster.general.securityContext` | object | `{}` | Opensearch securityContext |

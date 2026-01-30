@@ -629,6 +629,7 @@ func NewSTSForNodePool(
 					PriorityClassName:         node.PriorityClassName,
 					SecurityContext:           podSecurityContext,
 					HostAliases:               cr.Spec.General.HostAliases,
+					HostNetwork:               cr.Spec.General.HostNetwork,
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
@@ -1177,6 +1178,7 @@ func NewBootstrapPod(
 			SecurityContext:    podSecurityContext,
 			HostAliases:        hostAliases,
 			PriorityClassName:  cr.Spec.Bootstrap.PriorityClassName,
+			HostNetwork:        cr.Spec.General.HostNetwork,
 		},
 	}
 
@@ -1391,6 +1393,7 @@ func NewSecurityconfigUpdateJob(
 					ImagePullSecrets:   image.ImagePullSecrets,
 					SecurityContext:    podSecurityContext,
 					PriorityClassName:  priorityClassName,
+					HostNetwork:        instance.Spec.General.HostNetwork,
 				},
 			},
 		},
