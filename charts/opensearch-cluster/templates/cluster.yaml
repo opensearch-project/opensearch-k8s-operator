@@ -54,6 +54,9 @@ spec:
         {{- with .tls.transport.secret }}
         secret: {{ . | toYaml | nindent 10 }}
         {{- end }}
+        {{- if .tls.transport.rotateDaysBeforeExpiry }}
+        rotateDaysBeforeExpiry: {{ .tls.transport.rotateDaysBeforeExpiry }}
+        {{- end }}
         {{- if .tls.transport.duration }}
         duration: {{ .tls.transport.duration }}
         {{- end }}
@@ -72,6 +75,9 @@ spec:
         {{- end }}
         {{- with .tls.http.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
+        {{- end }}
+        {{- if .tls.http.rotateDaysBeforeExpiry }}
+        rotateDaysBeforeExpiry: {{ .tls.http.rotateDaysBeforeExpiry }}
         {{- end }}
         {{- if .tls.http.duration }}
         duration: {{ .tls.http.duration }}
