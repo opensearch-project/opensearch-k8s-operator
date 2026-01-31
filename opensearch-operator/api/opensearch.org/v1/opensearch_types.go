@@ -79,6 +79,8 @@ type GeneralConfig struct {
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
 	// gRPC API configuration for OpenSearch
 	Grpc *GrpcConfig `json:"grpc,omitempty"`
+	// HostNetwork enables host networking for all pods in the cluster.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
 }
 
 type PdbConfig struct {

@@ -176,6 +176,7 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 					HostAliases:               cr.Spec.Dashboards.HostAliases,
 					TopologySpreadConstraints: cr.Spec.Dashboards.TopologySpreadConstraints,
 					PriorityClassName:         cr.Spec.Dashboards.PriorityClassName,
+					HostNetwork:               cr.Spec.General.HostNetwork,
 				},
 			},
 		},

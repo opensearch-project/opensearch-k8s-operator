@@ -94,6 +94,9 @@ cluster:
       tlsConfig: {}
 #        insecureSkipVerify: true
 
+    # Enables host networking for all pods in the cluster.
+    hostNetwork: false
+
     # -- List of Opensearch plugins to install
     pluginsList: []
 

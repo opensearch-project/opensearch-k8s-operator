@@ -55,6 +55,8 @@ type GeneralConfig struct {
 	//+kubebuilder:default=true
 	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
+	// HostNetwork enables host networking for all pods in the cluster.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services

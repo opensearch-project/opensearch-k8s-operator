@@ -4523,6 +4523,10 @@ spec:
                       - ip
                       type: object
                     type: array
+                  hostNetwork:
+                    description: HostNetwork enables host networking for all pods
+                      in the cluster.
+                    type: boolean
                   httpPort:
                     default: 9200
                     format: int32
