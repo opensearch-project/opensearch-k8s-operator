@@ -174,7 +174,9 @@ $(ENVTEST): $(LOCALBIN)
 .PHONY: helm-docs
 helm-docs: $(HELM_DOCS) ## Download helm-docs locally if necessary.
 $(HELM_DOCS): $(LOCALBIN)
-	@curl -sL "https://github.com/norwoodj/helm-docs/releases/download/v$(HELM_DOCS_VERSION)/helm-docs_$(HELM_DOCS_VERSION)_$$(uname -s)_x86_64.tar.gz" | tar -xz -C $(LOCALBIN) helm-docs
+	@ARCH=$$(uname -m); \
+	if [ "$$ARCH" = "aarch64" ] || [ "$$ARCH" = "arm64" ]; then ARCH="arm64"; else ARCH="x86_64"; fi; \
+	curl -sL "https://github.com/norwoodj/helm-docs/releases/download/v$(HELM_DOCS_VERSION)/helm-docs_$(HELM_DOCS_VERSION)_$$(uname -s)_$$ARCH.tar.gz" | tar -xz -C $(LOCALBIN) helm-docs
 	@chmod +x $(HELM_DOCS)
 
 .PHONY: crd-ref-docs
