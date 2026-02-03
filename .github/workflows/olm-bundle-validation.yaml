@@ -1,0 +1,179 @@
+name: "OLM Bundle Validation"
+on:
+  pull_request:
+    branches:
+      - "main"
+    paths:
+      - "opensearch-operator/bundle/**"
+      - "opensearch-operator/config/crd/**"
+      - "opensearch-operator/config/rbac/**"
+      - "opensearch-operator/Dockerfile"
+      - ".github/workflows/olm-bundle-validation.yaml"
+  push:
+    branches:
+      - "main"
+    paths:
+      - "opensearch-operator/bundle/**"
+      - "opensearch-operator/config/crd/**"
+
+jobs:
+  bundle-validate:
+    runs-on: ubuntu-latest
+    name: Validate OLM Bundle
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+          cache: false
+
+      - name: Install operator-sdk
+        run: |
+          cd opensearch-operator
+          make operator-sdk
+
+      - name: Sync CRDs to bundle
+        run: |
+          cd opensearch-operator
+          cp config/crd/bases/opensearch.org_*.yaml bundle/manifests/
+
+      - name: Validate bundle
+        run: |
+          cd opensearch-operator
+          make bundle-validate
+
+  preflight-container:
+    runs-on: ubuntu-latest
+    name: Preflight Container Check
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+          cache: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Run preflight container check
+        run: |
+          cd opensearch-operator
+          make preflight-container-local
+
+      - name: Upload preflight results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preflight-results
+          path: artifacts/
+
+  bundle-scorecard:
+    runs-on: ubuntu-latest
+    name: OLM Scorecard Tests
+    needs: [bundle-validate]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+          cache: false
+
+      - name: Install operator-sdk
+        run: |
+          cd opensearch-operator
+          make operator-sdk
+
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+
+      - name: Install OLM
+        run: |
+          cd opensearch-operator
+          ./bin/operator-sdk olm install
+
+      - name: Run scorecard tests
+        run: |
+          cd opensearch-operator
+          make bundle-scorecard
+        continue-on-error: true
+
+      - name: Upload scorecard results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: scorecard-results
+          path: artifacts/
+
+  preflight-operator:
+    runs-on: ubuntu-latest
+    name: Preflight Operator Check
+    needs: [bundle-validate, preflight-container]
+    env:
+      CLUSTER_NAME: preflight-test
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.work'
+          cache: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Start local registry
+        run: |
+          cd opensearch-operator
+          make local-registry-start
+
+      - name: Create k3d cluster
+        uses: nolar/setup-k3d-k3s@v1
+        with:
+          version: v1
+          k3d-name: ${{ env.CLUSTER_NAME }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          k3d-args: --servers 1 --agents 1
+
+      - name: Install OLM
+        run: |
+          cd opensearch-operator
+          make operator-sdk
+          ./bin/operator-sdk olm install
+
+      - name: Start local registry
+        run: |
+          cd opensearch-operator
+          make local-registry-start
+          docker network connect k3d-$CLUSTER_NAME preflight-registry || true
+
+      - name: Build and push images to local registry
+        run: |
+          cd opensearch-operator
+          make docker-push-local
+          make bundle-push-local
+
+      - name: Run preflight operator check
+        run: |
+          export KUBECONFIG=$(k3d kubeconfig write $CLUSTER_NAME)
+          cd opensearch-operator
+          make preflight-operator-local
+        continue-on-error: true
+
+      - name: Upload preflight operator results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: preflight-operator-results
+          path: artifacts/

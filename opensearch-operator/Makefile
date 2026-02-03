@@ -7,6 +7,22 @@ NAMESPACE ?= opensearch-operator-system
 ENVTEST_K8S_VERSION = 1.27
 PROJECT_PATH=$(CURDIR)
 
+# OLM Bundle Configuration
+VERSION ?= 3.0.0
+BUNDLE_IMG ?= opensearchproject/opensearch-operator-bundle:v$(VERSION)
+CATALOG_IMG ?= opensearchproject/opensearch-operator-catalog:v$(VERSION)
+BUNDLE_CHANNELS ?= stable,alpha
+BUNDLE_DEFAULT_CHANNEL ?= stable
+
+# Local registry for development/CI testing
+LOCAL_REGISTRY ?= localhost:5000
+LOCAL_IMG ?= $(LOCAL_REGISTRY)/opensearch-operator:$(VERSION)
+LOCAL_BUNDLE_IMG ?= $(LOCAL_REGISTRY)/opensearch-operator-bundle:v$(VERSION)
+
+# Preflight operator check requirements
+KUBECONFIG ?= $(HOME)/.kube/config
+PFLT_INDEXIMAGE ?= registry.redhat.io/redhat/redhat-operator-index:v4.14
+
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -127,6 +143,108 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 undeploy: ## Undeploy controller from the K8s cluster specified in ~/.kube/config.
 	$(KUSTOMIZE) build config/default | kubectl delete -f -
 
+##@ OLM Bundle
+
+.PHONY: bundle
+bundle: manifests operator-sdk ## Sync CRDs to bundle and validate.
+	@echo "Syncing CRDs to bundle/manifests..."
+	cp config/crd/bases/opensearch.org_*.yaml bundle/manifests/
+	@echo "Validating bundle..."
+	$(OPERATOR_SDK) bundle validate ./bundle
+
+.PHONY: bundle-update-version
+bundle-update-version: ## Update version in CSV (usage: make bundle-update-version VERSION=x.y.z)
+	@echo "Updating CSV version to $(VERSION)..."
+	sed -i 's/opensearch-operator\.v[0-9]*\.[0-9]*\.[0-9]*/opensearch-operator.v$(VERSION)/g' bundle/manifests/opensearch-operator.clusterserviceversion.yaml
+	sed -i 's/version: [0-9]*\.[0-9]*\.[0-9]*/version: $(VERSION)/g' bundle/manifests/opensearch-operator.clusterserviceversion.yaml
+	sed -i 's/opensearch-operator:[0-9]*\.[0-9]*\.[0-9]*/opensearch-operator:$(VERSION)/g' bundle/manifests/opensearch-operator.clusterserviceversion.yaml
+
+.PHONY: bundle-build
+bundle-build: ## Build the bundle image.
+	docker build -f bundle.Dockerfile -t $(BUNDLE_IMG) .
+
+.PHONY: bundle-push
+bundle-push: ## Push the bundle image.
+	docker push $(BUNDLE_IMG)
+
+.PHONY: bundle-validate
+bundle-validate: operator-sdk ## Validate the bundle.
+	$(OPERATOR_SDK) bundle validate ./bundle --select-optional suite=operatorframework
+
+.PHONY: bundle-scorecard
+bundle-scorecard: operator-sdk ## Run scorecard tests on the bundle.
+	$(OPERATOR_SDK) scorecard ./bundle --wait-time 60s
+
+# Build a catalog image by adding bundle images to an empty catalog using the operator-sdk tool
+# https://olm.operatorframework.io/docs/tasks/creating-a-catalog/
+.PHONY: catalog-build
+catalog-build: opm ## Build a catalog image.
+	$(OPM) index add --container-tool docker --mode semver --tag $(CATALOG_IMG) --bundles $(BUNDLE_IMG)
+
+.PHONY: catalog-push
+catalog-push: ## Push a catalog image.
+	docker push $(CATALOG_IMG)
+
+##@ Red Hat Certification
+
+# Red Hat certification project ID (set this for your project)
+CERTIFICATION_PROJECT_ID ?= ""
+
+.PHONY: local-registry-start
+local-registry-start: ## Start a local Docker registry for testing.
+	@if [ -z "$$(docker ps -q -f name=preflight-registry)" ]; then \
+		echo "Starting local registry at $(LOCAL_REGISTRY)..."; \
+		docker run -d -p 5000:5000 --restart=always --name preflight-registry registry:2; \
+	else \
+		echo "Local registry already running."; \
+	fi
+
+.PHONY: local-registry-stop
+local-registry-stop: ## Stop the local Docker registry.
+	@docker stop preflight-registry 2>/dev/null || true
+	@docker rm preflight-registry 2>/dev/null || true
+
+.PHONY: docker-push-local
+docker-push-local: docker-build ## Build and push operator image to local registry.
+	docker tag $(IMG) $(LOCAL_IMG)
+	docker push $(LOCAL_IMG)
+
+.PHONY: bundle-push-local
+bundle-push-local: bundle-build ## Build and push bundle image to local registry.
+	docker tag $(BUNDLE_IMG) $(LOCAL_BUNDLE_IMG)
+	docker push $(LOCAL_BUNDLE_IMG)
+
+.PHONY: preflight-container-local
+preflight-container-local: preflight local-registry-start docker-push-local ## Run preflight checks on local operator image.
+	$(PREFLIGHT) check container $(LOCAL_IMG) --insecure
+
+.PHONY: preflight-operator-local
+preflight-operator-local: preflight local-registry-start bundle-push-local ## Run preflight checks on local bundle (requires cluster).
+	@echo "NOTE: This requires a running cluster with OLM installed."
+	@echo "Using KUBECONFIG=$(KUBECONFIG) and PFLT_INDEXIMAGE=$(PFLT_INDEXIMAGE)"
+	@echo "For bundle validation without a cluster, use: make bundle-validate"
+	KUBECONFIG=$(KUBECONFIG) PFLT_INDEXIMAGE=$(PFLT_INDEXIMAGE) $(PREFLIGHT) check operator $(LOCAL_BUNDLE_IMG)
+
+.PHONY: preflight-container
+preflight-container: preflight ## Run preflight checks on remote container image.
+	$(PREFLIGHT) check container $(IMG) --docker-config=$(HOME)/.docker/config.json
+
+.PHONY: preflight-operator
+preflight-operator: preflight ## Run preflight checks on remote operator bundle (requires cluster).
+	@echo "NOTE: This requires a running cluster with OLM installed."
+	@echo "Using KUBECONFIG=$(KUBECONFIG) and PFLT_INDEXIMAGE=$(PFLT_INDEXIMAGE)"
+	@echo "For bundle validation without a cluster, use: make bundle-validate"
+	KUBECONFIG=$(KUBECONFIG) $(PREFLIGHT) check operator $(BUNDLE_IMG) --docker-config=$(HOME)/.docker/config.json --indeximage=$(PFLT_INDEXIMAGE)
+
+.PHONY: preflight-submit
+preflight-submit: preflight ## Submit certification results to Red Hat (requires CERTIFICATION_PROJECT_ID and PYXIS_API_TOKEN).
+	@if [ -z "$(CERTIFICATION_PROJECT_ID)" ]; then echo "Error: CERTIFICATION_PROJECT_ID is not set"; exit 1; fi
+	@if [ -z "$(PYXIS_API_TOKEN)" ]; then echo "Error: PYXIS_API_TOKEN is not set"; exit 1; fi
+	$(PREFLIGHT) check container $(IMG) \
+		--submit \
+		--certification-project-id=$(CERTIFICATION_PROJECT_ID) \
+		--pyxis-api-token=$(PYXIS_API_TOKEN) \
+		--docker-config=$(HOME)/.docker/config.json
 
 ##@ Build Dependencies
 
@@ -142,6 +260,9 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 MOCKERY ?= $(LOCALBIN)/mockery
 HELM_DOCS := $(LOCALBIN)/helm-docs
 CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
+OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
+OPM ?= $(LOCALBIN)/opm
+PREFLIGHT ?= $(LOCALBIN)/preflight
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
@@ -149,6 +270,9 @@ CONTROLLER_TOOLS_VERSION ?= v0.19.0
 MOCKERY_VERSION ?= v2.52.2
 HELM_DOCS_VERSION ?= 1.14.2
 CRD_REF_DOCS_VERSION ?= v0.2.0
+OPERATOR_SDK_VERSION ?= v1.42.0
+OPM_VERSION ?= v1.47.0
+PREFLIGHT_VERSION ?= 1.16.0
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -183,3 +307,30 @@ $(HELM_DOCS): $(LOCALBIN)
 crd-ref-docs: $(CRD_REF_DOCS) ## Download crd-ref-docs locally if necessary.
 $(CRD_REF_DOCS): $(LOCALBIN)
 	test -s $(LOCALBIN)/crd-ref-docs || GOBIN=$(LOCALBIN) go install github.com/elastic/crd-ref-docs@$(CRD_REF_DOCS_VERSION)
+
+.PHONY: operator-sdk
+operator-sdk: $(OPERATOR_SDK) ## Download operator-sdk locally if necessary.
+$(OPERATOR_SDK): $(LOCALBIN)
+	@if [ ! -s $(LOCALBIN)/operator-sdk ]; then \
+		OS=$$(go env GOOS) && ARCH=$$(go env GOARCH) && \
+		curl -sSLo $(LOCALBIN)/operator-sdk https://github.com/operator-framework/operator-sdk/releases/download/$(OPERATOR_SDK_VERSION)/operator-sdk_$${OS}_$${ARCH} && \
+		chmod +x $(LOCALBIN)/operator-sdk; \
+	fi
+
+.PHONY: opm
+opm: $(OPM) ## Download opm locally if necessary.
+$(OPM): $(LOCALBIN)
+	@if [ ! -s $(LOCALBIN)/opm ]; then \
+		OS=$$(go env GOOS) && ARCH=$$(go env GOARCH) && \
+		curl -sSLo $(LOCALBIN)/opm https://github.com/operator-framework/operator-registry/releases/download/$(OPM_VERSION)/$${OS}-$${ARCH}-opm && \
+		chmod +x $(LOCALBIN)/opm; \
+	fi
+
+.PHONY: preflight
+preflight: $(PREFLIGHT) ## Download preflight locally if necessary.
+$(PREFLIGHT): $(LOCALBIN)
+	@if [ ! -s $(LOCALBIN)/preflight ]; then \
+		OS=$$(go env GOOS) && ARCH=$$(go env GOARCH) && \
+		curl -sSLo $(LOCALBIN)/preflight https://github.com/redhat-openshift-ecosystem/openshift-preflight/releases/download/$(PREFLIGHT_VERSION)/preflight-$${OS}-$${ARCH} && \
+		chmod +x $(LOCALBIN)/preflight; \
+	fi
