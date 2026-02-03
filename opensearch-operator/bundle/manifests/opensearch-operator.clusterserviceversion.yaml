@@ -1,0 +1,605 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: |-
+      [
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpenSearchCluster",
+          "metadata": {
+            "name": "my-cluster",
+            "namespace": "default"
+          },
+          "spec": {
+            "general": {
+              "version": "2.12.0",
+              "httpPort": 9200,
+              "serviceName": "my-cluster"
+            },
+            "nodePools": [
+              {
+                "component": "masters",
+                "replicas": 3,
+                "roles": ["cluster_manager", "data"],
+                "resources": {
+                  "requests": {
+                    "memory": "2Gi",
+                    "cpu": "500m"
+                  },
+                  "limits": {
+                    "memory": "2Gi",
+                    "cpu": "1"
+                  }
+                }
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpensearchUser",
+          "metadata": {
+            "name": "sample-user",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "passwordFrom": {
+              "name": "sample-user-password",
+              "key": "password"
+            }
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpensearchRole",
+          "metadata": {
+            "name": "sample-role",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "clusterPermissions": ["cluster_monitor"],
+            "indexPermissions": [
+              {
+                "indexPatterns": ["*"],
+                "allowedActions": ["read"]
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpensearchUserRoleBinding",
+          "metadata": {
+            "name": "sample-user-role-binding",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "users": ["sample-user"],
+            "roles": ["sample-role"]
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpensearchTenant",
+          "metadata": {
+            "name": "sample-tenant",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "description": "Sample tenant for demonstration"
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpensearchActionGroup",
+          "metadata": {
+            "name": "sample-action-group",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "allowedActions": ["indices:data/read/*"]
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpenSearchISMPolicy",
+          "metadata": {
+            "name": "sample-ism-policy",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "policyId": "hot-warm-delete",
+            "description": "Sample ISM policy",
+            "defaultState": "hot",
+            "states": [
+              {
+                "name": "hot",
+                "actions": [],
+                "transitions": [
+                  {
+                    "stateName": "delete",
+                    "conditions": {
+                      "minIndexAge": "30d"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "actions": [
+                  {
+                    "delete": {}
+                  }
+                ],
+                "transitions": []
+              }
+            ]
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpensearchIndexTemplate",
+          "metadata": {
+            "name": "sample-index-template",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "name": "sample-template",
+            "indexPatterns": ["logs-*"],
+            "template": {
+              "settings": {
+                "number_of_shards": 1,
+                "number_of_replicas": 1
+              }
+            },
+            "priority": 100
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpensearchComponentTemplate",
+          "metadata": {
+            "name": "sample-component-template",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "name": "sample-component",
+            "template": {
+              "settings": {
+                "number_of_shards": 1
+              }
+            }
+          }
+        },
+        {
+          "apiVersion": "opensearch.org/v1",
+          "kind": "OpensearchSnapshotPolicy",
+          "metadata": {
+            "name": "sample-snapshot-policy",
+            "namespace": "default"
+          },
+          "spec": {
+            "opensearchCluster": {
+              "name": "my-cluster"
+            },
+            "name": "daily-snapshots",
+            "repository": "my-repo",
+            "schedule": "0 0 * * *",
+            "config": {
+              "indices": "*"
+            }
+          }
+        }
+      ]
+    capabilities: Deep Insights
+    categories: Database,Big Data
+    containerImage: opensearchproject/opensearch-operator:2.8.0
+    createdAt: "2024-01-01T00:00:00Z"
+    description: Kubernetes operator for managing OpenSearch clusters
+    operators.operatorframework.io/builder: operator-sdk-v1.42.0
+    operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+    repository: https://github.com/opensearch-project/opensearch-k8s-operator
+    support: OpenSearch Project
+  name: opensearch-operator.v2.8.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+      - description: OpenSearchCluster is the Schema for the opensearchclusters API
+        displayName: OpenSearch Cluster
+        kind: OpenSearchCluster
+        name: opensearchclusters.opensearch.org
+        version: v1
+        resources:
+          - kind: StatefulSet
+            name: ""
+            version: apps/v1
+          - kind: Service
+            name: ""
+            version: v1
+          - kind: ConfigMap
+            name: ""
+            version: v1
+          - kind: Secret
+            name: ""
+            version: v1
+          - kind: Pod
+            name: ""
+            version: v1
+        specDescriptors:
+          - description: General cluster configuration
+            displayName: General
+            path: general
+          - description: Node pool configurations
+            displayName: Node Pools
+            path: nodePools
+          - description: Security configuration
+            displayName: Security
+            path: security
+          - description: Dashboard configuration
+            displayName: Dashboards
+            path: dashboards
+        statusDescriptors:
+          - description: Current phase of the cluster
+            displayName: Phase
+            path: phase
+          - description: Component status
+            displayName: Component Status
+            path: componentStatus
+      - description: OpensearchUser is the Schema for the opensearchusers API
+        displayName: OpenSearch User
+        kind: OpensearchUser
+        name: opensearchusers.opensearch.org
+        version: v1
+      - description: OpensearchRole is the Schema for the opensearchroles API
+        displayName: OpenSearch Role
+        kind: OpensearchRole
+        name: opensearchroles.opensearch.org
+        version: v1
+      - description: OpensearchUserRoleBinding binds users to roles
+        displayName: OpenSearch User Role Binding
+        kind: OpensearchUserRoleBinding
+        name: opensearchuserrolebindings.opensearch.org
+        version: v1
+      - description: OpensearchTenant is the Schema for the opensearchtenants API
+        displayName: OpenSearch Tenant
+        kind: OpensearchTenant
+        name: opensearchtenants.opensearch.org
+        version: v1
+      - description: OpensearchActionGroup is the Schema for the opensearchactiongroups API
+        displayName: OpenSearch Action Group
+        kind: OpensearchActionGroup
+        name: opensearchactiongroups.opensearch.org
+        version: v1
+      - description: OpenSearchISMPolicy is the Schema for the opensearchismpolicies API
+        displayName: OpenSearch ISM Policy
+        kind: OpenSearchISMPolicy
+        name: opensearchismpolicies.opensearch.org
+        version: v1
+      - description: OpensearchIndexTemplate is the Schema for index templates
+        displayName: OpenSearch Index Template
+        kind: OpensearchIndexTemplate
+        name: opensearchindextemplates.opensearch.org
+        version: v1
+      - description: OpensearchComponentTemplate is the Schema for component templates
+        displayName: OpenSearch Component Template
+        kind: OpensearchComponentTemplate
+        name: opensearchcomponenttemplates.opensearch.org
+        version: v1
+      - description: OpensearchSnapshotPolicy is the Schema for snapshot policies
+        displayName: OpenSearch Snapshot Policy
+        kind: OpensearchSnapshotPolicy
+        name: opensearchsnapshotpolicies.opensearch.org
+        version: v1
+  description: |
+    ## OpenSearch Kubernetes Operator
+
+    The OpenSearch Kubernetes Operator is used for automating the deployment, provisioning,
+    management, and orchestration of OpenSearch clusters and OpenSearch Dashboards.
+
+    ### Features
+
+    * **Cluster Management**: Deploy and manage OpenSearch clusters with multiple node pools
+    * **Rolling Upgrades**: Perform zero-downtime rolling upgrades
+    * **Scaling**: Horizontal and vertical scaling of cluster nodes
+    * **Security**: Integrated security plugin management with users, roles, and tenants
+    * **Dashboards**: Deploy OpenSearch Dashboards alongside your cluster
+    * **Index Management**: ISM policies, index templates, and component templates
+    * **Snapshots**: Automated snapshot policies for backup and recovery
+
+    ### Supported Versions
+
+    * OpenSearch 1.x and 2.x
+    * Kubernetes 1.23+
+    * OpenShift 4.12+
+
+    ### Getting Started
+
+    1. Create a namespace for your OpenSearch cluster
+    2. Deploy an OpenSearchCluster custom resource
+    3. Access your cluster via the created services
+
+    For detailed documentation, visit the [OpenSearch Kubernetes Operator documentation](https://opensearch.org/docs/latest/tools/k8s-operator/).
+
+    ### Support
+
+    * GitHub: https://github.com/opensearch-project/opensearch-k8s-operator
+    * Documentation: https://opensearch.org/docs/latest/tools/k8s-operator/
+    * Forum: https://forum.opensearch.org/
+  displayName: OpenSearch Operator
+  icon:
+    - base64data: PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI2NCIgaGVpZ2h0PSI2NCIgdmlld0JveD0iMCAwIDY0IDY0Ij48ZGVmcz48bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwJSIgeTE9IjAlIiB4Mj0iMTAwJSIgeTI9IjEwMCUiPjxzdG9wIG9mZnNldD0iMCUiIHN0b3AtY29sb3I9IiMwMDViOWYiLz48c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiMwMDNhNmMiLz48L2xpbmVhckdyYWRpZW50PjwvZGVmcz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSIzMCIgZmlsbD0idXJsKCNhKSIvPjxwYXRoIGZpbGw9IiNmZmYiIGQ9Ik0zMiAxNmMtOC44MzYgMC0xNiA3LjE2NC0xNiAxNnM3LjE2NCAxNiAxNiAxNiAxNi03LjE2NCAxNi0xNi03LjE2NC0xNi0xNi0xNnptMCAyOGMtNi42MjcgMC0xMi01LjM3My0xMi0xMnM1LjM3My0xMiAxMi0xMiAxMiA1LjM3MyAxMiAxMi01LjM3MyAxMi0xMiAxMnoiLz48Y2lyY2xlIGN4PSIzMiIgY3k9IjMyIiByPSI2IiBmaWxsPSIjZmZmIi8+PC9zdmc+
+      mediatype: image/svg+xml
+  install:
+    spec:
+      clusterPermissions:
+        - rules:
+            - apiGroups:
+                - ""
+              resources:
+                - configmaps
+                - persistentvolumeclaims
+                - pods
+                - secrets
+                - services
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - ""
+              resources:
+                - events
+              verbs:
+                - create
+                - patch
+                - update
+            - apiGroups:
+                - apps
+              resources:
+                - deployments
+                - statefulsets
+                - statefulsets/status
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - batch
+              resources:
+                - jobs
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - monitoring.coreos.com
+              resources:
+                - servicemonitors
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - opensearch.org
+              resources:
+                - opensearchactiongroups
+                - opensearchclusters
+                - opensearchcomponenttemplates
+                - opensearchindextemplates
+                - opensearchismpolicies
+                - opensearchroles
+                - opensearchsnapshotpolicies
+                - opensearchtenants
+                - opensearchuserrolebindings
+                - opensearchusers
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - opensearch.org
+              resources:
+                - opensearchactiongroups/finalizers
+                - opensearchclusters/finalizers
+                - opensearchcomponenttemplates/finalizers
+                - opensearchindextemplates/finalizers
+                - opensearchismpolicies/finalizers
+                - opensearchroles/finalizers
+                - opensearchsnapshotpolicies/finalizers
+                - opensearchtenants/finalizers
+                - opensearchuserrolebindings/finalizers
+                - opensearchusers/finalizers
+              verbs:
+                - update
+            - apiGroups:
+                - opensearch.org
+              resources:
+                - opensearchactiongroups/status
+                - opensearchclusters/status
+                - opensearchcomponenttemplates/status
+                - opensearchindextemplates/status
+                - opensearchismpolicies/status
+                - opensearchroles/status
+                - opensearchsnapshotpolicies/status
+                - opensearchtenants/status
+                - opensearchuserrolebindings/status
+                - opensearchusers/status
+              verbs:
+                - get
+                - patch
+                - update
+            - apiGroups:
+                - policy
+              resources:
+                - poddisruptionbudgets
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - authentication.k8s.io
+              resources:
+                - tokenreviews
+              verbs:
+                - create
+            - apiGroups:
+                - authorization.k8s.io
+              resources:
+                - subjectaccessreviews
+              verbs:
+                - create
+          serviceAccountName: opensearch-operator-controller-manager
+      deployments:
+        - label:
+            app.kubernetes.io/component: manager
+            app.kubernetes.io/created-by: opensearch-operator
+            app.kubernetes.io/instance: controller-manager
+            app.kubernetes.io/managed-by: kustomize
+            app.kubernetes.io/name: deployment
+            app.kubernetes.io/part-of: opensearch-operator
+            control-plane: controller-manager
+          name: opensearch-operator-controller-manager
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
+                control-plane: controller-manager
+            strategy: {}
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/default-container: manager
+                labels:
+                  control-plane: controller-manager
+              spec:
+                containers:
+                  - args:
+                      - --leader-elect
+                    command:
+                      - /manager
+                    image: opensearchproject/opensearch-operator:2.8.0
+                    imagePullPolicy: IfNotPresent
+                    livenessProbe:
+                      httpGet:
+                        path: /healthz
+                        port: 8081
+                      initialDelaySeconds: 15
+                      periodSeconds: 20
+                    name: manager
+                    readinessProbe:
+                      httpGet:
+                        path: /readyz
+                        port: 8081
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+                    resources:
+                      limits:
+                        cpu: 500m
+                        memory: 512Mi
+                      requests:
+                        cpu: 100m
+                        memory: 256Mi
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop:
+                          - ALL
+                      readOnlyRootFilesystem: true
+                      runAsNonRoot: true
+                securityContext:
+                  runAsNonRoot: true
+                serviceAccountName: opensearch-operator-controller-manager
+                terminationGracePeriodSeconds: 10
+    strategy: deployment
+  installModes:
+    - supported: false
+      type: OwnNamespace
+    - supported: false
+      type: SingleNamespace
+    - supported: false
+      type: MultiNamespace
+    - supported: true
+      type: AllNamespaces
+  keywords:
+    - opensearch
+    - elasticsearch
+    - search
+    - analytics
+    - logging
+    - database
+    - operator
+    - kubernetes
+  links:
+    - name: OpenSearch Project
+      url: https://opensearch.org
+    - name: Documentation
+      url: https://opensearch.org/docs/latest/tools/k8s-operator/
+    - name: GitHub Repository
+      url: https://github.com/opensearch-project/opensearch-k8s-operator
+  maintainers:
+    - email: support@opensearch.org
+      name: OpenSearch Project
+  maturity: stable
+  minKubeVersion: 1.23.0
+  provider:
+    name: OpenSearch Project
+    url: https://opensearch.org
+  relatedImages:
+    - image: opensearchproject/opensearch-operator:2.8.0
+      name: manager
+    - image: opensearchproject/opensearch:2.12.0
+      name: opensearch
+    - image: opensearchproject/opensearch-dashboards:2.12.0
+      name: opensearch-dashboards
+  version: 2.8.0

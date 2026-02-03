@@ -2,3 +2,6 @@ bin/
 vendor/
 testbin/
 /opensearch-operator
+
+preflight.log
+artifacts/
