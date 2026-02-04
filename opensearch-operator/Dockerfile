@@ -22,7 +22,7 @@ ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9-minimal:10.1
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi10-minimal:10.1
 
 LABEL name="opensearch-operator" \
       vendor="OpenSearch Project" \
