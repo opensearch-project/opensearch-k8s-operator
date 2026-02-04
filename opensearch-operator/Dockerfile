@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.24.11 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24.12 AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -22,7 +22,7 @@ ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9-minimal:9.7
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9-minimal:10.1
 
 LABEL name="opensearch-operator" \
       vendor="OpenSearch Project" \
