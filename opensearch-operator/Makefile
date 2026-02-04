@@ -116,9 +116,11 @@ run: manifests generate fmt vet ## Run a controller from your host.
 	go run ./main.go --loglevel debug
 
 docker-build: generate fmt vet ## Build docker image with the manager.
+	@cp -f ../LICENSE LICENSE 2>/dev/null || true
 	DOCKER_BUILDKIT=1 docker build -t ${IMG} .
 
 docker-build-multiarch: ## Build docker image with the manager for all supported architectures
+	@cp -f ../LICENSE LICENSE 2>/dev/null || true
 	DOCKER_BUILDKIT=1 docker buildx build --platform="linux/amd64,linux/arm,linux/arm64" -t ${IMG} .
 
 docker-push: ## Push docker image with the manager.
@@ -174,6 +176,18 @@ bundle-validate: operator-sdk ## Validate the bundle.
 .PHONY: bundle-scorecard
 bundle-scorecard: operator-sdk ## Run scorecard tests on the bundle.
 	$(OPERATOR_SDK) scorecard ./bundle --wait-time 60s
+
+.PHONY: olm-install
+olm-install: operator-sdk ## Install OLM on the cluster.
+	$(OPERATOR_SDK) olm install
+
+.PHONY: olm-uninstall
+olm-uninstall: operator-sdk ## Uninstall OLM from the cluster.
+	$(OPERATOR_SDK) olm uninstall
+
+.PHONY: olm-status
+olm-status: operator-sdk ## Check OLM status on the cluster.
+	$(OPERATOR_SDK) olm status
 
 # Build a catalog image by adding bundle images to an empty catalog using the operator-sdk tool
 # https://olm.operatorframework.io/docs/tasks/creating-a-catalog/
@@ -246,6 +260,23 @@ preflight-submit: preflight ## Submit certification results to Red Hat (requires
 		--pyxis-api-token=$(PYXIS_API_TOKEN) \
 		--docker-config=$(HOME)/.docker/config.json
 
+##@ CVE Scanning
+
+.PHONY: trivy
+trivy: $(TRIVY) ## Download trivy locally if necessary.
+
+.PHONY: cve-scan
+cve-scan: docker-build trivy ## Scan container image for CVEs using Trivy.
+	$(TRIVY) image --severity HIGH,CRITICAL --ignore-unfixed $(IMG)
+
+.PHONY: cve-scan-full
+cve-scan-full: docker-build trivy ## Full CVE scan including all severities.
+	$(TRIVY) image $(IMG)
+
+.PHONY: cve-scan-sarif
+cve-scan-sarif: docker-build trivy ## Generate CVE scan report in SARIF format.
+	$(TRIVY) image --format sarif --output trivy-results.sarif $(IMG)
+
 ##@ Build Dependencies
 
 ## Location to install dependencies to
@@ -263,6 +294,7 @@ CRD_REF_DOCS ?= $(LOCALBIN)/crd-ref-docs
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk
 OPM ?= $(LOCALBIN)/opm
 PREFLIGHT ?= $(LOCALBIN)/preflight
+TRIVY ?= $(LOCALBIN)/trivy
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.3.0
@@ -273,6 +305,7 @@ CRD_REF_DOCS_VERSION ?= v0.2.0
 OPERATOR_SDK_VERSION ?= v1.42.0
 OPM_VERSION ?= v1.47.0
 PREFLIGHT_VERSION ?= 1.16.0
+TRIVY_VERSION ?= 0.58.2
 
 KUSTOMIZE_INSTALL_SCRIPT ?= "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh"
 .PHONY: kustomize
@@ -333,4 +366,12 @@ $(PREFLIGHT): $(LOCALBIN)
 		OS=$$(go env GOOS) && ARCH=$$(go env GOARCH) && \
 		curl -sSLo $(LOCALBIN)/preflight https://github.com/redhat-openshift-ecosystem/openshift-preflight/releases/download/$(PREFLIGHT_VERSION)/preflight-$${OS}-$${ARCH} && \
 		chmod +x $(LOCALBIN)/preflight; \
+	fi
+
+.PHONY: trivy
+$(TRIVY): $(LOCALBIN)
+	@if [ ! -s $(LOCALBIN)/trivy ]; then \
+		OS=$$(go env GOOS) && ARCH=$$(go env GOARCH) && \
+		curl -sSL https://github.com/aquasecurity/trivy/releases/download/v$(TRIVY_VERSION)/trivy_$(TRIVY_VERSION)_$${OS}-$${ARCH}.tar.gz | tar -xz -C $(LOCALBIN) trivy && \
+		chmod +x $(LOCALBIN)/trivy; \
 	fi

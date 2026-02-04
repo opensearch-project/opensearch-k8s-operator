@@ -3,5 +3,7 @@ vendor/
 testbin/
 /opensearch-operator
 
+# preflightcheck artifacts
 preflight.log
 artifacts/
+LICENSE

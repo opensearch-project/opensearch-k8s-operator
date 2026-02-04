@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM --platform=$BUILDPLATFORM golang:1.24.11 AS builder
+FROM --platform=$BUILDPLATFORM golang:1.24.12 AS builder
 
 WORKDIR /workspace
 # Copy the Go Modules manifests
@@ -22,9 +22,18 @@ ARG TARGETOS
 ARG TARGETARCH
 RUN CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -a -o manager main.go
 
-# Use distroless as minimal base image to package the manager binary
-# Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM --platform=$BUILDPLATFORM gcr.io/distroless/static:nonroot
+FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi10-minimal:10.1
+
+LABEL name="opensearch-operator" \
+      vendor="OpenSearch Project" \
+      summary="OpenSearch Kubernetes Operator" \
+      description="Kubernetes operator for managing OpenSearch clusters and OpenSearch Dashboards" \
+      io.k8s.display-name="OpenSearch Operator" \
+      io.k8s.description="Kubernetes operator for managing OpenSearch clusters and OpenSearch Dashboards" \
+      io.openshift.tags="opensearch,operator,database,search" \
+      com.redhat.component="opensearch-operator" \
+      maintainer="OpenSearch Project <support@opensearch.org>"
+COPY LICENSE /licenses/LICENSE
 WORKDIR /
 COPY --from=builder /workspace/manager .
 USER 65532:65532
