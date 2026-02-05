@@ -15,6 +15,7 @@
 package patch
 
 import (
+	"crypto/rand"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -39,16 +40,26 @@ func TestSetOriginalConfigurationSkipsOversizedAnnotation(t *testing.T) {
 	u.SetName("test")
 	u.SetNamespace("default")
 
-	// Create data that will exceed MaxAnnotationSize after encoding
-	// We need data large enough that even after zip compression it exceeds the limit
-	largeData := make([]byte, MaxAnnotationSize+1024)
-	for i := range largeData {
-		// Use random-ish pattern to prevent good compression
-		largeData[i] = byte(i % 256)
+	// Create incompressible data that will exceed MaxAnnotationSize after encoding.
+	// Base64 adds ~33% overhead, and zip won't compress truly random data.
+	// Using MaxAnnotationSize bytes of random data guarantees the encoded
+	// result exceeds the limit.
+	largeData := make([]byte, MaxAnnotationSize)
+	if _, err := rand.Read(largeData); err != nil {
+		t.Fatalf("Failed to generate random data: %v", err)
+	}
+
+	// Verify encoded size exceeds the limit
+	encoded, err := zipAndBase64EncodeAnnotation(largeData)
+	if err != nil {
+		t.Fatalf("Failed to encode test data: %v", err)
+	}
+	if len(encoded) <= MaxAnnotationSize {
+		t.Fatalf("Test setup error: encoded size %d should exceed MaxAnnotationSize %d", len(encoded), MaxAnnotationSize)
 	}
 
 	// Set the oversized configuration - should succeed without error
-	err := DefaultAnnotator.SetOriginalConfiguration(&u, largeData)
+	err = DefaultAnnotator.SetOriginalConfiguration(&u, largeData)
 	if err != nil {
 		t.Fatalf("Expected no error, got: %v", err)
 	}
