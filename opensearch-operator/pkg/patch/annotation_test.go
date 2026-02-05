@@ -33,3 +33,63 @@ func TestAnnotationRemovedWhenEmpty(t *testing.T) {
 		t.Fatalf("Expected {\"metadata\":{} got %s", string(modified))
 	}
 }
+
+func TestSetOriginalConfigurationSkipsOversizedAnnotation(t *testing.T) {
+	u := unstructured.Unstructured{}
+	u.SetName("test")
+	u.SetNamespace("default")
+
+	// Create data that will exceed MaxAnnotationSize after encoding
+	// We need data large enough that even after zip compression it exceeds the limit
+	largeData := make([]byte, MaxAnnotationSize+1024)
+	for i := range largeData {
+		// Use random-ish pattern to prevent good compression
+		largeData[i] = byte(i % 256)
+	}
+
+	// Set the oversized configuration - should succeed without error
+	err := DefaultAnnotator.SetOriginalConfiguration(&u, largeData)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// Verify no annotation was set
+	annots := u.GetAnnotations()
+	if annots != nil {
+		if _, ok := annots[LastAppliedConfig]; ok {
+			t.Fatal("Expected annotation to be skipped for oversized data")
+		}
+	}
+}
+
+func TestSetOriginalConfigurationSetsNormalSizedAnnotation(t *testing.T) {
+	u := unstructured.Unstructured{}
+	u.SetName("test")
+	u.SetNamespace("default")
+
+	// Normal sized data should be stored
+	normalData := []byte(`{"apiVersion":"v1","kind":"Secret","metadata":{"name":"test"}}`)
+
+	err := DefaultAnnotator.SetOriginalConfiguration(&u, normalData)
+	if err != nil {
+		t.Fatalf("Expected no error, got: %v", err)
+	}
+
+	// Verify annotation was set
+	annots := u.GetAnnotations()
+	if annots == nil {
+		t.Fatal("Expected annotations to be set")
+	}
+	if _, ok := annots[LastAppliedConfig]; !ok {
+		t.Fatal("Expected last-applied annotation to be set for normal sized data")
+	}
+
+	// Verify we can retrieve the original configuration
+	retrieved, err := DefaultAnnotator.GetOriginalConfiguration(&u)
+	if err != nil {
+		t.Fatalf("Expected no error retrieving configuration, got: %v", err)
+	}
+	if string(retrieved) != string(normalData) {
+		t.Fatalf("Expected retrieved data to match original, got: %s", string(retrieved))
+	}
+}

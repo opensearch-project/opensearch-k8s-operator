@@ -29,6 +29,11 @@ import (
 
 const LastAppliedConfig = "opensearch.org/last-applied"
 
+// MaxAnnotationSize is the maximum size for a single annotation value.
+// Kubernetes limits total annotations to 262144 bytes, but we use a lower
+// threshold to leave room for other annotations and metadata overhead.
+const MaxAnnotationSize = 256 * 1024 // 256KB
+
 var DefaultAnnotator = NewAnnotator(LastAppliedConfig)
 
 type Annotator struct {
@@ -87,10 +92,18 @@ func (a *Annotator) SetOriginalConfiguration(obj runtime.Object, original []byte
 		annots = map[string]string{}
 	}
 
-	annots[a.key], err = zipAndBase64EncodeAnnotation(original)
+	encoded, err := zipAndBase64EncodeAnnotation(original)
 	if err != nil {
 		return err
 	}
+
+	// Skip setting the annotation if it would exceed the size limit.
+	// This prevents failures when creating/updating resources with large data
+	if len(encoded) > MaxAnnotationSize {
+		return nil
+	}
+
+	annots[a.key] = encoded
 	return a.metadataAccessor.SetAnnotations(obj, annots)
 }
 
