@@ -62,8 +62,17 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	}
 	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
 
-	// Clean up old node pools
-	r.cleanupStatefulSets(results)
+	// Check readiness of current NodePools before cleaning up old node pools
+	ready, err := r.nodePoolsReady()
+	if err != nil {
+		results.Combine(&ctrl.Result{}, err)
+	} else if !ready {
+		// Not all node pools are ready yet, requeue and skip cleanup
+		results.Combine(&ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, nil)
+	} else {
+		// Clean up old node pools (all current nodePools are ready)
+		r.cleanupStatefulSets(results)
+	}
 
 	return results.Result, results.Err
 }
@@ -302,6 +311,23 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		return err
 	}
 	return err
+}
+
+// nodePoolsReady checks that all StatefulSets for current NodePools are fully available.
+func (r *ScalerReconciler) nodePoolsReady() (bool, error) {
+	lg := log.FromContext(r.ctx)
+	for _, nodePool := range r.instance.Spec.NodePools {
+		stsName := builders.StsName(r.instance, &nodePool)
+		currentSts, err := r.client.GetStatefulSet(stsName, r.instance.Namespace)
+		if err != nil {
+			return false, err
+		}
+		if currentSts.Status.AvailableReplicas != *currentSts.Spec.Replicas {
+			lg.Info(fmt.Sprintf("Waiting for statefulset to become ready: %s", stsName))
+			return false, nil
+		}
+	}
+	return true, nil
 }
 
 func (r *ScalerReconciler) cleanupStatefulSets(result *reconciler.CombinedResult) {
