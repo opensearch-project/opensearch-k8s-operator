@@ -254,32 +254,10 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 }
 
 func (r *ClusterMigrationReconciler) syncOldToNew(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster, newCluster *opensearchv1.OpenSearchCluster) (ctrl.Result, error) {
-	logger := log.FromContext(ctx)
-
-	// Check if spec has changed
-	oldSpecBytes, _ := json.Marshal(oldCluster.Spec)
-	newSpecBytes, _ := json.Marshal(newCluster.Spec)
-
-	if string(oldSpecBytes) != string(newSpecBytes) {
-		logger.Info("Syncing spec changes from old to new API group", "name", oldCluster.Name)
-
-		// Update new cluster spec
-		if err := json.Unmarshal(oldSpecBytes, &newCluster.Spec); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to unmarshal spec: %w", err)
-		}
-
-		// Update annotations
-		if newCluster.Annotations == nil {
-			newCluster.Annotations = make(map[string]string)
-		}
-		newCluster.Annotations[MigrationSyncAnnotation] = time.Now().UTC().Format(time.RFC3339)
-
-		if err := r.Update(ctx, newCluster); err != nil {
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Sync status from new back to old
+	// Only sync status from new back to old
+	// Spec sync is intentionally disabled - the new CR is the source of truth after migration
+	// Users should make changes to the new opensearch.org CR, not the old opster.io CR
+	// The webhook already blocks spec changes to old CRs anyway
 	return r.syncStatusNewToOld(ctx, oldCluster, newCluster)
 }
 
