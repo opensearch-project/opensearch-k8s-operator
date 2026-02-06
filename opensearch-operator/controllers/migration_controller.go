@@ -23,6 +23,7 @@ import (
 	"reflect"
 	"time"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -40,11 +42,12 @@ import (
 
 const (
 	// Migration annotations
-	MigratedFromAnnotation         = "opensearch.org/migrated-from"
-	MigrationTimestampAnnotation   = "opensearch.org/migration-timestamp"
-	SourceUIDAnnotation            = "opensearch.org/source-uid"
-	MigrationSyncAnnotation        = "opensearch.org/migration-sync"
-	DeletedByNewResourceAnnotation = "opensearch.org/deleted-by-new-resource"
+	MigratedFromAnnotation             = "opensearch.org/migrated-from"
+	MigrationTimestampAnnotation       = "opensearch.org/migration-timestamp"
+	SourceUIDAnnotation                = "opensearch.org/source-uid"
+	MigrationSyncAnnotation            = "opensearch.org/migration-sync"
+	DeletedByNewResourceAnnotation     = "opensearch.org/deleted-by-new-resource"
+	CertOwnershipTransferredAnnotation = "opensearch.org/cert-ownership-transferred"
 
 	// Finalizer for migration
 	MigrationFinalizer = "opensearch.org/migration"
@@ -208,6 +211,15 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 	if err := r.Create(ctx, newCluster); err != nil {
 		if errors.IsAlreadyExists(err) {
 			logger.Info("New API group resource already exists", "name", newCluster.Name)
+			// Even if cluster exists, ensure certificate secrets have correct owner references
+			existingCluster := &opensearchv1.OpenSearchCluster{}
+			if err := r.Get(ctx, client.ObjectKeyFromObject(newCluster), existingCluster); err != nil {
+				return ctrl.Result{}, fmt.Errorf("failed to get existing new cluster: %w", err)
+			}
+			if err := r.transferCertificateSecretOwnership(ctx, oldCluster, existingCluster); err != nil {
+				logger.Error(err, "Failed to transfer certificate secret ownership, will retry")
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			}
 			return ctrl.Result{}, nil
 		}
 		return ctrl.Result{}, err
@@ -233,12 +245,13 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 	// Copy status from old to new cluster (status can only be set after creation)
 	// For the initial status copy right after creation, use a regular Update since there's no risk of spec conflict
 	// Use retry to handle cases where the resource might not be immediately available (especially in tests)
+	var createdCluster *opensearchv1.OpenSearchCluster
 	if err := retry.OnError(retry.DefaultRetry, func(err error) bool {
 		// Retry on NotFound errors (resource might not be immediately available)
 		return errors.IsNotFound(err)
 	}, func() error {
 		// Get the newly created cluster
-		createdCluster := &opensearchv1.OpenSearchCluster{}
+		createdCluster = &opensearchv1.OpenSearchCluster{}
 		if err := r.Get(ctx, client.ObjectKeyFromObject(newCluster), createdCluster); err != nil {
 			return err
 		}
@@ -249,11 +262,28 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 		return ctrl.Result{}, fmt.Errorf("failed to update new cluster status: %w", err)
 	}
 
+	// Transfer certificate secret ownership from old cluster to new cluster
+	// This prevents garbage collection from deleting secrets when the old CR is deleted,
+	// which would cause SSL handshake failures due to CA/cert mismatch between pods
+	if err := r.transferCertificateSecretOwnership(ctx, oldCluster, createdCluster); err != nil {
+		logger.Error(err, "Failed to transfer certificate secret ownership, will retry")
+		// Don't fail the migration, just requeue to retry the transfer
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+
 	logger.Info("Created new API group resource with status", "name", newCluster.Name, "namespace", newCluster.Namespace)
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
 func (r *ClusterMigrationReconciler) syncOldToNew(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster, newCluster *opensearchv1.OpenSearchCluster) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	// Ensure certificate secrets have correct owner references
+	// This handles cases where migration happened before this fix, or where transfer previously failed
+	if err := r.transferCertificateSecretOwnership(ctx, oldCluster, newCluster); err != nil {
+		logger.Error(err, "Failed to transfer certificate secret ownership during sync, will retry")
+		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
 	// Only sync status from new back to old
 	// Spec sync is intentionally disabled - the new CR is the source of truth after migration
 	// Users should make changes to the new opensearch.org CR, not the old opster.io CR
@@ -1003,6 +1033,95 @@ func clearManagedClusterField(obj client.Object) {
 		// Set ManagedCluster to nil
 		managedClusterField.Set(reflect.Zero(managedClusterField.Type()))
 	}
+}
+
+// transferCertificateSecretOwnership transfers owner references on certificate secrets
+// from the old cluster CR to the new cluster CR. This prevents Kubernetes garbage collection
+// from deleting the secrets when the old CR is deleted, which would cause SSL handshake failures
+// due to certificate/CA mismatch between pods.
+func (r *ClusterMigrationReconciler) transferCertificateSecretOwnership(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster, newCluster *opensearchv1.OpenSearchCluster) error {
+	logger := log.FromContext(ctx)
+
+	// Check if ownership has already been transferred (skip to avoid repeated checks)
+	if newCluster.Annotations != nil && newCluster.Annotations[CertOwnershipTransferredAnnotation] == "true" {
+		return nil
+	}
+
+	clusterName := oldCluster.Name
+	namespace := oldCluster.Namespace
+
+	// List of certificate-related secrets that need owner reference transfer
+	secretNames := []string{
+		clusterName + "-ca",             // CA certificate
+		clusterName + "-transport-cert", // Transport layer certificates
+		clusterName + "-http-cert",      // HTTP layer certificates
+		clusterName + "-admin-cert",     // Admin certificate for security config
+	}
+
+	transferredAny := false
+	for _, secretName := range secretNames {
+		secret := &corev1.Secret{}
+		err := r.Get(ctx, types.NamespacedName{Name: secretName, Namespace: namespace}, secret)
+		if err != nil {
+			if errors.IsNotFound(err) {
+				// Secret doesn't exist (TLS might be disabled or not yet created), skip
+				logger.V(1).Info("Certificate secret not found, skipping owner transfer", "secret", secretName)
+				continue
+			}
+			return fmt.Errorf("failed to get certificate secret %s: %w", secretName, err)
+		}
+
+		// Check if new cluster is already an owner
+		alreadyOwned := false
+		for _, ref := range secret.OwnerReferences {
+			if ref.UID == newCluster.UID {
+				alreadyOwned = true
+				break
+			}
+		}
+
+		if alreadyOwned {
+			logger.V(1).Info("Certificate secret already owned by new cluster", "secret", secretName)
+			continue
+		}
+
+		// Add owner reference to new cluster
+		// Use SetControllerReference to make the new cluster the controller owner
+		if err := controllerutil.SetControllerReference(newCluster, secret, r.Scheme); err != nil {
+			// If setting controller reference fails (e.g., another controller already owns it),
+			// try adding a non-controller owner reference instead
+			logger.V(1).Info("Failed to set controller reference, adding owner reference", "secret", secretName, "error", err)
+			ownerRef := metav1.OwnerReference{
+				APIVersion: opensearchv1.GroupVersion.String(),
+				Kind:       "OpenSearchCluster",
+				Name:       newCluster.Name,
+				UID:        newCluster.UID,
+			}
+			secret.OwnerReferences = append(secret.OwnerReferences, ownerRef)
+		}
+
+		// Update the secret with new owner reference
+		if err := r.Update(ctx, secret); err != nil {
+			return fmt.Errorf("failed to update owner reference on certificate secret %s: %w", secretName, err)
+		}
+		logger.Info("Transferred certificate secret ownership to new cluster", "secret", secretName)
+		transferredAny = true
+	}
+
+	// Mark ownership transfer as complete on the new cluster to avoid repeated checks
+	// Only update if we actually did some work or if this is the first time checking
+	if newCluster.Annotations == nil {
+		newCluster.Annotations = make(map[string]string)
+	}
+	newCluster.Annotations[CertOwnershipTransferredAnnotation] = "true"
+	if err := r.Update(ctx, newCluster); err != nil {
+		// Log but don't fail - the ownership transfer succeeded, annotation is just an optimization
+		logger.V(1).Info("Failed to set cert ownership transferred annotation", "error", err)
+	} else if transferredAny {
+		logger.Info("Certificate secret ownership transfer complete")
+	}
+
+	return nil
 }
 
 func containsString(slice []string, s string) bool {
