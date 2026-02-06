@@ -6249,6 +6249,16 @@ spec:
                               type: string
                           type: object
                       type: object
+                    podManagementPolicy:
+                      description: |-
+                        PodManagementPolicy controls how pods are created during initial scale up,
+                        when replacing pods on nodes, or when scaling down.
+                        OrderedReady (default): pods are created in order and wait for previous pod to be Ready
+                        Parallel: all pods are created at once without waiting
+                      enum:
+                      - OrderedReady
+                      - Parallel
+                      type: string
                     priorityClassName:
                       type: string
                     probes:
