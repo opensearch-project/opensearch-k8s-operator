@@ -1511,4 +1511,5 @@ var _ = Describe("Builders", func() {
 			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
 		})
 	})
+
 })

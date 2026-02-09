@@ -5,24 +5,25 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/utils/ptr"
 )
 
-var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
-	Context("Bootstrap Pod Recreation Approach", func() {
-		It("should detect when any bootstrap pod spec field has changed", func() {
-			instance := &opensearchv1.OpenSearchCluster{
+var _ = Describe("Bootstrap Pod Reconciliation", func() {
+	Context("Last-applied annotation change detection", func() {
+		var instance *opensearchv1.OpenSearchCluster
+
+		BeforeEach(func() {
+			instance = &opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "recreation-test",
+					Name:      "last-applied-test",
 					Namespace: "test-namespace",
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
 						HttpPort:       9200,
-						ServiceName:    "recreation-test",
+						ServiceName:    "last-applied-test",
 						Version:        "2.8.0",
 						ServiceAccount: "default-sa",
 					},
@@ -37,29 +38,44 @@ var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
 						},
 					},
 				},
-				Status: opensearchv1.ClusterStatus{
-					Initialized: false,
-				},
 			}
+		})
 
-			volumes := []corev1.Volume{}
-			volumeMounts := []corev1.VolumeMount{}
+		It("should produce identical last-applied config for the same CR", func() {
+			pod1 := builders.NewBootstrapPod(instance, nil, nil)
+			pod2 := builders.NewBootstrapPod(instance, nil, nil)
 
-			originalPod := builders.NewBootstrapPod(instance, volumes, volumeMounts)
+			cfg1, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod1, false)
+			Expect(err).NotTo(HaveOccurred())
+			cfg2, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod2, false)
+			Expect(err).NotTo(HaveOccurred())
 
-			By("Testing PodSpecChanged utility function")
+			Expect(cfg1).To(Equal(cfg2))
+		})
 
-			// Test 1: Same spec should not trigger recreation
-			Expect(util.PodSpecChanged(originalPod, originalPod)).To(BeFalse())
+		It("should produce different last-applied config when image changes", func() {
+			pod1 := builders.NewBootstrapPod(instance, nil, nil)
 
-			// Test 2: Different ServiceAccountName should trigger recreation
-			modifiedPod := originalPod.DeepCopy()
-			modifiedPod.Spec.ServiceAccountName = "new-sa"
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
+			modified := instance.DeepCopy()
+			customImage := "opensearch:2.9.0"
+			modified.Spec.General.ImageSpec = &opensearchv1.ImageSpec{
+				Image: &customImage,
+			}
+			pod2 := builders.NewBootstrapPod(modified, nil, nil)
 
-			// Test 3: Different Tolerations should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Tolerations = []corev1.Toleration{
+			cfg1, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod1, false)
+			Expect(err).NotTo(HaveOccurred())
+			cfg2, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod2, false)
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cfg1).NotTo(Equal(cfg2))
+		})
+
+		It("should produce different last-applied config when tolerations change", func() {
+			pod1 := builders.NewBootstrapPod(instance, nil, nil)
+
+			modified := instance.DeepCopy()
+			modified.Spec.Bootstrap.Tolerations = []corev1.Toleration{
 				{
 					Key:      "new-purpose",
 					Operator: "Equal",
@@ -67,64 +83,29 @@ var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
 					Effect:   "NoSchedule",
 				},
 			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
+			pod2 := builders.NewBootstrapPod(modified, nil, nil)
 
-			// Test 4: Different NodeSelector should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.NodeSelector = map[string]string{
-				"node-type": "compute",
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
+			cfg1, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod1, false)
+			Expect(err).NotTo(HaveOccurred())
+			cfg2, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod2, false)
+			Expect(err).NotTo(HaveOccurred())
 
-			// Test 5: Different environment variables should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			if len(modifiedPod.Spec.Containers) > 0 {
-				modifiedPod.Spec.Containers[0].Env = append(modifiedPod.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  "NEW_VAR",
-					Value: "new_value",
-				})
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
+			Expect(cfg1).NotTo(Equal(cfg2))
+		})
 
-			// Test 6: Different container image should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			if len(modifiedPod.Spec.Containers) > 0 {
-				modifiedPod.Spec.Containers[0].Image = "opensearch:2.9.0"
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
+		It("should produce different last-applied config when service account changes", func() {
+			pod1 := builders.NewBootstrapPod(instance, nil, nil)
 
-			// Test 7: Different volumes should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Volumes = append(modifiedPod.Spec.Volumes, corev1.Volume{
-				Name: "extra-volume",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-			})
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
+			modified := instance.DeepCopy()
+			modified.Spec.General.ServiceAccount = "new-sa"
+			pod2 := builders.NewBootstrapPod(modified, nil, nil)
 
-			// Test 8: NodeName changes set by the scheduler should be ignored
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.NodeName = "worker-node-1"
-			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
+			cfg1, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod1, false)
+			Expect(err).NotTo(HaveOccurred())
+			cfg2, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod2, false)
+			Expect(err).NotTo(HaveOccurred())
 
-			// Test 9: Default node lifecycle tolerations injected by Kubelet should be ignored
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Tolerations = append(modifiedPod.Spec.Tolerations,
-				corev1.Toleration{
-					Key:               "node.kubernetes.io/not-ready",
-					Operator:          corev1.TolerationOpExists,
-					Effect:            corev1.TaintEffectNoExecute,
-					TolerationSeconds: ptr.To[int64](300),
-				},
-				corev1.Toleration{
-					Key:               "node.kubernetes.io/unreachable",
-					Operator:          corev1.TolerationOpExists,
-					Effect:            corev1.TaintEffectNoExecute,
-					TolerationSeconds: ptr.To[int64](300),
-				},
-			)
-			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
+			Expect(cfg1).NotTo(Equal(cfg2))
 		})
 	})
 })

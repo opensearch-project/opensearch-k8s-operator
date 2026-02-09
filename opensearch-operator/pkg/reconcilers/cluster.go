@@ -1,6 +1,7 @@
 package reconcilers
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"reflect"
@@ -641,31 +642,45 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 	})
 }
 
-// reconcileBootstrapPod handles bootstrap pod reconciliation with recreation for any changes
+// reconcileBootstrapPod handles bootstrap pod reconciliation using the last-applied annotation.
+// This avoids infinite reconcile loops caused by custom schedulers (e.g., Volcano, Yunikorn)
+// that mutate the pod spec at runtime (adding schedulerName, nodeName, scheduling gates, etc.).
 func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
-	// Check if bootstrap pod exists
 	existingPod, err := r.client.GetPod(desiredPod.Name, desiredPod.Namespace)
 	if err != nil && !k8serrors.IsNotFound(err) {
 		return &ctrl.Result{}, err
 	}
 
 	if k8serrors.IsNotFound(err) {
-		// Pod doesn't exist, create it
 		r.logger.Info("Creating bootstrap pod", "pod", desiredPod.Name)
 		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
 	}
 
-	updatePod := desiredPod.DeepCopy()
-	if _, err := r.client.ReconcileResource(updatePod, reconciler.StatePresent); err != nil {
-		if isImmutablePodUpdateErr(err) {
-			r.logger.Info("Bootstrap pod update touched immutable fields, recreating pod", "pod", desiredPod.Name)
-			return r.recreateBootstrapPod(&existingPod, desiredPod)
-		}
-		r.logger.Error(err, "Failed to update bootstrap pod", "pod", desiredPod.Name)
+	// Compare the desired pod against the last-applied configuration stored on the existing pod.
+	// This ignores runtime mutations (nodeName, schedulerName, scheduling gates, tolerations)
+	// injected by custom schedulers after pod creation.
+	lastApplied, err := patch.DefaultAnnotator.GetOriginalConfiguration(&existingPod)
+	if err != nil {
 		return &ctrl.Result{}, err
 	}
 
-	return &ctrl.Result{}, nil
+	desiredSerialized, err := patch.DefaultAnnotator.GetModifiedConfiguration(desiredPod, false)
+	if err != nil {
+		return &ctrl.Result{}, err
+	}
+
+	// Strip null fields from the desired serialization to match what SetLastAppliedAnnotation stores
+	desiredClean, _, err := patch.DeleteNullInJson(desiredSerialized)
+	if err != nil {
+		return &ctrl.Result{}, err
+	}
+
+	if bytes.Equal(lastApplied, desiredClean) {
+		return &ctrl.Result{}, nil
+	}
+
+	r.logger.Info("Bootstrap pod spec changed, recreating pod", "pod", desiredPod.Name)
+	return r.recreateBootstrapPod(&existingPod, desiredPod)
 }
 
 func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {
@@ -682,14 +697,3 @@ func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desire
 	return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
 }
 
-func isImmutablePodUpdateErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	if statusErr, ok := err.(*k8serrors.StatusError); ok {
-		if statusErr.ErrStatus.Reason == metav1.StatusReasonInvalid && strings.Contains(statusErr.ErrStatus.Message, "pod updates may not change") {
-			return true
-		}
-	}
-	return strings.Contains(err.Error(), "pod updates may not change")
-}
