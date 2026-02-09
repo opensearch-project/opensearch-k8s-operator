@@ -1,0 +1,58 @@
+name: Chart Version Check
+
+on:
+  pull_request:
+    paths:
+      - "charts/opensearch-cluster/**"
+
+jobs:
+  check-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check chart version not regressed
+        run: |
+          CHART="charts/opensearch-cluster/Chart.yaml"
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+
+          # Extract versions
+          PR_VERSION=$(grep '^version:' "$CHART" | awk '{print $2}')
+          BASE_VERSION=$(git show "${BASE_SHA}:${CHART}" 2>/dev/null | grep '^version:' | awk '{print $2}')
+
+          if [ -z "$BASE_VERSION" ]; then
+            echo "Chart is new in this PR, skipping version check."
+            exit 0
+          fi
+
+          echo "Base version: $BASE_VERSION"
+          echo "PR version:   $PR_VERSION"
+
+          # Parse semver components
+          IFS='.' read -r BASE_MAJOR BASE_MINOR BASE_PATCH <<< "$BASE_VERSION"
+          IFS='.' read -r PR_MAJOR PR_MINOR PR_PATCH <<< "$PR_VERSION"
+
+          # Compare versions: convert to a single integer for easy comparison
+          BASE_NUM=$(( BASE_MAJOR * 1000000 + BASE_MINOR * 1000 + BASE_PATCH ))
+          PR_NUM=$(( PR_MAJOR * 1000000 + PR_MINOR * 1000 + PR_PATCH ))
+
+          if [ "$PR_NUM" -lt "$BASE_NUM" ]; then
+            echo "::error::Chart version was downgraded from $BASE_VERSION to $PR_VERSION"
+            exit 1
+          fi
+
+          # Check if there are content changes beyond the version line itself
+          CONTENT_CHANGES=$(git diff "${BASE_SHA}...HEAD" -- "$CHART" ':(exclude)' | grep -v '^[+-]version:' | grep -c '^[+-][^+-]' || true)
+          OTHER_FILES_CHANGED=$(git diff "${BASE_SHA}...HEAD" --name-only -- 'charts/opensearch-cluster/' | grep -v 'Chart.yaml' | head -1 || true)
+
+          if [ "$PR_NUM" -eq "$BASE_NUM" ]; then
+            if [ -n "$OTHER_FILES_CHANGED" ] || [ "$CONTENT_CHANGES" -gt 0 ]; then
+              echo "::error::Chart content changed but version was not bumped (still $PR_VERSION)"
+              exit 1
+            fi
+          fi
+
+          echo "Version check passed."
