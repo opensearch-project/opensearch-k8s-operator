@@ -1434,6 +1434,78 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("Configuring Security Config UpdateJob Tolerations", func() {
+		It("should propagate Tolerations to the Security Config UpdateJob", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			tolerations := []corev1.Toleration{
+				{
+					Key:      "dedicated",
+					Operator: corev1.TolerationOpEqual,
+					Value:    "opensearch",
+					Effect:   corev1.TaintEffectNoSchedule,
+				},
+			}
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Config: &opensearchv1.SecurityConfig{
+					UpdateJob: opensearchv1.SecurityUpdateJobConfig{
+						Tolerations: tolerations,
+					},
+				},
+			}
+
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			Expect(job.Spec.Template.Spec.Tolerations).To(Equal(tolerations))
+		})
+
+		It("should propagate NodeSelector to the Security Config UpdateJob", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodeSelector := map[string]string{
+				"disktype": "ssd",
+			}
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Config: &opensearchv1.SecurityConfig{
+					UpdateJob: opensearchv1.SecurityUpdateJobConfig{
+						NodeSelector: nodeSelector,
+					},
+				},
+			}
+
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			Expect(job.Spec.Template.Spec.NodeSelector).To(Equal(nodeSelector))
+		})
+
+		It("should propagate Affinity to the Security Config UpdateJob", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			affinity := &corev1.Affinity{
+				NodeAffinity: &corev1.NodeAffinity{
+					RequiredDuringSchedulingIgnoredDuringExecution: &corev1.NodeSelector{
+						NodeSelectorTerms: []corev1.NodeSelectorTerm{
+							{
+								MatchExpressions: []corev1.NodeSelectorRequirement{
+									{
+										Key:      "topology.kubernetes.io/zone",
+										Operator: corev1.NodeSelectorOpIn,
+										Values:   []string{"us-east-1a"},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Config: &opensearchv1.SecurityConfig{
+					UpdateJob: opensearchv1.SecurityUpdateJobConfig{
+						Affinity: affinity,
+					},
+				},
+			}
+
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			Expect(job.Spec.Template.Spec.Affinity).To(Equal(affinity))
+		})
+	})
+
 	When("configuring a host alias for the cluster", func() {
 		It("should configure the host alias for the statefulset and bootstrap pods", func() {
 			hostNames := []string{"dummy.com"}

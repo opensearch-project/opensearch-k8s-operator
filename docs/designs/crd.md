@@ -3287,6 +3287,9 @@ _Appears in:_
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ |  |  |  |
 | `priorityClassName` _string_ |  |  |  |
 | `labels` _object (keys:string, values:string)_ |  |  |  |
+| `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
+| `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
+| `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
 
 
 #### Shrink

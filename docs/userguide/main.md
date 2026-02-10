@@ -1227,7 +1227,7 @@ spec:
         cpu: "200m"
 ```
 
-You can also configure the resources for the security update job as shown below.
+You can also configure the resources and scheduling options for the security update job as shown below.
 
 ```yaml
 apiVersion: opensearch.org/v1
@@ -1245,6 +1245,8 @@ spec:
             cpu: "100m"
             memory: "100Mi"
 ```
+
+The `updateJob` also supports standard Kubernetes scheduling options: `nodeSelector`, `tolerations`, `affinity`, `labels`, and `priorityClassName`.
 
 Please note that the examples provided here do not reflect actual resource requirements. You may need to conduct further testing to properly adjust the resources based on your specific needs.
 

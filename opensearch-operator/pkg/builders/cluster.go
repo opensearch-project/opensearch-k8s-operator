@@ -1344,6 +1344,9 @@ func NewSecurityconfigUpdateJob(
 	updateJobConfig := instance.Spec.Security.GetConfig().GetUpdateJob()
 	resources := updateJobConfig.Resources
 	priorityClassName := updateJobConfig.PriorityClassName
+	tolerations := updateJobConfig.Tolerations
+	nodeSelector := updateJobConfig.NodeSelector
+	affinity := updateJobConfig.Affinity
 
 	// Build labels for Job and Pod template
 	jobLabels := map[string]string{
@@ -1394,6 +1397,9 @@ func NewSecurityconfigUpdateJob(
 					SecurityContext:    podSecurityContext,
 					PriorityClassName:  priorityClassName,
 					HostNetwork:        instance.Spec.General.HostNetwork,
+					Tolerations:        tolerations,
+					NodeSelector:       nodeSelector,
+					Affinity:           affinity,
 				},
 			},
 		},
