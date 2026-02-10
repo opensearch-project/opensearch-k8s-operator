@@ -5,25 +5,24 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-var _ = Describe("Bootstrap Pod Reconciliation", func() {
-	Context("Last-applied annotation change detection", func() {
+var _ = Describe("Bootstrap Pod Hash-Based Reconciliation", func() {
+	Context("Hash-based change detection", func() {
 		var instance *opensearchv1.OpenSearchCluster
 
 		BeforeEach(func() {
 			instance = &opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "last-applied-test",
+					Name:      "hash-test",
 					Namespace: "test-namespace",
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
 						HttpPort:       9200,
-						ServiceName:    "last-applied-test",
+						ServiceName:    "hash-test",
 						Version:        "2.8.0",
 						ServiceAccount: "default-sa",
 					},
@@ -41,19 +40,18 @@ var _ = Describe("Bootstrap Pod Reconciliation", func() {
 			}
 		})
 
-		It("should produce identical last-applied config for the same CR", func() {
+		It("should produce the same hash for the same CR", func() {
 			pod1 := builders.NewBootstrapPod(instance, nil, nil)
 			pod2 := builders.NewBootstrapPod(instance, nil, nil)
 
-			cfg1, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod1, false)
-			Expect(err).NotTo(HaveOccurred())
-			cfg2, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod2, false)
-			Expect(err).NotTo(HaveOccurred())
+			hash1 := pod1.Annotations[builders.BootstrapPodSpecHashAnnotation]
+			hash2 := pod2.Annotations[builders.BootstrapPodSpecHashAnnotation]
 
-			Expect(cfg1).To(Equal(cfg2))
+			Expect(hash1).NotTo(BeEmpty())
+			Expect(hash1).To(Equal(hash2))
 		})
 
-		It("should produce different last-applied config when image changes", func() {
+		It("should produce a different hash when the CR image changes", func() {
 			pod1 := builders.NewBootstrapPod(instance, nil, nil)
 
 			modified := instance.DeepCopy()
@@ -63,15 +61,11 @@ var _ = Describe("Bootstrap Pod Reconciliation", func() {
 			}
 			pod2 := builders.NewBootstrapPod(modified, nil, nil)
 
-			cfg1, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod1, false)
-			Expect(err).NotTo(HaveOccurred())
-			cfg2, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod2, false)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(cfg1).NotTo(Equal(cfg2))
+			Expect(pod1.Annotations[builders.BootstrapPodSpecHashAnnotation]).
+				NotTo(Equal(pod2.Annotations[builders.BootstrapPodSpecHashAnnotation]))
 		})
 
-		It("should produce different last-applied config when tolerations change", func() {
+		It("should produce a different hash when tolerations change", func() {
 			pod1 := builders.NewBootstrapPod(instance, nil, nil)
 
 			modified := instance.DeepCopy()
@@ -85,27 +79,26 @@ var _ = Describe("Bootstrap Pod Reconciliation", func() {
 			}
 			pod2 := builders.NewBootstrapPod(modified, nil, nil)
 
-			cfg1, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod1, false)
-			Expect(err).NotTo(HaveOccurred())
-			cfg2, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod2, false)
-			Expect(err).NotTo(HaveOccurred())
-
-			Expect(cfg1).NotTo(Equal(cfg2))
+			Expect(pod1.Annotations[builders.BootstrapPodSpecHashAnnotation]).
+				NotTo(Equal(pod2.Annotations[builders.BootstrapPodSpecHashAnnotation]))
 		})
 
-		It("should produce different last-applied config when service account changes", func() {
+		It("should produce a different hash when service account changes", func() {
 			pod1 := builders.NewBootstrapPod(instance, nil, nil)
 
 			modified := instance.DeepCopy()
 			modified.Spec.General.ServiceAccount = "new-sa"
 			pod2 := builders.NewBootstrapPod(modified, nil, nil)
 
-			cfg1, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod1, false)
-			Expect(err).NotTo(HaveOccurred())
-			cfg2, err := patch.DefaultAnnotator.GetModifiedConfiguration(pod2, false)
-			Expect(err).NotTo(HaveOccurred())
+			Expect(pod1.Annotations[builders.BootstrapPodSpecHashAnnotation]).
+				NotTo(Equal(pod2.Annotations[builders.BootstrapPodSpecHashAnnotation]))
+		})
 
-			Expect(cfg1).NotTo(Equal(cfg2))
+		It("should set the hash annotation on the built pod", func() {
+			pod := builders.NewBootstrapPod(instance, nil, nil)
+
+			Expect(pod.Annotations).To(HaveKey(builders.BootstrapPodSpecHashAnnotation))
+			Expect(pod.Annotations[builders.BootstrapPodSpecHashAnnotation]).To(HaveLen(40)) // SHA1 hex digest
 		})
 	})
 })

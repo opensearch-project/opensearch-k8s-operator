@@ -1,7 +1,6 @@
 package reconcilers
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"reflect"
@@ -642,7 +641,7 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 	})
 }
 
-// reconcileBootstrapPod handles bootstrap pod reconciliation using the last-applied annotation.
+// reconcileBootstrapPod handles bootstrap pod reconciliation using hash-based comparison.
 // This avoids infinite reconcile loops caused by custom schedulers (e.g., Volcano, Yunikorn)
 // that mutate the pod spec at runtime (adding schedulerName, nodeName, scheduling gates, etc.).
 func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
@@ -656,30 +655,16 @@ func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl
 		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
 	}
 
-	// Compare the desired pod against the last-applied configuration stored on the existing pod.
-	// This ignores runtime mutations (nodeName, schedulerName, scheduling gates, tolerations)
-	// injected by custom schedulers after pod creation.
-	lastApplied, err := patch.DefaultAnnotator.GetOriginalConfiguration(&existingPod)
-	if err != nil {
-		return &ctrl.Result{}, err
-	}
+	// Compare the hash of the operator-generated spec against the stored hash
+	existingHash := existingPod.Annotations[builders.BootstrapPodSpecHashAnnotation]
+	desiredHash := desiredPod.Annotations[builders.BootstrapPodSpecHashAnnotation]
 
-	desiredSerialized, err := patch.DefaultAnnotator.GetModifiedConfiguration(desiredPod, false)
-	if err != nil {
-		return &ctrl.Result{}, err
-	}
-
-	// Strip null fields from the desired serialization to match what SetLastAppliedAnnotation stores
-	desiredClean, _, err := patch.DeleteNullInJson(desiredSerialized)
-	if err != nil {
-		return &ctrl.Result{}, err
-	}
-
-	if bytes.Equal(lastApplied, desiredClean) {
+	if existingHash == desiredHash {
+		// No change in the operator's desired state — skip update
 		return &ctrl.Result{}, nil
 	}
 
-	r.logger.Info("Bootstrap pod spec changed, recreating pod", "pod", desiredPod.Name)
+	r.logger.Info("Bootstrap pod spec hash changed, recreating pod", "pod", desiredPod.Name)
 	return r.recreateBootstrapPod(&existingPod, desiredPod)
 }
 
