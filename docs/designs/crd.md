@@ -516,7 +516,6 @@ _Appears in:_
 | `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | Set security context for the cluster pods' container |  |  |
 | `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
-| `persistentVolumeClaimRetentionPolicy` _[StatefulSetPersistentVolumeClaimRetentionPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#statefulsetpersistentvolumeclaimretentionpolicy-v1-apps)_ | Set the retention policy for the cluster PVCs |  |  |
 
 
 #### ISMTemplate
@@ -2285,6 +2284,7 @@ _Appears in:_
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
 | `grpc` _[GrpcConfig](#grpcconfig)_ | gRPC API configuration for OpenSearch |  |  |
 | `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
+| `persistentVolumeClaimRetentionPolicy` _[StatefulSetPersistentVolumeClaimRetentionPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#statefulsetpersistentvolumeclaimretentionpolicy-v1-apps)_ | Set the retention policy for the cluster PVCs |  |  |
 
 
 #### GrpcConfig
