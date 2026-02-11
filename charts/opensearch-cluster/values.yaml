@@ -335,6 +335,12 @@ cluster:
     # Configure tls usage for transport and http interface
     tls:
       http:
+        # -- Controls if TLS should be enabled for HTTP.
+        # If false, TLS is explicitly disabled.
+        # If not set (default), TLS is enabled when http configuration is provided.
+        # If true, TLS is explicitly enabled and http configuration must be provided.
+        enabled: ~
+
         # -- DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh,
         # only used when existing certificates are provided
         adminDn: []
@@ -368,6 +374,12 @@ cluster:
         enableHotReload: false
 
       transport:
+        # -- Controls if TLS should be enabled for transport.
+        # If false, TLS is explicitly disabled.
+        # If not set (default), TLS is enabled when transport configuration is provided.
+        # If true, TLS is explicitly enabled and transport configuration must be provided.
+        enabled: ~
+
         # -- DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh,
         # only used when existing certificates are provided. This field is deprecated and will be removed in a future version.
         # For OpenSearch 2.0.0+, use security.tls.http.adminDn instead.

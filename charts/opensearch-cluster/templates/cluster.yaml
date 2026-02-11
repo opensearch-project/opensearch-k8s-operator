@@ -39,6 +39,11 @@ spec:
   security:
     tls:
       transport:
+        {{- if eq (toString .tls.transport.enabled) "false" }}
+        enabled: false
+        {{- else if eq (toString .tls.transport.enabled) "true" }}
+        enabled: true
+        {{- end }}
         {{- if .tls.transport.generate }}
         generate: {{ .tls.transport.generate }}
         {{- end }}
@@ -64,6 +69,11 @@ spec:
         enableHotReload: {{ .tls.transport.enableHotReload }}
         {{- end }}
       http:
+        {{- if eq (toString .tls.http.enabled) "false" }}
+        enabled: false
+        {{- else if eq (toString .tls.http.enabled) "true" }}
+        enabled: true
+        {{- end }}
         {{- with .tls.http.adminDn }}
         adminDn: {{ . | toYaml | nindent 10 }}
         {{- end }}
