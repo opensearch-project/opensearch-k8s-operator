@@ -16,6 +16,10 @@ on:
       - "opensearch-operator/bundle/**"
       - "opensearch-operator/config/crd/**"
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   bundle-validate:
     runs-on: ubuntu-latest
