@@ -14,6 +14,29 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// MarkStsReady simulates the StatefulSet controller by setting
+// Status.ReadyReplicas and Status.AvailableReplicas to match Spec.Replicas
+// for all StatefulSets in the given namespace that belong to the cluster.
+// This is needed in envtest where no real StatefulSet controller runs.
+func MarkStsReady(k8sClient client.Client, namespace string) error {
+	stsList := &appsv1.StatefulSetList{}
+	if err := k8sClient.List(context.Background(), stsList, client.InNamespace(namespace)); err != nil {
+		return err
+	}
+	for _, sts := range stsList.Items {
+		if sts.Spec.Replicas == nil {
+			continue
+		}
+		sts.Status.Replicas = *sts.Spec.Replicas
+		sts.Status.ReadyReplicas = *sts.Spec.Replicas
+		sts.Status.AvailableReplicas = *sts.Spec.Replicas
+		if err := k8sClient.Status().Update(context.Background(), &sts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func CreateNamespace(k8sClient client.Client, cluster *opensearchv1.OpenSearchCluster) error {
 	ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: cluster.Name}}
 	return k8sClient.Create(context.Background(), &ns)
