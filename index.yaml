@@ -3,6 +3,16 @@ entries:
   opensearch-cluster:
   - apiVersion: v2
     appVersion: 2.8.0
+    created: "2026-02-12T18:13:36.165473188Z"
+    description: A Helm chart for OpenSearch Cluster
+    digest: adb9c38d753d798ac8f3e5d765ee47f2ff6dea83399932ef14e95d01498f95bd
+    name: opensearch-cluster
+    type: application
+    urls:
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-cluster-3.2.0/opensearch-cluster-3.2.0.tgz
+    version: 3.2.0
+  - apiVersion: v2
+    appVersion: 2.8.0
     created: "2025-06-25T17:37:19.570582522Z"
     description: A Helm chart for OpenSearch Cluster
     digest: c06eb0436d147283d5fa2fe4567dc392a4ecd06d20b302605eca501e6b14bab3
@@ -326,4 +336,4 @@ entries:
     urls:
     - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2026-01-26T14:47:34.293435353Z"
+generated: "2026-02-12T18:13:36.344559324Z"
