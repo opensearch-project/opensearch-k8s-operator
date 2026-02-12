@@ -253,7 +253,7 @@ cluster:
   initHelper:
     # -- initHelper image
     image: docker.io/busybox
-    
+
     # -- initHelper image pull policy
     imagePullPolicy: "IfNotPresent"
 
@@ -421,9 +421,9 @@ cluster:
 
       # -- Opensearch tls configuration
       tls: []
-        #- hosts:
-        #   - example.com
-        #  secretName: tls-secret
+        # - hosts:
+        #     - example.com
+        #   secretName: tls-secret
 
     # Dashboards Ingress configuration
     dashboards:
