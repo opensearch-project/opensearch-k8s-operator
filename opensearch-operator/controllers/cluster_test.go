@@ -457,6 +457,10 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			Expect(k8sClient.Update(context.Background(), &OpensearchCluster)).Should(Succeed())
 
 			Eventually(func() bool {
+				// Simulate the StatefulSet controller by marking all STS as ready,
+				// so that nodePoolsReady() in the scaler reconciler passes.
+				_ = MarkStsReady(k8sClient, OpensearchCluster.Namespace)
+
 				stsList := &appsv1.StatefulSetList{}
 				err := k8sClient.List(context.Background(), stsList, client.InNamespace(OpensearchCluster.Name))
 				if err != nil {

@@ -100,6 +100,12 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 			By("Opensearch Dashboard")
 			Eventually(func() bool {
 				fmt.Println("\n DAShBOARD - START - 2")
+
+				// Simulate the StatefulSet controller by marking all STS as ready,
+				// so that nodePoolsReady() in the scaler reconciler passes and
+				// the dashboards reconciler is allowed to run.
+				_ = MarkStsReady(k8sClient, OpensearchCluster.Namespace)
+
 				//// -------- Dashboard tests ---------
 				if OpensearchCluster.Spec.Dashboards.Enable {
 					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-dashboards"}, &deploy); err != nil {
