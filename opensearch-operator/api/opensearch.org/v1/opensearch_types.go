@@ -204,6 +204,7 @@ type BootstrapConfig struct {
 	HostAliases       []corev1.HostAlias `json:"hostAliases,omitempty"`
 	DiskSize          resource.Quantity  `json:"diskSize,omitempty"`
 	PriorityClassName string             `json:"priorityClassName,omitempty"`
+	StorageClassName  *string            `json:"storageClass,omitempty"`
 }
 
 type DashboardsServiceSpec struct {

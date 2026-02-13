@@ -1935,6 +1935,7 @@ _Appears in:_
 | `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
 | `diskSize` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ |  |  |  |
 | `priorityClassName` _string_ |  |  |  |
+| `storageClass` _string_ |  |  |  |
 
 
 #### Close

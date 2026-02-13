@@ -881,6 +881,23 @@ var _ = Describe("Builders", func() {
 
 			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
 		})
+
+		It("should use custom storage class when specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			storageClass := "fast-ssd"
+			clusterObject.Spec.Bootstrap.StorageClassName = &storageClass
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Spec.StorageClassName).ToNot(BeNil())
+			Expect(*result.Spec.StorageClassName).To(Equal("fast-ssd"))
+		})
+
+		It("should not set storage class when not specified", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPVC(&clusterObject)
+
+			Expect(result.Spec.StorageClassName).To(BeNil())
+		})
 	})
 
 	When("Constructing a STS for a NodePool with Keystore Values", func() {

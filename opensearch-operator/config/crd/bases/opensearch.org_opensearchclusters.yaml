@@ -1231,6 +1231,8 @@ spec:
                           More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
                         type: object
                     type: object
+                  storageClass:
+                    type: string
                   tolerations:
                     items:
                       description: |-

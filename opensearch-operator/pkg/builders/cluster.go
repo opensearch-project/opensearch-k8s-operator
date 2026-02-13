@@ -1295,6 +1295,7 @@ func NewBootstrapPVC(cr *opensearchv1.OpenSearchCluster) *corev1.PersistentVolum
 					corev1.ResourceStorage: storageSize,
 				},
 			},
+			StorageClassName: cr.Spec.Bootstrap.StorageClassName,
 		},
 	}
 }
