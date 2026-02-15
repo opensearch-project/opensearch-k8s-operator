@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -76,7 +77,9 @@ func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req
 		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
 			err = userRoleBindingReconciler.Delete()
 			if err != nil {
-				return ctrl.Result{}, err
+				r.Logger.Error(err, "failed to delete opensearch resource")
+				r.Recorder.Event(r.Instance, "Warning", "OpensearchAPIError",
+					fmt.Sprintf("failed to delete resource from OpenSearch: %s", err.Error()))
 			}
 			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)

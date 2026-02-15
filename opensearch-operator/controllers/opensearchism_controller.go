@@ -2,6 +2,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/go-logr/logr"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -57,7 +58,9 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
 			err = ismReconciler.Delete()
 			if err != nil {
-				return ctrl.Result{}, err
+				r.Logger.Error(err, "failed to delete opensearch resource")
+				r.Recorder.Event(r.Instance, "Warning", "OpensearchAPIError",
+					fmt.Sprintf("failed to delete resource from OpenSearch: %s", err.Error()))
 			}
 			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
