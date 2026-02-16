@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -14,7 +15,6 @@ import (
 	"github.com/cisco-open/operator-tools/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -330,7 +330,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished os client for scaling ")
 
-	workingOrdinal := pointer.Int32Deref(sts.Spec.Replicas, 1) - 1
+	workingOrdinal := ptr.Deref(sts.Spec.Replicas, 1) - 1
 	lastReplicaNodeName := helpers.ReplicaHostName(sts, workingOrdinal)
 	_, err = services.AppendExcludeNodeHost(clusterClient, lastReplicaNodeName)
 	if err != nil {

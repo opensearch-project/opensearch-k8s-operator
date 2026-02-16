@@ -32,7 +32,7 @@ type OpensearchActionGroupReconciler struct {
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("actiongroup", req.NamespacedName)
-	r.Logger.Info("Reconciling OpensearchActionGroup")
+	r.Info("Reconciling OpensearchActionGroup")
 
 	r.Instance = &opsterv1.OpensearchActionGroup{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
@@ -49,7 +49,7 @@ func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctr
 
 	if r.Instance.DeletionTimestamp.IsZero() {
 		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Client.Update(ctx, r.Instance)
+		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
@@ -61,7 +61,7 @@ func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctr
 				return ctrl.Result{}, err
 			}
 			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
-			return ctrl.Result{}, r.Client.Update(ctx, r.Instance)
+			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
 

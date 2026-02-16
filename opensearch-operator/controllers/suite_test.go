@@ -25,6 +25,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"testing"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -99,8 +100,10 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 
 	k8sManager, err := ctrl.NewManager(cfg, ctrl.Options{
-		Scheme:                 scheme.Scheme,
-		MetricsBindAddress:     fmt.Sprintf(":%d", ports[0]),
+		Scheme: scheme.Scheme,
+		Metrics: metricsserver.Options{
+			BindAddress: fmt.Sprintf(":%d", ports[0]),
+		},
 		HealthProbeBindAddress: fmt.Sprintf(":%d", ports[1]),
 	})
 	Expect(err).ToNot(HaveOccurred())

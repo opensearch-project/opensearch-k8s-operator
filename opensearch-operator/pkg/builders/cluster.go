@@ -3,6 +3,7 @@ package builders
 import (
 	"context"
 	"fmt"
+	"k8s.io/utils/ptr"
 	"strings"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -16,7 +17,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/intstr"
-	"k8s.io/utils/pointer"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -60,6 +60,7 @@ func NewSTSForNodePool(
 		"transform",
 		"cluster_manager",
 		"search",
+		"warm",
 	}
 	var selectedRoles []string
 	for _, role := range node.Roles {
@@ -72,7 +73,7 @@ func NewSTSForNodePool(
 	pvc := corev1.PersistentVolumeClaim{}
 	dataVolume := corev1.Volume{}
 
-	if node.Persistence == nil || node.Persistence.PersistenceSource.PVC != nil {
+	if node.Persistence == nil || node.Persistence.PVC != nil {
 		mode := corev1.PersistentVolumeFilesystem
 		pvc = corev1.PersistentVolumeClaim{
 			ObjectMeta: metav1.ObjectMeta{Name: "data"},
@@ -81,9 +82,9 @@ func NewSTSForNodePool(
 					if node.Persistence == nil {
 						return []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce}
 					}
-					return node.Persistence.PersistenceSource.PVC.AccessModes
+					return node.Persistence.PVC.AccessModes
 				}(),
-				Resources: corev1.ResourceRequirements{
+				Resources: corev1.VolumeResourceRequirements{
 					Requests: corev1.ResourceList{
 						corev1.ResourceStorage: resource.MustParse(disksize),
 					},
@@ -106,16 +107,16 @@ func NewSTSForNodePool(
 	if node.Persistence != nil {
 		dataVolume.Name = "data"
 
-		if node.Persistence.PersistenceSource.HostPath != nil {
+		if node.Persistence.HostPath != nil {
 			dataVolume.VolumeSource = corev1.VolumeSource{
-				HostPath: node.Persistence.PersistenceSource.HostPath,
+				HostPath: node.Persistence.HostPath,
 			}
 			volumes = append(volumes, dataVolume)
 		}
 
-		if node.Persistence.PersistenceSource.EmptyDir != nil {
+		if node.Persistence.EmptyDir != nil {
 			dataVolume.VolumeSource = corev1.VolumeSource{
-				EmptyDir: node.Persistence.PersistenceSource.EmptyDir,
+				EmptyDir: node.Persistence.EmptyDir,
 			}
 			volumes = append(volumes, dataVolume)
 		}
@@ -361,7 +362,7 @@ func NewSTSForNodePool(
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
-	if cr.Spec.General.Keystore != nil && len(cr.Spec.General.Keystore) > 0 {
+	if len(cr.Spec.General.Keystore) > 0 {
 
 		// Add volume and volume mount for keystore
 		volumes = append(volumes, corev1.Volume{
@@ -395,7 +396,7 @@ func NewSTSForNodePool(
 				},
 			})
 
-			if keystoreValue.KeyMappings == nil || len(keystoreValue.KeyMappings) == 0 {
+			if len(keystoreValue.KeyMappings) == 0 {
 				// If no renames are necessary, mount secret key-value pairs directly
 				initContainerVolumeMounts = append(initContainerVolumeMounts, corev1.VolumeMount{
 					Name:      "keystore-" + keystoreValue.Secret.Name,
@@ -544,7 +545,7 @@ func NewSTSForNodePool(
 				},
 			},
 			VolumeClaimTemplates: func() []corev1.PersistentVolumeClaim {
-				if node.Persistence == nil || node.Persistence.PersistenceSource.PVC != nil {
+				if node.Persistence == nil || node.Persistence.PVC != nil {
 					return []corev1.PersistentVolumeClaim{pvc}
 				}
 				return []corev1.PersistentVolumeClaim{}
@@ -578,7 +579,7 @@ func NewSTSForNodePool(
 				"vm.max_map_count=262144",
 			},
 			SecurityContext: &corev1.SecurityContext{
-				Privileged: pointer.Bool(true),
+				Privileged: ptr.To(true),
 			},
 		})
 	}
@@ -870,7 +871,7 @@ func NewBootstrapPod(
 			Command:         []string{"sh", "-c"},
 			Args:            []string{"chown -R 1000:1000 /usr/share/opensearch/data"},
 			SecurityContext: &corev1.SecurityContext{
-				RunAsUser: pointer.Int64(0),
+				RunAsUser: ptr.To(int64(0)),
 			},
 			VolumeMounts: []corev1.VolumeMount{
 				{
@@ -882,7 +883,7 @@ func NewBootstrapPod(
 	}
 
 	// If Keystore Values are set in OpenSearchCluster manifest
-	if cr.Spec.Bootstrap.Keystore != nil && len(cr.Spec.Bootstrap.Keystore) > 0 {
+	if len(cr.Spec.Bootstrap.Keystore) > 0 {
 
 		// Add volume and volume mount for keystore
 		volumes = append(volumes, corev1.Volume{
@@ -916,7 +917,7 @@ func NewBootstrapPod(
 				},
 			})
 
-			if keystoreValue.KeyMappings == nil || len(keystoreValue.KeyMappings) == 0 {
+			if len(keystoreValue.KeyMappings) == 0 {
 				// If no renames are necessary, mount secret key-value pairs directly
 				initContainerVolumeMounts = append(initContainerVolumeMounts, corev1.VolumeMount{
 					Name:      "keystore-" + keystoreValue.Secret.Name,
@@ -1032,7 +1033,7 @@ func NewBootstrapPod(
 				"vm.max_map_count=262144",
 			},
 			SecurityContext: &corev1.SecurityContext{
-				Privileged: pointer.Bool(true),
+				Privileged: ptr.To(true),
 			},
 		})
 	}
@@ -1165,9 +1166,10 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opsterv1.
 			}, sts); err != nil {
 				return false
 			}
-			if sts.Status.ReadyReplicas != pointer.Int32Deref(sts.Spec.Replicas, 1) {
+			if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
 				return false
 			}
+
 		}
 	}
 	return true

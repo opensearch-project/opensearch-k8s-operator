@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 	"time"
 
 	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
@@ -16,7 +17,6 @@ import (
 	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
-	"k8s.io/utils/pointer"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -57,7 +57,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 	defer func() {
 		// Skip status updates when option is set
-		if !pointer.BoolDeref(r.updateStatus, true) {
+		if !ptr.Deref(r.updateStatus, true) {
 			return
 		}
 		// When the reconciler is done, figure out what the state of the resource is
@@ -110,7 +110,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			return
 		}
 	} else {
-		if pointer.BoolDeref(r.updateStatus, true) {
+		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 				instance := object.(*opsterv1.OpensearchUser)
 				instance.Status.ManagedCluster = &r.cluster.UID
