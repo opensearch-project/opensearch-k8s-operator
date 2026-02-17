@@ -712,7 +712,9 @@ func (r *TLSReconciler) handleHttp() error {
 	r.reconcilerContext.AddConfig("plugins.security.ssl.http.enabled", "true")
 
 	// Set certificate file paths based on mounting configuration
-	if tlsConfig.CaSecret.Name == "" || tlsConfig.CaSecret.Name == tlsConfig.Secret.Name {
+	// When generate is true, the CA cert is included in the generated secret mounted at tls-http/
+	// Only when generate is false AND CaSecret differs from Secret do we use the separate tls-http-ca/ mount
+	if tlsConfig.Generate || tlsConfig.CaSecret.Name == "" || tlsConfig.CaSecret.Name == tlsConfig.Secret.Name {
 		// Single secret mounted as directory
 		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemcert_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSCertKey))
 		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemkey_filepath", fmt.Sprintf("tls-http/%s", corev1.TLSPrivateKeyKey))
