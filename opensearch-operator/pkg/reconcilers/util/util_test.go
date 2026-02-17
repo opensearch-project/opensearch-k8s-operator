@@ -233,6 +233,38 @@ var _ = Describe("Additional volumes", func() {
 
 		})
 	})
+
+	When("HostPath volume is added", func() {
+		It("Should have HostPathVolumeSource fields and mount read-write", func() {
+			hostPathType := v1.HostPathDirectoryOrCreate
+			volumeConfigs[0].HostPath = &v1.HostPathVolumeSource{
+				Path: "/host/path",
+				Type: &hostPathType,
+			}
+
+			volume, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].HostPath.Path).To(Equal("/host/path"))
+			Expect(*volume[0].HostPath.Type).To(Equal(v1.HostPathDirectoryOrCreate))
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].ReadOnly).To(BeFalse())
+			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
+
+	When("HostPath volume is added with subPath", func() {
+		It("Should not set subPath", func() {
+			hostPathType := v1.HostPathDirectory
+			volumeConfigs[0].HostPath = &v1.HostPathVolumeSource{
+				Path: "/host/path",
+				Type: &hostPathType,
+			}
+			volumeConfigs[0].SubPath = "subpath"
+
+			_, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].SubPath).To(BeEmpty())
+		})
+	})
 })
 
 var _ = Describe("OpensearchClusterURL", func() {

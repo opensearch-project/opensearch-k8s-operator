@@ -166,6 +166,15 @@ func CreateAdditionalVolumes(
 				},
 			})
 		}
+		if volumeConfig.HostPath != nil {
+			readOnly = false
+			retVolumes = append(retVolumes, corev1.Volume{
+				Name: volumeConfig.Name,
+				VolumeSource: corev1.VolumeSource{
+					HostPath: volumeConfig.HostPath,
+				},
+			})
+		}
 		if volumeConfig.RestartPods {
 			namesIndex[volumeConfig.Name] = i
 			names = append(names, volumeConfig.Name)
