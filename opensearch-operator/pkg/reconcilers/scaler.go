@@ -155,8 +155,12 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 		}
 	}
 	if currentStatus.Status == "Excluded" {
+		targetNodeName := ""
+		if len(currentStatus.Conditions) > 0 {
+			targetNodeName = currentStatus.Conditions[0]
+		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start to Exclude %s/%s", r.instance.Namespace, r.instance.Name)
-		err := r.drainNode(currentStatus, currentSts, nodePool.Component)
+		err := r.drainNode(currentStatus, currentSts, nodePool.Component, targetNodeName)
 		return true, err
 	}
 	if currentStatus.Status == "Drained" {
@@ -247,6 +251,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatu
 			Component:   "Scaler",
 			Status:      "Excluded",
 			Description: nodePoolGroupName,
+			Conditions:  []string{lastReplicaNodeName},
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished to Exclude %s/%s", r.instance.Namespace, r.instance.Name)
 		lg.Info(fmt.Sprintf("Group: %s, Excluded node: %s", nodePoolGroupName, lastReplicaNodeName))
@@ -281,10 +286,15 @@ func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatu
 	return err
 }
 
-func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
+func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, targetNodeName string) error {
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
+
+	// Use tracked node name, fall back to computing from STS if not available (backward compat)
+	lastReplicaNodeName := targetNodeName
+	if lastReplicaNodeName == "" {
+		lastReplicaNodeName = helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
+	}
 
 	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 	if err != nil {
@@ -300,6 +310,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		Component:   "Scaler",
 		Status:      "Drained",
 		Description: nodePoolGroupName,
+		Conditions:  []string{lastReplicaNodeName},
 	}
 	lg.Info(fmt.Sprintf("Group: %s, Node %s is drained", nodePoolGroupName, lastReplicaNodeName))
 	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
