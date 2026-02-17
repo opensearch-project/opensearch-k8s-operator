@@ -1851,6 +1851,7 @@ _Appears in:_
 | `persistentVolumeClaim` _[PersistentVolumeClaimVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#persistentvolumeclaimvolumesource-v1-core)_ | PersistentVolumeClaim object to use to populate the volume |  |  |
 | `projected` _[ProjectedVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#projectedvolumesource-v1-core)_ | Projected object to use to populate the volume |  |  |
 | `nfs` _[NFSVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#nfsvolumesource-v1-core)_ | NFS object to use to populate the volume |  |  |
+| `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ | HostPath object to use to populate the volume |  |  |
 | `restartPods` _boolean_ | Whether to restart the pods on content change |  |  |
 
 

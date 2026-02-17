@@ -892,7 +892,7 @@ Sidecar containers share the same network namespace and storage volumes as the O
 
 ### Additional Volumes
 
-Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, or CSI volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
+Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, CSI volumes, NFS volumes, or hostPath volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
 
 ```yaml
 spec:
@@ -931,6 +931,11 @@ spec:
           server: 192.168.1.233
           path: /export/backups/opensearch
           readOnly: false # Optional, defaults to false
+      - name: hostpath-volume
+        path: /host/data
+        hostPath:
+          path: /var/lib/opensearch
+          type: DirectoryOrCreate # Optional, can be Directory, DirectoryOrCreate, File, FileOrCreate, Socket, CharDevice, or BlockDevice
   dashboards:
     additionalVolumes:
       - name: example-secret
@@ -972,6 +977,43 @@ spec:
         settings:
           location: /mnt/backups/opensearch
 ```
+
+#### HostPath Volume Support
+
+HostPath volumes allow you to mount a file or directory from the host node's filesystem into your OpenSearch pods. This is useful for accessing host-specific data, but should be used with caution as it can create security and portability issues.
+
+> **Warning:** HostPath volumes are strongly discouraged in production environments as they:
+> - Create security risks by allowing pods to access the host filesystem
+> - Reduce portability across different nodes
+> - Can cause issues if pods are scheduled on different nodes
+>
+> Consider using PersistentVolumeClaims, NFS, or other network storage solutions instead.
+
+To configure a hostPath volume, specify the `hostPath` field with the required `path` parameter:
+
+```yaml
+spec:
+  general:
+    additionalVolumes:
+      - name: hostpath-data
+        path: /host/data
+        hostPath:
+          path: /var/lib/opensearch
+          type: DirectoryOrCreate # Optional, defaults to empty string
+```
+
+The `type` field is optional and can be one of:
+- `Directory` - Directory must exist on the host
+- `DirectoryOrCreate` - Directory will be created if it doesn't exist
+- `File` - File must exist on the host
+- `FileOrCreate` - File will be created if it doesn't exist
+- `Socket` - Unix socket must exist on the host
+- `CharDevice` - Character device must exist on the host
+- `BlockDevice` - Block device must exist on the host
+
+If `type` is not specified, the path must exist and be of the correct type.
+
+> **Note:** When using hostPath volumes, ensure proper pod anti-affinity rules are configured to prevent multiple pods from scheduling on the same node, which could cause data conflicts.
 
 The defined volumes are added to all pods of the opensearch cluster. It is currently not possible to define them per nodepool.
 

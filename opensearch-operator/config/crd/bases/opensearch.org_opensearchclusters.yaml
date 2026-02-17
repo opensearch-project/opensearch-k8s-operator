@@ -1435,6 +1435,24 @@ spec:
                               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                               x-kubernetes-int-or-string: true
                           type: object
+                        hostPath:
+                          description: HostPath object to use to populate the volume
+                          properties:
+                            path:
+                              description: |-
+                                path of the directory on the host.
+                                If the path is a symlink, it will follow the link to the real path.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                              type: string
+                            type:
+                              description: |-
+                                type for HostPath Volume
+                                Defaults to ""
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                              type: string
+                          required:
+                          - path
+                          type: object
                         name:
                           description: Name to use for the volume. Required.
                           type: string
@@ -1902,8 +1920,8 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of secret, configMap, emptyDir, csi,
-                          projected, nfs must be set
-                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          projected, nfs, hostPath must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
                           == 1
                     type: array
                   affinity:
@@ -3957,6 +3975,24 @@ spec:
                               pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
                               x-kubernetes-int-or-string: true
                           type: object
+                        hostPath:
+                          description: HostPath object to use to populate the volume
+                          properties:
+                            path:
+                              description: |-
+                                path of the directory on the host.
+                                If the path is a symlink, it will follow the link to the real path.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                              type: string
+                            type:
+                              description: |-
+                                type for HostPath Volume
+                                Defaults to ""
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#hostpath
+                              type: string
+                          required:
+                          - path
+                          type: object
                         name:
                           description: Name to use for the volume. Required.
                           type: string
@@ -4424,8 +4460,8 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of secret, configMap, emptyDir, csi,
-                          projected, nfs must be set
-                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          projected, nfs, hostPath must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
                           == 1
                     type: array
                   annotations:
