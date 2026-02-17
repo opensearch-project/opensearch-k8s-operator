@@ -84,7 +84,7 @@ serviceAccount:
 # kubeRbacProxy has been replaced with controller-runtime's built-in
 # WithAuthenticationAndAuthorization for metrics endpoint protection.
 # This provides equivalent security functionality without external dependencies.
-# 
+#
 # kubeRbacProxy:
 #   enable: false
 
