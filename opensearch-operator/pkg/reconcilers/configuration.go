@@ -6,9 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"sort"
-	"strings"
-
+	"github.com/goccy/go-yaml"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -21,6 +19,9 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sort"
+	"strconv"
+	"strings"
 )
 
 type ConfigurationReconciler struct {
@@ -85,18 +86,71 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig(k, v)
 	}
 
-	// Helper function to build config string from a map
+	// Helper function to parse string value to determine its actual type
+	parseConfigValue := func(value string) interface{} {
+		// Try to parse as boolean
+		if value == "true" {
+			return true
+		}
+		if value == "false" {
+			return false
+		}
+
+		// Try to parse as JSON array
+		if len(value) >= 2 && value[0] == '[' && value[len(value)-1] == ']' {
+			var arr []interface{}
+			if err := json.Unmarshal([]byte(value), &arr); err == nil {
+				return arr
+			}
+		}
+
+		// Try to parse as JSON object
+		if len(value) >= 2 && value[0] == '{' && value[len(value)-1] == '}' {
+			var obj map[string]interface{}
+			if err := json.Unmarshal([]byte(value), &obj); err == nil {
+				return obj
+			}
+		}
+
+		// Try to parse as integer
+		if num, err := strconv.ParseInt(value, 10, 64); err == nil {
+			return num
+		}
+		// Try to parse as float
+		if num, err := strconv.ParseFloat(value, 64); err == nil {
+			return num
+		}
+
+		// Return as string if no other type matches
+		return value
+	}
+
+	// Helper function to build config string from a map[string]string
+	// Converts to map[string]interface{} and marshals directly - YAML library handles all quoting
+	// This follows ECK's approach: marshal the entire config structure
 	buildConfigString := func(config map[string]string) string {
-		var sb strings.Builder
-		keys := make([]string, 0, len(config))
-		for key := range config {
-			keys = append(keys, key)
+		// Convert map[string]string to map[string]interface{} by parsing each value
+		typedConfig := make(map[string]interface{})
+		for k, v := range config {
+			typedConfig[k] = parseConfigValue(v)
 		}
-		sort.Strings(keys)
-		for _, key := range keys {
-			sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
+
+		// Marshal the entire config map - YAML library handles all quoting automatically
+		quoted, err := yaml.Marshal(typedConfig)
+		if err != nil {
+			// Fallback to manual building if marshaling fails
+			var sb strings.Builder
+			keys := make([]string, 0, len(config))
+			for key := range config {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys)
+			for _, key := range keys {
+				sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
+			}
+			return sb.String()
 		}
-		return sb.String()
+		return string(quoted)
 	}
 
 	result := reconciler.CombinedResult{}
