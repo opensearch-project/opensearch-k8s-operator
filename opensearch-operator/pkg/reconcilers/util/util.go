@@ -21,7 +21,6 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -369,45 +368,3 @@ func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, c
 	return availableNodes
 }
 
-// PodSpecChanged checks if any meaningful pod spec fields have changed
-func PodSpecChanged(existing, desired *corev1.Pod) bool {
-	existingSpec := existing.Spec
-	desiredSpec := desired.Spec
-
-	sanitizeBootstrapPodSpec(&existingSpec)
-	sanitizeBootstrapPodSpec(&desiredSpec)
-
-	return !apiequality.Semantic.DeepEqual(existingSpec, desiredSpec)
-}
-
-func sanitizeBootstrapPodSpec(spec *corev1.PodSpec) {
-	spec.NodeName = ""
-	spec.Tolerations = removeDefaultNodeLifecycleTolerations(spec.Tolerations)
-}
-
-func removeDefaultNodeLifecycleTolerations(tolerations []corev1.Toleration) []corev1.Toleration {
-	if len(tolerations) == 0 {
-		return tolerations
-	}
-
-	filtered := make([]corev1.Toleration, 0, len(tolerations))
-	for _, tol := range tolerations {
-		if isDefaultNodeLifecycleToleration(tol) {
-			continue
-		}
-		filtered = append(filtered, tol)
-	}
-	return filtered
-}
-
-func isDefaultNodeLifecycleToleration(t corev1.Toleration) bool {
-	if t.Operator != corev1.TolerationOpExists || t.Effect != corev1.TaintEffectNoExecute {
-		return false
-	}
-
-	if t.TolerationSeconds == nil || *t.TolerationSeconds != 300 {
-		return false
-	}
-
-	return t.Key == "node.kubernetes.io/not-ready" || t.Key == "node.kubernetes.io/unreachable"
-}

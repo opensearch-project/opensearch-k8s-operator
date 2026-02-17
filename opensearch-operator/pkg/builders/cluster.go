@@ -2,6 +2,9 @@ package builders
 
 import (
 	"context"
+	"crypto/sha1"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -31,9 +34,21 @@ var (
 
 const (
 	ConfigurationChecksumAnnotation  = "opensearch.org/config"
+	BootstrapPodSpecHashAnnotation   = "opensearch.org/bootstrap-pod-spec-hash"
 	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
+
+// BootstrapPodSpecHash computes a SHA1 hash of the pod spec for change detection.
+func BootstrapPodSpecHash(pod *corev1.Pod) string {
+	data, err := json.Marshal(pod.Spec)
+	if err != nil {
+		return ""
+	}
+	hasher := sha1.New()
+	hasher.Write(data)
+	return hex.EncodeToString(hasher.Sum(nil))
+}
 
 // GetDefaultAffinity returns default pod anti-affinity that prefers to avoid
 // co-locating pods from the same cluster on a single node.
@@ -1198,6 +1213,13 @@ func NewBootstrapPod(
 			},
 		})
 	}
+
+	// Compute hash of the pod spec and store as annotation for change detection
+	specHash := BootstrapPodSpecHash(pod)
+	if pod.Annotations == nil {
+		pod.Annotations = make(map[string]string)
+	}
+	pod.Annotations[BootstrapPodSpecHashAnnotation] = specHash
 
 	return pod
 }
