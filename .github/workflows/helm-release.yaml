@@ -13,7 +13,8 @@ concurrency:
 jobs:
   release:
     permissions:
-      contents: write
+      contents: write # to push chart release and create a release (helm/chart-releaser-action)
+      packages: write # needed for ghcr access
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -38,3 +39,18 @@ jobs:
           mark_as_latest: false
         env:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+
+      # see https://github.com/helm/chart-releaser/issues/183
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push charts to GHCR
+        run: |
+          shopt -s nullglob
+          for pkg in .cr-release-packages/*; do
+            helm push "${pkg}" "oci://ghcr.io/${GITHUB_REPOSITORY_OWNER}/charts"
+          done
