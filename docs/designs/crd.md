@@ -714,6 +714,7 @@ _Appears in:_
 | `additionalConfig` _object (keys:string, values:string)_ | Extra items to add to the opensearch.yml for this nodepool (merged with general.additionalConfig) |  |  |
 | `sidecarContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core) array_ |  |  | Schemaless: \{\} <br /> |
 | `initContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core) array_ |  |  | Schemaless: \{\} <br /> |
+| `podManagementPolicy` _[PodManagementPolicyType](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podmanagementpolicytype-v1-apps)_ | PodManagementPolicy controls how pods are created during initial scale up,<br />when replacing pods on nodes, or when scaling down.<br />OrderedReady (default): pods are created in order and wait for previous pod to be Ready<br />Parallel: all pods are created at once without waiting |  | Enum: [OrderedReady Parallel] <br /> |
 
 
 #### Notification
