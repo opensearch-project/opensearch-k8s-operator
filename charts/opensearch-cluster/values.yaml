@@ -286,6 +286,21 @@ cluster:
         limits:
           memory: "2Gi"
           cpu: "500m"
+      # -- Per-nodePool ingress configuration. Creates a separate Ingress targeting this nodePool's service.
+      ingress:
+        enabled: false
+      #   annotations: {}
+      #   className: ""
+      #   hosts:
+      #     - host: opensearch-data.example.com
+      #       paths:
+      #         - path: /
+      #           pathType: ImplementationSpecific
+      #   tls: []
+      #     - hosts:
+      #         - opensearch-data.example.com
+      #       secretName: tls-secret
+
       # -- These containers will be deployed as sidecars in the same pod as the OpenSearch container
       sidecarContainers: []
       # Example configurations:
