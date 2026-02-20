@@ -189,6 +189,28 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 	*currentSts.Spec.Replicas--
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
+
+	// Verify that the node being removed is the same one that was excluded/drained
+	if len(currentStatus.Conditions) > 0 {
+		targetNodeName := currentStatus.Conditions[0]
+		if lastReplicaNodeName != targetNodeName {
+			lg.Info(fmt.Sprintf("Group: %s, Target node %s does not match last replica %s, resetting to Running", nodePoolGroupName, targetNodeName, lastReplicaNodeName))
+			*currentSts.Spec.Replicas++
+			componentStatus := opensearchv1.ComponentStatus{
+				Component:   "Scaler",
+				Status:      "Running",
+				Description: nodePoolGroupName,
+			}
+			err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+				instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+			})
+			if err != nil {
+				lg.Error(err, "failed to update status")
+			}
+			return true, fmt.Errorf("target node mismatch during decrease: excluded/drained %s but would remove %s, reset to Running", targetNodeName, lastReplicaNodeName)
+		}
+	}
+
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start to decreaseing node %s on %s ", lastReplicaNodeName, nodePoolGroupName)
 	_, err := r.client.ReconcileResource(&currentSts, reconciler.StatePresent)
 	if err != nil {
@@ -247,6 +269,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatu
 			Component:   "Scaler",
 			Status:      "Excluded",
 			Description: nodePoolGroupName,
+			Conditions:  []string{lastReplicaNodeName},
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished to Exclude %s/%s", r.instance.Namespace, r.instance.Name)
 		lg.Info(fmt.Sprintf("Group: %s, Excluded node: %s", nodePoolGroupName, lastReplicaNodeName))
@@ -284,7 +307,33 @@ func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatu
 func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
+
+	// Retrieve the target node name from the status conditions set during exclude phase
+	var lastReplicaNodeName string
+	if len(currentStatus.Conditions) > 0 {
+		lastReplicaNodeName = currentStatus.Conditions[0]
+	} else {
+		// Fallback for backwards compatibility
+		lastReplicaNodeName = helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
+	}
+
+	// Verify the target node is still the last replica
+	expectedNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
+	if lastReplicaNodeName != expectedNodeName {
+		lg.Info(fmt.Sprintf("Group: %s, Target node %s no longer matches last replica %s, resetting to Running", nodePoolGroupName, lastReplicaNodeName, expectedNodeName))
+		componentStatus := opensearchv1.ComponentStatus{
+			Component:   "Scaler",
+			Status:      "Running",
+			Description: nodePoolGroupName,
+		}
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+		})
+		if err != nil {
+			lg.Error(err, "failed to update status")
+		}
+		return fmt.Errorf("target node mismatch during drain: excluded %s but last replica is %s, reset to Running", lastReplicaNodeName, expectedNodeName)
+	}
 
 	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 	if err != nil {
@@ -300,6 +349,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		Component:   "Scaler",
 		Status:      "Drained",
 		Description: nodePoolGroupName,
+		Conditions:  []string{lastReplicaNodeName},
 	}
 	lg.Info(fmt.Sprintf("Group: %s, Node %s is drained", nodePoolGroupName, lastReplicaNodeName))
 	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
