@@ -436,7 +436,7 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 	// Tell cluster controller to mount secrets
 	volume := corev1.Volume{Name: "transport-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName}}}
 	r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
-	mount := corev1.VolumeMount{Name: "transport-cert", MountPath: "/usr/share/opensearch/config/tls-transport"}
+	mount := corev1.VolumeMount{Name: "transport-cert", MountPath: r.instance.Spec.General.GetOpenSearchHome() + "/config/tls-transport"}
 	r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 
 	// Extend opensearch.yml
@@ -563,8 +563,9 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 		return err
 	}
 
+	opensearchHome := r.instance.Spec.General.GetOpenSearchHome()
 	if tlsConfig.PerNode {
-		mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+		mountFolder("transport", "certs", tlsConfig.Secret.Name, opensearchHome, r.reconcilerContext)
 		// Extend opensearch.yml
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", "tls-transport/${HOSTNAME}.crt")
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", "tls-transport/${HOSTNAME}.key")
@@ -574,16 +575,16 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 		switch name := tlsConfig.CaSecret.Name; name {
 		case "":
 			// If CaSecret.Name is empty, mount Secret.Name as a directory
-			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+			mountFolder("transport", "certs", tlsConfig.Secret.Name, opensearchHome, r.reconcilerContext)
 		case tlsConfig.Secret.Name:
 			// If CaSecret.Name is same as Secret.Name, mount only Secret.Name as a directory
-			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+			mountFolder("transport", "certs", tlsConfig.Secret.Name, opensearchHome, r.reconcilerContext)
 		default:
 			// If CaSecret.Name is different from Secret.Name, mount both secrets as directories
 			// Mount Secret.Name as tls-transport/
-			mountFolder("transport", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+			mountFolder("transport", "certs", tlsConfig.Secret.Name, opensearchHome, r.reconcilerContext)
 			// Mount CaSecret.Name as tls-transport-ca/
-			mountFolder("transport", "ca", tlsConfig.CaSecret.Name, r.reconcilerContext)
+			mountFolder("transport", "ca", tlsConfig.CaSecret.Name, opensearchHome, r.reconcilerContext)
 		}
 
 		// Extend opensearch.yml with appropriate file paths based on mounting logic
@@ -682,7 +683,7 @@ func (r *TLSReconciler) handleHttp() error {
 		// Tell cluster controller to mount secrets
 		volume := corev1.Volume{Name: "http-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: nodeSecretName}}}
 		r.reconcilerContext.Volumes = append(r.reconcilerContext.Volumes, volume)
-		mount := corev1.VolumeMount{Name: "http-cert", MountPath: "/usr/share/opensearch/config/tls-" + "http"}
+		mount := corev1.VolumeMount{Name: "http-cert", MountPath: r.instance.Spec.General.GetOpenSearchHome() + "/config/tls-http"}
 		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)
 	} else {
 		if tlsConfig.Secret.Name == "" {
@@ -693,19 +694,20 @@ func (r *TLSReconciler) handleHttp() error {
 		}
 
 		// Implement new mounting logic based on CaSecret.Name configuration
+		opensearchHome := r.instance.Spec.General.GetOpenSearchHome()
 		switch name := tlsConfig.CaSecret.Name; name {
 		case "":
 			// If CaSecret.Name is empty, mount Secret.Name as a directory
-			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+			mountFolder("http", "certs", tlsConfig.Secret.Name, opensearchHome, r.reconcilerContext)
 		case tlsConfig.Secret.Name:
 			// If CaSecret.Name is same as Secret.Name, mount only Secret.Name as a directory
-			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+			mountFolder("http", "certs", tlsConfig.Secret.Name, opensearchHome, r.reconcilerContext)
 		default:
 			// If CaSecret.Name is different from Secret.Name, mount both secrets as directories
 			// Mount Secret.Name as tls-http/
-			mountFolder("http", "certs", tlsConfig.Secret.Name, r.reconcilerContext)
+			mountFolder("http", "certs", tlsConfig.Secret.Name, opensearchHome, r.reconcilerContext)
 			// Mount CaSecret.Name as tls-http-ca/
-			mountFolder("http", "ca", tlsConfig.CaSecret.Name, r.reconcilerContext)
+			mountFolder("http", "ca", tlsConfig.CaSecret.Name, opensearchHome, r.reconcilerContext)
 		}
 	}
 	// Extend opensearch.yml with appropriate file paths based on mounting logic
@@ -754,15 +756,15 @@ func (r *TLSReconciler) getReferencedCaCertOrDefault(
 	return ca, nil
 }
 
-func mountFolder(interfaceName string, name string, secretName string, reconcilerContext *ReconcilerContext) {
+func mountFolder(interfaceName string, name string, secretName string, opensearchHome string, reconcilerContext *ReconcilerContext) {
 	volume := corev1.Volume{Name: interfaceName + "-" + name, VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: secretName}}}
 	reconcilerContext.Volumes = append(reconcilerContext.Volumes, volume)
 
 	var mountPath string
 	if name == "ca" {
-		mountPath = fmt.Sprintf("/usr/share/opensearch/config/tls-%s-ca", interfaceName)
+		mountPath = fmt.Sprintf("%s/config/tls-%s-ca", opensearchHome, interfaceName)
 	} else {
-		mountPath = fmt.Sprintf("/usr/share/opensearch/config/tls-%s", interfaceName)
+		mountPath = fmt.Sprintf("%s/config/tls-%s", opensearchHome, interfaceName)
 	}
 
 	mount := corev1.VolumeMount{Name: interfaceName + "-" + name, MountPath: mountPath}

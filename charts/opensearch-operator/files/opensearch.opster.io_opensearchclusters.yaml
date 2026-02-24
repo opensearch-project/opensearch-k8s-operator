@@ -3019,6 +3019,11 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  opensearchDashboardsHome:
+                    description: OpenSearch Dashboards installation directory inside
+                      the container. Defaults to /usr/share/opensearch-dashboards
+                      if not set.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -4533,6 +4538,10 @@ spec:
                             type: string
                         type: object
                     type: object
+                  opensearchHome:
+                    description: OpenSearch installation directory inside the container.
+                      Defaults to /usr/share/opensearch if not set.
+                    type: string
                   operatorClusterURL:
                     description: |-
                       Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
