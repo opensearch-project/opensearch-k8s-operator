@@ -1103,6 +1103,20 @@ manager:
       value: "true"
 ```
 
+### Custom OpenSearch Path
+
+By default, the operator assumes OpenSearch is installed at `/usr/share/opensearch` inside the container (and `/usr/share/opensearch-dashboards` for Dashboards). If you use a custom OpenSearch image with a different installation directory, you can override these paths:
+
+```yaml
+spec:
+  general:
+    opensearchHome: "/opt/opensearch"
+  dashboards:
+    opensearchDashboardsHome: "/opt/opensearch-dashboards"
+```
+
+The operator uses these paths for all volume mounts (data, config, TLS certificates, keystore, security plugin) and init container commands. When not set, the defaults are used. Any trailing slashes in the provided path are automatically removed.
+
 ### PodDisruptionBudget
 
 The PDB (Pod Disruption Budget) is a Kubernetes resource that helps ensure the high availability of applications by defining the acceptable disruption level during maintenance or unexpected events.

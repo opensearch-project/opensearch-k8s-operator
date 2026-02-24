@@ -129,6 +129,10 @@ cluster:
     # -- Opensearch version
     version: 2.3.0
 
+    # -- OpenSearch installation directory inside the container.
+    # If not set, defaults to /usr/share/opensearch.
+    # opensearchHome: "/usr/share/opensearch"
+
   # cluster boostrap pod configuration
   bootstrap:
     # -- bootstrap pod env variables
@@ -248,6 +252,10 @@ cluster:
 
     # -- dashboards version
     version: 2.3.0
+
+    # -- OpenSearch Dashboards installation directory inside the container.
+    # If not set, defaults to /usr/share/opensearch-dashboards.
+    # opensearchDashboardsHome: "/usr/share/opensearch-dashboards"
 
   # initHelper configuration
   initHelper:

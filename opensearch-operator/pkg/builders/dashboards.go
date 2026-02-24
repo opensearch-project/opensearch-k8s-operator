@@ -32,9 +32,10 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 			},
 		},
 	})
+	dashboardsHome := cr.Spec.Dashboards.GetOpenSearchDashboardsHome()
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "dashboards-config",
-		MountPath: "/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml",
+		MountPath: dashboardsHome + "/config/opensearch_dashboards.yml",
 		SubPath:   "opensearch_dashboards.yml",
 	})
 
