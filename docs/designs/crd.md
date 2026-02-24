@@ -362,6 +362,7 @@ _Appears in:_
 | `podSecurityContext` _[PodSecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podsecuritycontext-v1-core)_ | Set security context for the dashboards pods |  |  |
 | `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | Set security context for the dashboards pods' container |  |  |
 | `priorityClassName` _string_ |  |  |  |
+| `opensearchDashboardsHome` _string_ | OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set. |  |  |
 
 
 #### DashboardsServiceSpec
@@ -516,6 +517,7 @@ _Appears in:_
 | `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | Set security context for the cluster pods' container |  |  |
 | `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
+| `opensearchHome` _string_ | OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set. |  |  |
 
 
 #### ISMTemplate
@@ -2131,6 +2133,7 @@ _Appears in:_
 | `podSecurityContext` _[PodSecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podsecuritycontext-v1-core)_ | Set security context for the dashboards pods |  |  |
 | `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | Set security context for the dashboards pods' container |  |  |
 | `priorityClassName` _string_ |  |  |  |
+| `opensearchDashboardsHome` _string_ | OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set. |  |  |
 
 
 #### DashboardsServiceSpec
@@ -2286,6 +2289,7 @@ _Appears in:_
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
 | `grpc` _[GrpcConfig](#grpcconfig)_ | gRPC API configuration for OpenSearch |  |  |
 | `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
+| `opensearchHome` _string_ | OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set. |  |  |
 
 
 #### GrpcConfig

@@ -198,7 +198,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 		})
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "config",
-			MountPath: "/usr/share/opensearch/config/opensearch.yml",
+			MountPath: r.instance.Spec.General.GetOpenSearchHome() + "/config/opensearch.yml",
 			SubPath:   "opensearch.yml",
 		})
 	}

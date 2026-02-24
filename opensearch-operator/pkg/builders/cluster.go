@@ -164,9 +164,10 @@ func NewSTSForNodePool(
 		}
 	}
 
+	opensearchHome := cr.Spec.General.GetOpenSearchHome()
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "data",
-		MountPath: "/usr/share/opensearch/data",
+		MountPath: opensearchHome + "/data",
 	})
 
 	labels := map[string]string{
@@ -417,14 +418,14 @@ func NewSTSForNodePool(
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Resources:       resources,
 			Command:         []string{"sh", "-c"},
-			Args:            []string{helpers.GetChownCommand(uid, gid, "/usr/share/opensearch/data")},
+			Args:            []string{helpers.GetChownCommand(uid, gid, opensearchHome+"/data")},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: &runas,
 			},
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "data",
-					MountPath: "/usr/share/opensearch/data",
+					MountPath: opensearchHome + "/data",
 				},
 			},
 		})
@@ -443,7 +444,7 @@ func NewSTSForNodePool(
 
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "keystore",
-			MountPath: "/usr/share/opensearch/config/opensearch.keystore",
+			MountPath: opensearchHome + "/config/opensearch.keystore",
 			SubPath:   "opensearch.keystore",
 		})
 
@@ -491,27 +492,27 @@ func NewSTSForNodePool(
 			Command: []string{
 				"sh",
 				"-c",
-				`
+				fmt.Sprintf(`
 				#!/usr/bin/env bash
 				set -euo pipefail
 
-				if [ ! -f /usr/share/opensearch/config/opensearch.keystore ]; then
-				  /usr/share/opensearch/bin/opensearch-keystore create
+				if [ ! -f %[1]s/config/opensearch.keystore ]; then
+				  %[1]s/bin/opensearch-keystore create
 				fi
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
-				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i" --force
+				  %[1]s/bin/opensearch-keystore add-file "$key" "$i" --force
 				done
 
 				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
 				if [ ! -z ${PASSWORD+x} ]; then
 				  echo 'Adding env $PASSWORD to keystore as key bootstrap.password'
-				  echo "$PASSWORD" | /usr/share/opensearch/bin/opensearch-keystore add -x bootstrap.password
+				  echo "$PASSWORD" | %[1]s/bin/opensearch-keystore add -x bootstrap.password
 				fi
 
-				cp -a /usr/share/opensearch/config/opensearch.keystore /tmp/keystore/
-				`,
+				cp -a %[1]s/config/opensearch.keystore /tmp/keystore/
+				`, opensearchHome),
 			},
 			VolumeMounts:    initContainerVolumeMounts,
 			SecurityContext: securityContext,
@@ -933,9 +934,10 @@ func NewBootstrapPod(
 		},
 	})
 
+	opensearchHome := cr.Spec.General.GetOpenSearchHome()
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "data",
-		MountPath: "/usr/share/opensearch/data",
+		MountPath: opensearchHome + "/data",
 	})
 
 	podSecurityContext := cr.Spec.General.PodSecurityContext
@@ -1008,14 +1010,14 @@ func NewBootstrapPod(
 			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
 			Resources:       cr.Spec.InitHelper.Resources,
 			Command:         []string{"sh", "-c"},
-			Args:            []string{helpers.GetChownCommand(uid, gid, "/usr/share/opensearch/data")},
+			Args:            []string{helpers.GetChownCommand(uid, gid, opensearchHome+"/data")},
 			SecurityContext: &corev1.SecurityContext{
 				RunAsUser: ptr.To(int64(0)),
 			},
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "data",
-					MountPath: "/usr/share/opensearch/data",
+					MountPath: opensearchHome + "/data",
 				},
 			},
 		})
@@ -1034,7 +1036,7 @@ func NewBootstrapPod(
 
 		volumeMounts = append(volumeMounts, corev1.VolumeMount{
 			Name:      "keystore",
-			MountPath: "/usr/share/opensearch/config/opensearch.keystore",
+			MountPath: opensearchHome + "/config/opensearch.keystore",
 			SubPath:   "opensearch.keystore",
 		})
 
@@ -1082,27 +1084,27 @@ func NewBootstrapPod(
 			Command: []string{
 				"sh",
 				"-c",
-				`
+				fmt.Sprintf(`
 				#!/usr/bin/env bash
 				set -euo pipefail
 
-				if [ ! -f /usr/share/opensearch/config/opensearch.keystore ]; then
-				  /usr/share/opensearch/bin/opensearch-keystore create
+				if [ ! -f %[1]s/config/opensearch.keystore ]; then
+				  %[1]s/bin/opensearch-keystore create
 				fi
 				for i in /tmp/keystoreSecrets/*/*; do
 				  key=$(basename $i)
 				  echo "Adding file $i to keystore key $key"
-				  /usr/share/opensearch/bin/opensearch-keystore add-file "$key" "$i" --force
+				  %[1]s/bin/opensearch-keystore add-file "$key" "$i" --force
 				done
 
 				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
 				if [ ! -z ${PASSWORD+x} ]; then
 				  echo 'Adding env $PASSWORD to keystore as key bootstrap.password'
-				  echo "$PASSWORD" | /usr/share/opensearch/bin/opensearch-keystore add -x bootstrap.password
+				  echo "$PASSWORD" | %[1]s/bin/opensearch-keystore add -x bootstrap.password
 				fi
 
-				cp -a /usr/share/opensearch/config/opensearch.keystore /tmp/keystore/
-				`,
+				cp -a %[1]s/config/opensearch.keystore /tmp/keystore/
+				`, opensearchHome),
 			},
 			VolumeMounts:    initContainerVolumeMounts,
 			SecurityContext: securityContext,
