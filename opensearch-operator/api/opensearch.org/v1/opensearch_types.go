@@ -17,6 +17,7 @@ limitations under the License.
 package v1
 
 import (
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -81,6 +82,8 @@ type GeneralConfig struct {
 	Grpc *GrpcConfig `json:"grpc,omitempty"`
 	// HostNetwork enables host networking for all pods in the cluster.
 	HostNetwork bool `json:"hostNetwork,omitempty"`
+	// Set the retention policy for the cluster PVCs
+	PersistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
 }
 
 type PdbConfig struct {
