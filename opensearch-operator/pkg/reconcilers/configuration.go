@@ -185,7 +185,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 		mount := corev1.VolumeMount{
 			Name:      "config",
-			MountPath: r.instance.Spec.General.GetOpenSearchHome() + "/config/opensearch.yml",
+			MountPath: r.instance.Spec.General.ConfigYmlPath(),
 			SubPath:   "opensearch.yml",
 		}
 		r.reconcilerContext.VolumeMounts = append(r.reconcilerContext.VolumeMounts, mount)

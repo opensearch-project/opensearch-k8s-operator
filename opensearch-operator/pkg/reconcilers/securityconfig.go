@@ -30,7 +30,7 @@ const (
 	adminKey  = "/certs/tls.key"
 	caCert    = "/certs/ca.crt"
 
-	SecurityAdminBaseCmdTmpl = `ADMIN=%s/plugins/opensearch-security/tools/securityadmin.sh;
+	SecurityAdminBaseCmdTmpl = `ADMIN=%s;
 chmod +x $ADMIN;
 until curl -k --silent https://%s:%v;
 do
@@ -197,9 +197,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	// securityconfig secret was not passed, build the command to apply all yml files
 	if !r.instance.Status.Initialized || len(cmdArg) == 0 {
 		clusterHostName := BuildClusterSvcHostName(r.instance)
-		opensearchHome := r.instance.Spec.General.GetOpenSearchHome()
 		httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(r.instance)
-		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort) +
+		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, r.instance.Spec.General.SecurityAdminPath(), clusterHostName, httpPort) +
 			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
 	}
 
@@ -229,10 +228,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 // securityconfig secret. yml files which are not present in the secret are not applied/updated
 func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret, log logr.Logger) string {
 	clusterHostName := BuildClusterSvcHostName(instance)
-	opensearchHome := instance.Spec.General.GetOpenSearchHome()
 	httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(instance)
 
-	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort)
+	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, instance.Spec.General.SecurityAdminPath(), clusterHostName, httpPort)
 
 	// Get the list of yml files and sort them
 	// This will ensure commands are always generated in the same order
