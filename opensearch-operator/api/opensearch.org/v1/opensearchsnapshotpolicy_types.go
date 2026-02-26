@@ -28,10 +28,11 @@ import (
 type OpensearchSnapshotPolicyState string
 
 const (
-	OpensearchSnapshotPolicyPending OpensearchSnapshotPolicyState = "PENDING"
-	OpensearchSnapshotPolicyCreated OpensearchSnapshotPolicyState = "CREATED"
-	OpensearchSnapshotPolicyError   OpensearchSnapshotPolicyState = "ERROR"
-	OpensearchSnapshotPolicyIgnored OpensearchSnapshotPolicyState = "IGNORED"
+	OpensearchSnapshotPolicyPending     OpensearchSnapshotPolicyState = "PENDING"
+	OpensearchSnapshotPolicyCreated     OpensearchSnapshotPolicyState = "CREATED"
+	OpensearchSnapshotPolicyError       OpensearchSnapshotPolicyState = "ERROR"
+	OpensearchSnapshotPolicyIgnored     OpensearchSnapshotPolicyState = "IGNORED"
+	OpensearchSnapshotPolicyTerminating OpensearchSnapshotPolicyState = "TERMINATING"
 )
 
 type OpensearchSnapshotPolicySpec struct {

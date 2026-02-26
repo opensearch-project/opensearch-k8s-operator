@@ -10,10 +10,11 @@ import (
 type OpensearchComponentTemplateState string
 
 const (
-	OpensearchComponentTemplatePending OpensearchComponentTemplateState = "PENDING"
-	OpensearchComponentTemplateCreated OpensearchComponentTemplateState = "CREATED"
-	OpensearchComponentTemplateError   OpensearchComponentTemplateState = "ERROR"
-	OpensearchComponentTemplateIgnored OpensearchComponentTemplateState = "IGNORED"
+	OpensearchComponentTemplatePending     OpensearchComponentTemplateState = "PENDING"
+	OpensearchComponentTemplateCreated     OpensearchComponentTemplateState = "CREATED"
+	OpensearchComponentTemplateError       OpensearchComponentTemplateState = "ERROR"
+	OpensearchComponentTemplateIgnored     OpensearchComponentTemplateState = "IGNORED"
+	OpensearchComponentTemplateTerminating OpensearchComponentTemplateState = "TERMINATING"
 )
 
 //+kubebuilder:object:root=true
