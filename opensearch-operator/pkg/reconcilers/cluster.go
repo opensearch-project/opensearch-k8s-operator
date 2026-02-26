@@ -245,66 +245,6 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 		}
 	}
 
-	// Detect cluster failure and initiate parallel recovery
-	if helpers.ParallelRecoveryMode() &&
-		(nodePool.Persistence == nil || nodePool.Persistence.PVC != nil) {
-		// This logic only works if the STS uses PVCs
-		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
-		if existing.Status.CurrentRevision == "" {
-			new, err := helpers.WaitForSTSStatus(r.ctx, r.client, &existing)
-			if err != nil {
-				return &ctrl.Result{Requeue: true}, err
-			}
-			existing = *new
-		}
-		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
-		if err != nil {
-			return result, err
-		}
-		existing.Status.ReadyReplicas = readyReplicas
-		// Check number of PVCs for nodepool
-		pvcCount, err := helpers.CountPVCsForNodePool(r.client, r.instance, &nodePool)
-		if err != nil {
-			r.logger.Error(err, "Failed to determine PVC count. Continuing on normally")
-		} else {
-			// A failure is assumed if n PVCs exist but less than n-1 pods (one missing pod is allowed for rolling restart purposes)
-			// We can assume the cluster is in a failure state and cannot recover on its own
-			if !helpers.IsUpgradeInProgress(r.instance.Status) &&
-				pvcCount >= int(nodePool.Replicas) && existing.Status.ReadyReplicas < nodePool.Replicas-1 {
-				r.logger.Info(fmt.Sprintf("Detected recovery situation for nodepool %s: PVC count: %d, replicas: %d. Recreating STS with parallel mode", nodePool.Component, pvcCount, existing.Status.Replicas))
-				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
-					// Switch to Parallel to jumpstart the cluster
-					// First delete existing STS
-					if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
-						r.logger.Error(err, "Failed to delete STS")
-						return result, err
-					}
-					// Recreate with PodManagementPolicy=Parallel
-					sts.Spec.PodManagementPolicy = appsv1.ParallelPodManagement
-					sts.ResourceVersion = ""
-					sts.UID = ""
-					result, err = r.client.ReconcileResource(sts, reconciler.StatePresent)
-					if err != nil {
-						r.logger.Error(err, "Failed to create STS")
-						return result, err
-					}
-					// Wait for pods to appear
-					err := helpers.WaitForSTSReplicas(r.ctx, r.client, &existing, nodePool.Replicas)
-					// Abort normal logic and requeue
-					return &ctrl.Result{Requeue: true}, err
-				}
-			} else if existing.Spec.PodManagementPolicy == appsv1.ParallelPodManagement {
-				// We are in Parallel mode but appear to not have a failure situation any longer. Switch back to normal mode
-				r.logger.Info(fmt.Sprintf("Ending recovery mode for nodepool %s", nodePool.Component))
-				if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
-					r.logger.Error(err, "Failed to delete STS")
-					return result, err
-				}
-				// STS will be recreated by the normal code below
-			}
-		}
-	}
-
 	// Handle PodDisruptionBudget
 	result, err = r.handlePDB(&nodePool)
 	if err != nil {

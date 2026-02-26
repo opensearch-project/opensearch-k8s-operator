@@ -68,7 +68,6 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.readinessProbe.successThreshold` | int | `1` |  |
 | `manager.readinessProbe.timeoutSeconds` | int | `3` |  |
 | `manager.readinessProbe.initialDelaySeconds` | int | `10` |  |
-| `manager.parallelRecoveryEnabled` | bool | `true` |  |
 | `manager.pprofEndpointsEnabled` | bool | `false` |  |
 | `manager.image.repository` | string | `"opensearchproject/opensearch-operator"` |  |
 | `manager.image.tag` | string | `""` |  |
@@ -135,4 +134,4 @@ subjects:
   namespace: <monitoring-namespace>
 ```
 
-Opensearch-operator Helm Chart version: `3.0.1`
+Opensearch-operator Helm Chart version: `3.0.2`
