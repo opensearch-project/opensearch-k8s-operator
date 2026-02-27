@@ -123,9 +123,10 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 		return false, nil
 	}
 
-	// Check for 'Running' status as we set it to indicate the scaling operation has begun
-	// Also the status is set to 'Running' if it fails to exclude node for some reason
-	if !found || currentStatus.Status == "Running" {
+	// Check for 'Running' or 'Waiting' status so we process scaling when replicas change.
+	// 'Running' indicates a scaling operation has begun; 'Waiting' means we were waiting for
+	// pods to become ready—if the user changed replicas in that state, we must handle it.
+	if !found || currentStatus.Status == "Running" || currentStatus.Status == "Waiting" {
 		// Change the status to running, to indicate that a scaling operation for this nodePool has started
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
