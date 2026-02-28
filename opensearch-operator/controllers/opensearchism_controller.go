@@ -59,13 +59,13 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
 			err = ismReconciler.Delete()
 			if err != nil {
-				r.Logger.Error(err, "failed to delete opensearch resource")
+				r.Error(err, "failed to delete opensearch resource")
 				r.Recorder.Event(r.Instance, "Warning", "OpensearchAPIError",
 					fmt.Sprintf("failed to delete resource from OpenSearch: %s", err.Error()))
 				r.Instance.Status.State = opensearchv1.OpensearchISMPolicyTerminating
 				r.Instance.Status.Reason = fmt.Sprintf("waiting to delete resource from OpenSearch: %s", err.Error())
 				if statusErr := r.Status().Update(ctx, r.Instance); statusErr != nil {
-					r.Logger.Error(statusErr, "failed to update status")
+					r.Error(statusErr, "failed to update status")
 				}
 				return ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 			}
