@@ -5,6 +5,7 @@ apiVersion: {{ $apiGroup }}/v1
 kind: OpenSearchCluster
 metadata:
   name: {{ $clusterName }}
+  namespace: {{ .Release.Namespace }}
   {{- with .Values.cluster.annotations }}
   annotations: {{ . | toYaml | nindent 4 }}
   {{- end }}

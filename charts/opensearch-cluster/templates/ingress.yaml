@@ -18,6 +18,7 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: {{ $clusterName }}
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "opensearch-cluster.labels" . | nindent 4 }}
   {{- with .Values.cluster.ingress.opensearch.annotations }}
@@ -79,6 +80,7 @@ apiVersion: extensions/v1beta1
 kind: Ingress
 metadata:
   name: {{ $clusterName }}-dashboards
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "opensearch-cluster.labels" . | nindent 4 }}
   {{- with .Values.cluster.ingress.dashboards.annotations }}

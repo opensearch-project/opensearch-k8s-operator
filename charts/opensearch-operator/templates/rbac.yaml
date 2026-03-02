@@ -7,6 +7,9 @@ kind: ClusterRole
 {{- end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
@@ -163,6 +166,9 @@ kind: ClusterRole
 {{- end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-proxy
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
@@ -183,6 +189,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
@@ -234,6 +241,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
@@ -248,6 +256,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ if .Values.useRoleBindings }}RoleBinding{{ else }}ClusterRoleBinding{{ end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
@@ -263,6 +274,9 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ if .Values.useRoleBindings }}RoleBinding{{ else }}ClusterRoleBinding{{ end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-proxy
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
