@@ -33,6 +33,8 @@ import (
 type certContextType string
 
 const (
+	tlsReconcilerName = "tls"
+
 	CertContextTransport certContextType = "transport"
 	CertContextHttp      certContextType = "http"
 )
@@ -61,13 +63,15 @@ func NewTLSReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *TLSReconciler {
 	return &TLSReconciler{
-		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "tls")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", tlsReconcilerName)))...),
 		reconcilerContext: reconcilerContext,
 		instance:          instance,
 		logger:            log.FromContext(ctx),
 		pki:               tls.NewPKI(),
 	}
 }
+
+func (r *TLSReconciler) Name() string { return tlsReconcilerName }
 
 const (
 	CaCertKey                     = "ca.crt"

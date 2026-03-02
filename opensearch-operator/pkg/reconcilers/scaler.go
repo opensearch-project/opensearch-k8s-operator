@@ -21,6 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const scalerReconcilerName = "scaler"
+
 type ScalerReconciler struct {
 	client            k8s.K8sClient
 	ctx               context.Context
@@ -41,7 +43,7 @@ func NewScalerReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &ScalerReconciler{
-		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "scaler"))),
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", scalerReconcilerName))),
 		ctx:               ctx,
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
@@ -49,6 +51,8 @@ func NewScalerReconciler(
 		ReconcilerOptions: options,
 	}
 }
+
+func (r *ScalerReconciler) Name() string { return scalerReconcilerName }
 
 func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	requeue := false

@@ -24,6 +24,8 @@ import (
 )
 
 const (
+	securityConfigReconcilerName = "securityconfig"
+
 	checksumAnnotation = "securityconfig/checksum"
 
 	adminCert = "/certs/tls.crt"
@@ -86,13 +88,15 @@ func NewSecurityconfigReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *SecurityconfigReconciler {
 	return &SecurityconfigReconciler{
-		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "securityconfig")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", securityConfigReconcilerName)))...),
 		reconcilerContext: reconcilerContext,
 		recorder:          recorder,
 		instance:          instance,
 		logger:            log.FromContext(ctx),
 	}
 }
+
+func (r *SecurityconfigReconciler) Name() string { return securityConfigReconcilerName }
 
 func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if !helpers.IsSecurityPluginEnabled(r.instance) {

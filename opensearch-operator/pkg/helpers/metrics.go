@@ -42,10 +42,17 @@ var (
 		}, []string{
 			"namespace", "opensearch_cluster", "status",
 		})
+	ReconcileErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: clusterMetricsPrefix + "reconcile_error",
+			Help: "Total number of reconciliation errors.",
+		}, []string{
+			"namespace", "opensearch_cluster", "reconciler",
+		})
 )
 
 func RegisterMetrics() {
-	metrics.Registry.MustRegister(TlsCertificateDaysRemaining, ClusterInfo, ClusterHealth, ClusterShards)
+	metrics.Registry.MustRegister(TlsCertificateDaysRemaining, ClusterInfo, ClusterHealth, ClusterShards, ReconcileErrors)
 }
 
 func DeleteClusterMetrics(namespace string, clusterName string) {
@@ -53,6 +60,7 @@ func DeleteClusterMetrics(namespace string, clusterName string) {
 	ClusterInfo.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 	ClusterHealth.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 	ClusterShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
+	ReconcileErrors.DeletePartialMatch(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 }
 
 func UpdateClusterInfo(instance *opensearchv1.OpenSearchCluster, health opensearchv1.OpenSearchHealth, healthResponse responses.ClusterHealthResponse) {
