@@ -21,6 +21,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const dashboardsReconcilerName = "dashboards"
+
 type DashboardsReconciler struct {
 	client            k8s.K8sClient
 	recorder          record.EventRecorder
@@ -39,7 +41,7 @@ func NewDashboardsReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *DashboardsReconciler {
 	return &DashboardsReconciler{
-		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "dashboards")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", dashboardsReconcilerName)))...),
 		reconcilerContext: reconcilerContext,
 		recorder:          recorder,
 		instance:          instance,
@@ -47,6 +49,8 @@ func NewDashboardsReconciler(
 		pki:               tls.NewPKI(),
 	}
 }
+
+func (r *DashboardsReconciler) Name() string { return dashboardsReconcilerName }
 
 func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	if !r.instance.Spec.Dashboards.Enable {

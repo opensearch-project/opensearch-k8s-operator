@@ -42,6 +42,8 @@ type candidate struct {
 	ordinal  int
 }
 
+const restartReconcilerName = "restart"
+
 type RollingRestartReconciler struct {
 	client            k8s.K8sClient
 	ctx               context.Context
@@ -61,14 +63,16 @@ func NewRollingRestartReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *RollingRestartReconciler {
 	return &RollingRestartReconciler{
-		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "restart")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", restartReconcilerName)))...),
 		ctx:               ctx,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "restart"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", restartReconcilerName),
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
 	}
 }
+
+func (r *RollingRestartReconciler) Name() string { return restartReconcilerName }
 
 func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	// We should never get to this while an upgrade is in progress

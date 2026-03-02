@@ -28,6 +28,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const clusterReconcilerName = "cluster"
+
 type ClusterReconciler struct {
 	client            k8s.K8sClient
 	ctx               context.Context
@@ -49,7 +51,7 @@ func NewClusterReconciler(
 		client: k8s.NewK8sClient(client, ctx, append(
 			opts,
 			reconciler.WithPatchCalculateOptions(patch.IgnoreVolumeClaimTemplateTypeMetaAndStatus(), patch.IgnoreStatusFields()),
-			reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "cluster")),
+			reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", clusterReconcilerName)),
 		)...),
 		ctx:               ctx,
 		recorder:          recorder,
@@ -58,6 +60,8 @@ func NewClusterReconciler(
 		logger:            log.FromContext(ctx),
 	}
 }
+
+func (r *ClusterReconciler) Name() string { return clusterReconcilerName }
 
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// lg := log.FromContext(r.ctx)
