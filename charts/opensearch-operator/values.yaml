@@ -9,6 +9,7 @@ securityContext:
   runAsNonRoot: true
 priorityClassName: ""
 manager:
+  workerCount: 1
   securityContext:
     allowPrivilegeEscalation: false
   extraEnv: []

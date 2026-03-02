@@ -48,6 +48,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `tolerations` | list | `[]` |  |
 | `securityContext.runAsNonRoot` | bool | `true` |  |
 | `priorityClassName` | string | `""` |  |
+| `manager.workerCount` | int | `1` |  |
 | `manager.securityContext.allowPrivilegeEscalation` | bool | `false` |  |
 | `manager.extraEnv` | list | `[]` |  |
 | `manager.resources.limits.cpu` | string | `"1000m"` |  |

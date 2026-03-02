@@ -30,6 +30,7 @@ spec:
         - --leader-elect
         - --enable-webhooks={{ .Values.webhook.enabled }}
         - --webhook-port={{ .Values.webhook.port }}
+        - --opensearch-controller-worker={{ .Values.manager.workerCount }}
         {{- if .Values.manager.watchNamespace }}
         {{- if kindIs "slice" .Values.manager.watchNamespace }}
         - --watch-namespace={{ .Values.manager.watchNamespace | join "," }}

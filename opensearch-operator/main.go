@@ -71,6 +71,7 @@ func main() {
 	var enableLeaderElection bool
 	var enableWebhooks bool
 	var webhookPort int
+	var opensearchControllerWorker int
 	var probeAddr string
 	var watchNamespace string
 	var logLevel string
@@ -81,6 +82,7 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "Enable validating webhooks for OpenSearch custom resources.")
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "Port used by the validating webhook server.")
+	flag.IntVar(&opensearchControllerWorker, "opensearch-controller-worker", 2, "Total number of opensearch controller workers to initialize")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
 		"The comma-separated list of namespaces that the controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
@@ -162,9 +164,10 @@ func main() {
 	// Controllers now watch opensearch.org/v1 (new API group)
 	// Migration controller handles creating new CRs from old ones
 	if err = (&controllers.OpenSearchClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("containerset-controller"),
+		Client:      mgr.GetClient(),
+		Scheme:      mgr.GetScheme(),
+		WorkerCount: opensearchControllerWorker,
+		Recorder:    mgr.GetEventRecorderFor("containerset-controller"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchCluster")
 		os.Exit(1)
