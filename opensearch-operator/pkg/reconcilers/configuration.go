@@ -146,7 +146,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 			}
 			sort.Strings(keys)
 			for _, key := range keys {
-				sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
+				fmt.Fprintf(&sb, "%s: %s\n", key, config[key])
 			}
 			return sb.String()
 		}
