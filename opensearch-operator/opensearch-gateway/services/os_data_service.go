@@ -41,6 +41,22 @@ func HasIndicesWithNoReplica(service *OsClusterClient) (bool, error) {
 	return false, err
 }
 
+// extractNodeName returns the actual node name from the NodeName field.
+// During shard relocation, _cat/shards returns a format like:
+// "opensearch-data-1 -> 172.31.233.51 4kGSHQhmRQ-83pvvBbTYow opensearch-data-8".
+// This extracts the source node name (first token) for correct comparison.
+func extractNodeName(fullNodeName string) string {
+	if fullNodeName == "" {
+		return ""
+	}
+	trimmed := strings.TrimSpace(fullNodeName)
+	fields := strings.Fields(trimmed)
+	if len(fields) > 0 {
+		return fields[0]
+	}
+	return trimmed
+}
+
 func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
 	var headers []string
 	response, err := service.CatShards(headers)
@@ -48,7 +64,7 @@ func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
 		return false, err
 	}
 	for _, shardsData := range response {
-		if shardsData.NodeName == nodeName {
+		if extractNodeName(shardsData.NodeName) == nodeName {
 			return true, err
 		}
 	}
@@ -67,7 +83,7 @@ func HasIndexPrimariesOnNode(service *OsClusterClient, nodeName string, indices 
 			return true, nil
 		}
 		// If there are system shards on the node consider it not empty
-		if shardsData.NodeName == nodeName && shardsData.PrimaryOrReplica == "p" {
+		if extractNodeName(shardsData.NodeName) == nodeName && shardsData.PrimaryOrReplica == "p" {
 			return true, nil
 		}
 	}
