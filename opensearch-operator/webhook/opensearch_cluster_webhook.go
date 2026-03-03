@@ -46,6 +46,9 @@ func (v *OpenSearchClusterValidator) SetupWithManager(mgr ctrl.Manager) error {
 
 func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	cluster := obj.(*opensearchv1.OpenSearchCluster)
+	if err := validateNodePoolComponentUniqueness(cluster); err != nil {
+		return nil, err
+	}
 	return v.validateTlsConfig(cluster)
 }
 
@@ -57,12 +60,34 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 		return nil, nil
 	}
 
+	// Validate no duplicate node pool component names (component is used for K8s resource names)
+	if err := validateNodePoolComponentUniqueness(newCluster); err != nil {
+		return nil, err
+	}
+
 	// Validate storage class changes - storage class is immutable in StatefulSets
 	if err := v.validateStorageClassChanges(oldCluster, newCluster); err != nil {
 		return nil, err
 	}
 
 	return v.validateTlsConfig(newCluster)
+}
+
+// validateNodePoolComponentUniqueness ensures no two node pools share the same component name,
+// since component is used to name K8s resources (StatefulSets, Services, ConfigMaps, Secrets) per node pool.
+func validateNodePoolComponentUniqueness(cluster *opensearchv1.OpenSearchCluster) error {
+	seen := make(map[string]struct{})
+	for i := range cluster.Spec.NodePools {
+		component := cluster.Spec.NodePools[i].Component
+		if component == "" {
+			return fmt.Errorf("node pool at index %d has an empty component name", i)
+		}
+		if _, exists := seen[component]; exists {
+			return fmt.Errorf("duplicate node pool component name '%s': each node pool must have a unique component name (used for K8s resource naming)", component)
+		}
+		seen[component] = struct{}{}
+	}
+	return nil
 }
 
 func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {

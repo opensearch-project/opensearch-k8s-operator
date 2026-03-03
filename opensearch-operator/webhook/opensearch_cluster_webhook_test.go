@@ -75,6 +75,37 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			Expect(warnings).To(BeEmpty())
 		})
 
+		It("should reject cluster with duplicate node pool component names", func() {
+			cluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"master"},
+						},
+						{
+							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"data"},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("duplicate node pool component name 'masters'"))
+			Expect(warnings).To(BeEmpty())
+		})
+
 		It("should reject transport TLS enabled without generate or secret", func() {
 			enabled := true
 			cluster := &opensearchv1.OpenSearchCluster{
@@ -340,6 +371,36 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 
 			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should reject update with duplicate node pool component names", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					NodePools: []opensearchv1.NodePool{
+						{Component: "masters"},
+						{Component: "data"},
+					},
+				},
+			}
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					NodePools: []opensearchv1.NodePool{
+						{Component: "masters"},
+						{Component: "masters"},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("duplicate node pool component name 'masters'"))
 			Expect(warnings).To(BeEmpty())
 		})
 	})
