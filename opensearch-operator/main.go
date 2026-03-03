@@ -75,6 +75,8 @@ func main() {
 	var probeAddr string
 	var watchNamespace string
 	var logLevel string
+	var maxConcurrentReconciles int
+	var maxConcurrentReconcilesPerController string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -82,7 +84,10 @@ func main() {
 			"Enabling this will ensure there is only one active controller manager.")
 	flag.BoolVar(&enableWebhooks, "enable-webhooks", true, "Enable validating webhooks for OpenSearch custom resources.")
 	flag.IntVar(&webhookPort, "webhook-port", 9443, "Port used by the validating webhook server.")
-	flag.IntVar(&opensearchControllerWorker, "opensearch-controller-worker", 2, "Total number of opensearch controller workers to initialize")
+	flag.IntVar(&opensearchControllerWorker, "opensearch-controller-worker", 2, "Total number of opensearch controller workers to initialize (deprecated: use max-concurrent-reconciles)")
+	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 1, "Global default max concurrent reconciles for all controllers")
+	flag.StringVar(&maxConcurrentReconcilesPerController, "max-concurrent-reconciles-per-controller", "",
+		"Per-controller max concurrent reconciles overrides (format: controller1=N,controller2=M)")
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
 		"The comma-separated list of namespaces that the controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
@@ -161,6 +166,24 @@ func main() {
 
 	helpers.RegisterMetrics()
 
+	// Parse per-controller configuration
+	perControllerConfig := make(map[string]int)
+	if maxConcurrentReconcilesPerController != "" {
+		for _, pair := range strings.Split(maxConcurrentReconcilesPerController, ",") {
+			parts := strings.Split(strings.TrimSpace(pair), "=")
+			if len(parts) == 2 {
+				if count, err := strconv.Atoi(parts[1]); err == nil {
+					perControllerConfig[strings.ToLower(parts[0])] = count
+				}
+			}
+		}
+	}
+
+	concurrencyConfig := &controllers.ControllerConcurrencyConfig{
+		MaxConcurrentReconciles: maxConcurrentReconciles,
+		PerController:           perControllerConfig,
+	}
+
 	// Controllers now watch opensearch.org/v1 (new API group)
 	// Migration controller handles creating new CRs from old ones
 	if err = (&controllers.OpenSearchClusterReconciler{
@@ -168,7 +191,7 @@ func main() {
 		Scheme:      mgr.GetScheme(),
 		WorkerCount: opensearchControllerWorker,
 		Recorder:    mgr.GetEventRecorderFor("containerset-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameCluster)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchCluster")
 		os.Exit(1)
 	}
@@ -177,7 +200,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("user-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameUser)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchUser")
 		os.Exit(1)
 	}
@@ -185,7 +208,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("role-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameRole)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchRole")
 		os.Exit(1)
 	}
@@ -193,7 +216,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("ism-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameISMPolicy)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchISM")
 		os.Exit(1)
 	}
@@ -201,7 +224,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("tenant-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameTenant)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchTenant")
 		os.Exit(1)
 	}
@@ -209,7 +232,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("userrolebinding-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameUserRoleBinding)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchUserRoleBinding")
 		os.Exit(1)
 	}
@@ -217,7 +240,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("actiongroup-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameActionGroup)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchActionGroup")
 		os.Exit(1)
 	}
@@ -225,7 +248,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("indextemplate-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameIndexTemplate)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchIndexTemplate")
 		os.Exit(1)
 	}
@@ -233,7 +256,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("componenttemplate-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameComponentTemplate)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchComponentTemplate")
 		os.Exit(1)
 	}
@@ -241,7 +264,7 @@ func main() {
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("snapshotpolicy-controller"),
-	}).SetupWithManager(mgr); err != nil {
+	}).SetupWithManager(mgr, concurrencyConfig.GetMaxConcurrentReconciles(controllers.ControllerNameSnapshotPolicy)); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
 		os.Exit(1)
 	}

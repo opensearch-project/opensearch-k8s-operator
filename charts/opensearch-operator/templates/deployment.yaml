@@ -31,6 +31,10 @@ spec:
         - --enable-webhooks={{ .Values.webhook.enabled }}
         - --webhook-port={{ .Values.webhook.port }}
         - --opensearch-controller-worker={{ .Values.manager.workerCount }}
+        - --max-concurrent-reconciles={{ .Values.manager.maxConcurrentReconciles }}
+        {{- if .Values.manager.maxConcurrentReconcilesPerController }}
+        - --max-concurrent-reconciles-per-controller={{- range $controller, $count := .Values.manager.maxConcurrentReconcilesPerController }}{{ $controller }}={{ $count }},{{- end }}
+        {{- end }}
         {{- if .Values.manager.watchNamespace }}
         {{- if kindIs "slice" .Values.manager.watchNamespace }}
         - --watch-namespace={{ .Values.manager.watchNamespace | join "," }}

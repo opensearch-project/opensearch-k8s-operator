@@ -26,6 +26,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -140,7 +141,7 @@ func (r *OpensearchUserReconciler) handleSecretEvent(_ context.Context, secret c
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpensearchUserReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrentReconciles int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpensearchUser{}).
 		// Get notified when opensearch clusters change
@@ -150,5 +151,6 @@ func (r *OpensearchUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			&corev1.Secret{},
 			handler.EnqueueRequestsFromMapFunc(r.handleSecretEvent),
 		).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		Complete(r)
 }

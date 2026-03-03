@@ -9,6 +9,24 @@ securityContext:
   runAsNonRoot: true
 priorityClassName: ""
 manager:
+  # Global default max concurrent reconciles for all controllers
+  maxConcurrentReconciles: 1
+  
+  # Per-controller max concurrent reconciles overrides
+  # This allows fine-grained control over reconciliation parallelism
+  # Example configuration:
+  maxConcurrentReconcilesPerController:
+    opensearchcluster: 1    # keep cluster reconciliation serial
+    opensearchuser: 2       # allow more parallel user reconciles
+    opensearchrole: 2       # allow more parallel role reconciles
+    # opensearchtenant: 2
+    # opensearchuserrolebinding: 4
+    # opensearchactiongroup: 4
+    # opensearchismpolicy: 4
+    # opensearchindextemplate: 4
+    # opensearchcomponenttemplate: 4
+    # opensearchsnapshotpolicy: 4
+  
   workerCount: 1
   securityContext:
     allowPrivilegeEscalation: false
