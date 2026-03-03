@@ -159,7 +159,16 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrentReconciles int) error {
+	// Use the provided maxConcurrentReconciles, but fall back to WorkerCount for backward compatibility
+	concurrency := maxConcurrentReconciles
+	if concurrency == 0 && r.WorkerCount > 0 {
+		concurrency = r.WorkerCount
+	}
+	if concurrency == 0 {
+		concurrency = 1
+	}
+
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpenSearchCluster{}). // Watch new API group
 		Owns(&corev1.Pod{}).
@@ -169,7 +178,7 @@ func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.Deployment{}).
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.PersistentVolumeClaim{}).
-		WithOptions(controller.Options{MaxConcurrentReconciles: r.WorkerCount}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: concurrency}).
 		Complete(r)
 }
 

@@ -48,6 +48,10 @@ The following table lists the configurable parameters of the Helm chart.
 | `tolerations` | list | `[]` |  |
 | `securityContext.runAsNonRoot` | bool | `true` |  |
 | `priorityClassName` | string | `""` |  |
+| `manager.maxConcurrentReconciles` | int | `1` | Global default max concurrent reconciles for all controllers |
+| `manager.maxConcurrentReconcilesPerController.opensearchcluster` | int | `1` | Max concurrent reconciles for opensearchcluster controller |
+| `manager.maxConcurrentReconcilesPerController.opensearchuser` | int | `2` | Max concurrent reconciles for opensearchuser controller |
+| `manager.maxConcurrentReconcilesPerController.opensearchrole` | int | `2` | Max concurrent reconciles for opensearchrole controller |
 | `manager.workerCount` | int | `1` |  |
 | `manager.securityContext.allowPrivilegeEscalation` | bool | `false` |  |
 | `manager.extraEnv` | list | `[]` |  |
