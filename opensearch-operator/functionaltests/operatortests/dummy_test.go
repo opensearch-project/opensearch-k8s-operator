@@ -14,7 +14,7 @@ var _ = Describe("dummy", Ordered, func() {
 	namespace := "default"
 
 	BeforeAll(func() {
-		CreateKubernetesObjects(name)
+		Expect(CreateKubernetesObjects(name)).To(Succeed())
 	})
 
 	It("should have the secret", func() {
