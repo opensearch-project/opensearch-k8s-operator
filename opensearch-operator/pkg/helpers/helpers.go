@@ -620,11 +620,19 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 	numReadyPods := 0
 	for _, pod := range list.Items {
 		// If DeletionTimestamp is set the pod is terminating
-		podReady := pod.DeletionTimestamp == nil
-		// Count the pod as not ready if one of its containers is not running or not ready
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		// Pod must have container statuses (kubelet has reported); otherwise treat as not ready.
+		// This avoids counting newly created pods as ready before any container is running.
+		if len(pod.Status.ContainerStatuses) == 0 {
+			continue
+		}
+		podReady := true
 		for _, container := range pod.Status.ContainerStatuses {
 			if !container.Ready || container.State.Running == nil {
 				podReady = false
+				break
 			}
 		}
 		if podReady {
