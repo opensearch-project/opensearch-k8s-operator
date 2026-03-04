@@ -32,8 +32,11 @@ spec:
     {{- omit . "image" | toYaml | nindent 4 }}
     image: {{ .image }}:{{ .version }}
   {{- end }}
-  {{- with .Values.cluster.nodePools }}
-  nodePools: {{ . | toYaml | nindent 4 }}
+  {{- if .Values.cluster.nodePools }}
+  nodePools:
+    {{- range .Values.cluster.nodePools }}
+    - {{ omit . "ingress" | toYaml | nindent 6 | trim }}
+    {{- end }}
   {{- end }}
   {{- with .Values.cluster.security }}
   security:
