@@ -37,17 +37,12 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.work'
-          cache: false
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       - name: Build image for scanning
         run: |
-          cd opensearch-operator
-          make docker-build IMG=opensearch-operator:scan
+          cp -f LICENSE opensearch-operator/LICENSE 2>/dev/null || true
+          DOCKER_BUILDKIT=1 docker build -t opensearch-operator:scan opensearch-operator/
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.33.1
         with:
