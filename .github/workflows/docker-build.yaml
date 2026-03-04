@@ -43,6 +43,9 @@ jobs:
         run: |
           cp -f LICENSE opensearch-operator/LICENSE 2>/dev/null || true
           DOCKER_BUILDKIT=1 docker build -t opensearch-operator:scan opensearch-operator/
+      - name: Install Trivy
+        run: |
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
       - name: Run Trivy vulnerability scanner
         uses: aquasecurity/trivy-action@0.33.1
         with:
@@ -52,6 +55,7 @@ jobs:
           ignore-unfixed: true
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
+          skip-setup-trivy: true
       - name: Run Trivy and output SARIF
         uses: aquasecurity/trivy-action@0.33.1
         if: always()
@@ -62,6 +66,7 @@ jobs:
           output: 'trivy-results.sarif'
           ignore-unfixed: true
           vuln-type: 'os,library'
+          skip-setup-trivy: true
       - name: Upload Trivy scan results to GitHub Security
         uses: github/codeql-action/upload-sarif@v4
         if: always() && hashFiles('trivy-results.sarif') != ''
