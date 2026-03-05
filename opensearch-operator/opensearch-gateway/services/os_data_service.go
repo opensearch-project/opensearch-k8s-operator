@@ -57,18 +57,24 @@ func extractNodeName(fullNodeName string) string {
 	return trimmed
 }
 
+// hasShardsOnNodeFromResponse returns true if any shard in the response is on the given node.
+// It uses extractNodeName so that relocation format (source -> ip id target) is handled correctly.
+func hasShardsOnNodeFromResponse(response []responses.CatShardsResponse, nodeName string) bool {
+	for _, shardsData := range response {
+		if extractNodeName(shardsData.NodeName) == nodeName {
+			return true
+		}
+	}
+	return false
+}
+
 func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
 	var headers []string
 	response, err := service.CatShards(headers)
 	if err != nil {
 		return false, err
 	}
-	for _, shardsData := range response {
-		if extractNodeName(shardsData.NodeName) == nodeName {
-			return true, err
-		}
-	}
-	return false, err
+	return hasShardsOnNodeFromResponse(response, nodeName), err
 }
 
 func HasIndexPrimariesOnNode(service *OsClusterClient, nodeName string, indices []string) (bool, error) {
