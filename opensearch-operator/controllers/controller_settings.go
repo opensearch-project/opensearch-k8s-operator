@@ -14,10 +14,14 @@ type ControllerConcurrencyConfig struct {
 
 // GetMaxConcurrentReconciles returns the max concurrent reconciles for a given controller
 func (c *ControllerConcurrencyConfig) GetMaxConcurrentReconciles(controllerName string) int {
+	n := c.MaxConcurrentReconciles
 	if override, exists := c.PerController[controllerName]; exists {
-		return override
+		n = override
 	}
-	return c.MaxConcurrentReconciles
+	if n < 0 {
+		return 1
+	}
+	return n
 }
 
 // Controller names for per-controller configuration
