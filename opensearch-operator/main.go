@@ -170,12 +170,20 @@ func main() {
 	perControllerConfig := make(map[string]int)
 	if maxConcurrentReconcilesPerController != "" {
 		for _, pair := range strings.Split(maxConcurrentReconcilesPerController, ",") {
-			parts := strings.Split(strings.TrimSpace(pair), "=")
-			if len(parts) == 2 {
-				if count, err := strconv.Atoi(parts[1]); err == nil {
-					perControllerConfig[strings.ToLower(parts[0])] = count
-				}
+			parts := strings.SplitN(strings.TrimSpace(pair), "=", 2)
+			if len(parts) != 2 {
+				continue
 			}
+			key := strings.ToLower(strings.TrimSpace(parts[0]))
+			val := strings.TrimSpace(parts[1])
+			if key == "" || val == "" {
+				continue
+			}
+			count, err := strconv.Atoi(val)
+			if err != nil || count < 1 {
+				continue
+			}
+			perControllerConfig[key] = count
 		}
 	}
 
