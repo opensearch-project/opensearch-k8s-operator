@@ -7,6 +7,7 @@ apiVersion: {{ $apiGroup }}/v1
 kind: OpensearchUserRoleBinding
 metadata:
   name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
   {{- with $.Values.cluster.annotations }}
   annotations: {{ . | toYaml | nindent 4 }}
   {{- end }}
