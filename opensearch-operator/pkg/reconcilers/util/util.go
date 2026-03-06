@@ -295,6 +295,14 @@ func FetchOpensearchCluster(
 	return &cluster, nil
 }
 
+func DetermineClusterNamespace(ref corev1.ObjectReference, defaultNamespace string) string {
+	if ref.Namespace == "" {
+		return defaultNamespace
+	}
+
+	return ref.Namespace
+}
+
 // Generates a checksum of binary data using the SHA1 algorithm.
 func GetSha1Sum(data []byte) (string, error) {
 	hasher := sha1.New()
