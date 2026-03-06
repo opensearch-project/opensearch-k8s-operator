@@ -530,6 +530,40 @@ var _ = Describe("indextemplate reconciler", func() {
 					Expect(transport.GetTotalCallCount()).To(Equal(transport.NumResponders() + 1))
 				})
 			})
+
+			When("indextemplate exists but OpenSearch refuses deletion", func() {
+				BeforeEach(func() {
+					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
+					indexTemplateUrl := fmt.Sprintf("%s_index_template/my-template", clusterUrl)
+
+					transport.RegisterResponder(
+						http.MethodGet,
+						clusterUrl,
+						httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
+					)
+					transport.RegisterResponder(
+						http.MethodHead,
+						clusterUrl,
+						httpmock.NewStringResponder(200, "OK").Once(failMessage),
+					)
+					transport.RegisterResponder(
+						http.MethodHead,
+						indexTemplateUrl,
+						httpmock.NewStringResponder(200, "OK").Once(failMessage),
+					)
+					transport.RegisterResponder(
+						http.MethodDelete,
+						indexTemplateUrl,
+						httpmock.NewStringResponder(400, `{"error":{"reason":"unable to remove composable templates as they are in use by a data stream"}}`).Once(failMessage),
+					)
+				})
+
+				It("should return an error", func() {
+					err := reconciler.Delete()
+					Expect(err).To(HaveOccurred())
+					Expect(err.Error()).To(ContainSubstring("failed to delete index template"))
+				})
+			})
 		})
 	})
 })
