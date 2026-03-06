@@ -1600,4 +1600,33 @@ var _ = Describe("Builders", func() {
 			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
 		})
 	})
+
+	When("Computing BootstrapPodSpecHash", func() {
+		It("should return a 40-character hex string", func() {
+			clusterObject := ClusterDescWithVersion("2.8.0")
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+
+			hash := BootstrapPodSpecHash(pod)
+			Expect(hash).To(HaveLen(40))
+		})
+
+		It("should return the same hash for identical pods", func() {
+			clusterObject := ClusterDescWithVersion("2.8.0")
+			pod1 := NewBootstrapPod(&clusterObject, nil, nil)
+			pod2 := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(BootstrapPodSpecHash(pod1)).To(Equal(BootstrapPodSpecHash(pod2)))
+		})
+
+		It("should return a different hash when the pod spec differs", func() {
+			clusterObject := ClusterDescWithVersion("2.8.0")
+			pod1 := NewBootstrapPod(&clusterObject, nil, nil)
+
+			modified := clusterObject.DeepCopy()
+			modified.Spec.General.ServiceAccount = "different-sa"
+			pod2 := NewBootstrapPod(modified, nil, nil)
+
+			Expect(BootstrapPodSpecHash(pod1)).NotTo(Equal(BootstrapPodSpecHash(pod2)))
+		})
+	})
 })
