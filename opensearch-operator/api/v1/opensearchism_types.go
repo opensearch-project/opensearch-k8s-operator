@@ -39,7 +39,7 @@ type OpenSearchISMPolicy struct {
 
 // ISMPolicySpec is the specification for the ISM policy for OS.
 type OpenSearchISMPolicySpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster,omitempty"`
+	OpensearchRef corev1.ObjectReference `json:"opensearchCluster,omitempty"`
 	// The default starting state for each index that uses this policy.
 	DefaultState string `json:"defaultState"`
 	// A human-readable description of the policy.
@@ -273,7 +273,7 @@ type OpenSearchISMPolicyList struct {
 }
 
 // GetOpensearchRef returns the OpenSearch cluster reference
-func (p *OpenSearchISMPolicy) GetOpensearchRef() corev1.LocalObjectReference {
+func (p *OpenSearchISMPolicy) GetOpensearchRef() corev1.ObjectReference {
 	return p.Spec.OpensearchRef
 }
 
