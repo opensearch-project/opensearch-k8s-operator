@@ -47,7 +47,7 @@ var _ = Describe("roles reconciler", func() {
 				UID:       types.UID("testuid"),
 			},
 			Spec: opensearchv1.OpensearchRoleSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: corev1.ObjectReference{
 					Name: "test-cluster",
 				},
 				ClusterPermissions: []string{

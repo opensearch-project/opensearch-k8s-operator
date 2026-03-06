@@ -39,7 +39,7 @@ type OpensearchIndexTemplateStatus struct {
 }
 
 type OpensearchIndexTemplateSpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
+	OpensearchRef corev1.ObjectReference `json:"opensearchCluster"`
 
 	// The name of the index template. Defaults to metadata.name
 	// +immutable

@@ -48,7 +48,7 @@ var _ = Describe("indextemplate reconciler", func() {
 				UID:       "testuid",
 			},
 			Spec: opensearchv1.OpensearchIndexTemplateSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: corev1.ObjectReference{
 					Name: "test-cluster",
 				},
 				Name:          "my-template",

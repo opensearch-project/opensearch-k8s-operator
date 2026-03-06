@@ -74,7 +74,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -98,7 +98,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "non-existent-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -112,7 +112,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 
 			warnings, err := validator.ValidateCreate(ctx, user)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' not found"))
+			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' in namespace 'default' not found"))
 			Expect(warnings).To(BeEmpty())
 		})
 
@@ -137,7 +137,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "old-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -161,7 +161,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -186,7 +186,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -203,6 +203,31 @@ var _ = Describe("OpenSearchUserValidator", func() {
 			Expect(err.Error()).To(ContainSubstring("passwordFrom.key must be specified"))
 			Expect(warnings).To(BeEmpty())
 		})
+
+		It("should allow user to reference cluster in other namespace", func() {
+			user := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-user",
+					Namespace: "test-namespace",
+				},
+				Spec: opensearchv1.OpensearchUserSpec{
+					OpensearchRef: corev1.ObjectReference{
+						Name:      "test-cluster",
+						Namespace: "default",
+					},
+					PasswordFrom: corev1.SecretKeySelector{
+						LocalObjectReference: corev1.LocalObjectReference{
+							Name: "user-password",
+						},
+						Key: "password",
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, user)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
 	})
 
 	Describe("ValidateUpdate", func() {
@@ -213,7 +238,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -230,7 +255,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -254,7 +279,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -271,7 +296,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "different-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -296,7 +321,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -313,7 +338,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{

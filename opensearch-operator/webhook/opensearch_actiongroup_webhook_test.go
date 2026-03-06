@@ -74,7 +74,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops", "indices:data/write/*"},
@@ -93,7 +93,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "non-existent-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
@@ -102,7 +102,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 
 			warnings, err := validator.ValidateCreate(ctx, actionGroup)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' not found"))
+			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' in namespace 'default' not found"))
 			Expect(warnings).To(BeEmpty())
 		})
 
@@ -113,7 +113,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{}, // Empty
@@ -147,10 +147,30 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "old-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, actionGroup)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should allow action group to reference cluster in other namespace", func() {
+			actionGroup := &opensearchv1.OpensearchActionGroup{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-action-group",
+					Namespace: "test-namespace",
+				},
+				Spec: opensearchv1.OpensearchActionGroupSpec{
+					OpensearchRef: corev1.ObjectReference{
+						Name:      "test-cluster",
+						Namespace: "default",
+					},
+					AllowedActions: []string{"cluster_composite_ops", "indices:data/write/*"},
 				},
 			}
 
@@ -168,7 +188,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
@@ -180,7 +200,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops", "indices:data/write/*"},
@@ -199,7 +219,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
@@ -211,7 +231,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "different-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
@@ -231,7 +251,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
@@ -243,7 +263,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{}, // Empty

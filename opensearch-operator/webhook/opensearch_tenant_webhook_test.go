@@ -74,7 +74,7 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 				},
@@ -92,7 +92,7 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "non-existent-cluster",
 					},
 				},
@@ -100,7 +100,7 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 
 			warnings, err := validator.ValidateCreate(ctx, tenant)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' not found"))
+			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' in namespace 'default' not found"))
 			Expect(warnings).To(BeEmpty())
 		})
 
@@ -125,8 +125,27 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "old-cluster",
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, tenant)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should allow tenant to reference cluster in other namespace", func() {
+			tenant := &opensearchv1.OpensearchTenant{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-tenant",
+					Namespace: "test-namespace",
+				},
+				Spec: opensearchv1.OpensearchTenantSpec{
+					OpensearchRef: corev1.ObjectReference{
+						Name:      "test-cluster",
+						Namespace: "default",
 					},
 				},
 			}
@@ -145,7 +164,7 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 				},
@@ -156,7 +175,7 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 				},
@@ -174,7 +193,7 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 				},
@@ -185,7 +204,7 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "different-cluster",
 					},
 				},
