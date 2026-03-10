@@ -372,6 +372,24 @@ general:
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
 
+#### Trigger a rolling restart
+
+To request a rolling restart, set or update an annotation on the `OpenSearchCluster` custom resource. Any change to the annotation value (e.g. a new timestamp) updates the pod template and triggers the operatorΓÇÖs rolling restart logic (one pod at a time, with drain and quorum handling).
+
+- **Restart all node pools:** use the annotation `opensearch.org/rolling-restart`
+- **Restart a specific node pool:** use `opensearch.org/rolling-restart-<component>`, where `<component>` is the node poolΓÇÖs `component` name (e.g. `master`, `data`)
+
+```bash
+# Restart all node pools
+kubectl annotate opensearchcluster <cluster-name> opensearch.org/rolling-restart="$(date +%s)" -n <namespace> --overwrite
+
+# Restart only the master node pool
+kubectl annotate opensearchcluster <cluster-name> opensearch.org/rolling-restart-master="$(date +%s)" -n <namespace> --overwrite
+
+# Restart only the data node pool
+kubectl annotate opensearchcluster <cluster-name> opensearch.org/rolling-restart-data="$(date +%s)" -n <namespace> --overwrite
+```
+
 To populate the keystore of the boostrap pod add the secrets under the `bootstrap.keystore` section:
 
 ```yaml
