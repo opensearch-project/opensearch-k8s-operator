@@ -1,0 +1,143 @@
+---
+# Example: OpenSearchCluster with security config merge mode (default behavior)
+# This example shows how to apply custom security configs while preserving existing users
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: custom-securityconfig
+  namespace: default
+type: Opaque
+stringData:
+  # Custom internal users - will be merged with existing users
+  internal_users.yml: |
+    ---
+    _meta:
+      type: "internalusers"
+      config_version: 2
+
+    # Application-specific user
+    myapp_user:
+      hash: "$2a$12$VcCDgh2NDk07JGN0rjGbM.Ad41qVR/YFJcgHp0UGns5JDymv..TOG"
+      reserved: false
+      backend_roles:
+        - "myapp_backend"
+      description: "Custom application user"
+
+    # Read-only user for monitoring
+    readonly_user:
+      hash: "$2a$12$VcCDgh2NDk07JGN0rjGbM.Ad41qVR/YFJcgHp0UGns5JDymv..TOG"
+      reserved: false
+      backend_roles:
+        - "readall"
+      description: "Read-only monitoring user"
+
+  # Custom roles
+  roles.yml: |
+    ---
+    _meta:
+      type: "roles"
+      config_version: 2
+
+    myapp_role:
+      reserved: false
+      cluster_permissions:
+        - "cluster_composite_ops_ro"
+      index_permissions:
+        - index_patterns:
+            - "myapp-*"
+          allowed_actions:
+            - "read"
+            - "write"
+            - "delete"
+            - "indices:data/read/*"
+            - "indices:data/write/*"
+
+  # Custom role mappings
+  roles_mapping.yml: |
+    ---
+    _meta:
+      type: "rolesmapping"
+      config_version: 2
+
+    myapp_role:
+      reserved: false
+      backend_roles:
+        - "myapp_backend"
+      description: "Mapping for myapp role"
+
+---
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+  namespace: default
+  # NOTE: No annotation means merge mode is active (default)
+  # Existing users (including those created via OpenSearchUser CRD) will be preserved
+  # and merged with the custom config above
+spec:
+  general:
+    serviceName: my-cluster
+    version: "2.11.0"
+    httpPort: 9200
+    vendor: opensearch
+
+  security:
+    config:
+      # Reference the custom security config secret
+      securityConfigSecret:
+        name: custom-securityconfig
+
+      # Admin credentials (required)
+      adminCredentialsSecret:
+        name: admin-credentials
+
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: 30Gi
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+      roles:
+        - cluster_manager
+        - data
+
+---
+# Example with OVERWRITE mode enabled
+# WARNING: This will DELETE any internal users not in your custom config!
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster-overwrite
+  namespace: default
+  annotations:
+    # This annotation enables overwrite mode (legacy behavior)
+    # Use with caution - it will delete existing users not in your custom config
+    opensearch.org/securityconfig-overwrite: "true"
+spec:
+  general:
+    serviceName: my-cluster-overwrite
+    version: "2.11.0"
+    httpPort: 9200
+    vendor: opensearch
+
+  security:
+    config:
+      securityConfigSecret:
+        name: custom-securityconfig
+      adminCredentialsSecret:
+        name: admin-credentials
+
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: 30Gi
+      resources:
+        requests:
+          memory: "2Gi"
+          cpu: "500m"
+      roles:
+        - cluster_manager
+        - data
