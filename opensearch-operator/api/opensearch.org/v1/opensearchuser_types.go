@@ -32,11 +32,11 @@ const (
 
 // OpensearchUserSpec defines the desired state of OpensearchUser
 type OpensearchUserSpec struct {
-	OpensearchRef           corev1.LocalObjectReference `json:"opensearchCluster"`
-	PasswordFrom            corev1.SecretKeySelector    `json:"passwordFrom"`
-	OpendistroSecurityRoles []string                    `json:"opendistroSecurityRoles,omitempty"`
-	BackendRoles            []string                    `json:"backendRoles,omitempty"`
-	Attributes              map[string]string           `json:"attributes,omitempty"`
+	OpensearchRef           corev1.ObjectReference   `json:"opensearchCluster"`
+	PasswordFrom            corev1.SecretKeySelector `json:"passwordFrom"`
+	OpendistroSecurityRoles []string                 `json:"opendistroSecurityRoles,omitempty"`
+	BackendRoles            []string                 `json:"backendRoles,omitempty"`
+	Attributes              map[string]string        `json:"attributes,omitempty"`
 }
 
 // OpensearchUserStatus defines the observed state of OpensearchUser
@@ -69,7 +69,7 @@ type OpensearchUserList struct {
 }
 
 // GetOpensearchRef returns the OpenSearch cluster reference
-func (u *OpensearchUser) GetOpensearchRef() corev1.LocalObjectReference {
+func (u *OpensearchUser) GetOpensearchRef() corev1.ObjectReference {
 	return u.Spec.OpensearchRef
 }
 
