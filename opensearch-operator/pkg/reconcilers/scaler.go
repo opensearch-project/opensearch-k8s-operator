@@ -58,6 +58,19 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	requeue := false
 	results := &reconciler.CombinedResult{}
 	var err error
+
+	// Clean stale allocation exclusions (e.g. from a failed RemoveExcludeNodeHost after scale-down or upgrade).
+	if r.instance.Spec.ConfMgmt.SmartScaler {
+		clusterClient, clientErr := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+		if clientErr == nil {
+			if res, cleanupErr := util.CleanStaleExclusionList(r.client, r.instance, clusterClient, log.FromContext(r.ctx)); cleanupErr != nil {
+				return ctrl.Result{}, cleanupErr
+			} else if res.Requeue {
+				return res, nil
+			}
+		}
+	}
+
 	for _, nodePool := range r.instance.Spec.NodePools {
 		requeue, err = r.reconcileNodePool(&nodePool)
 		if err != nil {
