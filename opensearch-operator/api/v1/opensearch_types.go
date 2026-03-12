@@ -63,7 +63,7 @@ type GeneralConfig struct {
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
 	Annotations map[string]string `json:"annotations,omitempty"`
-	// Drain data nodes controls whether to drain data notes on rolling restart operations
+	// Drain data nodes controls whether to drain data nodes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
 	Command        string   `json:"command,omitempty"`
