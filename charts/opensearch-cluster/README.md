@@ -127,4 +127,4 @@ The following table lists the configurable parameters of the Helm chart.
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
-Opensearch-cluster Helm Chart version: `3.3.0`
+Opensearch-cluster Helm Chart version: `3.3.1`
