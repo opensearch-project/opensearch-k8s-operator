@@ -4482,6 +4482,22 @@ spec:
                     description: Drain data nodes controls whether to drain data notes
                       on rolling restart operations
                     type: boolean
+                  externalClusterScheme:
+                    description: |-
+                      ExternalClusterScheme sets the scheme (http or https) used to connect to the external cluster.
+                      Only used when ExternalClusterURL is set. Defaults to "http" if not specified.
+                    enum:
+                    - http
+                    - https
+                    type: string
+                  externalClusterURL:
+                    description: |-
+                      ExternalClusterURL references an OpenSearch cluster running outside Kubernetes.
+                      When set, the operator skips all infrastructure reconcilers (TLS, StatefulSets, Services, etc.)
+                      and connects to this hostname using HttpPort. Use security.config.adminCredentialsSecret
+                      to provide credentials.
+                      Example: "my-opensearch.example.com"
+                    type: string
                   grpc:
                     description: gRPC API configuration for OpenSearch
                     properties:
@@ -5115,8 +5131,6 @@ spec:
                     type: string
                   version:
                     type: string
-                required:
-                - serviceName
                 type: object
               initHelper:
                 properties:
@@ -7981,9 +7995,15 @@ spec:
                         type: object
                     type: object
                 type: object
-            required:
-            - nodePools
             type: object
+            x-kubernetes-validations:
+            - message: general.serviceName is required when externalClusterURL is
+                not set
+              rule: has(self.general.externalClusterURL) || self.general.serviceName
+                != ''
+            - message: nodePools is required when externalClusterURL is not set
+              rule: has(self.general.externalClusterURL) || size(self.nodePools) >
+                0
           status:
             description: ClusterStatus defines the observed state of Es
             properties:
