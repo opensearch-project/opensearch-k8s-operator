@@ -159,11 +159,17 @@ func IsSecurityPluginEnabled(cr *opensearchv1.OpenSearchCluster) bool {
 }
 
 // ClusterURL returns the URL for communicating with the OpenSearch cluster.
+// If ExternalCluster is configured, it returns that URL directly.
 // If OperatorClusterURL is specified, it uses that custom URL.
 // Otherwise, it constructs the default internal Kubernetes service DNS name.
 func ClusterURL(cluster *opensearchv1.OpenSearchCluster) string {
 	if cluster == nil {
 		return ""
+	}
+
+	// External cluster: URL is provided as-is (must include scheme).
+	if cluster.Spec.ExternalCluster != nil && cluster.Spec.ExternalCluster.URL != "" {
+		return cluster.Spec.ExternalCluster.URL
 	}
 
 	namespace := cluster.Namespace
@@ -458,6 +464,20 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 }
 
 func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (string, string, error) {
+	// External cluster: use the provided credentials secret directly.
+	if cr.Spec.ExternalCluster != nil && cr.Spec.ExternalCluster.CredentialsSecret.Name != "" {
+		credentialsSecret, err := k8sClient.GetSecret(cr.Spec.ExternalCluster.CredentialsSecret.Name, cr.Namespace)
+		if err != nil {
+			return "", "", err
+		}
+		username, usernameExists := credentialsSecret.Data["username"]
+		password, passwordExists := credentialsSecret.Data["password"]
+		if !usernameExists || !passwordExists {
+			return "", "", errors.New("username or password field missing")
+		}
+		return string(username), string(password), nil
+	}
+
 	// Check if user provided AdminCredentialsSecret via Security.Config
 	var secretName string
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {

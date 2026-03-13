@@ -251,6 +251,12 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context) (ctrl.Result, error) {
+	// For an external cluster we don't manage any infrastructure, so it is
+	// always considered initialized.
+	if r.Instance.Spec.ExternalCluster != nil {
+		return r.reconcileExternalCluster(ctx)
+	}
+
 	// Update initialized status first
 	if !r.Instance.Status.Initialized {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -352,5 +358,46 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 	}
 
 	// -------- all resources has been created -----------
+	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+}
+
+// reconcileExternalCluster handles reconciliation for an external OpenSearch cluster.
+// It skips all infrastructure reconcilers (TLS, StatefulSets, Services, etc.) and
+// only runs reconcilers that manage cluster-level resources via the OpenSearch API
+// (snapshot repositories, etc.).
+func (r *OpenSearchClusterReconciler) reconcileExternalCluster(ctx context.Context) (ctrl.Result, error) {
+	if !r.Instance.Status.Initialized {
+		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+			if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
+				return err
+			}
+			r.Instance.Status.Initialized = true
+			return r.Status().Update(ctx, r.Instance)
+		}); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	snapshotrepository := reconcilers.NewSnapshotRepositoryReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		r.Instance,
+	)
+
+	componentReconcilers := []reconcilers.NamedComponentReconciler{
+		{Name: snapshotrepository.Name(), Func: snapshotrepository.Reconcile},
+	}
+	for _, rec := range componentReconcilers {
+		result, err := rec.Func()
+		if err != nil {
+			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
+			return result, err
+		}
+		if result.Requeue {
+			return result, nil
+		}
+	}
+
 	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 }
