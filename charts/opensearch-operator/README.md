@@ -90,6 +90,77 @@ The following table lists the configurable parameters of the Helm chart.
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
+## Referencing an External OpenSearch Cluster
+
+The operator can manage resources on an OpenSearch cluster running **outside Kubernetes** (bare metal, VMs, managed cloud service) without deploying any infrastructure itself. When `externalClusterURL` is set on an `OpenSearchCluster` resource, the operator skips all infrastructure reconcilers (TLS, StatefulSets, Services, etc.) and connects directly to the provided hostname.
+
+### How it works
+
+- The operator marks the cluster as initialized immediately — no nodes need to be ready
+- Only reconcilers that operate via the OpenSearch API are executed (currently: snapshot repositories)
+- `nodePools` and `serviceName` are not required when `externalClusterURL` is set
+- Deleting the `OpenSearchCluster` object does not affect the external cluster
+
+### Example
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-external-credentials
+  namespace: my-namespace
+type: Opaque
+stringData:
+  username: admin
+  password: my-secure-password
+---
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-external-cluster
+  namespace: my-namespace
+spec:
+  general:
+    httpPort: 9200
+    externalClusterURL: "my-opensearch.example.com"
+    # externalClusterScheme defaults to "https". Set to "http" for unencrypted connections.
+    # externalClusterScheme: http
+  security:
+    config:
+      adminCredentialsSecret:
+        name: my-external-credentials
+```
+
+### Fields
+
+| Field | Type | Default | Description |
+|---|---|---|---|
+| `spec.general.externalClusterURL` | string | — | Hostname of the external cluster, without scheme or port (e.g. `my-opensearch.example.com`). When set, all infrastructure reconcilers are skipped. |
+| `spec.general.externalClusterScheme` | `https` \| `http` | `https` | Scheme used to connect to the external cluster. |
+| `spec.general.httpPort` | int | `9200` | Port used to connect to the external cluster. |
+| `spec.security.config.adminCredentialsSecret` | LocalObjectReference | — | Secret containing `username` and `password` fields used by the operator to authenticate against the cluster. |
+
+### Difference between `externalClusterURL` and `operatorClusterURL`
+
+| | `operatorClusterURL` | `externalClusterURL` |
+|---|---|---|
+| **Purpose** | Override the URL the operator uses to reach an in-cluster OpenSearch node | Point the operator to a cluster running entirely outside Kubernetes |
+| **Infrastructure management** | Normal (StatefulSets, TLS, Services are created) | None (all infrastructure reconcilers are skipped) |
+| **Use case** | Custom FQDN for TLS certificates (e.g. cert-manager) | Bare metal, VM, or managed cloud OpenSearch |
+
+### What is and is not managed for external clusters
+
+| Managed via OpenSearch API | Not managed |
+|---|---|
+| Snapshot repositories (`spec.general.snapshotRepositories`) | TLS certificates |
+| | StatefulSets, Services, ConfigMaps |
+| | Rolling restarts and version upgrades |
+| | OpenSearch Dashboards |
+
+> **Note**: If you also define `nodePools` alongside `externalClusterURL`, the operator emits a Kubernetes `Warning` event and ignores the node pools entirely.
+
+> **Deletion behaviour**: deleting the `OpenSearchCluster` object only removes the Kubernetes resource. The external OpenSearch cluster is not affected.
+
 ## Namespace-scoped RBAC
 
 By default, the operator uses cluster-scoped RBAC resources (ClusterRole and ClusterRoleBinding). If you want to restrict the operator's permissions to a specific namespace, you can enable namespace-scoped RBAC by setting `useRoleBindings: true`.
@@ -135,4 +206,4 @@ subjects:
   namespace: <monitoring-namespace>
 ```
 
-Opensearch-operator Helm Chart version: `3.0.0`
+Opensearch-operator Helm Chart version: `3.1.0`
