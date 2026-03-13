@@ -85,6 +85,10 @@ type GeneralConfig struct {
 	// to provide credentials.
 	// Example: "my-opensearch.example.com"
 	ExternalClusterURL *string `json:"externalClusterURL,omitempty"`
+	// ExternalClusterScheme sets the scheme (http or https) used to connect to the external cluster.
+	// Only used when ExternalClusterURL is set. Defaults to "http" if not specified.
+	//+kubebuilder:validation:Enum=http;https
+	ExternalClusterScheme string `json:"externalClusterScheme,omitempty"`
 	// gRPC API configuration for OpenSearch
 	Grpc *GrpcConfig `json:"grpc,omitempty"`
 	// HostNetwork enables host networking for all pods in the cluster.
