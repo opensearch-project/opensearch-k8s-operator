@@ -62,7 +62,7 @@ var _ = Describe("ClusterURL", func() {
 		Expect(result).To(Equal("http://opensearch.example.com:9200"))
 	})
 
-	It("should use http by default for externalClusterURL when no scheme specified", func() {
+	It("should use https by default for externalClusterURL when no scheme specified", func() {
 		externalHost := "my-opensearch.example.com"
 		cluster := &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
@@ -75,24 +75,24 @@ var _ = Describe("ClusterURL", func() {
 		}
 
 		result := ClusterURL(cluster)
-		Expect(result).To(Equal("http://my-opensearch.example.com:9200"))
+		Expect(result).To(Equal("https://my-opensearch.example.com:9200"))
 	})
 
-	It("should use https for externalClusterURL when externalClusterScheme is https", func() {
+	It("should use http for externalClusterURL when externalClusterScheme is http", func() {
 		externalHost := "my-opensearch.example.com"
 		cluster := &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 			Spec: opensearchv1.ClusterSpec{
 				General: opensearchv1.GeneralConfig{
 					ExternalClusterURL:    &externalHost,
-					ExternalClusterScheme: "https",
+					ExternalClusterScheme: "http",
 					HttpPort:              9200,
 				},
 			},
 		}
 
 		result := ClusterURL(cluster)
-		Expect(result).To(Equal("https://my-opensearch.example.com:9200"))
+		Expect(result).To(Equal("http://my-opensearch.example.com:9200"))
 	})
 
 	It("should prefer externalClusterURL over operatorClusterURL", func() {
@@ -111,7 +111,7 @@ var _ = Describe("ClusterURL", func() {
 		}
 
 		result := ClusterURL(cluster)
-		Expect(result).To(Equal("http://external.example.com:9200"))
+		Expect(result).To(Equal("https://external.example.com:9200"))
 	})
 })
 

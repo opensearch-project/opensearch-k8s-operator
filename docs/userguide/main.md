@@ -135,6 +135,8 @@ spec:
 
 This is useful when using external certificates (e.g., from cert-manager) that are valid for a specific FQDN. The operator will use this URL instead of the default internal Kubernetes DNS name, allowing you to use a single certificate for both external access and operator communication.
 
+> **`operatorClusterURL` vs `externalClusterURL`**: `operatorClusterURL` only changes the URL the operator uses to reach an otherwise normally managed cluster (StatefulSets, TLS, Services are all still created). `externalClusterURL` is for clusters that live entirely outside Kubernetes: the operator skips all infrastructure reconcilers and only manages cluster-level resources (e.g. snapshot repositories) via the OpenSearch API.
+
 For a complete example with cert-manager, see `examples/2.x/opensearch-cluster-certmanager-example.yaml`.
 
 ### Referencing an External OpenSearch Cluster
@@ -161,7 +163,8 @@ spec:
   general:
     httpPort: 9200
     externalClusterURL: "my-opensearch.example.com"
-    externalClusterScheme: https   # "http" by default, "https" for TLS
+    # externalClusterScheme defaults to "https". Set to "http" for unencrypted connections.
+    # externalClusterScheme: http
   security:
     config:
       adminCredentialsSecret:
@@ -171,11 +174,24 @@ spec:
 | Field | Description |
 |---|---|
 | `general.externalClusterURL` | Hostname of the external cluster (without scheme or port) |
-| `general.externalClusterScheme` | `http` (default) or `https` |
+| `general.externalClusterScheme` | `https` (default) or `http` |
 | `general.httpPort` | Port to connect to (default: 9200) |
 | `security.config.adminCredentialsSecret` | Secret with `username` and `password` fields |
 
 Once connected, the operator can manage cluster-level resources on the external cluster such as snapshot repositories.
+
+**What the operator does and does not manage for external clusters:**
+
+| Managed | Not managed |
+|---|---|
+| Snapshot repositories (`general.snapshotRepositories`) | TLS certificates |
+| | StatefulSets, Services, ConfigMaps |
+| | Rolling restarts and upgrades |
+| | OpenSearch Dashboards |
+
+> **Note on `nodePools` and `serviceName`**: these fields are not required when `externalClusterURL` is set and will be ignored if provided. A Kubernetes warning event is emitted if `nodePools` is set alongside `externalClusterURL`.
+
+> **Deletion behaviour**: deleting the `OpenSearchCluster` object only removes the Kubernetes resource. The external OpenSearch cluster itself is not affected.
 
 ## Configuring OpenSearch
 

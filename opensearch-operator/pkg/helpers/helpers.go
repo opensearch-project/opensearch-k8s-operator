@@ -186,7 +186,7 @@ func ClusterURL(cluster *opensearchv1.OpenSearchCluster) string {
 	if externalClusterURL != nil && *externalClusterURL != "" {
 		externalScheme := cluster.Spec.General.ExternalClusterScheme
 		if externalScheme == "" {
-			externalScheme = "http"
+			externalScheme = "https"
 		}
 		return fmt.Sprintf("%s://%s:%d", externalScheme, *externalClusterURL, httpPort)
 	}

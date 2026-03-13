@@ -53,7 +53,8 @@ type GeneralConfig struct {
 	Vendor         string `json:"vendor,omitempty"`
 	Version        string `json:"version,omitempty"`
 	ServiceAccount string `json:"serviceAccount,omitempty"`
-	ServiceName    string `json:"serviceName"`
+	// +optional
+	ServiceName    string `json:"serviceName,omitempty"`
 	//+kubebuilder:default=true
 	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
@@ -451,6 +452,8 @@ type GrpcConfig struct {
 }
 
 // ClusterSpec defines the desired state of OpenSearchCluster
+// +kubebuilder:validation:XValidation:rule="has(self.general.externalClusterURL) || self.general.serviceName != ''",message="general.serviceName is required when externalClusterURL is not set"
+// +kubebuilder:validation:XValidation:rule="has(self.general.externalClusterURL) || size(self.nodePools) > 0",message="nodePools is required when externalClusterURL is not set"
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
@@ -459,7 +462,8 @@ type ClusterSpec struct {
 	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
-	NodePools  []NodePool       `json:"nodePools"`
+	// +optional
+	NodePools  []NodePool       `json:"nodePools,omitempty"`
 	InitHelper InitHelperConfig `json:"initHelper,omitempty"`
 }
 

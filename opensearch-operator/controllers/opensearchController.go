@@ -174,6 +174,12 @@ func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 // delete associated cluster resources //
 func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Context) (ctrl.Result, error) {
+	// For external clusters there are no Kubernetes resources to delete.
+	if r.Instance.Spec.General.ExternalClusterURL != nil {
+		r.Info("Skipping resource deletion for external cluster")
+		return ctrl.Result{}, nil
+	}
+
 	r.Info("Deleting resources")
 	// Run through all sub controllers to delete existing objects
 	reconcilerContext := reconcilers.NewReconcilerContext(r.Recorder, r.Instance, r.Instance.Spec.NodePools)
@@ -366,6 +372,11 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 // only runs reconcilers that manage cluster-level resources via the OpenSearch API
 // (snapshot repositories, etc.).
 func (r *OpenSearchClusterReconciler) reconcileExternalCluster(ctx context.Context) (ctrl.Result, error) {
+	if len(r.Instance.Spec.NodePools) > 0 {
+		r.Recorder.Event(r.Instance, "Warning", "InvalidConfiguration",
+			"nodePools is set but will be ignored because externalClusterURL is configured")
+	}
+
 	if !r.Instance.Status.Initialized {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
