@@ -62,40 +62,39 @@ var _ = Describe("ClusterURL", func() {
 		Expect(result).To(Equal("http://opensearch.example.com:9200"))
 	})
 
-	It("should use externalCluster URL as-is when provided", func() {
-		cluster := &opensearchv1.OpenSearchCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
-			Spec: opensearchv1.ClusterSpec{
-				ExternalCluster: &opensearchv1.ExternalCluster{
-					URL: "https://my-opensearch.example.com:9200",
-					CredentialsSecret: corev1.LocalObjectReference{Name: "my-creds"},
-				},
-			},
-		}
-
-		result := ClusterURL(cluster)
-		Expect(result).To(Equal("https://my-opensearch.example.com:9200"))
-	})
-
-	It("should prefer externalCluster URL over operatorClusterURL", func() {
-		customHost := "internal.example.com"
+	It("should use externalClusterURL with httpPort when provided", func() {
+		externalHost := "my-opensearch.example.com"
 		cluster := &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
 			Spec: opensearchv1.ClusterSpec{
 				General: opensearchv1.GeneralConfig{
-					OperatorClusterURL: &customHost,
+					ExternalClusterURL: &externalHost,
 					HttpPort:           9200,
-					ServiceName:        "test",
-				},
-				ExternalCluster: &opensearchv1.ExternalCluster{
-					URL: "https://external.example.com:9200",
-					CredentialsSecret: corev1.LocalObjectReference{Name: "my-creds"},
 				},
 			},
 		}
 
 		result := ClusterURL(cluster)
-		Expect(result).To(Equal("https://external.example.com:9200"))
+		Expect(result).To(Equal("http://my-opensearch.example.com:9200"))
+	})
+
+	It("should prefer externalClusterURL over operatorClusterURL", func() {
+		externalHost := "external.example.com"
+		internalHost := "internal.example.com"
+		cluster := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "test", Namespace: "default"},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
+					ExternalClusterURL: &externalHost,
+					OperatorClusterURL: &internalHost,
+					HttpPort:           9200,
+					ServiceName:        "test",
+				},
+			},
+		}
+
+		result := ClusterURL(cluster)
+		Expect(result).To(Equal("http://external.example.com:9200"))
 	})
 })
 
@@ -107,22 +106,26 @@ var _ = Describe("UsernameAndPassword", func() {
 
 	BeforeEach(func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
+		externalHost := "my-opensearch.example.com"
 		cluster = &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
-			Spec:       opensearchv1.ClusterSpec{},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
+					ExternalClusterURL: &externalHost,
+					HttpPort:           443,
+				},
+				Security: &opensearchv1.Security{
+					Config: &opensearchv1.SecurityConfig{
+						AdminCredentialsSecret: corev1.LocalObjectReference{Name: "mysecret"},
+					},
+				},
+			},
 		}
 	})
 
-	Context("when ExternalCluster is configured", func() {
-		BeforeEach(func() {
-			cluster.Spec.ExternalCluster = &opensearchv1.ExternalCluster{
-				URL:               "https://external.example.com:9200",
-				CredentialsSecret: corev1.LocalObjectReference{Name: "external-creds"},
-			}
-		})
-
-		It("should return credentials from the external credentials secret", func() {
-			mockClient.EXPECT().GetSecret("external-creds", "default").Return(corev1.Secret{
+	Context("when externalClusterURL and adminCredentialsSecret are configured", func() {
+		It("should return credentials from the adminCredentialsSecret", func() {
+			mockClient.EXPECT().GetSecret("mysecret", "default").Return(corev1.Secret{
 				Data: map[string][]byte{
 					"username": []byte("admin"),
 					"password": []byte("s3cr3t"),
@@ -135,16 +138,16 @@ var _ = Describe("UsernameAndPassword", func() {
 			Expect(password).To(Equal("s3cr3t"))
 		})
 
-		It("should return an error when the external credentials secret is not found", func() {
-			notFound := k8serrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, "external-creds")
-			mockClient.EXPECT().GetSecret("external-creds", "default").Return(corev1.Secret{}, notFound)
+		It("should return an error when the secret is not found", func() {
+			notFound := k8serrors.NewNotFound(schema.GroupResource{Resource: "secrets"}, "mysecret")
+			mockClient.EXPECT().GetSecret("mysecret", "default").Return(corev1.Secret{}, notFound)
 
 			_, _, err := UsernameAndPassword(mockClient, cluster)
 			Expect(err).To(HaveOccurred())
 		})
 
 		It("should return an error when username field is missing", func() {
-			mockClient.EXPECT().GetSecret("external-creds", "default").Return(corev1.Secret{
+			mockClient.EXPECT().GetSecret("mysecret", "default").Return(corev1.Secret{
 				Data: map[string][]byte{
 					"password": []byte("s3cr3t"),
 				},

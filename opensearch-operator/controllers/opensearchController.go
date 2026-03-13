@@ -253,7 +253,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context) (ctrl.Result, error) {
 	// For an external cluster we don't manage any infrastructure, so it is
 	// always considered initialized.
-	if r.Instance.Spec.ExternalCluster != nil {
+	if r.Instance.Spec.General.ExternalClusterURL != nil {
 		return r.reconcileExternalCluster(ctx)
 	}
 

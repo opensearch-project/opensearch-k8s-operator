@@ -79,6 +79,12 @@ type GeneralConfig struct {
 	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
 	// instead of the default internal Kubernetes service DNS name.
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
+	// ExternalClusterURL references an OpenSearch cluster running outside Kubernetes.
+	// When set, the operator skips all infrastructure reconcilers (TLS, StatefulSets, Services, etc.)
+	// and connects to this hostname using HttpPort. Use security.config.adminCredentialsSecret
+	// to provide credentials.
+	// Example: "my-opensearch.example.com"
+	ExternalClusterURL *string `json:"externalClusterURL,omitempty"`
 	// gRPC API configuration for OpenSearch
 	Grpc *GrpcConfig `json:"grpc,omitempty"`
 	// HostNetwork enables host networking for all pods in the cluster.
@@ -440,20 +446,6 @@ type GrpcConfig struct {
 	MaxMsgSize string `json:"maxMsgSize,omitempty"`
 }
 
-// ExternalCluster references an existing OpenSearch cluster outside Kubernetes.
-// When set, the operator will not deploy any pods or services but will connect
-// to the provided URL using the given credentials secret.
-type ExternalCluster struct {
-	// URL of the external OpenSearch cluster (e.g. https://my-opensearch.example.com:9200).
-	// Must include the scheme (http:// or https://).
-	//+kubebuilder:validation:Required
-	URL string `json:"url"`
-	// CredentialsSecret is a reference to a Kubernetes Secret that contains
-	// the username and password fields for authenticating with the external cluster.
-	//+kubebuilder:validation:Required
-	CredentialsSecret corev1.LocalObjectReference `json:"credentialsSecret"`
-}
-
 // ClusterSpec defines the desired state of OpenSearchCluster
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -465,10 +457,6 @@ type ClusterSpec struct {
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
 	InitHelper InitHelperConfig `json:"initHelper,omitempty"`
-	// ExternalCluster references an existing OpenSearch cluster outside Kubernetes.
-	// When set, the operator skips all infrastructure reconcilers (TLS, StatefulSets,
-	// Services, etc.) and connects directly to the provided cluster URL.
-	ExternalCluster *ExternalCluster `json:"externalCluster,omitempty"`
 }
 
 // ClusterStatus defines the observed state of Es
