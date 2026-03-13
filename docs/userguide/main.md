@@ -137,6 +137,46 @@ This is useful when using external certificates (e.g., from cert-manager) that a
 
 For a complete example with cert-manager, see `examples/2.x/opensearch-cluster-certmanager-example.yaml`.
 
+### Referencing an External OpenSearch Cluster
+
+If you have an OpenSearch cluster running outside Kubernetes, you can reference it using `externalClusterURL`. When set, the operator skips all infrastructure reconcilers (TLS, StatefulSets, Services, etc.) and connects directly to the provided hostname.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: my-external-credentials
+  namespace: my-namespace
+type: Opaque
+stringData:
+  username: admin
+  password: my-secure-password
+---
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-external-cluster
+  namespace: my-namespace
+spec:
+  general:
+    httpPort: 9200
+    externalClusterURL: "my-opensearch.example.com"
+    externalClusterScheme: https   # "http" by default, "https" for TLS
+  security:
+    config:
+      adminCredentialsSecret:
+        name: my-external-credentials
+```
+
+| Field | Description |
+|---|---|
+| `general.externalClusterURL` | Hostname of the external cluster (without scheme or port) |
+| `general.externalClusterScheme` | `http` (default) or `https` |
+| `general.httpPort` | Port to connect to (default: 9200) |
+| `security.config.adminCredentialsSecret` | Secret with `username` and `password` fields |
+
+Once connected, the operator can manage cluster-level resources on the external cluster such as snapshot repositories.
+
 ## Configuring OpenSearch
 
 The main job of the operator is to deploy and manage OpenSearch clusters. As such it offers a wide range of options to configure clusters.
