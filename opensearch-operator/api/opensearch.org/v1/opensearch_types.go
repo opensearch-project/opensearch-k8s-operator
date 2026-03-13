@@ -369,7 +369,7 @@ type ImageSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="(has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0) == 1",message="exactly one of secret, configMap, emptyDir, csi, projected, nfs, hostPath must be set"
+// +kubebuilder:validation:XValidation:rule="(has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.persistentVolumeClaim)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0) == 1",message="exactly one of secret, configMap, emptyDir, csi, persistentVolumeClaim, projected, nfs, hostPath must be set"
 type AdditionalVolume struct {
 	// Name to use for the volume. Required.
 	Name string `json:"name"`
