@@ -506,7 +506,7 @@ _Appears in:_
 | `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
 | `additionalConfig` _object (keys:string, values:string)_ | Extra items to add to the opensearch.yml |  |  |
 | `annotations` _object (keys:string, values:string)_ | Adds support for annotations in services |  |  |
-| `drainDataNodes` _boolean_ | Drain data nodes controls whether to drain data notes on rolling restart operations |  |  |
+| `drainDataNodes` _boolean_ | Drain data nodes controls whether to drain data nodes on rolling restart operations |  |  |
 | `pluginsList` _string array_ |  |  |  |
 | `command` _string_ |  |  |  |
 | `additionalVolumes` _[AdditionalVolume](#additionalvolume) array_ | Additional volumes to mount to all pods in the cluster |  |  |
@@ -2276,7 +2276,7 @@ _Appears in:_
 | `defaultRepo` _string_ |  |  |  |
 | `additionalConfig` _object (keys:string, values:string)_ | Extra items to add to the opensearch.yml |  |  |
 | `annotations` _object (keys:string, values:string)_ | Adds support for annotations in services |  |  |
-| `drainDataNodes` _boolean_ | Drain data nodes controls whether to drain data notes on rolling restart operations |  |  |
+| `drainDataNodes` _boolean_ | Drain data nodes controls whether to drain data nodes on rolling restart operations |  |  |
 | `pluginsList` _string array_ |  |  |  |
 | `command` _string_ |  |  |  |
 | `additionalVolumes` _[AdditionalVolume](#additionalvolume) array_ | Additional volumes to mount to all pods in the cluster |  |  |
