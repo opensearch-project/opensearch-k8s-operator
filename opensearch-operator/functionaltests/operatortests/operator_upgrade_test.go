@@ -198,6 +198,7 @@ func installOperatorFromHelm(version string) error {
 		"--wait",
 		"--timeout", "5m",
 		"--set", "webhook.enabled=true", // Enable webhooks for testing
+		"--set", "kubeRbacProxy.enable=false", // Disable kubeRbacProxy
 	)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
