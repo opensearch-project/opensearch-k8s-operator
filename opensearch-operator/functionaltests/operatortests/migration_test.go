@@ -744,16 +744,6 @@ func waitForResourceDeletion(name, namespace, kind, group string, timeout time.D
 	}
 }
 
-// containsString checks if a string slice contains a specific string
-func containsString(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
-		}
-	}
-	return false
-}
-
 // cleanupMigrationTestResources cleans up all resources created by migration tests
 func cleanupMigrationTestResources(clusterName, namespace string) {
 	deletionTestClusterName := clusterName + "-deletion-test"
