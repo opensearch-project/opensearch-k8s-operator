@@ -118,6 +118,16 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	// Clean stale allocation exclusions so a previously failed RemoveExcludeNodeHost (e.g. after DeletePod) gets retried.
+	if r.instance.Spec.General.DrainDataNodes {
+		if res, err := util.CleanStaleExclusionList(r.client, r.instance, r.osClient, r.logger); err != nil || res.Requeue {
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			return res, nil
+		}
+	}
+
 	// Start the nodepool upgrade loop
 
 	// Fetch the working nodepool
