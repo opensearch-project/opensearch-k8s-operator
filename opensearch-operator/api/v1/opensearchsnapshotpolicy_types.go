@@ -35,14 +35,14 @@ const (
 )
 
 type OpensearchSnapshotPolicySpec struct {
-	OpensearchRef  corev1.LocalObjectReference `json:"opensearchCluster"`
-	PolicyName     string                      `json:"policyName"`
-	Description    *string                     `json:"description,omitempty"`
-	Enabled        *bool                       `json:"enabled,omitempty"`
-	SnapshotConfig SnapshotConfig              `json:"snapshotConfig"`
-	Creation       SnapshotCreation            `json:"creation"`
-	Deletion       *SnapshotDeletion           `json:"deletion,omitempty"`
-	Notification   *SnapshotNotification       `json:"notification,omitempty"`
+	OpensearchRef  corev1.ObjectReference `json:"opensearchCluster"`
+	PolicyName     string                 `json:"policyName"`
+	Description    *string                `json:"description,omitempty"`
+	Enabled        *bool                  `json:"enabled,omitempty"`
+	SnapshotConfig SnapshotConfig         `json:"snapshotConfig"`
+	Creation       SnapshotCreation       `json:"creation"`
+	Deletion       *SnapshotDeletion      `json:"deletion,omitempty"`
+	Notification   *SnapshotNotification  `json:"notification,omitempty"`
 }
 
 type SnapshotConfig struct {
@@ -132,7 +132,7 @@ type OpensearchSnapshotPolicyList struct {
 }
 
 // GetOpensearchRef returns the OpenSearch cluster reference
-func (sp *OpensearchSnapshotPolicy) GetOpensearchRef() corev1.LocalObjectReference {
+func (sp *OpensearchSnapshotPolicy) GetOpensearchRef() corev1.ObjectReference {
 	return sp.Spec.OpensearchRef
 }
 

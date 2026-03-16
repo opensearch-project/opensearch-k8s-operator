@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 
 	"github.com/go-logr/logr"
@@ -15,7 +16,6 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -85,7 +85,7 @@ func (r *UserRoleBindingReconciler) Reconcile() (retResult ctrl.Result, retErr e
 
 	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
-		Namespace: r.instance.Namespace,
+		Namespace: util.DetermineClusterNamespace(r.instance.Spec.OpensearchRef, r.instance.Namespace),
 	})
 	if retErr != nil {
 		reason = "error fetching opensearch cluster"
@@ -212,7 +212,7 @@ func (r *UserRoleBindingReconciler) Delete() error {
 	var err error
 	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
 		Name:      r.instance.Spec.OpensearchRef.Name,
-		Namespace: r.instance.Namespace,
+		Namespace: util.DetermineClusterNamespace(r.instance.Spec.OpensearchRef, r.instance.Namespace),
 	})
 	if err != nil {
 		return err
