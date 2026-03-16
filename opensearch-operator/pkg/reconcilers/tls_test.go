@@ -321,6 +321,12 @@ var _ = Describe("TLS Controller", func() {
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=tls-withca-*,OU=tls-withca\"]"))
+
+			// Verify that the CA cert path uses tls-http/ (not tls-http-ca/) since generate=true
+			// includes the CA cert in the generated secret (Fixes #1279)
+			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.ssl.http.pemtrustedcas_filepath"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("tls-http/ca.crt"))
 		})
 	})
 
