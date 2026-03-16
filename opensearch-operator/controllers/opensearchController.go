@@ -24,6 +24,8 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
@@ -251,13 +253,20 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 }
 
 func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context) (ctrl.Result, error) {
-	// Update initialized status first
+	// Update initialized status first. Only set Initialized when all master pods are ready
+	// and the OpenSearch cluster API is reachable (cluster has formed). This prevents
+	// deleting the bootstrap pod before the cluster has actually bootstrapped, which
+	// can happen with parallel pod management when pods report ready before quorum is formed.
 	if !r.Instance.Status.Initialized {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 			if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 				return err
 			}
-			r.Instance.Status.Initialized = builders.AllMastersReady(ctx, r.Client, r.Instance)
+			allMastersReady := builders.AllMastersReady(ctx, r.Client, r.Instance)
+			k8sClient := k8s.NewK8sClient(r.Client, ctx)
+			health, _ := util.GetClusterHealth(k8sClient, ctx, r.Instance, r.Logger)
+			clusterReachable := health != opensearchv1.OpenSearchUnknownHealth
+			r.Instance.Status.Initialized = allMastersReady && clusterReachable
 			return r.Status().Update(ctx, r.Instance)
 		}); err != nil {
 			return ctrl.Result{}, err
