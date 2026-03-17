@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -471,10 +472,16 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(createdConfigMap).ToNot(BeNil())
 			data, exists := createdConfigMap.Data["opensearch.yml"]
 			Expect(exists).To(BeTrue())
-			// Native YAML array should be parsed and marshaled correctly
-			Expect(strings.Contains(data, "reindex.remote.allowlist:")).To(BeTrue())
-			Expect(strings.Contains(data, "host1:9200")).To(BeTrue())
-			Expect(strings.Contains(data, "host2:9200")).To(BeTrue())
+			// Parse the YAML output and verify the value is a proper list type
+			var parsed map[string]interface{}
+			Expect(yaml.Unmarshal([]byte(data), &parsed)).To(Succeed())
+			allowlist, ok := parsed["reindex.remote.allowlist"]
+			Expect(ok).To(BeTrue())
+			list, ok := allowlist.([]interface{})
+			Expect(ok).To(BeTrue(), "Expected allowlist to be a list, got %T", allowlist)
+			Expect(list).To(HaveLen(2))
+			Expect(list[0]).To(Equal("host1:9200"))
+			Expect(list[1]).To(Equal("host2:9200"))
 		})
 
 		It("should properly handle JSON object values", func() {

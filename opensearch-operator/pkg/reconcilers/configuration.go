@@ -27,20 +27,30 @@ import (
 
 const configurationReconcilerName = "configuration"
 
-// jsonValueToString converts an apiextensionsv1.JSON value to a string representation.
-// JSON strings are unquoted, other types (arrays, objects, numbers, booleans) are returned as raw JSON.
-func jsonValueToString(j apiextensionsv1.JSON) string {
-	raw := j.Raw
-	if len(raw) == 0 {
+// jsonValueToInterface converts an apiextensionsv1.JSON value to its native Go type.
+// json.Unmarshal returns: string, float64, bool, []interface{}, map[string]interface{}, or nil.
+func jsonValueToInterface(j apiextensionsv1.JSON) interface{} {
+	if len(j.Raw) == 0 {
 		return ""
 	}
-	if raw[0] == '"' {
-		var s string
-		if err := json.Unmarshal(raw, &s); err == nil {
-			return s
-		}
+	var v interface{}
+	if err := json.Unmarshal(j.Raw, &v); err != nil {
+		return string(j.Raw)
 	}
-	return string(raw)
+	return v
+}
+
+// jsonValueToString converts an apiextensionsv1.JSON value to a string representation.
+// Used for dashboards config which uses map[string]string.
+func jsonValueToString(j apiextensionsv1.JSON) string {
+	if len(j.Raw) == 0 {
+		return ""
+	}
+	var s string
+	if err := json.Unmarshal(j.Raw, &s); err == nil {
+		return s
+	}
+	return string(j.Raw)
 }
 
 type ConfigurationReconciler struct {
@@ -103,63 +113,56 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	r.processGrpcConfig()
 
 	// Add General.AdditionalConfig to reconciler context (for base config)
+	// Values are deserialized directly from JSON to preserve native types
 	for k, v := range r.instance.Spec.General.AdditionalConfig {
-		r.reconcilerContext.AddConfig(k, jsonValueToString(v))
+		r.reconcilerContext.AddConfig(k, jsonValueToInterface(v))
 	}
 
-	// Helper function to parse string value to determine its actual type
-	parseConfigValue := func(value string) interface{} {
-		// Try to parse as boolean
+	// parseStringValue parses string values added by system config (e.g. from TLS/gRPC reconcilers)
+	// to determine their actual type for correct YAML marshaling.
+	// This is NOT used for AdditionalConfig values, which preserve native types via jsonValueToInterface.
+	parseStringValue := func(value string) interface{} {
 		if value == "true" {
 			return true
 		}
 		if value == "false" {
 			return false
 		}
-
-		// Try to parse as JSON array
 		if len(value) >= 2 && value[0] == '[' && value[len(value)-1] == ']' {
 			var arr []interface{}
 			if err := json.Unmarshal([]byte(value), &arr); err == nil {
 				return arr
 			}
 		}
-
-		// Try to parse as JSON object
 		if len(value) >= 2 && value[0] == '{' && value[len(value)-1] == '}' {
 			var obj map[string]interface{}
 			if err := json.Unmarshal([]byte(value), &obj); err == nil {
 				return obj
 			}
 		}
-
-		// Try to parse as integer
 		if num, err := strconv.ParseInt(value, 10, 64); err == nil {
 			return num
 		}
-		// Try to parse as float
 		if num, err := strconv.ParseFloat(value, 64); err == nil {
 			return num
 		}
-
-		// Return as string if no other type matches
 		return value
 	}
 
-	// Helper function to build config string from a map[string]string
-	// Converts to map[string]interface{} and marshals directly - YAML library handles all quoting
-	// This follows ECK's approach: marshal the entire config structure
-	buildConfigString := func(config map[string]string) string {
-		// Convert map[string]string to map[string]interface{} by parsing each value
+	// Helper function to build config YAML from a map[string]interface{}.
+	// String values (from system config) are parsed for type; typed values (from AdditionalConfig) are used directly.
+	buildConfigString := func(config map[string]interface{}) string {
 		typedConfig := make(map[string]interface{})
 		for k, v := range config {
-			typedConfig[k] = parseConfigValue(v)
+			if s, ok := v.(string); ok {
+				typedConfig[k] = parseStringValue(s)
+			} else {
+				typedConfig[k] = v
+			}
 		}
 
-		// Marshal the entire config map - YAML library handles all quoting automatically
 		quoted, err := yaml.Marshal(typedConfig)
 		if err != nil {
-			// Fallback to manual building if marshaling fails
 			var sb strings.Builder
 			keys := make([]string, 0, len(config))
 			for key := range config {
@@ -167,7 +170,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 			}
 			sort.Strings(keys)
 			for _, key := range keys {
-				sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
+				sb.WriteString(fmt.Sprintf("%s: %v\n", key, config[key]))
 			}
 			return sb.String()
 		}
@@ -216,13 +219,13 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	for _, nodePool := range r.instance.Spec.NodePools {
 		if len(nodePool.AdditionalConfig) > 0 {
 			// Start with base config (system configs + General.AdditionalConfig)
-			mergedConfig := make(map[string]string)
+			mergedConfig := make(map[string]interface{})
 			for k, v := range r.reconcilerContext.OpenSearchConfig {
 				mergedConfig[k] = v
 			}
 			// Merge NodePool.AdditionalConfig (overrides General.AdditionalConfig)
 			for k, v := range nodePool.AdditionalConfig {
-				mergedConfig[k] = jsonValueToString(v)
+				mergedConfig[k] = jsonValueToInterface(v)
 			}
 
 			nodePoolData := buildConfigString(mergedConfig)
@@ -255,13 +258,13 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 	for _, nodePool := range r.instance.Spec.NodePools {
 		// Build merged config for hash calculation
-		mergedConfig := make(map[string]string)
+		mergedConfig := make(map[string]interface{})
 		for k, v := range r.reconcilerContext.OpenSearchConfig {
 			mergedConfig[k] = v
 		}
 		// Merge NodePool.AdditionalConfig (overrides General.AdditionalConfig)
 		for k, v := range nodePool.AdditionalConfig {
-			mergedConfig[k] = jsonValueToString(v)
+			mergedConfig[k] = jsonValueToInterface(v)
 		}
 		dataToUse := buildConfigString(mergedConfig)
 		result.Combine(r.createHashForNodePool(nodePool, dataToUse, addVolumeData))
