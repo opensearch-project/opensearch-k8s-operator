@@ -9,6 +9,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	appsv1 "k8s.io/api/apps/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -216,8 +217,8 @@ var _ = Describe("Dashboards Reconciler", func() {
 					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opensearchv1.DashboardsConfig{
 						Enable: true,
-						AdditionalConfig: map[string]string{
-							"some-key": testConfig,
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"some-key": {Raw: []byte(`"` + testConfig + `"`)},
 						},
 						Service: opensearchv1.DashboardsServiceSpec{Labels: map[string]string{}},
 					},

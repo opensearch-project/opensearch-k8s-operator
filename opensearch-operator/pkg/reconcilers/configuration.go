@@ -14,6 +14,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -25,6 +26,22 @@ import (
 )
 
 const configurationReconcilerName = "configuration"
+
+// jsonValueToString converts an apiextensionsv1.JSON value to a string representation.
+// JSON strings are unquoted, other types (arrays, objects, numbers, booleans) are returned as raw JSON.
+func jsonValueToString(j apiextensionsv1.JSON) string {
+	raw := j.Raw
+	if len(raw) == 0 {
+		return ""
+	}
+	if raw[0] == '"' {
+		var s string
+		if err := json.Unmarshal(raw, &s); err == nil {
+			return s
+		}
+	}
+	return string(raw)
+}
 
 type ConfigurationReconciler struct {
 	client            k8s.K8sClient
@@ -87,7 +104,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 	// Add General.AdditionalConfig to reconciler context (for base config)
 	for k, v := range r.instance.Spec.General.AdditionalConfig {
-		r.reconcilerContext.AddConfig(k, v)
+		r.reconcilerContext.AddConfig(k, jsonValueToString(v))
 	}
 
 	// Helper function to parse string value to determine its actual type
@@ -205,7 +222,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 			}
 			// Merge NodePool.AdditionalConfig (overrides General.AdditionalConfig)
 			for k, v := range nodePool.AdditionalConfig {
-				mergedConfig[k] = v
+				mergedConfig[k] = jsonValueToString(v)
 			}
 
 			nodePoolData := buildConfigString(mergedConfig)
@@ -244,7 +261,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		}
 		// Merge NodePool.AdditionalConfig (overrides General.AdditionalConfig)
 		for k, v := range nodePool.AdditionalConfig {
-			mergedConfig[k] = v
+			mergedConfig[k] = jsonValueToString(v)
 		}
 		dataToUse := buildConfigString(mergedConfig)
 		result.Combine(r.createHashForNodePool(nodePool, dataToUse, addVolumeData))

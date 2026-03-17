@@ -8,6 +8,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
@@ -145,8 +146,8 @@ var _ = Describe("Configuration Controller", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
-						AdditionalConfig: map[string]string{
-							"general.config": "general-value",
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"general.config": {Raw: []byte(`"general-value"`)},
 						},
 					},
 					NodePools: []opensearchv1.NodePool{
@@ -202,9 +203,9 @@ var _ = Describe("Configuration Controller", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
-						AdditionalConfig: map[string]string{
-							"general.config": "general-value",
-							"shared.config":  "shared-value",
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"general.config": {Raw: []byte(`"general-value"`)},
+							"shared.config":  {Raw: []byte(`"shared-value"`)},
 						},
 					},
 					NodePools: []opensearchv1.NodePool{
@@ -220,9 +221,9 @@ var _ = Describe("Configuration Controller", func() {
 							Roles: []string{
 								"data",
 							},
-							AdditionalConfig: map[string]string{
-								"nodepool.config": "nodepool-value",
-								"shared.config":   "nodepool-override",
+							AdditionalConfig: map[string]apiextensionsv1.JSON{
+								"nodepool.config": {Raw: []byte(`"nodepool-value"`)},
+								"shared.config":   {Raw: []byte(`"nodepool-override"`)},
 							},
 						},
 					},
@@ -308,8 +309,8 @@ var _ = Describe("Configuration Controller", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
-						AdditionalConfig: map[string]string{
-							"reindex.remote.allowlist": "*.svc.cluster.local:9200",
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"reindex.remote.allowlist": {Raw: []byte(`"*.svc.cluster.local:9200"`)},
 						},
 					},
 					NodePools: []opensearchv1.NodePool{
@@ -370,9 +371,9 @@ var _ = Describe("Configuration Controller", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
-						AdditionalConfig: map[string]string{
-							"plugins.security.restapi.roles_enabled": `["all_access", "security_rest_api_access"]`,
-							"reindex.remote.allowlist":               `["*.svc.cluster.local:9200", "other.host:9200"]`,
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"plugins.security.restapi.roles_enabled": {Raw: []byte(`["all_access","security_rest_api_access"]`)},
+							"reindex.remote.allowlist":               {Raw: []byte(`["*.svc.cluster.local:9200","other.host:9200"]`)},
 						},
 					},
 					NodePools: []opensearchv1.NodePool{
@@ -420,6 +421,62 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(strings.Contains(data, "other.host:9200")).To(BeTrue())
 		})
 
+		It("should properly handle native YAML array values via apiextensionsv1.JSON", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"reindex.remote.allowlist": {Raw: []byte(`["host1:9200","host2:9200"]`)},
+						},
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "test",
+							Roles: []string{
+								"master",
+								"data",
+							},
+						},
+					},
+				},
+			}
+
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().Context().Return(context.Background())
+			var createdConfigMap *corev1.ConfigMap
+			mockClient.On("CreateConfigMap", mock.Anything).
+				Return(func(cm *corev1.ConfigMap) (*ctrl.Result, error) {
+					createdConfigMap = cm
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+
+			underTest := newConfigurationReconciler(
+				mockClient,
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(createdConfigMap).ToNot(BeNil())
+			data, exists := createdConfigMap.Data["opensearch.yml"]
+			Expect(exists).To(BeTrue())
+			// Native YAML array should be parsed and marshaled correctly
+			Expect(strings.Contains(data, "reindex.remote.allowlist:")).To(BeTrue())
+			Expect(strings.Contains(data, "host1:9200")).To(BeTrue())
+			Expect(strings.Contains(data, "host2:9200")).To(BeTrue())
+		})
+
 		It("should properly handle JSON object values", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
@@ -431,8 +488,8 @@ var _ = Describe("Configuration Controller", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
-						AdditionalConfig: map[string]string{
-							"test.object": `{"key": "value", "number": 123}`,
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"test.object": {Raw: []byte(`{"key":"value","number":123}`)},
 						},
 					},
 					NodePools: []opensearchv1.NodePool{
@@ -489,10 +546,10 @@ var _ = Describe("Configuration Controller", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
-						AdditionalConfig: map[string]string{
-							"test.boolean": "true",
-							"test.number":  "123",
-							"test.float":   "123.45",
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"test.boolean": {Raw: []byte(`true`)},
+							"test.number":  {Raw: []byte(`123`)},
+							"test.float":   {Raw: []byte(`123.45`)},
 						},
 					},
 					NodePools: []opensearchv1.NodePool{
@@ -551,9 +608,9 @@ var _ = Describe("Configuration Controller", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
-						AdditionalConfig: map[string]string{
-							"test.string1": "123abc",
-							"test.string2": "123.45.67",
+						AdditionalConfig: map[string]apiextensionsv1.JSON{
+							"test.string1": {Raw: []byte(`"123abc"`)},
+							"test.string2": {Raw: []byte(`"123.45.67"`)},
 						},
 					},
 					NodePools: []opensearchv1.NodePool{
