@@ -94,13 +94,6 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 
-		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
-		if err != nil {
-			r.logger.Error(err, "Failed to count ready pods for node pool", "nodePool", nodePool.Component)
-			return ctrl.Result{Requeue: true}, err
-		}
-		sts.Status.ReadyReplicas = readyReplicas
-
 		// Check for pending updates
 		if sts.Status.UpdateRevision != "" &&
 			sts.Status.UpdatedReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
@@ -155,10 +148,12 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}, nil
 	}
 
-	if err := r.updateStatus(statusInProgress); err != nil {
-		return ctrl.Result{Requeue: true}, err
+	if status == nil || status.Status != statusInProgress {
+		if err := r.updateStatus(statusInProgress); err != nil {
+			return ctrl.Result{Requeue: true}, err
+		}
+		r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Normal", "RollingRestart", "Starting rolling restart")
 	}
-	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Normal", "RollingRestart", "Starting rolling restart")
 
 	// If there is work to do create an Opensearch Client
 	var err error
@@ -332,11 +327,6 @@ func (r *RollingRestartReconciler) countMasters() (int32, int32, error) {
 			return 0, 0, err
 		}
 		total += ptr.Deref(sts.Spec.Replicas, 1)
-		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &np)
-		if err != nil {
-			return 0, 0, err
-		}
-		sts.Status.ReadyReplicas = readyReplicas
 		ready += sts.Status.ReadyReplicas
 	}
 	return total, ready, nil
