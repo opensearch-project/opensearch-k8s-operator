@@ -318,12 +318,6 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 		return err
 	}
 
-	readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &pool)
-	if err != nil {
-		return err
-	}
-	sts.Status.ReadyReplicas = readyReplicas
-
 	dataCount := util.DataNodesCount(r.client, r.instance)
 	if dataCount == 2 && r.instance.Spec.General.DrainDataNodes {
 		r.logger.Info("Only 2 data nodes and drain is set, some shards may not drain")
