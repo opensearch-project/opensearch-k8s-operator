@@ -65,7 +65,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 
 	// add any aditional dashboard config to the reconciler context
 	for key, value := range r.instance.Spec.Dashboards.AdditionalConfig {
-		r.reconcilerContext.AddDashboardsConfig(key, value)
+		r.reconcilerContext.AddDashboardsConfig(key, jsonValueToString(value))
 	}
 
 	// Generate additional volumes

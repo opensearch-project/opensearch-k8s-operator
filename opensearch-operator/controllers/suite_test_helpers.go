@@ -9,6 +9,7 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -143,8 +144,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opensearchv1.Ope
 				ServiceName:    "es-svc",
 				ServiceAccount: "default",
 				PluginsList:    []string{"http://foo-plugin-1.0.0"},
-				AdditionalConfig: map[string]string{
-					"foo": "bar",
+				AdditionalConfig: map[string]apiextensionsv1.JSON{
+					"foo": {Raw: []byte(`"bar"`)},
 				},
 				AdditionalVolumes: []opensearchv1.AdditionalVolume{
 					{
@@ -287,8 +288,8 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opensearchv1.Ope
 					"data",
 					"ingest",
 				},
-				AdditionalConfig: map[string]string{
-					"baz": "bat",
+				AdditionalConfig: map[string]apiextensionsv1.JSON{
+					"baz": {Raw: []byte(`"bat"`)},
 				},
 				Labels: map[string]string{
 					"quux": "quut",
