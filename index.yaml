@@ -114,6 +114,20 @@ entries:
   opensearch-operator:
   - apiVersion: v2
     appVersion: 3.0.0-alpha
+    created: "2026-03-23T22:24:30.350250226Z"
+    description: The OpenSearch Operator Helm chart for Kubernetes
+    digest: d5fe23fd7d8e1107331d2074d68b7bc42533b265096730ba9ab45eca11659d93
+    home: https://opensearch.org
+    name: opensearch-operator
+    sources:
+    - https://github.com/opensearch-project/OpenSearch
+    - https://github.com/opensearch-project/opensearch-k8s-operator
+    type: application
+    urls:
+    - https://github.com/opensearch-project/opensearch-k8s-operator/releases/download/opensearch-operator-3.0.2/opensearch-operator-3.0.2.tgz
+    version: 3.0.2
+  - apiVersion: v2
+    appVersion: 3.0.0-alpha
     created: "2026-03-14T20:52:18.573299493Z"
     description: The OpenSearch Operator Helm chart for Kubernetes
     digest: 8090b51513455b8ba1a169f0b9e9078096e96bb5fab2e7ba26608f1467651eb8
@@ -440,4 +454,4 @@ entries:
     urls:
     - https://opensearch-project.github.io/opensearch-k8s-operator/opensearch-operator-0.1.0.tgz
     version: 0.1.0
-generated: "2026-03-14T20:52:18.573569347Z"
+generated: "2026-03-23T22:24:30.350447805Z"
