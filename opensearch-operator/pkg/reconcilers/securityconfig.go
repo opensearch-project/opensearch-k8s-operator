@@ -65,7 +65,7 @@ var ymlToFileType = map[string]string{
 	"action_groups.yml":  "actiongroups",
 	"tenants.yml":        "tenants",
 	"nodes_dn.yml":       "nodesdn",
-	"whitelist.yml":      "whitelist",
+	"whitelist.yml":      "allowlist",
 	"audit.yml":          "audit",
 	"allowlist.yml":      "allowlist",
 	"config.yml":         "config",
