@@ -542,7 +542,6 @@ type ClusterSpec struct {
 	General GeneralConfig `json:"general,omitempty"`
 	// +kubebuilder:default={smartScaler:true}
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
-	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`
