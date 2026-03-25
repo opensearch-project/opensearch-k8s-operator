@@ -336,7 +336,11 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opensearchv1
 	return nil
 }
 
-// BuildClusterSvcHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}
+// BuildClusterSvcHostName builds the discovery service host name as
+// {discovery-svc}.{namespace}.svc.{dns-base}. The discovery service has
+// PublishNotReadyAddresses=true, so pods are reachable before they pass
+// readiness probes. This is essential during initial cluster bootstrap when
+// the security plugin has not yet been initialized.
 func BuildClusterSvcHostName(instance *opensearchv1.OpenSearchCluster) string {
-	return fmt.Sprintf("%s.svc.%s", builders.DnsOfService(instance), helpers.ClusterDnsBase())
+	return fmt.Sprintf("%s.%s.svc.%s", builders.DiscoveryServiceName(instance), instance.Namespace, helpers.ClusterDnsBase())
 }

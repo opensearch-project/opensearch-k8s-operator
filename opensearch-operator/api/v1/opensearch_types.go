@@ -189,25 +189,6 @@ type MonitoringConfigTLS struct {
 	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
 }
 
-type BootstrapConfig struct {
-	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
-	Tolerations  []corev1.Toleration         `json:"tolerations,omitempty"`
-	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
-	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
-	Jvm          string                      `json:"jvm,omitempty"`
-	Annotations  map[string]string           `json:"annotations,omitempty"`
-	Labels       map[string]string           `json:"labels,omitempty"`
-	PluginsList  []string                    `json:"pluginsList,omitempty"`
-	Keystore     []KeystoreValue             `json:"keystore,omitempty"`
-	Env          []corev1.EnvVar             `json:"env,omitempty"`
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Schemaless
-	InitContainers    []corev1.Container `json:"initContainers,omitempty"`
-	HostAliases       []corev1.HostAlias `json:"hostAliases,omitempty"`
-	DiskSize          resource.Quantity  `json:"diskSize,omitempty"`
-	PriorityClassName string             `json:"priorityClassName,omitempty"`
-}
-
 type DashboardsServiceSpec struct {
 	// +kubebuilder:validation:Enum=ClusterIP;NodePort;LoadBalancer
 	// +kubebuilder:default=ClusterIP
@@ -408,7 +389,6 @@ type ClusterSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	General    GeneralConfig    `json:"general,omitempty"`
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
-	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`

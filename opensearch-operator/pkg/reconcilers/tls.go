@@ -361,10 +361,6 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 		}
 		nodeSecret.Data[CaCertKey] = ca.CertData()
 
-		if err := r.generateBootstrapCertIfNeeded(ca, &nodeSecret); err != nil {
-			return err
-		}
-
 		eg, _ := errgroup.WithContext(r.client.Context())
 		eg.SetLimit(min(SimultaneousCertGenerationCap, runtime.GOMAXPROCS(0)))
 
@@ -458,44 +454,6 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 
 	r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport/%s", CaCertKey))
 
-	return nil
-}
-
-func (r *TLSReconciler) generateBootstrapCertIfNeeded(
-	ca tls.Cert,
-	nodeSecret *corev1.Secret,
-) error {
-	namespace := r.instance.Namespace
-	clusterName := r.instance.Name
-
-	// Generate bootstrap pod cert
-	bootstrapPodName := builders.BootstrapPodName(r.instance)
-	_, bootstrapCertExists := nodeSecret.Data[fmt.Sprintf("%s.crt", bootstrapPodName)]
-	_, bootstrapKeyExists := nodeSecret.Data[fmt.Sprintf("%s.key", bootstrapPodName)]
-
-	if !r.instance.Status.Initialized && (!bootstrapCertExists || !bootstrapKeyExists) {
-		dnsNames := []string{
-			bootstrapPodName,
-			clusterName,
-			builders.DiscoveryServiceName(r.instance),
-			fmt.Sprintf("%s.%s", bootstrapPodName, clusterName),
-			fmt.Sprintf("%s.%s", clusterName, namespace),
-			fmt.Sprintf("%s.%s.%s", bootstrapPodName, clusterName, namespace),
-			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-			fmt.Sprintf("%s.%s.%s.svc", bootstrapPodName, clusterName, namespace),
-			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
-			fmt.Sprintf("%s.%s.%s.svc.%s", bootstrapPodName, clusterName, namespace, helpers.ClusterDnsBase()),
-		}
-		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames, r.resolveTransportCertDuration())
-		if err != nil {
-			r.logger.Error(err, "Failed to create node certificate", "interface", "transport", "node", bootstrapPodName)
-			//	r.recorder.Event(r.instance, "Normal", "Security", "Created transport certificates")
-			return err
-		}
-		//	r.recorder.Event(r.instance, "Normal", "Security", "Created transport certificates")
-		nodeSecret.Data[fmt.Sprintf("%s.crt", bootstrapPodName)] = nodeCert.CertData()
-		nodeSecret.Data[fmt.Sprintf("%s.key", bootstrapPodName)] = nodeCert.KeyData()
-	}
 	return nil
 }
 
