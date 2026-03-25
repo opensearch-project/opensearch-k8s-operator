@@ -4,9 +4,6 @@ metadata:
   name: test-cluster
   namespace: default
 spec:
-  bootstrap:
-    affinity: {}
-    resources: {}
   confMgmt:
     smartScaler: true
   dashboards:
