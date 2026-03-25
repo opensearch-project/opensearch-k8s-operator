@@ -41,13 +41,6 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.general.snapshotRepositories` | list | `[]` | Opensearch snapshot repositories configuration |
 | `cluster.general.vendor` | string | `"Opensearch"` |  |
 | `cluster.general.version` | string | `"2.3.0"` | Opensearch version |
-| `cluster.bootstrap.env` | list | `[]` | bootstrap pod env variables |
-| `cluster.bootstrap.affinity` | object | `{}` | bootstrap pod affinity rules |
-| `cluster.bootstrap.annotations` | object | `{}` | bootstrap pod annotations |
-| `cluster.bootstrap.jvm` | string | `""` | bootstrap pod jvm options. If jvm is not provided then the java heap size will be set to half of resources.requests.memory which is the recommend value for data nodes. If jvm is not provided and resources.requests.memory does not exist then value will be -Xmx512M -Xms512M |
-| `cluster.bootstrap.nodeSelector` | object | `{}` | bootstrap pod node selectors |
-| `cluster.bootstrap.resources` | object | `{}` | bootstrap pod cpu and memory resources |
-| `cluster.bootstrap.tolerations` | list | `[]` | bootstrap pod tolerations |
 | `cluster.confMgmt.smartScaler` | bool | `true` | Enable nodes to be safely removed from the cluster |
 | `cluster.dashboards.additionalConfig` | object | `{}` | Additional properties for opensearch_dashboards.yaml |
 | `cluster.dashboards.affinity` | object | `{}` | dashboards pod affinity rules |

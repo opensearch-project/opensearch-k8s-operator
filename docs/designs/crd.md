@@ -141,35 +141,6 @@ _Appears in:_
 | `waitFor` _string_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
 
 
-#### BootstrapConfig
-
-
-
-
-
-
-
-_Appears in:_
-- [ClusterSpec](#clusterspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ |  |  |  |
-| `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
-| `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
-| `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
-| `jvm` _string_ |  |  |  |
-| `annotations` _object (keys:string, values:string)_ |  |  |  |
-| `labels` _object (keys:string, values:string)_ |  |  |  |
-| `pluginsList` _string array_ |  |  |  |
-| `keystore` _[KeystoreValue](#keystorevalue) array_ |  |  |  |
-| `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ |  |  |  |
-| `initContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core) array_ |  |  | Schemaless: \{\} <br /> |
-| `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
-| `diskSize` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ |  |  |  |
-| `priorityClassName` _string_ |  |  |  |
-
-
 #### Close
 
 
@@ -198,7 +169,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `general` _[GeneralConfig](#generalconfig)_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file |  |  |
 | `confMgmt` _[ConfMgmt](#confmgmt)_ |  |  |  |
-| `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ |  |  |  |
 | `dashboards` _[DashboardsConfig](#dashboardsconfig)_ |  |  |  |
 | `security` _[Security](#security)_ |  |  |  |
 | `nodePools` _[NodePool](#nodepool) array_ |  |  |  |
@@ -619,7 +589,6 @@ _Appears in:_
 
 
 _Appears in:_
-- [BootstrapConfig](#bootstrapconfig)
 - [GeneralConfig](#generalconfig)
 
 | Field | Description | Default | Validation |
@@ -1911,36 +1880,6 @@ _Appears in:_
 | `waitFor` _string_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
 
 
-#### BootstrapConfig
-
-
-
-
-
-
-
-_Appears in:_
-- [ClusterSpec](#clusterspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ |  |  |  |
-| `tolerations` _[Toleration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#toleration-v1-core) array_ |  |  |  |
-| `nodeSelector` _object (keys:string, values:string)_ |  |  |  |
-| `affinity` _[Affinity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#affinity-v1-core)_ |  |  |  |
-| `jvm` _string_ |  |  |  |
-| `annotations` _object (keys:string, values:string)_ |  |  |  |
-| `labels` _object (keys:string, values:string)_ |  |  |  |
-| `pluginsList` _string array_ |  |  |  |
-| `keystore` _[KeystoreValue](#keystorevalue) array_ |  |  |  |
-| `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ |  |  |  |
-| `initContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core) array_ |  |  | Schemaless: \{\} <br /> |
-| `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
-| `diskSize` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ |  |  |  |
-| `priorityClassName` _string_ |  |  |  |
-| `storageClass` _string_ |  |  |  |
-
-
 #### Close
 
 
@@ -1969,7 +1908,6 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `general` _[GeneralConfig](#generalconfig)_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file |  |  |
 | `confMgmt` _[ConfMgmt](#confmgmt)_ |  |  |  |
-| `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ |  |  |  |
 | `dashboards` _[DashboardsConfig](#dashboardsconfig)_ |  |  |  |
 | `security` _[Security](#security)_ |  |  |  |
 | `nodePools` _[NodePool](#nodepool) array_ |  |  |  |
@@ -2419,7 +2357,6 @@ _Appears in:_
 
 
 _Appears in:_
-- [BootstrapConfig](#bootstrapconfig)
 - [GeneralConfig](#generalconfig)
 
 | Field | Description | Default | Validation |
