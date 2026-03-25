@@ -176,23 +176,9 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
 
-	if !r.reconcileNodeAttributesRBAC(&result) {
-		return result.Result, result.Err
-	}
-
-	// Create bootstrap PVC for persistent storage
-	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
-	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPVC, r.client.Scheme()))
-
-	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
-	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
-	if r.instance.Status.Initialized {
-		// Exclude bootstrap from voting before deletion so small master pools do not lose quorum.
-		result.Combine(r.removeBootstrapPod(bootstrapPod))
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
-	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
-		result.Combine(r.reconcileBootstrapPod(bootstrapPod))
+	if _, err := builders.InitialMasterNodes(r.instance); err != nil {
+		r.logger.Error(err, "Invalid cluster spec")
+		return ctrl.Result{}, err
 	}
 
 	for _, nodePool := range r.instance.Spec.NodePools {
@@ -827,107 +813,4 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 		instance.Status.Health = health
 		instance.Status.AvailableNodes = availableNodes
 	})
-}
-
-// reconcileBootstrapPod creates the bootstrap pod if it is missing and recreates
-// it only when the operator's last-applied spec has changed. Live spec drift from
-// admission controllers (LimitRange, mutating webhooks) is ignored so the pod is
-// not deleted in a loop. See https://github.com/opensearch-project/opensearch-k8s-operator/issues/1364
-func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
-	existingPod, err := r.client.GetPod(desiredPod.Name, desiredPod.Namespace)
-	if err != nil && !k8serrors.IsNotFound(err) {
-		return &ctrl.Result{}, err
-	}
-
-	if k8serrors.IsNotFound(err) {
-		r.logger.Info("Creating bootstrap pod", "pod", desiredPod.Name)
-		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
-	}
-
-	if existingPod.DeletionTimestamp != nil {
-		return &ctrl.Result{Requeue: true, RequeueAfter: 2 * time.Second}, nil
-	}
-
-	if !util.BootstrapPodNeedsRecreation(&existingPod, desiredPod) {
-		return &ctrl.Result{}, nil
-	}
-
-	r.logger.Info("Bootstrap pod spec changed, recreating pod", "pod", desiredPod.Name)
-	return r.recreateBootstrapPod(&existingPod, desiredPod)
-}
-
-// removeBootstrapPod excludes the bootstrap node from the voting configuration before
-// deleting it, so that a 1-master (or even-count) pool does not lose quorum when the
-// bootstrap voter that formed the cluster is removed.
-//
-// Client/POST failures return RequeueAfter without an error so ClusterReconciler
-// does not fail the whole reconcile chain (scaler/upgrade/restart still run). The
-// bootstrap pod is left in place until the exclusion succeeds.
-func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.Result, error) {
-	_, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
-	if k8serrors.IsNotFound(err) {
-		return &ctrl.Result{}, nil
-	}
-	if err != nil {
-		return &ctrl.Result{}, err
-	}
-
-	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
-	if err != nil {
-		r.logger.Error(err, "Failed to create OpenSearch client before bootstrap removal; will retry")
-		r.warnBootstrapExclusionFailed(bootstrapPod.Name, err)
-		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
-	nodeName := builders.BootstrapPodName(r.instance)
-	if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
-		r.logger.Error(err, "Failed to add voting config exclusion for bootstrap pod; will retry", "pod", nodeName)
-		r.warnBootstrapExclusionFailed(nodeName, err)
-		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
-	}
-
-	result, err := r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent)
-	if err != nil {
-		return result, err
-	}
-
-	// The pod is normally still terminating here, so a waiting clear would sit on
-	// OpenSearch's 30s wait_for_removal deadline. Clear only once the node has
-	// left; otherwise the scaler's voting-config exclusion sweep clears it on a
-	// later pass. Never clear without wait here: that can re-admit a still-alive
-	// voter. Failures do not fail the reconciler chain.
-	cleared, clearErr := services.ClearVotingConfigExclusionsIfNodeGone(clusterClient, r.logger, nodeName)
-	if clearErr != nil {
-		r.logger.Error(clearErr, "Failed to clear voting config exclusions after bootstrap removal; the scaler sweep retries", "pod", nodeName)
-	} else if !cleared {
-		r.logger.Info("Bootstrap node still leaving; its voting config exclusion is cleared by the scaler sweep", "pod", nodeName)
-	}
-
-	r.logger.Info("Removed bootstrap pod after voting config exclusion", "pod", nodeName)
-	return result, nil
-}
-
-// warnBootstrapExclusionFailed surfaces a held bootstrap pod on the cluster, since
-// the retry is otherwise only visible in the operator log.
-func (r *ClusterReconciler) warnBootstrapExclusionFailed(podName string, err error) {
-	if r.recorder == nil {
-		return
-	}
-	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "BootstrapExclusionFailed",
-		"Keeping bootstrap pod %s until it is excluded from the voting configuration, retrying in 10s: %v", podName, err)
-}
-
-func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {
-	if err := r.client.DeletePod(existingPod); err != nil {
-		r.logger.Error(err, "Failed to delete existing bootstrap pod", "pod", desiredPod.Name)
-		return &ctrl.Result{}, err
-	}
-	if err := r.client.WaitForPodDeletion(desiredPod.Name, desiredPod.Namespace); err != nil {
-		r.logger.Error(err, "Timeout waiting for bootstrap pod deletion", "pod", desiredPod.Name)
-		return &ctrl.Result{}, err
-	}
-
-	r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
-	return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
 }
