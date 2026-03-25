@@ -190,20 +190,6 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opensearchv1.Ope
 				VerUpdate:   false,
 				SmartScaler: false,
 			},
-			Bootstrap: opensearchv1.BootstrapConfig{
-				Resources: corev1.ResourceRequirements{
-					Limits: corev1.ResourceList{
-						corev1.ResourceCPU:    resource.MustParse("125m"),
-						corev1.ResourceMemory: resource.MustParse("1Gi"),
-					},
-				},
-				Tolerations: []corev1.Toleration{{
-					Effect:   "NoSchedule",
-					Key:      "foo",
-					Operator: "Equal",
-					Value:    "bar",
-				}},
-			},
 			Dashboards: opensearchv1.DashboardsConfig{
 				Enable:   true,
 				Replicas: 3,
