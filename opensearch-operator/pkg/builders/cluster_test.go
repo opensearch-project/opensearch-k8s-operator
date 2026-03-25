@@ -43,31 +43,11 @@ func ClusterDescWithKeystoreSecret(secretName string, keyMappings map[string]str
 	}
 }
 
-func ClusterDescWithBootstrapKeystoreSecret(secretName string, keyMappings map[string]string) opensearchv1.OpenSearchCluster {
-	return opensearchv1.OpenSearchCluster{
-		Spec: opensearchv1.ClusterSpec{
-			Bootstrap: opensearchv1.BootstrapConfig{
-				Keystore: []opensearchv1.KeystoreValue{
-					{
-						Secret: corev1.LocalObjectReference{
-							Name: secretName,
-						},
-						KeyMappings: keyMappings,
-					},
-				},
-			},
-		},
-	}
-}
-
-func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, bootstrapEnv []corev1.EnvVar) opensearchv1.OpenSearchCluster {
+func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string) opensearchv1.OpenSearchCluster {
 	return opensearchv1.OpenSearchCluster{
 		Spec: opensearchv1.ClusterSpec{
 			General: opensearchv1.GeneralConfig{
 				AdditionalConfig: addtitionalConfig,
-			},
-			Bootstrap: opensearchv1.BootstrapConfig{
-				Env: bootstrapEnv,
 			},
 		},
 	}
@@ -85,18 +65,6 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(len(result.Spec.Template.Spec.InitContainers)).To(Equal(0))
-			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
-		})
-		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(len(result.Spec.InitContainers)).To(Equal(1))
-		})
-		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
-			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(len(result.Spec.InitContainers)).To(Equal(0))
 			_ = os.Unsetenv(helpers.SkipInitContainerEnvVariable)
 		})
 		It("should only use valid roles", func() {
@@ -593,313 +561,6 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
-	When("Constructing a bootstrap pod", func() {
-		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			customRepository := "mycustomrepo.cr"
-			clusterObject.Spec.General.DefaultRepo = &customRepository
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[0].Image).To(Equal("mycustomrepo.cr/busybox:latest"))
-		})
-
-		It("should apply the ENV to the env variables", func() {
-			mockKey := "server.basePath"
-
-			mockEnv := []corev1.EnvVar{
-				{
-					Name:  mockKey,
-					Value: "/opensearch-operated",
-				},
-			}
-			clusterObject := ClusterDescWithAdditionalConfigs(nil, mockEnv)
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
-				Name:  mockKey,
-				Value: "/opensearch-operated",
-			}))
-		})
-
-		It("should apply bootstrap pod annotations", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			expectedAnnotations := map[string]string{
-				"custom-annotation":  "custom-value",
-				"another-annotation": "another-value",
-			}
-			clusterObject.Spec.Bootstrap.Annotations = expectedAnnotations
-
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			Expect(result.ObjectMeta.Annotations).To(Equal(expectedAnnotations))
-		})
-
-		It("should apply Bootstrap.Env when set", func() {
-			mockKey1 := "server.basePath"
-			mockKey2 := "server.rewriteBasePath"
-
-			mockGeneralConfig := map[string]string{
-				mockKey1: "/opensearch-operated",
-			}
-			mockBootstrapEnv := []corev1.EnvVar{
-				{
-					Name:  mockKey2,
-					Value: "false",
-				},
-			}
-
-			clusterObject := ClusterDescWithAdditionalConfigs(mockGeneralConfig, mockBootstrapEnv)
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
-				Name:  mockKey2,
-				Value: "false",
-			}))
-		})
-		It("should properly setup the main command when installing plugins", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			pluginA := "some-plugin"
-			pluginB := "another-plugin"
-
-			clusterObject.Spec.Bootstrap.PluginsList = []string{pluginA, pluginB}
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			installCmd := fmt.Sprintf(
-				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
-				pluginA,
-				pluginB,
-			)
-
-			expected := []string{
-				"/bin/bash",
-				"-c",
-				installCmd,
-			}
-
-			actual := result.Spec.Containers[0].Command
-
-			Expect(expected).To(Equal(actual))
-		})
-
-		It("should inherit General.PluginsList when Bootstrap.PluginsList is not set", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			pluginA := "repository-s3"
-			pluginB := "analysis-icu"
-
-			clusterObject.Spec.General.PluginsList = []string{pluginA, pluginB}
-			// Bootstrap.PluginsList is not set
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			actual := result.Spec.Containers[0].Command
-			Expect(len(actual)).To(Equal(3))
-			Expect(actual[2]).To(ContainSubstring(pluginA))
-			Expect(actual[2]).To(ContainSubstring(pluginB))
-		})
-
-		It("should override General.PluginsList with Bootstrap.PluginsList when explicitly set", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			generalPlugin := "repository-s3"
-			bootstrapPluginA := "custom-plugin-a"
-			bootstrapPluginB := "custom-plugin-b"
-
-			clusterObject.Spec.General.PluginsList = []string{generalPlugin}
-			clusterObject.Spec.Bootstrap.PluginsList = []string{bootstrapPluginA, bootstrapPluginB}
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			// Should use Bootstrap.PluginsList, not General.PluginsList
-			actual := result.Spec.Containers[0].Command
-			Expect(len(actual)).To(Equal(3))
-			Expect(actual[2]).To(ContainSubstring(bootstrapPluginA))
-			Expect(actual[2]).To(ContainSubstring(bootstrapPluginB))
-			Expect(actual[2]).NotTo(ContainSubstring(generalPlugin))
-		})
-
-		It("should use no plugins when both General.PluginsList and Bootstrap.PluginsList are empty", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			// Neither list is set
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			actual := result.Spec.Containers[0].Command
-			Expect(len(actual)).To(Equal(3))
-			Expect(actual[2]).To(Equal("./opensearch-docker-entrypoint.sh"))
-		})
-
-		It("should use PVC for data volume instead of emptyDir", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-
-			// Find the data volume
-			var dataVolume *corev1.Volume
-			for i, volume := range result.Spec.Volumes {
-				if volume.Name == "data" {
-					dataVolume = &result.Spec.Volumes[i]
-					break
-				}
-			}
-
-			Expect(dataVolume).NotTo(BeNil())
-			Expect(dataVolume.VolumeSource.PersistentVolumeClaim).NotTo(BeNil())
-			Expect(dataVolume.VolumeSource.PersistentVolumeClaim.ClaimName).To(Equal(fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)))
-			Expect(dataVolume.VolumeSource.EmptyDir).To(BeNil())
-		})
-	})
-
-	When("Constructing a bootstrap pod with Keystore Values", func() {
-		It("should create a proper initContainer", func() {
-			mockSecretName := "some-secret"
-			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, nil)
-
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[1].VolumeMounts).To(ContainElements([]corev1.VolumeMount{
-				{
-					Name:      "keystore",
-					MountPath: "/tmp/keystore",
-				},
-				{
-					Name:      "keystore-" + mockSecretName,
-					MountPath: "/tmp/keystoreSecrets/" + mockSecretName,
-				},
-			}))
-		})
-
-		It("should mount the prefilled keystore into the opensearch container", func() {
-			mockSecretName := "some-secret"
-			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, nil)
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.Containers[0].VolumeMounts).To(ContainElement(corev1.VolumeMount{
-				Name:      "keystore",
-				MountPath: "/usr/share/opensearch/config/opensearch.keystore",
-				SubPath:   "opensearch.keystore",
-			}))
-		})
-
-		It("should properly rename secret keys when key mappings are given", func() {
-			mockSecretName := "some-secret"
-			oldKey := "old-key"
-			newKey := "new-key"
-
-			keyMappings := map[string]string{
-				oldKey: newKey,
-			}
-			clusterObject := ClusterDescWithBootstrapKeystoreSecret(mockSecretName, keyMappings)
-			result := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(result.Spec.InitContainers[1].VolumeMounts).To(ContainElement(corev1.VolumeMount{
-				Name:      "keystore-" + mockSecretName,
-				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
-				SubPath:   oldKey,
-			}))
-		})
-		When("Constructing a bootstrap pod with Volumes", func() {
-			It("should include all the required volumes and mounts", func() {
-				clusterObject := opensearchv1.OpenSearchCluster{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      "test-cluster",
-						Namespace: "test-namespace",
-					},
-					Spec: opensearchv1.ClusterSpec{
-						General: opensearchv1.GeneralConfig{
-							PluginsList: []string{"repository-s3"},
-						},
-					},
-				}
-
-				// Create the volumes that would come from the configuration reconciler
-				volumes := []corev1.Volume{
-					{
-						Name: "rw-conf",
-						VolumeSource: corev1.VolumeSource{
-							EmptyDir: &corev1.EmptyDirVolumeSource{},
-						},
-					},
-					{
-						Name: "rw-logs",
-						VolumeSource: corev1.VolumeSource{
-							EmptyDir: &corev1.EmptyDirVolumeSource{},
-						},
-					},
-					{
-						Name: "rw-plugins",
-						VolumeSource: corev1.VolumeSource{
-							EmptyDir: &corev1.EmptyDirVolumeSource{},
-						},
-					},
-				}
-
-				volumeMounts := []corev1.VolumeMount{
-					{
-						Name:      "rw-conf",
-						MountPath: "/usr/share/opensearch/conf",
-					},
-					{
-						Name:      "rw-logs",
-						MountPath: "/usr/share/opensearch/logs",
-					},
-					{
-						Name:      "rw-plugins",
-						MountPath: "/usr/share/opensearch/plugins",
-					},
-				}
-
-				result := NewBootstrapPod(&clusterObject, volumes, volumeMounts)
-
-				Expect(len(result.Spec.Volumes)).To(Equal(4))
-				Expect(result.Spec.Volumes[0].Name).To(Equal(volumes[0].Name))
-				Expect(result.Spec.Volumes[1].Name).To(Equal(volumes[1].Name))
-				Expect(result.Spec.Volumes[2].Name).To(Equal(volumes[2].Name))
-
-				Expect(len(result.Spec.Containers)).To(Equal(1))
-				Expect(len(result.Spec.Containers[0].VolumeMounts)).To(Equal(4))
-				Expect(result.Spec.Containers[0].VolumeMounts[0].Name).To(Equal(volumeMounts[0].Name))
-				Expect(result.Spec.Containers[0].VolumeMounts[1].Name).To(Equal(volumeMounts[1].Name))
-				Expect(result.Spec.Containers[0].VolumeMounts[2].Name).To(Equal(volumeMounts[2].Name))
-			})
-		})
-	})
-
-	When("Constructing a bootstrap PVC", func() {
-		It("should create a PVC with correct name and storage size", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewBootstrapPVC(&clusterObject)
-
-			expectedName := fmt.Sprintf("%s-bootstrap-data", clusterObject.Name)
-			Expect(result.Name).To(Equal(expectedName))
-			Expect(result.Namespace).To(Equal(clusterObject.Namespace))
-			Expect(result.Spec.AccessModes).To(ContainElement(corev1.ReadWriteOnce))
-			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("1Gi")))
-		})
-
-		It("should use custom storage size from bootstrap resources", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.Bootstrap.DiskSize = resource.MustParse("2Gi")
-			result := NewBootstrapPVC(&clusterObject)
-
-			Expect(result.Spec.Resources.Requests[corev1.ResourceStorage]).To(Equal(resource.MustParse("2Gi")))
-		})
-
-		It("should have correct labels for cluster identification", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewBootstrapPVC(&clusterObject)
-
-			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
-		})
-
-		It("should use custom storage class when specified", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			storageClass := "fast-ssd"
-			clusterObject.Spec.Bootstrap.StorageClassName = &storageClass
-			result := NewBootstrapPVC(&clusterObject)
-
-			Expect(result.Spec.StorageClassName).ToNot(BeNil())
-			Expect(*result.Spec.StorageClassName).To(Equal("fast-ssd"))
-		})
-
-		It("should not set storage class when not specified", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			result := NewBootstrapPVC(&clusterObject)
-
-			Expect(result.Spec.StorageClassName).To(BeNil())
-		})
-	})
-
 	When("Constructing a STS for a NodePool with Keystore Values", func() {
 		It("should create a proper initContainer", func() {
 			mockSecretName := "some-secret"
@@ -967,6 +628,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceName = "foobar"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -988,6 +650,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar-v1v2"
 			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -1009,6 +672,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar-v1"
 			clusterObject.Spec.General.ServiceName = "foobar-v1"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -1347,10 +1011,6 @@ var _ = Describe("Builders", func() {
 			for _, container := range nodePoolSts.Spec.Template.Spec.InitContainers {
 				Expect(container.Resources).To(Equal(clusterObject.Spec.InitHelper.Resources))
 			}
-			bootstrapPod := NewBootstrapPod(&clusterObject, nil, nil)
-			for _, container := range bootstrapPod.Spec.InitContainers {
-				Expect(container.Resources).To(Equal(clusterObject.Spec.InitHelper.Resources))
-			}
 		})
 	})
 
@@ -1424,22 +1084,6 @@ var _ = Describe("Builders", func() {
 
 			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(sts.Spec.Template.Spec.HostNetwork).To(BeFalse())
-		})
-
-		It("should set hostNetwork on the bootstrap pod when enabled", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.General.HostNetwork = true
-
-			pod := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(pod.Spec.HostNetwork).To(BeTrue())
-		})
-
-		It("should not set hostNetwork on the bootstrap pod when disabled", func() {
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Spec.General.HostNetwork = false
-
-			pod := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(pod.Spec.HostNetwork).To(BeFalse())
 		})
 
 		It("should set hostNetwork on the securityconfig update job when enabled", func() {
@@ -1543,61 +1187,6 @@ var _ = Describe("Builders", func() {
 
 			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(sts.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
-
-			pod := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
-		})
-		It("should overwrite the host alias for the bootstrap pods", func() {
-			hostNames := []string{"dummy.com"}
-			hostAlias := corev1.HostAlias{
-				IP:        "3.5.7.9",
-				Hostnames: hostNames,
-			}
-			bootstrapHostNames := []string{"bootstrap.dummy.com"}
-			bootstrapHostAlias := corev1.HostAlias{
-				IP:        "3.5.7.10",
-				Hostnames: bootstrapHostNames,
-			}
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Namespace = "foobar"
-			clusterObject.Name = "foobar"
-			clusterObject.Spec.General.HostAliases = []corev1.HostAlias{hostAlias}
-			clusterObject.Spec.Bootstrap.HostAliases = []corev1.HostAlias{bootstrapHostAlias}
-			nodePool := opensearchv1.NodePool{
-				Replicas:  3,
-				Component: "masters",
-				Roles:     []string{"cluster_manager", "data"},
-			}
-			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-
-			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
-			Expect(sts.Spec.Template.Spec.HostAliases).To(Equal([]corev1.HostAlias{hostAlias}))
-
-			pod := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
-		})
-		It("should set the host alias for the bootstrap pods without hostAlias defined in opensearch pods", func() {
-			bootstrapHostNames := []string{"bootstrap.dummy.com"}
-			bootstrapHostAlias := corev1.HostAlias{
-				IP:        "3.5.7.10",
-				Hostnames: bootstrapHostNames,
-			}
-			clusterObject := ClusterDescWithVersion("2.2.1")
-			clusterObject.Namespace = "foobar"
-			clusterObject.Name = "foobar"
-			clusterObject.Spec.Bootstrap.HostAliases = []corev1.HostAlias{bootstrapHostAlias}
-			nodePool := opensearchv1.NodePool{
-				Replicas:  3,
-				Component: "masters",
-				Roles:     []string{"cluster_manager", "data"},
-			}
-			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-
-			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
-			Expect(sts.Spec.Template.Spec.HostAliases).To(BeNil())
-
-			pod := NewBootstrapPod(&clusterObject, nil, nil)
-			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
 		})
 	})
 })
