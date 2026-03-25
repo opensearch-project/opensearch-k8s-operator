@@ -49,7 +49,7 @@ jobs:
           cd opensearch-operator
           make docker-build IMG=opensearch-operator:scan
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         with:
           image-ref: 'opensearch-operator:scan'
           format: 'table'
@@ -58,7 +58,7 @@ jobs:
           vuln-type: 'os,library'
           severity: 'CRITICAL,HIGH'
       - name: Run Trivy and output SARIF
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1
         if: always()
         with:
           image-ref: 'opensearch-operator:scan'
