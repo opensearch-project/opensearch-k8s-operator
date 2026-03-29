@@ -17,6 +17,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/samber/lo"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -403,13 +404,16 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 		return nil
 	}
 
+	r.logger.Info(fmt.Sprintf("Deleting pod %s for upgrade", workingPod))
 	err = r.client.DeletePod(&corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      workingPod,
 			Namespace: sts.Namespace,
 		},
 	})
-	if err != nil {
+	if apierrors.IsNotFound(err) {
+		r.logger.Info(fmt.Sprintf("Pod %s already deleted, proceeding with cleanup", workingPod))
+	} else if err != nil {
 		r.logger.Error(err, "Could not delete pod")
 		conditions = append(conditions, "Could not delete pod")
 		r.setComponentConditions(conditions, pool.Component)
@@ -419,7 +423,9 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 	conditions = append(conditions, fmt.Sprintf("Deleted pod %s", workingPod))
 	r.setComponentConditions(conditions, pool.Component)
 
-	// If we are draining nodes remove the exclusion after the pod is deleted
+	// Always remove the allocation exclusion after the pod is deleted (or already gone).
+	// Failing to clean up the exclusion causes the new pod to be excluded from
+	// shard allocation, which deadlocks the drain of subsequent nodes.
 	if r.instance.Spec.General.DrainDataNodes {
 		_, err = services.RemoveExcludeNodeHost(r.osClient, r.logger, workingPod)
 		return err
