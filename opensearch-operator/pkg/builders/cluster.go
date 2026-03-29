@@ -12,7 +12,7 @@ import (
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1410,7 +1410,6 @@ func NewSecurityconfigUpdateJob(
 }
 
 func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearchv1.OpenSearchCluster) bool {
-	wrappedClient := k8s.NewK8sClient(k8sClient, ctx)
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
 		if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
@@ -1421,11 +1420,6 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearc
 			}, sts); err != nil {
 				return false
 			}
-			readyReplicas, err := helpers.ReadyReplicasForNodePool(wrappedClient, cr, &nodePool)
-			if err != nil {
-				return false
-			}
-			sts.Status.ReadyReplicas = readyReplicas
 			if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
 				return false
 			}

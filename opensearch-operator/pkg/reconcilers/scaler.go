@@ -91,12 +91,6 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 		return false, err
 	}
 
-	readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, nodePool)
-	if err != nil {
-		return false, err
-	}
-	currentSts.Status.ReadyReplicas = readyReplicas
-
 	componentStatus := opensearchv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Running",

@@ -102,7 +102,7 @@ func AppendExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToE
 		return false, err
 	}
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
-	lg.V(1).Info(fmt.Sprintf("Excluding from allocation node: %s , currently excluded: %s", nodeNameToExclude, val))
+	lg.Info(fmt.Sprintf("Excluding node %s from allocation, currently excluded: %q", nodeNameToExclude, val))
 	valAsString := nodeNameToExclude
 	if ok && val != "" {
 		// Test whether name is already excluded
@@ -134,7 +134,7 @@ func RemoveExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToE
 		return false, err
 	}
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
-	lg.V(1).Info(fmt.Sprintf("Removing allocation exclusion for node: %s , currently excluded: %s", nodeNameToExclude, val))
+	lg.Info(fmt.Sprintf("Removing allocation exclusion for node %s, currently excluded: %q", nodeNameToExclude, val))
 	if !ok || val == "" {
 		return true, err
 	}
@@ -280,12 +280,15 @@ func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName strin
 		// Checks if the pod is safe to delete because either:
 		// - there are no shards allocated on the node
 		// - all allocated shards are replicas stuck due to version mismatch (during upgrade)
-		safeToDelete, err := CheckPodSafeToDelete(service, podName)
+		safeToDelete, err := CheckPodSafeToDelete(service, lg, podName)
 		if err != nil {
 			return false, err
 		}
-		// If the node isn't empty requeue to wait for shards to drain
-		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
+		if safeToDelete {
+			lg.Info(fmt.Sprintf("Node %s is drained and safe to delete", podName))
+		} else {
+			lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
+		}
 		return safeToDelete, nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
@@ -610,23 +613,26 @@ func CheckClusterRestartOnYellow(service *OsClusterClient, health responses.Clus
 	return isDeadlocked, nil
 }
 
-func CheckPodSafeToDelete(service *OsClusterClient, nodeName string) (bool, error) {
-	// Get all shards on the cluster
+func CheckPodSafeToDelete(service *OsClusterClient, lg logr.Logger, nodeName string) (bool, error) {
 	var headers []string
 	shards, err := service.CatShards(headers)
 	if err != nil {
 		return false, err
 	}
 
-	// Check each shard on the node
 	nodeShardsCount := 0
+	nodePrimaryCount := 0
+	nodeReplicaCount := 0
 	nodeStuckReplicasCount := 0
 
 	for _, shard := range shards {
 		if shard.NodeName == nodeName {
 			nodeShardsCount += 1
 
-			if shard.PrimaryOrReplica == "r" {
+			if shard.PrimaryOrReplica == "p" {
+				nodePrimaryCount += 1
+			} else if shard.PrimaryOrReplica == "r" {
+				nodeReplicaCount += 1
 				isStuck, err := DetectShardStuckVersionMismatch(service, shard)
 				if err != nil {
 					return false, err
@@ -639,6 +645,8 @@ func CheckPodSafeToDelete(service *OsClusterClient, nodeName string) (bool, erro
 	}
 
 	safeToDelete := nodeStuckReplicasCount == nodeShardsCount
+	lg.Info(fmt.Sprintf("CheckPodSafeToDelete node=%s: totalShards=%d primaries=%d replicas=%d stuckReplicas=%d safeToDelete=%t",
+		nodeName, nodeShardsCount, nodePrimaryCount, nodeReplicaCount, nodeStuckReplicasCount, safeToDelete))
 
 	return safeToDelete, nil
 }
