@@ -48,7 +48,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 			},
 			Spec: opensearchv1.OpensearchSnapshotPolicySpec{
 				PolicyName: "test-policy",
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: corev1.ObjectReference{
 					Name: "test-cluster",
 				},
 			},

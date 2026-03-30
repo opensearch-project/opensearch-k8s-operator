@@ -39,7 +39,7 @@ type OpensearchComponentTemplateStatus struct {
 }
 
 type OpensearchComponentTemplateSpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
+	OpensearchRef corev1.ObjectReference `json:"opensearchCluster"`
 
 	// The name of the component template. Defaults to metadata.name
 	// +immutable
