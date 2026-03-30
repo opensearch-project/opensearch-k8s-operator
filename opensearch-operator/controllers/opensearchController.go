@@ -162,7 +162,6 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpenSearchCluster{}). // Watch new API group
-		Owns(&corev1.Pod{}).
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.ConfigMap{}).
 		Owns(&corev1.Service{}).

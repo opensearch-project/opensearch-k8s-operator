@@ -55,16 +55,13 @@ func NewScalerReconciler(
 func (r *ScalerReconciler) Name() string { return scalerReconcilerName }
 
 func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
-	requeue := false
 	results := &reconciler.CombinedResult{}
-	var err error
 	for _, nodePool := range r.instance.Spec.NodePools {
-		requeue, err = r.reconcileNodePool(&nodePool)
-		if err != nil {
+		requeue, err := r.reconcileNodePool(&nodePool)
+		if err != nil || requeue {
 			results.Combine(&ctrl.Result{Requeue: requeue}, err)
 		}
 	}
-	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
 
 	// Check readiness of current NodePools before cleaning up old node pools
 	ready, err := r.nodePoolsReady()
