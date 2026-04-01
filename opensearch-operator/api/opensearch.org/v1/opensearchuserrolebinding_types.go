@@ -25,9 +25,10 @@ import (
 type OpensearchUserRoleBindingState string
 
 const (
-	OpensearchUserRoleBindingPending      OpensearchUserRoleBindingState = "PENDING"
-	OpensearchUserRoleBindingStateCreated OpensearchUserRoleBindingState = "CREATED"
-	OpensearchUserRoleBindingStateError   OpensearchUserRoleBindingState = "ERROR"
+	OpensearchUserRoleBindingPending          OpensearchUserRoleBindingState = "PENDING"
+	OpensearchUserRoleBindingStateCreated     OpensearchUserRoleBindingState = "CREATED"
+	OpensearchUserRoleBindingStateError       OpensearchUserRoleBindingState = "ERROR"
+	OpensearchUserRoleBindingStateTerminating OpensearchUserRoleBindingState = "TERMINATING"
 )
 
 // OpensearchUserRoleBindingSpec defines the desired state of OpensearchUserRoleBinding
