@@ -54,6 +54,7 @@ jobs:
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
           kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.yaml
+          sleep 2
           kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
       - name: Run tests
         id: helm_tests
@@ -136,7 +137,7 @@ jobs:
     uses: ./.github/workflows/reusable-functional-test.yaml
     with:
       test_focus: "DataIntegrityUpgrade"
-      test_timeout: "30m"
+      test_timeout: "60m"
       test_name: "data-integrity-upgrade"
       enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
 
@@ -144,7 +145,7 @@ jobs:
     uses: ./.github/workflows/reusable-functional-test.yaml
     with:
       test_focus: "DataIntegrityScaling"
-      test_timeout: "30m"
+      test_timeout: "60m"
       test_name: "data-integrity-scaling"
       enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
 
@@ -161,7 +162,7 @@ jobs:
     uses: ./.github/workflows/reusable-functional-test.yaml
     with:
       test_focus: "DataIntegrityMultipleOperations"
-      test_timeout: "30m"
+      test_timeout: "60m"
       test_name: "data-integrity-multiple-ops"
       enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
 

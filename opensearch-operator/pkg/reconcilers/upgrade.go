@@ -37,6 +37,8 @@ const (
 	upgradeStatusFinished   = "Finished"
 )
 
+const upgradeReconcilerName = "upgrade"
+
 type UpgradeReconciler struct {
 	client            k8s.K8sClient
 	ctx               context.Context
@@ -56,14 +58,16 @@ func NewUpgradeReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *UpgradeReconciler {
 	return &UpgradeReconciler{
-		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "upgrade")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", upgradeReconcilerName)))...),
 		ctx:               ctx,
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "upgrade"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", upgradeReconcilerName),
 	}
 }
+
+func (r *UpgradeReconciler) Name() string { return upgradeReconcilerName }
 
 func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	// If versions are in sync do nothing

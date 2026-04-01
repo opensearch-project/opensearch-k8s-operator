@@ -19,6 +19,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const snapshotRepositoryReconcilerName = "snapshot_repository"
+
 type SnapshotRepositoryReconciler struct {
 	client k8s.K8sClient
 	ReconcilerOptions
@@ -39,14 +41,16 @@ func NewSnapshotRepositoryReconciler(
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &SnapshotRepositoryReconciler{
-		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "snapshot_repository"))),
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", snapshotRepositoryReconcilerName))),
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "snapshot_repository"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", snapshotRepositoryReconcilerName),
 	}
 }
+
+func (r *SnapshotRepositoryReconciler) Name() string { return snapshotRepositoryReconcilerName }
 
 func (r *SnapshotRepositoryReconciler) Reconcile() (ctrl.Result, error) {
 	if len(r.instance.Spec.General.SnapshotRepositories) == 0 {

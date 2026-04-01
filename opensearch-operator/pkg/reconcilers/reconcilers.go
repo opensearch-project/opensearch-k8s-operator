@@ -27,6 +27,11 @@ const (
 
 type ComponentReconciler func() (reconcile.Result, error)
 
+type NamedComponentReconciler struct {
+	Name string
+	Func ComponentReconciler
+}
+
 type ReconcilerOptions struct {
 	osClientTransport http.RoundTripper
 	updateStatus      *bool

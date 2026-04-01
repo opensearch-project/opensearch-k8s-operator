@@ -57,7 +57,7 @@ type OpenSearchClusterReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters,verbs=get;list;watch
 //+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters/status,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
@@ -213,17 +213,21 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		r.Instance,
 	)
 
-	componentReconcilers := []reconcilers.ComponentReconciler{
-		tls.DeleteResources,
-		securityconfig.DeleteResources,
-		config.DeleteResources,
-		cluster.DeleteResources,
-		dashboards.DeleteResources,
+	componentReconcilers := []reconcilers.NamedComponentReconciler{
+		{Name: tls.Name(), Func: tls.DeleteResources},
+		{Name: securityconfig.Name(), Func: securityconfig.DeleteResources},
+		{Name: config.Name(), Func: config.DeleteResources},
+		{Name: cluster.Name(), Func: cluster.DeleteResources},
+		{Name: dashboards.Name(), Func: dashboards.DeleteResources},
 	}
 	for _, rec := range componentReconcilers {
-		result, err := rec()
-		if err != nil || result.Requeue {
+		result, err := rec.Func()
+		if err != nil {
+			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
 			return result, err
+		}
+		if result.Requeue {
+			return result, nil
 		}
 	}
 	r.Info("Finished deleting resources")
@@ -325,21 +329,25 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		r.Instance,
 	)
 
-	componentReconcilers := []reconcilers.ComponentReconciler{
-		tls.Reconcile,
-		securityconfig.Reconcile,
-		config.Reconcile,
-		cluster.Reconcile,
-		scaler.Reconcile,
-		dashboards.Reconcile,
-		upgrade.Reconcile,
-		restart.Reconcile,
-		snapshotrepository.Reconcile,
+	componentReconcilers := []reconcilers.NamedComponentReconciler{
+		{Name: tls.Name(), Func: tls.Reconcile},
+		{Name: securityconfig.Name(), Func: securityconfig.Reconcile},
+		{Name: config.Name(), Func: config.Reconcile},
+		{Name: cluster.Name(), Func: cluster.Reconcile},
+		{Name: scaler.Name(), Func: scaler.Reconcile},
+		{Name: dashboards.Name(), Func: dashboards.Reconcile},
+		{Name: upgrade.Name(), Func: upgrade.Reconcile},
+		{Name: restart.Name(), Func: restart.Reconcile},
+		{Name: snapshotrepository.Name(), Func: snapshotrepository.Reconcile},
 	}
 	for _, rec := range componentReconcilers {
-		result, err := rec()
-		if err != nil || result.Requeue {
+		result, err := rec.Func()
+		if err != nil {
+			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
 			return result, err
+		}
+		if result.Requeue {
+			return result, nil
 		}
 	}
 

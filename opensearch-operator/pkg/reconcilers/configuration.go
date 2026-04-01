@@ -24,6 +24,8 @@ import (
 	"strings"
 )
 
+const configurationReconcilerName = "configuration"
+
 type ConfigurationReconciler struct {
 	client            k8s.K8sClient
 	recorder          record.EventRecorder
@@ -40,12 +42,14 @@ func NewConfigurationReconciler(
 	opts ...reconciler.ResourceReconcilerOption,
 ) *ConfigurationReconciler {
 	return &ConfigurationReconciler{
-		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "configuration")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", configurationReconcilerName)))...),
 		reconcilerContext: reconcilerContext,
 		recorder:          recorder,
 		instance:          instance,
 	}
 }
+
+func (r *ConfigurationReconciler) Name() string { return configurationReconcilerName }
 
 func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	// Check if we have any config to process
