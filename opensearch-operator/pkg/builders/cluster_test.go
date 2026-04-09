@@ -1326,6 +1326,18 @@ var _ = Describe("Builders", func() {
 			result := NewServiceMonitor(&clusterObject)
 			Expect(result.Spec.Endpoints[0].Scheme).To(Equal("http"))
 		})
+
+		It("should not set BearerTokenFile when BasicAuth is configured", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Name = "test-cluster"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.Monitoring.Enable = true
+			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
+
+			result := NewServiceMonitor(&clusterObject)
+			Expect(result.Spec.Endpoints[0].BasicAuth).ToNot(BeNil())
+			Expect(result.Spec.Endpoints[0].BearerTokenFile).To(BeEmpty()) //nolint:staticcheck // SA1019 intentionally testing deprecated field is not set
+		})
 	})
 
 	When("Configuring InitHelper Resources", func() {

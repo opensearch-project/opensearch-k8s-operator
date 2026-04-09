@@ -1527,7 +1527,6 @@ func NewServiceMonitor(cr *opensearchv1.OpenSearchCluster) *monitoring.ServiceMo
 					Path:            "/_prometheus/metrics",
 					Interval:        monitoring.Duration(cr.Spec.General.Monitoring.ScrapeInterval),
 					TLSConfig:       tlsconfig,
-					BearerTokenFile: "",
 					HonorLabels:     false,
 					BasicAuth:       &user,
 					Scheme:          scheme,
