@@ -62,6 +62,92 @@ var _ = Describe("ClusterURL", func() {
 
 var _ = Describe("Helper Functions", func() {
 
+	Describe("ShouldMergeSecurityConfig", func() {
+		Context("when cluster is nil", func() {
+			It("should return true (default to merge)", func() {
+				result := ShouldMergeSecurityConfig(nil)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when annotations are nil", func() {
+			It("should return true (default to merge)", func() {
+				cluster := &opensearchv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "default",
+					},
+				}
+				result := ShouldMergeSecurityConfig(cluster)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when annotation is not present", func() {
+			It("should return true (default to merge)", func() {
+				cluster := &opensearchv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "default",
+						Annotations: map[string]string{
+							"some.other/annotation": "value",
+						},
+					},
+				}
+				result := ShouldMergeSecurityConfig(cluster)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when annotation is set to 'true'", func() {
+			It("should return false (overwrite mode)", func() {
+				cluster := &opensearchv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "default",
+						Annotations: map[string]string{
+							"opensearch.org/securityconfig-overwrite": "true",
+						},
+					},
+				}
+				result := ShouldMergeSecurityConfig(cluster)
+				Expect(result).To(BeFalse())
+			})
+		})
+
+		Context("when annotation is set to 'false'", func() {
+			It("should return true (merge mode)", func() {
+				cluster := &opensearchv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "default",
+						Annotations: map[string]string{
+							"opensearch.org/securityconfig-overwrite": "false",
+						},
+					},
+				}
+				result := ShouldMergeSecurityConfig(cluster)
+				Expect(result).To(BeTrue())
+			})
+		})
+
+		Context("when annotation is set to any other value", func() {
+			It("should return true (merge mode)", func() {
+				cluster := &opensearchv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "test",
+						Namespace: "default",
+						Annotations: map[string]string{
+							"opensearch.org/securityconfig-overwrite": "yes",
+						},
+					},
+				}
+				result := ShouldMergeSecurityConfig(cluster)
+				Expect(result).To(BeTrue())
+			})
+		})
+	})
+
 	Describe("ResolveUidGid", func() {
 		Context("when no security context is specified", func() {
 			It("should return default values", func() {
