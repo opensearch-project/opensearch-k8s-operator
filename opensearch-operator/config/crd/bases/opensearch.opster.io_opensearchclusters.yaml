@@ -1287,8 +1287,9 @@ spec:
                 properties:
                   additionalConfig:
                     additionalProperties:
-                      type: string
-                    description: Additional properties for opensearch_dashboards.yaml
+                      x-kubernetes-preserve-unknown-fields: true
+                    description: Additional properties for opensearch_dashboards.yaml,
+                      supports arbitrary YAML values
                     type: object
                   additionalVolumes:
                     items:
@@ -3813,8 +3814,9 @@ spec:
                 properties:
                   additionalConfig:
                     additionalProperties:
-                      type: string
-                    description: Extra items to add to the opensearch.yml
+                      x-kubernetes-preserve-unknown-fields: true
+                    description: Extra items to add to the opensearch.yml, supports
+                      arbitrary YAML values (strings, arrays, objects, etc.)
                     type: object
                   additionalVolumes:
                     description: Additional volumes to mount to all pods in the cluster
@@ -5109,9 +5111,10 @@ spec:
                   properties:
                     additionalConfig:
                       additionalProperties:
-                        type: string
+                        x-kubernetes-preserve-unknown-fields: true
                       description: Extra items to add to the opensearch.yml for this
-                        nodepool (merged with general.additionalConfig)
+                        nodepool (merged with general.additionalConfig), supports
+                        arbitrary YAML values
                       type: object
                     affinity:
                       description: Affinity is a group of affinity scheduling rules.

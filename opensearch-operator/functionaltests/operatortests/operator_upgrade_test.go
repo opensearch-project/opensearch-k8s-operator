@@ -14,6 +14,7 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -302,10 +303,10 @@ func createUpgradeTestCluster(clusterName, namespace, version string) error {
 				HttpPort:    9200,
 				Vendor:      "Opensearch",
 				ServiceName: clusterName,
-				AdditionalConfig: map[string]string{
-					"cluster.routing.allocation.disk.watermark.low":         "500m",
-					"cluster.routing.allocation.disk.watermark.high":        "300m",
-					"cluster.routing.allocation.disk.watermark.flood_stage": "100m",
+				AdditionalConfig: map[string]apiextensionsv1.JSON{
+					"cluster.routing.allocation.disk.watermark.low":         {Raw: []byte(`"500m"`)},
+					"cluster.routing.allocation.disk.watermark.high":        {Raw: []byte(`"300m"`)},
+					"cluster.routing.allocation.disk.watermark.flood_stage": {Raw: []byte(`"100m"`)},
 				},
 			},
 			Dashboards: opensearchv1.DashboardsConfig{

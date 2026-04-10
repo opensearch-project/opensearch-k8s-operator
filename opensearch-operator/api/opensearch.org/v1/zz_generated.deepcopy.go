@@ -615,9 +615,9 @@ func (in *DashboardsConfig) DeepCopyInto(out *DashboardsConfig) {
 	}
 	if in.AdditionalConfig != nil {
 		in, out := &in.AdditionalConfig, &out.AdditionalConfig
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]apiextensionsv1.JSON, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 	out.OpensearchCredentialsSecret = in.OpensearchCredentialsSecret
@@ -878,9 +878,9 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 	}
 	if in.AdditionalConfig != nil {
 		in, out := &in.AdditionalConfig, &out.AdditionalConfig
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]apiextensionsv1.JSON, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 	if in.Annotations != nil {
@@ -1286,9 +1286,9 @@ func (in *NodePool) DeepCopyInto(out *NodePool) {
 	}
 	if in.AdditionalConfig != nil {
 		in, out := &in.AdditionalConfig, &out.AdditionalConfig
-		*out = make(map[string]string, len(*in))
+		*out = make(map[string]apiextensionsv1.JSON, len(*in))
 		for key, val := range *in {
-			(*out)[key] = val
+			(*out)[key] = *val.DeepCopy()
 		}
 	}
 	if in.SidecarContainers != nil {

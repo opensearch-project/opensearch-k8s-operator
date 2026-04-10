@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -57,8 +58,8 @@ type GeneralConfig struct {
 	//+kubebuilder:default=true
 	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
-	// Extra items to add to the opensearch.yml
-	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	// Extra items to add to the opensearch.yml, supports arbitrary YAML values (strings, arrays, objects, etc.)
+	AdditionalConfig map[string]apiextensionsv1.JSON `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
 	Annotations map[string]string `json:"annotations,omitempty"`
 	// Drain data nodes controls whether to drain data notes on rolling restart operations
@@ -140,8 +141,8 @@ type NodePool struct {
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
-	// Extra items to add to the opensearch.yml for this nodepool (merged with general.additionalConfig)
-	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	// Extra items to add to the opensearch.yml for this nodepool (merged with general.additionalConfig), supports arbitrary YAML values
+	AdditionalConfig map[string]apiextensionsv1.JSON `json:"additionalConfig,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
@@ -229,8 +230,8 @@ type DashboardsConfig struct {
 	Version  string               `json:"version,omitempty"`
 	// Base Path for Opensearch Clusters running behind a reverse proxy
 	BasePath string `json:"basePath,omitempty"`
-	// Additional properties for opensearch_dashboards.yaml
-	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
+	// Additional properties for opensearch_dashboards.yaml, supports arbitrary YAML values
+	AdditionalConfig map[string]apiextensionsv1.JSON `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
 	OpensearchCredentialsSecret corev1.LocalObjectReference       `json:"opensearchCredentialsSecret,omitempty"`
 	Env                         []corev1.EnvVar                   `json:"env,omitempty"`

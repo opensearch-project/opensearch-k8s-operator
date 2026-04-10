@@ -12,6 +12,7 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	corev1 "k8s.io/api/core/v1"
+	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -60,11 +61,11 @@ func ClusterDescWithBootstrapKeystoreSecret(secretName string, keyMappings map[s
 	}
 }
 
-func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, bootstrapEnv []corev1.EnvVar) opensearchv1.OpenSearchCluster {
+func ClusterDescWithAdditionalConfigs(additionalConfig map[string]apiextensionsv1.JSON, bootstrapEnv []corev1.EnvVar) opensearchv1.OpenSearchCluster {
 	return opensearchv1.OpenSearchCluster{
 		Spec: opensearchv1.ClusterSpec{
 			General: opensearchv1.GeneralConfig{
-				AdditionalConfig: addtitionalConfig,
+				AdditionalConfig: additionalConfig,
 			},
 			Bootstrap: opensearchv1.BootstrapConfig{
 				Env: bootstrapEnv,
@@ -637,8 +638,8 @@ var _ = Describe("Builders", func() {
 			mockKey1 := "server.basePath"
 			mockKey2 := "server.rewriteBasePath"
 
-			mockGeneralConfig := map[string]string{
-				mockKey1: "/opensearch-operated",
+			mockGeneralConfig := map[string]apiextensionsv1.JSON{
+				mockKey1: {Raw: []byte(`"/opensearch-operated"`)},
 			}
 			mockBootstrapEnv := []corev1.EnvVar{
 				{
