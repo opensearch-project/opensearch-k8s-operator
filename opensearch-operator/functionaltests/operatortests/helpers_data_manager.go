@@ -461,7 +461,7 @@ func (m *TestDataManager) GetDocumentCount(indexName string) (int64, error) {
 	if docs, ok := indices[0]["docs.count"]; ok {
 		if countStr, ok := docs.(string); ok {
 			var count int64
-			fmt.Sscanf(countStr, "%d", &count)
+			_, _ = fmt.Sscanf(countStr, "%d", &count)
 			return count, nil
 		}
 	}

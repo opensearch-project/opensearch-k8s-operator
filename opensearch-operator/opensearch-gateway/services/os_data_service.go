@@ -436,7 +436,7 @@ func DeleteIndexTemplate(ctx context.Context, service *OsClusterClient, indexTem
 	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
-		return fmt.Errorf("response from API is %s", resp.Status())
+		return fmt.Errorf("failed to delete index template: %s", resp.String())
 	}
 	return nil
 }
@@ -561,7 +561,7 @@ func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, comp
 	defer helpers.SafeClose(resp.Body)
 
 	if resp.IsError() {
-		return fmt.Errorf("response from API is %s", resp.Status())
+		return fmt.Errorf("failed to delete component template: %s", resp.String())
 	}
 	return nil
 }
