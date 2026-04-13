@@ -177,6 +177,17 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 func (r *RollingRestartReconciler) globalCandidateRollingRestart() (ctrl.Result, error) {
 	r.logger.Info("Starting global candidate rolling restart")
 
+	// Clean stale allocation exclusions (e.g. node was restarted but RemoveExcludeNodeHost failed).
+	// Otherwise we never retry removing that node and the exclude list stays stuck.
+	if r.instance.Spec.General.DrainDataNodes {
+		if res, err := r.cleanStaleExclusionList(); err != nil || res.Requeue {
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			return res, nil
+		}
+	}
+
 	// Build candidate list across all node pools
 	var candidates []candidate
 
@@ -307,6 +318,11 @@ func (r *RollingRestartReconciler) globalCandidateRollingRestart() (ctrl.Result,
 	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 }
 
+// cleanStaleExclusionList delegates to the shared CleanStaleExclusionList.
+func (r *RollingRestartReconciler) cleanStaleExclusionList() (ctrl.Result, error) {
+	return util.CleanStaleExclusionList(r.client, r.instance, r.osClient, r.logger)
+}
+
 func parseOrdinalFromName(name string) int {
 	// expects name like <stsName>-<ordinal>
 	parts := strings.Split(name, "-")
@@ -374,8 +390,13 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 	}
 
 	if r.instance.Spec.General.DrainDataNodes {
-		_, err = services.RemoveExcludeNodeHost(r.osClient, r.logger, c.podName)
-		return ctrl.Result{}, err
+		ok, err := services.RemoveExcludeNodeHost(r.osClient, r.logger, c.podName)
+		if err != nil || !ok {
+			// If we fail to clean up the exclude list, log and requeue so we don't
+			// leave nodes permanently excluded and block subsequent restarts.
+			r.logger.Error(err, "Failed to remove allocation exclusion, will retry", "pod", c.podName)
+			return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+		}
 	}
 	return ctrl.Result{}, nil
 }

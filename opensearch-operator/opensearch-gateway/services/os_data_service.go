@@ -128,6 +128,28 @@ func AppendExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToE
 	return err == nil, err
 }
 
+// GetExcludedNodeNames returns the current list of node names in cluster.routing.allocation.exclude._name.
+func GetExcludedNodeNames(service *OsClusterClient) ([]string, error) {
+	response, err := service.GetClusterSettings()
+	if err != nil {
+		return nil, err
+	}
+	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
+	if !ok || val == "" {
+		return nil, nil
+	}
+	valAsString := val.(string)
+	parts := strings.Split(valAsString, ",")
+	var names []string
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			names = append(names, trimmed)
+		}
+	}
+	return names, nil
+}
+
 func RemoveExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToExclude string) (bool, error) {
 	response, err := service.GetClusterSettings()
 	if err != nil {

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"k8s.io/utils/ptr"
@@ -410,4 +411,65 @@ func isDefaultNodeLifecycleToleration(t corev1.Toleration) bool {
 	}
 
 	return t.Key == "node.kubernetes.io/not-ready" || t.Key == "node.kubernetes.io/unreachable"
+}
+
+// CleanStaleExclusionList removes from the cluster exclude list any node whose pod has already
+// been restarted (updated revision) or no longer exists. Call this when DrainDataNodes or
+// SmartScaler use the exclude list, so that a failed RemoveExcludeNodeHost (e.g. connection
+// refused after DeletePod) gets retried and does not leave nodes permanently excluded.
+func CleanStaleExclusionList(k8sClient k8s.K8sClient, instance *opensearchv1.OpenSearchCluster, osClient *services.OsClusterClient, logger logr.Logger) (ctrl.Result, error) {
+	excluded, err := services.GetExcludedNodeNames(osClient)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+	if len(excluded) == 0 {
+		return ctrl.Result{}, nil
+	}
+	for _, name := range excluded {
+		stale, err := isPodStale(k8sClient, instance, name)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if !stale {
+			continue
+		}
+		logger.Info("Removing stale allocation exclusion (pod already restarted or gone)", "node", name)
+		ok, err := services.RemoveExcludeNodeHost(osClient, logger, name)
+		if err != nil || !ok {
+			logger.Error(err, "Failed to remove stale exclusion, will retry", "node", name)
+			return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+	return ctrl.Result{}, nil
+}
+
+// isPodStale returns true if the named pod should no longer be in the exclude list:
+// the pod does not exist, or it belongs to our cluster and has the updated revision (already restarted).
+func isPodStale(k8sClient k8s.K8sClient, instance *opensearchv1.OpenSearchCluster, podName string) (bool, error) {
+	pod, err := k8sClient.GetPod(podName, instance.Namespace)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return true, nil
+		}
+		return false, err
+	}
+	for i := range instance.Spec.NodePools {
+		np := instance.Spec.NodePools[i]
+		sts, err := k8sClient.GetStatefulSet(builders.StsName(instance, &np), instance.Namespace)
+		if err != nil {
+			return false, err
+		}
+		replicas := ptr.Deref(sts.Spec.Replicas, 1)
+		for ord := int32(0); ord < replicas; ord++ {
+			if helpers.ReplicaHostName(sts, ord) != podName {
+				continue
+			}
+			rev, ok := pod.Labels["controller-revision-hash"]
+			if !ok {
+				return false, fmt.Errorf("pod %s has no controller-revision-hash label", podName)
+			}
+			return rev == sts.Status.UpdateRevision, nil
+		}
+	}
+	return true, nil
 }
