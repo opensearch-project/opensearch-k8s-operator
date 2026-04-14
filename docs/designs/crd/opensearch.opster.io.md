@@ -1345,7 +1345,6 @@ _Appears in:_
 
 _Appears in:_
 - [DashboardsProbesConfig](#dashboardsprobesconfig)
-- [ProbesConfig](#probesconfig)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1369,7 +1368,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `liveness` _[ProbeConfig](#probeconfig)_ |  |  |  |
+| `liveness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `readiness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `startup` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 
