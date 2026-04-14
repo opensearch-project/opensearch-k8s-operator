@@ -1344,7 +1344,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `liveness` _[ProbeConfig](#probeconfig)_ |  |  |  |
+| `liveness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `readiness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `startup` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 
@@ -3144,7 +3144,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `liveness` _[ProbeConfig](#probeconfig)_ |  |  |  |
+| `liveness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `readiness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `startup` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 
@@ -3579,5 +3579,4 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `conditions` _[Condition](#condition)_ | conditions for the transition. |  |  |
 | `stateName` _string_ | The name of the state to transition to if the conditions are met. |  |  |
-
 
