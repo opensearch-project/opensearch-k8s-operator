@@ -1237,11 +1237,11 @@ spec:
           failureThreshold: 5
 ```
 
-### Customize startup and readiness probe command
+### Customize startup, readiness and liveness probe command
 
-While liveness probe is a TCP check the startup and readiness probes use the OpenSearch API with curl.
+By default, the liveness probe is a TCP check while startup and readiness use the OpenSearch API with curl.
 
-If you need to customize the startup or readiness probe commands you can override it as shown below:
+If you need to customize the startup, readiness or liveness probe commands you can override them as shown below:
 
 ```yaml
 apiVersion: opensearch.org/v1
@@ -1252,6 +1252,11 @@ spec:
     - component: masters
       ...
       probes:
+        liveness:
+          command:
+            - /bin/bash
+            - -c
+            - curl -k -s -o /dev/null https://localhost:9200
         startup:
           command:
             - echo
