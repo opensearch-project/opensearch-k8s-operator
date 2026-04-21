@@ -727,6 +727,9 @@ func DeleteUnsupportedClusterSettings(service *OsClusterClient, newVersion strin
 	if err != nil {
 		return err
 	}
+	if len(settingsToDelete.Persistent) == 0 && len(settingsToDelete.Transient) == 0 {
+		return nil
+	}
 
 	_, err = service.PutClusterSettings(settingsToDelete)
 	return err
