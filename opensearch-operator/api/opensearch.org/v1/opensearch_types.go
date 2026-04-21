@@ -516,11 +516,63 @@ func (g GeneralConfig) GetOpenSearchHome() string {
 	return DefaultOpenSearchHome
 }
 
+func (g GeneralConfig) DataPath() string {
+	return g.GetOpenSearchHome() + "/data"
+}
+
+func (g GeneralConfig) ConfigYmlPath() string {
+	return g.GetOpenSearchHome() + "/config/opensearch.yml"
+}
+
+func (g GeneralConfig) KeystoreFilePath() string {
+	return g.GetOpenSearchHome() + "/config/opensearch.keystore"
+}
+
+func (g GeneralConfig) KeystoreBinPath() string {
+	return g.GetOpenSearchHome() + "/bin/opensearch-keystore"
+}
+
+func (g GeneralConfig) TLSPath(interfaceName string) string {
+	return g.GetOpenSearchHome() + "/config/tls-" + interfaceName
+}
+
+func (g GeneralConfig) TLSCaPath(interfaceName string) string {
+	return g.GetOpenSearchHome() + "/config/tls-" + interfaceName + "-ca"
+}
+
+func (g GeneralConfig) SecurityConfigV2Path() string {
+	return g.GetOpenSearchHome() + "/config/opensearch-security"
+}
+
+func (g GeneralConfig) SecurityConfigV1Path() string {
+	return g.GetOpenSearchHome() + "/plugins/opensearch-security/securityconfig"
+}
+
+func (g GeneralConfig) SecurityAdminPath() string {
+	return g.GetOpenSearchHome() + "/plugins/opensearch-security/tools/securityadmin.sh"
+}
+
 func (d DashboardsConfig) GetOpenSearchDashboardsHome() string {
 	if d.OpenSearchDashboardsHome != "" {
 		return strings.TrimRight(d.OpenSearchDashboardsHome, "/")
 	}
 	return DefaultOpenSearchDashboardsHome
+}
+
+func (d DashboardsConfig) ConfigFilePath() string {
+	return d.GetOpenSearchDashboardsHome() + "/config/opensearch_dashboards.yml"
+}
+
+func (d DashboardsConfig) CertsPath() string {
+	return d.GetOpenSearchDashboardsHome() + "/certs"
+}
+
+func (d DashboardsConfig) TLSKeyPath() string {
+	return d.GetOpenSearchDashboardsHome() + "/certs/tls.key"
+}
+
+func (d DashboardsConfig) TLSCertPath() string {
+	return d.GetOpenSearchDashboardsHome() + "/certs/tls.crt"
 }
 
 func (s ImageSpec) GetImagePullPolicy() (_ corev1.PullPolicy) {
