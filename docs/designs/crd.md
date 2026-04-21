@@ -1311,24 +1311,6 @@ _Appears in:_
 | `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ |  |  |  |
 
 
-#### ProbeConfig
-
-
-
-
-
-
-
-_Appears in:_
-- [ProbesConfig](#probesconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `initialDelaySeconds` _integer_ |  |  |  |
-| `periodSeconds` _integer_ |  |  |  |
-| `timeoutSeconds` _integer_ |  |  |  |
-| `successThreshold` _integer_ |  |  |  |
-| `failureThreshold` _integer_ |  |  |  |
 
 
 #### ProbesConfig
@@ -3111,24 +3093,6 @@ _Appears in:_
 | `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ |  |  |  |
 
 
-#### ProbeConfig
-
-
-
-
-
-
-
-_Appears in:_
-- [ProbesConfig](#probesconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `initialDelaySeconds` _integer_ |  |  |  |
-| `periodSeconds` _integer_ |  |  |  |
-| `timeoutSeconds` _integer_ |  |  |  |
-| `successThreshold` _integer_ |  |  |  |
-| `failureThreshold` _integer_ |  |  |  |
 
 
 #### ProbesConfig
@@ -3579,4 +3543,5 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `conditions` _[Condition](#condition)_ | conditions for the transition. |  |  |
 | `stateName` _string_ | The name of the state to transition to if the conditions are met. |  |  |
+
 
