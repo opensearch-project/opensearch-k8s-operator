@@ -2648,8 +2648,8 @@ func (in *ProbesConfig) DeepCopyInto(out *ProbesConfig) {
 	*out = *in
 	if in.Liveness != nil {
 		in, out := &in.Liveness, &out.Liveness
-		*out = new(ProbeConfig)
-		**out = **in
+		*out = new(CommandProbeConfig)
+		(*in).DeepCopyInto(*out)
 	}
 	if in.Readiness != nil {
 		in, out := &in.Readiness, &out.Readiness
