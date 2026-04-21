@@ -509,6 +509,58 @@ var _ = Describe("snapshot policy reconciler", func() {
 	})
 
 	Context("CreateSnapshotPolicy", func() {
+		When("snapshotConfig booleans are explicitly false", func() {
+			BeforeEach(func() {
+				instance.Spec.SnapshotConfig.Repository = "my-repo"
+				instance.Spec.SnapshotConfig.IgnoreUnavailable = ptr.To(false)
+				instance.Spec.SnapshotConfig.IncludeGlobalState = ptr.To(false)
+				instance.Spec.SnapshotConfig.Partial = ptr.To(false)
+				instance.Spec.Creation = opensearchv1.SnapshotCreation{
+					Schedule: opensearchv1.CronSchedule{
+						Cron: opensearchv1.CronExpression{
+							Expression: "0 0 * * *",
+							Timezone:   "UTC",
+						},
+					},
+				}
+			})
+
+			It("maps false values to the OpenSearch request snapshot_config", func() {
+				policy, err := reconciler.CreateSnapshotPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).NotTo(BeNil())
+				Expect(policy.SnapshotConfig.IgnoreUnavailable).NotTo(BeNil())
+				Expect(*policy.SnapshotConfig.IgnoreUnavailable).To(BeFalse())
+				Expect(policy.SnapshotConfig.IncludeGlobalState).NotTo(BeNil())
+				Expect(*policy.SnapshotConfig.IncludeGlobalState).To(BeFalse())
+				Expect(policy.SnapshotConfig.Partial).NotTo(BeNil())
+				Expect(*policy.SnapshotConfig.Partial).To(BeFalse())
+			})
+		})
+
+		When("snapshotConfig booleans are unset", func() {
+			BeforeEach(func() {
+				instance.Spec.SnapshotConfig.Repository = "my-repo"
+				instance.Spec.Creation = opensearchv1.SnapshotCreation{
+					Schedule: opensearchv1.CronSchedule{
+						Cron: opensearchv1.CronExpression{
+							Expression: "0 0 * * *",
+							Timezone:   "UTC",
+						},
+					},
+				}
+			})
+
+			It("leaves OpenSearch request snapshot_config booleans nil", func() {
+				policy, err := reconciler.CreateSnapshotPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).NotTo(BeNil())
+				Expect(policy.SnapshotConfig.IgnoreUnavailable).To(BeNil())
+				Expect(policy.SnapshotConfig.IncludeGlobalState).To(BeNil())
+				Expect(policy.SnapshotConfig.Partial).To(BeNil())
+			})
+		})
+
 		When("deletion schedule is different from creation schedule", func() {
 			BeforeEach(func() {
 				instance.Spec.Creation = opensearchv1.SnapshotCreation{
