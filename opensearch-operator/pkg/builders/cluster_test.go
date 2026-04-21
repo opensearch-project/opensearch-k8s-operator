@@ -1499,7 +1499,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 				Probes: &opensearchv1.ProbesConfig{
-					Liveness: &opensearchv1.ProbeConfig{
+					Liveness: &opensearchv1.CommandProbeConfig{
 						FailureThreshold: 15,
 					},
 					Startup: &opensearchv1.CommandProbeConfig{
@@ -1536,7 +1536,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 				Probes: &opensearchv1.ProbesConfig{
-					Liveness: &opensearchv1.ProbeConfig{
+					Liveness: &opensearchv1.CommandProbeConfig{
 						InitialDelaySeconds: 12,
 						TimeoutSeconds:      6,
 						PeriodSeconds:       25,
