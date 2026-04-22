@@ -216,6 +216,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		namespace,
 		checksumval,
 		adminCertName,
+		r.determineAdminCASecret(adminCertName),
 		cmdArg,
 		r.reconcilerContext.Volumes,
 		r.reconcilerContext.VolumeMounts,
@@ -301,6 +302,27 @@ func (r *SecurityconfigReconciler) determineAdminSecret() string {
 	}
 	// Security plugin is not enabled, no admin cert needed
 	return ""
+}
+
+func (r *SecurityconfigReconciler) determineAdminCASecret(adminSecretName string) string {
+	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil {
+		return ""
+	}
+
+	var caSecretName string
+	if helpers.SecurityChangeVersion(r.instance) {
+		if r.instance.Spec.Security.Tls.Http != nil {
+			caSecretName = r.instance.Spec.Security.Tls.Http.CaSecret.Name
+		}
+	} else if r.instance.Spec.Security.Tls.Transport != nil {
+		caSecretName = r.instance.Spec.Security.Tls.Transport.CaSecret.Name
+	}
+
+	// If CA comes from the same secret, keep single-secret mounting behavior.
+	if caSecretName == "" || caSecretName == adminSecretName {
+		return ""
+	}
+	return caSecretName
 }
 
 func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {

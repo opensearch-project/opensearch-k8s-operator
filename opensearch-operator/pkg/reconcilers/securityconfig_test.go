@@ -366,4 +366,46 @@ done;`
 			Expect(createdJob.Spec.Template.Spec.Containers[0].Args[0]).To(Equal(cmdArg))
 		})
 	})
+
+	When("Determining admin CA secret for securityconfig update job", func() {
+		It("should use HTTP caSecret for security change versions", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "ca-http", Namespace: "ca-http", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.3.0",
+					},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
+								CaSecret: corev1.LocalObjectReference{Name: "http-ca"},
+							},
+						},
+					},
+				},
+			}
+			underTest := &SecurityconfigReconciler{instance: &spec}
+			Expect(underTest.determineAdminCASecret("admin-secret")).To(Equal("http-ca"))
+		})
+
+		It("should return empty when CA secret equals admin secret", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "same-ca", Namespace: "same-ca", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.3.0",
+					},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
+								CaSecret: corev1.LocalObjectReference{Name: "admin-secret"},
+							},
+						},
+					},
+				},
+			}
+			underTest := &SecurityconfigReconciler{instance: &spec}
+			Expect(underTest.determineAdminCASecret("admin-secret")).To(BeEmpty())
+		})
+	})
 })
