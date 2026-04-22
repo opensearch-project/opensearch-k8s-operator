@@ -1317,6 +1317,7 @@ func NewSecurityconfigUpdateJob(
 	namespace string,
 	checksum string,
 	adminCertName string,
+	adminCASecretName string,
 	cmdArg string,
 	volumes []corev1.Volume,
 	volumeMounts []corev1.VolumeMount,
@@ -1326,10 +1327,41 @@ func NewSecurityconfigUpdateJob(
 		Component: "securityconfig",
 	}
 
-	volumes = append(volumes, corev1.Volume{
-		Name:         "admin-cert",
-		VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: adminCertName}},
-	})
+	adminCertVolume := corev1.Volume{
+		Name: "admin-cert",
+		VolumeSource: corev1.VolumeSource{
+			Secret: &corev1.SecretVolumeSource{SecretName: adminCertName},
+		},
+	}
+	if adminCASecretName != "" {
+		adminCertVolume = corev1.Volume{
+			Name: "admin-cert",
+			VolumeSource: corev1.VolumeSource{
+				Projected: &corev1.ProjectedVolumeSource{
+					Sources: []corev1.VolumeProjection{
+						{
+							Secret: &corev1.SecretProjection{
+								LocalObjectReference: corev1.LocalObjectReference{Name: adminCertName},
+								Items: []corev1.KeyToPath{
+									{Key: corev1.TLSCertKey, Path: corev1.TLSCertKey},
+									{Key: corev1.TLSPrivateKeyKey, Path: corev1.TLSPrivateKeyKey},
+								},
+							},
+						},
+						{
+							Secret: &corev1.SecretProjection{
+								LocalObjectReference: corev1.LocalObjectReference{Name: adminCASecretName},
+								Items: []corev1.KeyToPath{
+									{Key: "ca.crt", Path: "ca.crt"},
+								},
+							},
+						},
+					},
+				},
+			},
+		}
+	}
+	volumes = append(volumes, adminCertVolume)
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "admin-cert",
 		MountPath: "/certs",
