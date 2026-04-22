@@ -1638,6 +1638,8 @@ By default the Opensearch admin user will be used to access the monitoring API. 
 a. Create new applicative User using OpenSearch API/UI, create new secret with 'username' and 'password' keys and provide that secret name under `monitoringUserSecret`.
 b. Use Our OpenSearchUser CRD and provide the secret under monitoringUserSecret.
 
+### Configuration
+
 To configure monitoring you can add the following fields to your cluster spec:
 
 ```yaml
@@ -1659,8 +1661,25 @@ spec:
       tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor, only the following provided options can be set currently
         serverName: "testserver.test.local"
         insecureSkipVerify: true # The operator currently does not allow configuring the ServiceMonitor with certificates, so this needs to be set
+      # Optional: customize relabeling behavior
+      relabelings:
+        - sourceLabels: [pod]
+          regex: "service-east-opensearch-cluster-(masters|nodes)-[1-9][0-9]*"
+          action: drop
+
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "opensearch_indices_.*"
+          action: keep
   # ...
 ```
+
+#### Relabeling and metric relabeling
+
+You can customize the generated Prometheus `ServiceMonitor` endpoint with relabeling rules.
+
+- `relabelings` are applied **before scraping** and allow modifying target labels.
+- `metricRelabelings` are applied **after scraping** and allow filtering or transforming metrics.
 
 ### Managing ISM policies with Kubernetes resources
 
