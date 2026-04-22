@@ -1,9 +1,10 @@
 # Maintainers
 
-| Maintainer | GitHub ID | Affiliation  |
-| --------------- | --------- |--------------|
-| Prudhvi Godithi | [prudhvigodithi](https://github.com/prudhvigodithi) | Amazon       |
-| Itamar Syn-Hershko | [synhershko](https://github.com/synhershko) | BigData Boutique       |
+| Maintainer | GitHub ID | Affiliation |
+| ---- | --------- |--------|
+| Prudhvi Godithi | [prudhvigodithi](https://github.com/prudhvigodithi) | Amazon |
+| Itamar Syn-Hershko | [synhershko](https://github.com/synhershko) | BigData Boutique |
+| Jose Barato | [josedev-union](https://github.com/josedev-union) | NexGen Cloud       |
 
 # Emeritus
 | Maintainer            | GitHub ID                                               | Affiliation      |
