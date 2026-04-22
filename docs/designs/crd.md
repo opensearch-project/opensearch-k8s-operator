@@ -1311,24 +1311,6 @@ _Appears in:_
 | `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ |  |  |  |
 
 
-#### ProbeConfig
-
-
-
-
-
-
-
-_Appears in:_
-- [ProbesConfig](#probesconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `initialDelaySeconds` _integer_ |  |  |  |
-| `periodSeconds` _integer_ |  |  |  |
-| `timeoutSeconds` _integer_ |  |  |  |
-| `successThreshold` _integer_ |  |  |  |
-| `failureThreshold` _integer_ |  |  |  |
 
 
 #### ProbesConfig
@@ -1344,7 +1326,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `liveness` _[ProbeConfig](#probeconfig)_ |  |  |  |
+| `liveness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `readiness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `startup` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 
@@ -3111,24 +3093,6 @@ _Appears in:_
 | `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ |  |  |  |
 
 
-#### ProbeConfig
-
-
-
-
-
-
-
-_Appears in:_
-- [ProbesConfig](#probesconfig)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `initialDelaySeconds` _integer_ |  |  |  |
-| `periodSeconds` _integer_ |  |  |  |
-| `timeoutSeconds` _integer_ |  |  |  |
-| `successThreshold` _integer_ |  |  |  |
-| `failureThreshold` _integer_ |  |  |  |
 
 
 #### ProbesConfig
@@ -3144,7 +3108,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `liveness` _[ProbeConfig](#probeconfig)_ |  |  |  |
+| `liveness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `readiness` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 | `startup` _[CommandProbeConfig](#commandprobeconfig)_ |  |  |  |
 
