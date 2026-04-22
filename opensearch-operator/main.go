@@ -58,6 +58,18 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+func parseWatchNamespaces(watchNamespace string) map[string]cache.Config {
+	namespaces := map[string]cache.Config{}
+	for watchNs := range strings.SplitSeq(watchNamespace, ",") {
+		trimmed := strings.TrimSpace(watchNs)
+		if trimmed == "" {
+			continue
+		}
+		namespaces[trimmed] = cache.Config{}
+	}
+	return namespaces
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(opsterv1.AddToScheme(scheme))
@@ -102,11 +114,9 @@ func main() {
 
 	var cacheOpts cache.Options
 	if watchNamespace != "" {
-		cacheOpts.DefaultNamespaces = map[string]cache.Config{
-			watchNamespace: {},
-		}
-		for watchNs := range strings.SplitSeq(watchNamespace, ",") {
-			cacheOpts.DefaultNamespaces[watchNs] = cache.Config{}
+		namespaces := parseWatchNamespaces(watchNamespace)
+		if len(namespaces) > 0 {
+			cacheOpts.DefaultNamespaces = namespaces
 		}
 	}
 
