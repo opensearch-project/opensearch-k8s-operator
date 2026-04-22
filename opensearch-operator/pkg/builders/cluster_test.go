@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1337,6 +1338,47 @@ var _ = Describe("Builders", func() {
 			result := NewServiceMonitor(&clusterObject)
 			Expect(result.Spec.Endpoints[0].BasicAuth).ToNot(BeNil())
 			Expect(result.Spec.Endpoints[0].BearerTokenFile).To(BeEmpty()) //nolint:staticcheck // SA1019 intentionally testing deprecated field is not set
+		})
+
+		It("should propagate relabelings and metric relabelings to the ServiceMonitor endpoint", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Name = "test-cluster"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.ServiceName = "test-cluster"
+			clusterObject.Spec.General.Monitoring.Enable = true
+			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
+
+			clusterObject.Spec.General.Monitoring.Relabelings = []monitoring.RelabelConfig{
+				{
+					SourceLabels: []monitoring.LabelName{"pod"},
+					Regex:        "test-cluster-masters-.*",
+					Action:       "drop",
+				},
+				{
+					SourceLabels: []monitoring.LabelName{"__meta_kubernetes_pod_label_app"},
+					Regex:        "(.+)",
+					Action:       "replace",
+					TargetLabel:  "app",
+				},
+			}
+			clusterObject.Spec.General.Monitoring.MetricRelabelings = []monitoring.RelabelConfig{
+				{
+					SourceLabels: []monitoring.LabelName{"__name__"},
+					Regex:        "jvm_(.+)",
+					Action:       "keep",
+				},
+				{
+					SourceLabels: []monitoring.LabelName{"__name__", "pod"},
+					Regex:        "(opensearch_cluster_.*);test-cluster-masters-.*",
+					Action:       "drop",
+				},
+			}
+
+			result := NewServiceMonitor(&clusterObject)
+
+			Expect(result.Spec.Endpoints).To(HaveLen(1))
+			Expect(result.Spec.Endpoints[0].RelabelConfigs).To(Equal(clusterObject.Spec.General.Monitoring.Relabelings))
+			Expect(result.Spec.Endpoints[0].MetricRelabelConfigs).To(Equal(clusterObject.Spec.General.Monitoring.MetricRelabelings))
 		})
 	})
 
