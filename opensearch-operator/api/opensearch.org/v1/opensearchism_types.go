@@ -9,10 +9,11 @@ import (
 type OpensearchISMPolicyState string
 
 const (
-	OpensearchISMPolicyPending OpensearchISMPolicyState = "PENDING"
-	OpensearchISMPolicyCreated OpensearchISMPolicyState = "CREATED"
-	OpensearchISMPolicyError   OpensearchISMPolicyState = "ERROR"
-	OpensearchISMPolicyIgnored OpensearchISMPolicyState = "IGNORED"
+	OpensearchISMPolicyPending     OpensearchISMPolicyState = "PENDING"
+	OpensearchISMPolicyCreated     OpensearchISMPolicyState = "CREATED"
+	OpensearchISMPolicyError       OpensearchISMPolicyState = "ERROR"
+	OpensearchISMPolicyIgnored     OpensearchISMPolicyState = "IGNORED"
+	OpensearchISMPolicyTerminating OpensearchISMPolicyState = "TERMINATING"
 )
 
 // OpensearchISMPolicyStatus defines the observed state of OpensearchISMPolicy
