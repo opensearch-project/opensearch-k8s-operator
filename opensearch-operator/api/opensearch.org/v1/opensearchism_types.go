@@ -102,6 +102,8 @@ type Action struct {
 	Close *Close `json:"close,omitempty"`
 	// Deletes a managed index.
 	Delete *Delete `json:"delete,omitempty"`
+	// Converts an existing index into a searchable snapshot by restoring it from a remote snapshot repository.
+	ConvertIndexToRemote *ConvertIndexToRemote `json:"convertIndexToRemote,omitempty"`
 	// Reduces the number of Lucene segments by merging the segments of individual shards.
 	ForceMerge *ForceMerge `json:"forceMerge,omitempty"`
 	// Set the priority for the index in a specific state.
@@ -168,6 +170,21 @@ type ReadOnly struct{}
 type ReadWrite struct{}
 
 type Delete struct{}
+
+type ConvertIndexToRemote struct {
+	// The repository name registered through snapshot API operations.
+	Repository string `json:"repository"`
+	// The name of the snapshot created by the snapshot action.
+	Snapshot string `json:"snapshot"`
+	// If true, include index aliases during restore.
+	IncludeAliases *bool `json:"includeAliases,omitempty"`
+	// A comma-separated list of index settings to ignore during restore.
+	IgnoreIndexSettings *string `json:"ignoreIndexSettings,omitempty"`
+	// The number of replicas for the restored remote index.
+	NumberOfReplicas *int `json:"numberOfReplicas,omitempty"`
+	// Naming pattern for the restored searchable snapshot index.
+	RenamePattern *string `json:"renamePattern,omitempty"`
+}
 
 type ForceMerge struct {
 	// The number of segments to reduce the shard to.

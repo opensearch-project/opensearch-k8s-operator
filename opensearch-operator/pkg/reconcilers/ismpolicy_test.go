@@ -799,6 +799,55 @@ var _ = Describe("ism policy reconciler", func() {
 		})
 	})
 
+	Context("CreateISMPolicy ConvertIndexToRemote Action", func() {
+		BeforeEach(func() {
+			recorder = record.NewFakeRecorder(1)
+			options := ReconcilerOptions{}
+			options.apply(WithOSClientTransport(transport), WithUpdateStatus(false))
+			reconciler = &IsmPolicyReconciler{
+				client:            mockClient,
+				ctx:               context.Background(),
+				ReconcilerOptions: options,
+				recorder:          recorder,
+				instance:          instance,
+				logger:            log.FromContext(context.Background()),
+			}
+		})
+
+		It("should map convertIndexToRemote action fields", func() {
+			instance.Spec.States = []opensearchv1.State{
+				{
+					Name: "archive",
+					Actions: []opensearchv1.Action{
+						{
+							ConvertIndexToRemote: &opensearchv1.ConvertIndexToRemote{
+								Repository:          "remote-repo",
+								Snapshot:            "{{ctx.index}}",
+								IncludeAliases:      ptr.To(true),
+								IgnoreIndexSettings: ptr.To("index.refresh_interval,index.number_of_replicas"),
+								NumberOfReplicas:    ptr.To(0),
+								RenamePattern:       ptr.To("remote_$1"),
+							},
+						},
+					},
+				},
+			}
+
+			policy, err := reconciler.CreateISMPolicy()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(policy).ToNot(BeNil())
+			Expect(policy.States).To(HaveLen(1))
+			Expect(policy.States[0].Actions).To(HaveLen(1))
+			Expect(policy.States[0].Actions[0].ConvertIndexToRemote).ToNot(BeNil())
+			Expect(policy.States[0].Actions[0].ConvertIndexToRemote.Repository).To(Equal("remote-repo"))
+			Expect(policy.States[0].Actions[0].ConvertIndexToRemote.Snapshot).To(Equal("{{ctx.index}}"))
+			Expect(policy.States[0].Actions[0].ConvertIndexToRemote.IncludeAliases).To(Equal(ptr.To(true)))
+			Expect(policy.States[0].Actions[0].ConvertIndexToRemote.IgnoreIndexSettings).To(Equal(ptr.To("index.refresh_interval,index.number_of_replicas")))
+			Expect(policy.States[0].Actions[0].ConvertIndexToRemote.NumberOfReplicas).To(Equal(ptr.To(0)))
+			Expect(policy.States[0].Actions[0].ConvertIndexToRemote.RenamePattern).To(Equal(ptr.To("remote_$1")))
+		})
+	})
+
 	Context("deletions", func() {
 		When("existing status is nil", func() {
 			It("should do nothing and exit", func() {

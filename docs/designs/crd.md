@@ -1814,6 +1814,7 @@ _Appears in:_
 | `allocation` _[Allocation](#allocation)_ | Allocate the index to a node with a specific attribute set |  |  |
 | `close` _[Close](#close)_ | Closes the managed index. |  |  |
 | `delete` _[Delete](#delete)_ | Deletes a managed index. |  |  |
+| `convertIndexToRemote` _[ConvertIndexToRemote](#convertindextoremote)_ | Converts an existing index into a searchable snapshot by restoring it from a remote snapshot repository. |  |  |
 | `forceMerge` _[ForceMerge](#forcemerge)_ | Reduces the number of Lucene segments by merging the segments of individual shards. |  |  |
 | `indexPriority` _[IndexPriority](#indexpriority)_ | Set the priority for the index in a specific state. |  |  |
 | `notification` _[Notification](#notification)_ | Name          string        `json:"name,omitempty"` |  |  |
@@ -2033,6 +2034,27 @@ _Appears in:_
 | `autoScaler` _boolean_ |  |  |  |
 | `VerUpdate` _boolean_ |  |  |  |
 | `smartScaler` _boolean_ |  | true | Required: \{\} <br /> |
+
+
+#### ConvertIndexToRemote
+
+
+
+
+
+
+
+_Appears in:_
+- [Action](#action)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `repository` _string_ | The repository name registered through snapshot API operations. |  |  |
+| `snapshot` _string_ | The name of the snapshot created by the snapshot action. |  |  |
+| `includeAliases` _boolean_ | If true, include index aliases during restore. |  |  |
+| `ignoreIndexSettings` _string_ | A comma-separated list of index settings to ignore during restore. |  |  |
+| `numberOfReplicas` _integer_ | The number of replicas for the restored remote index. |  |  |
+| `renamePattern` _string_ | Naming pattern for the restored searchable snapshot index. |  |  |
 
 
 #### Cron
