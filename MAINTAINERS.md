@@ -4,7 +4,7 @@
 | ---- | --------- |--------|
 | Prudhvi Godithi | [prudhvigodithi](https://github.com/prudhvigodithi) | Amazon |
 | Itamar Syn-Hershko | [synhershko](https://github.com/synhershko) | BigData Boutique |
-| Jose Barato | [josedev-union](https://github.com/josedev-union) | NexGen Cloud       |
+| Jose Barato | [josedev-union](https://github.com/josedev-union) | BigData Boutique       |
 
 # Emeritus
 | Maintainer            | GitHub ID                                               | Affiliation      |
