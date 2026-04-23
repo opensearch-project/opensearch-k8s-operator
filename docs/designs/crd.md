@@ -2464,6 +2464,8 @@ _Appears in:_
 | `pluginUrl` _string_ |  |  |  |
 | `tlsConfig` _[MonitoringConfigTLS](#monitoringconfigtls)_ |  |  |  |
 | `labels` _object (keys:string, values:string)_ |  |  |  |
+| `relabelings` _RelabelConfig array_ |  |  |  |
+| `metricRelabelings` _RelabelConfig array_ |  |  |  |
 
 
 #### MonitoringConfigTLS
