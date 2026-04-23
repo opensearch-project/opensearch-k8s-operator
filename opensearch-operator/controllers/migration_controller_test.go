@@ -46,6 +46,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		scheme = runtime.NewScheme()
+		_ = corev1.AddToScheme(scheme)
 		_ = opensearchv1.AddToScheme(scheme)
 		_ = opsterv1.AddToScheme(scheme)
 		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
