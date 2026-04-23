@@ -62,7 +62,7 @@ type ReconcilerContext struct {
 	VolumeMounts     []corev1.VolumeMount
 	NodePoolHashes   []NodePoolHash
 	DashboardsConfig map[string]string
-	OpenSearchConfig map[string]string
+	OpenSearchConfig map[string]interface{}
 	recorder         record.EventRecorder
 	instance         *opensearchv1.OpenSearchCluster
 }
@@ -81,14 +81,14 @@ func NewReconcilerContext(recorder record.EventRecorder, instance *opensearchv1.
 	}
 	return ReconcilerContext{
 		NodePoolHashes:   nodePoolHashes,
-		OpenSearchConfig: make(map[string]string),
+		OpenSearchConfig: make(map[string]interface{}),
 		DashboardsConfig: make(map[string]string),
 		recorder:         recorder,
 		instance:         instance,
 	}
 }
 
-func (c *ReconcilerContext) AddConfig(key string, value string) {
+func (c *ReconcilerContext) AddConfig(key string, value interface{}) {
 	_, exists := c.OpenSearchConfig[key]
 	if exists {
 		fmt.Printf("Warning: Config key '%s' already exists. Will be overwritten\n", key)
