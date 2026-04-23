@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -293,6 +294,68 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			result, err := reconciler.handleNewClusterDeletion(ctx, newCluster)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
+		})
+	})
+
+	Describe("backfillPVCLegacyLabels", func() {
+		It("should backfill new PVC labels from legacy labels", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-test-cluster-master-0",
+					Namespace: "default",
+					Labels: map[string]string{
+						oldClusterLabel:  "test-cluster",
+						oldNodePoolLabel: "master",
+					},
+				},
+			}
+			Expect(fakeClient.Create(ctx, pvc)).To(Succeed())
+
+			Expect(reconciler.backfillPVCLegacyLabels(ctx, oldCluster)).To(Succeed())
+
+			updatedPVC := &corev1.PersistentVolumeClaim{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
+			Expect(updatedPVC.Labels[newClusterLabel]).To(Equal("test-cluster"))
+			Expect(updatedPVC.Labels[newNodePoolLabel]).To(Equal("master"))
+		})
+
+		It("should not overwrite existing new labels", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-test-cluster-master-1",
+					Namespace: "default",
+					Labels: map[string]string{
+						oldClusterLabel:  "test-cluster",
+						oldNodePoolLabel: "master",
+						newClusterLabel:  "already-set-cluster",
+						newNodePoolLabel: "already-set-nodepool",
+					},
+				},
+			}
+			Expect(fakeClient.Create(ctx, pvc)).To(Succeed())
+
+			Expect(reconciler.backfillPVCLegacyLabels(ctx, oldCluster)).To(Succeed())
+
+			updatedPVC := &corev1.PersistentVolumeClaim{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
+			Expect(updatedPVC.Labels[newClusterLabel]).To(Equal("already-set-cluster"))
+			Expect(updatedPVC.Labels[newNodePoolLabel]).To(Equal("already-set-nodepool"))
 		})
 	})
 
