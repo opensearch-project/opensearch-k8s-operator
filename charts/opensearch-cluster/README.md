@@ -19,7 +19,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.labels` | object | `{}` | cluster labels |
 | `cluster.general.additionalConfig` | object | `{}` | Extra items to add to the opensearch.yml |
 | `cluster.general.additionalVolumes` | list | `[]` | Additional volumes to mount to all pods in the cluster. Supported volume types configMap, emptyDir, secret (with default Kubernetes configuration schema) |
-| `cluster.general.drainDataNodes` | bool | `true` | Controls whether to drain data notes on rolling restart operations |
+| `cluster.general.drainDataNodes` | bool | `true` | Controls whether to drain data nodes on rolling restart operations |
 | `cluster.general.httpPort` | int | `9200` | Opensearch service http port |
 | `cluster.general.image` | string | `"docker.io/opensearchproject/opensearch"` | Opensearch image |
 | `cluster.general.imagePullPolicy` | string | `"IfNotPresent"` | Default image pull policy |

@@ -41,7 +41,7 @@ cluster:
       ## Whether to restart the pods on content change
       #   restartPods: false
 
-    # -- Controls whether to drain data notes on rolling restart operations
+    # -- Controls whether to drain data nodes on rolling restart operations
     drainDataNodes: true
 
     # -- Opensearch service http port
