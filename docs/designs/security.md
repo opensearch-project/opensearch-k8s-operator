@@ -41,6 +41,10 @@ spec:
         certSecret: null # Only set if generate=false, details see transport above
     auth:
       securityConfigSecret: opensearch-securityconfig # optional, if set will be used as securityconfig, must have keys conforming to the different files (config.yml, roles.yml, ...)
+    config:
+      operatorClientCert:
+        name: opensearch-operator-client-cert # Optional, kubernetes.io/tls secret. When set the operator authenticates to OpenSearch with this client certificate (mTLS) instead of basic auth. The certificate's DN must map to a user/role with the privileges the operator needs (typically via plugins.security.authcz.admin_dn or a clientcert auth domain).
+      operatorClientServerName: opensearch.svc.cluster.local # Optional, overrides the TLS ServerName/SNI used when verifying the OpenSearch HTTP server certificate. Defaults to the host portion of the cluster URL.
 ```
 
 ## Relevant opensearch config

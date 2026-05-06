@@ -3,6 +3,8 @@ package util
 import (
 	"context"
 	"crypto/sha1"
+	cryptotls "crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"fmt"
 	"net/http"
@@ -255,30 +257,92 @@ func CreateClientForCluster(
 	transport http.RoundTripper,
 ) (*services.OsClusterClient, error) {
 	lg := log.FromContext(ctx)
-	var osClient *services.OsClusterClient
 
-	username, password, err := helpers.UsernameAndPassword(k8sClient, cluster)
+	opts := []services.OsClusterClientOption{}
+	username := ""
+	password := ""
+
+	tlsCfg, err := loadOperatorClientTLSConfig(k8sClient, cluster)
 	if err != nil {
-		lg.Error(err, "failed to fetch opensearch credentials")
+		lg.Error(err, "failed to load operator client TLS config")
 		return nil, err
 	}
 
-	if transport == nil {
-		osClient, err = services.NewOsClusterClient(
-			OpensearchClusterURL(cluster),
-			username,
-			password,
-		)
+	if tlsCfg != nil {
+		// mTLS: authenticate via client cert, do not send basic-auth credentials.
+		opts = append(opts, services.WithTLSConfig(tlsCfg))
 	} else {
-		osClient, err = services.NewOsClusterClient(
-			OpensearchClusterURL(cluster),
-			username,
-			password,
-			services.WithTransport(transport),
-		)
+		username, password, err = helpers.UsernameAndPassword(k8sClient, cluster)
+		if err != nil {
+			lg.Error(err, "failed to fetch opensearch credentials")
+			return nil, err
+		}
 	}
 
-	return osClient, err
+	if transport != nil {
+		// Explicit transport overrides any TLS config we built.
+		opts = append(opts, services.WithTransport(transport))
+	}
+
+	return services.NewOsClusterClient(
+		OpensearchClusterURL(cluster),
+		username,
+		password,
+		opts...,
+	)
+}
+
+// loadOperatorClientTLSConfig returns a TLS config configured with a client
+// certificate (and optional CA bundle) loaded from the secret referenced by
+// cluster.Spec.Security.Config.OperatorClientCert. Returns nil, nil when no
+// such secret is configured.
+func loadOperatorClientTLSConfig(k8sClient k8s.K8sClient, cluster *opensearchv1.OpenSearchCluster) (*cryptotls.Config, error) {
+	if cluster.Spec.Security == nil ||
+		cluster.Spec.Security.Config == nil ||
+		cluster.Spec.Security.Config.OperatorClientCert.Name == "" {
+		return nil, nil
+	}
+
+	secretName := cluster.Spec.Security.Config.OperatorClientCert.Name
+	secret, err := k8sClient.GetSecret(secretName, cluster.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get operator client cert secret %s/%s: %w", cluster.Namespace, secretName, err)
+	}
+
+	certPEM, ok := secret.Data[corev1.TLSCertKey]
+	if !ok || len(certPEM) == 0 {
+		return nil, fmt.Errorf("operator client cert secret %s/%s is missing %q", cluster.Namespace, secretName, corev1.TLSCertKey)
+	}
+	keyPEM, ok := secret.Data[corev1.TLSPrivateKeyKey]
+	if !ok || len(keyPEM) == 0 {
+		return nil, fmt.Errorf("operator client cert secret %s/%s is missing %q", cluster.Namespace, secretName, corev1.TLSPrivateKeyKey)
+	}
+
+	cert, err := cryptotls.X509KeyPair(certPEM, keyPEM)
+	if err != nil {
+		return nil, fmt.Errorf("invalid operator client cert in secret %s/%s: %w", cluster.Namespace, secretName, err)
+	}
+
+	tlsCfg := &cryptotls.Config{
+		Certificates: []cryptotls.Certificate{cert},
+	}
+
+	if name := cluster.Spec.Security.Config.OperatorClientServerName; name != "" {
+		tlsCfg.ServerName = name
+	}
+
+	if caPEM, ok := secret.Data[corev1.ServiceAccountRootCAKey]; ok && len(caPEM) > 0 {
+		pool := x509.NewCertPool()
+		if !pool.AppendCertsFromPEM(caPEM) {
+			return nil, fmt.Errorf("operator client cert secret %s/%s contains an invalid %q", cluster.Namespace, secretName, corev1.ServiceAccountRootCAKey)
+		}
+		tlsCfg.RootCAs = pool
+	} else {
+		// No CA provided: preserve historical behavior of skipping verification.
+		tlsCfg.InsecureSkipVerify = true
+	}
+
+	return tlsCfg, nil
 }
 
 func FetchOpensearchCluster(

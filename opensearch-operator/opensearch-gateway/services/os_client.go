@@ -50,6 +50,7 @@ type OsClusterClient struct {
 
 type OsClusterClientOptions struct {
 	transport http.RoundTripper
+	tlsConfig *tls.Config
 }
 
 type OsClusterClientOption func(*OsClusterClientOptions)
@@ -66,6 +67,16 @@ func WithTransport(transport http.RoundTripper) OsClusterClientOption {
 	}
 }
 
+// WithTLSConfig configures the underlying HTTP transport with the given TLS
+// configuration. This is the supported way to enable mTLS (client certificate
+// authentication) and/or proper server certificate verification when the
+// operator talks to OpenSearch. Ignored if WithTransport is also supplied.
+func WithTLSConfig(tlsConfig *tls.Config) OsClusterClientOption {
+	return func(o *OsClusterClientOptions) {
+		o.tlsConfig = tlsConfig
+	}
+}
+
 func NewOsClusterClient(clusterUrl string, username string, password string, opts ...OsClusterClientOption) (*OsClusterClient, error) {
 	options := OsClusterClientOptions{}
 	options.apply(opts...)
@@ -74,8 +85,12 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 			if options.transport != nil {
 				return options.transport
 			}
+			tlsCfg := options.tlsConfig
+			if tlsCfg == nil {
+				tlsCfg = &tls.Config{InsecureSkipVerify: true}
+			}
 			return &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				TLSClientConfig: tlsCfg,
 				// These options are needed as otherwise connections would be kept and leak memory
 				// Connection reuse is not really possible due to each reconcile run being independent
 				DisableKeepAlives: true,

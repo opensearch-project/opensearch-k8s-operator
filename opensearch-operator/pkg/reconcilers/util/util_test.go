@@ -2,11 +2,13 @@ package util
 
 import (
 	"context"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	opsterTLS "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
@@ -453,6 +455,227 @@ var _ = Describe("isPodStale", func() {
 			stale, err := isPodStale(mockClient, instance, "other-pod-0")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(stale).To(BeTrue())
+		})
+	})
+})
+
+var _ = Describe("loadOperatorClientTLSConfig", func() {
+	const (
+		clusterName = "test-cluster"
+		namespace   = "test-namespace"
+		secretName  = "operator-client-cert"
+	)
+
+	var (
+		mockClient *k8s.MockK8sClient
+		cluster    *opensearchv1.OpenSearchCluster
+		caData     []byte
+		certData   []byte
+		keyData    []byte
+	)
+
+	// Generate a CA + leaf cert/key once for all specs.
+	BeforeEach(func() {
+		pki := opsterTLS.NewPKI()
+		ca, err := pki.GenerateCA("test-ca")
+		Expect(err).NotTo(HaveOccurred())
+		leaf, err := ca.CreateAndSignCertificate("test-client", "OU", []string{"client.example.com"}, time.Hour)
+		Expect(err).NotTo(HaveOccurred())
+
+		caData = ca.CertData()
+		certData = leaf.CertData()
+		keyData = leaf.KeyData()
+
+		mockClient = k8s.NewMockK8sClient(GinkgoT())
+		cluster = &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
+			Spec: opensearchv1.ClusterSpec{
+				Security: &opensearchv1.Security{
+					Config: &opensearchv1.SecurityConfig{
+						OperatorClientCert: v1.LocalObjectReference{Name: secretName},
+					},
+				},
+			},
+		}
+	})
+
+	When("OperatorClientCert is not configured", func() {
+		It("returns nil config and no error", func() {
+			cluster.Spec.Security.Config.OperatorClientCert.Name = ""
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).To(BeNil())
+		})
+	})
+
+	When("Spec.Security is nil", func() {
+		It("returns nil config and no error", func() {
+			cluster.Spec.Security = nil
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).To(BeNil())
+		})
+	})
+
+	When("the referenced secret does not exist", func() {
+		It("returns an error", func() {
+			notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(v1.Secret{}, notFound)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(cfg).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("failed to get operator client cert secret"))
+		})
+	})
+
+	When("the secret is missing tls.crt", func() {
+		It("returns an error", func() {
+			secret := v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+				Data: map[string][]byte{
+					v1.TLSPrivateKeyKey: keyData,
+				},
+			}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(secret, nil)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(cfg).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("tls.crt"))
+		})
+	})
+
+	When("the secret is missing tls.key", func() {
+		It("returns an error", func() {
+			secret := v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+				Data: map[string][]byte{
+					v1.TLSCertKey: certData,
+				},
+			}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(secret, nil)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(cfg).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("tls.key"))
+		})
+	})
+
+	When("the cert/key pair is invalid", func() {
+		It("returns an error", func() {
+			secret := v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+				Data: map[string][]byte{
+					v1.TLSCertKey:       []byte("not a cert"),
+					v1.TLSPrivateKeyKey: []byte("not a key"),
+				},
+			}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(secret, nil)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(cfg).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("invalid operator client cert"))
+		})
+	})
+
+	When("only tls.crt and tls.key are provided (no CA)", func() {
+		It("returns a config with InsecureSkipVerify=true", func() {
+			secret := v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+				Data: map[string][]byte{
+					v1.TLSCertKey:       certData,
+					v1.TLSPrivateKeyKey: keyData,
+				},
+			}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(secret, nil)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).NotTo(BeNil())
+			Expect(cfg.Certificates).To(HaveLen(1))
+			Expect(cfg.InsecureSkipVerify).To(BeTrue())
+			Expect(cfg.RootCAs).To(BeNil())
+		})
+	})
+
+	When("ca.crt is also provided", func() {
+		It("uses the CA pool and disables InsecureSkipVerify", func() {
+			secret := v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+				Data: map[string][]byte{
+					v1.TLSCertKey:              certData,
+					v1.TLSPrivateKeyKey:        keyData,
+					v1.ServiceAccountRootCAKey: caData,
+				},
+			}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(secret, nil)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).NotTo(BeNil())
+			Expect(cfg.Certificates).To(HaveLen(1))
+			Expect(cfg.InsecureSkipVerify).To(BeFalse())
+			Expect(cfg.RootCAs).NotTo(BeNil())
+		})
+	})
+
+	When("ca.crt is provided but invalid", func() {
+		It("returns an error", func() {
+			secret := v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+				Data: map[string][]byte{
+					v1.TLSCertKey:              certData,
+					v1.TLSPrivateKeyKey:        keyData,
+					v1.ServiceAccountRootCAKey: []byte("not a CA bundle"),
+				},
+			}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(secret, nil)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(cfg).To(BeNil())
+			Expect(err.Error()).To(ContainSubstring("ca.crt"))
+		})
+	})
+
+	When("OperatorClientServerName is set", func() {
+		It("propagates it to tls.Config.ServerName", func() {
+			cluster.Spec.Security.Config.OperatorClientServerName = "override.example.com"
+			secret := v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+				Data: map[string][]byte{
+					v1.TLSCertKey:              certData,
+					v1.TLSPrivateKeyKey:        keyData,
+					v1.ServiceAccountRootCAKey: caData,
+				},
+			}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(secret, nil)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).NotTo(BeNil())
+			Expect(cfg.ServerName).To(Equal("override.example.com"))
+		})
+	})
+
+	When("OperatorClientServerName is empty", func() {
+		It("leaves tls.Config.ServerName empty", func() {
+			secret := v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: namespace},
+				Data: map[string][]byte{
+					v1.TLSCertKey:       certData,
+					v1.TLSPrivateKeyKey: keyData,
+				},
+			}
+			mockClient.EXPECT().GetSecret(secretName, namespace).Return(secret, nil)
+
+			cfg, err := loadOperatorClientTLSConfig(mockClient, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cfg).NotTo(BeNil())
+			Expect(cfg.ServerName).To(BeEmpty())
 		})
 	})
 })

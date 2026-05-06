@@ -1421,6 +1421,72 @@ If you provided your own certificate for SSL/TLS HTTP, then you must also provid
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
+### Authenticating the operator to OpenSearch with mTLS (client certificate)
+
+By default the operator uses HTTP basic auth (`adminCredentialsSecret`) when calling the OpenSearch REST API for tasks like health checks, ISM policy / role / user reconciliation, snapshot management, and node-draining during scale operations. You can instead authenticate the operator's runtime client using a TLS client certificate (mTLS) by setting `security.config.operatorClientCert`.
+
+The referenced secret must be of type `kubernetes.io/tls` and contain `tls.crt` and `tls.key`. If `ca.crt` is also present it is used to verify the OpenSearch HTTP server certificate; otherwise the operator falls back to skipping verification (preserving the previous default).
+
+#### Option A: reuse the operator-managed admin client cert (easiest)
+
+When `security.tls.http.generate: true` (the default) the operator already creates an admin client certificate for its own use (running `securityadmin.sh` to apply the securityconfig). It is stored in the secret `<cluster-name>-admin-cert` and its DN is automatically added to `plugins.security.authcz.admin_dn` in the generated `opensearch.yml`, so OpenSearch accepts it as a full-privilege admin client. You can simply point `operatorClientCert` at it — no new certificates or mappings required:
+
+```yaml
+# ...
+spec:
+  security:
+    config:
+      operatorClientCert:
+        name: dev-cluster-admin-cert   # <cluster-name>-admin-cert, auto-created by the TLS reconciler
+    tls:
+      http:
+        generate: true
+        adminDn:
+          - "CN=admin,OU=dev-cluster"
+```
+
+#### Option B: bring your own client certificate
+
+If you manage your own PKI (e.g. cert-manager, an external CA, or `security.tls.http.generate: false`), create a `kubernetes.io/tls` secret yourself and point `operatorClientCert` at it. In this case **you** are responsible for ensuring the certificate's DN is recognized by OpenSearch — typically by listing it under `plugins.security.authcz.admin_dn`, or by configuring a `clientcert` auth domain in `config.yml` and mapping the DN to a role in `roles_mapping.yml`.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: opensearch-operator-client-cert
+  namespace: opensearch
+type: kubernetes.io/tls
+data:
+  tls.crt: <base64-encoded PEM>
+  tls.key: <base64-encoded PEM>
+  ca.crt:  <base64-encoded PEM>   # optional, enables TLS verification
+```
+
+```yaml
+# ...
+spec:
+  security:
+    config:
+      operatorClientCert:
+        name: opensearch-operator-client-cert
+```
+
+#### Optional: override the TLS ServerName
+
+```yaml
+spec:
+  security:
+    config:
+      operatorClientServerName: dev-cluster.opensearch.svc.cluster.local
+```
+
+`operatorClientServerName` overrides the TLS SNI / `ServerName` used when verifying the OpenSearch HTTP server certificate. It defaults to the host portion of the cluster URL, so you only need to set it when `operatorClusterURL` points at a hostname that isn't in the server certificate's SANs (for example `localhost` during local debugging via `kubectl port-forward`). It only affects the operator's runtime HTTP client; it does not change how OpenSearch itself is configured.
+
+#### Notes
+
+- When `operatorClientCert` is set, the operator does **not** send basic-auth credentials and `adminCredentialsSecret` is no longer required for runtime API calls. (`adminCredentialsSecret` may still be useful for other purposes such as seeding the admin user password during initial securityconfig generation.)
+- The operator only re-reads the secret on its next reconcile, so a cert rotation triggers a normal reconcile loop.
+
 ### Managing security configurations with kubernetes resources
 
 The operator provides custom kubernetes resources that allow you to create/update/manage security configuration resources such as users, roles, action groups etc. as kubernetes objects.

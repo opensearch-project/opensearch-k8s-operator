@@ -2814,6 +2814,7 @@ func (in *SecurityConfig) DeepCopyInto(out *SecurityConfig) {
 	out.SecurityconfigSecret = in.SecurityconfigSecret
 	out.AdminSecret = in.AdminSecret
 	out.AdminCredentialsSecret = in.AdminCredentialsSecret
+	out.OperatorClientCert = in.OperatorClientCert
 	in.UpdateJob.DeepCopyInto(&out.UpdateJob)
 }
 

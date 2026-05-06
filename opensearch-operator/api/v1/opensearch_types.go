@@ -347,7 +347,14 @@ type SecurityConfig struct {
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`
-	UpdateJob              SecurityUpdateJobConfig     `json:"updateJob,omitempty"`
+	// Optional kubernetes.io/tls secret (tls.crt, tls.key, optional ca.crt) used by the operator's runtime REST client to authenticate to the OpenSearch HTTP API via mTLS instead of basic auth.
+	// The certificate's DN must be mapped to a user/role with the necessary privileges in the OpenSearch security configuration (e.g. via plugins.security.authcz.admin_dn or a clientcert auth domain).
+	// When set, the operator omits basic-auth credentials from outgoing requests. If ca.crt is present in the secret, it is used to verify the OpenSearch HTTP server certificate; otherwise TLS verification is skipped.
+	OperatorClientCert corev1.LocalObjectReference `json:"operatorClientCert,omitempty"`
+	// Optional. Overrides the TLS SNI / ServerName used when verifying the OpenSearch HTTP server certificate.
+	// Defaults to the host portion of the cluster URL.
+	OperatorClientServerName string                  `json:"operatorClientServerName,omitempty"`
+	UpdateJob                SecurityUpdateJobConfig `json:"updateJob,omitempty"`
 }
 
 // Specific configs for the SecurityConfig update job
