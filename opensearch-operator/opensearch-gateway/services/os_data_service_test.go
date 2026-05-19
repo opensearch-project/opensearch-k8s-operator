@@ -210,3 +210,48 @@ func TestHasShardsOnNodeFromResponse(t *testing.T) {
 		})
 	}
 }
+
+func TestDetermineUnsupportedClusterSettings(t *testing.T) {
+	tests := []struct {
+		name                string
+		newVersion          string
+		wantTransientCount  int
+		wantPersistentCount int
+	}{
+		{
+			name:                "2.x upgrade has no settings to delete",
+			newVersion:          "2.19.5",
+			wantTransientCount:  0,
+			wantPersistentCount: 0,
+		},
+		{
+			name:                "3.x upgrade includes archived ISM settings",
+			newVersion:          "3.0.0",
+			wantTransientCount:  6,
+			wantPersistentCount: 6,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := DetermineUnsupportedClusterSettings(tt.newVersion)
+			if err != nil {
+				t.Fatalf("DetermineUnsupportedClusterSettings(%q) returned error: %v", tt.newVersion, err)
+			}
+
+			if got.Transient == nil {
+				t.Fatalf("Transient settings map is nil")
+			}
+			if got.Persistent == nil {
+				t.Fatalf("Persistent settings map is nil")
+			}
+
+			if len(got.Transient) != tt.wantTransientCount {
+				t.Fatalf("len(Transient) = %d, want %d", len(got.Transient), tt.wantTransientCount)
+			}
+			if len(got.Persistent) != tt.wantPersistentCount {
+				t.Fatalf("len(Persistent) = %d, want %d", len(got.Persistent), tt.wantPersistentCount)
+			}
+		})
+	}
+}
