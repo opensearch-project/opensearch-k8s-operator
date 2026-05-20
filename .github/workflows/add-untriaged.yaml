@@ -5,6 +5,9 @@ on:
   issues:
     types: [opened, reopened, transferred]
 
+permissions:
+  issues: write
+
 jobs:
   apply-label:
     runs-on: ubuntu-latest
