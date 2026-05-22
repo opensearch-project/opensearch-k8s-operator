@@ -1,107 +1,25 @@
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.useRoleBindings }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
 - apiGroups:
-  - apps
-  resources:
-  - deployments
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - apps
-  resources:
-  - statefulsets
-  - statefulsets/status
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - batch
-  resources:
-  - jobs
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
   - ""
   resources:
   - configmaps
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
-  - events
-  verbs:
-  - create
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - namespaces
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
+  - persistentvolumeclaims
   - pods
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - secrets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - ""
-  resources:
   - services
   verbs:
   - create
@@ -112,28 +30,18 @@ rules:
   - update
   - watch
 - apiGroups:
-  - "policy"
-  resources:
-  - poddisruptionbudgets
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
+  - ""
   resources:
   - events
   verbs:
   - create
   - patch
+  - update
 - apiGroups:
-  - opensearch.opster.io
+  - apps
   resources:
-  - opensearchactiongroups
+  - deployments
+  - statefulsets
   verbs:
   - create
   - delete
@@ -143,231 +51,17 @@ rules:
   - update
   - watch
 - apiGroups:
-  - opensearch.opster.io
+  - apps
   resources:
-  - opensearchactiongroups/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchactiongroups/status
+  - statefulsets/status
   verbs:
   - get
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - batch
   resources:
-  - opensearchclusters
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchclusters/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchclusters/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchcomponenttemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchcomponenttemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchcomponenttemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchindextemplates
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchindextemplates/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchindextemplates/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchroles
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchroles/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchroles/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchtenants
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchtenants/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchtenants/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchuserrolebindings
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchuserrolebindings/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchuserrolebindings/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-    - opensearch.opster.io
-  resources:
-    - opensearchismpolicies/status
-  verbs:
-    - get
-    - patch
-    - update
-- apiGroups:
-    - opensearch.opster.io
-  resources:
-    - opensearchismpolicies/finalizers
-  verbs:
-    - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchusers
-  verbs:
-  - create
-  - delete
-  - get
-  - list
-  - patch
-  - update
-  - watch
-- apiGroups:
-    - opensearch.opster.io
-  resources:
-    - opensearchismpolicies
-  verbs:
-    - create
-    - delete
-    - get
-    - list
-    - patch
-    - update
-    - watch
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchusers/finalizers
-  verbs:
-  - update
-- apiGroups:
-  - opensearch.opster.io
-  resources:
-  - opensearchusers/status
-  verbs:
-  - get
-  - patch
-  - update
-- apiGroups:
-  - ""
-  resources:
-  - persistentvolumeclaims
+  - jobs
   verbs:
   - create
   - delete
@@ -390,8 +84,18 @@ rules:
   - watch
 - apiGroups:
   - opensearch.opster.io
+  - opensearch.org
   resources:
+  - opensearchactiongroups
+  - opensearchclusters
+  - opensearchcomponenttemplates
+  - opensearchindextemplates
+  - opensearchismpolicies
+  - opensearchroles
   - opensearchsnapshotpolicies
+  - opensearchtenants
+  - opensearchuserrolebindings
+  - opensearchusers
   verbs:
   - create
   - delete
@@ -402,18 +106,51 @@ rules:
   - watch
 - apiGroups:
   - opensearch.opster.io
+  - opensearch.org
   resources:
+  - opensearchactiongroups/finalizers
+  - opensearchclusters/finalizers
+  - opensearchcomponenttemplates/finalizers
+  - opensearchindextemplates/finalizers
+  - opensearchismpolicies/finalizers
+  - opensearchroles/finalizers
+  - opensearchsnapshotpolicies/finalizers
+  - opensearchtenants/finalizers
+  - opensearchuserrolebindings/finalizers
+  - opensearchusers/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - opensearch.opster.io
+  - opensearch.org
+  resources:
+  - opensearchactiongroups/status
+  - opensearchclusters/status
+  - opensearchcomponenttemplates/status
+  - opensearchindextemplates/status
+  - opensearchismpolicies/status
+  - opensearchroles/status
   - opensearchsnapshotpolicies/status
+  - opensearchtenants/status
+  - opensearchuserrolebindings/status
+  - opensearchusers/status
   verbs:
   - get
   - patch
   - update
 - apiGroups:
-  - opensearch.opster.io
+  - policy
   resources:
-  - opensearchsnapshotpolicies/finalizers
+  - poddisruptionbudgets
   verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
   - update
+  - watch
+{{- if not .Values.useRoleBindings }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -426,11 +163,19 @@ rules:
   - /metrics
   verbs:
   - get
+{{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
+{{- if .Values.useRoleBindings }}
+kind: Role
+{{- else }}
 kind: ClusterRole
+{{- end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-proxy
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
@@ -451,6 +196,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: Role
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
@@ -502,6 +248,7 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: RoleBinding
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-leader-election
+  namespace: {{ .Release.Namespace }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
@@ -516,11 +263,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ if .Values.useRoleBindings }}RoleBinding{{ else }}ClusterRoleBinding{{ end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: {{ if .Values.useRoleBindings }}Role{{ else }}ClusterRole{{ end }}
   name: {{ include "opensearch-operator.fullname" . }}
 subjects:
 - kind: ServiceAccount
@@ -531,11 +281,14 @@ apiVersion: rbac.authorization.k8s.io/v1
 kind: {{ if .Values.useRoleBindings }}RoleBinding{{ else }}ClusterRoleBinding{{ end }}
 metadata:
   name: {{ include "opensearch-operator.fullname" . }}-proxy
+{{- if .Values.useRoleBindings }}
+  namespace: {{ .Release.Namespace }}
+{{- end }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
+  kind: {{ if .Values.useRoleBindings }}Role{{ else }}ClusterRole{{ end }}
   name: {{ include "opensearch-operator.fullname" . }}-proxy
 subjects:
 - kind: ServiceAccount

@@ -1,5 +1,5 @@
 package controllers
 
 const (
-	OpensearchFinalizer = "opster.io/opensearch-data"
+	OpensearchFinalizer = "opensearch.org/opensearch-data"
 )

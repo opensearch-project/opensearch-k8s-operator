@@ -17,7 +17,10 @@ limitations under the License.
 package v1
 
 import (
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
 )
@@ -52,10 +55,10 @@ type GeneralConfig struct {
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 	ServiceName    string `json:"serviceName"`
 	//+kubebuilder:default=true
-	SetVMMaxMapCount bool    `json:"setVMMaxMapCount,omitempty"`
+	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`
-	// Disable SSL for the cluster
-	DisableSSL bool `json:"disableSSL,omitempty"`
+	// HostNetwork enables host networking for all pods in the cluster.
+	HostNetwork bool `json:"hostNetwork,omitempty"`
 	// Extra items to add to the opensearch.yml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
@@ -74,9 +77,12 @@ type GeneralConfig struct {
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the cluster pods' container
 	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	HostAliases     []corev1.HostAlias      `json:"hostAliases,omitempty"`
 	// Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
 	// instead of the default internal Kubernetes service DNS name.
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
+	// OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set.
+	OpenSearchHome string `json:"opensearchHome,omitempty"`
 }
 
 type PdbConfig struct {
@@ -117,7 +123,7 @@ type CommandProbeConfig struct {
 type NodePool struct {
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
-	DiskSize                  string                            `json:"diskSize,omitempty"`
+	DiskSize                  resource.Quantity                 `json:"diskSize,omitempty"`
 	Resources                 corev1.ResourceRequirements       `json:"resources,omitempty"`
 	Jvm                       string                            `json:"jvm,omitempty"`
 	Roles                     []string                          `json:"roles"`
@@ -126,13 +132,14 @@ type NodePool struct {
 	Affinity                  *corev1.Affinity                  `json:"affinity,omitempty"`
 	TopologySpreadConstraints []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 	Persistence               *PersistenceConfig                `json:"persistence,omitempty"`
-	AdditionalConfig          map[string]string                 `json:"additionalConfig,omitempty"`
 	Labels                    map[string]string                 `json:"labels,omitempty"`
 	Annotations               map[string]string                 `json:"annotations,omitempty"`
 	Env                       []corev1.EnvVar                   `json:"env,omitempty"`
 	PriorityClassName         string                            `json:"priorityClassName,omitempty"`
 	Pdb                       *PdbConfig                        `json:"pdb,omitempty"`
 	Probes                    *ProbesConfig                     `json:"probes,omitempty"`
+	// Extra items to add to the opensearch.yml for this nodepool (merged with general.additionalConfig)
+	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	SidecarContainers []corev1.Container `json:"sidecarContainers,omitempty"`
@@ -161,9 +168,11 @@ type PVCSource struct {
 
 // ConfMgmt defines which additional services will be deployed
 type ConfMgmt struct {
-	AutoScaler  bool `json:"autoScaler,omitempty"`
-	VerUpdate   bool `json:"VerUpdate,omitempty"`
-	SmartScaler bool `json:"smartScaler,omitempty"`
+	AutoScaler bool `json:"autoScaler,omitempty"`
+	VerUpdate  bool `json:"VerUpdate,omitempty"`
+	// +kubebuilder:default=true
+	// +kubebuilder:validation:Required
+	SmartScaler bool `json:"smartScaler"`
 }
 
 type MonitoringConfig struct {
@@ -186,14 +195,17 @@ type BootstrapConfig struct {
 	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
 	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
 	Jvm          string                      `json:"jvm,omitempty"`
-	// Extra items to add to the opensearch.yml, defaults to General.AdditionalConfig
-	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
-	Annotations      map[string]string `json:"annotations,omitempty"`
-	PluginsList      []string          `json:"pluginsList,omitempty"`
-	Keystore         []KeystoreValue   `json:"keystore,omitempty"`
+	Annotations  map[string]string           `json:"annotations,omitempty"`
+	Labels       map[string]string           `json:"labels,omitempty"`
+	PluginsList  []string                    `json:"pluginsList,omitempty"`
+	Keystore     []KeystoreValue             `json:"keystore,omitempty"`
+	Env          []corev1.EnvVar             `json:"env,omitempty"`
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
-	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+	InitContainers    []corev1.Container `json:"initContainers,omitempty"`
+	HostAliases       []corev1.HostAlias `json:"hostAliases,omitempty"`
+	DiskSize          resource.Quantity  `json:"diskSize,omitempty"`
+	PriorityClassName string             `json:"priorityClassName,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
@@ -217,20 +229,25 @@ type DashboardsConfig struct {
 	// Additional properties for opensearch_dashboards.yaml
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Secret that contains fields username and password for dashboards to use to login to opensearch, must only be supplied if a custom securityconfig is provided
-	OpensearchCredentialsSecret corev1.LocalObjectReference `json:"opensearchCredentialsSecret,omitempty"`
-	Env                         []corev1.EnvVar             `json:"env,omitempty"`
-	AdditionalVolumes           []AdditionalVolume          `json:"additionalVolumes,omitempty"`
-	Tolerations                 []corev1.Toleration         `json:"tolerations,omitempty"`
-	NodeSelector                map[string]string           `json:"nodeSelector,omitempty"`
-	Affinity                    *corev1.Affinity            `json:"affinity,omitempty"`
-	Labels                      map[string]string           `json:"labels,omitempty"`
-	Annotations                 map[string]string           `json:"annotations,omitempty"`
-	Service                     DashboardsServiceSpec       `json:"service,omitempty"`
-	PluginsList                 []string                    `json:"pluginsList,omitempty"`
+	OpensearchCredentialsSecret corev1.LocalObjectReference       `json:"opensearchCredentialsSecret,omitempty"`
+	Env                         []corev1.EnvVar                   `json:"env,omitempty"`
+	AdditionalVolumes           []AdditionalVolume                `json:"additionalVolumes,omitempty"`
+	Tolerations                 []corev1.Toleration               `json:"tolerations,omitempty"`
+	NodeSelector                map[string]string                 `json:"nodeSelector,omitempty"`
+	Affinity                    *corev1.Affinity                  `json:"affinity,omitempty"`
+	Labels                      map[string]string                 `json:"labels,omitempty"`
+	Annotations                 map[string]string                 `json:"annotations,omitempty"`
+	Service                     DashboardsServiceSpec             `json:"service,omitempty"`
+	PluginsList                 []string                          `json:"pluginsList,omitempty"`
+	HostAliases                 []corev1.HostAlias                `json:"hostAliases,omitempty"`
+	TopologySpreadConstraints   []corev1.TopologySpreadConstraint `json:"topologySpreadConstraints,omitempty"`
 	// Set security context for the dashboards pods
 	PodSecurityContext *corev1.PodSecurityContext `json:"podSecurityContext,omitempty"`
 	// Set security context for the dashboards pods' container
-	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
+	SecurityContext   *corev1.SecurityContext `json:"securityContext,omitempty"`
+	PriorityClassName string                  `json:"priorityClassName,omitempty"`
+	// OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set.
+	OpenSearchDashboardsHome string `json:"opensearchDashboardsHome,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -255,6 +272,15 @@ type TlsConfig struct {
 }
 
 type TlsConfigTransport struct {
+	// enabled controls if TLS should be enabled for the transport layer.
+	//
+	// If false: TLS is explicitly disabled for transport.
+	//
+	// If not set (default): TLS is enabled if transport configuration is provided, or if security.tls is set.
+	//
+	// If true: TLS is explicitly enabled. Transport configuration must be provided.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
@@ -266,9 +292,22 @@ type TlsConfigTransport struct {
 	TlsCertificateConfig `json:",omitempty"`
 	// Allowed Certificate DNs for nodes, only used when existing certificates are provided
 	NodesDn []string `json:"nodesDn,omitempty"`
+	// Deprecated: DNs of certificates that should have admin access. This field is deprecated and will be removed in a future version.
+	// For OpenSearch 2.0.0+, use security.tls.http.adminDn instead.
+	//+kubebuilder:deprecatedversion:warning="This field is deprecated and will be removed in a future version. Use security.tls.http.adminDn for OpenSearch 2.0.0+."
+	AdminDn []string `json:"adminDn,omitempty"`
 }
 
 type TlsConfigHttp struct {
+	// enabled controls if TLS should be enabled for the HTTP layer.
+	//
+	// If false: TLS is explicitly disabled for HTTP.
+	//
+	// If not set (default): TLS is enabled if HTTP configuration is provided, or if security.tls is set.
+	//
+	// If true: TLS is explicitly enabled. HTTP configuration must be provided.
+	// +optional
+	Enabled *bool `json:"enabled,omitempty"`
 	// If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied
 	Generate bool `json:"generate,omitempty"`
 	// Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names.
@@ -290,6 +329,8 @@ type TlsCertificateConfig struct {
 	// Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
 	//+kubebuilder:default:="8760h"
 	Duration *metav1.Duration `json:"duration,omitempty"`
+	// Enable hot reloading of TLS certificates. When enabled, certificates are mounted as directories instead of using subPath, allowing Kubernetes to update certificate files when secrets are updated.
+	EnableHotReload bool `json:"enableHotReload,omitempty"`
 }
 
 // Reference to a secret
@@ -299,7 +340,8 @@ type TlsSecret struct {
 }
 
 type SecurityConfig struct {
-	// Secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...)
+	// Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
+	// When omitted the operator seeds the cluster with its bundled defaults.
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
 	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
@@ -310,7 +352,9 @@ type SecurityConfig struct {
 
 // Specific configs for the SecurityConfig update job
 type SecurityUpdateJobConfig struct {
-	Resources corev1.ResourceRequirements `json:"resources,omitempty"`
+	Resources         corev1.ResourceRequirements `json:"resources,omitempty"`
+	PriorityClassName string                      `json:"priorityClassName,omitempty"`
+	Labels            map[string]string           `json:"labels,omitempty"`
 }
 
 type ImageSpec struct {
@@ -319,6 +363,7 @@ type ImageSpec struct {
 	ImagePullSecrets []corev1.LocalObjectReference `json:"imagePullSecrets,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="(has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0) == 1",message="exactly one of secret, configMap, emptyDir, csi, projected, nfs must be set"
 type AdditionalVolume struct {
 	// Name to use for the volume. Required.
 	Name string `json:"name"`
@@ -338,6 +383,8 @@ type AdditionalVolume struct {
 	PersistentVolumeClaim *corev1.PersistentVolumeClaimVolumeSource `json:"persistentVolumeClaim,omitempty"`
 	// Projected object to use to populate the volume
 	Projected *corev1.ProjectedVolumeSource `json:"projected,omitempty"`
+	// NFS object to use to populate the volume
+	NFS *corev1.NFSVolumeSource `json:"nfs,omitempty"`
 	// Whether to restart the pods on content change
 	RestartPods bool `json:"restartPods,omitempty"`
 }
@@ -377,8 +424,10 @@ type ClusterStatus struct {
 	Version          string            `json:"version,omitempty"`
 	Initialized      bool              `json:"initialized,omitempty"`
 	// AvailableNodes is the number of available instances.
-	AvailableNodes int32            `json:"availableNodes,omitempty"`
-	Health         OpenSearchHealth `json:"health,omitempty"`
+	AvailableNodes       int32            `json:"availableNodes,omitempty"`
+	Health               OpenSearchHealth `json:"health,omitempty"`
+	AdminSecretCreated   bool             `json:"adminsecretcreated,omitempty"`
+	ContextSecretCreated bool             `json:"contextsecretcreated,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -415,6 +464,25 @@ type OpenSearchClusterList struct {
 
 func init() {
 	SchemeBuilder.Register(&OpenSearchCluster{}, &OpenSearchClusterList{})
+}
+
+const (
+	DefaultOpenSearchHome           = "/usr/share/opensearch"
+	DefaultOpenSearchDashboardsHome = "/usr/share/opensearch-dashboards"
+)
+
+func (g GeneralConfig) GetOpenSearchHome() string {
+	if g.OpenSearchHome != "" {
+		return strings.TrimRight(g.OpenSearchHome, "/")
+	}
+	return DefaultOpenSearchHome
+}
+
+func (d DashboardsConfig) GetOpenSearchDashboardsHome() string {
+	if d.OpenSearchDashboardsHome != "" {
+		return strings.TrimRight(d.OpenSearchDashboardsHome, "/")
+	}
+	return DefaultOpenSearchDashboardsHome
 }
 
 func (s ImageSpec) GetImagePullPolicy() (_ corev1.PullPolicy) {

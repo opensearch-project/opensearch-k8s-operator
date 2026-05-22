@@ -20,10 +20,10 @@ import (
 	"context"
 	"time"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"github.com/go-logr/logr"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
@@ -37,29 +37,32 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 )
 
 // OpenSearchClusterReconciler reconciles a OpenSearchCluster object
+// Now reconciles opensearch.org/v1 API group (new API) instead of opensearch.opster.io/v1 (old API)
 type OpenSearchClusterReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opsterv1.OpenSearchCluster
+	Instance *opensearchv1.OpenSearchCluster
 	logr.Logger
 }
 
-//+kubebuilder:rbac:groups="opensearch.opster.io",resources=events,verbs=create;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters/status,verbs=get;update;patch
-//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters,verbs=get;list;watch
+//+kubebuilder:rbac:groups=opensearch.opster.io,resources=opensearchclusters/status,verbs=get
 //+kubebuilder:rbac:groups=apps,resources=statefulsets,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=apps,resources=statefulsets/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=configmaps,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=secrets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=pods,verbs=get;list;watch;create;update;patch;delete
-//+kubebuilder:rbac:groups=core,resources=namespaces,verbs=get;list;create;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=core,resources=events,verbs=create;update;patch
 //+kubebuilder:rbac:groups=core,resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
@@ -76,19 +79,25 @@ type OpenSearchClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("cluster", req.NamespacedName)
-	r.Info("Reconciling OpenSearchCluster")
-	myFinalizerName := "Opster"
+	r.Logger = log.FromContext(ctx).WithValues("cluster", req.NamespacedName, "apiGroup", "opensearch.org/v1")
+	r.Info("Reconciling OpenSearchCluster (opensearch.org/v1)")
+	myFinalizerName := "Opensearch"
 
-	r.Instance = &opsterv1.OpenSearchCluster{}
+	// Try to get new API group resource first
+	r.Instance = &opensearchv1.OpenSearchCluster{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// object not found, could have been deleted after
-			// reconcile request, hence don't requeue
+			// If new API group resource not found, check if old one exists (for backward compatibility during migration)
+			oldInstance := &opsterv1.OpenSearchCluster{}
+			if err := r.Get(ctx, req.NamespacedName, oldInstance); err == nil {
+				// Old instance exists but new one doesn't - migration controller should handle this
+				// Just requeue to let migration controller create the new one
+				r.Info("Old API group resource exists, waiting for migration", "name", req.Name)
+				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+			}
 			return ctrl.Result{}, nil
 		}
-		// error reading the object, requeue the request
 		return ctrl.Result{}, err
 	}
 	/// ------ check if CRD has been deleted ------ ///
@@ -135,13 +144,13 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 	/// if crd not deleted started phase 1
 	if r.Instance.Status.Phase == "" {
-		r.Instance.Status.Phase = opsterv1.PhasePending
+		r.Instance.Status.Phase = opensearchv1.PhasePending
 	}
 
 	switch r.Instance.Status.Phase {
-	case opsterv1.PhasePending:
+	case opensearchv1.PhasePending:
 		return r.reconcilePhasePending(ctx)
-	case opsterv1.PhaseRunning, opsterv1.PhaseUpgrading:
+	case opensearchv1.PhaseRunning, opensearchv1.PhaseUpgrading:
 		return r.reconcilePhaseRunning(ctx)
 	default:
 		// NOTHING WILL HAPPEN - DEFAULT
@@ -152,7 +161,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 // SetupWithManager sets up the controller with the Manager.
 func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opsterv1.OpenSearchCluster{}).
+		For(&opensearchv1.OpenSearchCluster{}). // Watch new API group
 		Owns(&corev1.Pod{}).
 		Owns(&corev1.Secret{}).
 		Owns(&corev1.ConfigMap{}).
@@ -204,17 +213,21 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		r.Instance,
 	)
 
-	componentReconcilers := []reconcilers.ComponentReconciler{
-		tls.DeleteResources,
-		securityconfig.DeleteResources,
-		config.DeleteResources,
-		cluster.DeleteResources,
-		dashboards.DeleteResources,
+	componentReconcilers := []reconcilers.NamedComponentReconciler{
+		{Name: tls.Name(), Func: tls.DeleteResources},
+		{Name: securityconfig.Name(), Func: securityconfig.DeleteResources},
+		{Name: config.Name(), Func: config.DeleteResources},
+		{Name: cluster.Name(), Func: cluster.DeleteResources},
+		{Name: dashboards.Name(), Func: dashboards.DeleteResources},
 	}
 	for _, rec := range componentReconcilers {
-		result, err := rec()
-		if err != nil || result.Requeue {
+		result, err := rec.Func()
+		if err != nil {
+			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
 			return result, err
+		}
+		if result.Requeue {
+			return result, nil
 		}
 	}
 	r.Info("Finished deleting resources")
@@ -227,8 +240,8 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 			return err
 		}
-		r.Instance.Status.Phase = opsterv1.PhaseRunning
-		r.Instance.Status.ComponentsStatus = make([]opsterv1.ComponentStatus, 0)
+		r.Instance.Status.Phase = opensearchv1.PhaseRunning
+		r.Instance.Status.ComponentsStatus = make([]opensearchv1.ComponentStatus, 0)
 		return r.Status().Update(ctx, r.Instance)
 	})
 	if err != nil {
@@ -316,21 +329,25 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		r.Instance,
 	)
 
-	componentReconcilers := []reconcilers.ComponentReconciler{
-		tls.Reconcile,
-		securityconfig.Reconcile,
-		config.Reconcile,
-		cluster.Reconcile,
-		scaler.Reconcile,
-		dashboards.Reconcile,
-		upgrade.Reconcile,
-		restart.Reconcile,
-		snapshotrepository.Reconcile,
+	componentReconcilers := []reconcilers.NamedComponentReconciler{
+		{Name: tls.Name(), Func: tls.Reconcile},
+		{Name: securityconfig.Name(), Func: securityconfig.Reconcile},
+		{Name: config.Name(), Func: config.Reconcile},
+		{Name: cluster.Name(), Func: cluster.Reconcile},
+		{Name: scaler.Name(), Func: scaler.Reconcile},
+		{Name: dashboards.Name(), Func: dashboards.Reconcile},
+		{Name: upgrade.Name(), Func: upgrade.Reconcile},
+		{Name: restart.Name(), Func: restart.Reconcile},
+		{Name: snapshotrepository.Name(), Func: snapshotrepository.Reconcile},
 	}
 	for _, rec := range componentReconcilers {
-		result, err := rec()
-		if err != nil || result.Requeue {
+		result, err := rec.Func()
+		if err != nil {
+			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
 			return result, err
+		}
+		if result.Requeue {
+			return result, nil
 		}
 	}
 

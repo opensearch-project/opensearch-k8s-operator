@@ -1,4 +1,9 @@
 bin/
 vendor/
 testbin/
-opensearch-operator
+/opensearch-operator
+
+# preflightcheck artifacts
+preflight.log
+artifacts/
+LICENSE

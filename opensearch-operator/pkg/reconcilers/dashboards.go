@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"time"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	"github.com/go-logr/logr"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -21,11 +21,13 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const dashboardsReconcilerName = "dashboards"
+
 type DashboardsReconciler struct {
 	client            k8s.K8sClient
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
 	pki               tls.PKI
 }
@@ -35,11 +37,11 @@ func NewDashboardsReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *DashboardsReconciler {
 	return &DashboardsReconciler{
-		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "dashboards")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", dashboardsReconcilerName)))...),
 		reconcilerContext: reconcilerContext,
 		recorder:          recorder,
 		instance:          instance,
@@ -47,6 +49,8 @@ func NewDashboardsReconciler(
 		pki:               tls.NewPKI(),
 	}
 }
+
+func (r *DashboardsReconciler) Name() string { return dashboardsReconcilerName }
 
 func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	if !r.instance.Spec.Dashboards.Enable {
@@ -76,6 +80,20 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 
 	volumes = append(volumes, addVolumes...)
 	volumeMounts = append(volumeMounts, addVolumeMounts...)
+
+	// Ensure Dashboards credentials secret exists (always generated/administered)
+	// OpensearchCredentialsSecret is optional - check if Name is set
+	if r.instance.Spec.Dashboards.OpensearchCredentialsSecret.Name == "" {
+		dashboardsCredSecret, managedByOperator, err := helpers.EnsureDashboardsCredentialsSecret(r.client, r.instance)
+		if err != nil {
+			r.logger.Error(err, "Unable to ensure Dashboards credentials secret")
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 30}, err
+		}
+		if managedByOperator && dashboardsCredSecret != nil {
+			result.CombineErr(ctrl.SetControllerReference(r.instance, dashboardsCredSecret, r.client.Scheme()))
+			result.Combine(r.client.ReconcileResource(dashboardsCredSecret, reconciler.StatePresent))
+		}
+	}
 
 	cm := builders.NewDashboardsConfigMapForCR(r.instance, fmt.Sprintf("%s-dashboards-config", r.instance.Name), r.reconcilerContext.DashboardsConfig)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, cm, r.client.Scheme()))
@@ -164,19 +182,21 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		// Mount secret
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsSecretName}}}
 		volumes = append(volumes, volume)
-		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}
+		dashboardsHome := r.instance.Spec.Dashboards.GetOpenSearchDashboardsHome()
+		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: dashboardsHome + "/certs"}
 		volumeMounts = append(volumeMounts, mount)
 	} else {
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Notice - using externally provided certificates for Dashboard Cluster")
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.Secret.Name}}}
 		volumes = append(volumes, volume)
-		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: "/usr/share/opensearch-dashboards/certs"}
+		dashboardsHome := r.instance.Spec.Dashboards.GetOpenSearchDashboardsHome()
+		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: dashboardsHome + "/certs"}
 		volumeMounts = append(volumeMounts, mount)
 	}
-	// Update dashboards config
+	dashboardsHome := r.instance.Spec.Dashboards.GetOpenSearchDashboardsHome()
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.enabled", "true")
-	r.reconcilerContext.AddDashboardsConfig("server.ssl.key", "/usr/share/opensearch-dashboards/certs/tls.key")
-	r.reconcilerContext.AddDashboardsConfig("server.ssl.certificate", "/usr/share/opensearch-dashboards/certs/tls.crt")
+	r.reconcilerContext.AddDashboardsConfig("server.ssl.key", dashboardsHome+"/certs/tls.key")
+	r.reconcilerContext.AddDashboardsConfig("server.ssl.certificate", dashboardsHome+"/certs/tls.crt")
 	return volumes, volumeMounts, nil
 }
 

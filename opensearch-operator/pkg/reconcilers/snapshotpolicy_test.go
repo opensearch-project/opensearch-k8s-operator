@@ -3,16 +3,18 @@ package reconcilers
 import (
 	"context"
 	"fmt"
-	"k8s.io/utils/ptr"
 	"net/http"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"k8s.io/utils/ptr"
+
 	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -25,46 +27,47 @@ var _ = Describe("snapshot policy reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *SnapshotPolicyReconciler
-		instance   *opsterv1.OpensearchSnapshotPolicy
+		instance   *opensearchv1.OpensearchSnapshotPolicy
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
 		// Objects
-		cluster *opsterv1.OpenSearchCluster
+		cluster    *opensearchv1.OpenSearchCluster
+		clusterUrl string
 	)
 
 	BeforeEach(func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opsterv1.OpensearchSnapshotPolicy{
+		instance = &opensearchv1.OpensearchSnapshotPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-policy",
 				Namespace: "test-policy",
 				UID:       types.UID("testuid"),
 			},
-			Spec: opsterv1.OpensearchSnapshotPolicySpec{
+			Spec: opensearchv1.OpensearchSnapshotPolicySpec{
 				PolicyName: "test-policy",
 				OpensearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 			},
-			Status: opsterv1.OpensearchSnapshotPolicyStatus{
+			Status: opensearchv1.OpensearchSnapshotPolicyStatus{
 				SnapshotPolicyName: "test-policy",
 			},
 		}
 
-		cluster = &opsterv1.OpenSearchCluster{
+		cluster = &opensearchv1.OpenSearchCluster{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-cluster",
 				Namespace: "test-policy",
 			},
-			Spec: opsterv1.ClusterSpec{
-				General: opsterv1.GeneralConfig{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
 					ServiceName: "test-cluster",
 					HttpPort:    9200,
 				},
-				NodePools: []opsterv1.NodePool{
+				NodePools: []opensearchv1.NodePool{
 					{
 						Component: "node",
 						Roles: []string{
@@ -75,6 +78,21 @@ var _ = Describe("snapshot policy reconciler", func() {
 				},
 			},
 		}
+		clusterUrl = fmt.Sprintf("%s/", helpers.ClusterURL(cluster))
+		// Mock admin credentials secret for all tests (available when CreateClientForCluster is invoked)
+		adminSecret := corev1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster-admin-password",
+				Namespace: "test-policy",
+			},
+			Data: map[string][]byte{
+				"username": []byte("admin"),
+				"password": []byte("admin"),
+			},
+		}
+		mockClient.On("GetSecret", "test-cluster-admin-password", "test-policy").Return(func(string, string) corev1.Secret {
+			return adminSecret
+		}, nil).Maybe()
 	})
 
 	JustBeforeEach(func() {
@@ -93,7 +111,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
 			instance.Spec.OpensearchRef.Name = "doesnotexist"
-			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
+			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should wait he cluster to exist", func() {
@@ -138,28 +156,20 @@ var _ = Describe("snapshot policy reconciler", func() {
 	Context("cluster is ready", func() {
 		extraContextCalls := 1
 		BeforeEach(func() {
-			cluster.Status.Phase = opsterv1.PhaseRunning
-			cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+			cluster.Status.Phase = opensearchv1.PhaseRunning
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{}
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 			recorder = record.NewFakeRecorder(1)
 
 			transport.RegisterResponder(
 				http.MethodGet,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 			)
 
 			transport.RegisterResponder(
 				http.MethodHead,
-				fmt.Sprintf(
-					"https://%s.%s.svc.cluster.local:9200/",
-					cluster.Spec.General.ServiceName,
-					cluster.Namespace,
-				),
+				clusterUrl,
 				httpmock.NewStringResponder(200, "OK").Once(failMessage),
 			)
 		})
@@ -194,9 +204,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_sm/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(404, "Not Found").Once(),
@@ -204,9 +213,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodPost,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_sm/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewStringResponder(200, "OK").Once(),
@@ -234,9 +242,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_sm/policies/%s",
+						clusterUrl,
 						instance.Name,
 					),
 					httpmock.NewErrorResponder(fmt.Errorf("failed to get policy")).Once(),
@@ -267,9 +274,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 				transport.RegisterResponder(
 					http.MethodGet,
 					fmt.Sprintf(
-						"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-						cluster.Spec.General.ServiceName,
-						cluster.Namespace,
+						"%s_plugins/_sm/policies/%s",
+						clusterUrl,
 						instance.Spec.PolicyName,
 					),
 					httpmock.NewJsonResponderOrPanic(200, responses.GetSnapshotPolicyResponse{
@@ -369,9 +375,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodGet,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_sm/policies/%s",
+								clusterUrl,
 								instance.Spec.PolicyName,
 							),
 							httpmock.NewJsonResponderOrPanic(200, map[string]interface{}{
@@ -385,9 +390,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodPut,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/?if_seq_no=0&if_primary_term=0",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_sm/policies/?if_seq_no=0&if_primary_term=0",
+								clusterUrl,
 							),
 							httpmock.NewStringResponder(200, "OK").Once(),
 						)
@@ -439,7 +443,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
 					instance.Spec.OpensearchRef.Name = "doesnotexist"
-					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opsterv1.OpenSearchCluster{}, NotFoundError())
+					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 				It("should do nothing and exit", func() {
 					Expect(reconciler.Delete()).To(Succeed())
@@ -449,28 +453,20 @@ var _ = Describe("snapshot policy reconciler", func() {
 			Context("cluster is ready", func() {
 				// extraContextCalls := 1
 				BeforeEach(func() {
-					cluster.Status.Phase = opsterv1.PhaseRunning
-					cluster.Status.ComponentsStatus = []opsterv1.ComponentStatus{}
+					cluster.Status.Phase = opensearchv1.PhaseRunning
+					cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{}
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(*cluster, nil)
 					recorder = record.NewFakeRecorder(1)
 
 					transport.RegisterResponder(
 						http.MethodGet,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Times(2, failMessage),
 					)
 
 					transport.RegisterResponder(
 						http.MethodHead,
-						fmt.Sprintf(
-							"https://%s.%s.svc.cluster.local:9200/",
-							cluster.Spec.General.ServiceName,
-							cluster.Namespace,
-						),
+						clusterUrl,
 						httpmock.NewStringResponder(200, "OK").Once(failMessage),
 					)
 				})
@@ -480,9 +476,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodDelete,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_sm/policies/%s",
+								clusterUrl,
 								instance.Name,
 							),
 							httpmock.NewStringResponder(404, "does not exist").Once(failMessage),
@@ -498,9 +493,8 @@ var _ = Describe("snapshot policy reconciler", func() {
 						transport.RegisterResponder(
 							http.MethodDelete,
 							fmt.Sprintf(
-								"https://%s.%s.svc.cluster.local:9200/_plugins/_sm/policies/%s",
-								cluster.Spec.General.ServiceName,
-								cluster.Namespace,
+								"%s_plugins/_sm/policies/%s",
+								clusterUrl,
 								instance.Name,
 							),
 							httpmock.NewStringResponder(200, "OK").Once(failMessage),
@@ -517,24 +511,24 @@ var _ = Describe("snapshot policy reconciler", func() {
 	Context("CreateSnapshotPolicy", func() {
 		When("deletion schedule is different from creation schedule", func() {
 			BeforeEach(func() {
-				instance.Spec.Creation = opsterv1.SnapshotCreation{
-					Schedule: opsterv1.CronSchedule{
-						Cron: opsterv1.CronExpression{
+				instance.Spec.Creation = opensearchv1.SnapshotCreation{
+					Schedule: opensearchv1.CronSchedule{
+						Cron: opensearchv1.CronExpression{
 							Expression: "0 6 * * *", // 6:00 AM
 							Timezone:   "UTC",
 						},
 					},
 					TimeLimit: ptr.To("2h"),
 				}
-				instance.Spec.Deletion = &opsterv1.SnapshotDeletion{
-					Schedule: &opsterv1.CronSchedule{
-						Cron: opsterv1.CronExpression{
+				instance.Spec.Deletion = &opensearchv1.SnapshotDeletion{
+					Schedule: &opensearchv1.CronSchedule{
+						Cron: opensearchv1.CronExpression{
 							Expression: "0 8 * * *", // 8:00 AM
 							Timezone:   "UTC",
 						},
 					},
 					TimeLimit: ptr.To("2h"),
-					DeleteCondition: &opsterv1.SnapshotDeleteCondition{
+					DeleteCondition: &opensearchv1.SnapshotDeleteCondition{
 						MaxAge:   ptr.To("180d"),
 						MinCount: ptr.To(1),
 					},
@@ -554,19 +548,19 @@ var _ = Describe("snapshot policy reconciler", func() {
 
 		When("deletion schedule is nil", func() {
 			BeforeEach(func() {
-				instance.Spec.Creation = opsterv1.SnapshotCreation{
-					Schedule: opsterv1.CronSchedule{
-						Cron: opsterv1.CronExpression{
+				instance.Spec.Creation = opensearchv1.SnapshotCreation{
+					Schedule: opensearchv1.CronSchedule{
+						Cron: opensearchv1.CronExpression{
 							Expression: "0 6 * * *",
 							Timezone:   "UTC",
 						},
 					},
 					TimeLimit: ptr.To("2h"),
 				}
-				instance.Spec.Deletion = &opsterv1.SnapshotDeletion{
+				instance.Spec.Deletion = &opensearchv1.SnapshotDeletion{
 					Schedule:  nil, // No schedule
 					TimeLimit: ptr.To("2h"),
-					DeleteCondition: &opsterv1.SnapshotDeleteCondition{
+					DeleteCondition: &opensearchv1.SnapshotDeleteCondition{
 						MaxAge:   ptr.To("180d"),
 						MinCount: ptr.To(1),
 					},

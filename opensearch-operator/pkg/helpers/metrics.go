@@ -1,8 +1,8 @@
 package helpers
 
 import (
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/prometheus/client_golang/prometheus"
 	"sigs.k8s.io/controller-runtime/pkg/metrics"
 )
@@ -42,10 +42,17 @@ var (
 		}, []string{
 			"namespace", "opensearch_cluster", "status",
 		})
+	ReconcileErrors = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: clusterMetricsPrefix + "reconcile_error",
+			Help: "Total number of reconciliation errors.",
+		}, []string{
+			"namespace", "opensearch_cluster", "reconciler",
+		})
 )
 
 func RegisterMetrics() {
-	metrics.Registry.MustRegister(TlsCertificateDaysRemaining, ClusterInfo, ClusterHealth, ClusterShards)
+	metrics.Registry.MustRegister(TlsCertificateDaysRemaining, ClusterInfo, ClusterHealth, ClusterShards, ReconcileErrors)
 }
 
 func DeleteClusterMetrics(namespace string, clusterName string) {
@@ -53,9 +60,10 @@ func DeleteClusterMetrics(namespace string, clusterName string) {
 	ClusterInfo.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 	ClusterHealth.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 	ClusterShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
+	ReconcileErrors.DeletePartialMatch(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 }
 
-func UpdateClusterInfo(instance *opsterv1.OpenSearchCluster, health opsterv1.OpenSearchHealth, healthResponse responses.ClusterHealthResponse) {
+func UpdateClusterInfo(instance *opensearchv1.OpenSearchCluster, health opensearchv1.OpenSearchHealth, healthResponse responses.ClusterHealthResponse) {
 	namespace := instance.Namespace
 	clusterName := instance.Name
 
@@ -65,18 +73,18 @@ func UpdateClusterInfo(instance *opsterv1.OpenSearchCluster, health opsterv1.Ope
 
 	var value float64
 	switch health {
-	case opsterv1.OpenSearchRedHealth:
+	case opensearchv1.OpenSearchRedHealth:
 		value = 2
-	case opsterv1.OpenSearchYellowHealth:
+	case opensearchv1.OpenSearchYellowHealth:
 		value = 1
-	case opsterv1.OpenSearchGreenHealth:
+	case opensearchv1.OpenSearchGreenHealth:
 		value = 0
 	default:
 		value = -1
 	}
 	ClusterHealth.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName}).Set(value)
 
-	if health != opsterv1.OpenSearchUnknownHealth {
+	if health != opensearchv1.OpenSearchUnknownHealth {
 		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "active"}).Set(float64(healthResponse.ActiveShards))
 		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "relocating"}).Set(float64(healthResponse.RelocatingShards))
 		ClusterShards.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "status": "initializing"}).Set(float64(healthResponse.InitializingShards))

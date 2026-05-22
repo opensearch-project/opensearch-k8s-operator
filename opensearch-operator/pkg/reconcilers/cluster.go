@@ -3,34 +3,39 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strings"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/patch"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	policyv1 "k8s.io/api/policy/v1"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/go-logr/logr"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
-	"k8s.io/apimachinery/pkg/api/resource"
+	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
+const clusterReconcilerName = "cluster"
+
 type ClusterReconciler struct {
 	client            k8s.K8sClient
 	ctx               context.Context
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
 }
 
@@ -39,14 +44,14 @@ func NewClusterReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *ClusterReconciler {
 	return &ClusterReconciler{
 		client: k8s.NewK8sClient(client, ctx, append(
 			opts,
 			reconciler.WithPatchCalculateOptions(patch.IgnoreVolumeClaimTemplateTypeMetaAndStatus(), patch.IgnoreStatusFields()),
-			reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "cluster")),
+			reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", clusterReconcilerName)),
 		)...),
 		ctx:               ctx,
 		recorder:          recorder,
@@ -55,6 +60,8 @@ func NewClusterReconciler(
 		logger:            log.FromContext(ctx),
 	}
 }
+
+func (r *ClusterReconciler) Name() string { return clusterReconcilerName }
 
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// lg := log.FromContext(r.ctx)
@@ -91,6 +98,18 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(discoveryService, reconciler.StatePresent))
 
+	discoverRandomAdminSecret, err := helpers.DiscoverRandomAdminSecret(r.client, r.instance)
+	if err == nil {
+		result.CombineErr(ctrl.SetControllerReference(r.instance, discoverRandomAdminSecret, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(discoverRandomAdminSecret, reconciler.StatePresent))
+	}
+
+	discoverRandomContextSecret, err := helpers.DiscoverRandomContextSecret(r.client, r.instance)
+	if err == nil {
+		result.CombineErr(ctrl.SetControllerReference(r.instance, discoverRandomContextSecret, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(discoverRandomContextSecret, reconciler.StatePresent))
+	}
+
 	passwordSecret := builders.PasswordSecret(r.instance, username, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
@@ -109,7 +128,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	if r.instance.Status.Initialized {
 		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
 	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StatePresent))
+		result.Combine(r.reconcileBootstrapPod(bootstrapPod))
 	}
 
 	for _, nodePool := range r.instance.Spec.NodePools {
@@ -122,7 +141,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 
 	// if Version isn't set we set it now to check for upgrades later.
 	if r.instance.Status.Version == "" {
-		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.Version = r.instance.Spec.General.Version
 		})
 		result.CombineErr(err)
@@ -139,7 +158,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool, username string) (*ctrl.Result, error) {
+func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodePool, username string) (*ctrl.Result, error) {
 	found, nodePoolConfig := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
 
 	// If config hasn't been set up for the node pool requeue
@@ -149,16 +168,52 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		}, nil
 	}
 
-	extraConfig := helpers.MergeConfigs(r.instance.Spec.General.AdditionalConfig, nodePool.AdditionalConfig)
+	// Use per-nodepool volumes if this nodepool has AdditionalConfig
+	volumes := r.reconcilerContext.Volumes
+	volumeMounts := r.reconcilerContext.VolumeMounts
+	if len(nodePool.AdditionalConfig) > 0 {
+		// Remove shared config volume and mount (if present) to override with nodepool-specific config
+		filteredVolumes := make([]corev1.Volume, 0, len(volumes))
+		for _, vol := range volumes {
+			if vol.Name != "config" {
+				filteredVolumes = append(filteredVolumes, vol)
+			}
+		}
+		volumes = filteredVolumes
+
+		filteredVolumeMounts := make([]corev1.VolumeMount, 0, len(volumeMounts))
+		for _, mount := range volumeMounts {
+			if mount.Name != "config" {
+				filteredVolumeMounts = append(filteredVolumeMounts, mount)
+			}
+		}
+		volumeMounts = filteredVolumeMounts
+
+		// Add per-nodepool configmap volume (overrides shared config)
+		volumes = append(volumes, corev1.Volume{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: fmt.Sprintf("%s-%s-config", r.instance.Name, nodePool.Component),
+					},
+				},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "config",
+			MountPath: r.instance.Spec.General.GetOpenSearchHome() + "/config/opensearch.yml",
+			SubPath:   "opensearch.yml",
+		})
+	}
 
 	sts := builders.NewSTSForNodePool(
 		username,
 		r.instance,
 		nodePool,
 		nodePoolConfig.ConfigHash,
-		r.reconcilerContext.Volumes,
-		r.reconcilerContext.VolumeMounts,
-		extraConfig,
+		volumes,
+		volumeMounts,
 	)
 	if err := ctrl.SetControllerReference(r.instance, sts, r.client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
@@ -180,7 +235,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
 	if _, exists := existing.Spec.Selector.MatchLabels["opensearch.role"]; exists {
 		r.logger.Info(fmt.Sprintf("Deleting statefulset %s while orphaning pods to fix labels", existing.Name))
-		if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+		if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 			r.logger.Error(err, "Failed to delete Statefulset for nodePool "+nodePool.Component)
 			return result, err
 		}
@@ -196,12 +251,17 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		// This logic only works if the STS uses PVCs
 		// First check if the STS already has a readable status (CurrentRevision == "" indicates the STS is newly created and the controller has not yet updated the status properly)
 		if existing.Status.CurrentRevision == "" {
-			new, err := helpers.WaitForSTSStatus(r.client, &existing)
+			new, err := helpers.WaitForSTSStatus(r.ctx, r.client, &existing)
 			if err != nil {
 				return &ctrl.Result{Requeue: true}, err
 			}
 			existing = *new
 		}
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+		if err != nil {
+			return result, err
+		}
+		existing.Status.ReadyReplicas = readyReplicas
 		// Check number of PVCs for nodepool
 		pvcCount, err := helpers.CountPVCsForNodePool(r.client, r.instance, &nodePool)
 		if err != nil {
@@ -215,7 +275,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 				if existing.Spec.PodManagementPolicy != appsv1.ParallelPodManagement {
 					// Switch to Parallel to jumpstart the cluster
 					// First delete existing STS
-					if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+					if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 						r.logger.Error(err, "Failed to delete STS")
 						return result, err
 					}
@@ -229,14 +289,14 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 						return result, err
 					}
 					// Wait for pods to appear
-					err := helpers.WaitForSTSReplicas(r.client, &existing, nodePool.Replicas)
+					err := helpers.WaitForSTSReplicas(r.ctx, r.client, &existing, nodePool.Replicas)
 					// Abort normal logic and requeue
 					return &ctrl.Result{Requeue: true}, err
 				}
 			} else if existing.Spec.PodManagementPolicy == appsv1.ParallelPodManagement {
 				// We are in Parallel mode but appear to not have a failure situation any longer. Switch back to normal mode
 				r.logger.Info(fmt.Sprintf("Ending recovery mode for nodepool %s", nodePool.Component))
-				if err := helpers.WaitForSTSDelete(r.client, &existing); err != nil {
+				if err := helpers.WaitForSTSDelete(r.ctx, r.client, &existing); err != nil {
 					r.logger.Error(err, "Failed to delete STS")
 					return result, err
 				}
@@ -274,13 +334,47 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opsterv1.NodePool,
 		sts.Spec.Template.Spec.Containers[0].Env = existing.Spec.Template.Spec.Containers[0].Env
 	}
 
-	// Finally we enforce the desired state
-	return r.client.ReconcileResource(sts, reconciler.StatePresent)
+	// NOTE: This is needed for migration from opster.io/v1 to opensearch.org/v1. Update labels on orphaned pods to match the new StatefulSet's selector
+	// to ensure they can be adopted by the new StatefulSet and counted correctly
+	if err := r.updateOrphanedPodLabels(&existing, sts, &nodePool); err != nil {
+		r.logger.Error(err, "Failed to update orphaned pod labels", "statefulset", sts.Name)
+	}
+
+	// Try to enforce the desired state - if it fails due to immutable field changes,
+	// handle it with rolling pod deletion (similar to maybeUpdateVolumes pattern)
+	result, err = r.client.ReconcileResource(sts, reconciler.StatePresent)
+	if err != nil {
+		// Check if this is an immutable field change error that requires recreation
+		if r.isImmutableFieldChangeError(err) {
+			r.logger.Info(fmt.Sprintf("Detected immutable field change error, recreating StatefulSet %s/%s", sts.Namespace, sts.Name))
+			// Delete StatefulSet with orphan (pods remain) - following maybeUpdateVolumes pattern
+			if err := r.deleteSTSWithOrphan(&existing); err != nil {
+				return &ctrl.Result{}, err
+			}
+			// Reconcile resource again to create the new StatefulSet
+			return r.client.ReconcileResource(sts, reconciler.StatePresent)
+		}
+		// Return other errors as-is
+		return result, err
+	}
+	return result, nil
 }
 
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+// isImmutableFieldChangeError checks if an error is due to immutable field changes in StatefulSet
+// The error is already wrapped by the generic reconciler with ImmutableFieldChangeErrorHelp message,
+// so we can simply check if the error message contains that constant.
+func (r *ClusterReconciler) isImmutableFieldChangeError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// The generic reconciler wraps the error with ImmutableFieldChangeErrorHelp message
+	// when immutable field changes are detected, so we just need to check for that message
+	return strings.Contains(err.Error(), reconciler.ImmutableFieldChangeErrorHelp)
 }
 
 // isEmptyDirCluster returns true only if every nodePool is using emptyDir
@@ -305,7 +399,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 	// If any scaling operation is going on, don't do anything
 	for _, nodePool := range r.instance.Spec.NodePools {
-		componentStatus := opsterv1.ComponentStatus{
+		componentStatus := opensearchv1.ComponentStatus{
 			Component:   "Scaler",
 			Description: nodePool.Component,
 		}
@@ -334,6 +428,11 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			if err != nil {
 				return &ctrl.Result{Requeue: true}, err
 			}
+			readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+			if err != nil {
+				return &ctrl.Result{Requeue: true}, err
+			}
+			sts.Status.ReadyReplicas = readyReplicas
 		}
 
 		if helpers.HasDataRole(&nodePool) {
@@ -354,7 +453,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 		lg.Info(fmt.Sprintf("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace))
 		lg.Info("Deleting all sts, dashboards and securityconfig job to re-create cluster")
 		for _, nodePool := range r.instance.Spec.NodePools {
-			err := helpers.DeleteSTSForNodePool(r.client, nodePool, clusterName, clusterNamespace)
+			err := helpers.DeleteSTSForNodePool(r.ctx, r.client, nodePool, clusterName, clusterNamespace)
 			if err != nil {
 				lg.Error(err, fmt.Sprintf("Failed to delete sts for nodePool %s", nodePool.Component))
 				return &ctrl.Result{Requeue: true}, err
@@ -363,7 +462,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 		// Also Delete Dashboards deployment so .kibana index can be recreated when cluster is started again
 		if r.instance.Spec.Dashboards.Enable {
-			err := helpers.DeleteDashboardsDeployment(r.client, clusterName, clusterNamespace)
+			err := helpers.DeleteDashboardsDeployment(r.ctx, r.client, clusterName, clusterNamespace)
 			if err != nil {
 				lg.Error(err, "Failed to delete OSD pod")
 				return &ctrl.Result{Requeue: true}, err
@@ -371,7 +470,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			// Dashboards deployment will be recreated normally through the reconcile cycle
 		}
 
-		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.Initialized = false
 		})
 		if err != nil {
@@ -391,7 +490,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 	return &ctrl.Result{}, nil
 }
 
-func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result, error) {
+func (r *ClusterReconciler) handlePDB(nodePool *opensearchv1.NodePool) (*ctrl.Result, error) {
 	pdb := policyv1.PodDisruptionBudget{}
 
 	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
@@ -420,9 +519,11 @@ func (r *ClusterReconciler) handlePDB(nodePool *opsterv1.NodePool) (*ctrl.Result
 	}
 }
 
-func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opsterv1.NodePool) error {
-	if nodePool.DiskSize == "" { // Default case
-		nodePool.DiskSize = builders.DefaultDiskSize
+func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opensearchv1.NodePool) error {
+	// Use default if DiskSize is zero (not set)
+	nodePoolDiskSize := nodePool.DiskSize
+	if nodePoolDiskSize.IsZero() {
+		nodePoolDiskSize = builders.DefaultDiskSize
 	}
 
 	// If we are changing from ephemeral storage to persistent
@@ -435,11 +536,6 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 	}
 
 	existingDisk := lo.FromPtr(existing.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage())
-	nodePoolDiskSize, err := resource.ParseQuantity(nodePool.DiskSize)
-	if err != nil {
-		r.logger.Error(err, fmt.Sprintf("Invalid diskSize '%s' for nodepool %s", nodePool.DiskSize, nodePool.Component))
-		return err
-	}
 
 	if existingDisk.Equal(nodePoolDiskSize) {
 		return nil
@@ -483,6 +579,59 @@ func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) er
 	return nil
 }
 
+// updateOrphanedPodLabels updates labels on orphaned pods to match the new StatefulSet's selector
+// This ensures they can be adopted by the new StatefulSet and counted correctly by ReadyReplicasForNodePool
+func (r *ClusterReconciler) updateOrphanedPodLabels(oldSTS *appsv1.StatefulSet, newSTS *appsv1.StatefulSet, nodePool *opensearchv1.NodePool) error {
+	// Get the old selector labels
+	oldSelector := oldSTS.Spec.Selector.MatchLabels
+	// Get the new selector labels
+	newSelector := newSTS.Spec.Selector.MatchLabels
+
+	// If labels haven't changed, no need to update
+	if reflect.DeepEqual(oldSelector, newSelector) {
+		return nil
+	}
+
+	// List pods that match the old selector (orphaned pods)
+	oldSelectorMap := make(map[string]string)
+	for k, v := range oldSelector {
+		oldSelectorMap[k] = v
+	}
+	selector := labels.SelectorFromSet(oldSelectorMap)
+	podList, err := r.client.ListPods(&client.ListOptions{
+		Namespace:     oldSTS.Namespace,
+		LabelSelector: selector,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list orphaned pods: %w", err)
+	}
+
+	// Update labels on each orphaned pod to match the new selector
+	for _, pod := range podList.Items {
+		// Skip pods that are being deleted
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		// Merge new selector labels and StatefulSet labels
+		labelsToUpdate := make(map[string]string)
+		for k, v := range newSelector {
+			labelsToUpdate[k] = v
+		}
+		// Also update any other labels that might have changed
+		for k, v := range newSTS.Labels {
+			labelsToUpdate[k] = v
+		}
+		if err := r.client.UpdatePodLabels(&pod, labelsToUpdate); err != nil {
+			r.logger.Error(err, "Failed to update pod labels", "pod", pod.Name)
+			// Continue with other pods even if one fails
+			continue
+		}
+		r.logger.Info("Updated labels on orphaned pod", "pod", pod.Name, "oldLabels", oldSelector, "newLabels", newSelector)
+	}
+
+	return nil
+}
+
 // UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
 func (r *ClusterReconciler) UpdateClusterStatus() error {
 	health, healthResponse := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
@@ -490,8 +639,61 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 
 	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
 
-	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opsterv1.OpenSearchCluster) {
+	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.Health = health
 		instance.Status.AvailableNodes = availableNodes
 	})
+}
+
+// reconcileBootstrapPod handles bootstrap pod reconciliation with recreation for any changes
+func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
+	// Check if bootstrap pod exists
+	existingPod, err := r.client.GetPod(desiredPod.Name, desiredPod.Namespace)
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return &ctrl.Result{}, err
+	}
+
+	if k8serrors.IsNotFound(err) {
+		// Pod doesn't exist, create it
+		r.logger.Info("Creating bootstrap pod", "pod", desiredPod.Name)
+		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+	}
+
+	updatePod := desiredPod.DeepCopy()
+	if _, err := r.client.ReconcileResource(updatePod, reconciler.StatePresent); err != nil {
+		if isImmutablePodUpdateErr(err) {
+			r.logger.Info("Bootstrap pod update touched immutable fields, recreating pod", "pod", desiredPod.Name)
+			return r.recreateBootstrapPod(&existingPod, desiredPod)
+		}
+		r.logger.Error(err, "Failed to update bootstrap pod", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+
+	return &ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {
+	if err := r.client.DeletePod(existingPod); err != nil {
+		r.logger.Error(err, "Failed to delete existing bootstrap pod", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+	if err := r.client.WaitForPodDeletion(desiredPod.Name, desiredPod.Namespace); err != nil {
+		r.logger.Error(err, "Timeout waiting for bootstrap pod deletion", "pod", desiredPod.Name)
+		return &ctrl.Result{}, err
+	}
+
+	r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
+	return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
+}
+
+func isImmutablePodUpdateErr(err error) bool {
+	if err == nil {
+		return false
+	}
+	if statusErr, ok := err.(*k8serrors.StatusError); ok {
+		if statusErr.ErrStatus.Reason == metav1.StatusReasonInvalid && strings.Contains(statusErr.ErrStatus.Message, "pod updates may not change") {
+			return true
+		}
+	}
+	return strings.Contains(err.Error(), "pod updates may not change")
 }

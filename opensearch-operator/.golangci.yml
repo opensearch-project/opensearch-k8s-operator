@@ -1,0 +1,14 @@
+version: "2"
+
+run:
+  timeout: 6m
+
+linters:
+  exclusions:
+    paths:
+      - opensearch-gateway/responses
+
+formatters:
+  exclusions:
+    paths:
+      - opensearch-gateway/responses

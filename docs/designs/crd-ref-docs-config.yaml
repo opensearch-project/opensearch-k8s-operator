@@ -1,0 +1,25 @@
+processor:
+  # RE2 regular expressions describing types that should be excluded from the generated documentation.
+  ignoreTypes:
+    - ".*List$"
+    - ".*Status$"
+  # RE2 regular expressions describing type fields that should be excluded from the generated documentation.
+  ignoreFields:
+    - "status$"
+    - "TypeMeta$"
+    - "ObjectMeta$"
+
+render:
+  # Version of Kubernetes to use when generating links to Kubernetes API documentation.
+  kubernetesVersion: 1.28
+  # Generate better links for known types
+  knownTypes:
+    - name: ResourceRequirements
+      package: k8s.io/api/core/v1
+      link: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core
+    - name: PodSecurityContext
+      package: k8s.io/api/core/v1
+      link: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podsecuritycontext-v1-core
+    - name: SecurityContext
+      package: k8s.io/api/core/v1
+      link: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core

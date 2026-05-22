@@ -37,9 +37,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/apiutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/patch"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/types"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/utils"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/types"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/utils"
 )
 
 const (
@@ -47,6 +47,9 @@ const (
 	StateCreated                StaticDesiredState = "Created"
 	StateAbsent                 StaticDesiredState = "Absent"
 	StatePresent                StaticDesiredState = "Present"
+	// ImmutableFieldChangeErrorHelp is the error message used when immutable field changes are detected
+	// but recreation is not enabled. This constant is shared across the codebase for consistent error detection.
+	ImmutableFieldChangeErrorHelp = "recreating object on immutable field change has to be enabled explicitly through the reconciler options"
 )
 
 var DefaultRecreateEnabledGroupKinds = []schema.GroupKind{
@@ -331,7 +334,7 @@ func WithPatchCalculateOptions(options ...patch.CalculateOption) ResourceReconci
 func NewReconcilerWith(client client.Client, opts ...ResourceReconcilerOption) ResourceReconciler {
 	options := ReconcilerOpts{
 		Log: logr.Discard(),
-		EnableRecreateWorkloadOnImmutableFieldChangeHelp: "recreating object on immutable field change has to be enabled explicitly through the reconciler options",
+		EnableRecreateWorkloadOnImmutableFieldChangeHelp: ImmutableFieldChangeErrorHelp,
 	}
 	for _, opt := range opts {
 		opt(&options)

@@ -8,14 +8,14 @@ import (
 	"strings"
 	"time"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/builders"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/go-logr/logr"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,15 +37,17 @@ type candidate struct {
 	podName  string
 	podNS    string
 	sts      appsv1.StatefulSet
-	nodePool opsterv1.NodePool
+	nodePool opensearchv1.NodePool
 	isMaster bool
 	ordinal  int
 }
 
+const restartReconcilerName = "restart"
+
 type RollingRestartReconciler struct {
 	client            k8s.K8sClient
 	ctx               context.Context
-	instance          *opsterv1.OpenSearchCluster
+	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
 	osClient          *services.OsClusterClient
 	recorder          record.EventRecorder
@@ -57,18 +59,20 @@ func NewRollingRestartReconciler(
 	ctx context.Context,
 	recorder record.EventRecorder,
 	reconcilerContext *ReconcilerContext,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...reconciler.ResourceReconcilerOption,
 ) *RollingRestartReconciler {
 	return &RollingRestartReconciler{
-		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "restart")))...),
+		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", restartReconcilerName)))...),
 		ctx:               ctx,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "restart"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", restartReconcilerName),
 		recorder:          recorder,
 		reconcilerContext: reconcilerContext,
 	}
 }
+
+func (r *RollingRestartReconciler) Name() string { return restartReconcilerName }
 
 func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 	// We should never get to this while an upgrade is in progress
@@ -83,11 +87,19 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 
 	// Check that all nodes are ready before doing work
 	// Also check if there are pending updates for all nodes.
-	for _, nodePool := range r.instance.Spec.NodePools {
+	for i := range r.instance.Spec.NodePools {
+		nodePool := r.instance.Spec.NodePools[i]
 		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
+
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
+		if err != nil {
+			r.logger.Error(err, "Failed to count ready pods for node pool", "nodePool", nodePool.Component)
+			return ctrl.Result{Requeue: true}, err
+		}
+		sts.Status.ReadyReplicas = readyReplicas
 
 		// Check for pending updates
 		if sts.Status.UpdateRevision != "" &&
@@ -107,6 +119,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, 1) {
+			r.logger.Info("StatefulSet is not ready", "name", sts.Name, "namespace", sts.Namespace, "readyReplicas", sts.Status.ReadyReplicas, "desiredReplicas", ptr.Deref(sts.Spec.Replicas, 1))
 			return ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: 10 * time.Second,
@@ -163,6 +176,17 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 // orders them and restarts at most one pod per reconciliation.
 func (r *RollingRestartReconciler) globalCandidateRollingRestart() (ctrl.Result, error) {
 	r.logger.Info("Starting global candidate rolling restart")
+
+	// Clean stale allocation exclusions (e.g. node was restarted but RemoveExcludeNodeHost failed).
+	// Otherwise we never retry removing that node and the exclude list stays stuck.
+	if r.instance.Spec.General.DrainDataNodes {
+		if res, err := r.cleanStaleExclusionList(); err != nil || res.Requeue {
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			return res, nil
+		}
+	}
 
 	// Build candidate list across all node pools
 	var candidates []candidate
@@ -294,6 +318,11 @@ func (r *RollingRestartReconciler) globalCandidateRollingRestart() (ctrl.Result,
 	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 }
 
+// cleanStaleExclusionList delegates to the shared CleanStaleExclusionList.
+func (r *RollingRestartReconciler) cleanStaleExclusionList() (ctrl.Result, error) {
+	return util.CleanStaleExclusionList(r.client, r.instance, r.osClient, r.logger)
+}
+
 func parseOrdinalFromName(name string) int {
 	// expects name like <stsName>-<ordinal>
 	parts := strings.Split(name, "-")
@@ -309,7 +338,8 @@ func parseOrdinalFromName(name string) int {
 
 func (r *RollingRestartReconciler) countMasters() (int32, int32, error) {
 	var total, ready int32
-	for _, np := range r.instance.Spec.NodePools {
+	for i := range r.instance.Spec.NodePools {
+		np := r.instance.Spec.NodePools[i]
 		if !helpers.HasManagerRole(&np) {
 			continue
 		}
@@ -318,6 +348,11 @@ func (r *RollingRestartReconciler) countMasters() (int32, int32, error) {
 			return 0, 0, err
 		}
 		total += ptr.Deref(sts.Spec.Replicas, 1)
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &np)
+		if err != nil {
+			return 0, 0, err
+		}
+		sts.Status.ReadyReplicas = readyReplicas
 		ready += sts.Status.ReadyReplicas
 	}
 	return total, ready, nil
@@ -355,23 +390,28 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 	}
 
 	if r.instance.Spec.General.DrainDataNodes {
-		_, err = services.RemoveExcludeNodeHost(r.osClient, c.podName)
-		return ctrl.Result{}, err
+		ok, err := services.RemoveExcludeNodeHost(r.osClient, r.logger, c.podName)
+		if err != nil || !ok {
+			// If we fail to clean up the exclude list, log and requeue so we don't
+			// leave nodes permanently excluded and block subsequent restarts.
+			r.logger.Error(err, "Failed to remove allocation exclusion, will retry", "pod", c.podName)
+			return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+		}
 	}
 	return ctrl.Result{}, nil
 }
 
 func (r *RollingRestartReconciler) updateStatus(status string) error {
-	return UpdateComponentStatus(r.client, r.instance, &opsterv1.ComponentStatus{
+	return UpdateComponentStatus(r.client, r.instance, &opensearchv1.ComponentStatus{
 		Component:   componentName,
 		Status:      status,
 		Description: "",
 	})
 }
 
-func (r *RollingRestartReconciler) findStatus() *opsterv1.ComponentStatus {
+func (r *RollingRestartReconciler) findStatus() *opensearchv1.ComponentStatus {
 	comp := r.instance.Status.ComponentsStatus
-	_, found := helpers.FindFirstPartial(comp, opsterv1.ComponentStatus{
+	_, found := helpers.FindFirstPartial(comp, opensearchv1.ComponentStatus{
 		Component: componentName,
 	}, helpers.GetByComponent)
 	if found {

@@ -2,14 +2,16 @@ package controllers
 
 import (
 	"context"
-	"k8s.io/utils/ptr"
 	"time"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"k8s.io/utils/ptr"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
@@ -20,7 +22,7 @@ import (
 // These tests use Ginkgo (BDD-style Go testing framework). Refer to
 // http://onsi.github.io/ginkgo/ to learn more about Ginkgo.
 
-var _ = Describe("Scaler Reconciler", func() {
+var _ = Describe("Scaler Reconciler", Ordered, func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
 		clusterName = "cluster-test-nodes"
@@ -31,7 +33,7 @@ var _ = Describe("Scaler Reconciler", func() {
 	var (
 		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace)
 		nodePool          = appsv1.StatefulSet{}
-		cluster2          = opsterv1.OpenSearchCluster{}
+		cluster2          = opensearchv1.OpenSearchCluster{}
 	)
 
 	/// ------- Creation Check phase -------
@@ -147,7 +149,7 @@ var _ = Describe("Scaler Reconciler", func() {
 					return err
 				}
 				if OpensearchCluster.Spec.NodePools[0].Persistence == nil || OpensearchCluster.Spec.NodePools[0].Persistence.PVC != nil {
-					OpensearchCluster.Spec.NodePools[0].DiskSize = "32Gi"
+					OpensearchCluster.Spec.NodePools[0].DiskSize = resource.MustParse("32Gi")
 				}
 
 				return k8sClient.Update(context.Background(), &OpensearchCluster)

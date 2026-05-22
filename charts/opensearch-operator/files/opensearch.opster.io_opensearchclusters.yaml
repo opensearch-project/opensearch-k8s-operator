@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.16.0
+    controller-gen.kubebuilder.io/version: v0.19.0
   name: opensearchclusters.opensearch.opster.io
 spec:
   group: opensearch.opster.io
@@ -62,12 +62,6 @@ spec:
             properties:
               bootstrap:
                 properties:
-                  additionalConfig:
-                    additionalProperties:
-                      type: string
-                    description: Extra items to add to the opensearch.yml, defaults
-                      to General.AdditionalConfig
-                    type: object
                   affinity:
                     description: Affinity is a group of affinity scheduling rules.
                     properties:
@@ -991,6 +985,150 @@ spec:
                     additionalProperties:
                       type: string
                     type: object
+                  diskSize:
+                    anyOf:
+                    - type: integer
+                    - type: string
+                    pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                    x-kubernetes-int-or-string: true
+                  env:
+                    items:
+                      description: EnvVar represents an environment variable present
+                        in a Container.
+                      properties:
+                        name:
+                          description: Name of the environment variable. Must be a
+                            C_IDENTIFIER.
+                          type: string
+                        value:
+                          description: |-
+                            Variable references $(VAR_NAME) are expanded
+                            using the previously defined environment variables in the container and
+                            any service environment variables. If a variable cannot be resolved,
+                            the reference in the input string will be unchanged. Double $$ are reduced
+                            to a single $, which allows for escaping the $(VAR_NAME) syntax: i.e.
+                            "$$(VAR_NAME)" will produce the string literal "$(VAR_NAME)".
+                            Escaped references will never be expanded, regardless of whether the variable
+                            exists or not.
+                            Defaults to "".
+                          type: string
+                        valueFrom:
+                          description: Source for the environment variable's value.
+                            Cannot be used if value is not empty.
+                          properties:
+                            configMapKeyRef:
+                              description: Selects a key of a ConfigMap.
+                              properties:
+                                key:
+                                  description: The key to select.
+                                  type: string
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                optional:
+                                  description: Specify whether the ConfigMap or its
+                                    key must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            fieldRef:
+                              description: |-
+                                Selects a field of the pod: supports metadata.name, metadata.namespace, `metadata.labels['<KEY>']`, `metadata.annotations['<KEY>']`,
+                                spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP, status.podIPs.
+                              properties:
+                                apiVersion:
+                                  description: Version of the schema the FieldPath
+                                    is written in terms of, defaults to "v1".
+                                  type: string
+                                fieldPath:
+                                  description: Path of the field to select in the
+                                    specified API version.
+                                  type: string
+                              required:
+                              - fieldPath
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            resourceFieldRef:
+                              description: |-
+                                Selects a resource of the container: only resources limits and requests
+                                (limits.cpu, limits.memory, limits.ephemeral-storage, requests.cpu, requests.memory and requests.ephemeral-storage) are currently supported.
+                              properties:
+                                containerName:
+                                  description: 'Container name: required for volumes,
+                                    optional for env vars'
+                                  type: string
+                                divisor:
+                                  anyOf:
+                                  - type: integer
+                                  - type: string
+                                  description: Specifies the output format of the
+                                    exposed resources, defaults to "1"
+                                  pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                                  x-kubernetes-int-or-string: true
+                                resource:
+                                  description: 'Required: resource to select'
+                                  type: string
+                              required:
+                              - resource
+                              type: object
+                              x-kubernetes-map-type: atomic
+                            secretKeyRef:
+                              description: Selects a key of a secret in the pod's
+                                namespace
+                              properties:
+                                key:
+                                  description: The key of the secret to select from.  Must
+                                    be a valid secret key.
+                                  type: string
+                                name:
+                                  default: ""
+                                  description: |-
+                                    Name of the referent.
+                                    This field is effectively required, but due to backwards compatibility is
+                                    allowed to be empty. Instances of this type with an empty value here are
+                                    almost certainly wrong.
+                                    More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                  type: string
+                                optional:
+                                  description: Specify whether the Secret or its key
+                                    must be defined
+                                  type: boolean
+                              required:
+                              - key
+                              type: object
+                              x-kubernetes-map-type: atomic
+                          type: object
+                      required:
+                      - name
+                      type: object
+                    type: array
+                  hostAliases:
+                    items:
+                      description: |-
+                        HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the
+                        pod's hosts file.
+                      properties:
+                        hostnames:
+                          description: Hostnames for the above IP address.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        ip:
+                          description: IP address of the host file entry.
+                          type: string
+                      required:
+                      - ip
+                      type: object
+                    type: array
                   initContainers:
                     x-kubernetes-preserve-unknown-fields: true
                   jvm:
@@ -1019,6 +1157,10 @@ spec:
                           x-kubernetes-map-type: atomic
                       type: object
                     type: array
+                  labels:
+                    additionalProperties:
+                      type: string
+                    type: object
                   nodeSelector:
                     additionalProperties:
                       type: string
@@ -1027,6 +1169,8 @@ spec:
                     items:
                       type: string
                     type: array
+                  priorityClassName:
+                    type: string
                   resources:
                     description: ResourceRequirements describes the compute resource
                       requirements.
@@ -1134,7 +1278,10 @@ spec:
                   autoScaler:
                     type: boolean
                   smartScaler:
+                    default: true
                     type: boolean
+                required:
+                - smartScaler
                 type: object
               dashboards:
                 properties:
@@ -1289,23 +1436,49 @@ spec:
                         name:
                           description: Name to use for the volume. Required.
                           type: string
+                        nfs:
+                          description: NFS object to use to populate the volume
+                          properties:
+                            path:
+                              description: |-
+                                path that is exported by the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly here will force the NFS export to be mounted with read-only permissions.
+                                Defaults to false.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: boolean
+                            server:
+                              description: |-
+                                server is the hostname or IP address of the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                          required:
+                          - path
+                          - server
+                          type: object
                         path:
                           description: Path in the container to mount the volume at.
                             Required.
                           type: string
                         persistentVolumeClaim:
-                          description: PersistentVolumeClaim object to use to populate the volume
+                          description: PersistentVolumeClaim object to use to populate
+                            the volume
                           properties:
                             claimName:
                               description: |-
-                                The name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
                                 More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
                               type: string
                             readOnly:
                               description: |-
-                                Will force the ReadOnly setting in VolumeMounts.
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
                                 Default false.
                               type: boolean
+                          required:
+                          - claimName
                           type: object
                         projected:
                           description: Projected object to use to populate the volume
@@ -1725,6 +1898,11 @@ spec:
                       - name
                       - path
                       type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of secret, configMap, emptyDir, csi,
+                          projected, nfs must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          == 1
                     type: array
                   affinity:
                     description: Affinity is a group of affinity scheduling rules.
@@ -2774,6 +2952,25 @@ spec:
                       - name
                       type: object
                     type: array
+                  hostAliases:
+                    items:
+                      description: |-
+                        HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the
+                        pod's hosts file.
+                      properties:
+                        hostnames:
+                          description: Hostnames for the above IP address.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        ip:
+                          description: IP address of the host file entry.
+                          type: string
+                      required:
+                      - ip
+                      type: object
+                    type: array
                   image:
                     type: string
                   imagePullPolicy:
@@ -2822,6 +3019,11 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  opensearchDashboardsHome:
+                    description: OpenSearch Dashboards installation directory inside
+                      the container. Defaults to /usr/share/opensearch-dashboards
+                      if not set.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -3058,7 +3260,10 @@ spec:
                             type: string
                         type: object
                     type: object
+                  priorityClassName:
+                    type: string
                   replicas:
+                    default: 1
                     format: int32
                     type: integer
                   resources:
@@ -3360,6 +3565,12 @@ spec:
                       enable:
                         description: Enable HTTPS for Dashboards
                         type: boolean
+                      enableHotReload:
+                        description: Enable hot reloading of TLS certificates. When
+                          enabled, certificates are mounted as directories instead
+                          of using subPath, allowing Kubernetes to update certificate
+                          files when secrets are updated.
+                        type: boolean
                       generate:
                         description: Generate certificate, if false secret must be
                           provided
@@ -3419,11 +3630,181 @@ spec:
                           type: string
                       type: object
                     type: array
+                  topologySpreadConstraints:
+                    items:
+                      description: TopologySpreadConstraint specifies how to spread
+                        matching pods among the given topology.
+                      properties:
+                        labelSelector:
+                          description: |-
+                            LabelSelector is used to find matching pods.
+                            Pods that match this label selector are counted to determine the number of pods
+                            in their corresponding topology domain.
+                          properties:
+                            matchExpressions:
+                              description: matchExpressions is a list of label selector
+                                requirements. The requirements are ANDed.
+                              items:
+                                description: |-
+                                  A label selector requirement is a selector that contains values, a key, and an operator that
+                                  relates the key and values.
+                                properties:
+                                  key:
+                                    description: key is the label key that the selector
+                                      applies to.
+                                    type: string
+                                  operator:
+                                    description: |-
+                                      operator represents a key's relationship to a set of values.
+                                      Valid operators are In, NotIn, Exists and DoesNotExist.
+                                    type: string
+                                  values:
+                                    description: |-
+                                      values is an array of string values. If the operator is In or NotIn,
+                                      the values array must be non-empty. If the operator is Exists or DoesNotExist,
+                                      the values array must be empty. This array is replaced during a strategic
+                                      merge patch.
+                                    items:
+                                      type: string
+                                    type: array
+                                    x-kubernetes-list-type: atomic
+                                required:
+                                - key
+                                - operator
+                                type: object
+                              type: array
+                              x-kubernetes-list-type: atomic
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: |-
+                                matchLabels is a map of {key,value} pairs. A single {key,value} in the matchLabels
+                                map is equivalent to an element of matchExpressions, whose key field is "key", the
+                                operator is "In", and the values array contains only "value". The requirements are ANDed.
+                              type: object
+                          type: object
+                          x-kubernetes-map-type: atomic
+                        matchLabelKeys:
+                          description: |-
+                            MatchLabelKeys is a set of pod label keys to select the pods over which
+                            spreading will be calculated. The keys are used to lookup values from the
+                            incoming pod labels, those key-value labels are ANDed with labelSelector
+                            to select the group of existing pods over which spreading will be calculated
+                            for the incoming pod. The same key is forbidden to exist in both MatchLabelKeys and LabelSelector.
+                            MatchLabelKeys cannot be set when LabelSelector isn't set.
+                            Keys that don't exist in the incoming pod labels will
+                            be ignored. A null or empty list means only match against labelSelector.
+
+                            This is a beta field and requires the MatchLabelKeysInPodTopologySpread feature gate to be enabled (enabled by default).
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        maxSkew:
+                          description: |-
+                            MaxSkew describes the degree to which pods may be unevenly distributed.
+                            When `whenUnsatisfiable=DoNotSchedule`, it is the maximum permitted difference
+                            between the number of matching pods in the target topology and the global minimum.
+                            The global minimum is the minimum number of matching pods in an eligible domain
+                            or zero if the number of eligible domains is less than MinDomains.
+                            For example, in a 3-zone cluster, MaxSkew is set to 1, and pods with the same
+                            labelSelector spread as 2/2/1:
+                            In this case, the global minimum is 1.
+                            | zone1 | zone2 | zone3 |
+                            |  P P  |  P P  |   P   |
+                            - if MaxSkew is 1, incoming pod can only be scheduled to zone3 to become 2/2/2;
+                            scheduling it onto zone1(zone2) would make the ActualSkew(3-1) on zone1(zone2)
+                            violate MaxSkew(1).
+                            - if MaxSkew is 2, incoming pod can be scheduled onto any zone.
+                            When `whenUnsatisfiable=ScheduleAnyway`, it is used to give higher precedence
+                            to topologies that satisfy it.
+                            It's a required field. Default value is 1 and 0 is not allowed.
+                          format: int32
+                          type: integer
+                        minDomains:
+                          description: |-
+                            MinDomains indicates a minimum number of eligible domains.
+                            When the number of eligible domains with matching topology keys is less than minDomains,
+                            Pod Topology Spread treats "global minimum" as 0, and then the calculation of Skew is performed.
+                            And when the number of eligible domains with matching topology keys equals or greater than minDomains,
+                            this value has no effect on scheduling.
+                            As a result, when the number of eligible domains is less than minDomains,
+                            scheduler won't schedule more than maxSkew Pods to those domains.
+                            If value is nil, the constraint behaves as if MinDomains is equal to 1.
+                            Valid values are integers greater than 0.
+                            When value is not nil, WhenUnsatisfiable must be DoNotSchedule.
+
+                            For example, in a 3-zone cluster, MaxSkew is set to 2, MinDomains is set to 5 and pods with the same
+                            labelSelector spread as 2/2/2:
+                            | zone1 | zone2 | zone3 |
+                            |  P P  |  P P  |  P P  |
+                            The number of domains is less than 5(MinDomains), so "global minimum" is treated as 0.
+                            In this situation, new pod with the same labelSelector cannot be scheduled,
+                            because computed skew will be 3(3 - 0) if new Pod is scheduled to any of the three zones,
+                            it will violate MaxSkew.
+                          format: int32
+                          type: integer
+                        nodeAffinityPolicy:
+                          description: |-
+                            NodeAffinityPolicy indicates how we will treat Pod's nodeAffinity/nodeSelector
+                            when calculating pod topology spread skew. Options are:
+                            - Honor: only nodes matching nodeAffinity/nodeSelector are included in the calculations.
+                            - Ignore: nodeAffinity/nodeSelector are ignored. All nodes are included in the calculations.
+
+                            If this value is nil, the behavior is equivalent to the Honor policy.
+                          type: string
+                        nodeTaintsPolicy:
+                          description: |-
+                            NodeTaintsPolicy indicates how we will treat node taints when calculating
+                            pod topology spread skew. Options are:
+                            - Honor: nodes without taints, along with tainted nodes for which the incoming pod
+                            has a toleration, are included.
+                            - Ignore: node taints are ignored. All nodes are included.
+
+                            If this value is nil, the behavior is equivalent to the Ignore policy.
+                          type: string
+                        topologyKey:
+                          description: |-
+                            TopologyKey is the key of node labels. Nodes that have a label with this key
+                            and identical values are considered to be in the same topology.
+                            We consider each <key, value> as a "bucket", and try to put balanced number
+                            of pods into each bucket.
+                            We define a domain as a particular instance of a topology.
+                            Also, we define an eligible domain as a domain whose nodes meet the requirements of
+                            nodeAffinityPolicy and nodeTaintsPolicy.
+                            e.g. If TopologyKey is "kubernetes.io/hostname", each Node is a domain of that topology.
+                            And, if TopologyKey is "topology.kubernetes.io/zone", each zone is a domain of that topology.
+                            It's a required field.
+                          type: string
+                        whenUnsatisfiable:
+                          description: |-
+                            WhenUnsatisfiable indicates how to deal with a pod if it doesn't satisfy
+                            the spread constraint.
+                            - DoNotSchedule (default) tells the scheduler not to schedule it.
+                            - ScheduleAnyway tells the scheduler to schedule the pod in any location,
+                              but giving higher precedence to topologies that would help reduce the
+                              skew.
+                            A constraint is considered "Unsatisfiable" for an incoming pod
+                            if and only if every possible node assignment for that pod would violate
+                            "MaxSkew" on some topology.
+                            For example, in a 3-zone cluster, MaxSkew is set to 1, and pods with the same
+                            labelSelector spread as 3/1/1:
+                            | zone1 | zone2 | zone3 |
+                            | P P P |   P   |   P   |
+                            If WhenUnsatisfiable is set to DoNotSchedule, incoming pod can only be scheduled
+                            to zone2(zone3) to become 3/2/1(3/1/2) as ActualSkew(2-1) on zone2(zone3) satisfies
+                            MaxSkew(1). In other words, the cluster can still be imbalanced, but scheduler
+                            won't make it *more* imbalanced.
+                            It's a required field.
+                          type: string
+                      required:
+                      - maxSkew
+                      - topologyKey
+                      - whenUnsatisfiable
+                      type: object
+                    type: array
                   version:
                     type: string
-                required:
-                - replicas
-                - version
                 type: object
               general:
                 description: |-
@@ -3582,23 +3963,49 @@ spec:
                         name:
                           description: Name to use for the volume. Required.
                           type: string
+                        nfs:
+                          description: NFS object to use to populate the volume
+                          properties:
+                            path:
+                              description: |-
+                                path that is exported by the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                            readOnly:
+                              description: |-
+                                readOnly here will force the NFS export to be mounted with read-only permissions.
+                                Defaults to false.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: boolean
+                            server:
+                              description: |-
+                                server is the hostname or IP address of the NFS server.
+                                More info: https://kubernetes.io/docs/concepts/storage/volumes#nfs
+                              type: string
+                          required:
+                          - path
+                          - server
+                          type: object
                         path:
                           description: Path in the container to mount the volume at.
                             Required.
                           type: string
                         persistentVolumeClaim:
-                          description: PersistentVolumeClaim object to use to populate the volume
+                          description: PersistentVolumeClaim object to use to populate
+                            the volume
                           properties:
                             claimName:
                               description: |-
-                                The name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
+                                claimName is the name of a PersistentVolumeClaim in the same namespace as the pod using this volume.
                                 More info: https://kubernetes.io/docs/concepts/storage/persistent-volumes#persistentvolumeclaims
                               type: string
                             readOnly:
                               description: |-
-                                Will force the ReadOnly setting in VolumeMounts.
+                                readOnly Will force the ReadOnly setting in VolumeMounts.
                                 Default false.
                               type: boolean
+                          required:
+                          - claimName
                           type: object
                         projected:
                           description: Projected object to use to populate the volume
@@ -4018,6 +4425,11 @@ spec:
                       - name
                       - path
                       type: object
+                      x-kubernetes-validations:
+                      - message: exactly one of secret, configMap, emptyDir, csi,
+                          projected, nfs must be set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)
+                          == 1
                     type: array
                   annotations:
                     additionalProperties:
@@ -4028,13 +4440,29 @@ spec:
                     type: string
                   defaultRepo:
                     type: string
-                  disableSSL:
-                    description: Disable SSL for the cluster
-                    type: boolean
                   drainDataNodes:
                     description: Drain data nodes controls whether to drain data notes
                       on rolling restart operations
                     type: boolean
+                  hostAliases:
+                    items:
+                      description: |-
+                        HostAlias holds the mapping between IP and hostnames that will be injected as an entry in the
+                        pod's hosts file.
+                      properties:
+                        hostnames:
+                          description: Hostnames for the above IP address.
+                          items:
+                            type: string
+                          type: array
+                          x-kubernetes-list-type: atomic
+                        ip:
+                          description: IP address of the host file entry.
+                          type: string
+                      required:
+                      - ip
+                      type: object
+                    type: array
                   httpPort:
                     default: 9200
                     format: int32
@@ -4110,6 +4538,15 @@ spec:
                             type: string
                         type: object
                     type: object
+                  opensearchHome:
+                    description: OpenSearch installation directory inside the container.
+                      Defaults to /usr/share/opensearch if not set.
+                    type: string
+                  operatorClusterURL:
+                    description: |-
+                      Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
+                      instead of the default internal Kubernetes service DNS name.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -4669,6 +5106,8 @@ spec:
                     additionalConfig:
                       additionalProperties:
                         type: string
+                      description: Extra items to add to the opensearch.yml for this
+                        nodepool (merged with general.additionalConfig)
                       type: object
                     affinity:
                       description: Affinity is a group of affinity scheduling rules.
@@ -5597,7 +6036,11 @@ spec:
                     component:
                       type: string
                     diskSize:
-                      type: string
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
                     env:
                       items:
                         description: EnvVar represents an environment variable present
@@ -6205,9 +6648,9 @@ spec:
                         type: object
                         x-kubernetes-map-type: atomic
                       securityConfigSecret:
-                        description: Secret that contains the different yml files
-                          of the opensearch-security config (config.yml, internal_users.yml,
-                          ...)
+                        description: |-
+                          Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
+                          When omitted the operator seeds the cluster with its bundled defaults.
                         properties:
                           name:
                             default: ""
@@ -6224,6 +6667,12 @@ spec:
                         description: Specific configs for the SecurityConfig update
                           job
                         properties:
+                          labels:
+                            additionalProperties:
+                              type: string
+                            type: object
+                          priorityClassName:
+                            type: string
                           resources:
                             description: ResourceRequirements describes the compute
                               resource requirements.
@@ -6316,11 +6765,32 @@ spec:
                                 type: string
                             type: object
                             x-kubernetes-map-type: atomic
+                          customFQDN:
+                            description: Custom FQDN to use for the HTTP certificate.
+                              If not set, the operator will use the default cluster
+                              DNS names.
+                            type: string
                           duration:
                             default: 8760h
                             description: Duration controls the validity period of
                               generated certificates (e.g. "8760h", "720h").
                             type: string
+                          enableHotReload:
+                            description: Enable hot reloading of TLS certificates.
+                              When enabled, certificates are mounted as directories
+                              instead of using subPath, allowing Kubernetes to update
+                              certificate files when secrets are updated.
+                            type: boolean
+                          enabled:
+                            description: |-
+                              enabled controls if TLS should be enabled for the HTTP layer.
+
+                              If false: TLS is explicitly disabled for HTTP.
+
+                              If not set (default): TLS is enabled if HTTP configuration is provided, or if security.tls is set.
+
+                              If true: TLS is explicitly enabled. HTTP configuration must be provided.
+                            type: boolean
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
@@ -6350,6 +6820,13 @@ spec:
                         type: object
                       transport:
                         properties:
+                          adminDn:
+                            description: |-
+                              Deprecated: DNs of certificates that should have admin access. This field is deprecated and will be removed in a future version.
+                              For OpenSearch 2.0.0+, use security.tls.http.adminDn instead.
+                            items:
+                              type: string
+                            type: array
                           caSecret:
                             description: Optional, secret that contains the ca certificate
                               as ca.crt. If this and generate=true is set the existing
@@ -6372,6 +6849,22 @@ spec:
                             description: Duration controls the validity period of
                               generated certificates (e.g. "8760h", "720h").
                             type: string
+                          enableHotReload:
+                            description: Enable hot reloading of TLS certificates.
+                              When enabled, certificates are mounted as directories
+                              instead of using subPath, allowing Kubernetes to update
+                              certificate files when secrets are updated.
+                            type: boolean
+                          enabled:
+                            description: |-
+                              enabled controls if TLS should be enabled for the transport layer.
+
+                              If false: TLS is explicitly disabled for transport.
+
+                              If not set (default): TLS is enabled if transport configuration is provided, or if security.tls is set.
+
+                              If true: TLS is explicitly enabled. Transport configuration must be provided.
+                            type: boolean
                           generate:
                             description: If set to true the operator will generate
                               a CA and certificates for the cluster to use, if false
@@ -6416,6 +6909,8 @@ spec:
           status:
             description: ClusterStatus defines the observed state of Es
             properties:
+              adminsecretcreated:
+                type: boolean
               availableNodes:
                 description: AvailableNodes is the number of available instances.
                 format: int32
@@ -6435,6 +6930,8 @@ spec:
                       type: string
                   type: object
                 type: array
+              contextsecretcreated:
+                type: boolean
               health:
                 description: OpenSearchHealth is the health of the cluster as returned
                   by the health API.

@@ -5,7 +5,7 @@ metadata:
   name: opensearchuser-viewer-role
 rules:
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.org
   resources:
   - opensearchusers
   verbs:
@@ -13,7 +13,7 @@ rules:
   - list
   - watch
 - apiGroups:
-  - opster.opensearch.opster.io
+  - opensearch.org
   resources:
   - opensearchusers/status
   verbs:

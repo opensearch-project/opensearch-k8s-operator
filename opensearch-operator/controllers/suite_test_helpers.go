@@ -6,7 +6,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/util/intstr"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -14,7 +14,30 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-func CreateNamespace(k8sClient client.Client, cluster *opsterv1.OpenSearchCluster) error {
+// MarkStsReady simulates the StatefulSet controller by setting
+// Status.ReadyReplicas and Status.AvailableReplicas to match Spec.Replicas
+// for all StatefulSets in the given namespace that belong to the cluster.
+// This is needed in envtest where no real StatefulSet controller runs.
+func MarkStsReady(k8sClient client.Client, namespace string) error {
+	stsList := &appsv1.StatefulSetList{}
+	if err := k8sClient.List(context.Background(), stsList, client.InNamespace(namespace)); err != nil {
+		return err
+	}
+	for _, sts := range stsList.Items {
+		if sts.Spec.Replicas == nil {
+			continue
+		}
+		sts.Status.Replicas = *sts.Spec.Replicas
+		sts.Status.ReadyReplicas = *sts.Spec.Replicas
+		sts.Status.AvailableReplicas = *sts.Spec.Replicas
+		if err := k8sClient.Status().Update(context.Background(), &sts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func CreateNamespace(k8sClient client.Client, cluster *opensearchv1.OpenSearchCluster) error {
 	ns := corev1.Namespace{ObjectMeta: metav1.ObjectMeta{Name: cluster.Name}}
 	return k8sClient.Create(context.Background(), &ns)
 }
@@ -76,7 +99,7 @@ func IsConfigMapDeleted(k8sClient client.Client, name string, namespace string) 
 	return err != nil
 }
 
-func HasOwnerReference(object client.Object, owner *opsterv1.OpenSearchCluster) bool {
+func HasOwnerReference(object client.Object, owner *opensearchv1.OpenSearchCluster) bool {
 	for _, ownerRef := range object.GetOwnerReferences() {
 		if ownerRef.Name == owner.Name {
 			return true
@@ -94,22 +117,22 @@ func ArrayElementContains(array []string, content string) bool {
 	return false
 }
 
-func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSearchCluster {
-	OpensearchCluster := &opsterv1.OpenSearchCluster{
+func ComposeOpensearchCrd(clusterName string, namespace string) opensearchv1.OpenSearchCluster {
+	OpensearchCluster := &opensearchv1.OpenSearchCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OpenSearchCluster",
-			APIVersion: "opensearch.opster.io/v1",
+			APIVersion: "opensearch.org/v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      clusterName,
 			Namespace: namespace,
 		},
-		Spec: opsterv1.ClusterSpec{
-			General: opsterv1.GeneralConfig{
-				Monitoring: opsterv1.MonitoringConfig{
+		Spec: opensearchv1.ClusterSpec{
+			General: opensearchv1.GeneralConfig{
+				Monitoring: opensearchv1.MonitoringConfig{
 					Enable:         true,
 					ScrapeInterval: "35s",
-					TLSConfig:      &opsterv1.MonitoringConfigTLS{InsecureSkipVerify: true, ServerName: "foo.bar"},
+					TLSConfig:      &opensearchv1.MonitoringConfigTLS{InsecureSkipVerify: true, ServerName: "foo.bar"},
 					Labels: map[string]string{
 						"foo": "bar",
 					},
@@ -123,7 +146,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				AdditionalConfig: map[string]string{
 					"foo": "bar",
 				},
-				AdditionalVolumes: []opsterv1.AdditionalVolume{
+				AdditionalVolumes: []opensearchv1.AdditionalVolume{
 					{
 						Name: "test-secret",
 						Path: "/opt/test-secret",
@@ -162,12 +185,12 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					},
 				},
 			},
-			ConfMgmt: opsterv1.ConfMgmt{
+			ConfMgmt: opensearchv1.ConfMgmt{
 				AutoScaler:  false,
 				VerUpdate:   false,
 				SmartScaler: false,
 			},
-			Bootstrap: opsterv1.BootstrapConfig{
+			Bootstrap: opensearchv1.BootstrapConfig{
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("125m"),
@@ -181,7 +204,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					Value:    "bar",
 				}},
 			},
-			Dashboards: opsterv1.DashboardsConfig{
+			Dashboards: opensearchv1.DashboardsConfig{
 				Enable:   true,
 				Replicas: 3,
 				Version:  "2.0.0",
@@ -202,16 +225,16 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				},
 				Affinity: &corev1.Affinity{},
 			},
-			NodePools: []opsterv1.NodePool{{
+			NodePools: []opensearchv1.NodePool{{
 				Component: "master",
-				Pdb: &opsterv1.PdbConfig{
+				Pdb: &opensearchv1.PdbConfig{
 					Enable: true,
 					MinAvailable: &intstr.IntOrString{
 						IntVal: 3,
 					},
 				},
 				Replicas: 3,
-				DiskSize: "32Gi",
+				DiskSize: resource.MustParse("32Gi"),
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -235,11 +258,11 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					"master",
 					"data",
 				},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+				Persistence: &opensearchv1.PersistenceConfig{PersistenceSource: opensearchv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			}, {
 				Component: "nodes",
 				Replicas:  3,
-				DiskSize:  "32Gi",
+				DiskSize:  resource.MustParse("32Gi"),
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -249,11 +272,11 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 				Roles: []string{
 					"data",
 				},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+				Persistence: &opensearchv1.PersistenceConfig{PersistenceSource: opensearchv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			}, {
 				Component: "client",
 				Replicas:  3,
-				DiskSize:  "32Gi",
+				DiskSize:  resource.MustParse("32Gi"),
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
 						corev1.ResourceCPU:    resource.MustParse("500m"),
@@ -274,11 +297,11 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opsterv1.OpenSea
 					{Name: "qux", Value: "qut"},
 					{Name: "quuxe", ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{FieldPath: "metadata.labels['quux']"}}},
 				},
-				Persistence: &opsterv1.PersistenceConfig{PersistenceSource: opsterv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
+				Persistence: &opensearchv1.PersistenceConfig{PersistenceSource: opensearchv1.PersistenceSource{EmptyDir: &corev1.EmptyDirVolumeSource{}}},
 			}},
 		},
-		Status: opsterv1.ClusterStatus{
-			ComponentsStatus: []opsterv1.ComponentStatus{
+		Status: opensearchv1.ClusterStatus{
+			ComponentsStatus: []opensearchv1.ComponentStatus{
 				{
 					Component:   "",
 					Status:      "",

@@ -24,15 +24,15 @@ import (
 
 	"strings"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/controllers"
-	opsterwebhook "github.com/Opster/opensearch-k8s-operator/opensearch-operator/webhook"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/controllers"
+	opsterwebhook "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/webhook"
 	"go.uber.org/zap/zapcore"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
@@ -42,7 +42,8 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
@@ -57,9 +58,22 @@ var (
 	setupLog = ctrl.Log.WithName("setup")
 )
 
+func parseWatchNamespaces(watchNamespace string) map[string]cache.Config {
+	namespaces := map[string]cache.Config{}
+	for watchNs := range strings.SplitSeq(watchNamespace, ",") {
+		trimmed := strings.TrimSpace(watchNs)
+		if trimmed == "" {
+			continue
+		}
+		namespaces[trimmed] = cache.Config{}
+	}
+	return namespaces
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(opsterv1.AddToScheme(scheme))
+	utilruntime.Must(opensearchv1.AddToScheme(scheme))
 	utilruntime.Must(monitoring.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
@@ -100,11 +114,9 @@ func main() {
 
 	var cacheOpts cache.Options
 	if watchNamespace != "" {
-		cacheOpts.DefaultNamespaces = map[string]cache.Config{
-			watchNamespace: {},
-		}
-		for watchNs := range strings.SplitSeq(watchNamespace, ",") {
-			cacheOpts.DefaultNamespaces[watchNs] = cache.Config{}
+		namespaces := parseWatchNamespaces(watchNamespace)
+		if len(namespaces) > 0 {
+			cacheOpts.DefaultNamespaces = namespaces
 		}
 	}
 
@@ -146,7 +158,7 @@ func main() {
 		},
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
-		LeaderElectionID:       "a867c7dc.opensearch.opster.io",
+		LeaderElectionID:       "a867c7dc.opensearch.org",
 		Cache:                  cacheOpts,
 		WebhookServer:          webhookServer,
 	})
@@ -157,6 +169,8 @@ func main() {
 
 	helpers.RegisterMetrics()
 
+	// Controllers now watch opensearch.org/v1 (new API group)
+	// Migration controller handles creating new CRs from old ones
 	if err = (&controllers.OpenSearchClusterReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
@@ -238,6 +252,79 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
 		os.Exit(1)
 	}
+
+	// Migration controllers for opensearch.opster.io -> opensearch.org migration
+	if err = (&controllers.ClusterMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ClusterMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.UserMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "UserMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.RoleMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "RoleMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.UserRoleBindingMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "UserRoleBindingMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.TenantMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TenantMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ActionGroupMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ActionGroupMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ISMPolicyMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ISMPolicyMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.SnapshotPolicyMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "SnapshotPolicyMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.IndexTemplateMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "IndexTemplateMigration")
+		os.Exit(1)
+	}
+	if err = (&controllers.ComponentTemplateMigrationReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ComponentTemplateMigration")
+		os.Exit(1)
+	}
+
 	//+kubebuilder:scaffold:builder
 
 	// Setup webhook validators if enabled
@@ -280,6 +367,47 @@ func main() {
 		}
 		if err = (&opsterwebhook.OpenSearchClusterValidator{}).SetupWithManager(mgr); err != nil {
 			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchCluster")
+			os.Exit(1)
+		}
+		// Register legacy webhooks to deny user updates to old CRs (only operator can update for sync)
+		if err = (&opsterwebhook.OpenSearchClusterLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchClusterLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchUserLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUserLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchRoleLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchRoleLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchTenantLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchTenantLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchActionGroupLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchActionGroupLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchComponentTemplateLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchComponentTemplateLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchIndexTemplateLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchIndexTemplateLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchISMPolicyLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchISMPolicyLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchSnapshotPolicyLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchSnapshotPolicyLegacy")
+			os.Exit(1)
+		}
+		if err = (&opsterwebhook.OpenSearchUserRoleBindingLegacyValidator{}).SetupWithManager(mgr); err != nil {
+			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUserRoleBindingLegacy")
 			os.Exit(1)
 		}
 	} else {

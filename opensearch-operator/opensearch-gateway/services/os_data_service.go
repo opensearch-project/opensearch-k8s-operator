@@ -6,14 +6,15 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Masterminds/semver"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/go-logr/logr"
 	"github.com/opensearch-project/opensearch-go/opensearchutil"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -40,18 +41,40 @@ func HasIndicesWithNoReplica(service *OsClusterClient) (bool, error) {
 	return false, err
 }
 
+// extractNodeName returns the actual node name from the NodeName field.
+// During shard relocation, _cat/shards returns a format like:
+// "opensearch-data-1 -> 172.31.233.51 4kGSHQhmRQ-83pvvBbTYow opensearch-data-8".
+// This extracts the source node name (first token) for correct comparison.
+func extractNodeName(fullNodeName string) string {
+	if fullNodeName == "" {
+		return ""
+	}
+	trimmed := strings.TrimSpace(fullNodeName)
+	fields := strings.Fields(trimmed)
+	if len(fields) > 0 {
+		return fields[0]
+	}
+	return trimmed
+}
+
+// hasShardsOnNodeFromResponse returns true if any shard in the response is on the given node.
+// It uses extractNodeName so that relocation format (source -> ip id target) is handled correctly.
+func hasShardsOnNodeFromResponse(response []responses.CatShardsResponse, nodeName string) bool {
+	for _, shardsData := range response {
+		if extractNodeName(shardsData.NodeName) == nodeName {
+			return true
+		}
+	}
+	return false
+}
+
 func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
 	var headers []string
 	response, err := service.CatShards(headers)
 	if err != nil {
 		return false, err
 	}
-	for _, shardsData := range response {
-		if shardsData.NodeName == nodeName {
-			return true, err
-		}
-	}
-	return false, err
+	return hasShardsOnNodeFromResponse(response, nodeName), err
 }
 
 func HasIndexPrimariesOnNode(service *OsClusterClient, nodeName string, indices []string) (bool, error) {
@@ -66,19 +89,20 @@ func HasIndexPrimariesOnNode(service *OsClusterClient, nodeName string, indices 
 			return true, nil
 		}
 		// If there are system shards on the node consider it not empty
-		if shardsData.NodeName == nodeName && shardsData.PrimaryOrReplica == "p" {
+		if extractNodeName(shardsData.NodeName) == nodeName && shardsData.PrimaryOrReplica == "p" {
 			return true, nil
 		}
 	}
 	return false, err
 }
 
-func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (bool, error) {
+func AppendExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToExclude string) (bool, error) {
 	response, err := service.GetClusterSettings()
 	if err != nil {
 		return false, err
 	}
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
+	lg.V(1).Info(fmt.Sprintf("Excluding from allocation node: %s , currently excluded: %s", nodeNameToExclude, val))
 	valAsString := nodeNameToExclude
 	if ok && val != "" {
 		// Test whether name is already excluded
@@ -98,15 +122,41 @@ func AppendExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	}
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
 	_, err = service.PutClusterSettings(settings)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not exclude from allocation node %s", nodeNameToExclude))
+	}
 	return err == nil, err
 }
 
-func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (bool, error) {
+// GetExcludedNodeNames returns the current list of node names in cluster.routing.allocation.exclude._name.
+func GetExcludedNodeNames(service *OsClusterClient) ([]string, error) {
+	response, err := service.GetClusterSettings()
+	if err != nil {
+		return nil, err
+	}
+	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
+	if !ok || val == "" {
+		return nil, nil
+	}
+	valAsString := val.(string)
+	parts := strings.Split(valAsString, ",")
+	var names []string
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed != "" {
+			names = append(names, trimmed)
+		}
+	}
+	return names, nil
+}
+
+func RemoveExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToExclude string) (bool, error) {
 	response, err := service.GetClusterSettings()
 	if err != nil {
 		return false, err
 	}
 	val, ok := helpers.FindByPath(response.Transient, ClusterSettingsExcludeBrokenPath)
+	lg.V(1).Info(fmt.Sprintf("Removing allocation exclusion for node: %s , currently excluded: %s", nodeNameToExclude, val))
 	if !ok || val == "" {
 		return true, err
 	}
@@ -123,6 +173,9 @@ func RemoveExcludeNodeHost(service *OsClusterClient, nodeNameToExclude string) (
 	valAsString = strings.Join(filteredArr, ",")
 	settings := createClusterSettingsResponseWithExcludeName(valAsString)
 	_, err = service.PutClusterSettings(settings)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not remove allocation exclusion for node %s", nodeNameToExclude))
+	}
 	return err == nil, err
 }
 
@@ -172,8 +225,19 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 		return true, "", nil
 	}
 
-	if continueRestartWithYellowHealth(health) {
-		return true, "", nil
+	if health.Status == "yellow" {
+		// During an upgrade, if the primary of a shard end on an upgraded node,
+		// its replicas cannot be allocated to non-upgraded nodes,
+		// which will cause the cluster to remain yellow until the number of upgraded nodes
+		// is enough to allocate all replicas.
+		// If the cluster is locked in yellow state just for this reason, it's safe to restart.
+		safeToRestart, err := CheckClusterRestartOnYellow(service, health)
+		if err != nil {
+			return false, "", err
+		}
+		if safeToRestart {
+			return true, "", nil
+		}
 	}
 
 	if drainNodes {
@@ -215,7 +279,7 @@ func ReactivateShardAllocation(service *OsClusterClient) error {
 func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, error) {
 	if drainNode {
 		// If we are draining nodes then drain the working node
-		_, err := AppendExcludeNodeHost(service, podName)
+		_, err := AppendExcludeNodeHost(service, lg, podName)
 		if err != nil {
 			return false, err
 		}
@@ -235,14 +299,16 @@ func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName strin
 			return !systemPrimaries, nil
 		}
 
-		// Check if there are any shards on the node
-		nodeNotEmpty, err := HasShardsOnNode(service, podName)
+		// Checks if the pod is safe to delete because either:
+		// - there are no shards allocated on the node
+		// - all allocated shards are replicas stuck due to version mismatch (during upgrade)
+		safeToDelete, err := CheckPodSafeToDelete(service, podName)
 		if err != nil {
 			return false, err
 		}
 		// If the node isn't empty requeue to wait for shards to drain
 		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
-		return !nodeNotEmpty, nil
+		return safeToDelete, nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
 	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationPrimaries); err != nil {
@@ -270,26 +336,6 @@ func GetExistingSystemIndices(service *OsClusterClient) ([]string, error) {
 	}
 
 	return existing, nil
-}
-
-// continueRestartWithYellowHealth allows upgrades and rolling restarts to continue when the cluster is yellow
-// if the yellow status is caused by the .opensearch-observability index.  This is a new index that is created
-// on upgrade and will be yellow until at least 2 data nodes are upgraded.
-func continueRestartWithYellowHealth(health responses.ClusterHealthResponse) bool {
-	if health.Status != "yellow" {
-		return false
-	}
-
-	if health.RelocatingShards > 0 || health.InitializingShards > 0 || health.UnassignedShards > 1 {
-		return false
-	}
-
-	observabilityIndex, ok := health.Indices[".opensearch-observability"]
-	if !ok {
-		return false
-	}
-
-	return observabilityIndex.Status == "yellow"
 }
 
 // IndexTemplatePath returns a strings.Builder pointing to /_index_template/<templateName>
@@ -540,4 +586,197 @@ func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, comp
 		return fmt.Errorf("response from API is %s", resp.Status())
 	}
 	return nil
+}
+
+func CheckClusterRestartOnYellow(service *OsClusterClient, health responses.ClusterHealthResponse) (bool, error) {
+	if health.Status != "yellow" {
+		return false, nil
+	}
+
+	// Make sure that there are no moving shards,
+	// i.e. the yellow status is caused by unassigned replicas
+	if health.RelocatingShards > 0 || health.InitializingShards > 0 {
+		return false, nil
+	}
+
+	// Check each yellow index
+	stuckReplicasCount := 0
+	for index, indexHealth := range health.Indices {
+		if indexHealth.Status == "yellow" {
+			// Get all shards for this index
+			headers := []string{}
+			indices := []string{index}
+			shards, err := service.CatNamedIndicesShards(headers, indices)
+			if err != nil {
+				return false, err
+			}
+
+			// Check each unassigned replica
+			for _, shard := range shards {
+				if shard.State == "UNASSIGNED" && shard.PrimaryOrReplica == "r" {
+					isStuck, err := DetectShardStuckVersionMismatch(service, shard)
+					if err != nil {
+						return false, err
+					}
+					if isStuck {
+						stuckReplicasCount += 1
+					}
+				}
+			}
+		}
+	}
+
+	// Make sure that all unassigned shards are stuck due to node version mismatch
+	isDeadlocked := health.UnassignedShards == stuckReplicasCount
+
+	return isDeadlocked, nil
+}
+
+func CheckPodSafeToDelete(service *OsClusterClient, nodeName string) (bool, error) {
+	// Get all shards on the cluster
+	var headers []string
+	shards, err := service.CatShards(headers)
+	if err != nil {
+		return false, err
+	}
+
+	// Check each shard on the node
+	nodeShardsCount := 0
+	nodeStuckReplicasCount := 0
+
+	for _, shard := range shards {
+		if shard.NodeName == nodeName {
+			nodeShardsCount += 1
+
+			if shard.PrimaryOrReplica == "r" {
+				isStuck, err := DetectShardStuckVersionMismatch(service, shard)
+				if err != nil {
+					return false, err
+				}
+				if isStuck {
+					nodeStuckReplicasCount += 1
+				}
+			}
+		}
+	}
+
+	safeToDelete := nodeStuckReplicasCount == nodeShardsCount
+
+	return safeToDelete, nil
+}
+
+// DetectShardStuckVersionMismatch detects if a shard is stuck due to version mismatch
+func DetectShardStuckVersionMismatch(service *OsClusterClient, shard responses.CatShardsResponse) (bool, error) {
+	// Parse shard number
+	shardNum := int(0)
+	if shard.Shard != "" {
+		_, err := fmt.Sscanf(shard.Shard, "%d", &shardNum)
+		if err != nil {
+			err = fmt.Errorf("could not parse shard number for %s[%s]: %v", shard.Index, shard.Shard, err)
+			return false, err
+		}
+	}
+
+	// Check allocation explain for this shard
+	explain, err := service.GetAllocationExplain(shard.Index, shardNum, shard.PrimaryOrReplica == "p")
+	if err != nil {
+		err = fmt.Errorf("could not get allocation explain for %s[%d]: %v", shard.Index, shardNum, err)
+		return false, err
+	}
+
+	// Check if allocation is blocked by node_version decider
+	// Detect these two cases:
+	// 1. the shard is unassigned and cannot be assigned to any node, due to version mismatch
+	// 2. the shard is assigned, shall be moved, but cannot be moved to another node
+	isUnassignedAndCannotAllocate := explain.CurrentState == "unassigned" && explain.CanAllocate == "no"
+
+	isAssignedOrStarted := explain.CurrentState == "assigned" || explain.CurrentState == "started"
+	cannotRemainOnCurrentNode := explain.CanRemainOnCurrentNode == "no"
+	cannotMoveToOtherNode := explain.CanMoveToOtherNode == "no"
+	isAssignedButCannotMove := isAssignedOrStarted && cannotRemainOnCurrentNode && cannotMoveToOtherNode
+
+	isStuck := isUnassignedAndCannotAllocate || isAssignedButCannotMove
+	if !isStuck {
+		return false, nil
+	}
+
+	hasNodeVersionMismatch := false
+	for _, nodeAllocationDecision := range explain.NodeAllocationDecisions {
+		if nodeAllocationDecision.Decision == "no" {
+			for _, allocationDecision := range nodeAllocationDecision.Deciders {
+				if allocationDecision.Decision == "NO" && allocationDecision.Decider == "node_version" {
+					hasNodeVersionMismatch = true
+					break
+				}
+			}
+		}
+		if hasNodeVersionMismatch {
+			break
+		}
+	}
+
+	return hasNodeVersionMismatch, nil
+}
+
+// While performing the upgrade, settings that have been removed in the newer version will be
+// archived. If updating settings while archived settings are in place, the update will be rejected
+// and the upgrade procedure may deadlock.
+// Therefore, this function takes a best effort to remove some common archived settings.
+func DeleteUnsupportedClusterSettings(service *OsClusterClient, newVersion string) error {
+	settingsToDelete, err := DetermineUnsupportedClusterSettings(newVersion)
+	if err != nil {
+		return err
+	}
+	if len(settingsToDelete.Persistent) == 0 && len(settingsToDelete.Transient) == 0 {
+		return nil
+	}
+
+	_, err = service.PutClusterSettings(settingsToDelete)
+	return err
+}
+
+// Determines archived settings that shall be removed to avoid failure when updating cluster settings
+// during an upgrade.
+// The list included here is best-effort and not guaranteed to be kept up to date
+func DetermineUnsupportedClusterSettings(newVersion string) (responses.ClusterSettingsResponse, error) {
+	settingsToDelete := responses.ClusterSettingsResponse{
+		Transient:  make(map[string]interface{}),
+		Persistent: make(map[string]interface{}),
+	}
+	var removedSettingsByVersion = map[string][]string{
+		"3.0.0": {
+			// https://github.com/opensearch-project/index-management/pull/963
+			"archived.opendistro.index_state_management.metadata_service.enabled",
+			"archived.opendistro.index_state_management.metadata_migration.status",
+			"archived.opendistro.index_state_management.template_migration.control",
+			"archived.plugins.index_state_management.metadata_service.enabled",
+			"archived.plugins.index_state_management.metadata_migration.status",
+			"archived.plugins.index_state_management.template_migration.control",
+		},
+	}
+
+	// Parse version
+	new, err := semver.NewVersion(newVersion)
+	if err != nil {
+		return settingsToDelete, err
+	}
+
+	// Determine settings to delete
+	for minVer, removedSettings := range removedSettingsByVersion {
+		newerThanMin, err := semver.NewConstraint(fmt.Sprintf(">= %s", minVer))
+		if err != nil {
+			return settingsToDelete, err
+		}
+
+		// Check if the new version is newer than the group we're checking
+		if newerThanMin.Check(new) {
+			// Schedule the settings for removal
+			for _, settingName := range removedSettings {
+				settingsToDelete.Transient[settingName] = nil
+				settingsToDelete.Persistent[settingName] = nil
+			}
+		}
+	}
+
+	return settingsToDelete, nil
 }

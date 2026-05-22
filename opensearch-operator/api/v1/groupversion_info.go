@@ -15,6 +15,11 @@ limitations under the License.
 */
 
 // Package v1 contains API Schema definitions for the opster v1 API group
+//
+// DEPRECATED: The opensearch.opster.io API group is deprecated and will be removed
+// in a future release. Please migrate to opensearch.org/v1 API group.
+// See docs/userguide/migration-guide.md for migration instructions.
+//
 // +kubebuilder:object:generate=true
 // +groupName=opensearch.opster.io
 package v1

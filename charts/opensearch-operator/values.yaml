@@ -14,10 +14,10 @@ manager:
   extraEnv: []
   resources:
     limits:
-      cpu: 200m
+      cpu: 1000m
       memory: 500Mi
     requests:
-      cpu: 100m
+      cpu: 200m
       memory: 350Mi
 
   livenessProbe:
@@ -84,14 +84,22 @@ serviceAccount:
 # kubeRbacProxy has been replaced with controller-runtime's built-in
 # WithAuthenticationAndAuthorization for metrics endpoint protection.
 # This provides equivalent security functionality without external dependencies.
-# 
+#
 # kubeRbacProxy:
 #   enable: false
 
-## If this is set to true, RoleBindings will be used instead of ClusterRoleBindings, inorder to restrict ClusterRoles
-## to the namespace where the operator and OpenSearch cluster are in. In that case, specify the namespace where they
-## are in in manager.watchNamespace field.
-## If false, ClusterRoleBindings will be used
+## If this is set to true, RoleBindings will be used instead of ClusterRoleBindings, in order to restrict permissions
+## to the namespace where the operator and OpenSearch cluster are deployed. In that case, specify the namespace in the
+## manager.watchNamespace field.
+##
+## When useRoleBindings is true:
+## - Manager and proxy roles will be created as namespace-scoped Roles instead of ClusterRoles
+## - The metrics ClusterRole will NOT be created, as nonResourceURLs (like /metrics) cannot be used in namespace-scoped Roles
+## - The operator's /metrics endpoint is exposed via kube-apiserver and requires authentication (TokenReviews) and
+##   authorization (SubjectAccessReviews). If you need to access metrics with monitoring tools, you must create the
+##   appropriate ClusterRole and ClusterRoleBinding manually
+##
+## If false (default), ClusterRoleBindings will be used and the metrics ClusterRole will be created
 useRoleBindings: false
 
 # Webhook configuration

@@ -6,18 +6,20 @@ import (
 	"fmt"
 	"time"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/go-logr/logr"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/requests"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
+
+const snapshotRepositoryReconcilerName = "snapshot_repository"
 
 type SnapshotRepositoryReconciler struct {
 	client k8s.K8sClient
@@ -25,7 +27,7 @@ type SnapshotRepositoryReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opsterv1.OpenSearchCluster
+	instance *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
 
@@ -33,20 +35,22 @@ func NewSnapshotRepositoryReconciler(
 	client client.Client,
 	ctx context.Context,
 	recorder record.EventRecorder,
-	instance *opsterv1.OpenSearchCluster,
+	instance *opensearchv1.OpenSearchCluster,
 	opts ...ReconcilerOption,
 ) *SnapshotRepositoryReconciler {
 	options := ReconcilerOptions{}
 	options.apply(opts...)
 	return &SnapshotRepositoryReconciler{
-		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", "snapshot_repository"))),
+		client:            k8s.NewK8sClient(client, ctx, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", snapshotRepositoryReconcilerName))),
 		ReconcilerOptions: options,
 		ctx:               ctx,
 		recorder:          recorder,
 		instance:          instance,
-		logger:            log.FromContext(ctx).WithValues("reconciler", "snapshot_repository"),
+		logger:            log.FromContext(ctx).WithValues("reconciler", snapshotRepositoryReconcilerName),
 	}
 }
+
+func (r *SnapshotRepositoryReconciler) Name() string { return snapshotRepositoryReconcilerName }
 
 func (r *SnapshotRepositoryReconciler) Reconcile() (ctrl.Result, error) {
 	if len(r.instance.Spec.General.SnapshotRepositories) == 0 {
@@ -57,7 +61,7 @@ func (r *SnapshotRepositoryReconciler) Reconcile() (ctrl.Result, error) {
 	var retErr error
 
 	// Check cluster is ready
-	if r.instance.Status.Phase != opsterv1.PhaseRunning {
+	if r.instance.Status.Phase != opensearchv1.PhaseRunning {
 		r.logger.Info("opensearch cluster is not running, requeueing")
 		reason = "waiting for opensearch cluster status to be running"
 		r.recorder.Event(r.instance, "Normal", opensearchPending, reason)
@@ -91,7 +95,7 @@ func (r *SnapshotRepositoryReconciler) Reconcile() (ctrl.Result, error) {
 	}
 }
 
-func (r *SnapshotRepositoryReconciler) ReconcileRepository(repoConfig *opsterv1.SnapshotRepoConfig) error {
+func (r *SnapshotRepositoryReconciler) ReconcileRepository(repoConfig *opensearchv1.SnapshotRepoConfig) error {
 	newSnapshotRepository := mapSnapshotRepository(repoConfig)
 
 	existingRepository, retErr := services.GetSnapshotRepository(r.ctx, r.osClient, repoConfig.Name)
@@ -141,7 +145,7 @@ func (r *SnapshotRepositoryReconciler) Delete() error {
 	return nil
 }
 
-func mapSnapshotRepository(repository *opsterv1.SnapshotRepoConfig) requests.SnapshotRepository {
+func mapSnapshotRepository(repository *opensearchv1.SnapshotRepoConfig) requests.SnapshotRepository {
 	return requests.SnapshotRepository{
 		Type:     repository.Type,
 		Settings: repository.Settings,

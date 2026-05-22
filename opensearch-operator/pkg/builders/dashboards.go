@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -15,7 +15,7 @@ import (
 
 /// Package that declare and build all the resources that related to the OpenSearch-Dashboard ///
 
-func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, annotations map[string]string) *appsv1.Deployment {
+func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []corev1.Volume, volumeMounts []corev1.VolumeMount, annotations map[string]string) *appsv1.Deployment {
 	var replicas = cr.Spec.Dashboards.Replicas
 	var port int32 = 5601
 	var mode int32 = 420
@@ -32,9 +32,10 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 			},
 		},
 	})
+	dashboardsHome := cr.Spec.Dashboards.GetOpenSearchDashboardsHome()
 	volumeMounts = append(volumeMounts, corev1.VolumeMount{
 		Name:      "dashboards-config",
-		MountPath: "/usr/share/opensearch-dashboards/config/opensearch_dashboards.yml",
+		MountPath: dashboardsHome + "/config/opensearch_dashboards.yml",
 		SubPath:   "opensearch_dashboards.yml",
 	})
 
@@ -56,15 +57,17 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 		env = append(env, cr.Spec.Dashboards.Env...)
 	}
 
+	var secretRef corev1.LocalObjectReference
 	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
 		// Custom credentials supplied
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "username"}}})
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: cr.Spec.Dashboards.OpensearchCredentialsSecret, Key: "password"}}})
+		secretRef = cr.Spec.Dashboards.OpensearchCredentialsSecret
 	} else {
-		// Default values from demo configuration
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", Value: "kibanaserver"})
-		env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", Value: "kibanaserver"})
+		// Use generated Dashboards password secret (always available, regardless of security settings)
+		generatedSecretName := helpers.GeneratedDashboardsCredentialsSecretName(cr)
+		secretRef = corev1.LocalObjectReference{Name: generatedSecretName}
 	}
+	env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: secretRef, Key: "username"}}})
+	env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: secretRef, Key: "password"}}})
 
 	labels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
@@ -158,25 +161,30 @@ func NewDashboardsDeploymentForCR(cr *opsterv1.OpenSearchCluster, volumes []core
 							},
 							StartupProbe:    &probe,
 							LivenessProbe:   &probe,
+							ReadinessProbe:  &probe,
 							Env:             env,
 							VolumeMounts:    volumeMounts,
 							Command:         mainCommand,
 							SecurityContext: securityContext,
 						},
 					},
-					ServiceAccountName: cr.Spec.General.ServiceAccount,
-					ImagePullSecrets:   image.ImagePullSecrets,
-					NodeSelector:       cr.Spec.Dashboards.NodeSelector,
-					Tolerations:        cr.Spec.Dashboards.Tolerations,
-					Affinity:           cr.Spec.Dashboards.Affinity,
-					SecurityContext:    podSecurityContext,
+					ServiceAccountName:        cr.Spec.General.ServiceAccount,
+					ImagePullSecrets:          image.ImagePullSecrets,
+					NodeSelector:              cr.Spec.Dashboards.NodeSelector,
+					Tolerations:               cr.Spec.Dashboards.Tolerations,
+					Affinity:                  getAffinity(cr.Spec.Dashboards.Affinity, cr.Name),
+					SecurityContext:           podSecurityContext,
+					HostAliases:               cr.Spec.Dashboards.HostAliases,
+					TopologySpreadConstraints: cr.Spec.Dashboards.TopologySpreadConstraints,
+					PriorityClassName:         cr.Spec.Dashboards.PriorityClassName,
+					HostNetwork:               cr.Spec.General.HostNetwork,
 				},
 			},
 		},
 	}
 }
 
-func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
+func NewDashboardsConfigMapForCR(cr *opensearchv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {
 	config["server.name"] = cr.Name + "-dashboards"
 
 	// Don't override verificationMode
@@ -213,7 +221,7 @@ func NewDashboardsConfigMapForCR(cr *opsterv1.OpenSearchCluster, name string, co
 	}
 }
 
-func NewDashboardsSvcForCr(cr *opsterv1.OpenSearchCluster, customLabels map[string]string) *corev1.Service {
+func NewDashboardsSvcForCr(cr *opensearchv1.OpenSearchCluster, customLabels map[string]string) *corev1.Service {
 	var port int32 = 5601
 
 	metadataLabels := map[string]string{

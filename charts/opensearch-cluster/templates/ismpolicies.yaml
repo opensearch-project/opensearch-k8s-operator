@@ -1,11 +1,13 @@
 {{- $labels := include "opensearch-cluster.labels" . }}
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- $apiGroup := $.Values.apiGroup | default "opensearch.org" }}
 {{- range .Values.ismPolicies }}
 ---
-apiVersion: opensearch.opster.io/v1
+apiVersion: {{ $apiGroup }}/v1
 kind: OpenSearchISMPolicy
 metadata:
   name: {{ .name }}
+  namespace: {{ $.Release.Namespace }}
   {{- with $.Values.cluster.annotations }}
   annotations: {{ . | toYaml | nindent 4 }}
   {{- end }}

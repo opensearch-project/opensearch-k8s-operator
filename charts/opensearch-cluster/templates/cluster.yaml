@@ -1,9 +1,11 @@
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- $apiGroup := .Values.apiGroup | default "opensearch.org" }}
 ---
-apiVersion: opensearch.opster.io/v1
+apiVersion: {{ $apiGroup }}/v1
 kind: OpenSearchCluster
 metadata:
   name: {{ $clusterName }}
+  namespace: {{ .Release.Namespace }}
   {{- with .Values.cluster.annotations }}
   annotations: {{ . | toYaml | nindent 4 }}
   {{- end }}
@@ -31,8 +33,11 @@ spec:
     {{- omit . "image" | toYaml | nindent 4 }}
     image: {{ .image }}:{{ .version }}
   {{- end }}
-  {{- with .Values.cluster.nodePools }}
-  nodePools: {{ . | toYaml | nindent 4 }}
+  {{- if .Values.cluster.nodePools }}
+  nodePools:
+    {{- range .Values.cluster.nodePools }}
+    - {{ omit . "ingress" | toYaml | nindent 6 | trim }}
+    {{- end }}
   {{- end }}
   {{- with .Values.cluster.security }}
   security:
@@ -53,8 +58,14 @@ spec:
         {{- with .tls.transport.secret }}
         secret: {{ . | toYaml | nindent 10 }}
         {{- end }}
+        {{- if .tls.transport.rotateDaysBeforeExpiry }}
+        rotateDaysBeforeExpiry: {{ .tls.transport.rotateDaysBeforeExpiry }}
+        {{- end }}
         {{- if .tls.transport.duration }}
-        duration: {{ .tls.transport.duration | nindent 10 }}
+        duration: {{ .tls.transport.duration }}
+        {{- end }}
+        {{- if .tls.transport.enableHotReload }}
+        enableHotReload: {{ .tls.transport.enableHotReload }}
         {{- end }}
       http:
         {{- with .tls.http.adminDn }}
@@ -69,8 +80,14 @@ spec:
         {{- with .tls.http.caSecret }}
         caSecret: {{ . | toYaml | nindent 10 }}
         {{- end }}
+        {{- if .tls.http.rotateDaysBeforeExpiry }}
+        rotateDaysBeforeExpiry: {{ .tls.http.rotateDaysBeforeExpiry }}
+        {{- end }}
         {{- if .tls.http.duration }}
-        duration: {{ .tls.http.duration | nindent 10 }}
+        duration: {{ .tls.http.duration }}
+        {{- end }}
+        {{- if .tls.http.enableHotReload }}
+        enableHotReload: {{ .tls.http.enableHotReload }}
         {{- end }}
     {{- with .config }}
     config: {{ . | toYaml | nindent 6 }}

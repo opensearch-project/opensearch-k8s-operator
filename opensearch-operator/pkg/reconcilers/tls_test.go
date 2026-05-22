@@ -4,11 +4,11 @@ import (
 	"context"
 	"fmt"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/mocks/github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/stretchr/testify/mock"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -17,7 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-func newTLSReconciler(k8sClient *k8s.MockK8sClient, spec *opsterv1.OpenSearchCluster) (*ReconcilerContext, *TLSReconciler) {
+func newTLSReconciler(k8sClient *k8s.MockK8sClient, spec *opensearchv1.OpenSearchCluster) (*ReconcilerContext, *TLSReconciler) {
 	reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, spec, spec.Spec.NodePools)
 	underTest := &TLSReconciler{
 		client:            k8sClient,
@@ -39,13 +39,13 @@ var _ = Describe("TLS Controller", func() {
 			transportSecretName := clusterName + "-transport-cert"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{Generate: true},
-						Http:      &opsterv1.TlsConfigHttp{Generate: true},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{},
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+						Http:      &opensearchv1.TlsConfigHttp{Generate: true},
 					}},
 				},
 			}
@@ -84,18 +84,23 @@ var _ = Describe("TLS Controller", func() {
 			transportSecretName := clusterName + "-transport-cert"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{Generate: true, PerNode: true},
-						Http:      &opsterv1.TlsConfigHttp{Generate: true},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{},
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{Generate: true, PerNode: true},
+						Http:      &opensearchv1.TlsConfigHttp{Generate: true},
 					}},
-					NodePools: []opsterv1.NodePool{
+					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
 							Replicas:  3,
+						},
+						{
+							// sufficiently large to be above the pool cap
+							Component: "data",
+							Replicas:  12,
 						},
 					},
 				}}
@@ -117,15 +122,18 @@ var _ = Describe("TLS Controller", func() {
 					fmt.Printf("ca.crt missing from transport secret\n")
 					return false
 				}
-				for i := 0; i < 3; i++ {
-					name := fmt.Sprintf("tls-pernode-masters-%d", i)
-					if _, exists := secret.Data[name+".crt"]; !exists {
-						fmt.Printf("%s.crt missing from transport secret\n", name)
-						return false
-					}
-					if _, exists := secret.Data[name+".key"]; !exists {
-						fmt.Printf("%s.key missing from transport secret\n", name)
-						return false
+				for _, nodePool := range spec.Spec.NodePools {
+					var i int32
+					for i = 0; i < nodePool.Replicas; i++ {
+						name := fmt.Sprintf("tls-pernode-%s-%d", nodePool.Component, i)
+						if _, exists := secret.Data[name+".crt"]; !exists {
+							fmt.Printf("%s.crt missing from transport secret\n", name)
+							return false
+						}
+						if _, exists := secret.Data[name+".key"]; !exists {
+							fmt.Printf("%s.key missing from transport secret\n", name)
+							return false
+						}
 					}
 				}
 				return true
@@ -152,20 +160,20 @@ var _ = Describe("TLS Controller", func() {
 	Context("When Reconciling the TLS configuration with external certificates", func() {
 		It("Should not create secrets but only mount them", func() {
 			clusterName := "tls-test-existingsecrets"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{Version: "2.8.0"}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{Version: "2.8.0"}, Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+					Transport: &opensearchv1.TlsConfigTransport{
 						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
 							CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
 						},
 						NodesDn: []string{"CN=mycn", "CN=othercn"},
 					},
-					Http: &opsterv1.TlsConfigHttp{
+					Http: &opensearchv1.TlsConfigHttp{
 						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							Secret:   corev1.LocalObjectReference{Name: "cert-http"},
 							CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
 						},
@@ -173,52 +181,77 @@ var _ = Describe("TLS Controller", func() {
 					},
 				},
 				}}}
+			data := map[string][]byte{
+				"ca.crt": []byte("ca.crt"),
+				"ca.key": []byte("ca.key"),
+			}
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "casecret-http", Namespace: clusterName},
+				Data:       data,
+			}
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret("casecret-http", clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
 			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
-			Expect(reconcilerContext.Volumes).Should(HaveLen(6))
-			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(6))
+			Expect(reconcilerContext.Volumes).Should(HaveLen(4))
+			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(4))
+			// With new mounting logic: CaSecret.Name != Secret.Name, so we mount both as directories
 			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "casecret-transport", "transport-ca")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-transport", "transport-key")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-transport", "transport-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-transport", "transport-certs")).Should((BeTrue()))
 			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "casecret-http", "http-ca")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-http", "http-key")).Should((BeTrue()))
-			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-http", "http-cert")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "cert-http", "http-certs")).Should((BeTrue()))
 
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=mycn\",\"CN=othercn\"]"))
 			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
 			Expect(exists).To(BeTrue())
-			Expect(value).To(Equal("[\"CN=admin1\",\"CN=admin2\"]"))
+			Expect(value).To(Equal("[\"CN=admin,OU=" + clusterName + "\"]"))
 		})
 	})
 
 	Context("When Reconciling the TLS configuration with external per-node certificates", func() {
 		It("Should not create secrets but only mount them", func() {
 			clusterName := "tls-test-existingsecretspernode"
-			spec := opsterv1.OpenSearchCluster{
+
+			caSecretName := clusterName + "-ca"
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"ca.crt": []byte("ca.crt"),
+					"ca.key": []byte("ca.key"),
+				},
+			}
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{}, Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+					Transport: &opensearchv1.TlsConfigTransport{
 						Generate: false,
 						PerNode:  true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							Secret: corev1.LocalObjectReference{Name: "my-transport-certs"},
 						},
 						NodesDn: []string{"CN=mycn", "CN=othercn"},
 					},
-					Http: &opsterv1.TlsConfigHttp{
+					Http: &opensearchv1.TlsConfigHttp{
 						Generate: false,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							Secret: corev1.LocalObjectReference{Name: "my-http-certs"},
 						},
 					},
 				},
 				}}}
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
 			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
@@ -237,19 +270,19 @@ var _ = Describe("TLS Controller", func() {
 		It("Should create certificates using that CA", func() {
 			clusterName := "tls-withca"
 			caSecretName := clusterName + "-myca"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{Version: "2.8.0"}, Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-					Transport: &opsterv1.TlsConfigTransport{
+				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{Version: "2.8.0"}, Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+					Transport: &opensearchv1.TlsConfigTransport{
 						Generate: true,
 						PerNode:  true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
 						},
 					},
-					Http: &opsterv1.TlsConfigHttp{
+					Http: &opensearchv1.TlsConfigHttp{
 						Generate: true,
-						TlsCertificateConfig: opsterv1.TlsCertificateConfig{
+						TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 							CaSecret: corev1.LocalObjectReference{Name: caSecretName},
 						},
 					},
@@ -265,6 +298,7 @@ var _ = Describe("TLS Controller", func() {
 			}
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
 			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
 			mockClient.EXPECT().GetSecret(clusterName+"-transport-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
@@ -287,6 +321,164 @@ var _ = Describe("TLS Controller", func() {
 			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.nodes_dn"]
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=tls-withca-*,OU=tls-withca\"]"))
+
+			// Verify that the CA cert path uses tls-http/ (not tls-http-ca/) since generate=true
+			// includes the CA cert in the generated secret (Fixes #1279)
+			value, exists = reconcilerContext.OpenSearchConfig["plugins.security.ssl.http.pemtrustedcas_filepath"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("tls-http/ca.crt"))
+		})
+	})
+
+	Context("When Reconciling the TLS configuration with same CaSecret and Secret names", func() {
+		It("Should mount only one secret as directory", func() {
+			clusterName := "tls-same-secrets"
+			caSecretName := "same-secret"
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"ca.crt": []byte("ca.crt"),
+					"ca.key": []byte("ca.key"),
+				},
+			}
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.8.0"},
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{
+							Generate: false,
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+								Secret:   corev1.LocalObjectReference{Name: "same-secret"},
+								CaSecret: corev1.LocalObjectReference{Name: "same-secret"}, // Same name
+							},
+							NodesDn: []string{"CN=mycn"},
+						},
+						Http: &opensearchv1.TlsConfigHttp{
+							Generate: false,
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+								Secret:   corev1.LocalObjectReference{Name: "same-secret"},
+								CaSecret: corev1.LocalObjectReference{Name: caSecretName}, // Same name
+							},
+						},
+					},
+					},
+				}}
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Should have only 2 volumes/mounts (one for transport, one for http)
+			Expect(reconcilerContext.Volumes).Should(HaveLen(2))
+			Expect(reconcilerContext.VolumeMounts).Should(HaveLen(2))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "same-secret", "transport-certs")).Should((BeTrue()))
+			Expect(helpers.CheckVolumeExists(reconcilerContext.Volumes, reconcilerContext.VolumeMounts, "same-secret", "http-certs")).Should((BeTrue()))
+		})
+	})
+
+	Context("When Reconciling the TLS configuration with hot reload enabled", func() {
+		It("Should enable hot reload configuration for supported versions", func() {
+			clusterName := "tls-hotreload"
+			caSecretName := "casecret-http"
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"ca.crt": []byte("ca.crt"),
+					"ca.key": []byte("ca.key"),
+				},
+			}
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.19.1"}, // Version that supports hot reload
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{
+							Generate: false,
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+								Secret:          corev1.LocalObjectReference{Name: "cert-transport"},
+								CaSecret:        corev1.LocalObjectReference{Name: "casecret-transport"},
+								EnableHotReload: true,
+							},
+							NodesDn: []string{"CN=mycn"},
+						},
+						Http: &opensearchv1.TlsConfigHttp{
+							Generate: false,
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+								Secret:          corev1.LocalObjectReference{Name: "cert-http"},
+								CaSecret:        corev1.LocalObjectReference{Name: caSecretName},
+								EnableHotReload: true,
+							},
+						},
+					},
+					},
+				}}
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that hot reload is enabled
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.ssl.certificates_hot_reload.enabled"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("true"))
+		})
+
+		It("Should not enable hot reload configuration for unsupported versions", func() {
+			clusterName := "tls-hotreload-unsupported"
+			caSecretName := "casecret-http"
+			caSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: caSecretName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"ca.crt": []byte("ca.crt"),
+					"ca.key": []byte("ca.key"),
+				},
+			}
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.18.0"}, // Version that doesn't support hot reload
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{
+							Generate: false,
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+								Secret:          corev1.LocalObjectReference{Name: "cert-transport"},
+								CaSecret:        corev1.LocalObjectReference{Name: "casecret-transport"},
+								EnableHotReload: true,
+							},
+							NodesDn: []string{"CN=mycn"},
+						},
+						Http: &opensearchv1.TlsConfigHttp{
+							Generate: false,
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+								Secret:          corev1.LocalObjectReference{Name: "cert-http"},
+								CaSecret:        corev1.LocalObjectReference{Name: caSecretName},
+								EnableHotReload: true,
+							},
+						},
+					},
+					},
+				}}
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().GetSecret(caSecretName, clusterName).Return(caSecret, nil)
+			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			// Check that hot reload is not enabled for unsupported version
+			_, exists := reconcilerContext.OpenSearchConfig["plugins.security.ssl.certificates_hot_reload.enabled"]
+			Expect(exists).To(BeFalse())
 		})
 	})
 
@@ -297,16 +489,16 @@ var _ = Describe("TLS Controller", func() {
 			caSecretName := clusterName + "-ca"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
 						HttpPort:    9200,
 					},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{Generate: true},
-						Http: &opsterv1.TlsConfigHttp{
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+						Http: &opensearchv1.TlsConfigHttp{
 							Generate:   true,
 							CustomFQDN: &customFQDN,
 						},
@@ -350,16 +542,16 @@ var _ = Describe("TLS Controller", func() {
 			caSecretName := clusterName + "-ca"
 			httpSecretName := clusterName + "-http-cert"
 			adminSecretName := clusterName + "-admin-cert"
-			spec := opsterv1.OpenSearchCluster{
+			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
-				Spec: opsterv1.ClusterSpec{
-					General: opsterv1.GeneralConfig{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
 						HttpPort:    9200,
 					},
-					Security: &opsterv1.Security{Tls: &opsterv1.TlsConfig{
-						Transport: &opsterv1.TlsConfigTransport{Generate: true},
-						Http: &opsterv1.TlsConfigHttp{
+					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+						Http: &opensearchv1.TlsConfigHttp{
 							Generate:   true,
 							CustomFQDN: &emptyFQDN,
 						},
@@ -397,5 +589,4 @@ var _ = Describe("TLS Controller", func() {
 			Expect(value).To(Equal("[\"CN=admin,OU=tls-empty-fqdn\"]"))
 		})
 	})
-
 })

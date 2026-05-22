@@ -2,14 +2,18 @@ package k8s
 
 import (
 	"context"
+	"fmt"
+	"time"
 
-	opsterv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
-	"github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
+	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -21,6 +25,7 @@ import (
 type K8sClient interface {
 	GetSecret(name, namespace string) (corev1.Secret, error)
 	CreateSecret(secret *corev1.Secret) (*ctrl.Result, error)
+	UpdateSecret(secret *corev1.Secret) error
 	GetJob(name, namespace string) (batchv1.Job, error)
 	CreateJob(job *batchv1.Job) (*ctrl.Result, error)
 	DeleteJob(job *batchv1.Job) error
@@ -34,13 +39,15 @@ type K8sClient interface {
 	DeleteDeployment(deployment *appsv1.Deployment, orphan bool) error
 	GetService(name, namespace string) (corev1.Service, error)
 	CreateService(svc *corev1.Service) (*ctrl.Result, error)
-	GetOpenSearchCluster(name, namespace string) (opsterv1.OpenSearchCluster, error)
-	UpdateOpenSearchClusterStatus(key client.ObjectKey, f func(*opsterv1.OpenSearchCluster)) error
+	GetOpenSearchCluster(name, namespace string) (opensearchv1.OpenSearchCluster, error)
+	UpdateOpenSearchClusterStatus(key client.ObjectKey, f func(*opensearchv1.OpenSearchCluster)) error
 	UdateObjectStatus(instance client.Object, f func(client.Object)) error
 	ReconcileResource(runtime.Object, reconciler.DesiredState) (*ctrl.Result, error)
 	GetPod(name, namespace string) (corev1.Pod, error)
 	DeletePod(pod *corev1.Pod) error
 	ListPods(listOptions *client.ListOptions) (corev1.PodList, error)
+	WaitForPodDeletion(podName, namespace string) error
+	UpdatePodLabels(pod *corev1.Pod, newLabels map[string]string) error
 	GetPVC(name, namespace string) (corev1.PersistentVolumeClaim, error)
 	UpdatePVC(pvc *corev1.PersistentVolumeClaim) error
 	ListPVCs(listOptions *client.ListOptions) (corev1.PersistentVolumeClaimList, error)
@@ -71,6 +78,10 @@ func (c K8sClientImpl) GetSecret(name, namespace string) (corev1.Secret, error) 
 
 func (c K8sClientImpl) CreateSecret(secret *corev1.Secret) (*ctrl.Result, error) {
 	return c.ReconcileResource(secret, reconciler.StatePresent)
+}
+
+func (c K8sClientImpl) UpdateSecret(secret *corev1.Secret) error {
+	return c.Update(c.ctx, secret)
 }
 
 func (c K8sClientImpl) GetJob(name, namespace string) (batchv1.Job, error) {
@@ -165,15 +176,16 @@ func (c K8sClientImpl) CreateService(svc *corev1.Service) (*ctrl.Result, error) 
 	return c.ReconcileResource(svc, reconciler.StatePresent)
 }
 
-func (c K8sClientImpl) GetOpenSearchCluster(name, namespace string) (opsterv1.OpenSearchCluster, error) {
-	cluster := opsterv1.OpenSearchCluster{}
+func (c K8sClientImpl) GetOpenSearchCluster(name, namespace string) (opensearchv1.OpenSearchCluster, error) {
+	cluster := opensearchv1.OpenSearchCluster{}
 	err := c.Get(c.ctx, client.ObjectKey{Name: name, Namespace: namespace}, &cluster)
 	return cluster, err
 }
 
-func (c K8sClientImpl) UpdateOpenSearchClusterStatus(key client.ObjectKey, f func(*opsterv1.OpenSearchCluster)) error {
+func (c K8sClientImpl) UpdateOpenSearchClusterStatus(key client.ObjectKey, f func(*opensearchv1.OpenSearchCluster)) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		instance := opsterv1.OpenSearchCluster{}
+		// Only work with new API group
+		instance := opensearchv1.OpenSearchCluster{}
 		if err := c.Get(c.ctx, key, &instance); err != nil {
 			return err
 		}
@@ -236,6 +248,48 @@ func (c K8sClientImpl) Scheme() *runtime.Scheme {
 
 func (c K8sClientImpl) Context() context.Context {
 	return c.ctx
+}
+
+// WaitForPodDeletion waits for a pod to be deleted from the Kubernetes API using PollUntilContextTimeout
+func (c K8sClientImpl) WaitForPodDeletion(podName, namespace string) error {
+	interval := 500 * time.Millisecond
+	timeout := 30 * time.Second
+
+	err := wait.PollUntilContextTimeout(c.ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
+		_, err := c.GetPod(podName, namespace)
+		if k8serrors.IsNotFound(err) {
+			log.FromContext(c.ctx).V(1).Info("Pod deleted successfully", "pod", podName)
+			return true, nil
+		}
+		if err != nil {
+			log.FromContext(c.ctx).V(1).Info("Error checking pod deletion, will retry", "pod", podName, "error", err)
+			return false, nil
+		}
+		log.FromContext(c.ctx).V(2).Info("Pod still exists, continuing to wait", "pod", podName)
+		return false, nil
+	})
+
+	if err != nil {
+		if err == context.DeadlineExceeded {
+			return fmt.Errorf("timeout waiting for pod %s deletion after %v", podName, timeout)
+		}
+		return fmt.Errorf("error waiting for pod %s deletion: %w", podName, err)
+	}
+
+	return nil
+}
+
+// UpdatePodLabels updates the labels on a pod with the provided new labels
+func (c K8sClientImpl) UpdatePodLabels(pod *corev1.Pod, newLabels map[string]string) error {
+	podCopy := pod.DeepCopy()
+	if podCopy.Labels == nil {
+		podCopy.Labels = make(map[string]string)
+	}
+	// Update labels
+	for k, v := range newLabels {
+		podCopy.Labels[k] = v
+	}
+	return c.Update(c.ctx, podCopy)
 }
 
 // Validate K8sClientImpl implements the interface

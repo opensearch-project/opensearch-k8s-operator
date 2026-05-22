@@ -3,131 +3,34 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
-      enable_log_collection:
-        description: 'Enable log collection and publishing'
+      enable_debug_tmate:
+        description: 'Enable interactive tmate debug session on operator test failure'
         required: false
         type: boolean
         default: false
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  operator:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-      - name: Setup go
-        uses: actions/setup-go@v5
-        with:
-          go-version-file: 'go.work'
-          cache: false
-      - uses: nolar/setup-k3d-k3s@v1
-        with:
-          version: v1
-          k3d-name: opensearch-operator-tests
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          # NOTE: Disable kubelet eviction in k3d creation
-          k3d-args: >
-            --servers 1
-            --agents 2
-            -p 30000-30005:30000-30005@agent:0
-            --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
-      - name: Run tests
-        id: operator_tests
-        run: |
-          set -e
-          export CLUSTER_NAME=opensearch-operator-tests
-          ## Check disk to avoid failed shard assignments due to watermarking
-          df -h
-          cd opensearch-operator
-          ## Prepare kubeconfig
-          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
-          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-
-          ## Build controller docker image
-          make docker-build
-
-          ## Import controller docker image
-          k3d image import -c $CLUSTER_NAME controller:latest
-
-          ## Install helm chart
-          helm install opensearch-operator ../charts/opensearch-operator \
-          -f functionaltests/helmtests/ci-operator-values.yml \
-          --namespace default --wait
-          cd functionaltests
-
-          ## Run tests
-          go test ./operatortests -timeout 30m
-
-      - name: Collect operator logs
-        if: always() && (steps.operator_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
-        run: |
-          df -h
-          export CLUSTER_NAME=deploy-and-upgrade
-          cd opensearch-operator
-          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
-          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-
-          mkdir -p ../logs
-
-          echo "Collecting all pods list (first to see status)..."
-          kubectl get pods -n default -o wide > ../logs/all-pods.txt 2>&1 || true
-          echo "=== All Pods Status ==="
-          cat ../logs/all-pods.txt || true
-
-          echo "Collecting OpenSearchCluster resource status..."
-          kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
-
-          echo "Collecting events..."
-          kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
-
-          echo "Collecting pod descriptions..."
-          kubectl describe pods -n default -l control-plane=controller-manager > ../logs/operator-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opster.io/opensearch-cluster=deploy-and-upgrade > ../logs/opensearch-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opensearch.cluster.dashboards=deploy-and-upgrade > ../logs/dashboards-pods-describe.txt 2>&1 || true
-
-          echo "Collecting logs from OpenSearch operator pods..."
-          kubectl get pods -n default -l control-plane=controller-manager -o name 2>/dev/null | while read pod; do
-            pod_name=$(echo $pod | cut -d'/' -f2)
-            echo "Collecting logs from $pod_name"
-            kubectl logs -n default $pod_name > ../logs/operator-${pod_name}.log 2>&1 || true
-            kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
-          done
-
-          echo "Collecting logs from OpenSearch cluster pods..."
-          kubectl get pods -n default -l opster.io/opensearch-cluster=deploy-and-upgrade -o name 2>/dev/null | while read pod; do
-            pod_name=$(echo $pod | cut -d'/' -f2)
-            echo "Collecting logs from $pod_name"
-            kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
-            kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
-          done
-
-          echo "Collecting logs from OpenSearch Dashboards pods..."
-          kubectl get pods -n default -l opensearch.cluster.dashboards=deploy-and-upgrade -o name 2>/dev/null | while read pod; do
-            pod_name=$(echo $pod | cut -d'/' -f2)
-            echo "Collecting logs from $pod_name"
-            kubectl logs -n default $pod_name > ../logs/dashboards-${pod_name}.log 2>&1 || true
-            kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
-          done
-      - name: Publish logs
-        if: always() && (steps.operator_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
-        uses: actions/upload-artifact@v4
-        with:
-          name: operator-job-logs
-          path: logs/
-          retention-days: 7
-
   cluster-helm-chart:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         version:
-            - 3.1.0
-            - 2.19.2
+            - 3.4.0
+            - 2.19.4
             - 1.3.20
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+      # https://github.com/actions/runner-images/issues/2840#issuecomment-790492173
+      - name: Remove unnecessary files
+        run: |
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY"
       - name: Setup go
         uses: actions/setup-go@v5
         with:
@@ -144,6 +47,15 @@ jobs:
             --agents 2
             -p 30000-30005:30000-30005@agent:0
             --k3s-arg --kubelet-arg=eviction-hard=nodefs.available<1Mi@all
+      - name: Install cert-manager
+        run: |
+          export CLUSTER_NAME=opensearch-operator-tests
+          cd opensearch-operator
+          k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
+          export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.19.2/cert-manager.yaml
+          sleep 2
+          kubectl wait --for=condition=ready pod -l app.kubernetes.io/instance=cert-manager -n cert-manager --timeout=300s
       - name: Run tests
         id: helm_tests
         run: |
@@ -155,13 +67,10 @@ jobs:
           ## Prepare kubeconfig
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-
           ## Build controller docker image
           make docker-build
-
           ## Import controller docker image
           k3d image import -c $CLUSTER_NAME controller:latest
-
           ## Install helm chart
           helm install opensearch-operator ../charts/opensearch-operator \
           -f functionaltests/helmtests/ci-operator-values.yml \
@@ -172,53 +81,43 @@ jobs:
             -f functionaltests/helmtests/ci-cluster-values.yml \
             --wait
           cd functionaltests
-
           ## Run tests
-          go test ./helmtests -timeout 15m
-
+          go test ./helmtests -timeout 15m -test.v -ginkgo.v
       - name: Collect operator logs
-        if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        if: always() && steps.helm_tests.outcome == 'failure'
         run: |
           df -h
           export CLUSTER_NAME=opensearch-operator-tests
           cd opensearch-operator
           k3d kubeconfig get $CLUSTER_NAME > functionaltests/kubeconfig
           export KUBECONFIG=$(pwd)/functionaltests/kubeconfig
-
           mkdir -p ../logs
-
           echo "Collecting all pods list (first to see status)..."
           kubectl get pods -n default -o wide > ../logs/all-pods.txt 2>&1 || true
           echo "=== All Pods Status ==="
           cat ../logs/all-pods.txt || true
-
           echo "Collecting OpenSearchCluster resource status..."
           kubectl get opensearchcluster -n default -o yaml > ../logs/opensearchcluster-resource.yaml 2>&1 || true
-
           echo "Collecting events..."
           kubectl get events -n default --sort-by='.lastTimestamp' > ../logs/events.txt 2>&1 || true
-
           echo "Collecting pod descriptions..."
-          kubectl describe pods -n default -l control-plane=controller-manager > ../logs/operator-pods-describe.txt 2>&1 || true
-          kubectl describe pods -n default -l opster.io/opensearch-cluster=opensearch-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l app.kubernetes.io/name=opensearch-operator > ../logs/operator-pods-describe.txt 2>&1 || true
+          kubectl describe pods -n default -l opensearch.org/opensearch-cluster=opensearch-cluster > ../logs/opensearch-pods-describe.txt 2>&1 || true
           kubectl describe pods -n default -l opensearch.cluster.dashboards=opensearch-cluster > ../logs/dashboards-pods-describe.txt 2>&1 || true
-
           echo "Collecting logs from OpenSearch operator pods..."
-          kubectl get pods -n default -l control-plane=controller-manager -o name 2>/dev/null | while read pod; do
+          kubectl get pods -n default -l app.kubernetes.io/name=opensearch-operator -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
             echo "Collecting logs from $pod_name"
             kubectl logs -n default $pod_name > ../logs/operator-${pod_name}.log 2>&1 || true
             kubectl logs -n default $pod_name --previous > ../logs/operator-${pod_name}-previous.log 2>&1 || true
           done
-
           echo "Collecting logs from OpenSearch cluster pods..."
-          kubectl get pods -n default -l opster.io/opensearch-cluster=opensearch-cluster -o name 2>/dev/null | while read pod; do
+          kubectl get pods -n default -l opensearch.org/opensearch-cluster=opensearch-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
             echo "Collecting logs from $pod_name"
             kubectl logs -n default $pod_name > ../logs/opensearch-${pod_name}.log 2>&1 || true
             kubectl logs -n default $pod_name --previous > ../logs/opensearch-${pod_name}-previous.log 2>&1 || true
           done
-
           echo "Collecting logs from OpenSearch Dashboards pods..."
           kubectl get pods -n default -l opensearch.cluster.dashboards=opensearch-cluster -o name 2>/dev/null | while read pod; do
             pod_name=$(echo $pod | cut -d'/' -f2)
@@ -227,9 +126,58 @@ jobs:
             kubectl logs -n default $pod_name --previous > ../logs/dashboards-${pod_name}-previous.log 2>&1 || true
           done
       - name: Publish logs
-        if: always() && (steps.helm_tests.outcome == 'failure' || (github.event_name == 'workflow_dispatch' && inputs.enable_log_collection == true))
+        if: always() && steps.helm_tests.outcome == 'failure'
         uses: actions/upload-artifact@v4
         with:
           name: operator-logs-${{ matrix.version }}
           path: logs/
           retention-days: 7
+
+  data-integrity-upgrade:
+    uses: ./.github/workflows/reusable-functional-test.yaml
+    with:
+      test_focus: "DataIntegrityUpgrade"
+      test_timeout: "60m"
+      test_name: "data-integrity-upgrade"
+      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
+
+  data-integrity-scaling:
+    uses: ./.github/workflows/reusable-functional-test.yaml
+    with:
+      test_focus: "DataIntegrityScaling"
+      test_timeout: "60m"
+      test_name: "data-integrity-scaling"
+      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
+
+  # TODO: Uncomment this when we have big runners
+  # data-integrity-nodepool:
+  #   uses: ./.github/workflows/reusable-functional-test.yaml
+  #   with:
+  #     test_focus: "DataIntegrityNodePoolOperations"
+  #     test_timeout: "30m"
+  #     test_name: "data-integrity-nodepool"
+  #     enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
+
+  data-integrity-multiple-ops:
+    uses: ./.github/workflows/reusable-functional-test.yaml
+    with:
+      test_focus: "DataIntegrityMultipleOperations"
+      test_timeout: "60m"
+      test_name: "data-integrity-multiple-ops"
+      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
+
+  operator-other-tests:
+    uses: ./.github/workflows/reusable-functional-test.yaml
+    with:
+      test_focus: "dummy"
+      test_timeout: "10m"
+      test_name: "operator-other-tests"
+      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
+
+  api-group-migration:
+    uses: ./.github/workflows/reusable-functional-test.yaml
+    with:
+      test_focus: "APIGroupMigration"
+      test_timeout: "40m"
+      test_name: "api-group-migration"
+      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}

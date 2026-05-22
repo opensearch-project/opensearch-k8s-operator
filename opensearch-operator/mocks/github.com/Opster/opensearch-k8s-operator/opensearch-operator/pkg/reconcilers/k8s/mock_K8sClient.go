@@ -3,7 +3,7 @@
 package k8s
 
 import (
-	apiv1 "github.com/Opster/opensearch-k8s-operator/opensearch-operator/api/v1"
+	apiv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	appsv1 "k8s.io/api/apps/v1"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -16,7 +16,7 @@ import (
 
 	reconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
-	reconciler "github.com/Opster/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
+	reconciler "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 
 	runtime "k8s.io/apimachinery/pkg/runtime"
 
@@ -1497,6 +1497,99 @@ func (_c *MockK8sClient_UpdatePVC_Call) Return(_a0 error) *MockK8sClient_UpdateP
 }
 
 func (_c *MockK8sClient_UpdatePVC_Call) RunAndReturn(run func(*v1.PersistentVolumeClaim) error) *MockK8sClient_UpdatePVC_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// UpdateSecret provides a mock function with given fields: secret
+func (_m *MockK8sClient) UpdateSecret(secret *v1.Secret) error {
+	ret := _m.Called(secret)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateSecret")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*v1.Secret) error); ok {
+		r0 = rf(secret)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_UpdateSecret_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateSecret'
+type MockK8sClient_UpdateSecret_Call struct {
+	*mock.Call
+}
+
+// UpdateSecret is a helper method to define mock.On call
+//   - secret *v1.Secret
+func (_e *MockK8sClient_Expecter) UpdateSecret(secret interface{}) *MockK8sClient_UpdateSecret_Call {
+	return &MockK8sClient_UpdateSecret_Call{Call: _e.mock.On("UpdateSecret", secret)}
+}
+
+func (_c *MockK8sClient_UpdateSecret_Call) Run(run func(secret *v1.Secret)) *MockK8sClient_UpdateSecret_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*v1.Secret))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_UpdateSecret_Call) Return(_a0 error) *MockK8sClient_UpdateSecret_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_UpdateSecret_Call) RunAndReturn(run func(*v1.Secret) error) *MockK8sClient_UpdateSecret_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// WaitForPodDeletion provides a mock function with given fields: podName, namespace
+func (_m *MockK8sClient) WaitForPodDeletion(podName string, namespace string) error {
+	ret := _m.Called(podName, namespace)
+
+	if len(ret) == 0 {
+		panic("no return value specified for WaitForPodDeletion")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string) error); ok {
+		r0 = rf(podName, namespace)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_WaitForPodDeletion_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'WaitForPodDeletion'
+type MockK8sClient_WaitForPodDeletion_Call struct {
+	*mock.Call
+}
+
+// WaitForPodDeletion is a helper method to define mock.On call
+//   - podName string
+//   - namespace string
+func (_e *MockK8sClient_Expecter) WaitForPodDeletion(podName interface{}, namespace interface{}) *MockK8sClient_WaitForPodDeletion_Call {
+	return &MockK8sClient_WaitForPodDeletion_Call{Call: _e.mock.On("WaitForPodDeletion", podName, namespace)}
+}
+
+func (_c *MockK8sClient_WaitForPodDeletion_Call) Run(run func(podName string, namespace string)) *MockK8sClient_WaitForPodDeletion_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_WaitForPodDeletion_Call) Return(_a0 error) *MockK8sClient_WaitForPodDeletion_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_WaitForPodDeletion_Call) RunAndReturn(run func(string, string) error) *MockK8sClient_WaitForPodDeletion_Call {
 	_c.Call.Return(run)
 	return _c
 }
