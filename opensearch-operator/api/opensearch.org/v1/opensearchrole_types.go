@@ -25,10 +25,11 @@ import (
 type OpensearchRoleState string
 
 const (
-	OpensearchRoleStatePending OpensearchRoleState = "PENDING"
-	OpensearchRoleStateCreated OpensearchRoleState = "CREATED"
-	OpensearchRoleStateError   OpensearchRoleState = "ERROR"
-	OpensearchRoleIgnored      OpensearchRoleState = "IGNORED"
+	OpensearchRoleStatePending     OpensearchRoleState = "PENDING"
+	OpensearchRoleStateCreated     OpensearchRoleState = "CREATED"
+	OpensearchRoleStateError       OpensearchRoleState = "ERROR"
+	OpensearchRoleIgnored          OpensearchRoleState = "IGNORED"
+	OpensearchRoleStateTerminating OpensearchRoleState = "TERMINATING"
 )
 
 // OpensearchRoleSpec defines the desired state of OpensearchRole

@@ -36,8 +36,12 @@ func (co *ClusterOperations) UpgradeCluster(clusterName string, opensearchVersio
 		return err
 	}
 
-	SetNestedKey(cluster.Object, opensearchVersion, "spec", "general", "version")
-	SetNestedKey(cluster.Object, dashboardsVersion, "spec", "dashboards", "version")
+	if err := SetNestedKey(cluster.Object, opensearchVersion, "spec", "general", "version"); err != nil {
+		return err
+	}
+	if err := SetNestedKey(cluster.Object, dashboardsVersion, "spec", "dashboards", "version"); err != nil {
+		return err
+	}
 
 	return co.k8sClient.Update(context.Background(), &cluster)
 }

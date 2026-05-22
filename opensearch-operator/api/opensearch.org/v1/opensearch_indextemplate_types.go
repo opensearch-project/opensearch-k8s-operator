@@ -10,10 +10,11 @@ import (
 type OpensearchIndexTemplateState string
 
 const (
-	OpensearchIndexTemplatePending OpensearchIndexTemplateState = "PENDING"
-	OpensearchIndexTemplateCreated OpensearchIndexTemplateState = "CREATED"
-	OpensearchIndexTemplateError   OpensearchIndexTemplateState = "ERROR"
-	OpensearchIndexTemplateIgnored OpensearchIndexTemplateState = "IGNORED"
+	OpensearchIndexTemplatePending     OpensearchIndexTemplateState = "PENDING"
+	OpensearchIndexTemplateCreated     OpensearchIndexTemplateState = "CREATED"
+	OpensearchIndexTemplateError       OpensearchIndexTemplateState = "ERROR"
+	OpensearchIndexTemplateIgnored     OpensearchIndexTemplateState = "IGNORED"
+	OpensearchIndexTemplateTerminating OpensearchIndexTemplateState = "TERMINATING"
 )
 
 //+kubebuilder:object:root=true

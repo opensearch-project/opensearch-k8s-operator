@@ -9,10 +9,11 @@ import (
 type OpensearchActionGroupState string
 
 const (
-	OpensearchActionGroupPending OpensearchActionGroupState = "PENDING"
-	OpensearchActionGroupCreated OpensearchActionGroupState = "CREATED"
-	OpensearchActionGroupError   OpensearchActionGroupState = "ERROR"
-	OpensearchActionGroupIgnored OpensearchActionGroupState = "IGNORED"
+	OpensearchActionGroupPending     OpensearchActionGroupState = "PENDING"
+	OpensearchActionGroupCreated     OpensearchActionGroupState = "CREATED"
+	OpensearchActionGroupError       OpensearchActionGroupState = "ERROR"
+	OpensearchActionGroupIgnored     OpensearchActionGroupState = "IGNORED"
+	OpensearchActionGroupTerminating OpensearchActionGroupState = "TERMINATING"
 )
 
 // OpensearchActionGroupSpec defines the desired state of OpensearchActionGroup

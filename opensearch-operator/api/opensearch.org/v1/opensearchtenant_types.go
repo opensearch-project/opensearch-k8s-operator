@@ -9,10 +9,11 @@ import (
 type OpensearchTenantState string
 
 const (
-	OpensearchTenantPending OpensearchTenantState = "PENDING"
-	OpensearchTenantCreated OpensearchTenantState = "CREATED"
-	OpensearchTenantError   OpensearchTenantState = "ERROR"
-	OpensearchTenantIgnored OpensearchTenantState = "IGNORED"
+	OpensearchTenantPending     OpensearchTenantState = "PENDING"
+	OpensearchTenantCreated     OpensearchTenantState = "CREATED"
+	OpensearchTenantError       OpensearchTenantState = "ERROR"
+	OpensearchTenantIgnored     OpensearchTenantState = "IGNORED"
+	OpensearchTenantTerminating OpensearchTenantState = "TERMINATING"
 )
 
 // OpensearchTenantSpec defines the desired state of OpensearchTenant

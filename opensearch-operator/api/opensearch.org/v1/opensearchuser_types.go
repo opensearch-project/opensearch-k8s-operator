@@ -25,9 +25,10 @@ import (
 type OpensearchUserState string
 
 const (
-	OpensearchUserStatePending OpensearchUserState = "PENDING"
-	OpensearchUserStateCreated OpensearchUserState = "CREATED"
-	OpensearchUserStateError   OpensearchUserState = "ERROR"
+	OpensearchUserStatePending     OpensearchUserState = "PENDING"
+	OpensearchUserStateCreated     OpensearchUserState = "CREATED"
+	OpensearchUserStateError       OpensearchUserState = "ERROR"
+	OpensearchUserStateTerminating OpensearchUserState = "TERMINATING"
 )
 
 // OpensearchUserSpec defines the desired state of OpensearchUser

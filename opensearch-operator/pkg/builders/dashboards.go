@@ -206,7 +206,7 @@ func NewDashboardsConfigMapForCR(cr *opensearchv1.OpenSearchCluster, name string
 
 	var sb strings.Builder
 	for _, key := range keys {
-		sb.WriteString(fmt.Sprintf("%s: %s\n", key, config[key]))
+		fmt.Fprintf(&sb, "%s: %s\n", key, config[key])
 	}
 	data := sb.String()
 
