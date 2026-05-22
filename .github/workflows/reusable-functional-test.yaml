@@ -27,7 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           fetch-depth: 0
       - name: Detect debug commit
@@ -52,11 +52,11 @@ jobs:
           sudo rm -rf /usr/share/dotnet
           sudo rm -rf "$AGENT_TOOLSDIRECTORY"
       - name: Setup go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: 'go.work'
           cache: false
-      - uses: nolar/setup-k3d-k3s@v1
+      - uses: nolar/setup-k3d-k3s@62c9d1bd2bc843275c85d2e7dcd696edc1160eee # v1
         with:
           version: v1
           k3d-name: opensearch-operator-tests
@@ -105,7 +105,7 @@ jobs:
       # NOTE(joseb): allow interactive debug when last commit message contains 'debug' or when explicitly enabled
       - name: Debug with tmate (${{ inputs.test_name }})
         if: always() && (steps.functional_tests.outcome == 'failure' && (steps.debug_commit.outputs.is_debug == 'true' || inputs.enable_debug == true))
-        uses: mxschmitt/action-tmate@v3
+        uses: mxschmitt/action-tmate@c0afd6f790e3a5564914980036ebf83216678101 # v3
         timeout-minutes: 30
         with:
           limit-access-to-actor: true
@@ -153,7 +153,7 @@ jobs:
           done
       - name: Publish logs
         if: always() && steps.functional_tests.outcome == 'failure'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: ${{ inputs.test_name }}-logs
           path: logs/
