@@ -1,7 +1,70 @@
 {{- $clusterName := include "opensearch-cluster.cluster-name" . }}
 {{- $svcPort := .Values.cluster.general.httpPort -}}
 {{- $svcName := .Values.cluster.general.serviceName | default $clusterName }}
-{{- if .Values.cluster.ingress.opensearch.enabled -}}
+
+{{- range $pool := .Values.cluster.nodePools }}
+{{- if and $pool.ingress $pool.ingress.enabled }}
+---
+{{- if and $pool.ingress.className (not (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion)) }}
+  {{- if not (hasKey $pool.ingress.annotations "kubernetes.io/ingress.class") }}
+  {{- $_ := set $pool.ingress.annotations "kubernetes.io/ingress.class" $pool.ingress.className }}
+  {{- end }}
+{{- end }}
+{{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1
+{{- else if semverCompare ">=1.14-0" $.Capabilities.KubeVersion.GitVersion -}}
+apiVersion: networking.k8s.io/v1beta1
+{{- else -}}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Ingress
+metadata:
+  name: {{ $clusterName }}-{{ $pool.component }}
+  labels:
+    {{- include "opensearch-cluster.labels" $ | nindent 4 }}
+  {{- with $pool.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if and $pool.ingress.className (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion) }}
+  ingressClassName: {{ $pool.ingress.className }}
+  {{- end }}
+  {{- if $pool.ingress.tls }}
+  tls:
+    {{- range $pool.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range $pool.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            {{- if and .pathType (semverCompare ">=1.18-0" $.Capabilities.KubeVersion.GitVersion) }}
+            pathType: {{ .pathType }}
+            {{- end }}
+            backend:
+              {{- if semverCompare ">=1.19-0" $.Capabilities.KubeVersion.GitVersion }}
+              service:
+                name: {{ $svcName }}-{{ $pool.component }}
+                port:
+                  number: {{ $svcPort }}
+              {{- else }}
+              serviceName: {{ $svcName }}-{{ $pool.component }}
+              servicePort: {{ $svcPort }}
+              {{- end }}
+          {{- end }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.cluster.ingress.opensearch.enabled }}
 ---
 {{- if and .Values.cluster.ingress.opensearch.className (not (semverCompare ">=1.18-0" .Capabilities.KubeVersion.GitVersion)) }}
   {{- if not (hasKey .Values.cluster.ingress.opensearch.annotations "kubernetes.io/ingress.class") }}

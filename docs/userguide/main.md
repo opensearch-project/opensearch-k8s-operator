@@ -436,6 +436,12 @@ spec:
 
 By default the init container uses a busybox image. If you want to change that (for example to use an image from a private registry), see [Custom init helper](#custom-init-helper).
 
+> **Upgrade note:** In operator versions before `3.0.0-alpha`, `setVMMaxMapCount` was a non-pointer boolean and explicit `false` could be dropped from stored objects (because of `omitempty`). This is fixed in operator versions `3.0.0-alpha` and later, which use a pointer boolean so explicit `false` is preserved. If you upgrade from an older version and your existing `OpenSearchCluster` was created with `setVMMaxMapCount: false` but the field is now missing in `spec`, patch it explicitly:
+>
+> ```bash
+> kubectl patch opensearchcluster <name> -n <namespace> --type merge -p '{"spec":{"general":{"setVMMaxMapCount":false}}}'
+> ```
+
 ### Configuring Snapshot Repositories
 
 You can configure the snapshot repositories for the OpenSearch cluster through the operator. Using `general.snapshotRepositories` settings you can configure multiple snapshot repositories. Once the snapshot repository is configured a user can create custom `_ism` policies through dashboard to backup indexes.
