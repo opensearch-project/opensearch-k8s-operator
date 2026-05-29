@@ -67,20 +67,23 @@ generate: controller-gen helm-docs ## Generate code containing DeepCopy, DeepCop
 .PHONY: docs
 docs: crd-ref-docs manifests ## Generate CRD API reference documentation.
 	@echo "Generating CRD documentation..."
-	@mkdir -p ../docs/designs
+	@rm -rf ../docs/designs/crd
+	@mkdir -p ../docs/designs/crd
 	@if [ -f ../docs/designs/crd-ref-docs-config.yaml ]; then \
 		$(CRD_REF_DOCS) \
 			--source-path=$(CURDIR)/api \
 			--config=../docs/designs/crd-ref-docs-config.yaml \
 			--renderer=markdown \
-			--output-path=../docs/designs/crd.md; \
+			--output-mode=group \
+			--output-path=../docs/designs/crd; \
 	else \
 		$(CRD_REF_DOCS) \
 			--source-path=$(CURDIR)/api \
 			--renderer=markdown \
-			--output-path=../docs/designs/crd.md; \
+			--output-mode=group \
+			--output-path=../docs/designs/crd; \
 	fi
-	@echo "CRD documentation generated at ../docs/designs/crd.md"
+	@echo "CRD documentation generated at ../docs/designs/crd/"
 
 .PHONY: helm-docs
 helm-docs: ${HELM_DOCS}

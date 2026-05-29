@@ -123,7 +123,7 @@ All PRs must conform to the following rules:
     cp opensearch-operator/config/crd/bases/opensearch.*.yaml charts/opensearch-operator/files/
     ```
 
-* Changes to the CRD must be documented in the [CRD reference](./designs/crd.md)
+* Changes to the CRD must be documented in the [CRD reference index](./designs/crd.md)
 * Any customer-visible features must be documented in the [userguide](./userguide/)
 * No TODOs or commented out code snippets can be in the code
 

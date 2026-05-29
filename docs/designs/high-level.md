@@ -17,7 +17,7 @@ The descriptor is a [Custom Resource](https://kubernetes.io/docs/concepts/extend
 
 Each custom resource answering to that schema (kind: `OpenSearchCluster`) represents a **single** OpenSearch cluster. 
 
-See [Custom Resource Reference Guide](crd.md) for a full reference to the custom resource.
+See [Custom Resource Reference Guide](crd.md) for a full reference to the custom resource by API group.
 
 ### Architecture Diagram
 
@@ -107,4 +107,3 @@ The operator wants to accomplish two goals from security standpoint: Secure from
 ### Interacting with the Operator
 
 Updating the Custom Resource is currently the only way to communicate with the Operator. 
-

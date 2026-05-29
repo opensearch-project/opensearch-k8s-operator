@@ -4,6 +4,7 @@ on:
     paths:
       - 'opensearch-operator/api/**'
       - 'docs/designs/crd.md'
+      - 'docs/designs/crd/**'
       - 'docs/designs/crd-ref-docs-config.yaml'
       - 'opensearch-operator/Makefile'
 
@@ -28,7 +29,7 @@ jobs:
           make docs
       - name: Check if docs are up to date
         run: |
-          if ! git diff --exit-code --quiet docs/designs/crd.md; then
+          if [ -n "$(git status --short --untracked-files=all -- docs/designs/crd.md docs/designs/crd)" ]; then
             echo "CRD docs are out of date. Please run 'make docs' in the opensearch-operator directory and commit the changes."
             exit 1
           fi
