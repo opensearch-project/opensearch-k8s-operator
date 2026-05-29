@@ -1343,6 +1343,17 @@ spec:
 The Operator will then perform a rolling upgrade and restart the nodes one-by-one, waiting after each node for the cluster to stabilize and have a green cluster status. Depending on the number of nodes and the size of the data stored this can take some time.
 Downgrades and upgrades that span more than one major version are not supported, as this will put the OpenSearch cluster in an unsupported state. If you are using emptyDir storage for data nodes, it is recommended to set `general.drainDataNodes` to `true`, otherwise you might lose data.
 
+By default, rolling restarts and upgrades use the existing conservative health gate. If a cluster is stuck in a known recoverable yellow state, you can opt in to continuing when the operator verifies that all primaries are active, no shards are relocating or initializing, and all unassigned shards are replicas:
+
+```yaml
+spec:
+  general:
+    rollingRestart:
+      healthGatePolicy: GreenOrRecoverableYellow
+```
+
+The default `GreenOnly` policy remains the safest option and is used when `healthGatePolicy` is omitted. When the recoverable yellow checks fail, the operator continues to block the restart and records the reason in the rolling restart status conditions.
+
 ### Configuration changes
 
 As explained in the section [Configuring opensearch.yml](#configuring-opensearchyml) you can add extra opensearch configuration to your cluster. Changing this configuration on an already installed cluster will be detected by the operator and it will do a rolling restart of all cluster nodes to apply that new configuration. The same goes for nodepool-specific configuration like `resources`, `annotation` or `labels`.

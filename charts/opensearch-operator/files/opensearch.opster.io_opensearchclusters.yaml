@@ -4463,6 +4463,10 @@ spec:
                       - ip
                       type: object
                     type: array
+                  hostNetwork:
+                    description: HostNetwork enables host networking for all pods
+                      in the cluster.
+                    type: boolean
                   httpPort:
                     default: 9200
                     format: int32
@@ -4782,6 +4786,19 @@ spec:
                               PodSecurityContext, the value specified in SecurityContext takes precedence.
                             type: string
                         type: object
+                    type: object
+                  rollingRestart:
+                    description: RollingRestart controls operator-managed pod restart
+                      behavior.
+                    properties:
+                      healthGatePolicy:
+                        description: |-
+                          HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.
+                          Defaults to GreenOnly, which preserves the existing restart health gate.
+                        enum:
+                        - GreenOnly
+                        - GreenOrRecoverableYellow
+                        type: string
                     type: object
                   securityContext:
                     description: Set security context for the cluster pods' container
