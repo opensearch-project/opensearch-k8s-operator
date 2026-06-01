@@ -127,7 +127,7 @@ cluster:
     vendor: Opensearch
 
     # -- Opensearch version
-    version: 2.3.0
+    version: ""
 
     # -- OpenSearch installation directory inside the container.
     # If not set, defaults to /usr/share/opensearch.
@@ -251,7 +251,7 @@ cluster:
     tolerations: []
 
     # -- dashboards version
-    version: 2.3.0
+    version: ""
 
     # -- OpenSearch Dashboards installation directory inside the container.
     # If not set, defaults to /usr/share/opensearch-dashboards.

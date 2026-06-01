@@ -19,14 +19,16 @@ spec:
   {{- end }}
   {{- with .Values.cluster.dashboards }}
   dashboards:
-    {{- omit . "image" | toYaml | nindent 4 }}
-    image: {{ .image }}:{{ .version }}
+    {{- omit . "image" "version" | toYaml | nindent 4 }}
+    image: {{ .image }}:{{ default $.Chart.AppVersion .version }}
+    version: {{ default $.Chart.AppVersion .version }}
   {{- end }}
   {{- with .Values.cluster.general }}
   general:
-    {{- omit . "image" "serviceName" | toYaml | nindent 4 }}
-    image: {{ .image }}:{{ .version }}
+    {{- omit . "image" "serviceName" "version" | toYaml | nindent 4 }}
+    image: {{ .image }}:{{ default $.Chart.AppVersion .version }}
     serviceName: {{ .serviceName | default $clusterName }}
+    version: {{ default $.Chart.AppVersion .version }}
   {{- end }}
   {{- with .Values.cluster.initHelper }}
   initHelper:
