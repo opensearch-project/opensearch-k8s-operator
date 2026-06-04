@@ -77,19 +77,17 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	newCluster := &opensearchv1.OpenSearchCluster{}
 	err := r.Get(ctx, req.NamespacedName, newCluster)
 	if err == nil {
-		// Add migration finalizer to new cluster if not present
-		// This ensures we can handle deletion even after main reconciler removes its finalizer
-		if !containsString(newCluster.Finalizers, MigrationFinalizer) {
-			newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
-			if err := r.Update(ctx, newCluster); err != nil {
-				return ctrl.Result{}, err
-			}
-			// Requeue to process deletion if needed
-			return ctrl.Result{Requeue: true}, nil
-		}
-
-		// This is a new cluster - check if it's being deleted
+		// Handle deletion first. We must never attempt to add a finalizer to an
+		// object that is already being deleted: the API server rejects this with
+		// "no new finalizers can be added if the object is being deleted", which
+		// would otherwise cause an endless reconcile error loop (see #1417).
 		if !newCluster.DeletionTimestamp.IsZero() {
+			// If our migration finalizer is not present there is nothing for us to
+			// clean up, so let the deletion proceed without re-adding it.
+			if !containsString(newCluster.Finalizers, MigrationFinalizer) {
+				return ctrl.Result{}, nil
+			}
+
 			// Check if the main reconciler has finished cleanup (finalizer removed)
 			// The main reconciler removes the "Opensearch" finalizer after cleanup
 			hasMainFinalizer := false
@@ -117,6 +115,17 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			// Requeue to wait for cleanup to complete
 			logger.Info("New cluster deletion in progress, waiting for main reconciler to finish cleanup", "name", newCluster.Name)
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+
+		// Add migration finalizer to new cluster if not present
+		// This ensures we can handle deletion even after main reconciler removes its finalizer
+		if !containsString(newCluster.Finalizers, MigrationFinalizer) {
+			newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
+			if err := r.Update(ctx, newCluster); err != nil {
+				return ctrl.Result{}, err
+			}
+			// Requeue to process deletion if needed
+			return ctrl.Result{Requeue: true}, nil
 		}
 		// If new cluster exists and is not being deleted, continue to check old cluster
 	}
@@ -647,19 +656,17 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 	newResource := NewPtr(new(NewType))
 	err := c.Get(ctx, req.NamespacedName, newResource)
 	if err == nil {
-		// Add migration finalizer to new resource if not present
-		// This ensures we can handle deletion even after main reconciler removes its finalizer
-		if !containsString(newResource.GetFinalizers(), MigrationFinalizer) {
-			newResource.SetFinalizers(append(newResource.GetFinalizers(), MigrationFinalizer))
-			if err := c.Update(ctx, newResource); err != nil {
-				return ctrl.Result{}, err
-			}
-			// Requeue to process deletion if needed
-			return ctrl.Result{Requeue: true}, nil
-		}
-
-		// This is a new resource - check if it's being deleted
+		// Handle deletion first. We must never attempt to add a finalizer to an
+		// object that is already being deleted: the API server rejects this with
+		// "no new finalizers can be added if the object is being deleted", which
+		// would otherwise cause an endless reconcile error loop (see #1417).
 		if !newResource.GetDeletionTimestamp().IsZero() {
+			// If our migration finalizer is not present there is nothing for us to
+			// clean up, so let the deletion proceed without re-adding it.
+			if !containsString(newResource.GetFinalizers(), MigrationFinalizer) {
+				return ctrl.Result{}, nil
+			}
+
 			// Check if the resource still has other finalizers (cleanup in progress)
 			// Only delete old resource if new resource has no other finalizers (only migration finalizer remains)
 			otherFinalizers := false
@@ -687,6 +694,17 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{}, nil
+		}
+
+		// Add migration finalizer to new resource if not present
+		// This ensures we can handle deletion even after main reconciler removes its finalizer
+		if !containsString(newResource.GetFinalizers(), MigrationFinalizer) {
+			newResource.SetFinalizers(append(newResource.GetFinalizers(), MigrationFinalizer))
+			if err := c.Update(ctx, newResource); err != nil {
+				return ctrl.Result{}, err
+			}
+			// Requeue to process deletion if needed
+			return ctrl.Result{Requeue: true}, nil
 		}
 		// If new resource exists and is not being deleted, continue to check old resource
 	}

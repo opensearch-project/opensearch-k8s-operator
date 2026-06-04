@@ -84,6 +84,100 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
 		})
+
+		It("should not add migration finalizer to a new cluster that is being deleted", func() {
+			// Reproduces #1417: the migration controller must not attempt to add a
+			// finalizer to an object that is already being deleted, otherwise the API
+			// server rejects the update with "no new finalizers can be added if the
+			// object is being deleted" and the controller loops forever.
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+					// Some other finalizer keeps the object around (so deletion sets a
+					// DeletionTimestamp instead of removing it) but the migration
+					// finalizer is intentionally absent.
+					Finalizers: []string{"Opensearch"},
+				},
+			}
+			Expect(fakeClient.Create(ctx, newCluster)).To(Succeed())
+			Expect(fakeClient.Delete(ctx, newCluster)).To(Succeed())
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			// Verify the migration finalizer was NOT added to the deleting object
+			updatedCluster := &opensearchv1.OpenSearchCluster{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
+			Expect(updatedCluster.DeletionTimestamp.IsZero()).To(BeFalse())
+			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
+		})
+
+		It("should wait while the main reconciler is still cleaning up", func() {
+			// When the new cluster is being deleted but the main "Opensearch"
+			// finalizer is still present, the migration controller must wait for the
+			// main reconciler to finish external cleanup before removing its own
+			// finalizer.
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Namespace:  "default",
+					Finalizers: []string{"Opensearch", MigrationFinalizer},
+				},
+			}
+			Expect(fakeClient.Create(ctx, newCluster)).To(Succeed())
+			Expect(fakeClient.Delete(ctx, newCluster)).To(Succeed())
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(5 * time.Second))
+
+			// Both finalizers must still be present (cleanup not finished)
+			updatedCluster := &opensearchv1.OpenSearchCluster{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
+			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
+			Expect(containsString(updatedCluster.Finalizers, "Opensearch")).To(BeTrue())
+		})
+
+		It("should remove the migration finalizer once the main reconciler is done", func() {
+			// When the new cluster is being deleted and only the migration finalizer
+			// remains, the migration controller deletes the old CR and removes its
+			// finalizer, allowing the new CR to be garbage collected.
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Namespace:  "default",
+					Finalizers: []string{MigrationFinalizer},
+				},
+			}
+			Expect(fakeClient.Create(ctx, newCluster)).To(Succeed())
+			Expect(fakeClient.Delete(ctx, newCluster)).To(Succeed())
+
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			// The migration finalizer was the only one left, so removing it allows the
+			// fake client to garbage collect the new cluster.
+			updatedCluster := &opensearchv1.OpenSearchCluster{}
+			err = fakeClient.Get(ctx, req.NamespacedName, updatedCluster)
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+
+			// The corresponding old cluster should have been deleted as well.
+			updatedOld := &opsterv1.OpenSearchCluster{}
+			err = fakeClient.Get(ctx, req.NamespacedName, updatedOld)
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+		})
 	})
 
 	Describe("Reconcile - Old Cluster Migration", func() {
@@ -320,6 +414,113 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 				Status: opsterv1.ClusterStatus{},
 			}
 			Expect(isClusterReady(cluster)).To(BeFalse())
+		})
+	})
+
+	Describe("Generic Migration Reconciler - New Resource Deletion", func() {
+		It("should not add migration finalizer to a new resource that is being deleted", func() {
+			// Reproduces #1417 for the generic migration reconciler (used by
+			// usermigration / userrolebindingmigration / etc.): adding a finalizer
+			// to an object that is already being deleted is rejected by the API
+			// server and causes a reconcile error loop.
+			newUser := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Namespace:  "default",
+					Finalizers: []string{OpensearchFinalizer},
+				},
+			}
+			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
+			Expect(fakeClient.Delete(ctx, newUser)).To(Succeed())
+
+			userMigration := &UserMigrationReconciler{Client: fakeClient, Scheme: scheme}
+			result, err := userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(updatedUser.DeletionTimestamp.IsZero()).To(BeFalse())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeFalse())
+		})
+
+		It("should add migration finalizer to a new resource that is not being deleted", func() {
+			newUser := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
+
+			userMigration := &UserMigrationReconciler{Client: fakeClient, Scheme: scheme}
+			result, err := userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
+			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeTrue())
+		})
+
+		It("should wait while other finalizers are still present on a deleting resource", func() {
+			// The migration controller must not remove its finalizer (and delete the
+			// old resource) until the main reconciler has removed its own finalizer.
+			newUser := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Namespace:  "default",
+					Finalizers: []string{OpensearchFinalizer, MigrationFinalizer},
+				},
+			}
+			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
+			Expect(fakeClient.Delete(ctx, newUser)).To(Succeed())
+
+			userMigration := &UserMigrationReconciler{Client: fakeClient, Scheme: scheme}
+			result, err := userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(5 * time.Second))
+
+			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeTrue())
+			Expect(containsString(updatedUser.Finalizers, OpensearchFinalizer)).To(BeTrue())
+		})
+
+		It("should remove the migration finalizer once only it remains on a deleting resource", func() {
+			newUser := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:       "test-cluster",
+					Namespace:  "default",
+					Finalizers: []string{MigrationFinalizer},
+				},
+			}
+			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
+			Expect(fakeClient.Delete(ctx, newUser)).To(Succeed())
+
+			oldUser := &opsterv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldUser)).To(Succeed())
+
+			userMigration := &UserMigrationReconciler{Client: fakeClient, Scheme: scheme}
+			result, err := userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeZero())
+
+			// Migration finalizer was the only one left, so the new resource is removed.
+			updatedUser := &opensearchv1.OpensearchUser{}
+			err = fakeClient.Get(ctx, req.NamespacedName, updatedUser)
+			Expect(errors.IsNotFound(err)).To(BeTrue())
+
+			// The corresponding old resource should have been deleted as well.
+			updatedOld := &opsterv1.OpensearchUser{}
+			err = fakeClient.Get(ctx, req.NamespacedName, updatedOld)
+			Expect(errors.IsNotFound(err)).To(BeTrue())
 		})
 	})
 
