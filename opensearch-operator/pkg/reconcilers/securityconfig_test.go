@@ -378,7 +378,9 @@ done;`
 					Security: &opensearchv1.Security{
 						Tls: &opensearchv1.TlsConfig{
 							Http: &opensearchv1.TlsConfigHttp{
-								CaSecret: corev1.LocalObjectReference{Name: "http-ca"},
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									CaSecret: corev1.LocalObjectReference{Name: "http-ca"},
+								},
 							},
 						},
 					},
@@ -398,7 +400,9 @@ done;`
 					Security: &opensearchv1.Security{
 						Tls: &opensearchv1.TlsConfig{
 							Http: &opensearchv1.TlsConfigHttp{
-								CaSecret: corev1.LocalObjectReference{Name: "admin-secret"},
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									CaSecret: corev1.LocalObjectReference{Name: "admin-secret"},
+								},
 							},
 						},
 					},
