@@ -6651,6 +6651,28 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      operatorClientCert:
+                        description: |-
+                          Optional kubernetes.io/tls secret (tls.crt, tls.key, optional ca.crt) used by the operator's runtime REST client to authenticate to the OpenSearch HTTP API via mTLS instead of basic auth.
+                          The certificate's DN must be mapped to a user/role with the necessary privileges in the OpenSearch security configuration (e.g. via plugins.security.authcz.admin_dn or a clientcert auth domain).
+                          When set, the operator omits basic-auth credentials from outgoing requests. If ca.crt is present in the secret, it is used to verify the OpenSearch HTTP server certificate; otherwise TLS verification is skipped.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      operatorClientServerName:
+                        description: |-
+                          Optional. Overrides the TLS SNI / ServerName used when verifying the OpenSearch HTTP server certificate.
+                          Defaults to the host portion of the cluster URL.
+                        type: string
                       securityConfigSecret:
                         description: |-
                           Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
