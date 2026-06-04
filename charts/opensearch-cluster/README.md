@@ -40,7 +40,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.general.setVMMaxMapCount` | bool | `true` | Enable setVMMaxMapCount. OpenSearch requires the Linux kernel vm.max_map_count option to be set to at least 262144 |
 | `cluster.general.snapshotRepositories` | list | `[]` | Opensearch snapshot repositories configuration |
 | `cluster.general.vendor` | string | `"Opensearch"` |  |
-| `cluster.general.version` | string | `"2.3.0"` | Opensearch version |
+| `cluster.general.version` | string | `""` | Opensearch version |
 | `cluster.bootstrap.env` | list | `[]` | bootstrap pod env variables |
 | `cluster.bootstrap.affinity` | object | `{}` | bootstrap pod affinity rules |
 | `cluster.bootstrap.annotations` | object | `{}` | bootstrap pod annotations |
@@ -75,7 +75,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.dashboards.tls.secret` | string | `nil` | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |
 | `cluster.dashboards.tls.duration` | string | `"8760h"` | Duration controls the validity period of generated certificates (e.g. "8760h", "720h"). This is used only when generate is true. |
 | `cluster.dashboards.tolerations` | list | `[]` | dashboards pod tolerations |
-| `cluster.dashboards.version` | string | `"2.3.0"` | dashboards version |
+| `cluster.dashboards.version` | string | `""` | dashboards version |
 | `cluster.initHelper.image` | string | `"docker.io/busybox"` | initHelper image |
 | `cluster.initHelper.imagePullPolicy` | string | `"IfNotPresent"` | initHelper image pull policy |
 | `cluster.initHelper.imagePullSecrets` | list | `[]` | initHelper image pull secret |
@@ -125,4 +125,4 @@ The following table lists the configurable parameters of the Helm chart.
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
-Opensearch-cluster Helm Chart version: `3.3.0`
+Opensearch-cluster Helm Chart version: `3.3.1`
