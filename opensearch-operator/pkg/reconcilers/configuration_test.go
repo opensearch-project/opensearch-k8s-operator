@@ -190,6 +190,58 @@ var _ = Describe("Configuration Controller", func() {
 		})
 	})
 
+	Context("When Reconciling with General.NodeAttributes", func() {
+		It("should add node.attr.* settings backed by env var placeholders", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						NodeAttributes: []opensearchv1.NodeAttribute{
+							{Name: "zone", NodeLabel: "topology.kubernetes.io/zone"},
+						},
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "test",
+							Roles:     []string{"master", "data"},
+						},
+					},
+				},
+			}
+
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().Context().Return(context.Background())
+			var createdConfigMap *corev1.ConfigMap
+			mockClient.On("CreateConfigMap", mock.Anything).
+				Return(func(cm *corev1.ConfigMap) (*ctrl.Result, error) {
+					createdConfigMap = cm
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+
+			underTest := newConfigurationReconciler(
+				mockClient,
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(createdConfigMap).ToNot(BeNil())
+			data := createdConfigMap.Data["opensearch.yml"]
+			Expect(data).To(ContainSubstring("node.attr.zone:"))
+			Expect(data).To(ContainSubstring("${NODE_ATTR_ZONE}"))
+		})
+	})
+
 	Context("When Reconciling with NodePool.AdditionalConfig", func() {
 		It("should create both shared and per-nodepool configmaps with merged config", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())

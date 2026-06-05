@@ -33,7 +33,108 @@ const (
 	ConfigurationChecksumAnnotation  = "opensearch.org/config"
 	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
+
+	nodeAttributesVolumeName = "node-attributes"
+	nodeAttributesFileName   = "attributes.env"
 )
+
+// nodeAttributesEnabled reports whether the cluster maps any Kubernetes node
+// labels onto OpenSearch node attributes.
+func nodeAttributesEnabled(cr *opensearchv1.OpenSearchCluster) bool {
+	return len(cr.Spec.General.NodeAttributes) > 0
+}
+
+// nodeAttributesDir is the directory in the OpenSearch config folder where the
+// resolved node attributes file is shared between the init and main containers.
+func nodeAttributesDir(cr *opensearchv1.OpenSearchCluster) string {
+	return cr.Spec.General.GetOpenSearchHome() + "/config/node-attributes"
+}
+
+// nodeAttributesVolume is the emptyDir shared between the node-attributes init
+// container (writer) and the OpenSearch container (reader).
+func nodeAttributesVolume() corev1.Volume {
+	return corev1.Volume{
+		Name:         nodeAttributesVolumeName,
+		VolumeSource: corev1.VolumeSource{EmptyDir: &corev1.EmptyDirVolumeSource{}},
+	}
+}
+
+func nodeAttributesVolumeMount(cr *opensearchv1.OpenSearchCluster) corev1.VolumeMount {
+	return corev1.VolumeMount{
+		Name:      nodeAttributesVolumeName,
+		MountPath: nodeAttributesDir(cr),
+	}
+}
+
+// nodeAttributesEntrypoint wraps the OpenSearch entrypoint so that the resolved
+// attributes file is sourced first, exporting the node.attr.* placeholders that
+// opensearch.yml references before the JVM starts.
+func nodeAttributesEntrypoint(cr *opensearchv1.OpenSearchCluster, entrypoint string) string {
+	return fmt.Sprintf(". %s/%s && %s", nodeAttributesDir(cr), nodeAttributesFileName, entrypoint)
+}
+
+// nodeAttributesInitContainer builds an init container that queries the
+// Kubernetes API for the node hosting the pod and writes the configured labels
+// as exported, shell-quoted environment variables to the shared volume. The
+// OpenSearch image is used because it ships with bash and curl; the in-cluster
+// ServiceAccount credentials are mounted automatically by Kubernetes.
+func nodeAttributesInitContainer(
+	cr *opensearchv1.OpenSearchCluster,
+	image opensearchv1.ImageSpec,
+	resources corev1.ResourceRequirements,
+) corev1.Container {
+	attrsFile := nodeAttributesDir(cr) + "/" + nodeAttributesFileName
+
+	var script strings.Builder
+	script.WriteString("#!/usr/bin/env bash\n")
+	script.WriteString("set -euo pipefail\n\n")
+	fmt.Fprintf(&script, "attrs_file=%q\n", attrsFile)
+	script.WriteString("sa=/var/run/secrets/kubernetes.io/serviceaccount\n")
+	script.WriteString("node_json=\"$(curl -sS --fail --cacert \"$sa/ca.crt\" ")
+	script.WriteString("-H \"Authorization: Bearer $(cat \"$sa/token\")\" ")
+	script.WriteString("\"https://kubernetes.default.svc/api/v1/nodes/$NODE_NAME\")\"\n\n")
+
+	// read_label prints the value of the node label given as $1, or an empty
+	// string when the label is absent. The label key is matched literally (not
+	// as a regex) so keys containing dots or slashes are handled safely.
+	script.WriteString("read_label() {\n")
+	script.WriteString("  local key=\"$1\" line\n")
+	script.WriteString("  while IFS= read -r line; do\n")
+	script.WriteString("    line=\"${line#\"${line%%[![:space:]]*}\"}\"\n")
+	script.WriteString("    if [[ \"$line\" == \"\\\"$key\\\":\"* ]]; then\n")
+	script.WriteString("      line=\"${line#*:}\"\n")
+	script.WriteString("      line=\"${line#\\\"}\"\n")
+	script.WriteString("      line=\"${line%\\\"}\"\n")
+	script.WriteString("      printf '%s' \"$line\"\n")
+	script.WriteString("      return 0\n")
+	script.WriteString("    fi\n")
+	script.WriteString("  done < <(printf '%s' \"$node_json\" | tr ',{}' '\\n')\n")
+	script.WriteString("}\n\n")
+
+	script.WriteString(": > \"$attrs_file\"\n")
+	for _, attr := range cr.Spec.General.NodeAttributes {
+		// printf %q quotes the (untrusted) label value so the sourced file
+		// stays a safe assignment regardless of the value's contents.
+		fmt.Fprintf(&script, "printf 'export %s=%%q\\n' \"$(read_label %q)\" >> \"$attrs_file\"\n",
+			helpers.NodeAttributeEnvVar(attr.Name), attr.NodeLabel)
+	}
+
+	return corev1.Container{
+		Name:            nodeAttributesVolumeName,
+		Image:           image.GetImage(),
+		ImagePullPolicy: image.GetImagePullPolicy(),
+		Resources:       resources,
+		Command:         []string{"/bin/bash", "-c", script.String()},
+		Env: []corev1.EnvVar{
+			{
+				Name:      "NODE_NAME",
+				ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "spec.nodeName"}},
+			},
+		},
+		VolumeMounts:    []corev1.VolumeMount{nodeAttributesVolumeMount(cr)},
+		SecurityContext: cr.Spec.General.SecurityContext,
+	}
+}
 
 // GetDefaultAffinity returns default pod anti-affinity that prefers to avoid
 // co-locating pods from the same cluster on a single node.
@@ -388,6 +489,14 @@ func NewSTSForNodePool(
 		startUpCommand = cr.Spec.General.Command
 	}
 
+	// Source the resolved node attributes before launching OpenSearch so the
+	// node.attr.* placeholders in opensearch.yml can be substituted at startup.
+	if nodeAttributesEnabled(cr) {
+		startUpCommand = nodeAttributesEntrypoint(cr, startUpCommand)
+		volumes = append(volumes, nodeAttributesVolume())
+		volumeMounts = append(volumeMounts, nodeAttributesVolumeMount(cr))
+	}
+
 	var pluginslist []string
 	if cr.Spec.General.Monitoring.Enable {
 		if cr.Spec.General.Monitoring.PluginURL != "" {
@@ -408,6 +517,10 @@ func NewSTSForNodePool(
 
 	if len(node.InitContainers) > 0 {
 		initContainers = append(initContainers, node.InitContainers...)
+	}
+
+	if nodeAttributesEnabled(cr) {
+		initContainers = append(initContainers, nodeAttributesInitContainer(cr, image, resources))
 	}
 
 	if !helpers.SkipInitContainer() {
@@ -1120,6 +1233,16 @@ func NewBootstrapPod(
 	}
 
 	startUpCommand := "./opensearch-docker-entrypoint.sh"
+
+	// The bootstrap pod mounts the same opensearch.yml as the node pools, so it
+	// must resolve the node.attr.* placeholders too. Reuse the init container
+	// (with the bootstrap resources) to populate them before startup.
+	if nodeAttributesEnabled(cr) {
+		startUpCommand = nodeAttributesEntrypoint(cr, startUpCommand)
+		volumes = append(volumes, nodeAttributesVolume())
+		volumeMounts = append(volumeMounts, nodeAttributesVolumeMount(cr))
+		initContainers = append(initContainers, nodeAttributesInitContainer(cr, image, resources))
+	}
 
 	// Use General.PluginsList by default, override with Bootstrap.PluginsList if set
 	pluginslist := cr.Spec.General.PluginsList

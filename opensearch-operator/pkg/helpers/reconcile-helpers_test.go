@@ -31,3 +31,12 @@ var _ = DescribeTable("versionCheck reconciler",
 	Entry("When no http port is specified and prerelease version 2.0.0-testing is used", "2.0.0-testing", int32(0), int32(9200), int32(9200), "/usr/share/opensearch/config/opensearch-security"),
 	Entry("When no http port is specified and prerelease version 1.9.0-testing is used", "1.9.0-testing", int32(0), int32(9200), int32(9300), "/usr/share/opensearch/plugins/opensearch-security/securityconfig"),
 )
+
+var _ = DescribeTable("NodeAttributeEnvVar",
+	func(attribute string, expected string) {
+		Expect(NodeAttributeEnvVar(attribute)).To(Equal(expected))
+	},
+	Entry("uppercases a simple attribute", "zone", "NODE_ATTR_ZONE"),
+	Entry("replaces dots with underscores", "rack.id", "NODE_ATTR_RACK_ID"),
+	Entry("replaces dashes with underscores", "fault-domain", "NODE_ATTR_FAULT_DOMAIN"),
+)
