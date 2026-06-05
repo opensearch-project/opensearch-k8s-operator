@@ -85,6 +85,29 @@ type GeneralConfig struct {
 	HostNetwork bool `json:"hostNetwork,omitempty"`
 	// OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set.
 	OpenSearchHome string `json:"opensearchHome,omitempty"`
+	// NodeAttributes derives OpenSearch node attributes (node.attr.*) from
+	// Kubernetes node labels at runtime. For each entry the operator injects an
+	// init container that reads the label off the node hosting the pod and
+	// exposes its value to OpenSearch, enabling shard allocation awareness
+	// (e.g. zone or rack awareness) without splitting topology into separate
+	// node pools. The pods' ServiceAccount must be allowed to "get" nodes.
+	NodeAttributes []NodeAttribute `json:"nodeAttributes,omitempty"`
+}
+
+// NodeAttribute maps a Kubernetes node label onto an OpenSearch node attribute
+// so that shard allocation awareness can follow the cluster's physical topology.
+type NodeAttribute struct {
+	// Name is the OpenSearch node attribute, i.e. the suffix after "node.attr.".
+	// For zone awareness configured with
+	// cluster.routing.allocation.awareness.attributes: zone this is "zone",
+	// yielding the node.attr.zone setting.
+	//+kubebuilder:validation:Required
+	//+kubebuilder:validation:Pattern=`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`
+	Name string `json:"name"`
+	// NodeLabel is the Kubernetes node label whose value is copied into the
+	// attribute, e.g. "topology.kubernetes.io/zone".
+	//+kubebuilder:validation:Required
+	NodeLabel string `json:"nodeLabel"`
 }
 
 type PdbConfig struct {
