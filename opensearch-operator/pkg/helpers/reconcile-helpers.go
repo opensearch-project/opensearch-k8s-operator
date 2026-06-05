@@ -154,13 +154,12 @@ func VersionCheck(instance *opensearchv1.OpenSearchCluster) (int32, int32, strin
 		}
 	}
 
-	opensearchHome := instance.Spec.General.GetOpenSearchHome()
 	if isVersion2OrHigher {
 		securityConfigPort = httpPort
-		securityConfigPath = opensearchHome + "/config/opensearch-security"
+		securityConfigPath = instance.Spec.General.SecurityConfigV2Path()
 	} else {
 		securityConfigPort = 9300
-		securityConfigPath = opensearchHome + "/plugins/opensearch-security/securityconfig"
+		securityConfigPath = instance.Spec.General.SecurityConfigV1Path()
 	}
 	return httpPort, securityConfigPort, securityConfigPath
 }

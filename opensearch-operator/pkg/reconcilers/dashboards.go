@@ -182,21 +182,18 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 		// Mount secret
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsSecretName}}}
 		volumes = append(volumes, volume)
-		dashboardsHome := r.instance.Spec.Dashboards.GetOpenSearchDashboardsHome()
-		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: dashboardsHome + "/certs"}
+		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: r.instance.Spec.Dashboards.CertsPath()}
 		volumeMounts = append(volumeMounts, mount)
 	} else {
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Notice - using externally provided certificates for Dashboard Cluster")
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsConfig.Secret.Name}}}
 		volumes = append(volumes, volume)
-		dashboardsHome := r.instance.Spec.Dashboards.GetOpenSearchDashboardsHome()
-		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: dashboardsHome + "/certs"}
+		mount := corev1.VolumeMount{Name: "tls-cert", MountPath: r.instance.Spec.Dashboards.CertsPath()}
 		volumeMounts = append(volumeMounts, mount)
 	}
-	dashboardsHome := r.instance.Spec.Dashboards.GetOpenSearchDashboardsHome()
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.enabled", "true")
-	r.reconcilerContext.AddDashboardsConfig("server.ssl.key", dashboardsHome+"/certs/tls.key")
-	r.reconcilerContext.AddDashboardsConfig("server.ssl.certificate", dashboardsHome+"/certs/tls.crt")
+	r.reconcilerContext.AddDashboardsConfig("server.ssl.key", r.instance.Spec.Dashboards.TLSKeyPath())
+	r.reconcilerContext.AddDashboardsConfig("server.ssl.certificate", r.instance.Spec.Dashboards.TLSCertPath())
 	return volumes, volumeMounts, nil
 }
 
