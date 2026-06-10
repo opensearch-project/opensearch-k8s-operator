@@ -255,3 +255,135 @@ func TestDetermineUnsupportedClusterSettings(t *testing.T) {
 		})
 	}
 }
+
+func TestCheckClusterRecoverableYellowFromResponses(t *testing.T) {
+	baseHealth := func() responses.ClusterHealthResponse {
+		return responses.ClusterHealthResponse{
+			Status:           "yellow",
+			UnassignedShards: 1,
+			Indices: map[string]responses.IndexHealth{
+				"idx": {
+					Status:              "yellow",
+					NumberOfShards:      1,
+					NumberOfReplicas:    1,
+					ActivePrimaryShards: 1,
+					ActiveShards:        1,
+					UnassignedShards:    1,
+				},
+			},
+		}
+	}
+	baseShards := func() []responses.CatShardsResponse {
+		return []responses.CatShardsResponse{
+			{Index: "idx", Shard: "0", PrimaryOrReplica: "p", State: "STARTED", NodeName: "opensearch-data-0"},
+			{Index: "idx", Shard: "0", PrimaryOrReplica: "r", State: "UNASSIGNED"},
+		}
+	}
+
+	tests := []struct {
+		name   string
+		health responses.ClusterHealthResponse
+		shards []responses.CatShardsResponse
+		want   bool
+	}{
+		{
+			name:   "allows yellow caused only by unassigned replicas",
+			health: baseHealth(),
+			shards: baseShards(),
+			want:   true,
+		},
+		{
+			name: "blocks non-yellow health",
+			health: func() responses.ClusterHealthResponse {
+				health := baseHealth()
+				health.Status = "green"
+				return health
+			}(),
+			shards: baseShards(),
+			want:   false,
+		},
+		{
+			name: "blocks inactive primary shards",
+			health: func() responses.ClusterHealthResponse {
+				health := baseHealth()
+				index := health.Indices["idx"]
+				index.ActivePrimaryShards = 0
+				health.Indices["idx"] = index
+				return health
+			}(),
+			shards: baseShards(),
+			want:   false,
+		},
+		{
+			name: "blocks shard movement in progress",
+			health: func() responses.ClusterHealthResponse {
+				health := baseHealth()
+				health.RelocatingShards = 1
+				return health
+			}(),
+			shards: baseShards(),
+			want:   false,
+		},
+		{
+			name: "blocks yellow with initializing replicas",
+			health: func() responses.ClusterHealthResponse {
+				health := baseHealth()
+				health.InitializingShards = 4
+				health.UnassignedShards = 5
+				index := health.Indices["idx"]
+				index.InitializingShards = 4
+				index.UnassignedShards = 5
+				health.Indices["idx"] = index
+				return health
+			}(),
+			shards: []responses.CatShardsResponse{
+				{Index: "idx", Shard: "0", PrimaryOrReplica: "p", State: "STARTED", NodeName: "opensearch-data-0"},
+				{Index: "idx", Shard: "0", PrimaryOrReplica: "r", State: "INITIALIZING", NodeName: "opensearch-data-1"},
+			},
+			want: false,
+		},
+		{
+			name:   "blocks unassigned primary shard",
+			health: baseHealth(),
+			shards: []responses.CatShardsResponse{
+				{Index: "idx", Shard: "0", PrimaryOrReplica: "p", State: "UNASSIGNED"},
+				{Index: "idx", Shard: "0", PrimaryOrReplica: "r", State: "UNASSIGNED"},
+			},
+			want: false,
+		},
+		{
+			name: "blocks when health and shard details disagree",
+			health: func() responses.ClusterHealthResponse {
+				health := baseHealth()
+				health.UnassignedShards = 2
+				return health
+			}(),
+			shards: baseShards(),
+			want:   false,
+		},
+		{
+			name: "blocks primary shard not started",
+			health: func() responses.ClusterHealthResponse {
+				health := baseHealth()
+				health.UnassignedShards = 0
+				return health
+			}(),
+			shards: []responses.CatShardsResponse{
+				{Index: "idx", Shard: "0", PrimaryOrReplica: "p", State: "INITIALIZING"},
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, _, err := checkClusterRecoverableYellowFromResponses(tt.health, tt.shards)
+			if err != nil {
+				t.Fatalf("checkClusterRecoverableYellowFromResponses returned error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("checkClusterRecoverableYellowFromResponses() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

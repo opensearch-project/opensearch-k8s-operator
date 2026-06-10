@@ -44,6 +44,10 @@ cluster:
     # -- Controls whether to drain data notes on rolling restart operations
     drainDataNodes: true
 
+    rollingRestart:
+      # -- Health gate policy for operator-managed rolling restart and upgrade pod restarts. GreenOnly preserves the existing restart health gate. GreenOrRecoverableYellow also allows yellow health when all primaries are active, no shard movement is in progress, and only replicas are unassigned.
+      healthGatePolicy: GreenOnly
+
     # -- Opensearch service http port
     httpPort: 9200
 
