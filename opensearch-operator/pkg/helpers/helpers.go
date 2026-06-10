@@ -158,6 +158,24 @@ func IsSecurityPluginEnabled(cr *opensearchv1.OpenSearchCluster) bool {
 	return IsTransportTlsEnabled(cr)
 }
 
+// ShouldMergeSecurityConfig determines if internal users should be merged (default)
+// or overwritten when applying security config.
+// Returns true (merge) unless the annotation "opensearch.org/securityconfig-overwrite" is explicitly set to "true".
+func ShouldMergeSecurityConfig(cr *opensearchv1.OpenSearchCluster) bool {
+	if cr == nil {
+		return true // default to merge
+	}
+	if cr.Annotations == nil {
+		return true // default to merge
+	}
+	value, exists := cr.Annotations["opensearch.org/securityconfig-overwrite"]
+	if !exists {
+		return true // default to merge
+	}
+	// Only overwrite if explicitly set to "true"
+	return value != "true"
+}
+
 // ClusterURL returns the URL for communicating with the OpenSearch cluster.
 // If OperatorClusterURL is specified, it uses that custom URL.
 // Otherwise, it constructs the default internal Kubernetes service DNS name.
@@ -308,6 +326,41 @@ func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 	return &createdSecret, true, nil
 }
 
+// mergeInternalUsers merges custom internal users into base internal users.
+// Base users (admin, kibanaserver) are preserved, and custom users are added or updated.
+func mergeInternalUsers(baseData []byte, customData []byte) ([]byte, error) {
+	// Parse base internal_users.yml
+	var baseUsers map[string]interface{}
+	if err := yaml.Unmarshal(baseData, &baseUsers); err != nil {
+		return nil, fmt.Errorf("failed to parse base internal_users.yml: %w", err)
+	}
+
+	// Parse custom internal_users.yml
+	var customUsers map[string]interface{}
+	if err := yaml.Unmarshal(customData, &customUsers); err != nil {
+		return nil, fmt.Errorf("failed to parse custom internal_users.yml: %w", err)
+	}
+
+	// Merge: start with base, then overlay custom users
+	// This preserves all base users (admin, kibanaserver, etc.) and adds/updates custom users
+	for key, value := range customUsers {
+		if key == "_meta" {
+			// Preserve base _meta
+			continue
+		}
+		// Add or update the custom user in base
+		baseUsers[key] = value
+	}
+
+	// Marshal back to YAML
+	mergedYaml, err := yaml.Marshal(baseUsers)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal merged internal_users.yml: %w", err)
+	}
+
+	return mergedYaml, nil
+}
+
 func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, adminSecret *corev1.Secret) (*corev1.Secret, error) {
 	baseData, err := defaultSecurityconfigData()
 	if err != nil {
@@ -320,7 +373,17 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 			return nil, err
 		}
 		for key, value := range userSecret.Data {
-			baseData[key] = append([]byte(nil), value...)
+			// Special handling for internal_users.yml - merge custom users with base users
+			if key == "internal_users.yml" {
+				mergedUsers, err := mergeInternalUsers(baseData[key], value)
+				if err != nil {
+					return nil, fmt.Errorf("failed to merge internal_users.yml: %w", err)
+				}
+				baseData[key] = mergedUsers
+			} else {
+				// For other files, user config overrides base config
+				baseData[key] = append([]byte(nil), value...)
+			}
 		}
 	}
 
@@ -393,9 +456,16 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 }
 
 func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
-	var data InternalUserConfig
+	// Use a generic map to preserve all users (including custom ones)
+	var data map[string]interface{}
 	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
+	}
+
+	// Update admin user
+	adminUser, ok := data["admin"].(map[interface{}]interface{})
+	if !ok {
+		return nil, fmt.Errorf("admin user not found or has invalid format")
 	}
 
 	var adminHash string
@@ -408,28 +478,43 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		}
 		adminHash = string(hashed)
 	}
-	data.Admin.Hash = adminHash
+	adminUser["hash"] = adminHash
 
-	if !data.Admin.Reserved {
-		data.Admin.Reserved = true
+	if reserved, ok := adminUser["reserved"].(bool); !ok || !reserved {
+		adminUser["reserved"] = true
 	}
-	if len(data.Admin.BackendRoles) == 0 {
-		data.Admin.BackendRoles = []string{"admin"}
+
+	// Ensure admin has "admin" backend role
+	var backendRoles []string
+	if roles, ok := adminUser["backend_roles"].([]interface{}); ok {
+		for _, role := range roles {
+			if roleStr, ok := role.(string); ok {
+				backendRoles = append(backendRoles, roleStr)
+			}
+		}
+	}
+	if len(backendRoles) == 0 {
+		backendRoles = []string{"admin"}
 	} else {
 		found := false
-		for _, role := range data.Admin.BackendRoles {
+		for _, role := range backendRoles {
 			if role == "admin" {
 				found = true
 				break
 			}
 		}
 		if !found {
-			data.Admin.BackendRoles = append(data.Admin.BackendRoles, "admin")
+			backendRoles = append(backendRoles, "admin")
 		}
 	}
+	adminUser["backend_roles"] = backendRoles
 
-	if data.Kibanaserver == nil {
-		data.Kibanaserver = &User{}
+	// Update kibanaserver user
+	kibanaUser, ok := data["kibanaserver"].(map[interface{}]interface{})
+	if !ok {
+		// Create kibanaserver if it doesn't exist
+		kibanaUser = make(map[interface{}]interface{})
+		data["kibanaserver"] = kibanaUser
 	}
 
 	var dashboardsHash string
@@ -442,14 +527,17 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		}
 		dashboardsHash = string(hashed)
 	}
-	data.Kibanaserver.Hash = dashboardsHash
-	if !data.Kibanaserver.Reserved {
-		data.Kibanaserver.Reserved = true
-	}
-	if data.Kibanaserver.Description == "" {
-		data.Kibanaserver.Description = "Demo user for the OpenSearch Dashboards server"
+	kibanaUser["hash"] = dashboardsHash
+
+	if reserved, ok := kibanaUser["reserved"].(bool); !ok || !reserved {
+		kibanaUser["reserved"] = true
 	}
 
+	if description, ok := kibanaUser["description"].(string); !ok || description == "" {
+		kibanaUser["description"] = "Demo user for the OpenSearch Dashboards server"
+	}
+
+	// Marshal back to YAML, preserving all users (base + custom)
 	modifiedYaml, err := yaml.Marshal(data)
 	if err != nil {
 		return nil, err

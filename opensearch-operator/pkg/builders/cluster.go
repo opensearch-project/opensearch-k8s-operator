@@ -1335,6 +1335,21 @@ func NewSecurityconfigUpdateJob(
 		MountPath: "/certs",
 	})
 
+	// Add tools volume for yq binary (shared between init and main container)
+	volumes = append(volumes, corev1.Volume{
+		Name: "tools",
+		VolumeSource: corev1.VolumeSource{
+			EmptyDir: &corev1.EmptyDirVolumeSource{},
+		},
+	})
+
+	// Mount tools in main container
+	volumeMounts = append(volumeMounts, corev1.VolumeMount{
+		Name:      "tools",
+		MountPath: "/tools",
+		ReadOnly:  true,
+	})
+
 	annotations := map[string]string{
 		securityconfigChecksumAnnotation: checksum,
 	}
@@ -1342,6 +1357,7 @@ func NewSecurityconfigUpdateJob(
 	backoffLimit := int32(0)
 
 	image := helpers.ResolveImage(instance, &node)
+	initHelperImage := helpers.ResolveInitHelperImage(instance)
 	securityContext := instance.Spec.General.SecurityContext
 	podSecurityContext := instance.Spec.General.PodSecurityContext
 	updateJobConfig := instance.Spec.Security.GetConfig().GetUpdateJob()
@@ -1367,6 +1383,37 @@ func NewSecurityconfigUpdateJob(
 		}
 	}
 
+	// Create init container to install yq
+	initContainers := []corev1.Container{
+		{
+			Name:            "install-yq",
+			Image:           initHelperImage.GetImage(),
+			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
+			Resources:       resources,
+			Command:         []string{"/bin/sh", "-c"},
+			Args: []string{`
+				set -e
+				YQ_VERSION=v4.35.1
+				YQ_BINARY=yq_linux_amd64
+				echo "Downloading yq ${YQ_VERSION}..."
+				wget -qO /tools/yq https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/${YQ_BINARY} || {
+					echo "ERROR: Failed to download yq"
+					exit 1
+				}
+				chmod +x /tools/yq
+				echo "yq installed successfully"
+				/tools/yq --version
+			`},
+			VolumeMounts: []corev1.VolumeMount{
+				{
+					Name:      "tools",
+					MountPath: "/tools",
+				},
+			},
+			SecurityContext: securityContext,
+		},
+	}
+
 	return batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        jobName,
@@ -1383,6 +1430,7 @@ func NewSecurityconfigUpdateJob(
 				},
 				Spec: corev1.PodSpec{
 					TerminationGracePeriodSeconds: &terminationGracePeriodSeconds,
+					InitContainers:                initContainers,
 					Containers: []corev1.Container{{
 						Name:            "updater",
 						Image:           image.GetImage(),

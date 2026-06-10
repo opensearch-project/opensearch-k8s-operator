@@ -39,6 +39,58 @@ do
 echo 'Waiting to connect to the cluster'; sleep 20;
 done;`
 
+	BackupSecurityConfigCmdTmpl = `
+BACKUP_DIR=/tmp/security-backup;
+mkdir -p $BACKUP_DIR;
+echo "Backing up current security configuration...";
+count=0;
+until $ADMIN -backup $BACKUP_DIR -cacert %s -cert %s -key %s -icl -nhnv -h %s -p %v; do
+  if (( count++ >= 20 )); then
+    echo "ERROR: Failed to backup security configuration after 20 attempts";
+    exit 1;
+  fi;
+  echo "Backup attempt failed, retrying...";
+  sleep 20;
+done;
+echo "Backup completed successfully";`
+
+	MergeInternalUsersCmdTmpl = `
+# Use yq from tools volume
+YQ_CMD=/tools/yq;
+
+# Verify yq is available
+if [ ! -x "$YQ_CMD" ]; then
+  echo "ERROR: yq not found at $YQ_CMD";
+  exit 1;
+fi;
+
+# Merge internal_users.yml (custom overrides existing)
+BACKUP_USERS=/tmp/security-backup/internal_users.yml;
+CUSTOM_USERS=%s/internal_users.yml;
+MERGED_USERS=/tmp/merged_internal_users.yml;
+
+if [ -f "$BACKUP_USERS" ] && [ -f "$CUSTOM_USERS" ]; then
+  echo "Merging internal_users.yml (custom config takes precedence)...";
+  $YQ_CMD eval-all 'select(fileIndex == 0) * select(fileIndex == 1)' \
+    $BACKUP_USERS $CUSTOM_USERS > $MERGED_USERS || {
+      echo "ERROR: Failed to merge internal_users.yml";
+      exit 1;
+    };
+  echo "Merge completed successfully - merged file at $MERGED_USERS";
+elif [ ! -f "$CUSTOM_USERS" ]; then
+  echo "No custom internal_users.yml found, using backup";
+  cp $BACKUP_USERS $MERGED_USERS || {
+    echo "ERROR: Failed to copy backup internal_users.yml";
+    exit 1;
+  };
+else
+  echo "No backup found, using custom internal_users.yml as-is";
+  cp $CUSTOM_USERS $MERGED_USERS || {
+    echo "ERROR: Failed to copy custom internal_users.yml";
+    exit 1;
+  };
+fi;`
+
 	ApplyAllYmlCmdTmpl = `count=0;
 until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s -p %v; do
   if (( count++ >= 20 )); then
@@ -238,6 +290,20 @@ func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret
 
 	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort)
 
+	// Check if we should merge internal users (default behavior)
+	shouldMerge := helpers.ShouldMergeSecurityConfig(instance)
+
+	if shouldMerge {
+		log.Info("Security config merge mode enabled - will preserve existing internal users")
+		// Add backup command
+		arg += fmt.Sprintf(BackupSecurityConfigCmdTmpl, caCert, adminCert, adminKey, clusterHostName, securityConfigPort)
+
+		// Add merge command
+		arg += fmt.Sprintf(MergeInternalUsersCmdTmpl, securityconfigPath)
+	} else {
+		log.Info("Security config overwrite mode enabled - will replace all internal users")
+	}
+
 	// Get the list of yml files and sort them
 	// This will ensure commands are always generated in the same order
 	// Needed for tests as well to compare actual and expected command
@@ -248,7 +314,15 @@ func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret
 	sort.Strings(keys)
 
 	for _, k := range keys {
-		filePath := fmt.Sprintf("%s/%s", securityconfigPath, k)
+		var filePath string
+
+		// If merge mode is enabled and this is internal_users.yml, use the merged file from temp
+		if shouldMerge && k == "internal_users.yml" {
+			filePath = "/tmp/merged_internal_users.yml"
+		} else {
+			filePath = fmt.Sprintf("%s/%s", securityconfigPath, k)
+		}
+
 		fileType, ok := ymlToFileType[k]
 		if !ok {
 			// If the yml file is invalid, do not return the error
