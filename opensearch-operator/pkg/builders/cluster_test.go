@@ -186,6 +186,58 @@ var _ = Describe("Builders", func() {
 				"testAnnotationKey":             "testAnnotationValue",
 			}))
 		})
+		It("should include global rolling-restart annotation in pod template when set on CR", func() {
+			clusterObject := ClusterDescWithVersion("1.3.0")
+			clusterObject.Annotations = map[string]string{
+				RollingRestartTriggerAnnotation: "123",
+			}
+			nodePool := opensearchv1.NodePool{
+				Component: "data",
+				Roles:     []string{"data"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Annotations).To(HaveKeyWithValue(ConfigurationChecksumAnnotation, "foobar"))
+			Expect(result.Spec.Template.Annotations).To(HaveKeyWithValue(RollingRestartTriggerAnnotation, "123"))
+		})
+		It("should include per-component rolling-restart annotation only for matching node pool", func() {
+			clusterObject := ClusterDescWithVersion("1.3.0")
+			clusterObject.Annotations = map[string]string{
+				RollingRestartTriggerAnnotation + "-master": "456",
+			}
+			nodePool := opensearchv1.NodePool{
+				Component: "master",
+				Roles:     []string{"cluster_manager"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Annotations).To(HaveKeyWithValue(RollingRestartTriggerAnnotation+"-master", "456"))
+		})
+		It("should not include per-component rolling-restart annotation for non-matching node pool", func() {
+			clusterObject := ClusterDescWithVersion("1.3.0")
+			clusterObject.Annotations = map[string]string{
+				RollingRestartTriggerAnnotation + "-master": "456",
+			}
+			nodePool := opensearchv1.NodePool{
+				Component: "data",
+				Roles:     []string{"data"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Annotations).NotTo(HaveKey(RollingRestartTriggerAnnotation + "-master"))
+			Expect(result.Spec.Template.Annotations).To(HaveKeyWithValue(ConfigurationChecksumAnnotation, "foobar"))
+		})
+		It("should include both global and per-component rolling-restart when both set", func() {
+			clusterObject := ClusterDescWithVersion("1.3.0")
+			clusterObject.Annotations = map[string]string{
+				RollingRestartTriggerAnnotation:           "789",
+				RollingRestartTriggerAnnotation + "-data": "999",
+			}
+			nodePool := opensearchv1.NodePool{
+				Component: "data",
+				Roles:     []string{"data"},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Annotations).To(HaveKeyWithValue(RollingRestartTriggerAnnotation, "789"))
+			Expect(result.Spec.Template.Annotations).To(HaveKeyWithValue(RollingRestartTriggerAnnotation+"-data", "999"))
+		})
 		It("should have annotations added to sts", func() {
 			clusterObject := ClusterDescWithVersion("1.3.0")
 			nodePool := opensearchv1.NodePool{

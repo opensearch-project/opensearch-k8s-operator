@@ -31,6 +31,7 @@ var (
 
 const (
 	ConfigurationChecksumAnnotation  = "opensearch.org/config"
+	RollingRestartTriggerAnnotation  = "opensearch.org/rolling-restart"
 	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
 )
@@ -198,6 +199,15 @@ func NewSTSForNodePool(
 	// cr.Spec.NodePool.annotations
 	for ak, vk := range node.Annotations {
 		annotations[ak] = vk
+	}
+	// Rolling restart trigger: when set on the CR, included in pod template so updating it triggers a new revision and rollout
+	if v, ok := cr.Annotations[RollingRestartTriggerAnnotation]; ok && v != "" {
+		annotations[RollingRestartTriggerAnnotation] = v
+	}
+	// Per-node-pool restart trigger: opensearch.org/rolling-restart-<component> restarts only that node pool
+	componentRestartKey := RollingRestartTriggerAnnotation + "-" + node.Component
+	if v, ok := cr.Annotations[componentRestartKey]; ok && v != "" {
+		annotations[componentRestartKey] = v
 	}
 
 	runas := int64(0)
