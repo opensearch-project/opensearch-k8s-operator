@@ -22,6 +22,7 @@ import (
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -79,11 +80,13 @@ func (v *OpenSearchTenantValidator) ValidateDelete(ctx context.Context, obj runt
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
 func (v *OpenSearchTenantValidator) validateClusterReference(ctx context.Context, tenant *opensearchv1.OpensearchTenant) error {
+	namespace := util.DetermineClusterNamespace(tenant.Spec.OpensearchRef, tenant.Namespace)
+
 	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      tenant.Spec.OpensearchRef.Name,
-		Namespace: tenant.Namespace,
+		Namespace: namespace,
 	}, cluster)
 
 	if err != nil {
@@ -91,9 +94,9 @@ func (v *OpenSearchTenantValidator) validateClusterReference(ctx context.Context
 		oldCluster := &opsterv1.OpenSearchCluster{}
 		if err := v.Client.Get(ctx, types.NamespacedName{
 			Name:      tenant.Spec.OpensearchRef.Name,
-			Namespace: tenant.Namespace,
+			Namespace: namespace,
 		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", tenant.Spec.OpensearchRef.Name, err)
+			return fmt.Errorf("referenced OpenSearch cluster '%s' in namespace '%s' not found: %w", tenant.Spec.OpensearchRef.Name, namespace, err)
 		}
 	}
 

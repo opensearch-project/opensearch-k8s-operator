@@ -33,10 +33,10 @@ const (
 
 // OpensearchRoleSpec defines the desired state of OpensearchRole
 type OpensearchRoleSpec struct {
-	OpensearchRef      corev1.LocalObjectReference `json:"opensearchCluster"`
-	ClusterPermissions []string                    `json:"clusterPermissions,omitempty"`
-	IndexPermissions   []IndexPermissionSpec       `json:"indexPermissions,omitempty"`
-	TenantPermissions  []TenantPermissionsSpec     `json:"tenantPermissions,omitempty"`
+	OpensearchRef      corev1.ObjectReference  `json:"opensearchCluster"`
+	ClusterPermissions []string                `json:"clusterPermissions,omitempty"`
+	IndexPermissions   []IndexPermissionSpec   `json:"indexPermissions,omitempty"`
+	TenantPermissions  []TenantPermissionsSpec `json:"tenantPermissions,omitempty"`
 }
 
 type IndexPermissionSpec struct {
@@ -83,7 +83,7 @@ type OpensearchRoleList struct {
 }
 
 // GetOpensearchRef returns the OpenSearch cluster reference
-func (r *OpensearchRole) GetOpensearchRef() corev1.LocalObjectReference {
+func (r *OpensearchRole) GetOpensearchRef() corev1.ObjectReference {
 	return r.Spec.OpensearchRef
 }
 

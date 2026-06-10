@@ -48,7 +48,7 @@ var _ = Describe("users reconciler", func() {
 				UID:       types.UID("testuid"),
 			},
 			Spec: opensearchv1.OpensearchUserSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: corev1.ObjectReference{
 					Name: "test-cluster",
 				},
 				PasswordFrom: corev1.SecretKeySelector{

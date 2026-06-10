@@ -74,7 +74,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -93,7 +93,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					IndexPermissions: []opensearchv1.IndexPermissionSpec{
@@ -119,7 +119,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					TenantPermissions: []opensearchv1.TenantPermissionsSpec{
@@ -143,7 +143,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "non-existent-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -152,7 +152,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 
 			warnings, err := validator.ValidateCreate(ctx, role)
 			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' not found"))
+			Expect(err.Error()).To(ContainSubstring("referenced OpenSearch cluster 'non-existent-cluster' in namespace 'default' not found"))
 			Expect(warnings).To(BeEmpty())
 		})
 
@@ -163,7 +163,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					// No permissions specified
@@ -197,8 +197,28 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "old-cluster",
+					},
+					ClusterPermissions: []string{"cluster_composite_ops"},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, role)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should allow role to reference cluster in other namespace", func() {
+			role := &opensearchv1.OpensearchRole{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-role",
+					Namespace: "test-namespace",
+				},
+				Spec: opensearchv1.OpensearchRoleSpec{
+					OpensearchRef: corev1.ObjectReference{
+						Name:      "test-cluster",
+						Namespace: "default",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
 				},
@@ -218,7 +238,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -230,7 +250,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops", "cluster_monitor"},
@@ -249,7 +269,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -261,7 +281,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "different-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -281,7 +301,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -293,7 +313,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpensearchRef: corev1.ObjectReference{
 						Name: "test-cluster",
 					},
 					// No permissions
