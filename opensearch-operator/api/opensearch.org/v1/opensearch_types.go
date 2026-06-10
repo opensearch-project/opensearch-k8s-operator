@@ -100,7 +100,7 @@ type InitHelperConfig struct {
 }
 
 type ProbesConfig struct {
-	Liveness  *ProbeConfig        `json:"liveness,omitempty"`
+	Liveness  *CommandProbeConfig `json:"liveness,omitempty"`
 	Readiness *CommandProbeConfig `json:"readiness,omitempty"`
 	Startup   *CommandProbeConfig `json:"startup,omitempty"`
 }

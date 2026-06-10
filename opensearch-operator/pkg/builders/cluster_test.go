@@ -1150,7 +1150,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 				Probes: &opensearchv1.ProbesConfig{
-					Liveness: &opensearchv1.ProbeConfig{
+					Liveness: &opensearchv1.CommandProbeConfig{
 						FailureThreshold: 15,
 					},
 					Startup: &opensearchv1.CommandProbeConfig{
@@ -1187,7 +1187,7 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 				Probes: &opensearchv1.ProbesConfig{
-					Liveness: &opensearchv1.ProbeConfig{
+					Liveness: &opensearchv1.CommandProbeConfig{
 						InitialDelaySeconds: 12,
 						TimeoutSeconds:      6,
 						PeriodSeconds:       25,
@@ -1243,6 +1243,10 @@ var _ = Describe("Builders", func() {
 				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
 				To(Equal([]string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.ProbeHandler.TCPSocket).
+				NotTo(BeNil())
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.ProbeHandler.Exec).
+				To(BeNil())
 		})
 
 		It("should have custom command when set", func() {
@@ -1251,6 +1255,9 @@ var _ = Describe("Builders", func() {
 				Component: "masters",
 				Roles:     []string{"search"},
 				Probes: &opensearchv1.ProbesConfig{
+					Liveness: &opensearchv1.CommandProbeConfig{
+						Command: []string{"/bin/bash", "-c", "echo 'live'"},
+					},
 					Startup: &opensearchv1.CommandProbeConfig{
 						Command: []string{"/bin/bash", "-c", "echo 'startup'"},
 					},
@@ -1260,6 +1267,8 @@ var _ = Describe("Builders", func() {
 				},
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].LivenessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'live'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
 				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
