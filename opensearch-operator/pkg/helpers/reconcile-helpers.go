@@ -165,6 +165,16 @@ func VersionCheck(instance *opensearchv1.OpenSearchCluster) (int32, int32, strin
 	return httpPort, securityConfigPort, securityConfigPath
 }
 
+// NodeAttributeEnvVar returns the shell- and OpenSearch-safe environment
+// variable name used to carry the value of a node attribute from the init
+// container to the OpenSearch process. OpenSearch resolves node.attr.<name>
+// from this variable via the ${...} placeholder in opensearch.yml, so the name
+// must not contain the dots or dashes that a raw attribute name may have.
+func NodeAttributeEnvVar(attribute string) string {
+	sanitized := strings.NewReplacer(".", "_", "-", "_").Replace(attribute)
+	return "NODE_ATTR_" + strings.ToUpper(sanitized)
+}
+
 func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool, entrypoint string) []string {
 	var mainCommand []string
 	com := installerBinary + " install"

@@ -62,9 +62,11 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
+	hasNodeAttributes := len(r.instance.Spec.General.NodeAttributes) > 0
+
 	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
 		len(r.reconcilerContext.OpenSearchConfig) == 0 &&
-		!hasGeneralConfig && !hasNodePoolConfig {
+		!hasGeneralConfig && !hasNodePoolConfig && !hasNodeAttributes {
 		return ctrl.Result{}, nil
 	}
 	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
@@ -88,6 +90,16 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	// Add General.AdditionalConfig to reconciler context (for base config)
 	for k, v := range r.instance.Spec.General.AdditionalConfig {
 		r.reconcilerContext.AddConfig(k, v)
+	}
+
+	// Map each Kubernetes node label onto a node.attr.* setting. The value is an
+	// environment variable placeholder resolved per-pod at startup by the
+	// node-attributes init container (see pkg/builders).
+	for _, attr := range r.instance.Spec.General.NodeAttributes {
+		r.reconcilerContext.AddConfig(
+			fmt.Sprintf("node.attr.%s", attr.Name),
+			fmt.Sprintf("${%s}", helpers.NodeAttributeEnvVar(attr.Name)),
+		)
 	}
 
 	// Helper function to parse string value to determine its actual type
