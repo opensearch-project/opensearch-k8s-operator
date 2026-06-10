@@ -1,6 +1,6 @@
 module github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator
 
-go 1.25.10
+go 1.25.11
 
 require (
 	emperror.dev/errors v0.8.1
