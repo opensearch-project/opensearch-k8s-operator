@@ -1061,7 +1061,7 @@ var _ = Describe("Builders", func() {
 			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(sts.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "cmd", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
 			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
 		})
 	})
@@ -1386,7 +1386,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
 		})
 
@@ -1404,8 +1404,22 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
+		})
+
+		It("should project CA cert into admin-cert mount when configured separately", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "admin-cert", "http-ca", "dummy", nil, nil)
+
+			adminVolume := job.Spec.Template.Spec.Volumes[0]
+			Expect(adminVolume.Name).To(Equal("admin-cert"))
+			Expect(adminVolume.Projected).ToNot(BeNil())
+			Expect(adminVolume.Projected.Sources).To(HaveLen(2))
+			Expect(adminVolume.Projected.Sources[0].Secret).ToNot(BeNil())
+			Expect(adminVolume.Projected.Sources[0].Secret.Name).To(Equal("admin-cert"))
+			Expect(adminVolume.Projected.Sources[1].Secret).ToNot(BeNil())
+			Expect(adminVolume.Projected.Sources[1].Secret.Name).To(Equal("http-ca"))
 		})
 	})
 
@@ -1458,7 +1472,7 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.Spec.General.HostNetwork = true
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "cmd", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
 			Expect(job.Spec.Template.Spec.HostNetwork).To(BeTrue())
 		})
 	})
@@ -1482,7 +1496,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Tolerations).To(Equal(tolerations))
 		})
 
@@ -1499,7 +1513,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.NodeSelector).To(Equal(nodeSelector))
 		})
 
@@ -1530,7 +1544,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Affinity).To(Equal(affinity))
 		})
 	})
