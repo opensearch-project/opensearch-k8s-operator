@@ -240,8 +240,8 @@ cluster:
 
       # -- Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different
       # secret provide it via the caSecret field
-      secret:
-        # name: "
+      secret: {}
+        # name: ""
 
       # -- Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
       # This is used only when generate is true.
