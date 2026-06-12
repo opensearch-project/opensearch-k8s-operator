@@ -71,7 +71,9 @@ manager:
 
   metricsBindAddress: 127.0.0.1:8080
 
-# Install the Custom Resource Definitions with Helm
+# Install the Custom Resource Definitions with Helm.
+# CRD descriptions are stripped to keep files under the 256KB annotation limit.
+# To regenerate stripped CRDs: python3 hack/strip-crd-descriptions.py charts/opensearch-operator/files/<crd>.yaml
 installCRDs: true
 
 serviceAccount:
