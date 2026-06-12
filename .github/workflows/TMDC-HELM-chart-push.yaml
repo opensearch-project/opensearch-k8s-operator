@@ -3,18 +3,18 @@ name: TMDC Helm chart push workflow to AWS ECR
 on:
   push:
     tags:
-      - 'operator-*[0-9]+.*[0-9]+.*[0-9]-d*'
-      - 'cluster-*[0-9]+.*[0-9]+.*[0-9]-d*'
+      - 'operator-*'
+      - 'cluster-*'
 
 jobs:
   push-operator-chart:
     name: Push opensearch-operator chart to ECR
     runs-on: ubuntu-latest
     container:
-        image: rubiklabs/k8s_cli_builder:0.6.0
-        credentials:
-            username: ${{ secrets.DOCKER_HUB_USERNAME }}
-            password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+      image: rubiklabs/k8s_cli_builder:0.6.0
+      credentials:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
     permissions:
       id-token: write
@@ -53,16 +53,16 @@ jobs:
         ECR_HOST: ${{ steps.login-ecr.outputs.registry }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_ECR_REGION }}
       run: |
-          make push-oci-chart DIR=opensearch-operator
+        make push-oci-chart DIR=opensearch-operator
 
   push-cluster-chart:
     name: Push opensearch-cluster chart to ECR
     runs-on: ubuntu-latest
     container:
-        image: rubiklabs/k8s_cli_builder:0.6.0
-        credentials:
-            username: ${{ secrets.DOCKER_HUB_USERNAME }}
-            password: ${{ secrets.DOCKER_HUB_PASSWORD }}
+      image: rubiklabs/k8s_cli_builder:0.6.0
+      credentials:
+        username: ${{ secrets.DOCKER_HUB_USERNAME }}
+        password: ${{ secrets.DOCKER_HUB_PASSWORD }}
 
     permissions:
       id-token: write
@@ -101,4 +101,4 @@ jobs:
         ECR_HOST: ${{ steps.login-ecr.outputs.registry }}
         AWS_DEFAULT_REGION: ${{ secrets.AWS_ECR_REGION }}
       run: |
-          make push-oci-chart DIR=opensearch-cluster
+        make push-oci-chart DIR=opensearch-cluster
