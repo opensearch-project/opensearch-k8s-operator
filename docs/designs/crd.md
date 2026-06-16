@@ -2292,6 +2292,7 @@ _Appears in:_
 | `grpc` _[GrpcConfig](#grpcconfig)_ | gRPC API configuration for OpenSearch |  |  |
 | `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
 | `opensearchHome` _string_ | OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set. |  |  |
+| `nodeAttributes` _[NodeAttribute](#nodeattribute) array_ | NodeAttributes derives OpenSearch node attributes (node.attr.*) from<br />Kubernetes node labels at runtime. For each entry the operator injects an<br />init container that reads the label off the node hosting the pod and<br />exposes its value to OpenSearch, enabling shard allocation awareness<br />(e.g. zone or rack awareness) without splitting topology into separate<br />node pools. The pods' ServiceAccount must be allowed to "get" nodes. |  |  |
 
 
 #### GrpcConfig
@@ -2483,6 +2484,24 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `serverName` _string_ |  |  |  |
 | `insecureSkipVerify` _boolean_ |  |  |  |
+
+
+#### NodeAttribute
+
+
+
+NodeAttribute maps a Kubernetes node label onto an OpenSearch node attribute
+so that shard allocation awareness can follow the cluster's physical topology.
+
+
+
+_Appears in:_
+- [GeneralConfig](#generalconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name is the OpenSearch node attribute, i.e. the suffix after "node.attr.".<br />For zone awareness configured with<br />cluster.routing.allocation.awareness.attributes: zone this is "zone",<br />yielding the node.attr.zone setting. |  | Pattern: `^[a-zA-Z0-9][a-zA-Z0-9_.-]*$` <br />Required: \{\} <br /> |
+| `nodeLabel` _string_ | NodeLabel is the Kubernetes node label whose value is copied into the<br />attribute, e.g. "topology.kubernetes.io/zone". |  | Required: \{\} <br /> |
 
 
 #### NodePool
