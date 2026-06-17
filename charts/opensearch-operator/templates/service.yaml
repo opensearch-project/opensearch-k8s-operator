@@ -11,5 +11,8 @@ spec:
   - name: https
     port: 8443
     targetPort: https
+  - name: health
+    port: 8081
+    targetPort: health
   selector:
     {{- include "opensearch-operator.selectorLabels" . | nindent 4 }}
