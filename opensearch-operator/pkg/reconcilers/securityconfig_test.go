@@ -366,4 +366,195 @@ done;`
 			Expect(createdJob.Spec.Template.Spec.Containers[0].Args[0]).To(Equal(cmdArg))
 		})
 	})
+
+	When("Determining admin CA secret for securityconfig update job", func() {
+		It("should use HTTP caSecret for security change versions", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "ca-http", Namespace: "ca-http", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.3.0",
+					},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									CaSecret: corev1.LocalObjectReference{Name: "http-ca"},
+								},
+							},
+						},
+					},
+				},
+			}
+			underTest := &SecurityconfigReconciler{instance: &spec}
+			Expect(underTest.determineAdminCASecret("admin-secret")).To(Equal("http-ca"))
+		})
+
+		It("should return empty when CA secret equals admin secret", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "same-ca", Namespace: "same-ca", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.3.0",
+					},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									CaSecret: corev1.LocalObjectReference{Name: "admin-secret"},
+								},
+							},
+						},
+					},
+				},
+			}
+			underTest := &SecurityconfigReconciler{instance: &spec}
+			Expect(underTest.determineAdminCASecret("admin-secret")).To(BeEmpty())
+		})
+
+		It("should use transport caSecret for pre-2.0 versions", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "ca-transport", Namespace: "ca-transport", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "1.3.0",
+					},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									CaSecret: corev1.LocalObjectReference{Name: "transport-ca"},
+								},
+							},
+						},
+					},
+				},
+			}
+			underTest := &SecurityconfigReconciler{instance: &spec}
+			Expect(underTest.determineAdminCASecret("admin-secret")).To(Equal("transport-ca"))
+		})
+	})
+
+	When("Reconciling with external TLS certs and separate caSecret", func() {
+		const (
+			externalClusterName = "external-tls"
+			tlsSecretName       = "my-tls-secret"
+			caSecretName        = "my-ca-secret"
+		)
+
+		findJobVolume := func(job batchv1.Job, name string) corev1.Volume {
+			for _, volume := range job.Spec.Template.Spec.Volumes {
+				if volume.Name == name {
+					return volume
+				}
+			}
+			return corev1.Volume{}
+		}
+
+		It("should project admin-cert from TLS secret and caSecret when reconciling", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			adminCredSecret := newAdminCredentialsSecret(externalClusterName)
+			securityConfigSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: externalClusterName},
+				Type:       corev1.SecretType("Opaque"),
+				Data: map[string][]byte{
+					"config.yml": []byte(configYAML),
+				},
+			}
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: externalClusterName, Namespace: externalClusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: externalClusterName,
+						Version:     "3.5.0",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+							AdminSecret:            corev1.LocalObjectReference{Name: tlsSecretName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{
+								Generate: false,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret:   corev1.LocalObjectReference{Name: tlsSecretName},
+									CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+								},
+							},
+							Http: &opensearchv1.TlsConfigHttp{
+								Generate: false,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret:   corev1.LocalObjectReference{Name: tlsSecretName},
+									CaSecret: corev1.LocalObjectReference{Name: caSecretName},
+								},
+							},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Initialized: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+			mockClient.EXPECT().GetSecret(adminCredsName, externalClusterName).Return(adminCredSecret, nil)
+			mockClient.EXPECT().GetSecret("securityconfig-secret", externalClusterName).Return(*securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, externalClusterName)
+			mockClient.EXPECT().GetJob(externalClusterName+"-securityconfig-update", externalClusterName).Return(batchv1.Job{}, NotFoundError())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+			mockClient.On("GetSecret", generatedConfigName, externalClusterName).Return(corev1.Secret{}, NotFoundError()).Once()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, externalClusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(
+				mockClient,
+				context.Background(),
+				&reconcilerContext,
+				&spec,
+			)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(createdJob).ToNot(BeNil())
+
+			adminVolume := findJobVolume(*createdJob, "admin-cert")
+			Expect(adminVolume.Projected).ToNot(BeNil())
+			Expect(adminVolume.Projected.Sources).To(HaveLen(2))
+			Expect(adminVolume.Projected.Sources[0].Secret.Name).To(Equal(tlsSecretName))
+			Expect(adminVolume.Projected.Sources[0].Secret.Items).To(ConsistOf(
+				corev1.KeyToPath{Key: corev1.TLSCertKey, Path: corev1.TLSCertKey},
+				corev1.KeyToPath{Key: corev1.TLSPrivateKeyKey, Path: corev1.TLSPrivateKeyKey},
+			))
+			Expect(adminVolume.Projected.Sources[1].Secret.Name).To(Equal(caSecretName))
+			Expect(adminVolume.Projected.Sources[1].Secret.Items).To(ConsistOf(
+				corev1.KeyToPath{Key: "ca.crt", Path: "ca.crt"},
+			))
+
+			cmdArg := createdJob.Spec.Template.Spec.Containers[0].Args[0]
+			Expect(cmdArg).To(ContainSubstring("-cacert /certs/ca.crt"))
+			Expect(cmdArg).To(ContainSubstring("-cert /certs/tls.crt"))
+			Expect(cmdArg).To(ContainSubstring("-key /certs/tls.key"))
+		})
+	})
 })

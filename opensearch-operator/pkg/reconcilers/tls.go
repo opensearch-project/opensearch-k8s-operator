@@ -214,10 +214,7 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 }
 
 func (r *TLSReconciler) adminCAConfig() corev1.LocalObjectReference {
-	if helpers.SecurityChangeVersion(r.instance) {
-		return r.instance.Spec.Security.Tls.Http.CaSecret
-	}
-	return r.instance.Spec.Security.Tls.Transport.CaSecret
+	return helpers.TlsCASecretRef(r.instance)
 }
 
 func (r *TLSReconciler) shouldCreateAdminCert(ca tls.Cert) (bool, error) {
