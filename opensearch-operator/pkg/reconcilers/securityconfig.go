@@ -305,19 +305,7 @@ func (r *SecurityconfigReconciler) determineAdminSecret() string {
 }
 
 func (r *SecurityconfigReconciler) determineAdminCASecret(adminSecretName string) string {
-	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Tls == nil {
-		return ""
-	}
-
-	var caSecretName string
-	if helpers.SecurityChangeVersion(r.instance) {
-		if r.instance.Spec.Security.Tls.Http != nil {
-			caSecretName = r.instance.Spec.Security.Tls.Http.CaSecret.Name
-		}
-	} else if r.instance.Spec.Security.Tls.Transport != nil {
-		caSecretName = r.instance.Spec.Security.Tls.Transport.CaSecret.Name
-	}
-
+	caSecretName := helpers.TlsCASecretRef(r.instance).Name
 	// If CA comes from the same secret, keep single-secret mounting behavior.
 	if caSecretName == "" || caSecretName == adminSecretName {
 		return ""

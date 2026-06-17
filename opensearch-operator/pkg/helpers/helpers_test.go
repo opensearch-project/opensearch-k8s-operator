@@ -293,3 +293,53 @@ var _ = Describe("JVM Heap Size Functions", func() {
 		})
 	})
 })
+
+var _ = Describe("TlsCASecretRef", func() {
+	It("should return HTTP caSecret for OpenSearch 2.x", func() {
+		cluster := &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{Version: "2.3.0"},
+				Security: &opensearchv1.Security{
+					Tls: &opensearchv1.TlsConfig{
+						Http: &opensearchv1.TlsConfigHttp{
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+								CaSecret: corev1.LocalObjectReference{Name: "http-ca"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		Expect(TlsCASecretRef(cluster).Name).To(Equal("http-ca"))
+	})
+
+	It("should return transport caSecret for OpenSearch 1.x", func() {
+		cluster := &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{Version: "1.3.0"},
+				Security: &opensearchv1.Security{
+					Tls: &opensearchv1.TlsConfig{
+						Transport: &opensearchv1.TlsConfigTransport{
+							TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+								CaSecret: corev1.LocalObjectReference{Name: "transport-ca"},
+							},
+						},
+					},
+				},
+			},
+		}
+
+		Expect(TlsCASecretRef(cluster).Name).To(Equal("transport-ca"))
+	})
+
+	It("should return empty when TLS is not configured", func() {
+		cluster := &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{Version: "2.3.0"},
+			},
+		}
+
+		Expect(TlsCASecretRef(cluster).Name).To(BeEmpty())
+	})
+})
