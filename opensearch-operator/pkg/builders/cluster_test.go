@@ -1684,6 +1684,40 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("configuring persistentVolumeClaimRetentionPolicy for the cluster", func() {
+		It("should set the retention policy on the statefulset when configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.PersistentVolumeClaimRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+				WhenDeleted: ptr.To(appsv1.DeletePersistentVolumeClaimRetentionPolicyType),
+				WhenScaled:  ptr.To(appsv1.RetainPersistentVolumeClaimRetentionPolicyType),
+			}
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy).NotTo(BeNil())
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted).To(Equal(ptr.To(appsv1.DeletePersistentVolumeClaimRetentionPolicyType)))
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled).To(Equal(ptr.To(appsv1.RetainPersistentVolumeClaimRetentionPolicyType)))
+		})
+
+		It("should not set the retention policy on the statefulset when not configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy).To(BeNil())
+		})
+	})
+
 	When("Configuring Security Config UpdateJob Tolerations", func() {
 		It("should propagate Tolerations to the Security Config UpdateJob", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
