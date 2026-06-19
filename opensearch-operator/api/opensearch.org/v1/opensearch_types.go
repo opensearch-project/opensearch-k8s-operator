@@ -19,6 +19,7 @@ package v1
 import (
 	"strings"
 
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,6 +84,8 @@ type GeneralConfig struct {
 	Grpc *GrpcConfig `json:"grpc,omitempty"`
 	// HostNetwork enables host networking for all pods in the cluster.
 	HostNetwork bool `json:"hostNetwork,omitempty"`
+	// Set the retention policy for the cluster PVCs
+	PersistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
 	// OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set.
 	OpenSearchHome string `json:"opensearchHome,omitempty"`
 }

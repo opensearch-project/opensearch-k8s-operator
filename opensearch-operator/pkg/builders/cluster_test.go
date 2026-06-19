@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1460,6 +1461,40 @@ var _ = Describe("Builders", func() {
 
 			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "cmd", nil, nil)
 			Expect(job.Spec.Template.Spec.HostNetwork).To(BeTrue())
+		})
+	})
+
+	When("configuring persistentVolumeClaimRetentionPolicy for the cluster", func() {
+		It("should set the retention policy on the statefulset when configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.PersistentVolumeClaimRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+				WhenDeleted: ptr.To(appsv1.DeletePersistentVolumeClaimRetentionPolicyType),
+				WhenScaled:  ptr.To(appsv1.RetainPersistentVolumeClaimRetentionPolicyType),
+			}
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy).NotTo(BeNil())
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted).To(Equal(ptr.To(appsv1.DeletePersistentVolumeClaimRetentionPolicyType)))
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled).To(Equal(ptr.To(appsv1.RetainPersistentVolumeClaimRetentionPolicyType)))
+		})
+
+		It("should not set the retention policy on the statefulset when not configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy).To(BeNil())
 		})
 	})
 
