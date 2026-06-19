@@ -1,6 +1,11 @@
 package v1
 
 import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+	"strings"
+
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -152,13 +157,114 @@ type AliasDetails struct {
 
 type Allocation struct {
 	// Allocate the index to a node with a specified attribute.
-	Exclude map[string]string `json:"exclude"`
+	// +optional
+	Exclude map[string]string `json:"exclude,omitempty"`
 	// Allocate the index to a node with any of the specified attributes.
-	Include map[string]string `json:"include"`
+	// +optional
+	Include map[string]string `json:"include,omitempty"`
 	// Don’t allocate the index to a node with any of the specified attributes.
-	Require map[string]string `json:"require"`
+	// +optional
+	Require map[string]string `json:"require,omitempty"`
 	// Wait for the policy to execute before allocating the index to a node with a specified attribute.
-	WaitFor bool `json:"waitFor"`
+	// +optional
+	WaitFor *bool `json:"waitFor,omitempty"`
+}
+
+func parseAllocationString(s string) map[string]string {
+	res := make(map[string]string)
+	parts := strings.Split(s, ",")
+	for _, part := range parts {
+		kv := strings.SplitN(part, ":", 2)
+		if len(kv) == 2 {
+			res[strings.TrimSpace(kv[0])] = strings.TrimSpace(kv[1])
+		} else if len(kv) == 1 && strings.TrimSpace(kv[0]) != "" {
+			res[strings.TrimSpace(kv[0])] = ""
+		}
+	}
+	return res
+}
+
+func (a *Allocation) UnmarshalJSON(data []byte) error {
+	type Alias Allocation
+	aux := &struct {
+		Exclude json.RawMessage `json:"exclude,omitempty"`
+		Include json.RawMessage `json:"include,omitempty"`
+		Require json.RawMessage `json:"require,omitempty"`
+		WaitFor json.RawMessage `json:"waitFor,omitempty"`
+		*Alias
+	}{
+		Alias: (*Alias)(a),
+	}
+
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+
+	if len(aux.Exclude) > 0 {
+		var str string
+		if err := json.Unmarshal(aux.Exclude, &str); err == nil {
+			if str != "" {
+				a.Exclude = parseAllocationString(str)
+			}
+		} else {
+			var m map[string]string
+			if err := json.Unmarshal(aux.Exclude, &m); err != nil {
+				return err
+			}
+			a.Exclude = m
+		}
+	}
+
+	if len(aux.Include) > 0 {
+		var str string
+		if err := json.Unmarshal(aux.Include, &str); err == nil {
+			if str != "" {
+				a.Include = parseAllocationString(str)
+			}
+		} else {
+			var m map[string]string
+			if err := json.Unmarshal(aux.Include, &m); err != nil {
+				return err
+			}
+			a.Include = m
+		}
+	}
+
+	if len(aux.Require) > 0 {
+		var str string
+		if err := json.Unmarshal(aux.Require, &str); err == nil {
+			if str != "" {
+				a.Require = parseAllocationString(str)
+			}
+		} else {
+			var m map[string]string
+			if err := json.Unmarshal(aux.Require, &m); err != nil {
+				return err
+			}
+			a.Require = m
+		}
+	}
+
+	if len(aux.WaitFor) > 0 {
+		var b bool
+		if err := json.Unmarshal(aux.WaitFor, &b); err == nil {
+			a.WaitFor = &b
+		} else {
+			var str string
+			if err := json.Unmarshal(aux.WaitFor, &str); err == nil {
+				parsedBool, err := strconv.ParseBool(str)
+				if err == nil {
+					a.WaitFor = &parsedBool
+				} else {
+					return fmt.Errorf("invalid value for waitFor: %s", str)
+				}
+			} else {
+				return fmt.Errorf("invalid type for waitFor, expected boolean or string")
+			}
+		}
+	}
+
+	return nil
 }
 
 type Close struct{}

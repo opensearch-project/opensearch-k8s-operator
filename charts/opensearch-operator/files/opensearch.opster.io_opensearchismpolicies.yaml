@@ -210,11 +210,6 @@ spec:
                                   allocating the index to a node with a specified
                                   attribute.
                                 type: boolean
-                            required:
-                            - exclude
-                            - include
-                            - require
-                            - waitFor
                             type: object
                           close:
                             description: Closes the managed index.

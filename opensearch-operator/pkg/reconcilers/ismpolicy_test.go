@@ -615,6 +615,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 		When("an Allocation action is configured correctly", func() {
 			BeforeEach(func() {
+				waitFor := true
 				instance.Spec.States = []opensearchv1.State{
 					{
 						Name: "hot",
@@ -624,7 +625,7 @@ var _ = Describe("ism policy reconciler", func() {
 									Require: map[string]string{"box_type": "hot"},
 									Exclude: map[string]string{"box_type": "cold"},
 									Include: map[string]string{"box_type": "warm"},
-									WaitFor: true,
+									WaitFor: &waitFor,
 								},
 							},
 						},
@@ -641,7 +642,8 @@ var _ = Describe("ism policy reconciler", func() {
 				Expect(policy.States[0].Actions[0].Allocation.Require).To(Equal(map[string]string{"box_type": "hot"}))
 				Expect(policy.States[0].Actions[0].Allocation.Exclude).To(Equal(map[string]string{"box_type": "cold"}))
 				Expect(policy.States[0].Actions[0].Allocation.Include).To(Equal(map[string]string{"box_type": "warm"}))
-				Expect(policy.States[0].Actions[0].Allocation.WaitFor).To(BeTrue())
+				Expect(policy.States[0].Actions[0].Allocation.WaitFor).ToNot(BeNil())
+				Expect(*policy.States[0].Actions[0].Allocation.WaitFor).To(BeTrue())
 			})
 		})
 	})
