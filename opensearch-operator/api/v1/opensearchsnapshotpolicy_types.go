@@ -17,7 +17,6 @@ limitations under the License.
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -35,14 +34,14 @@ const (
 )
 
 type OpensearchSnapshotPolicySpec struct {
-	OpensearchRef  OpensearchClusterRef `json:"opensearchCluster"`
-	PolicyName     string                 `json:"policyName"`
-	Description    *string                `json:"description,omitempty"`
-	Enabled        *bool                  `json:"enabled,omitempty"`
-	SnapshotConfig SnapshotConfig         `json:"snapshotConfig"`
-	Creation       SnapshotCreation       `json:"creation"`
-	Deletion       *SnapshotDeletion      `json:"deletion,omitempty"`
-	Notification   *SnapshotNotification  `json:"notification,omitempty"`
+	OpensearchRef  OpensearchClusterRef  `json:"opensearchCluster"`
+	PolicyName     string                `json:"policyName"`
+	Description    *string               `json:"description,omitempty"`
+	Enabled        *bool                 `json:"enabled,omitempty"`
+	SnapshotConfig SnapshotConfig        `json:"snapshotConfig"`
+	Creation       SnapshotCreation      `json:"creation"`
+	Deletion       *SnapshotDeletion     `json:"deletion,omitempty"`
+	Notification   *SnapshotNotification `json:"notification,omitempty"`
 }
 
 type SnapshotConfig struct {

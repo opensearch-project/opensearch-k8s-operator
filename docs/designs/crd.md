@@ -833,7 +833,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `defaultState` _string_ | The default starting state for each index that uses this policy. |  |  |
 | `description` _string_ | A human-readable description of the policy. |  |  |
 | `applyToExistingIndices` _boolean_ | If true, apply the policy to existing indices that match the index patterns in the ISM template. |  |  |
@@ -874,12 +874,37 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `allowedActions` _string array_ |  |  |  |
 | `type` _string_ |  |  |  |
 | `description` _string_ |  |  |  |
 
 
+
+
+#### OpensearchClusterRef
+
+
+
+OpensearchClusterRef is a reference to an OpenSearchCluster resource.
+
+
+
+_Appears in:_
+- [OpenSearchISMPolicySpec](#opensearchismpolicyspec)
+- [OpensearchActionGroupSpec](#opensearchactiongroupspec)
+- [OpensearchComponentTemplateSpec](#opensearchcomponenttemplatespec)
+- [OpensearchIndexTemplateSpec](#opensearchindextemplatespec)
+- [OpensearchRoleSpec](#opensearchrolespec)
+- [OpensearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
+- [OpensearchTenantSpec](#opensearchtenantspec)
+- [OpensearchUserRoleBindingSpec](#opensearchuserrolebindingspec)
+- [OpensearchUserSpec](#opensearchuserspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name of the OpenSearch cluster. |  | Required: \{\} <br /> |
+| `namespace` _string_ | Namespace of the OpenSearch cluster. Defaults to the resource's own namespace. |  |  |
 
 
 
@@ -915,7 +940,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `name` _string_ | The name of the component template. Defaults to metadata.name |  |  |
 | `template` _[OpensearchIndexSpec](#opensearchindexspec)_ | The template that should be applied |  |  |
 | `version` _integer_ | Version number used to manage the component template externally |  |  |
@@ -1029,7 +1054,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `name` _string_ | The name of the index template. Defaults to metadata.name |  |  |
 | `indexPatterns` _string array_ | Array of wildcard expressions used to match the names of indices during creation |  |  |
 | `dataStream` _[OpensearchDatastreamSpec](#opensearchdatastreamspec)_ | The dataStream config that should be applied |  |  |
@@ -1073,7 +1098,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `clusterPermissions` _string array_ |  |  |  |
 | `indexPermissions` _[IndexPermissionSpec](#indexpermissionspec) array_ |  |  |  |
 | `tenantPermissions` _[TenantPermissionsSpec](#tenantpermissionsspec) array_ |  |  |  |
@@ -1112,7 +1137,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `policyName` _string_ |  |  |  |
 | `description` _string_ |  |  |  |
 | `enabled` _boolean_ |  |  |  |
@@ -1155,7 +1180,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `description` _string_ |  |  |  |
 
 
@@ -1210,7 +1235,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `roles` _string array_ |  |  |  |
 | `users` _string array_ |  |  |  |
 | `backendRoles` _string array_ |  |  |  |
@@ -1231,7 +1256,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `passwordFrom` _[SecretKeySelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#secretkeyselector-v1-core)_ |  |  |  |
 | `opendistroSecurityRoles` _string array_ |  |  |  |
 | `backendRoles` _string array_ |  |  |  |
@@ -2635,7 +2660,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `defaultState` _string_ | The default starting state for each index that uses this policy. |  |  |
 | `description` _string_ | A human-readable description of the policy. |  |  |
 | `applyToExistingIndices` _boolean_ | If true, apply the policy to existing indices that match the index patterns in the ISM template. |  |  |
@@ -2676,12 +2701,37 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `allowedActions` _string array_ |  |  |  |
 | `type` _string_ |  |  |  |
 | `description` _string_ |  |  |  |
 
 
+
+
+#### OpensearchClusterRef
+
+
+
+OpensearchClusterRef is a reference to an OpenSearchCluster resource.
+
+
+
+_Appears in:_
+- [OpenSearchISMPolicySpec](#opensearchismpolicyspec)
+- [OpensearchActionGroupSpec](#opensearchactiongroupspec)
+- [OpensearchComponentTemplateSpec](#opensearchcomponenttemplatespec)
+- [OpensearchIndexTemplateSpec](#opensearchindextemplatespec)
+- [OpensearchRoleSpec](#opensearchrolespec)
+- [OpensearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
+- [OpensearchTenantSpec](#opensearchtenantspec)
+- [OpensearchUserRoleBindingSpec](#opensearchuserrolebindingspec)
+- [OpensearchUserSpec](#opensearchuserspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name of the OpenSearch cluster. |  | Required: \{\} <br /> |
+| `namespace` _string_ | Namespace of the OpenSearch cluster. Defaults to the resource's own namespace. |  |  |
 
 
 
@@ -2717,7 +2767,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `name` _string_ | The name of the component template. Defaults to metadata.name |  |  |
 | `template` _[OpensearchIndexSpec](#opensearchindexspec)_ | The template that should be applied |  |  |
 | `version` _integer_ | Version number used to manage the component template externally |  |  |
@@ -2831,7 +2881,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `name` _string_ | The name of the index template. Defaults to metadata.name |  |  |
 | `indexPatterns` _string array_ | Array of wildcard expressions used to match the names of indices during creation |  |  |
 | `dataStream` _[OpensearchDatastreamSpec](#opensearchdatastreamspec)_ | The dataStream config that should be applied |  |  |
@@ -2875,7 +2925,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `clusterPermissions` _string array_ |  |  |  |
 | `indexPermissions` _[IndexPermissionSpec](#indexpermissionspec) array_ |  |  |  |
 | `tenantPermissions` _[TenantPermissionsSpec](#tenantpermissionsspec) array_ |  |  |  |
@@ -2914,7 +2964,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `policyName` _string_ |  |  |  |
 | `description` _string_ |  |  |  |
 | `enabled` _boolean_ |  |  |  |
@@ -2957,7 +3007,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `description` _string_ |  |  |  |
 
 
@@ -3012,7 +3062,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `roles` _string array_ |  |  |  |
 | `users` _string array_ |  |  |  |
 | `backendRoles` _string array_ |  |  |  |
@@ -3033,7 +3083,7 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `opensearchCluster` _OpensearchClusterRef_ |  |  |  |
+| `opensearchCluster` _[OpensearchClusterRef](#opensearchclusterref)_ |  |  |  |
 | `passwordFrom` _[SecretKeySelector](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#secretkeyselector-v1-core)_ |  |  |  |
 | `opendistroSecurityRoles` _string array_ |  |  |  |
 | `backendRoles` _string array_ |  |  |  |

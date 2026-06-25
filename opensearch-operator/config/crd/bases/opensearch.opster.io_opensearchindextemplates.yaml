@@ -81,8 +81,8 @@ spec:
                     description: Name of the OpenSearch cluster.
                     type: string
                   namespace:
-                    description: Namespace of the OpenSearch cluster. Defaults to the
-                      resource's own namespace.
+                    description: Namespace of the OpenSearch cluster. Defaults to
+                      the resource's own namespace.
                     type: string
                 required:
                 - name

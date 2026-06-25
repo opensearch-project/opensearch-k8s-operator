@@ -32,7 +32,7 @@ const (
 
 // OpensearchUserSpec defines the desired state of OpensearchUser
 type OpensearchUserSpec struct {
-	OpensearchRef           OpensearchClusterRef   `json:"opensearchCluster"`
+	OpensearchRef           OpensearchClusterRef     `json:"opensearchCluster"`
 	PasswordFrom            corev1.SecretKeySelector `json:"passwordFrom"`
 	OpendistroSecurityRoles []string                 `json:"opendistroSecurityRoles,omitempty"`
 	BackendRoles            []string                 `json:"backendRoles,omitempty"`
