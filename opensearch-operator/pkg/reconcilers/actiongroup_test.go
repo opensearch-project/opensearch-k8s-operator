@@ -47,7 +47,7 @@ var _ = Describe("actiongroup reconciler", func() {
 				UID:       "testuid",
 			},
 			Spec: opensearchv1.OpensearchActionGroupSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: opensearchv1.OpensearchClusterRef{
 					Name: "test-cluster",
 				},
 				AllowedActions: []string{

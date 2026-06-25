@@ -1,7 +1,6 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -17,10 +16,10 @@ const (
 
 // OpensearchActionGroupSpec defines the desired state of OpensearchActionGroup
 type OpensearchActionGroupSpec struct {
-	OpensearchRef  corev1.LocalObjectReference `json:"opensearchCluster"`
-	AllowedActions []string                    `json:"allowedActions"`
-	Type           string                      `json:"type,omitempty"`
-	Description    string                      `json:"description,omitempty"`
+	OpensearchRef  OpensearchClusterRef `json:"opensearchCluster"`
+	AllowedActions []string               `json:"allowedActions"`
+	Type           string                 `json:"type,omitempty"`
+	Description    string                 `json:"description,omitempty"`
 }
 
 // OpensearchActionGroupStatus defines the observed state of OpensearchActionGroup
@@ -54,7 +53,7 @@ type OpensearchActionGroupList struct {
 }
 
 // GetOpensearchRef returns the OpenSearch cluster reference
-func (ag *OpensearchActionGroup) GetOpensearchRef() corev1.LocalObjectReference {
+func (ag *OpensearchActionGroup) GetOpensearchRef() OpensearchClusterRef {
 	return ag.Spec.OpensearchRef
 }
 

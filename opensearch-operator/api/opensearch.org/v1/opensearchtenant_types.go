@@ -1,7 +1,6 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -17,8 +16,8 @@ const (
 
 // OpensearchTenantSpec defines the desired state of OpensearchTenant
 type OpensearchTenantSpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
-	Description   string                      `json:"description,omitempty"`
+	OpensearchRef OpensearchClusterRef `json:"opensearchCluster"`
+	Description   string                 `json:"description,omitempty"`
 }
 
 // OpensearchTenantStatus defines the observed state of OpensearchTenant
@@ -52,7 +51,7 @@ type OpensearchTenantList struct {
 }
 
 // GetOpensearchRef returns the OpenSearch cluster reference
-func (t *OpensearchTenant) GetOpensearchRef() corev1.LocalObjectReference {
+func (t *OpensearchTenant) GetOpensearchRef() OpensearchClusterRef {
 	return t.Spec.OpensearchRef
 }
 
