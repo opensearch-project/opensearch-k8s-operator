@@ -48,7 +48,7 @@ var _ = Describe("ism policy reconciler", func() {
 			},
 			Spec: opensearchv1.OpenSearchISMPolicySpec{
 				PolicyID: "test-policy",
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: opensearchv1.OpensearchClusterRef{
 					Name: "test-cluster",
 				},
 			},

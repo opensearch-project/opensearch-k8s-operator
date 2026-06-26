@@ -1,7 +1,6 @@
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -39,7 +38,7 @@ type OpensearchIndexTemplateStatus struct {
 }
 
 type OpensearchIndexTemplateSpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
+	OpensearchRef OpensearchClusterRef `json:"opensearchCluster"`
 
 	// The name of the index template. Defaults to metadata.name
 	// +immutable

@@ -1734,6 +1734,27 @@ spec:
   # ...
 ```
 
+### Referencing OpensearchCluster in another namespace
+
+The operator allows referencing a cluster in a different namespace on all resources.
+
+**Note:** This only works when the operator is deployed with cluster-scoped or multi-namespace watch mode and has RBAC permissions covering the referenced namespace. If the operator runs in single-namespace watch mode, validation and reconciliation will fail because the operator cannot read `OpenSearchCluster` objects in other namespaces.
+
+Define the `spec.opensearchCluster.namespace` property on any resource referencing an Opensearch cluster.
+When not defined, the default value will be the namespace of the resource.
+
+```yaml
+apiVersion: opensearch.org/v1
+kind: OpensearchTenant
+metadata:
+  name: sample-tenant
+  namespace: default
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+    namespace: another-namespace
+```
+
 ### Managing ISM policies with Kubernetes resources
 
 The operator provides a custom Kubernetes resource that allow you to create/update/manage ISM policies using Kubernetes objects.
@@ -1881,7 +1902,7 @@ The OpenSearch Operator provides a custom Kubernetes resource to create, update,
 
 Fields in the CRD map directly to the OpenSearch snapshot policy structure, allowing seamless integration. Policies are not modified if they already exist in OpenSearch. You can define a new policy using the following example:
 
-```
+```yaml
 apiVersion: opensearch.org/v1
 kind: OpensearchSnapshotPolicy
 metadata:

@@ -1920,8 +1920,9 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of secret, configMap, emptyDir, csi,
-                          projected, nfs, hostPath must be set
-                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
+                          persistentVolumeClaim, projected, nfs, hostPath must be
+                          set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.persistentVolumeClaim)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
                           == 1
                     type: array
                   affinity:
@@ -3039,6 +3040,11 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  opensearchDashboardsHome:
+                    description: OpenSearch Dashboards installation directory inside
+                      the container. Defaults to /usr/share/opensearch-dashboards
+                      if not set.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -4460,8 +4466,9 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of secret, configMap, emptyDir, csi,
-                          projected, nfs, hostPath must be set
-                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
+                          persistentVolumeClaim, projected, nfs, hostPath must be
+                          set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.persistentVolumeClaim)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
                           == 1
                     type: array
                   annotations:
@@ -4640,6 +4647,10 @@ spec:
                             type: string
                         type: object
                     type: object
+                  opensearchHome:
+                    description: OpenSearch installation directory inside the container.
+                      Defaults to /usr/share/opensearch if not set.
+                    type: string
                   operatorClusterURL:
                     description: |-
                       Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
@@ -6745,6 +6756,28 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      operatorClientCert:
+                        description: |-
+                          Optional kubernetes.io/tls secret (tls.crt, tls.key, optional ca.crt) used by the operator's runtime REST client to authenticate to the OpenSearch HTTP API via mTLS instead of basic auth.
+                          The certificate's DN must be mapped to a user/role with the necessary privileges in the OpenSearch security configuration (e.g. via plugins.security.authcz.admin_dn or a clientcert auth domain).
+                          When set, the operator omits basic-auth credentials from outgoing requests. If ca.crt is present in the secret, it is used to verify the OpenSearch HTTP server certificate; otherwise TLS verification is skipped.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      operatorClientServerName:
+                        description: |-
+                          Optional. Overrides the TLS SNI / ServerName used when verifying the OpenSearch HTTP server certificate.
+                          Defaults to the host portion of the cluster URL.
+                        type: string
                       securityConfigSecret:
                         description: |-
                           Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).

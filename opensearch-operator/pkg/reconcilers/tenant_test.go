@@ -47,7 +47,7 @@ var _ = Describe("tenant reconciler", func() {
 				UID:       "testuid",
 			},
 			Spec: opensearchv1.OpensearchTenantSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: opensearchv1.OpensearchClusterRef{
 					Name: "test-cluster",
 				},
 				Description: "test-description",

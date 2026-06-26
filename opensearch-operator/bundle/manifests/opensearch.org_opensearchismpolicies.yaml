@@ -104,21 +104,19 @@ spec:
                 - indexPatterns
                 type: object
               opensearchCluster:
-                description: |-
-                  LocalObjectReference contains enough information to let you locate the
-                  referenced object inside the same namespace.
+                description: OpensearchClusterRef is a reference to an OpenSearchCluster
+                  resource.
                 properties:
                   name:
-                    default: ""
-                    description: |-
-                      Name of the referent.
-                      This field is effectively required, but due to backwards compatibility is
-                      allowed to be empty. Instances of this type with an empty value here are
-                      almost certainly wrong.
-                      More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                    description: Name of the OpenSearch cluster.
                     type: string
+                  namespace:
+                    description: Namespace of the OpenSearch cluster. Defaults to the
+                      resource's own namespace.
+                    type: string
+                required:
+                - name
                 type: object
-                x-kubernetes-map-type: atomic
               policyId:
                 type: string
               states:

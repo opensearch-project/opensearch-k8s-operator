@@ -23,6 +23,7 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	util "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -85,11 +86,13 @@ func (v *OpenSearchComponentTemplateValidator) ValidateDelete(ctx context.Contex
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
 func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx context.Context, componentTemplate *opensearchv1.OpensearchComponentTemplate) error {
+	namespace := util.DetermineClusterNamespace(componentTemplate.Spec.OpensearchRef, componentTemplate.Namespace)
+
 	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
 		Name:      componentTemplate.Spec.OpensearchRef.Name,
-		Namespace: componentTemplate.Namespace,
+		Namespace: namespace,
 	}, cluster)
 
 	if err != nil {
@@ -97,9 +100,9 @@ func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx cont
 		oldCluster := &opsterv1.OpenSearchCluster{}
 		if err := v.Client.Get(ctx, types.NamespacedName{
 			Name:      componentTemplate.Spec.OpensearchRef.Name,
-			Namespace: componentTemplate.Namespace,
+			Namespace: namespace,
 		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", componentTemplate.Spec.OpensearchRef.Name, err)
+			return fmt.Errorf("referenced OpenSearch cluster '%s' in namespace '%s' not found: %w", componentTemplate.Spec.OpensearchRef.Name, namespace, err)
 		}
 	}
 
@@ -108,7 +111,7 @@ func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx cont
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
 func (v *OpenSearchComponentTemplateValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchComponentTemplate) error {
-	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
+	if !util.OpensearchClusterRefUnchanged(old.Spec.OpensearchRef, new.Spec.OpensearchRef) {
 		return fmt.Errorf("cannot change the cluster a component template refers to")
 	}
 	return nil

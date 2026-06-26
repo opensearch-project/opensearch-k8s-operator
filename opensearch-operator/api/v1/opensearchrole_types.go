@@ -17,7 +17,6 @@ limitations under the License.
 package v1
 
 import (
-	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -33,10 +32,10 @@ const (
 
 // OpensearchRoleSpec defines the desired state of OpensearchRole
 type OpensearchRoleSpec struct {
-	OpensearchRef      corev1.LocalObjectReference `json:"opensearchCluster"`
-	ClusterPermissions []string                    `json:"clusterPermissions,omitempty"`
-	IndexPermissions   []IndexPermissionSpec       `json:"indexPermissions,omitempty"`
-	TenantPermissions  []TenantPermissionsSpec     `json:"tenantPermissions,omitempty"`
+	OpensearchRef      OpensearchClusterRef    `json:"opensearchCluster"`
+	ClusterPermissions []string                `json:"clusterPermissions,omitempty"`
+	IndexPermissions   []IndexPermissionSpec   `json:"indexPermissions,omitempty"`
+	TenantPermissions  []TenantPermissionsSpec `json:"tenantPermissions,omitempty"`
 }
 
 type IndexPermissionSpec struct {
@@ -83,7 +82,7 @@ type OpensearchRoleList struct {
 }
 
 // GetOpensearchRef returns the OpenSearch cluster reference
-func (r *OpensearchRole) GetOpensearchRef() corev1.LocalObjectReference {
+func (r *OpensearchRole) GetOpensearchRef() OpensearchClusterRef {
 	return r.Spec.OpensearchRef
 }
 

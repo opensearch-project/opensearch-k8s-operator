@@ -46,7 +46,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 				UID:       types.UID("testuid"),
 			},
 			Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+				OpensearchRef: opensearchv1.OpensearchClusterRef{
 					Name: "test-cluster",
 				},
 				Users: []string{
