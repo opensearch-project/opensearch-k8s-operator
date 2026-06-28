@@ -298,6 +298,9 @@ func (r *RollingRestartReconciler) globalCandidateRollingRestart() (ctrl.Result,
 			// If still master and unsafe, requeue and wait
 			if next.isMaster && readyMasters <= minRequired {
 				r.logger.Info("No safe non-master candidates, requeuing to wait for quorum")
+				if err := r.updateStatusWithConditions(statusInProgress, []string{fmt.Sprintf("Waiting for cluster-manager quorum before restarting %s: ready=%d total=%d", next.podName, readyMasters, totalMasters)}); err != nil {
+					return ctrl.Result{}, err
+				}
 				return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 			}
 		} else {
@@ -367,12 +370,19 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 		r.logger.Info("Only 2 data nodes and drain is set, some shards may not drain")
 	}
 
-	ready, message, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
+	ready, message, err := services.CheckClusterStatusForRestart(
+		r.osClient,
+		r.instance.Spec.General.DrainDataNodes,
+		r.instance.Spec.General.GetRollingRestartHealthGatePolicy() == opensearchv1.RollingRestartHealthGatePolicyGreenOrRecoverableYellow,
+	)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !ready {
 		r.logger.Info(fmt.Sprintf("Couldn't proceed with rolling restart for Pod %s because %s", c.podName, message))
+		if err := r.updateStatusWithConditions(statusInProgress, []string{fmt.Sprintf("Waiting for restart health gate before restarting %s: %s", c.podName, message)}); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 	}
 
@@ -382,6 +392,9 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 		return ctrl.Result{}, err
 	}
 	if !ready {
+		if err := r.updateStatusWithConditions(statusInProgress, []string{fmt.Sprintf("Waiting for pod %s to drain", c.podName)}); err != nil {
+			return ctrl.Result{}, err
+		}
 		return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 	}
 
@@ -402,20 +415,25 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 }
 
 func (r *RollingRestartReconciler) updateStatus(status string) error {
+	return r.updateStatusWithConditions(status, nil)
+}
+
+func (r *RollingRestartReconciler) updateStatusWithConditions(status string, conditions []string) error {
 	return UpdateComponentStatus(r.client, r.instance, &opensearchv1.ComponentStatus{
 		Component:   componentName,
 		Status:      status,
 		Description: "",
+		Conditions:  conditions,
 	})
 }
 
 func (r *RollingRestartReconciler) findStatus() *opensearchv1.ComponentStatus {
 	comp := r.instance.Status.ComponentsStatus
-	_, found := helpers.FindFirstPartial(comp, opensearchv1.ComponentStatus{
+	status, found := helpers.FindFirstPartial(comp, opensearchv1.ComponentStatus{
 		Component: componentName,
 	}, helpers.GetByComponent)
 	if found {
-		return &comp[0]
+		return &status
 	}
 	return nil
 }

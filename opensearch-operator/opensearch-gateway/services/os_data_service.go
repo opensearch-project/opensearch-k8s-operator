@@ -215,7 +215,7 @@ func createClusterSettingsAllocationEnable(enable ClusterSettingsAllocation) res
 	}}
 }
 
-func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bool, string, error) {
+func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool, allowRecoverableYellow bool) (bool, string, error) {
 	health, err := service.GetHealth()
 	if err != nil {
 		return false, "failed to fetch health", err
@@ -238,6 +238,31 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 		if safeToRestart {
 			return true, "", nil
 		}
+
+		if allowRecoverableYellow {
+			if !drainNodes {
+				flatSettings, err := service.GetFlatClusterSettings()
+				if err != nil {
+					return false, "could not fetch cluster settings", err
+				}
+
+				if flatSettings.Transient.ClusterRoutingAllocationEnable != string(ClusterSettingsAllocationAll) {
+					if err := SetClusterShardAllocation(service, ClusterSettingsAllocationAll); err != nil {
+						return false, "failed to set shard allocation", err
+					}
+					return false, "enabled shard allocation", nil
+				}
+			}
+
+			safeToRestart, reason, err := CheckClusterRecoverableYellow(service, health)
+			if err != nil {
+				return false, "", err
+			}
+			if safeToRestart {
+				return true, "", nil
+			}
+			return false, fmt.Sprintf("recoverable yellow policy blocked restart: %s", reason), nil
+		}
 	}
 
 	if drainNodes {
@@ -259,6 +284,61 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 	}
 
 	return false, "enabled shard allocation", nil
+}
+
+func CheckClusterRecoverableYellow(service *OsClusterClient, health responses.ClusterHealthResponse) (bool, string, error) {
+	shards, err := service.CatShards([]string{})
+	if err != nil {
+		return false, "", err
+	}
+	return checkClusterRecoverableYellowFromResponses(health, shards)
+}
+
+func checkClusterRecoverableYellowFromResponses(health responses.ClusterHealthResponse, shards []responses.CatShardsResponse) (bool, string, error) {
+	if health.Status != "yellow" {
+		return false, fmt.Sprintf("cluster health is %s, not yellow", health.Status), nil
+	}
+
+	if health.RelocatingShards > 0 || health.InitializingShards > 0 {
+		return false, fmt.Sprintf("shard movement is in progress: relocating=%d initializing=%d", health.RelocatingShards, health.InitializingShards), nil
+	}
+
+	if len(health.Indices) == 0 {
+		return false, "index-level health is unavailable", nil
+	}
+
+	for index, indexHealth := range health.Indices {
+		if indexHealth.ActivePrimaryShards < indexHealth.NumberOfShards {
+			return false, fmt.Sprintf("index %s has inactive primary shards: active=%d expected=%d", index, indexHealth.ActivePrimaryShards, indexHealth.NumberOfShards), nil
+		}
+	}
+
+	unassignedReplicaCount := 0
+	for _, shard := range shards {
+		if !strings.EqualFold(shard.State, "UNASSIGNED") {
+			if strings.EqualFold(shard.PrimaryOrReplica, "p") && !strings.EqualFold(shard.State, "STARTED") {
+				return false, fmt.Sprintf("primary shard %s[%s] is %s", shard.Index, shard.Shard, shard.State), nil
+			}
+			continue
+		}
+
+		if strings.EqualFold(shard.PrimaryOrReplica, "p") {
+			return false, fmt.Sprintf("primary shard %s[%s] is unassigned", shard.Index, shard.Shard), nil
+		}
+		if !strings.EqualFold(shard.PrimaryOrReplica, "r") {
+			return false, fmt.Sprintf("shard %s[%s] has unknown primary/replica marker %q", shard.Index, shard.Shard, shard.PrimaryOrReplica), nil
+		}
+		unassignedReplicaCount++
+	}
+
+	if health.UnassignedShards == 0 {
+		return false, "yellow health has no unassigned replicas to explain it", nil
+	}
+	if unassignedReplicaCount != health.UnassignedShards {
+		return false, fmt.Sprintf("could not verify all unassigned shards are replicas: health reports %d unassigned, cat shards found %d unassigned replicas", health.UnassignedShards, unassignedReplicaCount), nil
+	}
+
+	return true, "", nil
 }
 
 func ReactivateShardAllocation(service *OsClusterClient) error {

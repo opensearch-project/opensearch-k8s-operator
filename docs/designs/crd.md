@@ -509,6 +509,7 @@ _Appears in:_
 | `drainDataNodes` _boolean_ | Drain data nodes controls whether to drain data notes on rolling restart operations |  |  |
 | `pluginsList` _string array_ |  |  |  |
 | `command` _string_ |  |  |  |
+| `rollingRestart` _[RollingRestartConfig](#rollingrestartconfig)_ | RollingRestart controls operator-managed pod restart behavior. |  |  |
 | `additionalVolumes` _[AdditionalVolume](#additionalvolume) array_ | Additional volumes to mount to all pods in the cluster |  |  |
 | `monitoring` _[MonitoringConfig](#monitoringconfig)_ |  |  |  |
 | `keystore` _[KeystoreValue](#keystorevalue) array_ | Populate opensearch keystore before startup |  |  |
@@ -1409,6 +1410,40 @@ _Appears in:_
 | `delay` _string_ | The time to wait between retries. |  |  |
 
 
+#### RollingRestartConfig
+
+
+
+
+
+
+
+_Appears in:_
+- [GeneralConfig](#generalconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `healthGatePolicy` _[RollingRestartHealthGatePolicy](#rollingrestarthealthgatepolicy)_ | HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.<br />Defaults to GreenOnly, which preserves the existing restart health gate. |  | Enum: [GreenOnly GreenOrRecoverableYellow] <br /> |
+
+
+#### RollingRestartHealthGatePolicy
+
+_Underlying type:_ _string_
+
+RollingRestartHealthGatePolicy controls which OpenSearch health states allow
+the operator to continue operator-managed pod restarts.
+
+
+
+_Appears in:_
+- [RollingRestartConfig](#rollingrestartconfig)
+
+| Field | Description |
+| --- | --- |
+| `GreenOnly` | RollingRestartHealthGatePolicyGreenOnly preserves the existing restart health gate.<br /> |
+| `GreenOrRecoverableYellow` | RollingRestartHealthGatePolicyGreenOrRecoverableYellow also allows proven safe yellow states.<br /> |
+
+
 #### Rollover
 
 
@@ -2281,6 +2316,7 @@ _Appears in:_
 | `drainDataNodes` _boolean_ | Drain data nodes controls whether to drain data notes on rolling restart operations |  |  |
 | `pluginsList` _string array_ |  |  |  |
 | `command` _string_ |  |  |  |
+| `rollingRestart` _[RollingRestartConfig](#rollingrestartconfig)_ | RollingRestart controls operator-managed pod restart behavior. |  |  |
 | `additionalVolumes` _[AdditionalVolume](#additionalvolume) array_ | Additional volumes to mount to all pods in the cluster |  |  |
 | `monitoring` _[MonitoringConfig](#monitoringconfig)_ |  |  |  |
 | `keystore` _[KeystoreValue](#keystorevalue) array_ | Populate opensearch keystore before startup |  |  |
@@ -3209,6 +3245,40 @@ _Appears in:_
 | `backoff` _string_ | The backoff policy type to use when retrying. |  |  |
 | `count` _integer_ | The number of retry counts. |  |  |
 | `delay` _string_ | The time to wait between retries. |  |  |
+
+
+#### RollingRestartConfig
+
+
+
+
+
+
+
+_Appears in:_
+- [GeneralConfig](#generalconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `healthGatePolicy` _[RollingRestartHealthGatePolicy](#rollingrestarthealthgatepolicy)_ | HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.<br />Defaults to GreenOnly, which preserves the existing restart health gate. |  | Enum: [GreenOnly GreenOrRecoverableYellow] <br /> |
+
+
+#### RollingRestartHealthGatePolicy
+
+_Underlying type:_ _string_
+
+RollingRestartHealthGatePolicy controls which OpenSearch health states allow
+the operator to continue operator-managed pod restarts.
+
+
+
+_Appears in:_
+- [RollingRestartConfig](#rollingrestartconfig)
+
+| Field | Description |
+| --- | --- |
+| `GreenOnly` | RollingRestartHealthGatePolicyGreenOnly preserves the existing restart health gate.<br /> |
+| `GreenOrRecoverableYellow` | RollingRestartHealthGatePolicyGreenOrRecoverableYellow also allows proven safe yellow states.<br /> |
 
 
 #### Rollover
