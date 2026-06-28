@@ -6541,6 +6541,10 @@ spec:
                       properties:
                         liveness:
                           properties:
+                            command:
+                              items:
+                                type: string
+                              type: array
                             failureThreshold:
                               format: int32
                               type: integer
