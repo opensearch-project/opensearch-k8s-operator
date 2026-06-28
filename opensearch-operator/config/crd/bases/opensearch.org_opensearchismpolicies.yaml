@@ -213,6 +213,38 @@ spec:
                           close:
                             description: Closes the managed index.
                             type: object
+                          convertIndexToRemote:
+                            description: Converts an existing index into a searchable
+                              snapshot by restoring it from a remote snapshot repository.
+                            properties:
+                              ignoreIndexSettings:
+                                description: A comma-separated list of index settings
+                                  to ignore during restore.
+                                type: string
+                              includeAliases:
+                                description: If true, include index aliases during
+                                  restore.
+                                type: boolean
+                              numberOfReplicas:
+                                description: The number of replicas for the restored
+                                  remote index.
+                                type: integer
+                              renamePattern:
+                                description: Naming pattern for the restored searchable
+                                  snapshot index.
+                                type: string
+                              repository:
+                                description: The repository name registered through
+                                  snapshot API operations.
+                                type: string
+                              snapshot:
+                                description: The name of the snapshot created by the
+                                  snapshot action.
+                                type: string
+                            required:
+                            - repository
+                            - snapshot
+                            type: object
                           delete:
                             description: Deletes a managed index.
                             type: object

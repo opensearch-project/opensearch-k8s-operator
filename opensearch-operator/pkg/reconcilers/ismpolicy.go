@@ -407,6 +407,25 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 				if action.Delete != nil {
 					del = &requests.Delete{}
 				}
+				var convertIndexToRemote *requests.ConvertIndexToRemote
+				if action.ConvertIndexToRemote != nil {
+					convertIndexToRemote = &requests.ConvertIndexToRemote{
+						Repository: action.ConvertIndexToRemote.Repository,
+						Snapshot:   action.ConvertIndexToRemote.Snapshot,
+					}
+					if action.ConvertIndexToRemote.IncludeAliases != nil {
+						convertIndexToRemote.IncludeAliases = action.ConvertIndexToRemote.IncludeAliases
+					}
+					if action.ConvertIndexToRemote.IgnoreIndexSettings != nil {
+						convertIndexToRemote.IgnoreIndexSettings = action.ConvertIndexToRemote.IgnoreIndexSettings
+					}
+					if action.ConvertIndexToRemote.NumberOfReplicas != nil {
+						convertIndexToRemote.NumberOfReplicas = action.ConvertIndexToRemote.NumberOfReplicas
+					}
+					if action.ConvertIndexToRemote.RenamePattern != nil {
+						convertIndexToRemote.RenamePattern = action.ConvertIndexToRemote.RenamePattern
+					}
+				}
 				var open *requests.Open
 				if action.Open != nil {
 					open = &requests.Open{}
@@ -509,21 +528,22 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 					readOnly = &requests.ReadOnly{}
 				}
 				actions = append(actions, requests.Action{
-					ReplicaCount:  replicaCount,
-					Retry:         retry,
-					Close:         closea,
-					Delete:        del,
-					Open:          open,
-					Shrink:        shrink,
-					Snapshot:      snapshot,
-					Allocation:    alloc,
-					ForceMerge:    forceMerge,
-					Rollover:      rollover,
-					IndexPriority: indexPri,
-					Timeout:       timeOut,
-					ReadOnly:      readOnly,
-					ReadWrite:     readWrite,
-					Alias:         alias,
+					ReplicaCount:         replicaCount,
+					Retry:                retry,
+					Close:                closea,
+					Delete:               del,
+					ConvertIndexToRemote: convertIndexToRemote,
+					Open:                 open,
+					Shrink:               shrink,
+					Snapshot:             snapshot,
+					Allocation:           alloc,
+					ForceMerge:           forceMerge,
+					Rollover:             rollover,
+					IndexPriority:        indexPri,
+					Timeout:              timeOut,
+					ReadOnly:             readOnly,
+					ReadWrite:            readWrite,
+					Alias:                alias,
 				})
 			}
 			transitions := make([]requests.Transition, 0, len(state.Transitions))
