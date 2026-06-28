@@ -135,10 +135,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `exclude` _string_ | Allocate the index to a node with a specified attribute. |  |  |
-| `include` _string_ | Allocate the index to a node with any of the specified attributes. |  |  |
-| `require` _string_ | Don’t allocate the index to a node with any of the specified attributes. |  |  |
-| `waitFor` _string_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
+| `exclude` _object (keys:string, values:string)_ | Allocate the index to a node with a specified attribute. |  |  |
+| `include` _object (keys:string, values:string)_ | Allocate the index to a node with any of the specified attributes. |  |  |
+| `require` _object (keys:string, values:string)_ | Don’t allocate the index to a node with any of the specified attributes. |  |  |
+| `waitFor` _boolean_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
 
 
 #### BootstrapConfig
@@ -1907,10 +1907,10 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `exclude` _string_ | Allocate the index to a node with a specified attribute. |  |  |
-| `include` _string_ | Allocate the index to a node with any of the specified attributes. |  |  |
-| `require` _string_ | Don't allocate the index to a node with any of the specified attributes. |  |  |
-| `waitFor` _string_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
+| `exclude` _object (keys:string, values:string)_ | Allocate the index to a node with a specified attribute. |  |  |
+| `include` _object (keys:string, values:string)_ | Allocate the index to a node with any of the specified attributes. |  |  |
+| `require` _object (keys:string, values:string)_ | Don't allocate the index to a node with any of the specified attributes. |  |  |
+| `waitFor` _boolean_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
 
 
 #### BootstrapConfig

@@ -597,6 +597,57 @@ var _ = Describe("ism policy reconciler", func() {
 		})
 	})
 
+	Context("CreateISMPolicy Allocation Action Validation", func() {
+		BeforeEach(func() {
+			recorder = record.NewFakeRecorder(1)
+
+			options := ReconcilerOptions{}
+			options.apply(WithOSClientTransport(transport), WithUpdateStatus(false))
+			reconciler = &IsmPolicyReconciler{
+				client:            mockClient,
+				ctx:               context.Background(),
+				ReconcilerOptions: options,
+				recorder:          recorder,
+				instance:          instance,
+				logger:            log.FromContext(context.Background()),
+			}
+		})
+
+		When("an Allocation action is configured correctly", func() {
+			BeforeEach(func() {
+				waitFor := true
+				instance.Spec.States = []opensearchv1.State{
+					{
+						Name: "hot",
+						Actions: []opensearchv1.Action{
+							{
+								Allocation: &opensearchv1.Allocation{
+									Require: map[string]string{"box_type": "hot"},
+									Exclude: map[string]string{"box_type": "cold"},
+									Include: map[string]string{"box_type": "warm"},
+									WaitFor: &waitFor,
+								},
+							},
+						},
+					},
+				}
+			})
+			It("should create the policy without error and set Allocation fields", func() {
+				policy, err := reconciler.CreateISMPolicy()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(policy).ToNot(BeNil())
+				Expect(policy.States).To(HaveLen(1))
+				Expect(policy.States[0].Actions).To(HaveLen(1))
+				Expect(policy.States[0].Actions[0].Allocation).ToNot(BeNil())
+				Expect(policy.States[0].Actions[0].Allocation.Require).To(Equal(map[string]string{"box_type": "hot"}))
+				Expect(policy.States[0].Actions[0].Allocation.Exclude).To(Equal(map[string]string{"box_type": "cold"}))
+				Expect(policy.States[0].Actions[0].Allocation.Include).To(Equal(map[string]string{"box_type": "warm"}))
+				Expect(policy.States[0].Actions[0].Allocation.WaitFor).ToNot(BeNil())
+				Expect(*policy.States[0].Actions[0].Allocation.WaitFor).To(BeTrue())
+			})
+		})
+	})
+
 	Context("CreateISMPolicy Shrink Action Validation", func() {
 		var (
 			originalInstanceSpec opensearchv1.OpenSearchISMPolicySpec
