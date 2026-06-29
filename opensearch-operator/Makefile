@@ -64,19 +64,22 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen helm-docs ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations and helm-docs.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+# Generate reference docs only for the active opensearch.org API group. The deprecated
+# opensearch.opster.io group shares many type names with it, which would otherwise produce
+# duplicate Markdown headings/anchors and broken in-page links when rendered together.
 .PHONY: docs
 docs: crd-ref-docs manifests ## Generate CRD API reference documentation.
 	@echo "Generating CRD documentation..."
 	@mkdir -p ../docs/designs
 	@if [ -f ../docs/designs/crd-ref-docs-config.yaml ]; then \
 		$(CRD_REF_DOCS) \
-			--source-path=$(CURDIR)/api \
+			--source-path=$(CURDIR)/api/opensearch.org \
 			--config=../docs/designs/crd-ref-docs-config.yaml \
 			--renderer=markdown \
 			--output-path=../docs/designs/crd.md; \
 	else \
 		$(CRD_REF_DOCS) \
-			--source-path=$(CURDIR)/api \
+			--source-path=$(CURDIR)/api/opensearch.org \
 			--renderer=markdown \
 			--output-path=../docs/designs/crd.md; \
 	fi
