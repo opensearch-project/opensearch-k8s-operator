@@ -309,6 +309,22 @@ cluster:
       #         - opensearch-data.example.com
       #       secretName: tls-secret
 
+      # -- Per-nodePool Gateway API HTTPRoute configuration. Creates a separate HTTPRoute targeting this nodePool's service.
+      httproute:
+        enabled: false
+      #   parentRefs:
+      #     - name: example-gateway
+      #       namespace: default
+      #       sectionName: https
+      #   hostnames:
+      #     - opensearch-data.example.com
+      #   labels: {}
+      #   annotations: {}
+      #   matches:
+      #     - path:
+      #         type: PathPrefix
+      #         value: /
+
       # -- These containers will be deployed as sidecars in the same pod as the OpenSearch container
       sidecarContainers: []
       # Example configurations:
@@ -471,6 +487,62 @@ cluster:
       #  - hosts:
       #      - example.com
       #    secretName: tls-secret
+
+  # Gateway API HTTPRoute configuration. Opt-in alternative to the Ingress
+  # resources above for clusters that expose services through the Gateway API.
+  httproute:
+    opensearch:
+      # -- Enable a Gateway API HTTPRoute for the Opensearch service
+      enabled: false
+
+      # -- Opensearch HTTPRoute parentRefs (the Gateway(s) the route attaches to)
+      parentRefs: []
+      #  - name: example-gateway
+      #    namespace: default
+      #    sectionName: https
+
+      # -- Opensearch HTTPRoute hostnames
+      hostnames: []
+      #  - opensearch.example.com
+
+      # -- Opensearch HTTPRoute extra labels
+      labels: {}
+
+      # -- Opensearch HTTPRoute annotations
+      annotations: {}
+
+      # -- Opensearch HTTPRoute rule matches. Defaults to a single PathPrefix `/` match when empty.
+      matches: []
+      #  - path:
+      #      type: PathPrefix
+      #      value: /
+
+    # Dashboards HTTPRoute configuration
+    dashboards:
+      # -- Enable a Gateway API HTTPRoute for the dashboards service
+      enabled: false
+
+      # -- dashboards HTTPRoute parentRefs (the Gateway(s) the route attaches to)
+      parentRefs: []
+      #  - name: example-gateway
+      #    namespace: default
+      #    sectionName: https
+
+      # -- dashboards HTTPRoute hostnames
+      hostnames: []
+      #  - dashboards.example.com
+
+      # -- dashboards HTTPRoute extra labels
+      labels: {}
+
+      # -- dashboards HTTPRoute annotations
+      annotations: {}
+
+      # -- dashboards HTTPRoute rule matches. Defaults to a single PathPrefix `/` match when empty.
+      matches: []
+      #  - path:
+      #      type: PathPrefix
+      #      value: /
 
 # -- List of OpensearchRole. Check values.yaml file for examples.
 roles: []
