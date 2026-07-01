@@ -548,6 +548,7 @@ _Appears in:_
 - [DashboardsConfig](#dashboardsconfig)
 - [GeneralConfig](#generalconfig)
 - [InitHelperConfig](#inithelperconfig)
+- [NodePool](#nodepool)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |

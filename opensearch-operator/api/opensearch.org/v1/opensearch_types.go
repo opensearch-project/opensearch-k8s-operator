@@ -124,7 +124,7 @@ type CommandProbeConfig struct {
 }
 
 type NodePool struct {
-	*ImageSpec `json:",inline,omitempty"`
+	*ImageSpec                `json:",inline,omitempty"`
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
 	DiskSize                  resource.Quantity                 `json:"diskSize,omitempty"`
