@@ -202,6 +202,31 @@ The settings must be provided as a map of strings, so use the flat form of any s
 
 Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If want to avoid that please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
 
+### Per-node pool image override
+
+By default, all node pools use the image configured in `spec.general` (or the default `opensearchproject/opensearch` image for the cluster version). You can override the OpenSearch container image for a specific node pool by setting `image` on that node pool. This is useful when some node pools require a specialized image, such as GPU-enabled nodes that need a CUDA build of OpenSearch.
+
+Node pool image settings override `spec.general` for that pool only. You can also set `imagePullPolicy` and `imagePullSecrets` per node pool.
+
+```yaml
+spec:
+  general:
+    version: "2.17.1"
+  nodePools:
+    - component: masters
+      replicas: 3
+      roles:
+        - cluster_manager
+    - component: ml
+      replicas: 2
+      roles:
+        - ml
+      image: "myregistry.example.com/opensearch-cuda:2.17.1"
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets:
+        - name: docker-pull-secret
+```
+
 ### TLS
 
 For security reasons, encryption is required for communication with the OpenSearch cluster and between cluster nodes. If you do not configure any encryption, OpenSearch will use the included demo TLS certificates, which are not ideal for most active deployments.
