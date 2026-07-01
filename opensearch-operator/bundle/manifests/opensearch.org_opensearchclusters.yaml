@@ -1920,8 +1920,9 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of secret, configMap, emptyDir, csi,
-                          projected, nfs, hostPath must be set
-                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
+                          persistentVolumeClaim, projected, nfs, hostPath must be
+                          set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.persistentVolumeClaim)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
                           == 1
                     type: array
                   affinity:
@@ -3039,6 +3040,11 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  opensearchDashboardsHome:
+                    description: OpenSearch Dashboards installation directory inside
+                      the container. Defaults to /usr/share/opensearch-dashboards
+                      if not set.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -4460,8 +4466,9 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of secret, configMap, emptyDir, csi,
-                          projected, nfs, hostPath must be set
-                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
+                          persistentVolumeClaim, projected, nfs, hostPath must be
+                          set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.persistentVolumeClaim)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
                           == 1
                     type: array
                   annotations:
@@ -4474,7 +4481,7 @@ spec:
                   defaultRepo:
                     type: string
                   drainDataNodes:
-                    description: Drain data nodes controls whether to drain data notes
+                    description: Drain data nodes controls whether to drain data nodes
                       on rolling restart operations
                     type: boolean
                   grpc:
@@ -4626,10 +4633,182 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
+                      metricRelabelings:
+                        items:
+                          description: |-
+                            RelabelConfig allows dynamic rewriting of the label set for targets, alerts,
+                            scraped samples and remote write samples.
+
+                            More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+                          properties:
+                            action:
+                              default: replace
+                              description: |-
+                                Action to perform based on the regex matching.
+
+                                `Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.
+                                `DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.
+
+                                Default: "Replace"
+                              enum:
+                              - replace
+                              - Replace
+                              - keep
+                              - Keep
+                              - drop
+                              - Drop
+                              - hashmod
+                              - HashMod
+                              - labelmap
+                              - LabelMap
+                              - labeldrop
+                              - LabelDrop
+                              - labelkeep
+                              - LabelKeep
+                              - lowercase
+                              - Lowercase
+                              - uppercase
+                              - Uppercase
+                              - keepequal
+                              - KeepEqual
+                              - dropequal
+                              - DropEqual
+                              type: string
+                            modulus:
+                              description: |-
+                                Modulus to take of the hash of the source label values.
+
+                                Only applicable when the action is `HashMod`.
+                              format: int64
+                              type: integer
+                            regex:
+                              description: Regular expression against which the extracted
+                                value is matched.
+                              type: string
+                            replacement:
+                              description: |-
+                                Replacement value against which a Replace action is performed if the
+                                regular expression matches.
+
+                                Regex capture groups are available.
+                              type: string
+                            separator:
+                              description: Separator is the string between concatenated
+                                SourceLabels.
+                              type: string
+                            sourceLabels:
+                              description: |-
+                                The source labels select values from existing labels. Their content is
+                                concatenated using the configured Separator and matched against the
+                                configured regular expression.
+                              items:
+                                description: |-
+                                  LabelName is a valid Prometheus label name which may only contain ASCII
+                                  letters, numbers, as well as underscores.
+                                pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
+                                type: string
+                              type: array
+                            targetLabel:
+                              description: |-
+                                Label to which the resulting string is written in a replacement.
+
+                                It is mandatory for `Replace`, `HashMod`, `Lowercase`, `Uppercase`,
+                                `KeepEqual` and `DropEqual` actions.
+
+                                Regex capture groups are available.
+                              type: string
+                          type: object
+                        type: array
                       monitoringUserSecret:
                         type: string
                       pluginUrl:
                         type: string
+                      relabelings:
+                        items:
+                          description: |-
+                            RelabelConfig allows dynamic rewriting of the label set for targets, alerts,
+                            scraped samples and remote write samples.
+
+                            More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+                          properties:
+                            action:
+                              default: replace
+                              description: |-
+                                Action to perform based on the regex matching.
+
+                                `Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.
+                                `DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.
+
+                                Default: "Replace"
+                              enum:
+                              - replace
+                              - Replace
+                              - keep
+                              - Keep
+                              - drop
+                              - Drop
+                              - hashmod
+                              - HashMod
+                              - labelmap
+                              - LabelMap
+                              - labeldrop
+                              - LabelDrop
+                              - labelkeep
+                              - LabelKeep
+                              - lowercase
+                              - Lowercase
+                              - uppercase
+                              - Uppercase
+                              - keepequal
+                              - KeepEqual
+                              - dropequal
+                              - DropEqual
+                              type: string
+                            modulus:
+                              description: |-
+                                Modulus to take of the hash of the source label values.
+
+                                Only applicable when the action is `HashMod`.
+                              format: int64
+                              type: integer
+                            regex:
+                              description: Regular expression against which the extracted
+                                value is matched.
+                              type: string
+                            replacement:
+                              description: |-
+                                Replacement value against which a Replace action is performed if the
+                                regular expression matches.
+
+                                Regex capture groups are available.
+                              type: string
+                            separator:
+                              description: Separator is the string between concatenated
+                                SourceLabels.
+                              type: string
+                            sourceLabels:
+                              description: |-
+                                The source labels select values from existing labels. Their content is
+                                concatenated using the configured Separator and matched against the
+                                configured regular expression.
+                              items:
+                                description: |-
+                                  LabelName is a valid Prometheus label name which may only contain ASCII
+                                  letters, numbers, as well as underscores.
+                                pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
+                                type: string
+                              type: array
+                            targetLabel:
+                              description: |-
+                                Label to which the resulting string is written in a replacement.
+
+                                It is mandatory for `Replace`, `HashMod`, `Lowercase`, `Uppercase`,
+                                `KeepEqual` and `DropEqual` actions.
+
+                                Regex capture groups are available.
+                              type: string
+                          type: object
+                        type: array
                       scrapeInterval:
                         type: string
                       tlsConfig:
@@ -4640,6 +4819,10 @@ spec:
                             type: string
                         type: object
                     type: object
+                  opensearchHome:
+                    description: OpenSearch installation directory inside the container.
+                      Defaults to /usr/share/opensearch if not set.
+                    type: string
                   operatorClusterURL:
                     description: |-
                       Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
@@ -6745,6 +6928,28 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      operatorClientCert:
+                        description: |-
+                          Optional kubernetes.io/tls secret (tls.crt, tls.key, optional ca.crt) used by the operator's runtime REST client to authenticate to the OpenSearch HTTP API via mTLS instead of basic auth.
+                          The certificate's DN must be mapped to a user/role with the necessary privileges in the OpenSearch security configuration (e.g. via plugins.security.authcz.admin_dn or a clientcert auth domain).
+                          When set, the operator omits basic-auth credentials from outgoing requests. If ca.crt is present in the secret, it is used to verify the OpenSearch HTTP server certificate; otherwise TLS verification is skipped.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      operatorClientServerName:
+                        description: |-
+                          Optional. Overrides the TLS SNI / ServerName used when verifying the OpenSearch HTTP server certificate.
+                          Defaults to the host portion of the cluster URL.
+                        type: string
                       securityConfigSecret:
                         description: |-
                           Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).

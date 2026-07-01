@@ -4481,7 +4481,7 @@ spec:
                   defaultRepo:
                     type: string
                   drainDataNodes:
-                    description: Drain data nodes controls whether to drain data notes
+                    description: Drain data nodes controls whether to drain data nodes
                       on rolling restart operations
                     type: boolean
                   grpc:
