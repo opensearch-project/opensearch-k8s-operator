@@ -3,6 +3,7 @@
 ## Packages
 - [opensearch.opster.io/v1](#opensearchopsteriov1)
 
+
 ## opensearch.opster.io/v1
 
 Package v1 contains API Schema definitions for the opster v1 API group
@@ -54,7 +55,7 @@ _Appears in:_
 | `rollover` _[Rollover](#rollover)_ | Rolls an alias over to a new index when the managed index meets one of the rollover conditions. |  |  |
 | `rollup` _[Rollup](#rollup)_ | Periodically reduce data granularity by rolling up old data into summarized indexes. |  |  |
 | `shrink` _[Shrink](#shrink)_ | Allows you to reduce the number of primary shards in your indexes |  |  |
-| `snapshot` _[Snapshot](#snapshot)_ | Back up your clusterâ€™s indexes and state |  |  |
+| `snapshot` _[Snapshot](#snapshot)_ | Back up your cluster’s indexes and state |  |  |
 | `timeout` _string_ | The timeout period for the action. Accepts time units for minutes, hours, and days. |  |  |
 
 
@@ -135,7 +136,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `exclude` _string_ | Allocate the index to a node with a specified attribute. |  |  |
 | `include` _string_ | Allocate the index to a node with any of the specified attributes. |  |  |
-| `require` _string_ | Donâ€™t allocate the index to a node with any of the specified attributes. |  |  |
+| `require` _string_ | Don’t allocate the index to a node with any of the specified attributes. |  |  |
 | `waitFor` _string_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
 
 
@@ -1658,7 +1659,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `actions` _[Action](#action) array_ | The actions to execute after entering a state. |  |  |
 | `name` _string_ | The name of the state. |  |  |
-| `transitions` _[Transition](#transition) array_ | The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that itâ€™s complete and can now stop managing the index |  |  |
+| `transitions` _[Transition](#transition) array_ | The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that it’s complete and can now stop managing the index |  |  |
 
 
 #### TenantPermissionsSpec
@@ -1776,6 +1777,5 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `conditions` _[Condition](#condition)_ | conditions for the transition. |  |  |
 | `stateName` _string_ | The name of the state to transition to if the conditions are met. |  |  |
-
 
 
