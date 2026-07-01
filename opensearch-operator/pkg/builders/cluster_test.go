@@ -235,6 +235,19 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("docker.io/busybox:latest"))
 		})
+		It("should use node pool image when configured", func() {
+			clusterObject := ClusterDescWithVersion("2.17.1")
+			customImage := "custom/cuda-opensearch:2.17.1"
+			nodePool := opensearchv1.NodePool{
+				Component: "ml",
+				Roles:     []string{"ml"},
+				ImageSpec: &opensearchv1.ImageSpec{
+					Image: &customImage,
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Image).To(Equal(customImage))
+		})
 		It("should use a custom dns name when env variable is set as cluster url", func() {
 			customDns := "custom.domain"
 			serviceName := "opensearch"
