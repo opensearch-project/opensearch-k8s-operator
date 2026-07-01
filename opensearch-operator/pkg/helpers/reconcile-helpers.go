@@ -47,13 +47,13 @@ func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.Nod
 	if cr.Spec.General.DefaultRepo != nil {
 		defaultRepo = *cr.Spec.General.DefaultRepo
 	}
-	imageSpec := cr.Spec.General.ImageSpec
-
-	defaultImage := "opensearch"
 
 	// If a general custom image is specified, use it.
-	if imageSpec != nil {
-		if useCustomImage(imageSpec, &result) {
+	if cr.Spec.General.ImageSpec != nil {
+		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
+			if nodePool != nil {
+				mergeImageSpec(nodePool.ImageSpec, &result)
+			}
 			return
 		}
 	}
@@ -61,8 +61,27 @@ func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.Nod
 	// If a different image repo is requested, use that with the default image
 	// name and version tag.
 	result.Image = ptr.To(fmt.Sprintf("%s:%s",
-		path.Join(defaultRepo, defaultImage), version))
+		path.Join(defaultRepo, "opensearch"), version))
+	mergeImageSpec(cr.Spec.General.ImageSpec, &result)
+	if nodePool != nil {
+		mergeImageSpec(nodePool.ImageSpec, &result)
+	}
 	return
+}
+
+func mergeImageSpec(customImageSpec *opensearchv1.ImageSpec, result *opensearchv1.ImageSpec) {
+	if customImageSpec == nil {
+		return
+	}
+	if customImageSpec.ImagePullPolicy != nil {
+		result.ImagePullPolicy = customImageSpec.ImagePullPolicy
+	}
+	if len(customImageSpec.ImagePullSecrets) > 0 {
+		result.ImagePullSecrets = customImageSpec.ImagePullSecrets
+	}
+	if customImageSpec.Image != nil {
+		result.Image = customImageSpec.Image
+	}
 }
 
 func ResolveDashboardsImage(cr *opensearchv1.OpenSearchCluster) (result opensearchv1.ImageSpec) {
