@@ -3,6 +3,7 @@
 ## Packages
 - [opensearch.org/v1](#opensearchorgv1)
 
+
 ## opensearch.org/v1
 
 Package v1 contains API Schema definitions for the opensearch.org v1 API group
