@@ -11,9 +11,6 @@ metadata:
   {{- end }}
   labels: {{ include "opensearch-cluster.labels" . | nindent 4 }}
 spec:
-  {{- with .Values.cluster.bootstrap }}
-  bootstrap: {{ . | toYaml | nindent 4 }}
-  {{- end }}
   {{- with .Values.cluster.confMgmt }}
   confMgmt: {{ . | toYaml | nindent 4 }}
   {{- end }}
