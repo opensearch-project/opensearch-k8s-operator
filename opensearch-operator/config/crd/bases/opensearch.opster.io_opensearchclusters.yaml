@@ -4546,18 +4546,6 @@ spec:
                     description: OpenSearch installation directory inside the container.
                       Defaults to /usr/share/opensearch if not set.
                     type: string
-                  rollingRestart:
-                    description: RollingRestart controls operator-managed pod restart behavior.
-                    properties:
-                      healthGatePolicy:
-                        description: |-
-                          HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.
-                          Defaults to GreenOnly, which preserves the existing restart health gate.
-                        enum:
-                        - GreenOnly
-                        - GreenOrRecoverableYellow
-                        type: string
-                    type: object
                   operatorClusterURL:
                     description: |-
                       Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
@@ -4798,6 +4786,19 @@ spec:
                               PodSecurityContext, the value specified in SecurityContext takes precedence.
                             type: string
                         type: object
+                    type: object
+                  rollingRestart:
+                    description: RollingRestart controls operator-managed pod restart
+                      behavior.
+                    properties:
+                      healthGatePolicy:
+                        description: |-
+                          HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.
+                          Defaults to GreenOnly, which preserves the existing restart health gate.
+                        enum:
+                        - GreenOnly
+                        - GreenOrRecoverableYellow
+                        type: string
                     type: object
                   securityContext:
                     description: Set security context for the cluster pods' container

@@ -517,6 +517,7 @@ _Appears in:_
 | `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
 | `opensearchHome` _string_ | OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set. |  |  |
+| `rollingRestart` _[RollingRestartConfig](#rollingrestartconfig)_ | RollingRestart controls operator-managed pod restart behavior. |  |  |
 
 
 #### ISMTemplate
@@ -1406,6 +1407,40 @@ _Appears in:_
 | `backoff` _string_ | The backoff policy type to use when retrying. |  |  |
 | `count` _integer_ | The number of retry counts. |  |  |
 | `delay` _string_ | The time to wait between retries. |  |  |
+
+
+#### RollingRestartConfig
+
+
+
+
+
+
+
+_Appears in:_
+- [GeneralConfig](#generalconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `healthGatePolicy` _[RollingRestartHealthGatePolicy](#rollingrestarthealthgatepolicy)_ | HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.<br />Defaults to GreenOnly, which preserves the existing restart health gate. |  | Enum: [GreenOnly GreenOrRecoverableYellow] <br /> |
+
+
+#### RollingRestartHealthGatePolicy
+
+_Underlying type:_ _string_
+
+RollingRestartHealthGatePolicy controls which OpenSearch health states allow
+the operator to continue operator-managed pod restarts.
+
+
+
+_Appears in:_
+- [RollingRestartConfig](#rollingrestartconfig)
+
+| Field | Description |
+| --- | --- |
+| `GreenOnly` | RollingRestartHealthGatePolicyGreenOnly preserves the existing restart health gate.<br /> |
+| `GreenOrRecoverableYellow` | RollingRestartHealthGatePolicyGreenOrRecoverableYellow also allows proven safe yellow states.<br /> |
 
 
 #### Rollover
