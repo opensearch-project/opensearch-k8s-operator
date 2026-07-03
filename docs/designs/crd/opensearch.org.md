@@ -516,6 +516,7 @@ _Appears in:_
 | `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
 | `opensearchHome` _string_ | OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set. |  |  |
 | `nodeAttributes` _[NodeAttribute](#nodeattribute) array_ | NodeAttributes derives OpenSearch node attributes (node.attr.*) from<br />Kubernetes node labels at runtime. For each entry the operator injects an<br />init container that reads the label off the node hosting the pod and<br />exposes its value to OpenSearch, enabling shard allocation awareness<br />(e.g. zone or rack awareness) without splitting topology into separate<br />node pools. The pods' ServiceAccount must be allowed to "get" nodes. |  |  |
+| `rollingRestart` _[RollingRestartConfig](#rollingrestartconfig)_ | RollingRestart controls operator-managed pod restart behavior. |  |  |
 
 
 #### GrpcConfig
@@ -1455,6 +1456,40 @@ _Appears in:_
 | `backoff` _string_ | The backoff policy type to use when retrying. |  |  |
 | `count` _integer_ | The number of retry counts. |  |  |
 | `delay` _string_ | The time to wait between retries. |  |  |
+
+
+#### RollingRestartConfig
+
+
+
+
+
+
+
+_Appears in:_
+- [GeneralConfig](#generalconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `healthGatePolicy` _[RollingRestartHealthGatePolicy](#rollingrestarthealthgatepolicy)_ | HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.<br />Defaults to GreenOnly, which preserves the existing restart health gate. |  | Enum: [GreenOnly GreenOrRecoverableYellow] <br /> |
+
+
+#### RollingRestartHealthGatePolicy
+
+_Underlying type:_ _string_
+
+RollingRestartHealthGatePolicy controls which OpenSearch health states allow
+the operator to continue operator-managed pod restarts.
+
+
+
+_Appears in:_
+- [RollingRestartConfig](#rollingrestartconfig)
+
+| Field | Description |
+| --- | --- |
+| `GreenOnly` | RollingRestartHealthGatePolicyGreenOnly preserves the existing restart health gate.<br /> |
+| `GreenOrRecoverableYellow` | RollingRestartHealthGatePolicyGreenOrRecoverableYellow also allows proven safe yellow states.<br /> |
 
 
 #### Rollover
