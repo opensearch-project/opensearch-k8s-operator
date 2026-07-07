@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Deprecated
 ### Removed
 ### Fixed
+- Generated TLS certificates are now rotated 30 days before expiry by default, expired or unparseable certificates are always regenerated, and renewals trigger a rolling restart so nodes load the new certificates.
 ### Security
 
 ---

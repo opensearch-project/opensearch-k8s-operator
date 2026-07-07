@@ -76,6 +76,12 @@ func (r *TLSReconciler) Name() string { return tlsReconcilerName }
 const (
 	CaCertKey                     = "ca.crt"
 	SimultaneousCertGenerationCap = 8
+
+	// CertRenewalAnnotation is set on generated certificate secrets whenever an
+	// existing certificate is renewed (as opposed to created). Its value is
+	// folded into the node pool config hashes so that a renewal changes the pod
+	// templates and the rolling-restart machinery reloads the certificates.
+	CertRenewalAnnotation = "opensearch.org/cert-renewal"
 )
 
 func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
@@ -347,7 +353,11 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 			return err
 		}
 		if newCertData != nil {
+			renewed := nodeSecret.Data[corev1.TLSCertKey] != nil
 			nodeSecret.Data = newCertData.SecretData(ca)
+			if renewed {
+				setCertRenewalAnnotation(&nodeSecret, certRenewalMarker(newCertData.CertData()))
+			}
 		}
 
 	} else {
@@ -366,6 +376,7 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 		eg.SetLimit(min(SimultaneousCertGenerationCap, runtime.GOMAXPROCS(0)))
 
 		secretMutex := sync.Mutex{}
+		renewalMarker := ""
 
 		// Generate node cert and put it into secret
 		for _, nodePool := range r.instance.Spec.NodePools {
@@ -414,6 +425,14 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 						secretMutex.Lock()
 						nodeSecret.Data[certName] = newCertData.CertData()
 						nodeSecret.Data[keyName] = newCertData.KeyData()
+						// certData != nil means an existing certificate was renewed
+						// (as opposed to created for a new node), which the running
+						// pods only pick up after a restart
+						if certData != nil {
+							if marker := certRenewalMarker(newCertData.CertData()); marker > renewalMarker {
+								renewalMarker = marker
+							}
+						}
 						secretMutex.Unlock()
 					}
 					return nil
@@ -426,12 +445,20 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 			r.logger.Error(err, "Not all required certificates could be created")
 			return err
 		}
+
+		if renewalMarker != "" {
+			setCertRenewalAnnotation(&nodeSecret, renewalMarker)
+		}
 	}
 
 	_, err = r.client.CreateSecret(&nodeSecret)
 	if err != nil {
 		r.logger.Error(err, "Failed to store node certificate(s) in secret", "interface", "transport")
 		return err
+	}
+
+	if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" {
+		r.reconcilerContext.CertHashData = append(r.reconcilerContext.CertHashData, "transport-certs:"+marker)
 	}
 
 	// Tell cluster controller to mount secrets
@@ -503,7 +530,7 @@ func (r *TLSReconciler) generateNewCertIfNeeded(
 ) (tls.Cert, error) {
 	clusterName := r.instance.Name
 
-	if existingCertData != nil && !r.certShouldBeRenewed(cd, existingCertData) {
+	if existingCertData != nil && !r.certShouldBeRenewed(ca, cd, existingCertData) {
 		return nil, nil
 	}
 
@@ -528,7 +555,7 @@ func (r *TLSReconciler) generateNewCertIfNeeded(
 	return nodeCert, nil
 }
 
-func (r *TLSReconciler) certShouldBeRenewed(cd certDescription, existingCertData []byte) bool {
+func (r *TLSReconciler) certShouldBeRenewed(ca tls.Cert, cd certDescription, existingCertData []byte) bool {
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
 
@@ -544,13 +571,29 @@ func (r *TLSReconciler) certShouldBeRenewed(cd certDescription, existingCertData
 
 	daysRemaining, err := getDaysRemainingFromCertificate(existingCertData)
 	if err != nil {
-		r.logger.Error(err, "Failed to parse certificate for expiry date - not renewing", "interface",
+		r.logger.Error(err, "Failed to parse certificate for expiry date - regenerating", "interface",
 			cd.certContext, "node", cd.loggingName)
-		return false
+		return true
 	}
 
 	helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace,
 		clusterName, string(cd.certContext), cd.loggingName).Set(float64(daysRemaining))
+
+	// An expired certificate is unusable and can only cause an outage, so always
+	// replace it, even if rotation is disabled.
+	if daysRemaining <= 0 {
+		r.logger.Info("Certificate is expired - renewing", "interface",
+			cd.certContext, "node", cd.loggingName)
+		return true
+	}
+
+	// A replaced CA (even with the same subject) leaves the certificate
+	// unverifiable for new pods and truststores, so renew against the current CA
+	if !certSignedByCA(existingCertData, ca) {
+		r.logger.Info("Certificate is not signed by the current CA - renewing", "interface",
+			cd.certContext, "node", cd.loggingName)
+		return true
+	}
 
 	return (renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays)
 }
@@ -671,7 +714,11 @@ func (r *TLSReconciler) handleHttp() error {
 			return err
 		}
 		if nodeCert != nil {
+			renewed := nodeSecret.Data[corev1.TLSCertKey] != nil
 			nodeSecret.Data = nodeCert.SecretData(ca)
+			if renewed {
+				setCertRenewalAnnotation(&nodeSecret, certRenewalMarker(nodeCert.CertData()))
+			}
 		}
 
 		_, err = r.client.CreateSecret(&nodeSecret)
@@ -679,6 +726,10 @@ func (r *TLSReconciler) handleHttp() error {
 			r.logger.Error(err, "Failed to store node certificate in secret", "interface", "http")
 			//		r.recorder.Event(r.instance, "Warning", "Security", "Failed to store node http certificate in secret")
 			return err
+		}
+
+		if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" {
+			r.reconcilerContext.CertHashData = append(r.reconcilerContext.CertHashData, "http-certs:"+marker)
 		}
 
 		// Tell cluster controller to mount secrets
@@ -777,6 +828,47 @@ func mountFolder(interfaceName string, name string, secretName string, opensearc
 func (r *TLSReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
 	return result.Result, result.Err
+}
+
+// certSignedByCA reports whether the certificate's signature verifies against
+// the given CA. If either certificate cannot be parsed no determination can be
+// made, so it returns true to avoid renewing on every reconcile.
+func certSignedByCA(certData []byte, ca tls.Cert) bool {
+	certBlock, _ := pem.Decode(certData)
+	if certBlock == nil {
+		return true
+	}
+	cert, err := x509.ParseCertificate(certBlock.Bytes)
+	if err != nil {
+		return true
+	}
+	caBlock, _ := pem.Decode(ca.CertData())
+	if caBlock == nil {
+		return true
+	}
+	caCert, err := x509.ParseCertificate(caBlock.Bytes)
+	if err != nil {
+		return true
+	}
+	return caCert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature) == nil
+}
+
+// certRenewalMarker returns a stable identifier for a renewed certificate,
+// preferring its expiry timestamp for readability when inspecting the secret.
+func certRenewalMarker(certData []byte) string {
+	if der, _ := pem.Decode(certData); der != nil {
+		if cert, err := x509.ParseCertificate(der.Bytes); err == nil {
+			return cert.NotAfter.UTC().Format(time.RFC3339)
+		}
+	}
+	return generateHash(certData)
+}
+
+func setCertRenewalAnnotation(secret *corev1.Secret, marker string) {
+	if secret.Annotations == nil {
+		secret.Annotations = map[string]string{}
+	}
+	secret.Annotations[CertRenewalAnnotation] = marker
 }
 
 func getDaysRemainingFromCertificate(data []byte) (int, error) {
