@@ -1764,7 +1764,7 @@ _Appears in:_
 | `enabled` _boolean_ | enabled controls if TLS should be enabled for the HTTP layer.<br />If false: TLS is explicitly disabled for HTTP.<br />If not set (default): TLS is enabled if HTTP configuration is provided, or if security.tls is set.<br />If true: TLS is explicitly enabled. HTTP configuration must be provided. |  |  |
 | `generate` _boolean_ | If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied |  |  |
 | `customFQDN` _string_ | Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names. |  |  |
-| `rotateDaysBeforeExpiry` _integer_ | Automatically rotate certificates before they expire, set to -1 to disable | -1 |  |
+| `rotateDaysBeforeExpiry` _integer_ | Automatically rotate certificates this many days before they expire, set to -1 to disable.<br />Only applies to operator-generated certificates. Expired or unparseable certificates are<br />always regenerated regardless of this setting. | 30 |  |
 | `TlsCertificateConfig` _[TlsCertificateConfig](#tlscertificateconfig)_ |  |  |  |
 | `adminDn` _string array_ | DNs of certificates that should have admin access, mainly used for securityconfig updates via securityadmin.sh, only used when existing certificates are provided |  |  |
 
@@ -1785,7 +1785,7 @@ _Appears in:_
 | `enabled` _boolean_ | enabled controls if TLS should be enabled for the transport layer.<br />If false: TLS is explicitly disabled for transport.<br />If not set (default): TLS is enabled if transport configuration is provided, or if security.tls is set.<br />If true: TLS is explicitly enabled. Transport configuration must be provided. |  |  |
 | `generate` _boolean_ | If set to true the operator will generate a CA and certificates for the cluster to use, if false secrets with existing certificates must be supplied |  |  |
 | `perNode` _boolean_ | Configure transport node certificate |  |  |
-| `rotateDaysBeforeExpiry` _integer_ | Automatically rotate certificates before they expire, set to -1 to disable | -1 |  |
+| `rotateDaysBeforeExpiry` _integer_ | Automatically rotate certificates this many days before they expire, set to -1 to disable.<br />Only applies to operator-generated certificates. Expired or unparseable certificates are<br />always regenerated regardless of this setting. | 30 |  |
 | `TlsCertificateConfig` _[TlsCertificateConfig](#tlscertificateconfig)_ |  |  |  |
 | `nodesDn` _string array_ | Allowed Certificate DNs for nodes, only used when existing certificates are provided |  |  |
 | `adminDn` _string array_ | Deprecated: DNs of certificates that should have admin access. This field is deprecated and will be removed in a future version.<br />For OpenSearch 2.0.0+, use security.tls.http.adminDn instead. |  |  |

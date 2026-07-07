@@ -237,7 +237,7 @@ spec:
 # ...
 ```
 
-To have the Operator generate the certificates, set `generate` and `perNode` to `true` (other fields can be omitted). The Operator will generate a CA certificate, issue one certificate per node, and sign them. Certificates default to one year validity, configurable via `duration`. The Operator supports rotation by reissuing certs when near expiry if `rotateDaysBeforeExpiry` is set.
+To have the Operator generate the certificates, set `generate` and `perNode` to `true` (other fields can be omitted). The Operator will generate a CA certificate, issue one certificate per node, and sign them. Certificates default to one year validity, configurable via `duration`. The Operator reissues certificates `rotateDaysBeforeExpiry` days before they expire (default 30, set to -1 to disable) and performs a rolling restart of the cluster so the nodes load the renewed certificates. Expired or unreadable generated certificates are always reissued, regardless of `rotateDaysBeforeExpiry`.
 
 Alternatively, you can provide the certificates yourself (e.g. if your organization has an internal CA). You can either provide one certificate to be used by all nodes or provide a certificate for each node (recommended). In this mode, set `generate: false` and `perNode` to `true` or `false` depending on whether you're providing per-node certificates.
 

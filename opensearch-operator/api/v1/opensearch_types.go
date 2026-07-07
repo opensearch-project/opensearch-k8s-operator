@@ -285,8 +285,10 @@ type TlsConfigTransport struct {
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
 	PerNode bool `json:"perNode,omitempty"`
-	// Automatically rotate certificates before they expire, set to -1 to disable
-	//+kubebuilder:default=-1
+	// Automatically rotate certificates this many days before they expire, set to -1 to disable.
+	// Only applies to operator-generated certificates. Expired or unparseable certificates are
+	// always regenerated regardless of this setting.
+	//+kubebuilder:default=30
 	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	//
 	TlsCertificateConfig `json:",omitempty"`
@@ -312,8 +314,10 @@ type TlsConfigHttp struct {
 	Generate bool `json:"generate,omitempty"`
 	// Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names.
 	CustomFQDN *string `json:"customFQDN,omitempty"`
-	// Automatically rotate certificates before they expire, set to -1 to disable
-	//+kubebuilder:default=-1
+	// Automatically rotate certificates this many days before they expire, set to -1 to disable.
+	// Only applies to operator-generated certificates. Expired or unparseable certificates are
+	// always regenerated regardless of this setting.
+	//+kubebuilder:default=30
 	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	//
 	TlsCertificateConfig `json:",omitempty"`

@@ -6823,9 +6823,11 @@ spec:
                               secrets with existing certificates must be supplied
                             type: boolean
                           rotateDaysBeforeExpiry:
-                            default: -1
-                            description: Automatically rotate certificates before
-                              they expire, set to -1 to disable
+                            default: 30
+                            description: |-
+                              Automatically rotate certificates this many days before they expire, set to -1 to disable.
+                              Only applies to operator-generated certificates. Expired or unparseable certificates are
+                              always regenerated regardless of this setting.
                             type: integer
                           secret:
                             description: Optional, name of a TLS secret that contains
@@ -6906,9 +6908,11 @@ spec:
                             description: Configure transport node certificate
                             type: boolean
                           rotateDaysBeforeExpiry:
-                            default: -1
-                            description: Automatically rotate certificates before
-                              they expire, set to -1 to disable
+                            default: 30
+                            description: |-
+                              Automatically rotate certificates this many days before they expire, set to -1 to disable.
+                              Only applies to operator-generated certificates. Expired or unparseable certificates are
+                              always regenerated regardless of this setting.
                             type: integer
                           secret:
                             description: Optional, name of a TLS secret that contains

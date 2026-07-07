@@ -58,9 +58,14 @@ func WithUpdateStatus(update bool) ReconcilerOption {
 }
 
 type ReconcilerContext struct {
-	Volumes          []corev1.Volume
-	VolumeMounts     []corev1.VolumeMount
-	NodePoolHashes   []NodePoolHash
+	Volumes        []corev1.Volume
+	VolumeMounts   []corev1.VolumeMount
+	NodePoolHashes []NodePoolHash
+	// CertHashData holds markers for renewed TLS certificates. They are folded
+	// into each node pool's config hash so that a certificate renewal changes
+	// the pod templates and triggers the rolling-restart machinery, without
+	// being written to opensearch.yml.
+	CertHashData     []string
 	DashboardsConfig map[string]string
 	OpenSearchConfig map[string]string
 	recorder         record.EventRecorder
