@@ -1097,6 +1097,26 @@ spec:
         cpu: "500m"
 ```
 
+### Custom init container security context
+
+By default the chown init container runs with `runAsUser: 0` and the sysctl init container (enabled via `general.setVMMaxMapCount`) runs with `privileged: true`. If your cluster enforces admission policies that require additional security context fields (for example a seccomp profile or dropped capabilities), you can replace the security context of these init containers:
+
+```yaml
+spec:
+  initHelper:
+    securityContext:
+      runAsUser: 0
+      seccompProfile:
+        type: RuntimeDefault
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+```
+
+Note that this replaces the defaults entirely for all init helper containers: the chown init container still needs to run as root, and the sysctl init container still needs privileged access, so make sure your custom security context grants the required permissions.
+
 ### Disabling the init helper
 
 In some cases, you may want to avoid the `chmod` init container (e.g. on OpenShift or if your cluster blocks containers running as `root`).
