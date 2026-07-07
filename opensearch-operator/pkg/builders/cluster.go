@@ -419,9 +419,9 @@ func NewSTSForNodePool(
 			Resources:       resources,
 			Command:         []string{"sh", "-c"},
 			Args:            []string{helpers.GetChownCommand(uid, gid, opensearchHome+"/data")},
-			SecurityContext: &corev1.SecurityContext{
+			SecurityContext: helpers.ResolveInitHelperSecurityContext(cr, &corev1.SecurityContext{
 				RunAsUser: &runas,
-			},
+			}),
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "data",
@@ -670,9 +670,9 @@ func NewSTSForNodePool(
 				"-w",
 				"vm.max_map_count=262144",
 			},
-			SecurityContext: &corev1.SecurityContext{
+			SecurityContext: helpers.ResolveInitHelperSecurityContext(cr, &corev1.SecurityContext{
 				Privileged: ptr.To(true),
-			},
+			}),
 		})
 	}
 
@@ -1011,9 +1011,9 @@ func NewBootstrapPod(
 			Resources:       cr.Spec.InitHelper.Resources,
 			Command:         []string{"sh", "-c"},
 			Args:            []string{helpers.GetChownCommand(uid, gid, opensearchHome+"/data")},
-			SecurityContext: &corev1.SecurityContext{
+			SecurityContext: helpers.ResolveInitHelperSecurityContext(cr, &corev1.SecurityContext{
 				RunAsUser: ptr.To(int64(0)),
-			},
+			}),
 			VolumeMounts: []corev1.VolumeMount{
 				{
 					Name:      "data",
@@ -1195,9 +1195,9 @@ func NewBootstrapPod(
 				"-w",
 				"vm.max_map_count=262144",
 			},
-			SecurityContext: &corev1.SecurityContext{
+			SecurityContext: helpers.ResolveInitHelperSecurityContext(cr, &corev1.SecurityContext{
 				Privileged: ptr.To(true),
-			},
+			}),
 		})
 	}
 
