@@ -30,6 +30,7 @@ spec:
         - --leader-elect
         - --enable-webhooks={{ .Values.webhook.enabled }}
         - --webhook-port={{ .Values.webhook.port }}
+        - --manage-cluster-role-bindings={{ not .Values.useRoleBindings }}
         {{- if .Values.manager.watchNamespace }}
         {{- if kindIs "slice" .Values.manager.watchNamespace }}
         - --watch-namespace={{ .Values.manager.watchNamespace | join "," }}

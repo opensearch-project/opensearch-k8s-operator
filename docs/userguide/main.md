@@ -854,6 +854,51 @@ spec:
 
 If you set an explicit `affinity`, it will completely replace the default anti-affinity behavior. To disable anti-affinity entirely, you can set `affinity: {}`.
 
+### Shard allocation awareness from node labels
+
+OpenSearch can spread shard copies across failure domains such as zones or racks using [shard allocation awareness](https://opensearch.org/docs/latest/tuning-your-cluster/availability-and-recovery/configuring-allocation-awareness/). This requires every node to advertise its own location through a `node.attr.<attribute>` setting. Kubernetes does not expose node labels to pods through the Downward API, so the operator can populate these attributes from node labels at runtime using `spec.general.nodeAttributes`:
+
+```yaml
+spec:
+  general:
+    nodeAttributes:
+      - name: zone
+        nodeLabel: topology.kubernetes.io/zone
+    additionalConfig:
+      cluster.routing.allocation.awareness.attributes: zone
+      cluster.routing.allocation.awareness.force.zone.values: dc1,dc2
+```
+
+For each entry the operator injects an init container that reads the given label off the node hosting the pod (via the Kubernetes API) and writes its value into a small file on a shared volume. The OpenSearch container sources that file on startup, so `node.attr.zone` resolves to the zone of the node the pod actually landed on. The example above yields `node.attr.zone: dc1` (or `dc2`) per pod, which the awareness settings then use to balance and force shard copies across both data centers.
+
+You can map several attributes at once (for example a `zone` and a `rack`), and combine this with `topologySpreadConstraints` to also control pod placement:
+
+```yaml
+spec:
+  nodePools:
+    - component: data
+      replicas: 6
+      roles:
+        - "data"
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              opensearch.org/opensearch-nodepool: data
+```
+
+> **Note:** The init container queries the Kubernetes API for the node object, so the pods'
+`ServiceAccount` must be allowed to `get` `nodes`. By default (no `spec.general.serviceAccount`
+set) the operator handles this for you: it creates a dedicated `ServiceAccount` for the
+cluster and binds it to the shared `opensearch-node-attributes` `ClusterRole` shipped by
+the operator's Helm chart — no manual RBAC required. If you set a custom `spec.general.serviceAccount`,
+the operator leaves RBAC to you and you must grant that account `get` on `nodes` yourself
+(see the [example manifest](../../opensearch-operator/examples/opensearch-zone-awareness.yaml)).
+Automatic RBAC management requires a cluster-scoped installation (the Helm chart must be
+installed with `useRoleBindings=false`). Node label values must not contain `,`, `{` or `}`.
+
 ### Sidecar Containers
 
 You can deploy additional sidecar containers alongside OpenSearch in the same pod. This is useful for log shipping, monitoring agents, or other auxiliary services that need to run alongside OpenSearch nodes.
