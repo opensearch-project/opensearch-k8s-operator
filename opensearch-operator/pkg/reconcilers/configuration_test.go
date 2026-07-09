@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 
+	"github.com/goccy/go-yaml"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -177,6 +178,70 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(strings.Contains(data, "foo:") || strings.Contains(data, "foo :")).To(BeTrue())
 			Expect(strings.Contains(data, "bar:") || strings.Contains(data, "bar :")).To(BeTrue())
 			Expect(strings.Contains(data, "baz")).To(BeTrue())
+		})
+	})
+
+	Context("When Reconciling with General.Grpc enabled", func() {
+		It("should render valid gRPC settings in opensearch.yml", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Grpc: &opensearchv1.GrpcConfig{
+							Enable: true,
+						},
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "test",
+							Roles: []string{
+								"master",
+								"data",
+							},
+						},
+					},
+				},
+			}
+
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().Context().Return(context.Background())
+			var createdConfigMap *corev1.ConfigMap
+			mockClient.On("CreateConfigMap", mock.Anything).
+				Return(func(cm *corev1.ConfigMap) (*ctrl.Result, error) {
+					createdConfigMap = cm
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+
+			underTest := newConfigurationReconciler(
+				mockClient,
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			// In the real reconcile chain earlier reconcilers (e.g. TLS) always
+			// populate the context; an empty context short-circuits Reconcile.
+			reconcilerContext.AddConfig("foo", "bar")
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(createdConfigMap).ToNot(BeNil())
+			data, exists := createdConfigMap.Data["opensearch.yml"]
+			Expect(exists).To(BeTrue())
+
+			var parsed map[string]interface{}
+			Expect(yaml.Unmarshal([]byte(data), &parsed)).To(Succeed())
+			// types must be a real YAML list, not a quoted "[transport-grpc]" string
+			Expect(parsed["aux.transport.types"]).To(Equal([]interface{}{"transport-grpc"}))
+			// port must be the plain range without embedded quotes
+			Expect(parsed["aux.transport.transport-grpc.port"]).To(Equal("9400-9500"))
 		})
 	})
 
