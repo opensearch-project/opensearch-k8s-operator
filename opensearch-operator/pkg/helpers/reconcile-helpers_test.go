@@ -61,3 +61,14 @@ var _ = DescribeTable("ResolveImage",
 	Entry("uses node pool image over general image", ptr.To("custom/opensearch:1.0.0"), ptr.To("custom/cuda-opensearch:1.0.0"), "custom/cuda-opensearch:1.0.0"),
 	Entry("uses node pool image when only node pool is configured", nil, ptr.To("custom/cuda-opensearch:2.17.1"), "custom/cuda-opensearch:2.17.1"),
 )
+
+var _ = DescribeTable("NodeAttributeEnvVar",
+	func(attribute string, expected string) {
+		Expect(NodeAttributeEnvVar(attribute)).To(Equal(expected))
+	},
+	Entry("encodes a simple attribute", "zone", "NODE_ATTR_7A6F6E65"),
+	Entry("encodes dots distinctly", "rack.id", "NODE_ATTR_7261636B2E6964"),
+	Entry("encodes dashes distinctly", "rack-id", "NODE_ATTR_7261636B2D6964"),
+	Entry("encodes underscores distinctly", "rack_id", "NODE_ATTR_7261636B5F6964"),
+	Entry("preserves case distinctly", "Zone", "NODE_ATTR_5A6F6E65"),
+)

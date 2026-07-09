@@ -31,6 +31,7 @@ spec:
         - --enable-webhooks={{ .Values.webhook.enabled }}
         - --enable-legacy-api={{ include "opensearch-operator.legacyAPIEnabled" . }}
         - --webhook-port={{ .Values.webhook.port }}
+        - --manage-cluster-role-bindings={{ not .Values.useRoleBindings }}
         {{- if .Values.manager.watchNamespace }}
         {{- if kindIs "slice" .Values.manager.watchNamespace }}
         - --watch-namespace={{ .Values.manager.watchNamespace | join "," }}
