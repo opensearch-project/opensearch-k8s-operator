@@ -1697,7 +1697,7 @@ _Appears in:_
 | `secret` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |  |  |
 | `caSecret` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ | Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields |  |  |
 | `duration` _[Duration](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#duration-v1-meta)_ | Duration controls the validity period of generated certificates (e.g. "8760h", "720h"). | 8760h |  |
-| `enableHotReload` _boolean_ | Enable hot reloading of TLS certificates. When enabled, certificates are mounted as directories instead of using subPath, allowing Kubernetes to update certificate files when secrets are updated. |  |  |
+| `enableHotReload` _boolean_ | Enable hot reloading of TLS certificates so nodes pick up renewed certificates without a restart. Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch 3.x and above. |  |  |
 
 
 #### TlsConfig

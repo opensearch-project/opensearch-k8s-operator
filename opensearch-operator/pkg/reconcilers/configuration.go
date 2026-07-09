@@ -273,8 +273,8 @@ func (r *ConfigurationReconciler) buildConfigMapForNodePool(data string, name st
 
 func (r *ConfigurationReconciler) createHashForNodePool(nodePool opensearchv1.NodePool, data string, volumeData []byte) (*ctrl.Result, error) {
 	combinedData := append([]byte(data), volumeData...)
-	// Renewed TLS certificates must also roll the pods even though they do not
-	// alter opensearch.yml
+	// Without hot reload, renewed TLS certificates must roll the pods even
+	// though they do not alter opensearch.yml
 	combinedData = append(combinedData, []byte(strings.Join(r.reconcilerContext.CertHashData, ","))...)
 
 	found, nodePoolHash := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)

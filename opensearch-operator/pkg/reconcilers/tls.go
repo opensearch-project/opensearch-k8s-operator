@@ -109,12 +109,31 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.ssl.http.enabled", "false")
 	}
 
+	// The hot reload setting is global, so enable it once if any TLS interface
+	// wants it. With hot reload active nodes pick up renewed certificates from
+	// the mounted secrets without a restart.
+	if r.transportHotReloadEnabled() || r.httpHotReloadEnabled() {
+		r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
+	}
+
 	if helpers.IsSecurityPluginEnabled(r.instance) {
 		res, err := r.handleAdminCertificate()
 		return lo.FromPtrOr(res, ctrl.Result{}), err
 	}
 
 	return ctrl.Result{}, nil
+}
+
+func (r *TLSReconciler) transportHotReloadEnabled() bool {
+	tlsConfig := r.instance.Spec.Security.Tls
+	return r.isTransportTlsEnabled(tlsConfig) &&
+		helpers.HotReloadEnabled(r.instance, tlsConfig.Transport.EnableHotReload)
+}
+
+func (r *TLSReconciler) httpHotReloadEnabled() bool {
+	tlsConfig := r.instance.Spec.Security.Tls
+	return r.isHttpTlsEnabled(tlsConfig) &&
+		helpers.HotReloadEnabled(r.instance, tlsConfig.Http.EnableHotReload)
 }
 
 // isTransportTlsEnabled determines if transport TLS should be enabled.
@@ -457,7 +476,9 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 		return err
 	}
 
-	if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" {
+	// With hot reload active nodes reload renewed certificates in place; the
+	// restart marker is only needed as a fallback when it is off.
+	if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" && !r.transportHotReloadEnabled() {
 		r.reconcilerContext.CertHashData = append(r.reconcilerContext.CertHashData, "transport-certs:"+marker)
 	}
 
@@ -644,11 +665,6 @@ func (r *TLSReconciler) handleTransportExistingCerts() error {
 			r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemtrustedcas_filepath", fmt.Sprintf("tls-transport-ca/%s", CaCertKey))
 		}
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "false")
-
-		// Enable hot reload if configured and version supports it
-		if tlsConfig.EnableHotReload && helpers.SupportsHotReload(r.instance) {
-			r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
-		}
 	}
 	dnList := strings.Join(tlsConfig.NodesDn, "\",\"")
 	r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"%s\"]", dnList))
@@ -728,7 +744,9 @@ func (r *TLSReconciler) handleHttp() error {
 			return err
 		}
 
-		if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" {
+		// With hot reload active nodes reload renewed certificates in place; the
+		// restart marker is only needed as a fallback when it is off.
+		if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" && !r.httpHotReloadEnabled() {
 			r.reconcilerContext.CertHashData = append(r.reconcilerContext.CertHashData, "http-certs:"+marker)
 		}
 
@@ -780,10 +798,6 @@ func (r *TLSReconciler) handleHttp() error {
 		r.reconcilerContext.AddConfig("plugins.security.ssl.http.pemtrustedcas_filepath", fmt.Sprintf("tls-http-ca/%s", CaCertKey))
 	}
 
-	// Enable hot reload if configured and version supports it
-	if tlsConfig.EnableHotReload && helpers.SupportsHotReload(r.instance) {
-		r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
-	}
 	return nil
 }
 
