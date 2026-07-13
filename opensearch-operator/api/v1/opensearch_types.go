@@ -83,6 +83,26 @@ type GeneralConfig struct {
 	OperatorClusterURL *string `json:"operatorClusterURL,omitempty"`
 	// OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set.
 	OpenSearchHome string `json:"opensearchHome,omitempty"`
+	// RollingRestart controls operator-managed pod restart behavior.
+	RollingRestart *RollingRestartConfig `json:"rollingRestart,omitempty"`
+}
+
+// RollingRestartHealthGatePolicy controls which OpenSearch health states allow
+// the operator to continue operator-managed pod restarts.
+type RollingRestartHealthGatePolicy string
+
+const (
+	// RollingRestartHealthGatePolicyGreenOnly preserves the existing restart health gate.
+	RollingRestartHealthGatePolicyGreenOnly RollingRestartHealthGatePolicy = "GreenOnly"
+	// RollingRestartHealthGatePolicyGreenOrRecoverableYellow also allows proven safe yellow states.
+	RollingRestartHealthGatePolicyGreenOrRecoverableYellow RollingRestartHealthGatePolicy = "GreenOrRecoverableYellow"
+)
+
+type RollingRestartConfig struct {
+	// HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.
+	// Defaults to GreenOnly, which preserves the existing restart health gate.
+	// +kubebuilder:validation:Enum=GreenOnly;GreenOrRecoverableYellow
+	HealthGatePolicy RollingRestartHealthGatePolicy `json:"healthGatePolicy,omitempty"`
 }
 
 type PdbConfig struct {
@@ -483,6 +503,13 @@ func (g GeneralConfig) GetOpenSearchHome() string {
 		return strings.TrimRight(g.OpenSearchHome, "/")
 	}
 	return DefaultOpenSearchHome
+}
+
+func (g GeneralConfig) GetRollingRestartHealthGatePolicy() RollingRestartHealthGatePolicy {
+	if g.RollingRestart == nil || g.RollingRestart.HealthGatePolicy == "" {
+		return RollingRestartHealthGatePolicyGreenOnly
+	}
+	return g.RollingRestart.HealthGatePolicy
 }
 
 func (d DashboardsConfig) GetOpenSearchDashboardsHome() string {
