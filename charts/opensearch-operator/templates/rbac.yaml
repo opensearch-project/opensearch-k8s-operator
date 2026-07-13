@@ -20,6 +20,7 @@ rules:
   - persistentvolumeclaims
   - pods
   - secrets
+  - serviceaccounts
   - services
   verbs:
   - create
@@ -150,6 +151,49 @@ rules:
   - patch
   - update
   - watch
+{{- if not .Values.useRoleBindings }}
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  resourceNames:
+  - opensearch-node-attributes
+  verbs:
+  - bind
+{{- end }}
+{{- if not .Values.useRoleBindings }}
+---
+# Shared, cluster-scoped role granting "get" on nodes. The operator is allowed
+# to bind only this role to per-cluster ServiceAccounts when
+# spec.general.nodeAttributes is configured, allowing the node-attributes init
+# container to read node labels. Named statically so the operator can reference
+# it at runtime.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: opensearch-node-attributes
+  labels:
+    {{- include "opensearch-operator.labels" . | nindent 4 }}
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - nodes
+  verbs:
+  - get
+{{- end }}
 {{- if not .Values.useRoleBindings }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1

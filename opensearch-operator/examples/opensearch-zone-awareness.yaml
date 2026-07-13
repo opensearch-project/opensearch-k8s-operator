@@ -1,0 +1,92 @@
+# Example: shard allocation awareness driven by Kubernetes node labels.
+#
+# The operator reads the node label "topology.kubernetes.io/zone" off the node
+# hosting each pod and exposes it to OpenSearch as node.attr.zone. Together with
+# the awareness settings in additionalConfig this spreads (and forces) shard
+# copies across the two data centers dc1 and dc2.
+#
+# The init container that reads the node label talks to the Kubernetes API, so
+# the pods' ServiceAccount must be allowed to "get" nodes. When no
+# spec.general.serviceAccount is set (as below) the operator handles this
+# automatically: it creates a dedicated ServiceAccount for the cluster and binds
+# it to the shared "opensearch-node-attributes" ClusterRole shipped by the
+# operator's Helm chart. No manual RBAC is required.
+#
+# If you instead set a custom spec.general.serviceAccount, the operator will NOT
+# manage RBAC for it and you must grant that ServiceAccount "get" on nodes
+# yourself (see the commented-out ClusterRole/ClusterRoleBinding at the bottom).
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+  namespace: default
+spec:
+  general:
+    serviceName: my-cluster
+    version: "2.11.0"
+    # No serviceAccount is set, so the operator creates and wires up a
+    # ServiceAccount + ClusterRoleBinding for node-label access automatically.
+    #
+    # Derive node.attr.zone from the node label at runtime.
+    nodeAttributes:
+      - name: zone
+        nodeLabel: topology.kubernetes.io/zone
+    # Enable and force zone awareness using the attribute populated above.
+    additionalConfig:
+      cluster.routing.allocation.awareness.attributes: zone
+      cluster.routing.allocation.awareness.force.zone.values: dc1,dc2
+  nodePools:
+    - component: data
+      replicas: 6
+      diskSize: "30Gi"
+      roles:
+        - "cluster_manager"
+        - "data"
+      # Also spread the pods themselves across zones and nodes.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              opensearch.org/opensearch-nodepool: data
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              opensearch.org/opensearch-nodepool: data
+#
+# --- Alternative: bring your own ServiceAccount ---------------------------------
+#
+# If you prefer to manage the ServiceAccount yourself, set
+# spec.general.serviceAccount to its name and pre-create the RBAC below. The
+# operator will then leave RBAC entirely to you.
+#
+# apiVersion: v1
+# kind: ServiceAccount
+# metadata:
+#   name: opensearch-zone-aware
+#   namespace: default
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRole
+# metadata:
+#   name: opensearch-node-reader
+# rules:
+#   - apiGroups: [""]
+#     resources: ["nodes"]
+#     verbs: ["get"]
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: ClusterRoleBinding
+# metadata:
+#   name: opensearch-zone-aware-node-reader
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: ClusterRole
+#   name: opensearch-node-reader
+# subjects:
+#   - kind: ServiceAccount
+#     name: opensearch-zone-aware
+#     namespace: default

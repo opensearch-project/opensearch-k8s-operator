@@ -45,9 +45,11 @@ import (
 // Now reconciles opensearch.org/v1 API group (new API) instead of opensearch.opster.io/v1 (old API)
 type OpenSearchClusterReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Instance *opensearchv1.OpenSearchCluster
+	Scheme                           *runtime.Scheme
+	Recorder                         record.EventRecorder
+	Instance                         *opensearchv1.OpenSearchCluster
+	SkipClusterRoleBindingManagement bool
+	NodeAttributesClusterRoleName    string
 	logr.Logger
 }
 
@@ -68,6 +70,9 @@ type OpenSearchClusterReconciler struct {
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,resourceNames=opensearch-node-attributes,verbs=bind
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -205,6 +210,10 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		&reconcilerContext,
 		r.Instance,
 	)
+	if r.SkipClusterRoleBindingManagement {
+		cluster.DisableClusterRoleBindingManagement()
+	}
+	cluster.SetNodeAttributesClusterRoleName(r.NodeAttributesClusterRoleName)
 	dashboards := reconcilers.NewDashboardsReconciler(
 		r.Client,
 		ctx,
@@ -294,6 +303,10 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		&reconcilerContext,
 		r.Instance,
 	)
+	if r.SkipClusterRoleBindingManagement {
+		cluster.DisableClusterRoleBindingManagement()
+	}
+	cluster.SetNodeAttributesClusterRoleName(r.NodeAttributesClusterRoleName)
 	scaler := reconcilers.NewScalerReconciler(
 		r.Client,
 		ctx,

@@ -24,6 +24,7 @@ import (
 
 	"strings"
 
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
@@ -86,6 +87,8 @@ func main() {
 	var probeAddr string
 	var watchNamespace string
 	var logLevel string
+	var manageClusterRoleBindings bool
+	var nodeAttributesClusterRoleName string
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8443", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
@@ -96,6 +99,10 @@ func main() {
 	flag.StringVar(&watchNamespace, "watch-namespace", "",
 		"The comma-separated list of namespaces that the controller manager is restricted to watch. If not set, default is to watch all namespaces.")
 	flag.StringVar(&logLevel, "loglevel", "info", "The log level to use for the operator logs. Possible values: debug,info,warn,error")
+	flag.BoolVar(&manageClusterRoleBindings, "manage-cluster-role-bindings", true,
+		"Allow the operator to create and delete ClusterRoleBindings for optional features that need cluster-scoped RBAC.")
+	flag.StringVar(&nodeAttributesClusterRoleName, "node-attributes-cluster-role-name", builders.NodeAttributesClusterRoleName,
+		"The shared ClusterRole name that grants OpenSearch node-attribute init containers get access to nodes.")
 
 	opts := zap.Options{
 		Development: false,
@@ -172,9 +179,11 @@ func main() {
 	// Controllers now watch opensearch.org/v1 (new API group)
 	// Migration controller handles creating new CRs from old ones
 	if err = (&controllers.OpenSearchClusterReconciler{
-		Client:   mgr.GetClient(),
-		Scheme:   mgr.GetScheme(),
-		Recorder: mgr.GetEventRecorderFor("containerset-controller"),
+		Client:                           mgr.GetClient(),
+		Scheme:                           mgr.GetScheme(),
+		Recorder:                         mgr.GetEventRecorderFor("containerset-controller"),
+		SkipClusterRoleBindingManagement: !manageClusterRoleBindings,
+		NodeAttributesClusterRoleName:    nodeAttributesClusterRoleName,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchCluster")
 		os.Exit(1)

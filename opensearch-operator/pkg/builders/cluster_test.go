@@ -1686,4 +1686,93 @@ var _ = Describe("Builders", func() {
 			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
 		})
 	})
+
+	When("configuring node attributes from node labels", func() {
+		clusterWithAttributes := func() opensearchv1.OpenSearchCluster {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.NodeAttributes = []opensearchv1.NodeAttribute{
+				{Name: "zone", NodeLabel: "topology.kubernetes.io/zone"},
+			}
+			return clusterObject
+		}
+
+		findContainer := func(containers []corev1.Container, name string) *corev1.Container {
+			for i := range containers {
+				if containers[i].Name == name {
+					return &containers[i]
+				}
+			}
+			return nil
+		}
+
+		It("should not touch pods when no attributes are configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			sts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			Expect(findContainer(sts.Spec.Template.Spec.InitContainers, nodeAttributesVolumeName)).To(BeNil())
+			for _, v := range sts.Spec.Template.Spec.Volumes {
+				Expect(v.Name).NotTo(Equal(nodeAttributesVolumeName))
+			}
+		})
+
+		It("should add the init container, shared volume and mount to the node pool STS", func() {
+			clusterObject := clusterWithAttributes()
+			sts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+
+			initContainer := findContainer(sts.Spec.Template.Spec.InitContainers, nodeAttributesVolumeName)
+			Expect(initContainer).NotTo(BeNil())
+			Expect(initContainer.Env).To(ContainElement(corev1.EnvVar{
+				Name:      "NODE_NAME",
+				ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "spec.nodeName"}},
+			}))
+			// The init container must reference the requested label and write the
+			// matching placeholder variable, while logging the resolved mapping.
+			Expect(initContainer.Command[2]).To(ContainSubstring("topology.kubernetes.io/zone"))
+			Expect(initContainer.Command[2]).To(ContainSubstring(helpers.NodeAttributeEnvVar("zone")))
+			Expect(initContainer.Command[2]).To(ContainSubstring("node-attributes: node.attr.zone from node label topology.kubernetes.io/zone -> " + helpers.NodeAttributeEnvVar("zone")))
+
+			Expect(sts.Spec.Template.Spec.Volumes).To(ContainElement(nodeAttributesVolume()))
+			Expect(sts.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(nodeAttributesVolumeMount(&clusterObject)))
+		})
+
+		It("should source the attributes file before the OpenSearch entrypoint", func() {
+			clusterObject := clusterWithAttributes()
+			sts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			command := sts.Spec.Template.Spec.Containers[0].Command
+			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && ./opensearch-docker-entrypoint.sh"))
+		})
+
+		It("should wire the same mechanism into the bootstrap pod", func() {
+			clusterObject := clusterWithAttributes()
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(findContainer(pod.Spec.InitContainers, nodeAttributesVolumeName)).NotTo(BeNil())
+			Expect(pod.Spec.Volumes).To(ContainElement(nodeAttributesVolume()))
+			command := pod.Spec.Containers[0].Command
+			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && ./opensearch-docker-entrypoint.sh"))
+		})
+
+		It("should bind the managed ServiceAccount to the shared node-attributes ClusterRole", func() {
+			clusterObject := clusterWithAttributes()
+			clusterObject.Name = "mycluster"
+			clusterObject.Namespace = "myns"
+
+			sa := NodeAttributesManagedServiceAccount(&clusterObject)
+			Expect(sa.Name).To(Equal("mycluster-node-attributes"))
+			Expect(sa.Namespace).To(Equal("myns"))
+
+			crb := NodeAttributesClusterRoleBinding(&clusterObject)
+			// Binding name is per-cluster (namespace embedded) to avoid collisions.
+			Expect(crb.Name).To(Equal("mycluster-myns-node-attributes"))
+			Expect(crb.Name).To(Equal(NodeAttributesClusterRoleBindingName(&clusterObject)))
+			// It must reference the shared, chart-managed ClusterRole, never a
+			// per-cluster one, so the operator needs no ClusterRole create rights.
+			Expect(crb.RoleRef.Kind).To(Equal("ClusterRole"))
+			Expect(crb.RoleRef.Name).To(Equal(NodeAttributesClusterRoleName))
+			Expect(NodeAttributesClusterRoleName).To(Equal("opensearch-node-attributes"))
+			Expect(crb.Subjects).To(HaveLen(1))
+			Expect(crb.Subjects[0].Kind).To(Equal("ServiceAccount"))
+			Expect(crb.Subjects[0].Name).To(Equal("mycluster-node-attributes"))
+			Expect(crb.Subjects[0].Namespace).To(Equal("myns"))
+		})
+	})
 })

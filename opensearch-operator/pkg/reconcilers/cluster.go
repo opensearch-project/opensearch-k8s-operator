@@ -31,12 +31,14 @@ import (
 const clusterReconcilerName = "cluster"
 
 type ClusterReconciler struct {
-	client            k8s.K8sClient
-	ctx               context.Context
-	recorder          record.EventRecorder
-	reconcilerContext *ReconcilerContext
-	instance          *opensearchv1.OpenSearchCluster
-	logger            logr.Logger
+	client                           k8s.K8sClient
+	ctx                              context.Context
+	recorder                         record.EventRecorder
+	reconcilerContext                *ReconcilerContext
+	instance                         *opensearchv1.OpenSearchCluster
+	logger                           logr.Logger
+	nodeAttributesClusterRoleName    string
+	skipClusterRoleBindingManagement bool
 }
 
 func NewClusterReconciler(
@@ -53,15 +55,40 @@ func NewClusterReconciler(
 			reconciler.WithPatchCalculateOptions(patch.IgnoreVolumeClaimTemplateTypeMetaAndStatus(), patch.IgnoreStatusFields()),
 			reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", clusterReconcilerName)),
 		)...),
-		ctx:               ctx,
-		recorder:          recorder,
-		reconcilerContext: reconcilerContext,
-		instance:          instance,
-		logger:            log.FromContext(ctx),
+		ctx:                           ctx,
+		recorder:                      recorder,
+		reconcilerContext:             reconcilerContext,
+		instance:                      instance,
+		logger:                        log.FromContext(ctx),
+		nodeAttributesClusterRoleName: builders.NodeAttributesClusterRoleName,
 	}
 }
 
 func (r *ClusterReconciler) Name() string { return clusterReconcilerName }
+
+// DisableClusterRoleBindingManagement prevents this reconciler from creating or
+// deleting cluster-scoped RBAC. It is used by namespace-scoped installs that
+// intentionally run without ClusterRoleBinding permissions.
+func (r *ClusterReconciler) DisableClusterRoleBindingManagement() {
+	r.skipClusterRoleBindingManagement = true
+}
+
+func (r *ClusterReconciler) SetNodeAttributesClusterRoleName(name string) {
+	if name != "" {
+		r.nodeAttributesClusterRoleName = name
+	}
+}
+
+func (r *ClusterReconciler) getNodeAttributesClusterRoleName() string {
+	if r.nodeAttributesClusterRoleName == "" {
+		return builders.NodeAttributesClusterRoleName
+	}
+	return r.nodeAttributesClusterRoleName
+}
+
+func (r *ClusterReconciler) canManageClusterRoleBindings() bool {
+	return !r.skipClusterRoleBindingManagement
+}
 
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// lg := log.FromContext(r.ctx)
@@ -113,6 +140,10 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	passwordSecret := builders.PasswordSecret(r.instance, username, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
+
+	if !r.reconcileNodeAttributesRBAC(&result) {
+		return result.Result, result.Err
+	}
 
 	// Create bootstrap PVC for persistent storage
 	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
@@ -362,7 +393,47 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
+	// Clean up the cluster-scoped ClusterRoleBinding created for node-attributes (it
+	// has no owner reference and won't be garbage-collected automatically). The
+	// shared ClusterRole is chart-managed and intentionally left in place.
+	if r.canManageClusterRoleBindings() {
+		result.CombineErr(r.client.DeleteClusterRoleBinding(builders.NodeAttributesClusterRoleBindingName(r.instance)))
+	}
 	return result.Result, result.Err
+}
+
+func (r *ClusterReconciler) reconcileNodeAttributesRBAC(result *reconciler.CombinedResult) bool {
+	// When nodeAttributes are enabled and no custom serviceAccount is set, create a
+	// dedicated ServiceAccount and a ClusterRoleBinding to the shared, chart-managed
+	// node-attributes ClusterRole so the init container can read node labels. The
+	// operator never creates the ClusterRole itself (it is shipped by the Helm chart
+	// and explicitly allowed via the "bind" verb), which avoids granting broad node
+	// read access or the "escalate" verb to the operator.
+	if len(r.instance.Spec.General.NodeAttributes) > 0 && r.instance.Spec.General.ServiceAccount == "" {
+		if !r.canManageClusterRoleBindings() {
+			result.CombineErr(fmt.Errorf(
+				"spec.general.nodeAttributes with a managed serviceAccount requires ClusterRoleBinding management; " +
+					"set spec.general.serviceAccount to an account that can get nodes or install the operator with cluster-scoped RBAC",
+			))
+			return false
+		}
+		sa := builders.NodeAttributesManagedServiceAccount(r.instance)
+		result.CombineErr(ctrl.SetControllerReference(r.instance, sa, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(sa, reconciler.StatePresent))
+
+		result.CombineErr(r.client.EnsureClusterRoleBinding(
+			builders.NodeAttributesClusterRoleBindingWithRoleName(r.instance, r.getNodeAttributesClusterRoleName()),
+		))
+		return true
+	}
+
+	// Ensure they are removed when nodeAttributes are disabled or a custom SA is in use.
+	if r.canManageClusterRoleBindings() {
+		result.CombineErr(r.client.DeleteClusterRoleBinding(builders.NodeAttributesClusterRoleBindingName(r.instance)))
+	}
+	sa := builders.NodeAttributesManagedServiceAccount(r.instance)
+	result.Combine(r.client.ReconcileResource(sa, reconciler.StateAbsent))
+	return true
 }
 
 // isImmutableFieldChangeError checks if an error is due to immutable field changes in StatefulSet

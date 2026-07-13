@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"encoding/hex"
 	"fmt"
 	"path"
 	"strings"
@@ -163,6 +164,18 @@ func VersionCheck(instance *opensearchv1.OpenSearchCluster) (int32, int32, strin
 		securityConfigPath = opensearchHome + "/plugins/opensearch-security/securityconfig"
 	}
 	return httpPort, securityConfigPort, securityConfigPath
+}
+
+// NodeAttributeEnvVar returns the shell- and OpenSearch-safe environment
+// variable name used to carry the value of a node attribute from the init
+// container to the OpenSearch process. OpenSearch resolves node.attr.<name>
+// from this variable via the ${...} placeholder in opensearch.yml, so the name
+// must not contain the dots or dashes that a raw attribute name may have.
+// Hex-encoding the original name is less readable than replacing separators
+// with underscores, but it avoids collisions between valid attributes such as
+// "rack.id", "rack-id", and "rack_id".
+func NodeAttributeEnvVar(attribute string) string {
+	return "NODE_ATTR_" + strings.ToUpper(hex.EncodeToString([]byte(attribute)))
 }
 
 func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool, entrypoint string) []string {
