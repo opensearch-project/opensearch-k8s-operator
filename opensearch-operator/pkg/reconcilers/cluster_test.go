@@ -1,6 +1,8 @@
 package reconcilers
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -10,6 +12,59 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 )
+
+var _ = Describe("emptyDir recovery", func() {
+	DescribeTable("emptyDirDataLossSuspected",
+		func(stats emptyDirPodStats, expected bool) {
+			Expect(emptyDirDataLossSuspected(stats)).To(Equal(expected))
+		},
+		Entry("does not trigger when data pods exist but are not ready", emptyDirPodStats{
+			existingDataPods:   3,
+			totalDataPods:      3,
+			existingMasterPods: 3,
+			totalMasterPods:    3,
+		}, false),
+		Entry("does not trigger when masters exist but are not ready", emptyDirPodStats{
+			existingDataPods:   3,
+			totalDataPods:      3,
+			existingMasterPods: 2,
+			totalMasterPods:    3,
+		}, false),
+		Entry("triggers when all data pods are missing", emptyDirPodStats{
+			existingDataPods:   0,
+			totalDataPods:      3,
+			existingMasterPods: 3,
+			totalMasterPods:    3,
+		}, true),
+		Entry("triggers when master quorum pods are missing", emptyDirPodStats{
+			existingDataPods:   3,
+			totalDataPods:      3,
+			existingMasterPods: 1,
+			totalMasterPods:    3,
+		}, true),
+		Entry("does not trigger when there are no data nodes", emptyDirPodStats{
+			existingDataPods:   0,
+			totalDataPods:      0,
+			existingMasterPods: 3,
+			totalMasterPods:    3,
+		}, false),
+	)
+
+	It("parses the first observed timestamp from component status", func() {
+		firstObserved := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+		components := []opensearchv1.ComponentStatus{
+			{
+				Component:   emptyDirRecoveryComponent,
+				Status:      emptyDirRecoveryStatusPending,
+				Description: firstObserved.Format(time.RFC3339),
+			},
+		}
+
+		parsed, ok := emptyDirRecoveryFirstObserved(components)
+		Expect(ok).To(BeTrue())
+		Expect(parsed).To(Equal(firstObserved))
+	})
+})
 
 var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
 	Context("Bootstrap Pod Recreation Approach", func() {
