@@ -616,28 +616,49 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 	return diff
 }
 
-// Count the number of pods running and ready and not terminating for a given nodePool
-func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	// Constrict selector from labels
+func listPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) ([]corev1.Pod, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	componentReq, err := labels.NewRequirement(NodePoolLabel, selection.Equals, []string{nodePool.Component})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	selector := labels.NewSelector()
 	selector = selector.Add(*clusterReq, *componentReq)
-	// List pods matching selector
 	list, err := k8sClient.ListPods(&client.ListOptions{Namespace: cr.Namespace, LabelSelector: selector})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
+}
+
+// CountExistingPodsForNodePool returns the number of non-terminating pods for a node pool,
+// regardless of readiness. emptyDir data survives in-place pod restarts while the pod exists.
+func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
+	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
 	}
-	// Count pods that are ready
+	numExistingPods := 0
+	for _, pod := range pods {
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		numExistingPods++
+	}
+	return numExistingPods, nil
+}
+
+// Count the number of pods running and ready and not terminating for a given nodePool
+func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
+	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
+	if err != nil {
+		return 0, err
+	}
 	numReadyPods := 0
-	for _, pod := range list.Items {
-		// If DeletionTimestamp is set the pod is terminating
+	for _, pod := range pods {
 		if pod.DeletionTimestamp != nil {
 			continue
 		}
@@ -649,7 +670,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 			}
 		}
 		if podReady {
-			numReadyPods += 1
+			numReadyPods++
 		}
 	}
 	return numReadyPods, nil
