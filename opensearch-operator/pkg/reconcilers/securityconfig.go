@@ -7,6 +7,8 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -15,6 +17,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
@@ -25,8 +28,21 @@ import (
 
 const (
 	securityConfigReconcilerName = "securityconfig"
+	securityConfigComponentName  = "Securityconfig"
 
 	checksumAnnotation = "securityconfig/checksum"
+
+	securityConfigStatusReady   = "Ready"
+	securityConfigStatusRunning = "Running"
+	securityConfigStatusFailed  = "Failed"
+
+	securityConfigRetryConditionPrefix    = "retry:"
+	securityConfigLastRetryConditionPrefix = "lastRetry:"
+
+	securityConfigInitialRetryDelay = 30 * time.Second
+	securityConfigMaxRetryDelay     = 15 * time.Minute
+
+	securityConfigConnectWaitAttempts = 60
 
 	adminCert = "/certs/tls.crt"
 	adminKey  = "/certs/tls.key"
@@ -34,9 +50,14 @@ const (
 
 	SecurityAdminBaseCmdTmpl = `ADMIN=%s/plugins/opensearch-security/tools/securityadmin.sh;
 chmod +x $ADMIN;
+wait_count=0;
 until curl -k --silent https://%s:%v;
 do
-echo 'Waiting to connect to the cluster'; sleep 20;
+  if (( wait_count++ >= %d )); then
+    echo "Failed to connect to cluster after %d attempts";
+    exit 1;
+  fi;
+  echo 'Waiting to connect to the cluster'; sleep 20;
 done;`
 
 	ApplyAllYmlCmdTmpl = `count=0;
@@ -183,11 +204,20 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
 
 	job, err := r.client.GetJob(jobName, namespace)
+	resetRetryCount := false
 	if err == nil {
 		value, exists := job.Annotations[checksumAnnotation]
 		if exists && value == checksumval {
-			// Nothing to do, current securityconfig already applied
-			return ctrl.Result{}, nil
+			result, done, handleErr := r.handleExistingSecurityConfigJob(job, annotations)
+			if handleErr != nil {
+				return ctrl.Result{}, handleErr
+			}
+			if done {
+				return result, nil
+			}
+			// Failed job past backoff window: delete and recreate below.
+		} else {
+			resetRetryCount = true
 		}
 		// Delete old job
 		r.logger.Info("Deleting old update job")
@@ -196,6 +226,15 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			return ctrl.Result{}, err
 		}
 	}
+	if resetRetryCount {
+		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", r.securityConfigRetryConditions(0, time.Time{})); err != nil {
+			r.logger.Error(err, "Unable to reset securityconfig retry status")
+			return ctrl.Result{}, err
+		}
+	} else if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", r.currentSecurityConfigRetryConditions()); err != nil {
+		r.logger.Error(err, "Unable to update securityconfig status")
+		return ctrl.Result{}, err
+	}
 
 	// If the cluster has not yet initialized or
 	// securityconfig secret was not passed, build the command to apply all yml files
@@ -203,7 +242,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		clusterHostName := BuildClusterSvcHostName(r.instance)
 		opensearchHome := r.instance.Spec.General.GetOpenSearchHome()
 		httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(r.instance)
-		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort) +
+		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort, securityConfigConnectWaitAttempts, securityConfigConnectWaitAttempts) +
 			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
 	}
 
@@ -237,7 +276,7 @@ func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret
 	opensearchHome := instance.Spec.General.GetOpenSearchHome()
 	httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(instance)
 
-	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort)
+	arg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort, securityConfigConnectWaitAttempts, securityConfigConnectWaitAttempts)
 
 	// Get the list of yml files and sort them
 	// This will ensure commands are always generated in the same order
@@ -349,4 +388,141 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opensearchv1
 // BuildClusterSvcHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}
 func BuildClusterSvcHostName(instance *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s.svc.%s", builders.DnsOfService(instance), helpers.ClusterDnsBase())
+}
+
+func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
+	job batchv1.Job,
+	annotations map[string]string,
+) (ctrl.Result, bool, error) {
+	if job.Status.Succeeded > 0 {
+		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusReady, "", nil); err != nil {
+			return ctrl.Result{}, true, err
+		}
+		return ctrl.Result{}, true, nil
+	}
+
+	if job.Status.Active > 0 {
+		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", nil); err != nil {
+			return ctrl.Result{}, true, err
+		}
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, true, nil
+	}
+
+	if job.Status.Failed > 0 {
+		retryCount := r.securityConfigRetryCount()
+		delay := securityConfigRetryDelay(retryCount)
+		lastRetry := r.securityConfigLastRetry()
+		if !lastRetry.IsZero() && time.Since(lastRetry) < delay {
+			remaining := delay - time.Since(lastRetry)
+			if err := r.updateSecurityConfigComponentStatus(
+				securityConfigStatusFailed,
+				"securityconfig update job failed",
+				r.securityConfigRetryConditions(retryCount, lastRetry),
+			); err != nil {
+				return ctrl.Result{}, true, err
+			}
+			return ctrl.Result{Requeue: true, RequeueAfter: remaining}, true, nil
+		}
+
+		retryCount++
+		now := time.Now().UTC()
+		r.recorder.AnnotatedEventf(
+			r.instance,
+			annotations,
+			"Warning",
+			"Security",
+			"Securityconfig update job failed, retrying (attempt %d)",
+			retryCount,
+		)
+		if err := r.updateSecurityConfigComponentStatus(
+			securityConfigStatusFailed,
+			"securityconfig update job failed",
+			r.securityConfigRetryConditions(retryCount, now),
+		); err != nil {
+			return ctrl.Result{}, true, err
+		}
+		return ctrl.Result{}, false, nil
+	}
+
+	if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", nil); err != nil {
+		return ctrl.Result{}, true, err
+	}
+	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, true, nil
+}
+
+func (r *SecurityconfigReconciler) updateSecurityConfigComponentStatus(status, description string, conditions []string) error {
+	return UpdateComponentStatus(r.client, r.instance, &opensearchv1.ComponentStatus{
+		Component:   securityConfigComponentName,
+		Status:      status,
+		Description: description,
+		Conditions:  conditions,
+	})
+}
+
+func (r *SecurityconfigReconciler) securityConfigComponentStatus() (opensearchv1.ComponentStatus, bool) {
+	for _, componentStatus := range r.instance.Status.ComponentsStatus {
+		if componentStatus.Component == securityConfigComponentName {
+			return componentStatus, true
+		}
+	}
+	return opensearchv1.ComponentStatus{}, false
+}
+
+func (r *SecurityconfigReconciler) securityConfigRetryCount() int {
+	componentStatus, found := r.securityConfigComponentStatus()
+	if !found {
+		return 0
+	}
+	for _, condition := range componentStatus.Conditions {
+		if strings.HasPrefix(condition, securityConfigRetryConditionPrefix) {
+			retryCount, err := strconv.Atoi(strings.TrimPrefix(condition, securityConfigRetryConditionPrefix))
+			if err == nil {
+				return retryCount
+			}
+		}
+	}
+	return 0
+}
+
+func (r *SecurityconfigReconciler) securityConfigLastRetry() time.Time {
+	componentStatus, found := r.securityConfigComponentStatus()
+	if !found {
+		return time.Time{}
+	}
+	for _, condition := range componentStatus.Conditions {
+		if strings.HasPrefix(condition, securityConfigLastRetryConditionPrefix) {
+			lastRetry, err := time.Parse(time.RFC3339, strings.TrimPrefix(condition, securityConfigLastRetryConditionPrefix))
+			if err == nil {
+				return lastRetry
+			}
+		}
+	}
+	return time.Time{}
+}
+
+func (r *SecurityconfigReconciler) securityConfigRetryConditions(retryCount int, lastRetry time.Time) []string {
+	conditions := []string{fmt.Sprintf("%s%d", securityConfigRetryConditionPrefix, retryCount)}
+	if !lastRetry.IsZero() {
+		conditions = append(conditions, fmt.Sprintf("%s%s", securityConfigLastRetryConditionPrefix, lastRetry.Format(time.RFC3339)))
+	}
+	return conditions
+}
+
+func (r *SecurityconfigReconciler) currentSecurityConfigRetryConditions() []string {
+	componentStatus, found := r.securityConfigComponentStatus()
+	if found {
+		return componentStatus.Conditions
+	}
+	return nil
+}
+
+func securityConfigRetryDelay(retryCount int) time.Duration {
+	delay := securityConfigInitialRetryDelay
+	for i := 0; i < retryCount; i++ {
+		delay *= 2
+		if delay >= securityConfigMaxRetryDelay {
+			return securityConfigMaxRetryDelay
+		}
+	}
+	return delay
 }
