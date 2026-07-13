@@ -374,7 +374,7 @@ done;`
 	})
 
 	When("Reconciling with a failed securityconfig update job", func() {
-		buildReconcileFixture := func(mockClient *k8s.MockK8sClient) (*opensearchv1.OpenSearchCluster, *corev1.Secret) {
+		buildReconcileFixture := func(mockClient *k8s.MockK8sClient) (*opensearchv1.OpenSearchCluster, **corev1.Secret) {
 			adminCredSecret := newAdminCredentialsSecret(clusterName)
 			securityConfigSecret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
@@ -431,12 +431,12 @@ done;`
 					return *generatedConfigSecret
 				}, nil).Once()
 
-			return &spec, generatedConfigSecret
+			return &spec, &generatedConfigSecret
 		}
 
-		jobWithStatus := func(generatedConfigSecret *corev1.Secret, status batchv1.JobStatus) batchv1.Job {
-			Expect(generatedConfigSecret).ToNot(BeNil())
-			checksumval, err := checksum(generatedConfigSecret.Data)
+		jobWithStatus := func(generatedConfigSecret **corev1.Secret, status batchv1.JobStatus) batchv1.Job {
+			Expect(*generatedConfigSecret).ToNot(BeNil())
+			checksumval, err := checksum((*generatedConfigSecret).Data)
 			Expect(err).ToNot(HaveOccurred())
 			return batchv1.Job{
 				ObjectMeta: metav1.ObjectMeta{
