@@ -36,7 +36,7 @@ const (
 	securityConfigStatusRunning = "Running"
 	securityConfigStatusFailed  = "Failed"
 
-	securityConfigRetryConditionPrefix    = "retry:"
+	securityConfigRetryConditionPrefix     = "retry:"
 	securityConfigLastRetryConditionPrefix = "lastRetry:"
 
 	securityConfigInitialRetryDelay = 30 * time.Second
