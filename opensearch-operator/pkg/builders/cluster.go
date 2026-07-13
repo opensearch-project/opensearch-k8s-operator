@@ -1371,7 +1371,8 @@ func NewSecurityconfigUpdateJob(
 		securityconfigChecksumAnnotation: checksum,
 	}
 	terminationGracePeriodSeconds := int64(5)
-	backoffLimit := int32(0)
+	backoffLimit := int32(1)
+	activeDeadlineSeconds := int64(2400)
 
 	image := helpers.ResolveImage(instance, &node)
 	securityContext := instance.Spec.General.SecurityContext
@@ -1407,7 +1408,8 @@ func NewSecurityconfigUpdateJob(
 			Labels:      jobLabels,
 		},
 		Spec: batchv1.JobSpec{
-			BackoffLimit: &backoffLimit,
+			BackoffLimit:            &backoffLimit,
+			ActiveDeadlineSeconds:   &activeDeadlineSeconds,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:   jobName,

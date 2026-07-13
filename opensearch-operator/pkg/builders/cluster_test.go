@@ -1535,6 +1535,14 @@ var _ = Describe("Builders", func() {
 			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
 			Expect(job.Spec.Template.Spec.HostNetwork).To(BeTrue())
 		})
+
+		It("should retry failed securityconfig update jobs and enforce a deadline", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
+			Expect(*job.Spec.BackoffLimit).To(Equal(int32(1)))
+			Expect(*job.Spec.ActiveDeadlineSeconds).To(Equal(int64(2400)))
+		})
 	})
 
 	When("Configuring Security Config UpdateJob Tolerations", func() {

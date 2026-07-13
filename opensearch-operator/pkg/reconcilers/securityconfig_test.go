@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -351,9 +352,14 @@ config:
 
 			cmdArg := `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
 chmod +x $ADMIN;
+wait_count=0;
 until curl -k --silent https://no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local:9200;
 do
-echo 'Waiting to connect to the cluster'; sleep 20;
+  if (( wait_count++ >= 60 )); then
+    echo "Failed to connect to cluster after 60 attempts";
+    exit 1;
+  fi;
+  echo 'Waiting to connect to the cluster'; sleep 20;
 done;count=0;
 until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd /usr/share/opensearch/config/opensearch-security -icl -nhnv -h no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local -p 9200; do
   if (( count++ >= 20 )); then
@@ -364,6 +370,145 @@ until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd 
 done;`
 
 			Expect(createdJob.Spec.Template.Spec.Containers[0].Args[0]).To(Equal(cmdArg))
+		})
+	})
+
+	When("Reconciling with a failed securityconfig update job", func() {
+		buildReconcileFixture := func(mockClient *k8s.MockK8sClient) (*opensearchv1.OpenSearchCluster, *corev1.Secret) {
+			adminCredSecret := newAdminCredentialsSecret(clusterName)
+			securityConfigSecret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Type:       corev1.SecretType("Opaque"),
+				Data: map[string][]byte{
+					"config.yml":         []byte(configYAML),
+					"internal_users.yml": internalUsersYAML("", ""),
+				},
+			}
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Initialized:          true,
+					ContextSecretCreated: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(*securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			return &spec, generatedConfigSecret
+		}
+
+		jobWithStatus := func(generatedConfigSecret *corev1.Secret, status batchv1.JobStatus) batchv1.Job {
+			Expect(generatedConfigSecret).ToNot(BeNil())
+			checksumval, err := checksum(generatedConfigSecret.Data)
+			Expect(err).ToNot(HaveOccurred())
+			return batchv1.Job{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:        "securityconfig-securityconfig-update",
+					Namespace:   clusterName,
+					Annotations: map[string]string{checksumAnnotation: checksumval},
+				},
+				Status: status,
+			}
+		}
+
+		It("should not recreate the job when it already succeeded", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec, generatedConfigSecret := buildReconcileFixture(mockClient)
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				RunAndReturn(func(string, string) (batchv1.Job, error) {
+					return jobWithStatus(generatedConfigSecret, batchv1.JobStatus{Succeeded: 1}), nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+		})
+
+		It("should requeue while the update job is still running", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec, generatedConfigSecret := buildReconcileFixture(mockClient)
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				RunAndReturn(func(string, string) (batchv1.Job, error) {
+					return jobWithStatus(generatedConfigSecret, batchv1.JobStatus{Active: 1}), nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(Equal(30 * time.Second))
+		})
+
+		It("should delete and recreate the job when it failed with a matching checksum", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec, generatedConfigSecret := buildReconcileFixture(mockClient)
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				RunAndReturn(func(string, string) (batchv1.Job, error) {
+					return jobWithStatus(generatedConfigSecret, batchv1.JobStatus{Failed: 1}), nil
+				})
+			mockClient.EXPECT().DeleteJob(mock.AnythingOfType("*v1.Job")).Return(nil)
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(createdJob).ToNot(BeNil())
+		})
+	})
+
+	Describe("securityConfigRetryDelay", func() {
+		It("should use exponential backoff capped at the maximum delay", func() {
+			Expect(securityConfigRetryDelay(0)).To(Equal(30 * time.Second))
+			Expect(securityConfigRetryDelay(1)).To(Equal(60 * time.Second))
+			Expect(securityConfigRetryDelay(2)).To(Equal(120 * time.Second))
+			Expect(securityConfigRetryDelay(10)).To(Equal(15 * time.Minute))
 		})
 	})
 
