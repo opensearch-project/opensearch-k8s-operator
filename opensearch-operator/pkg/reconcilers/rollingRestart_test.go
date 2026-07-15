@@ -91,4 +91,41 @@ var _ = Describe("RollingRestart Reconciler", func() {
 			})
 		})
 	})
+
+	Describe("findStatus", func() {
+		Context("when ComponentsStatus has a non-RollingRestart entry at index 0", func() {
+			It("should return the matched RollingRestart entry, not comp[0]", func() {
+				instance := &opensearchv1.OpenSearchCluster{
+					Status: opensearchv1.ClusterStatus{
+						ComponentsStatus: []opensearchv1.ComponentStatus{
+							{Component: "Scaler", Status: statusInProgress},
+							{Component: componentName, Status: statusInProgress},
+						},
+					},
+				}
+				r := &RollingRestartReconciler{instance: instance}
+
+				found := r.findStatus()
+
+				Expect(found).NotTo(BeNil())
+				Expect(found.Component).To(Equal(componentName))
+				Expect(found.Status).To(Equal(statusInProgress))
+			})
+		})
+
+		Context("when there is no RollingRestart entry", func() {
+			It("should return nil", func() {
+				instance := &opensearchv1.OpenSearchCluster{
+					Status: opensearchv1.ClusterStatus{
+						ComponentsStatus: []opensearchv1.ComponentStatus{
+							{Component: "Scaler", Status: statusInProgress},
+						},
+					},
+				}
+				r := &RollingRestartReconciler{instance: instance}
+
+				Expect(r.findStatus()).To(BeNil())
+			})
+		})
+	})
 })
