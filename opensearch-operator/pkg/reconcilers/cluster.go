@@ -494,11 +494,15 @@ func (r *ClusterReconciler) handlePDB(nodePool *opensearchv1.NodePool) (*ctrl.Re
 	pdb := policyv1.PodDisruptionBudget{}
 
 	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
-		// Check if provided parameters are valid
+		// Check if provided parameters are valid. Invalid PDB config is a
+		// permanent spec error — skip PDB creation and continue so scaler /
+		// upgrade / restart are not blocked indefinitely.
 		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
-			r.logger.Info("Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
-			return &ctrl.Result{}, fmt.Errorf("please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
-
+			msg := "please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget"
+			r.logger.Info(msg, "nodePool", nodePool.Component)
+			annotations := map[string]string{"cluster-name": r.instance.GetName()}
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PDB", "%s (nodePool %s)", msg, nodePool.Component)
+			return &ctrl.Result{}, nil
 		}
 		pdb = helpers.ComposePDB(r.instance, nodePool)
 		if err := ctrl.SetControllerReference(r.instance, &pdb, r.client.Scheme()); err != nil {

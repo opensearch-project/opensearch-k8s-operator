@@ -344,4 +344,55 @@ var _ = Describe("Scaler Controller", func() {
 			Expect(currentStatus.Conditions[0]).To(Equal(targetNodeName))
 		})
 	})
+
+	Context("When coordinating with upgrade", func() {
+		It("Should skip scaling while an upgrade is in progress", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "test-namespace",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.12.0",
+					},
+					NodePools: []opensearchv1.NodePool{
+						{Component: "masters", Replicas: 3},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Version: "2.11.0",
+				},
+			}
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			underTest := newScalerReconciler(mockClient, &spec)
+			result, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			// No StatefulSet lookups — upgrade guard returns before pool work
+			mockClient.AssertExpectations(GinkgoT())
+		})
+	})
+
+	Context("When accumulating requeue across node pools", func() {
+		It("Should keep Requeue when an earlier pool requested it (regression #1454)", func() {
+			// Previously only the last pool's requeue was combined on the success
+			// path, so a drain on a non-last pool reported Requeue=false and the
+			// main chain proceeded into upgrade/restart.
+			results := &reconciler.CombinedResult{}
+			poolRequeues := []bool{true, false} // first pool draining, last idle
+			for _, requeue := range poolRequeues {
+				results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+			}
+			Expect(results.Result.Requeue).To(BeTrue())
+
+			// Demonstrate the old overwrite bug for clarity
+			requeue := false
+			for _, r := range poolRequeues {
+				requeue = r
+			}
+			Expect(requeue).To(BeFalse())
+		})
+	})
 })

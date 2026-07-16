@@ -92,11 +92,13 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
-	// If version validation fails log a warning and do nothing
+	// If version validation fails log a warning and do nothing. Return a
+	// terminal error so the main chain can continue (restart, snapshots, etc.)
+	// instead of freezing all maintenance on a permanent spec mistake.
 	if err := r.validateUpgrade(); err != nil {
 		r.logger.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Failed to validation version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
-		return ctrl.Result{}, err
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Failed to validation version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
+		return ctrl.Result{}, AsTerminal(err)
 	}
 
 	// Set phase to UPGRADING if not already set
