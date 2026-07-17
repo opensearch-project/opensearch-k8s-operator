@@ -56,37 +56,41 @@ func (r *ScalerReconciler) Name() string { return scalerReconcilerName }
 
 func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	results := &reconciler.CombinedResult{}
+	lg := log.FromContext(r.ctx)
 
-	// Do not scale while an upgrade is changing versions — mirrors the
+	upgradeInProgress := r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version
+
+	// Skip replica scaling while an upgrade is changing versions — mirrors the
 	// rolling-restart guard so scaler and upgrader do not delete pods at once.
-	if r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version {
-		lg := log.FromContext(r.ctx)
-		lg.V(1).Info("Upgrade in progress, skipping scaler")
-		return ctrl.Result{}, nil
-	}
-
-	// Clean stale allocation exclusions (e.g. from a failed RemoveExcludeNodeHost after scale-down or upgrade).
-	// CleanStaleExclusionList itself skips when a scale-down drain is in progress.
-	if r.instance.Spec.ConfMgmt.SmartScaler {
-		clusterClient, clientErr := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
-		if clientErr == nil {
-			if res, cleanupErr := util.CleanStaleExclusionList(r.client, r.instance, clusterClient, log.FromContext(r.ctx)); cleanupErr != nil {
-				return ctrl.Result{}, cleanupErr
-			} else if res.Requeue {
-				return res, nil
+	// Cleanup of entirely removed node pools still runs below.
+	if !upgradeInProgress {
+		// Clean stale allocation exclusions (e.g. from a failed RemoveExcludeNodeHost after scale-down or upgrade).
+		// CleanStaleExclusionList itself skips when a scale-down drain is in progress.
+		if r.instance.Spec.ConfMgmt.SmartScaler {
+			clusterClient, clientErr := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+			if clientErr == nil {
+				if res, cleanupErr := util.CleanStaleExclusionList(r.client, r.instance, clusterClient, lg); cleanupErr != nil {
+					return ctrl.Result{}, cleanupErr
+				} else if res.Requeue {
+					return res, nil
+				}
 			}
 		}
+
+		// Accumulate requeue across all pools — previously only the last pool's
+		// value was kept, so a drain on a non-last pool failed to short-circuit
+		// the main reconcile chain before upgrade/restart.
+		for _, nodePool := range r.instance.Spec.NodePools {
+			requeue, poolErr := r.reconcileNodePool(&nodePool)
+			results.Combine(&ctrl.Result{Requeue: requeue}, poolErr)
+		}
+	} else {
+		lg.V(1).Info("Upgrade in progress, skipping replica scaling")
 	}
 
-	// Accumulate requeue across all pools — previously only the last pool's
-	// value was kept, so a drain on a non-last pool failed to short-circuit
-	// the main reconcile chain before upgrade/restart.
-	for _, nodePool := range r.instance.Spec.NodePools {
-		requeue, poolErr := r.reconcileNodePool(&nodePool)
-		results.Combine(&ctrl.Result{Requeue: requeue}, poolErr)
-	}
-
-	// Check readiness of current NodePools before cleaning up old node pools
+	// Check readiness of current NodePools before cleaning up old node pools.
+	// Cleanup of removed pools must happen even during upgrades so that
+	// deleted node pools do not linger.
 	ready, err := r.nodePoolsReady()
 	if err != nil {
 		results.Combine(&ctrl.Result{}, err)
