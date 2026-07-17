@@ -1041,7 +1041,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
 			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
-			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
+			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal("set -f && " + customCommand))
 		})
 	})
 
