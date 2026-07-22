@@ -66,6 +66,9 @@ spec:
         - containerPort: 8081
           name: health
           protocol: TCP
+        - containerPort: 8080
+          name: metrics
+          protocol: TCP
         {{- if .Values.webhook.enabled }}
         - containerPort: {{ .Values.webhook.port }}
           name: webhook-server

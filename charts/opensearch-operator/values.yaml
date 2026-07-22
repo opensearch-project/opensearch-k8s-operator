@@ -71,6 +71,19 @@ manager:
 
   metricsBindAddress: 127.0.0.1:8080
 
+  serviceMonitor:
+    enabled: false
+    labels: {}
+    endpoints:
+      - port: metrics
+        path: /metrics
+        interval: 60s
+        scheme: https
+        bearerTokenFile: /var/run/secrets/kubernetes.io/serviceaccount/token
+        tlsConfig:
+          insecureSkipVerify: true
+        relabelings: []
+
 # Install the Custom Resource Definitions with Helm
 installCRDs: true
 

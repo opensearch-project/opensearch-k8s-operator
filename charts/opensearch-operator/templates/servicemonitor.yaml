@@ -1,0 +1,18 @@
+{{- if .Values.manager.serviceMonitor.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "opensearch-operator.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "opensearch-operator.labels" . | nindent 4 }}
+    {{- with .Values.manager.serviceMonitor.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "opensearch-operator.selectorLabels" . | nindent 6 }}
+  endpoints:
+    {{- toYaml .Values.manager.serviceMonitor.endpoints | nindent 4 }}
+{{- end }}
