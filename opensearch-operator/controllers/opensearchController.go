@@ -340,17 +340,42 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		{Name: restart.Name(), Func: restart.Reconcile},
 		{Name: snapshotrepository.Name(), Func: snapshotrepository.Reconcile},
 	}
+
+	const defaultRequeueAfter = 30 * time.Second
+	var minRequeueAfter time.Duration
+
 	for _, rec := range componentReconcilers {
 		result, err := rec.Func()
 		if err != nil {
+			if reconcilers.IsTerminal(err) {
+				// Permanent config/validation failure: surface via metrics/logs but
+				// keep running later reconcilers (e.g. bad version must not block restart).
+				helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
+				r.Info("terminal reconciler error, continuing chain", "reconciler", rec.Name, "error", err.Error())
+				continue
+			}
 			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
 			return result, err
 		}
+		// Requeue=true short-circuits so in-progress scaler/upgrade work is exclusive.
 		if result.Requeue {
 			return result, nil
 		}
+		// RequeueAfter-only is valid controller-runtime semantics; CombinedResult
+		// often produces it. Track the soonest requested delay instead of always
+		// falling through to the fixed 30s tick.
+		if result.RequeueAfter > 0 {
+			if minRequeueAfter == 0 || result.RequeueAfter < minRequeueAfter {
+				minRequeueAfter = result.RequeueAfter
+			}
+		}
+	}
+
+	requeueAfter := defaultRequeueAfter
+	if minRequeueAfter > 0 && minRequeueAfter < defaultRequeueAfter {
+		requeueAfter = minRequeueAfter
 	}
 
 	// -------- all resources has been created -----------
-	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	return ctrl.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
 }
