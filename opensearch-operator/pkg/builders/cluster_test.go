@@ -350,6 +350,37 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
 		})
+
+		It("should use the custom initHelper security context for init containers if set", func() {
+			initSecurityContext := &corev1.SecurityContext{
+				RunAsUser:      ptr.To(int64(0)),
+				Privileged:     ptr.To(true),
+				SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(true)
+			clusterObject.Spec.InitHelper.SecurityContext = initSecurityContext
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			for _, container := range result.Spec.Template.Spec.InitContainers {
+				Expect(container.SecurityContext).To(Equal(initSecurityContext))
+			}
+
+			bootstrapPod := NewBootstrapPod(&clusterObject, nil, nil)
+			for _, container := range bootstrapPod.Spec.InitContainers {
+				Expect(container.SecurityContext).To(Equal(initSecurityContext))
+			}
+		})
+
+		It("should keep the default init container security contexts if no custom one is set", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(true)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			initContainers := result.Spec.Template.Spec.InitContainers
+			Expect(initContainers[0].Name).To(Equal("init"))
+			Expect(initContainers[0].SecurityContext.RunAsUser).To(Equal(ptr.To(int64(0))))
+			Expect(initContainers[1].Name).To(Equal("init-sysctl"))
+			Expect(initContainers[1].SecurityContext.Privileged).To(Equal(ptr.To(true)))
+		})
 		It("should use default storageclass if no persistence specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			nodePool := opensearchv1.NodePool{

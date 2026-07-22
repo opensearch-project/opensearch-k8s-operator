@@ -98,6 +98,11 @@ type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
 	Version    *string                     `json:"version,omitempty"`
+	// SecurityContext replaces the default security context of the init helper containers.
+	// Note that the chown init container needs to run as root and the sysctl init container
+	// needs to run privileged, so an override must provide equivalent permissions for those
+	// containers to keep working.
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type ProbesConfig struct {
