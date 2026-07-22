@@ -76,6 +76,53 @@ var _ = Describe("Configuration Controller", func() {
 		})
 	})
 
+	Context("When TLS certificates have been renewed", func() {
+		It("should change the node pool config hash so that pods are restarted", func() {
+			buildSpec := func() opensearchv1.OpenSearchCluster {
+				return opensearchv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      clusterName,
+						Namespace: clusterName,
+						UID:       "dummyuid",
+					},
+					Spec: opensearchv1.ClusterSpec{
+						General:   opensearchv1.GeneralConfig{},
+						NodePools: []opensearchv1.NodePool{{Component: "test", Roles: []string{"master", "data"}}},
+					},
+				}
+			}
+
+			reconcileHash := func(certHashData []string) string {
+				mockClient := k8s.NewMockK8sClient(GinkgoT())
+				mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+				mockClient.EXPECT().Context().Return(context.Background())
+				mockClient.On("CreateConfigMap", mock.Anything).Return(&ctrl.Result{}, nil)
+
+				spec := buildSpec()
+				reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+				reconcilerContext.CertHashData = certHashData
+				underTest := newConfigurationReconciler(
+					mockClient,
+					&helpers.MockEventRecorder{},
+					&reconcilerContext,
+					&spec,
+				)
+				reconcilerContext.AddConfig("foo", "bar")
+				_, err := underTest.Reconcile()
+				Expect(err).ToNot(HaveOccurred())
+
+				found, hash := reconcilerContext.fetchNodePoolHash("test")
+				Expect(found).To(BeTrue())
+				return hash.ConfigHash
+			}
+
+			hashWithoutRenewal := reconcileHash(nil)
+			hashWithRenewal := reconcileHash([]string{"transport-certs:2027-01-01T00:00:00Z"})
+			Expect(hashWithoutRenewal).ToNot(BeEmpty())
+			Expect(hashWithRenewal).ToNot(Equal(hashWithoutRenewal))
+		})
+	})
+
 	Context("When Reconciling the configuration controller with some configuration snippets", func() {
 		It("should create a configmap ", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())

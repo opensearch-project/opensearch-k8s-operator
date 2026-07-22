@@ -3566,10 +3566,10 @@ spec:
                         description: Enable HTTPS for Dashboards
                         type: boolean
                       enableHotReload:
-                        description: Enable hot reloading of TLS certificates. When
-                          enabled, certificates are mounted as directories instead
-                          of using subPath, allowing Kubernetes to update certificate
-                          files when secrets are updated.
+                        description: Enable hot reloading of TLS certificates so nodes
+                          pick up renewed certificates without a restart. Requires
+                          OpenSearch >= 2.19.1. Defaults to true on OpenSearch 3.x
+                          and above.
                         type: boolean
                       generate:
                         description: Generate certificate, if false secret must be
@@ -6802,10 +6802,10 @@ spec:
                               generated certificates (e.g. "8760h", "720h").
                             type: string
                           enableHotReload:
-                            description: Enable hot reloading of TLS certificates.
-                              When enabled, certificates are mounted as directories
-                              instead of using subPath, allowing Kubernetes to update
-                              certificate files when secrets are updated.
+                            description: Enable hot reloading of TLS certificates
+                              so nodes pick up renewed certificates without a restart.
+                              Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch
+                              3.x and above.
                             type: boolean
                           enabled:
                             description: |-
@@ -6823,9 +6823,11 @@ spec:
                               secrets with existing certificates must be supplied
                             type: boolean
                           rotateDaysBeforeExpiry:
-                            default: -1
-                            description: Automatically rotate certificates before
-                              they expire, set to -1 to disable
+                            default: 30
+                            description: |-
+                              Automatically rotate certificates this many days before they expire, set to -1 to disable.
+                              Only applies to operator-generated certificates. Expired or unparseable certificates are
+                              always regenerated regardless of this setting.
                             type: integer
                           secret:
                             description: Optional, name of a TLS secret that contains
@@ -6876,10 +6878,10 @@ spec:
                               generated certificates (e.g. "8760h", "720h").
                             type: string
                           enableHotReload:
-                            description: Enable hot reloading of TLS certificates.
-                              When enabled, certificates are mounted as directories
-                              instead of using subPath, allowing Kubernetes to update
-                              certificate files when secrets are updated.
+                            description: Enable hot reloading of TLS certificates
+                              so nodes pick up renewed certificates without a restart.
+                              Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch
+                              3.x and above.
                             type: boolean
                           enabled:
                             description: |-
@@ -6906,9 +6908,11 @@ spec:
                             description: Configure transport node certificate
                             type: boolean
                           rotateDaysBeforeExpiry:
-                            default: -1
-                            description: Automatically rotate certificates before
-                              they expire, set to -1 to disable
+                            default: 30
+                            description: |-
+                              Automatically rotate certificates this many days before they expire, set to -1 to disable.
+                              Only applies to operator-generated certificates. Expired or unparseable certificates are
+                              always regenerated regardless of this setting.
                             type: integer
                           secret:
                             description: Optional, name of a TLS secret that contains

@@ -147,6 +147,21 @@ func SupportsHotReload(cluster *opensearchv1.OpenSearchCluster) bool {
 	)
 }
 
+// HotReloadEnabled determines if TLS certificate hot reload should be active.
+// An explicit enableHotReload value is honored (subject to version support);
+// when unset it defaults to enabled on OpenSearch 3.x and above.
+func HotReloadEnabled(cluster *opensearchv1.OpenSearchCluster, enableHotReload *bool) bool {
+	if enableHotReload != nil {
+		return *enableHotReload && SupportsHotReload(cluster)
+	}
+	return CheckVersionConstraint(
+		cluster,
+		">=3.0.0",
+		false,
+		"unable to parse version for hot reload check, assuming not supported",
+	)
+}
+
 // IsTransportTlsEnabled determines if transport TLS should be enabled.
 // If enabled is nil (not set): enabled by default if transport config exists.
 // If enabled is true: explicitly enabled.

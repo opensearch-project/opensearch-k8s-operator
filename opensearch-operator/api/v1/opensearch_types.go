@@ -285,8 +285,10 @@ type TlsConfigTransport struct {
 	Generate bool `json:"generate,omitempty"`
 	// Configure transport node certificate
 	PerNode bool `json:"perNode,omitempty"`
-	// Automatically rotate certificates before they expire, set to -1 to disable
-	//+kubebuilder:default=-1
+	// Automatically rotate certificates this many days before they expire, set to -1 to disable.
+	// Only applies to operator-generated certificates. Expired or unparseable certificates are
+	// always regenerated regardless of this setting.
+	//+kubebuilder:default=30
 	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	//
 	TlsCertificateConfig `json:",omitempty"`
@@ -312,8 +314,10 @@ type TlsConfigHttp struct {
 	Generate bool `json:"generate,omitempty"`
 	// Custom FQDN to use for the HTTP certificate. If not set, the operator will use the default cluster DNS names.
 	CustomFQDN *string `json:"customFQDN,omitempty"`
-	// Automatically rotate certificates before they expire, set to -1 to disable
-	//+kubebuilder:default=-1
+	// Automatically rotate certificates this many days before they expire, set to -1 to disable.
+	// Only applies to operator-generated certificates. Expired or unparseable certificates are
+	// always regenerated regardless of this setting.
+	//+kubebuilder:default=30
 	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	//
 	TlsCertificateConfig `json:",omitempty"`
@@ -329,8 +333,8 @@ type TlsCertificateConfig struct {
 	// Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
 	//+kubebuilder:default:="8760h"
 	Duration *metav1.Duration `json:"duration,omitempty"`
-	// Enable hot reloading of TLS certificates. When enabled, certificates are mounted as directories instead of using subPath, allowing Kubernetes to update certificate files when secrets are updated.
-	EnableHotReload bool `json:"enableHotReload,omitempty"`
+	// Enable hot reloading of TLS certificates so nodes pick up renewed certificates without a restart. Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch 3.x and above.
+	EnableHotReload *bool `json:"enableHotReload,omitempty"`
 }
 
 // Reference to a secret

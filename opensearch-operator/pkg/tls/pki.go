@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/asn1"
 	"encoding/pem"
+	"errors"
 	"math/big"
 	"time"
 )
@@ -267,10 +268,15 @@ func (i *implCertValidater) IsExpiringSoon() bool {
 
 func (i *implCertValidater) IsSignedByCA(ca Cert) (bool, error) {
 	block, _ := pem.Decode(ca.CertData())
+	if block == nil {
+		return false, errors.New("failed to decode valid PEM from CA certificate data")
+	}
 	caCert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
 		return false, err
 	}
 
-	return bytes.Equal(i.cert.RawIssuer, caCert.RawSubject), nil
+	// Verify the signature instead of just comparing the issuer name, so that
+	// a replaced CA with the same subject is detected
+	return caCert.CheckSignature(i.cert.SignatureAlgorithm, i.cert.RawTBSCertificate, i.cert.Signature) == nil, nil
 }
