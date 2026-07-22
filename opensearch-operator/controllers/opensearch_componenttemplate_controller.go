@@ -10,6 +10,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
@@ -70,9 +71,10 @@ func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, r
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchComponentTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpensearchComponentTemplateReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrentReconciles int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpensearchComponentTemplate{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		Complete(r)
 }
