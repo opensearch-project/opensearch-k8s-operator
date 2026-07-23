@@ -70,6 +70,12 @@ func parseWatchNamespaces(watchNamespace string) map[string]cache.Config {
 	return namespaces
 }
 
+func registerLegacyAPIComponents(enabled bool, register func()) {
+	if enabled {
+		register()
+	}
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(opsterv1.AddToScheme(scheme))
@@ -255,7 +261,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	if enableLegacyAPI {
+	registerLegacyAPIComponents(enableLegacyAPI, func() {
 		// Migration controllers for opensearch.opster.io -> opensearch.org migration
 		if err = (&controllers.ClusterMigrationReconciler{
 			Client: mgr.GetClient(),
@@ -327,7 +333,8 @@ func main() {
 			setupLog.Error(err, "unable to create controller", "controller", "ComponentTemplateMigration")
 			os.Exit(1)
 		}
-	} else {
+	})
+	if !enableLegacyAPI {
 		setupLog.Info("Legacy API disabled; skipping opensearch.opster.io migration controllers")
 	}
 
@@ -375,7 +382,7 @@ func main() {
 			setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchCluster")
 			os.Exit(1)
 		}
-		if enableLegacyAPI {
+		registerLegacyAPIComponents(enableLegacyAPI, func() {
 			// Register legacy webhooks to deny user updates to old CRs (only operator can update for sync)
 			if err = (&opsterwebhook.OpenSearchClusterLegacyValidator{}).SetupWithManager(mgr); err != nil {
 				setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchClusterLegacy")
@@ -417,7 +424,8 @@ func main() {
 				setupLog.Error(err, "unable to create webhook", "webhook", "OpenSearchUserRoleBindingLegacy")
 				os.Exit(1)
 			}
-		} else {
+		})
+		if !enableLegacyAPI {
 			setupLog.Info("Legacy API disabled; skipping opensearch.opster.io webhooks")
 		}
 	} else {
