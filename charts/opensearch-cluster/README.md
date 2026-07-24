@@ -81,10 +81,11 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.initHelper.imagePullSecrets` | list | `[]` | initHelper image pull secret |
 | `cluster.initHelper.resources` | object | `{}` | initHelper pod cpu and memory resources |
 | `cluster.initHelper.version` | string | `"1.36"` | initHelper version |
-| `cluster.nodePools` | list | `[{"additionalConfig":{},"annotations":{},"component":"masters","diskSize":"30Gi","ingress":{"enabled":false},"replicas":3,"resources":{"limits":{"cpu":"500m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"2Gi"}},"roles":["master","data"],"sidecarContainers":[]}]` | Opensearch nodes configuration |
+| `cluster.nodePools` | list | `[{"additionalConfig":{},"annotations":{},"component":"masters","diskSize":"30Gi","httproute":{"enabled":false},"ingress":{"enabled":false},"replicas":3,"resources":{"limits":{"cpu":"500m","memory":"2Gi"},"requests":{"cpu":"500m","memory":"2Gi"}},"roles":["master","data"],"sidecarContainers":[]}]` | Opensearch nodes configuration |
 | `cluster.nodePools[0].annotations` | object | `{}` | node pool pod annotations |
 | `cluster.nodePools[0].additionalConfig` | object | `{}` | Extra items to add to opensearch.yml for this specific nodepool (merged with general.additionalConfig) |
 | `cluster.nodePools[0].ingress` | object | `{"enabled":false}` | Per-nodePool ingress configuration. Creates a separate Ingress targeting this nodePool's service. |
+| `cluster.nodePools[0].httproute` | object | `{"enabled":false}` | Per-nodePool Gateway API HTTPRoute configuration. Creates a separate HTTPRoute targeting this nodePool's service. |
 | `cluster.nodePools[0].sidecarContainers` | list | `[]` | These containers will be deployed as sidecars in the same pod as the OpenSearch container |
 | `cluster.security.config.adminCredentialsSecret` | object | `{}` | Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided. |
 | `cluster.security.config.adminSecret` | object | `{}` | TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated |
@@ -116,6 +117,18 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.ingress.dashboards.className` | string | `""` | Ingress class name |
 | `cluster.ingress.dashboards.hosts` | list | `[]` | Ingress hostnames |
 | `cluster.ingress.dashboards.tls` | list | `[]` | Ingress tls configuration |
+| `cluster.httproute.opensearch.enabled` | bool | `false` | Enable a Gateway API HTTPRoute for the Opensearch service |
+| `cluster.httproute.opensearch.parentRefs` | list | `[]` | Opensearch HTTPRoute parentRefs (the Gateway(s) the route attaches to) |
+| `cluster.httproute.opensearch.hostnames` | list | `[]` | Opensearch HTTPRoute hostnames |
+| `cluster.httproute.opensearch.labels` | object | `{}` | Opensearch HTTPRoute extra labels |
+| `cluster.httproute.opensearch.annotations` | object | `{}` | Opensearch HTTPRoute annotations |
+| `cluster.httproute.opensearch.matches` | list | `[]` | Opensearch HTTPRoute rule matches. Defaults to a single PathPrefix `/` match when empty. |
+| `cluster.httproute.dashboards.enabled` | bool | `false` | Enable a Gateway API HTTPRoute for the dashboards service |
+| `cluster.httproute.dashboards.parentRefs` | list | `[]` | dashboards HTTPRoute parentRefs (the Gateway(s) the route attaches to) |
+| `cluster.httproute.dashboards.hostnames` | list | `[]` | dashboards HTTPRoute hostnames |
+| `cluster.httproute.dashboards.labels` | object | `{}` | dashboards HTTPRoute extra labels |
+| `cluster.httproute.dashboards.annotations` | object | `{}` | dashboards HTTPRoute annotations |
+| `cluster.httproute.dashboards.matches` | list | `[]` | dashboards HTTPRoute rule matches. Defaults to a single PathPrefix `/` match when empty. |
 | `roles` | list | `[]` | List of OpensearchRole. Check values.yaml file for examples. |
 | `users` | list | `[]` | List of OpensearchUser. Check values.yaml file for examples. |
 | `usersRoleBinding` | list | `[]` | Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role Check values.yaml file for examples. |
@@ -127,4 +140,4 @@ The following table lists the configurable parameters of the Helm chart.
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
-Opensearch-cluster Helm Chart version: `3.3.1`
+Opensearch-cluster Helm Chart version: `3.4.0`
