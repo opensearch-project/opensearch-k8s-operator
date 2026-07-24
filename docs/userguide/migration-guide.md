@@ -175,6 +175,41 @@ kubectl delete opensearchclusters.opensearch.opster.io <cluster-name>
 - Deleting the old resource will not affect the new resource - they operate independently after migration.
 - The migration controller automatically handles the deletion of old resources when new resources are deleted.
 
+### Step 8: Disable Legacy API Support
+
+Complete this step only after every legacy resource has migrated, its
+`opensearch.org` replacement has been verified, and the legacy resource has
+been deleted.
+
+> **Warning:** Helm manages the legacy CRDs as regular Helm resources.
+> Setting `legacyAPI.enabled=false` during an upgrade removes the
+> `opensearch.opster.io` CRDs. Kubernetes then deletes every remaining custom
+> resource stored under those CRDs across the cluster.
+
+Check every legacy resource type and namespace before disabling support:
+
+```bash
+kubectl api-resources --api-group=opensearch.opster.io -o name |
+  while read -r resource; do
+    kubectl get "$resource" --all-namespaces
+  done
+```
+
+If the command reports any resources, finish migrating and deleting them as
+described in the preceding steps. When no legacy resources remain, disable
+legacy API support:
+
+```bash
+helm upgrade <release-name> opensearch-operator/opensearch-operator \
+  --namespace <operator-namespace> \
+  --reuse-values \
+  --set legacyAPI.enabled=false
+```
+
+This also disables the legacy migration controllers, validation webhooks, and
+RBAC rules. Continue using only `opensearch.org/v1` resources after the
+upgrade.
+
 ## Resource Mapping
 
 All CRDs have equivalent types in the new API group:

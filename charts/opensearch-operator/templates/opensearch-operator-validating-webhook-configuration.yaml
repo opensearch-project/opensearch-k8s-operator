@@ -8,6 +8,7 @@ metadata:
     cert-manager.io/inject-ca-from: {{ .Release.Namespace }}/{{ include "opensearch-operator.fullname" . }}-serving-cert
   {{- end }}
 webhooks:
+{{- if eq (include "opensearch-operator.legacyAPIEnabled" .) "true" }}
 - name: vopensearchactiongroup.opensearch.opster.io
   admissionReviewVersions:
   - v1
@@ -208,6 +209,7 @@ webhooks:
     resources:
     - opensearchuserrolebindings
   sideEffects: None
+{{- end }}
 # New API group: opensearch.org webhooks
 - name: vopensearchactiongroup.opensearch.org
   admissionReviewVersions:
@@ -410,4 +412,3 @@ webhooks:
     - opensearchuserrolebindings
   sideEffects: None
 {{- end }}
-

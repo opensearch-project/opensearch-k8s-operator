@@ -42,3 +42,35 @@ func TestParseWatchNamespacesTrimAndSkipEmpty(t *testing.T) {
 		t.Fatalf("expected namespace2 to be present")
 	}
 }
+
+func TestRegisterLegacyAPIComponents(t *testing.T) {
+	tests := []struct {
+		name          string
+		enabled       bool
+		expectedCalls int
+	}{
+		{
+			name:          "enabled",
+			enabled:       true,
+			expectedCalls: 1,
+		},
+		{
+			name:          "disabled",
+			enabled:       false,
+			expectedCalls: 0,
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			calls := 0
+			registerLegacyAPIComponents(test.enabled, func() {
+				calls++
+			})
+
+			if calls != test.expectedCalls {
+				t.Fatalf("expected %d registrations, got %d", test.expectedCalls, calls)
+			}
+		})
+	}
+}

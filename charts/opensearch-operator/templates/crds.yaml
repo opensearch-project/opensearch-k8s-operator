@@ -1,5 +1,8 @@
 {{- if .Values.installCRDs -}}
+{{- $legacyAPIEnabled := eq (include "opensearch-operator.legacyAPIEnabled" .) "true" -}}
 {{- range $path, $_ := .Files.Glob "files/*.yaml" }}
+	{{- $isLegacyCRD := contains "opensearch.opster.io" $path -}}
+	{{- if or $legacyAPIEnabled (not $isLegacyCRD) }}
 	{{- $raw := $.Files.Get $path -}}
 	{{- $docs := splitList "\n---\n" $raw -}}
 	{{- range $doc := $docs }}
@@ -14,6 +17,7 @@
 ---
 			{{- end }}
 		{{- end }}
+	{{- end }}
 	{{- end }}
 {{- end }}
 {{- end }}
