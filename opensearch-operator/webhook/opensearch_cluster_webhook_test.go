@@ -403,6 +403,72 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			Expect(err.Error()).To(ContainSubstring("duplicate node pool component name 'masters'"))
 			Expect(warnings).To(BeEmpty())
 		})
+
+		It("should reject version change when a custom image remains pinned", func() {
+			image := "example.com/opensearch:custom-1"
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.11.0",
+						ImageSpec: &opensearchv1.ImageSpec{
+							Image: &image,
+						},
+					},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "2.12.0"
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cannot change spec.general.version"))
+			Expect(err.Error()).To(ContainSubstring("custom image is pinned"))
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should allow version change when the pinned custom image also changes", func() {
+			oldImage := "example.com/opensearch:custom-1"
+			newImage := "example.com/opensearch:custom-2"
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.11.0",
+						ImageSpec: &opensearchv1.ImageSpec{
+							Image: &oldImage,
+						},
+					},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "2.12.0"
+			newCluster.Spec.General.ImageSpec.Image = &newImage
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should allow version change when no custom image is pinned", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.11.0",
+					},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "2.12.0"
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
 	})
 
 	Describe("ValidateDelete", func() {

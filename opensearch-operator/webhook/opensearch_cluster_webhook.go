@@ -70,7 +70,30 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 		return nil, err
 	}
 
+	// Reject version-only changes when a custom image pins the running image (version is ignored).
+	if err := validateCustomImageVersionChange(oldCluster, newCluster); err != nil {
+		return nil, err
+	}
+
 	return v.validateTlsConfig(newCluster)
+}
+
+// validateCustomImageVersionChange rejects bumping spec.general.version while a custom image remains
+// pinned unchanged. In that case ResolveImage ignores version, so an "upgrade" would be a silent no-op.
+func validateCustomImageVersionChange(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
+	if !helpers.HasPinnedCustomImage(newCluster) {
+		return nil
+	}
+	if oldCluster.Spec.General.Version == newCluster.Spec.General.Version {
+		return nil
+	}
+	oldImage := helpers.PinnedCustomImage(oldCluster)
+	newImage := helpers.PinnedCustomImage(newCluster)
+	if oldImage == newImage {
+		return fmt.Errorf("cannot change spec.general.version from %s to %s while a custom image is pinned (%s); update imageSpec.image (or remove it) to change the running image, since version is ignored when a custom image is set",
+			oldCluster.Spec.General.Version, newCluster.Spec.General.Version, newImage)
+	}
+	return nil
 }
 
 // validateNodePoolComponentUniqueness ensures no two node pools share the same component name,
