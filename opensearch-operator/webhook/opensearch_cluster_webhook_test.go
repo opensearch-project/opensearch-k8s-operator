@@ -445,7 +445,7 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			}
 			newCluster := oldCluster.DeepCopy()
 			newCluster.Spec.General.Version = "2.12.0"
-			newCluster.Spec.General.ImageSpec.Image = &newImage
+			newCluster.Spec.General.Image = &newImage
 
 			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
 			Expect(err).NotTo(HaveOccurred())
