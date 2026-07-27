@@ -347,11 +347,13 @@ var _ = Describe("Scaler Controller", func() {
 	})
 
 	Context("When coordinating with upgrade", func() {
-		It("Should skip scaling while an upgrade is in progress", func() {
+		It("Should skip replica scaling while an upgrade is in progress but still clean up removed pools", func() {
+			clusterName := "test-cluster"
+			clusterNamespace := "test-namespace"
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:      "test-cluster",
-					Namespace: "test-namespace",
+					Name:      clusterName,
+					Namespace: clusterNamespace,
 				},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
@@ -366,12 +368,33 @@ var _ = Describe("Scaler Controller", func() {
 				},
 			}
 
+			mastersSts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName + "-masters",
+					Namespace: clusterNamespace,
+					Labels:    map[string]string{helpers.ClusterLabel: clusterName},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: ptr.To[int32](3),
+				},
+				Status: appsv1.StatefulSetStatus{
+					AvailableReplicas: 3,
+				},
+			}
+
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			// Upgrade guard skips reconcileNodePool, but readiness + cleanup still run.
+			mockClient.On("GetStatefulSet", clusterName+"-masters", clusterNamespace).Return(mastersSts, nil)
+			mockClient.On("ListStatefulSets",
+				client.InNamespace(clusterNamespace),
+				client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{
+				Items: []appsv1.StatefulSet{mastersSts},
+			}, nil)
+
 			underTest := newScalerReconciler(mockClient, &spec)
 			result, err := underTest.Reconcile()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
-			// No StatefulSet lookups — upgrade guard returns before pool work
 			mockClient.AssertExpectations(GinkgoT())
 		})
 	})
