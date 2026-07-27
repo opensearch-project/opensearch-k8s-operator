@@ -372,7 +372,10 @@ var _ = Describe("Scaler Controller", func() {
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      clusterName + "-masters",
 					Namespace: clusterNamespace,
-					Labels:    map[string]string{helpers.ClusterLabel: clusterName},
+					Labels: map[string]string{
+						helpers.ClusterLabel:  clusterName,
+						helpers.NodePoolLabel: "masters",
+					},
 				},
 				Spec: appsv1.StatefulSetSpec{
 					Replicas: ptr.To[int32](3),
