@@ -702,4 +702,80 @@ done;`
 			Expect(cmdArg).To(ContainSubstring("-key /certs/tls.key"))
 		})
 	})
+	When("When Reconciling the securityconfig reconciler with transport TLS enabled but HTTP TLS disabled", func() {
+		It("should apply the securityconfig via default init instead of a securityadmin job", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			var clusterName = "securityconfig-default-init"
+
+			adminCredSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: adminCredsName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"username": []byte("admin"),
+					"password": []byte("changeme"),
+				},
+			}
+			httpTlsDisabled := false
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.19.4",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Enabled: &httpTlsDisabled},
+						},
+					},
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil)
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(
+				mockClient,
+				context.Background(),
+				&reconcilerContext,
+				&spec,
+			)
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(reconcilerContext.OpenSearchConfig).To(HaveKeyWithValue("plugins.security.allow_default_init_securityindex", "true"))
+
+			Expect(generatedConfigSecret).ToNot(BeNil())
+			var mountPaths []string
+			for _, mount := range reconcilerContext.VolumeMounts {
+				if mount.Name == "securityconfig" {
+					mountPaths = append(mountPaths, mount.MountPath)
+				}
+			}
+			Expect(mountPaths).ToNot(BeEmpty())
+			Expect(mountPaths).To(ContainElement(ContainSubstring("internal_users.yml")))
+		})
+	})
 })
