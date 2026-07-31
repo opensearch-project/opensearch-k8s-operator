@@ -7,9 +7,9 @@ import (
 )
 
 const (
-	emptyDirRecoveryComponent      = "EmptyDirRecovery"
-	emptyDirRecoveryStatusPending  = "Pending"
-	emptyDirRecoveryGracePeriod    = 5 * time.Minute
+	emptyDirRecoveryComponent     = "EmptyDirRecovery"
+	emptyDirRecoveryStatusPending = "Pending"
+	emptyDirRecoveryGracePeriod   = 5 * time.Minute
 )
 
 type emptyDirPodStats struct {
