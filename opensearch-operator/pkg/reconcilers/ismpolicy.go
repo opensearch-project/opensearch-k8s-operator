@@ -298,37 +298,40 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 		DefaultState: r.instance.Spec.DefaultState,
 		Description:  r.instance.Spec.Description,
 	}
-	if r.instance.Spec.ErrorNotification != nil && r.instance.Spec.ErrorNotification.Destination != nil && r.instance.Spec.ErrorNotification.MessageTemplate != nil {
-		dest := requests.Destination{}
-		if r.instance.Spec.ErrorNotification.Destination.Amazon != nil {
-			dest.Amazon = &requests.DestinationURL{
-				URL: r.instance.Spec.ErrorNotification.Destination.Amazon.URL,
-			}
-		}
-		if r.instance.Spec.ErrorNotification.Destination.Chime != nil {
-			dest.Chime = &requests.DestinationURL{
-				URL: r.instance.Spec.ErrorNotification.Destination.Chime.URL,
-			}
-		}
-		if r.instance.Spec.ErrorNotification.Destination.Slack != nil {
-			dest.Slack = &requests.DestinationURL{
-				URL: r.instance.Spec.ErrorNotification.Destination.Slack.URL,
-			}
-		}
-		if r.instance.Spec.ErrorNotification.Destination.CustomWebhook != nil {
-			dest.CustomWebhook = &requests.DestinationURL{
-				URL: r.instance.Spec.ErrorNotification.Destination.CustomWebhook.URL,
-			}
-		}
-		if dest.Amazon == nil && dest.Chime == nil && dest.Slack == nil && dest.CustomWebhook == nil {
-			return nil, errors.New("exactly one errorNotification.destination must be set")
-		}
+	if r.instance.Spec.ErrorNotification != nil {
 		messageTemplate := requests.MessageTemplate{Source: r.instance.Spec.ErrorNotification.MessageTemplate.Source}
 
 		policy.ErrorNotification = &requests.ErrorNotification{
 			Channel:         r.instance.Spec.ErrorNotification.Channel,
-			Destination:     &dest,
 			MessageTemplate: &messageTemplate,
+		}
+
+		if r.instance.Spec.ErrorNotification.Destination != nil {
+			dest := requests.Destination{}
+			if r.instance.Spec.ErrorNotification.Destination.Amazon != nil {
+				dest.Amazon = &requests.DestinationURL{
+					URL: r.instance.Spec.ErrorNotification.Destination.Amazon.URL,
+				}
+			}
+			if r.instance.Spec.ErrorNotification.Destination.Chime != nil {
+				dest.Chime = &requests.DestinationURL{
+					URL: r.instance.Spec.ErrorNotification.Destination.Chime.URL,
+				}
+			}
+			if r.instance.Spec.ErrorNotification.Destination.Slack != nil {
+				dest.Slack = &requests.DestinationURL{
+					URL: r.instance.Spec.ErrorNotification.Destination.Slack.URL,
+				}
+			}
+			if r.instance.Spec.ErrorNotification.Destination.CustomWebhook != nil {
+				dest.CustomWebhook = &requests.DestinationURL{
+					URL: r.instance.Spec.ErrorNotification.Destination.CustomWebhook.URL,
+				}
+			}
+			if dest.Amazon == nil && dest.Chime == nil && dest.Slack == nil && dest.CustomWebhook == nil {
+				return nil, errors.New("exactly one errorNotification.destination must be set")
+			}
+			policy.ErrorNotification.Destination = &dest
 		}
 	}
 
