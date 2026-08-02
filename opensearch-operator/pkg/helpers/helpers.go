@@ -2,12 +2,12 @@ package helpers
 
 import (
 	"context"
-	"crypto/rand"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"log"
+	mrand "math/rand"
 	"reflect"
 	"sort"
 	"strings"
@@ -46,6 +46,43 @@ const (
 	DefaultUID = int64(1000)
 	DefaultGID = int64(1000)
 )
+
+// Password character sets for generating secure passwords
+const (
+	upperChars   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+	lowerChars   = "abcdefghijklmnopqrstuvwxyz"
+	digitChars   = "0123456789"
+	specialChars = "!@#$%^&*()_+-=[]{}|;':\",./<>?"
+	allChars     = upperChars + lowerChars + digitChars + specialChars
+)
+
+// GenerateSecurePassword creates a password that meets OpenSearch security plugin requirements:
+// minimum 8 characters, at least one uppercase, one lowercase, one digit, and one special character
+func GenerateSecurePassword(length int) string {
+	if length < 8 {
+		length = 16
+	}
+
+	// Ensure we have at least one of each required character type
+	password := make([]byte, length)
+	password[0] = upperChars[mrand.Intn(len(upperChars))]
+	password[1] = lowerChars[mrand.Intn(len(lowerChars))]
+	password[2] = digitChars[mrand.Intn(len(digitChars))]
+	password[3] = specialChars[mrand.Intn(len(specialChars))]
+
+	// Fill remaining positions with random characters from all sets
+	for i := 4; i < length; i++ {
+		password[i] = allChars[mrand.Intn(len(allChars))]
+	}
+
+	// Shuffle to avoid predictable positions
+	for i := len(password) - 1; i > 0; i-- {
+		j := mrand.Intn(i + 1)
+		password[i], password[j] = password[j], password[i]
+	}
+
+	return string(password)
+}
 
 type User struct {
 	Hash         string   `yaml:"hash"`
@@ -303,7 +340,7 @@ func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 		return nil, true, err
 	}
 
-	randomPassword := rand.Text()
+	randomPassword := GenerateSecurePassword(16)
 
 	adminSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1067,7 +1104,7 @@ func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1
 		return nil, true, err
 	}
 
-	randomPassword := rand.Text()
+	randomPassword := GenerateSecurePassword(16)
 	// NOTE(joseb): we cannot set random password when security plugin is disabled.
 	if !IsSecurityPluginEnabled(cr) {
 		randomPassword = "kibanaserver"
