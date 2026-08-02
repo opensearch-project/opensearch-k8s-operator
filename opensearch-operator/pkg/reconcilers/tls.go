@@ -188,8 +188,10 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 				return nil, err
 			}
 			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
-		} else {
+		} else if len(tlsConfig.AdminDn) > 0 {
 			certDN = strings.Join(tlsConfig.AdminDn, "\",\"")
+		} else {
+			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
 		}
 	} else {
 		tlsConfig := r.instance.Spec.Security.Tls.Transport
@@ -204,8 +206,10 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 				return nil, err
 			}
 			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
-		} else {
+		} else if len(tlsConfig.AdminDn) > 0 {
 			certDN = strings.Join(tlsConfig.AdminDn, "\",\"") //nolint:staticcheck
+		} else {
+			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
 		}
 	}
 
