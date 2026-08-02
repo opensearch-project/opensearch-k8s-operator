@@ -10,6 +10,7 @@ const (
 	DashboardChecksumName        = "checksum/dashboards.yml"
 	ClusterLabel                 = "opensearch.org/opensearch-cluster"
 	OldClusterLabel              = "opster.io/opensearch-cluster"
+	OldNodePoolLabel             = "opster.io/opensearch-nodepool"
 	JobLabel                     = "opensearch.org/opensearch-job"
 	NodePoolLabel                = "opensearch.org/opensearch-nodepool"
 	OsUserNameAnnotation         = "opensearchuser/name"

@@ -722,7 +722,8 @@ func ReadyReplicasForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSear
 	return int32(numReadyPods), nil
 }
 
-// Count the number of PVCs created for the given NodePool
+// CountPVCsForNodePool counts PVCs for a node pool, handling both old (opster.io)
+// and new (opensearch.org) label schemes for backward compatibility with migrated clusters.
 func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
@@ -738,7 +739,26 @@ func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCl
 	if err != nil {
 		return 0, err
 	}
-	return len(list.Items), nil
+	count := len(list.Items)
+
+	// Also count PVCs with old opster.io labels for backward compatibility
+	oldClusterReq, err := labels.NewRequirement(OldClusterLabel, selection.Equals, []string{cr.Name})
+	if err != nil {
+		return count, err
+	}
+	oldComponentReq, err := labels.NewRequirement(OldNodePoolLabel, selection.Equals, []string{nodePool.Component})
+	if err != nil {
+		return count, err
+	}
+	oldSelector := labels.NewSelector()
+	oldSelector = oldSelector.Add(*oldClusterReq, *oldComponentReq)
+	oldList, err := k8sClient.ListPVCs(&client.ListOptions{Namespace: cr.Namespace, LabelSelector: oldSelector})
+	if err != nil {
+		return count, err
+	}
+	count += len(oldList.Items)
+
+	return count, nil
 }
 
 // Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
