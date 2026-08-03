@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -371,6 +372,40 @@ func (client *OsClusterClient) GetIndices(ctx context.Context, pattern string) (
 	return doHTTPGet(ctx, client.client, path)
 }
 
+// AddVotingConfigExclusion excludes the given node name from the cluster voting
+// configuration. The request waits until the node has left the voting config or
+// the timeout expires (OpenSearch default 30s).
+// See: POST /_cluster/voting_config_exclusions?node_names=<name>
+func (client *OsClusterClient) AddVotingConfigExclusion(ctx context.Context, nodeName string) error {
+	path := generateVotingConfigExclusionsPath("node_names=" + url.QueryEscape(nodeName))
+	resp, err := doHTTPPost(ctx, client.client, path, nil)
+	if err != nil {
+		return err
+	}
+	defer helpers.SafeClose(resp.Body)
+	if resp.IsError() {
+		return ErrVotingConfigExclusionsFailed(resp.String())
+	}
+	return nil
+}
+
+// ClearVotingConfigExclusions clears the voting configuration exclusions list.
+// When waitForRemoval is true, OpenSearch waits until excluded nodes have left
+// the cluster before clearing the list.
+// See: DELETE /_cluster/voting_config_exclusions?wait_for_removal=<bool>
+func (client *OsClusterClient) ClearVotingConfigExclusions(ctx context.Context, waitForRemoval bool) error {
+	path := generateVotingConfigExclusionsPath("wait_for_removal=" + strconv.FormatBool(waitForRemoval))
+	resp, err := doHTTPDelete(ctx, client.client, path)
+	if err != nil {
+		return err
+	}
+	defer helpers.SafeClose(resp.Body)
+	if resp.IsError() {
+		return ErrVotingConfigExclusionsFailed(resp.String())
+	}
+	return nil
+}
+
 // GetSecurityResource performs an HTTP GET request to OS to fetch the security resource specified by name
 func (client *OsClusterClient) GetSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
@@ -465,6 +500,21 @@ func (client *OsClusterClient) DeleteSnapshotPolicyConfig(ctx context.Context, n
 func (client *OsClusterClient) UpdateSnapshotPolicyConfig(ctx context.Context, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
 	path := generateAPIPathSnapshotUpdatePolicies(snapshotpolicyResource, name, seqnumber, primterm)
 	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// generateVotingConfigExclusionsPath builds /_cluster/voting_config_exclusions[?query]
+func generateVotingConfigExclusionsPath(query string) strings.Builder {
+	var path strings.Builder
+	base := "/_cluster/voting_config_exclusions"
+	if query == "" {
+		path.WriteString(base)
+		return path
+	}
+	path.Grow(len(base) + 1 + len(query))
+	path.WriteString(base)
+	path.WriteString("?")
+	path.WriteString(query)
+	return path
 }
 
 // generateGetIndicesPath generates a URI PATH for a specific resource endpoint and name
