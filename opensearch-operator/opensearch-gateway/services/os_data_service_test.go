@@ -260,7 +260,8 @@ func TestGenerateVotingConfigExclusionsPath(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := generateVotingConfigExclusionsPath(tt.query).String()
+			path := generateVotingConfigExclusionsPath(tt.query)
+			got := path.String()
 			if got != tt.expected {
 				t.Errorf("generateVotingConfigExclusionsPath(%q) = %q, want %q", tt.query, got, tt.expected)
 			}
