@@ -11,6 +11,7 @@ var (
 	ErrClusterSettingsOperation          = errors.New("cluster settings failed")
 	ErrCatIndicesOperation               = errors.New("cat indices failed")
 	ErrCatShardsOperation                = errors.New("cat shards failed")
+	ErrVotingConfigExclusionsOperation   = errors.New("voting config exclusions failed")
 )
 
 func ErrClusterAllocationExplainGetFailed(resp string) error {
@@ -35,4 +36,8 @@ func ErrCatIndicesFailed(resp string) error {
 
 func ErrCatShardsFailed(resp string) error {
 	return fmt.Errorf("%w: %s", ErrCatShardsOperation, resp)
+}
+
+func ErrVotingConfigExclusionsFailed(resp string) error {
+	return fmt.Errorf("%w: %s", ErrVotingConfigExclusionsOperation, resp)
 }

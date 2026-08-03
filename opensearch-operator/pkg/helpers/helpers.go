@@ -812,6 +812,24 @@ func HasManagerRole(nodePool *opensearchv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
 }
 
+// IsMasterStatefulSet returns true if the StatefulSet belongs to a master-eligible node pool.
+func IsMasterStatefulSet(sts appsv1.StatefulSet) bool {
+	role := sts.Labels["opensearch.role"]
+	return role == "master" || role == "cluster_manager"
+}
+
+// CountMasterEligibleReplicas returns the total number of master-eligible replicas
+// across all node pools (roles master or cluster_manager).
+func CountMasterEligibleReplicas(nodePools []opensearchv1.NodePool) int32 {
+	var total int32
+	for i := range nodePools {
+		if HasManagerRole(&nodePools[i]) {
+			total += nodePools[i].Replicas
+		}
+	}
+	return total
+}
+
 func RemoveDuplicateStrings(strSlice []string) []string {
 	allKeys := make(map[string]bool)
 	list := []string{}

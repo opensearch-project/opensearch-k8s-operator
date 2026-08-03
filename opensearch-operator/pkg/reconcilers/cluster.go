@@ -15,6 +15,7 @@ import (
 
 	"github.com/go-logr/logr"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -174,17 +175,15 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Create bootstrap PVC for persistent storage
 	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPVC, r.client.Scheme()))
-	if r.instance.Status.Initialized {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
-	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
-	}
 
 	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
 	if r.instance.Status.Initialized {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
+		// Exclude bootstrap from voting before deletion so small master pools do not lose quorum.
+		result.Combine(r.removeBootstrapPod(bootstrapPod))
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
 	} else {
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
 		result.Combine(r.reconcileBootstrapPod(bootstrapPod))
 	}
 
@@ -780,6 +779,46 @@ func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl
 	}
 
 	return &ctrl.Result{}, nil
+}
+
+// removeBootstrapPod excludes the bootstrap node from the voting configuration before
+// deleting it, so that a 1-master (or even-count) pool does not lose quorum when the
+// bootstrap voter that formed the cluster is removed.
+func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.Result, error) {
+	_, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
+	if k8serrors.IsNotFound(err) {
+		return &ctrl.Result{}, nil
+	}
+	if err != nil {
+		return &ctrl.Result{}, err
+	}
+
+	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, nil)
+	if err != nil {
+		r.logger.Error(err, "Failed to create OpenSearch client before bootstrap removal")
+		return &ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, err
+	}
+
+	nodeName := builders.BootstrapPodName(r.instance)
+	if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
+		r.logger.Error(err, "Failed to add voting config exclusion for bootstrap pod", "pod", nodeName)
+		return &ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, err
+	}
+
+	result, err := r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent)
+	if err != nil {
+		return result, err
+	}
+
+	if clearErr := services.ClearVotingConfigExclusions(clusterClient, r.logger, true); clearErr != nil {
+		r.logger.Error(clearErr, "Failed to clear voting config exclusions after bootstrap removal, retrying without wait", "pod", nodeName)
+		if clearErr = services.ClearVotingConfigExclusions(clusterClient, r.logger, false); clearErr != nil {
+			r.logger.Error(clearErr, "Failed to clear voting config exclusions after bootstrap removal", "pod", nodeName)
+		}
+	}
+
+	r.logger.Info("Removed bootstrap pod after voting config exclusion", "pod", nodeName)
+	return result, nil
 }
 
 func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {

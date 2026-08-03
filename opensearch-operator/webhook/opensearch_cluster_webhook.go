@@ -49,6 +49,9 @@ func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj run
 	if err := validateNodePoolComponentUniqueness(cluster); err != nil {
 		return nil, err
 	}
+	if err := validateMasterEligibleNodes(cluster); err != nil {
+		return nil, err
+	}
 	return v.validateTlsConfig(cluster)
 }
 
@@ -62,6 +65,10 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 
 	// Validate no duplicate node pool component names (component is used for K8s resource names)
 	if err := validateNodePoolComponentUniqueness(newCluster); err != nil {
+		return nil, err
+	}
+
+	if err := validateMasterEligibleNodes(newCluster); err != nil {
 		return nil, err
 	}
 
@@ -86,6 +93,15 @@ func validateNodePoolComponentUniqueness(cluster *opensearchv1.OpenSearchCluster
 			return fmt.Errorf("duplicate node pool component name '%s': each node pool must have a unique component name (used for K8s resource naming)", component)
 		}
 		seen[component] = struct{}{}
+	}
+	return nil
+}
+
+// validateMasterEligibleNodes ensures the cluster retains at least one master-eligible replica.
+// Scaling all masters to 0 or removing the last master pool permanently loses quorum.
+func validateMasterEligibleNodes(cluster *opensearchv1.OpenSearchCluster) error {
+	if helpers.CountMasterEligibleReplicas(cluster.Spec.NodePools) < 1 {
+		return fmt.Errorf("cluster must have at least one master-eligible node (role 'master' or 'cluster_manager'); scaling masters to 0 or removing the last master pool is not allowed")
 	}
 	return nil
 }
