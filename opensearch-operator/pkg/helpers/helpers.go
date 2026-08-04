@@ -411,61 +411,18 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 }
 
 func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
-	var data InternalUserConfig
+	// Parse as a generic map to preserve arbitrary internal users (not just admin/kibanaserver).
+	// We only override admin.hash and kibanaserver.hash; everything else stays intact.
+	var data map[string]interface{}
 	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
 	}
 
-	var adminHash string
-	if adminHashOverride != "" {
-		adminHash = adminHashOverride
-	} else {
-		hashed, err := bcrypt.GenerateFromPassword(adminPassword, 12)
-		if err != nil {
-			return nil, err
-		}
-		adminHash = string(hashed)
+	if err := bcryptHash(data, "admin", adminPassword, adminHashOverride); err != nil {
+		return nil, err
 	}
-	data.Admin.Hash = adminHash
-
-	if !data.Admin.Reserved {
-		data.Admin.Reserved = true
-	}
-	if len(data.Admin.BackendRoles) == 0 {
-		data.Admin.BackendRoles = []string{"admin"}
-	} else {
-		found := false
-		for _, role := range data.Admin.BackendRoles {
-			if role == "admin" {
-				found = true
-				break
-			}
-		}
-		if !found {
-			data.Admin.BackendRoles = append(data.Admin.BackendRoles, "admin")
-		}
-	}
-
-	if data.Kibanaserver == nil {
-		data.Kibanaserver = &User{}
-	}
-
-	var dashboardsHash string
-	if dashboardsHashOverride != "" {
-		dashboardsHash = dashboardsHashOverride
-	} else {
-		hashed, err := bcrypt.GenerateFromPassword(dashboardsPassword, 12)
-		if err != nil {
-			return nil, err
-		}
-		dashboardsHash = string(hashed)
-	}
-	data.Kibanaserver.Hash = dashboardsHash
-	if !data.Kibanaserver.Reserved {
-		data.Kibanaserver.Reserved = true
-	}
-	if data.Kibanaserver.Description == "" {
-		data.Kibanaserver.Description = "Demo user for the OpenSearch Dashboards server"
+	if err := bcryptHash(data, "kibanaserver", dashboardsPassword, dashboardsHashOverride); err != nil {
+		return nil, err
 	}
 
 	modifiedYaml, err := yaml.Marshal(data)
@@ -473,6 +430,55 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		return nil, err
 	}
 	return modifiedYaml, nil
+}
+
+// bcryptHash ensures the given user in data has a valid bcrypt hash.
+// If hashOverride is non-empty it is used directly; otherwise the password is hashed.
+func bcryptHash(data map[string]interface{}, username string, password []byte, hashOverride string) error {
+	user, _ := data[username].(map[string]interface{})
+	if user == nil {
+		user = make(map[string]interface{})
+		data[username] = user
+	}
+
+	if hashOverride != "" {
+		user["hash"] = hashOverride
+	} else {
+		hashed, err := bcrypt.GenerateFromPassword(password, 12)
+		if err != nil {
+			return err
+		}
+		user["hash"] = string(hashed)
+	}
+
+	if _, ok := user["reserved"]; !ok {
+		user["reserved"] = true
+	}
+
+	switch username {
+	case "admin":
+		roles, _ := user["backend_roles"].([]interface{})
+		if len(roles) == 0 {
+			user["backend_roles"] = []interface{}{"admin"}
+		} else {
+			found := false
+			for _, r := range roles {
+				if s, ok := r.(string); ok && s == "admin" {
+					found = true
+					break
+				}
+			}
+			if !found {
+				user["backend_roles"] = append(roles, "admin")
+			}
+		}
+	case "kibanaserver":
+		if _, ok := user["description"].(string); !ok || user["description"] == "" {
+			user["description"] = "Demo user for the OpenSearch Dashboards server"
+		}
+	}
+
+	return nil
 }
 
 func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (string, string, error) {
