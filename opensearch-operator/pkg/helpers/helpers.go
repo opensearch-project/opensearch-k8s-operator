@@ -411,9 +411,20 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 }
 
 func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
-	var data InternalUserConfig
+	// Use a generic map to preserve all users (including custom ones).
+	// Only "admin" and "kibanaserver" are modified; all other entries
+	// (including _meta and any custom users) pass through unchanged.
+	var data map[string]interface{}
 	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
+	}
+
+	// Update admin user.
+	// NOTE: yaml.v2 deserializes nested mappings as map[interface{}]interface{}.
+	// If migrating to yaml.v3, these assertions must change to map[string]interface{}.
+	adminUser, ok := data["admin"].(map[interface{}]interface{})
+	if !ok {
+		return nil, fmt.Errorf("admin user not found or has invalid format")
 	}
 
 	var adminHash string
@@ -426,28 +437,43 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		}
 		adminHash = string(hashed)
 	}
-	data.Admin.Hash = adminHash
+	adminUser["hash"] = adminHash
 
-	if !data.Admin.Reserved {
-		data.Admin.Reserved = true
+	if reserved, ok := adminUser["reserved"].(bool); !ok || !reserved {
+		adminUser["reserved"] = true
 	}
-	if len(data.Admin.BackendRoles) == 0 {
-		data.Admin.BackendRoles = []string{"admin"}
+
+	// Ensure admin has "admin" backend role
+	var backendRoles []string
+	if roles, ok := adminUser["backend_roles"].([]interface{}); ok {
+		for _, role := range roles {
+			if roleStr, ok := role.(string); ok {
+				backendRoles = append(backendRoles, roleStr)
+			}
+		}
+	}
+	if len(backendRoles) == 0 {
+		backendRoles = []string{"admin"}
 	} else {
 		found := false
-		for _, role := range data.Admin.BackendRoles {
+		for _, role := range backendRoles {
 			if role == "admin" {
 				found = true
 				break
 			}
 		}
 		if !found {
-			data.Admin.BackendRoles = append(data.Admin.BackendRoles, "admin")
+			backendRoles = append(backendRoles, "admin")
 		}
 	}
+	adminUser["backend_roles"] = backendRoles
 
-	if data.Kibanaserver == nil {
-		data.Kibanaserver = &User{}
+	// Update kibanaserver user (same yaml.v2 map type as above)
+	kibanaUser, ok := data["kibanaserver"].(map[interface{}]interface{})
+	if !ok {
+		// Create kibanaserver if it doesn't exist
+		kibanaUser = make(map[interface{}]interface{})
+		data["kibanaserver"] = kibanaUser
 	}
 
 	var dashboardsHash string
@@ -460,14 +486,17 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		}
 		dashboardsHash = string(hashed)
 	}
-	data.Kibanaserver.Hash = dashboardsHash
-	if !data.Kibanaserver.Reserved {
-		data.Kibanaserver.Reserved = true
-	}
-	if data.Kibanaserver.Description == "" {
-		data.Kibanaserver.Description = "Demo user for the OpenSearch Dashboards server"
+	kibanaUser["hash"] = dashboardsHash
+
+	if reserved, ok := kibanaUser["reserved"].(bool); !ok || !reserved {
+		kibanaUser["reserved"] = true
 	}
 
+	if description, ok := kibanaUser["description"].(string); !ok || description == "" {
+		kibanaUser["description"] = "Demo user for the OpenSearch Dashboards server"
+	}
+
+	// Marshal back to YAML, preserving all users (base + custom)
 	modifiedYaml, err := yaml.Marshal(data)
 	if err != nil {
 		return nil, err
