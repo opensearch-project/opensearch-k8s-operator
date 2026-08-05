@@ -29,6 +29,7 @@ spec:
         - --metrics-bind-address={{ .Values.manager.metricsBindAddress }}
         - --leader-elect
         - --enable-webhooks={{ .Values.webhook.enabled }}
+        - --enable-legacy-api={{ include "opensearch-operator.legacyAPIEnabled" . }}
         - --webhook-port={{ .Values.webhook.port }}
         {{- if .Values.manager.watchNamespace }}
         {{- if kindIs "slice" .Values.manager.watchNamespace }}

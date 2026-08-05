@@ -108,6 +108,24 @@ manager:
   #    value: somevalue
 ```
 
+### Legacy API support
+
+Support for the deprecated `opensearch.opster.io/v1` API group is enabled by
+default. After migrating to `opensearch.org/v1`, it can be disabled in the
+operator Helm values:
+
+```yaml
+legacyAPI:
+  enabled: false
+```
+
+> **Warning:** Do not disable legacy API support while
+> `opensearch.opster.io` resources still exist. The legacy CRDs are managed as
+> regular Helm release resources, so disabling the legacy API during an upgrade
+> removes those CRDs and deletes all remaining custom resources stored under
+> them. Follow the [migration guide](./migration-guide.md) to migrate, verify,
+> and delete every legacy resource before changing this setting.
+
 ### Pprof endpoints
 
 There have been situations reported where the operator is leaking memory. To help diagnose these situations the standard go [pprof](https://pkg.go.dev/net/http/pprof) endpoints can be enabled by adding the following to your `values.yaml`:
