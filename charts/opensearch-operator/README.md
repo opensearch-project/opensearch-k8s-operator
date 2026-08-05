@@ -157,4 +157,4 @@ subjects:
   namespace: <monitoring-namespace>
 ```
 
-Opensearch-operator Helm Chart version: `3.0.7`
+Opensearch-operator Helm Chart version: `3.0.8`
