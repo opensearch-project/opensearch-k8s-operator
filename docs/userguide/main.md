@@ -719,9 +719,9 @@ spec:
       privileged: false
 ```
 
-The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions and does not use any defined securityContext. If your kubernetes environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches an init container with root.
+The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions (`runAsUser: 0`) and does not inherit `general.securityContext`; configure it via `initHelper.securityContext` instead (see [Custom init container security context](#custom-init-container-security-context)). If your k8s environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches a privileged init container.
 
-Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods (with the same limitations for the init containers).
+Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods, and the same `initHelper.securityContext` for its init containers.
 
 The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod.
 
@@ -1114,6 +1114,27 @@ spec:
         memory: "512Mi"
         cpu: "500m"
 ```
+
+### Custom init container security context
+
+By default the chown init container runs with `runAsUser: 0` and the sysctl init container (enabled via `general.setVMMaxMapCount`) runs with `privileged: true`. If your cluster enforces admission policies that require additional security context fields (for example a seccomp profile or dropped capabilities), you can replace the security context of these init containers:
+
+```yaml
+spec:
+  initHelper:
+    securityContext:
+      runAsUser: 0
+      privileged: true  # required when general.setVMMaxMapCount is enabled
+      seccompProfile:
+        type: RuntimeDefault
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+```
+
+Note that this replaces the defaults entirely for all init helper containers (chown and sysctl share one context): the chown init container still needs to run as root, and the sysctl init container still needs privileged access, so make sure your custom security context grants the required permissions for both.
 
 ### Disabling the init helper
 

@@ -5,6 +5,7 @@ import (
 	"path"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/hashicorp/go-version"
@@ -35,6 +36,15 @@ func ResolveInitHelperImage(cr *opensearchv1.OpenSearchCluster) (result opensear
 	result.Image = ptr.To(fmt.Sprintf("%s:%s",
 		path.Join(defaultRepo, defaultImage), defaultVersion))
 	return
+}
+
+// ResolveInitHelperSecurityContext returns the user-provided security context for
+// init helper containers, or the given default if none is configured.
+func ResolveInitHelperSecurityContext(cr *opensearchv1.OpenSearchCluster, defaultContext *corev1.SecurityContext) *corev1.SecurityContext {
+	if cr.Spec.InitHelper.SecurityContext != nil {
+		return cr.Spec.InitHelper.SecurityContext
+	}
+	return defaultContext
 }
 
 func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (result opensearchv1.ImageSpec) {

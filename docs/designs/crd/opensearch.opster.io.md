@@ -607,6 +607,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `resources` _[ResourceRequirements](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#resourcerequirements-v1-core)_ |  |  |  |
 | `version` _string_ |  |  |  |
+| `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | SecurityContext replaces the default security context of the init helper containers.<br />Note that the chown init container needs to run as root and the sysctl init container<br />needs to run privileged, so an override must provide equivalent permissions for those<br />containers to keep working. |  |  |
 
 
 #### KeystoreValue
