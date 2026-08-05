@@ -286,6 +286,19 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	return val, ok
 }
 
+// GenerateSecurePassword returns a cryptographically secure random password
+// that satisfies the OpenSearch security plugin's default password policy:
+// minimum 8 characters with at least one uppercase letter, one lowercase
+// letter, one digit and one special character. The entropy comes from the 26
+// random base32 characters returned by rand.Text (130 bits); the fixed suffix
+// only guarantees the required character classes. Shell glob characters
+// (e.g. '*', '?', '[') are deliberately avoided so the password is not
+// mangled by unquoted variable expansions in the OpenSearch image's startup
+// scripts (see issue #955).
+func GenerateSecurePassword() string {
+	return rand.Text() + "aB3!"
+}
+
 func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
 	// Check if user provided AdminCredentialsSecret via Security.Config
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
@@ -303,7 +316,7 @@ func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 		return nil, true, err
 	}
 
-	randomPassword := rand.Text()
+	randomPassword := GenerateSecurePassword()
 
 	adminSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -1096,7 +1109,7 @@ func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1
 		return nil, true, err
 	}
 
-	randomPassword := rand.Text()
+	randomPassword := GenerateSecurePassword()
 	// NOTE(joseb): we cannot set random password when security plugin is disabled.
 	if !IsSecurityPluginEnabled(cr) {
 		randomPassword = "kibanaserver"

@@ -287,7 +287,7 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 
 			installCmd := fmt.Sprintf(
-				"set -f && ./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
+				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
 				pluginA,
 				pluginB,
 			)
@@ -709,7 +709,7 @@ var _ = Describe("Builders", func() {
 			result := NewBootstrapPod(&clusterObject, nil, nil)
 
 			installCmd := fmt.Sprintf(
-				"set -f && ./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
+				"./bin/opensearch-plugin install --batch '%s' '%s' && ./opensearch-docker-entrypoint.sh",
 				pluginA,
 				pluginB,
 			)
@@ -765,7 +765,7 @@ var _ = Describe("Builders", func() {
 
 			actual := result.Spec.Containers[0].Command
 			Expect(len(actual)).To(Equal(3))
-			Expect(actual[2]).To(Equal("set -f && ./opensearch-docker-entrypoint.sh"))
+			Expect(actual[2]).To(Equal("./opensearch-docker-entrypoint.sh"))
 		})
 
 		It("should use PVC for data volume instead of emptyDir", func() {
@@ -1085,7 +1085,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
 
 			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
-			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal("set -f && " + customCommand))
+			Expect(sts.Spec.Template.Spec.Containers[0].Command[2]).To(Equal(customCommand))
 		})
 	})
 

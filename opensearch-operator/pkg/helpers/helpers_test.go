@@ -4,8 +4,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	k8smocks "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -606,5 +609,89 @@ kibanaserver:
 		}
 		Expect(roleStrings).To(ContainElement("other_role"))
 		Expect(roleStrings).To(ContainElement("admin"))
+	})
+})
+
+// OpenSearch 2.12+ rejects admin passwords missing any of: uppercase,
+// lowercase, digit, special character (see issue #1415).
+func expectPolicyCompliant(password string) {
+	GinkgoHelper()
+	Expect(len(password)).To(BeNumerically(">=", 8))
+	Expect(password).To(MatchRegexp(`[A-Z]`), "password must contain an uppercase letter")
+	Expect(password).To(MatchRegexp(`[a-z]`), "password must contain a lowercase letter")
+	Expect(password).To(MatchRegexp(`[0-9]`), "password must contain a digit")
+	Expect(password).To(MatchRegexp(`[^A-Za-z0-9]`), "password must contain a special character")
+}
+
+var _ = Describe("GenerateSecurePassword", func() {
+	It("satisfies the security plugin password policy", func() {
+		for i := 0; i < 100; i++ {
+			expectPolicyCompliant(GenerateSecurePassword())
+		}
+	})
+
+	It("avoids shell glob characters that get mangled by unquoted expansion (issue #955)", func() {
+		for i := 0; i < 100; i++ {
+			Expect(GenerateSecurePassword()).ToNot(MatchRegexp(`[*?\[\]$` + "`" + `\\'"]`))
+		}
+	})
+
+	It("returns unique passwords", func() {
+		Expect(GenerateSecurePassword()).ToNot(Equal(GenerateSecurePassword()))
+	})
+})
+
+var _ = Describe("EnsureAdminCredentialsSecret", func() {
+	It("generates a password that satisfies the security plugin password policy", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+		}
+		secretName := GeneratedAdminCredentialsSecretName(cr)
+
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+		mockClient.EXPECT().GetSecret(secretName, "pwtest").Return(corev1.Secret{}, notFound).Once()
+		var created *corev1.Secret
+		mockClient.EXPECT().CreateSecret(mock.Anything).Run(func(secret *corev1.Secret) {
+			created = secret
+		}).Return(nil, nil).Once()
+		mockClient.EXPECT().GetSecret(secretName, "pwtest").Return(corev1.Secret{}, nil).Once()
+
+		_, _, err := EnsureAdminCredentialsSecret(mockClient, cr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(created).ToNot(BeNil())
+		Expect(created.StringData["username"]).To(Equal("admin"))
+		expectPolicyCompliant(created.StringData["password"])
+	})
+})
+
+var _ = Describe("EnsureDashboardsCredentialsSecret", func() {
+	It("generates a password that satisfies the security plugin password policy", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+			Spec: opensearchv1.ClusterSpec{
+				Security: &opensearchv1.Security{
+					Tls: &opensearchv1.TlsConfig{
+						Http: &opensearchv1.TlsConfigHttp{Enabled: ptr.To(true)},
+					},
+				},
+			},
+		}
+		secretName := GeneratedDashboardsCredentialsSecretName(cr)
+
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+		mockClient.EXPECT().GetSecret(secretName, "pwtest").Return(corev1.Secret{}, notFound).Once()
+		var created *corev1.Secret
+		mockClient.EXPECT().CreateSecret(mock.Anything).Run(func(secret *corev1.Secret) {
+			created = secret
+		}).Return(nil, nil).Once()
+		mockClient.EXPECT().GetSecret(secretName, "pwtest").Return(corev1.Secret{}, nil).Once()
+
+		_, _, err := EnsureDashboardsCredentialsSecret(mockClient, cr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(created).ToNot(BeNil())
+		Expect(created.StringData["username"]).To(Equal("kibanaserver"))
+		expectPolicyCompliant(created.StringData["password"])
 	})
 })

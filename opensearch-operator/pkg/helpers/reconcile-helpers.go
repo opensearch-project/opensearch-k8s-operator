@@ -221,12 +221,10 @@ func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bo
 			com = com + " '" + strings.ReplaceAll(plugin, "'", "\\'") + "'"
 		}
 
-		// Disable shell glob expansion so credentials containing wildcard characters
-		// (e.g. OPENSEARCH_INITIAL_ADMIN_PASSWORD='...*...') are not altered by bash.
-		com = "set -f && " + com + " && " + entrypoint
+		com = com + " && " + entrypoint
 		mainCommand = append(mainCommand, com)
 	} else {
-		mainCommand = []string{"/bin/bash", "-c", "set -f && " + entrypoint}
+		mainCommand = []string{"/bin/bash", "-c", entrypoint}
 	}
 
 	return mainCommand
