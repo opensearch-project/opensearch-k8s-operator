@@ -24,6 +24,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -407,8 +408,8 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 					Name:      "data-test-cluster-master-0",
 					Namespace: "default",
 					Labels: map[string]string{
-						oldClusterLabel:  "test-cluster",
-						oldNodePoolLabel: "master",
+						helpers.OldClusterLabel:  "test-cluster",
+						helpers.OldNodePoolLabel: "master",
 					},
 				},
 			}
@@ -418,8 +419,8 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 
 			updatedPVC := &corev1.PersistentVolumeClaim{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
-			Expect(updatedPVC.Labels[newClusterLabel]).To(Equal("test-cluster"))
-			Expect(updatedPVC.Labels[newNodePoolLabel]).To(Equal("master"))
+			Expect(updatedPVC.Labels[helpers.ClusterLabel]).To(Equal("test-cluster"))
+			Expect(updatedPVC.Labels[helpers.NodePoolLabel]).To(Equal("master"))
 		})
 
 		It("should not overwrite existing new labels", func() {
@@ -436,10 +437,10 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 					Name:      "data-test-cluster-master-1",
 					Namespace: "default",
 					Labels: map[string]string{
-						oldClusterLabel:  "test-cluster",
-						oldNodePoolLabel: "master",
-						newClusterLabel:  "already-set-cluster",
-						newNodePoolLabel: "already-set-nodepool",
+						helpers.OldClusterLabel:  "test-cluster",
+						helpers.OldNodePoolLabel: "master",
+						helpers.ClusterLabel:     "already-set-cluster",
+						helpers.NodePoolLabel:    "already-set-nodepool",
 					},
 				},
 			}
@@ -449,8 +450,110 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 
 			updatedPVC := &corev1.PersistentVolumeClaim{}
 			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
-			Expect(updatedPVC.Labels[newClusterLabel]).To(Equal("already-set-cluster"))
-			Expect(updatedPVC.Labels[newNodePoolLabel]).To(Equal("already-set-nodepool"))
+			Expect(updatedPVC.Labels[helpers.ClusterLabel]).To(Equal("already-set-cluster"))
+			Expect(updatedPVC.Labels[helpers.NodePoolLabel]).To(Equal("already-set-nodepool"))
+		})
+	})
+
+	Describe("syncOldToNew PVC label backfill gating", func() {
+		var statusClient client.Client
+		var statusReconciler *ClusterMigrationReconciler
+
+		BeforeEach(func() {
+			statusClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&opensearchv1.OpenSearchCluster{}, &opsterv1.OpenSearchCluster{}).
+				Build()
+			statusReconciler = &ClusterMigrationReconciler{
+				Client: statusClient,
+				Scheme: scheme,
+			}
+		})
+
+		It("should not backfill PVC labels before the new cluster is initialized", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(statusClient.Create(ctx, oldCluster)).To(Succeed())
+
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+					Annotations: map[string]string{
+						CertOwnershipTransferredAnnotation: "true",
+					},
+				},
+			}
+			Expect(statusClient.Create(ctx, newCluster)).To(Succeed())
+			newCluster.Status = opensearchv1.ClusterStatus{Initialized: false}
+			Expect(statusClient.Status().Update(ctx, newCluster)).To(Succeed())
+
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-test-cluster-master-2",
+					Namespace: "default",
+					Labels: map[string]string{
+						helpers.OldClusterLabel:  "test-cluster",
+						helpers.OldNodePoolLabel: "master",
+					},
+				},
+			}
+			Expect(statusClient.Create(ctx, pvc)).To(Succeed())
+
+			_, err := statusReconciler.syncOldToNew(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedPVC := &corev1.PersistentVolumeClaim{}
+			Expect(statusClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
+			Expect(updatedPVC.Labels).NotTo(HaveKey(helpers.ClusterLabel))
+			Expect(updatedPVC.Labels).NotTo(HaveKey(helpers.NodePoolLabel))
+		})
+
+		It("should backfill PVC labels once the new cluster is initialized", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(statusClient.Create(ctx, oldCluster)).To(Succeed())
+
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+					Annotations: map[string]string{
+						CertOwnershipTransferredAnnotation: "true",
+					},
+				},
+			}
+			Expect(statusClient.Create(ctx, newCluster)).To(Succeed())
+			newCluster.Status = opensearchv1.ClusterStatus{Initialized: true}
+			Expect(statusClient.Status().Update(ctx, newCluster)).To(Succeed())
+
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-test-cluster-master-3",
+					Namespace: "default",
+					Labels: map[string]string{
+						helpers.OldClusterLabel:  "test-cluster",
+						helpers.OldNodePoolLabel: "master",
+					},
+				},
+			}
+			Expect(statusClient.Create(ctx, pvc)).To(Succeed())
+
+			_, err := statusReconciler.syncOldToNew(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedPVC := &corev1.PersistentVolumeClaim{}
+			Expect(statusClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
+			Expect(updatedPVC.Labels[helpers.ClusterLabel]).To(Equal("test-cluster"))
+			Expect(updatedPVC.Labels[helpers.NodePoolLabel]).To(Equal("master"))
 		})
 	})
 

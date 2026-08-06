@@ -37,6 +37,7 @@ import (
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	k8s "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 )
 
@@ -55,11 +56,6 @@ const (
 	// Old finalizers that need to be removed during deletion
 	OldClusterFinalizer  = "Opster"                    // Old cluster finalizer corresponding myFinalizerName
 	OldResourceFinalizer = "opster.io/opensearch-data" // Old resource finalizer (User, Role, etc.) coresponding to OpensearchFinalizer)
-
-	oldClusterLabel  = "opster.io/opensearch-cluster"
-	oldNodePoolLabel = "opster.io/opensearch-nodepool"
-	newClusterLabel  = "opensearch.org/opensearch-cluster"
-	newNodePoolLabel = "opensearch.org/opensearch-nodepool"
 )
 
 // ClusterMigrationReconciler reconciles OpenSearchCluster resources between old and new API groups
@@ -285,10 +281,6 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 		// Don't fail the migration, just requeue to retry the transfer
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
-	if err := r.backfillPVCLegacyLabels(ctx, oldCluster); err != nil {
-		logger.Error(err, "Failed to backfill PVC labels during migration, will retry")
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-	}
 
 	logger.Info("Created new API group resource with status", "name", newCluster.Name, "namespace", newCluster.Namespace)
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
@@ -303,9 +295,15 @@ func (r *ClusterMigrationReconciler) syncOldToNew(ctx context.Context, oldCluste
 		logger.Error(err, "Failed to transfer certificate secret ownership during sync, will retry")
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
-	if err := r.backfillPVCLegacyLabels(ctx, oldCluster); err != nil {
-		logger.Error(err, "Failed to backfill PVC labels during sync, will retry")
-		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	// Only backfill PVC labels once the new cluster is initialized. Doing this earlier
+	// can make legacy PVCs visible to parallel recovery while the migrated CR is still
+	// settling (e.g. Status.Initialized not yet true), which recreates STS in Parallel
+	// mode and can break a healthy cluster mid-migration.
+	if newCluster.Status.Initialized {
+		if err := r.backfillPVCLegacyLabels(ctx, oldCluster); err != nil {
+			logger.Error(err, "Failed to backfill PVC labels during sync, will retry")
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
 	}
 	// Only sync status from new back to old
 	// Spec sync is intentionally disabled - the new CR is the source of truth after migration
@@ -1073,32 +1071,33 @@ func (r *ClusterMigrationReconciler) backfillPVCLegacyLabels(ctx context.Context
 	if err := r.List(ctx, pvcList, &client.ListOptions{
 		Namespace: oldCluster.Namespace,
 	}, client.MatchingLabels{
-		oldClusterLabel: oldCluster.Name,
+		helpers.OldClusterLabel: oldCluster.Name,
 	}); err != nil {
 		return fmt.Errorf("failed to list PVCs for label migration: %w", err)
 	}
 
 	for i := range pvcList.Items {
 		pvc := &pvcList.Items[i]
+		original := pvc.DeepCopy()
 		if pvc.Labels == nil {
 			pvc.Labels = map[string]string{}
 		}
 
 		updated := false
-		if pvc.Labels[newClusterLabel] == "" {
-			pvc.Labels[newClusterLabel] = oldCluster.Name
+		if pvc.Labels[helpers.ClusterLabel] == "" {
+			pvc.Labels[helpers.ClusterLabel] = oldCluster.Name
 			updated = true
 		}
-		if pvc.Labels[newNodePoolLabel] == "" {
-			if oldNodePool, ok := pvc.Labels[oldNodePoolLabel]; ok && oldNodePool != "" {
-				pvc.Labels[newNodePoolLabel] = oldNodePool
+		if pvc.Labels[helpers.NodePoolLabel] == "" {
+			if oldNodePool, ok := pvc.Labels[helpers.OldNodePoolLabel]; ok && oldNodePool != "" {
+				pvc.Labels[helpers.NodePoolLabel] = oldNodePool
 				updated = true
 			}
 		}
 
 		if updated {
-			if err := r.Update(ctx, pvc); err != nil {
-				return fmt.Errorf("failed to update PVC %s/%s labels: %w", pvc.Namespace, pvc.Name, err)
+			if err := r.Patch(ctx, pvc, client.MergeFrom(original)); err != nil {
+				return fmt.Errorf("failed to patch PVC %s/%s labels: %w", pvc.Namespace, pvc.Name, err)
 			}
 		}
 	}
