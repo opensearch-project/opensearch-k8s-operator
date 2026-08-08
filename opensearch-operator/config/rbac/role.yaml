@@ -11,6 +11,7 @@ rules:
   - persistentvolumeclaims
   - pods
   - secrets
+  - serviceaccounts
   - services
   verbs:
   - create
@@ -141,3 +142,23 @@ rules:
   - patch
   - update
   - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterrolebindings
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  resourceNames:
+  - opensearch-node-attributes
+  verbs:
+  - bind

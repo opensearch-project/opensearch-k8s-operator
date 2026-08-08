@@ -10,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,6 +52,12 @@ type K8sClient interface {
 	GetPVC(name, namespace string) (corev1.PersistentVolumeClaim, error)
 	UpdatePVC(pvc *corev1.PersistentVolumeClaim) error
 	ListPVCs(listOptions *client.ListOptions) (corev1.PersistentVolumeClaimList, error)
+	// EnsureClusterRoleBinding creates or updates a cluster-scoped ClusterRoleBinding.
+	// It uses the raw client directly because the ReconcileResource abstraction does
+	// not handle cluster-scoped (non-namespaced) objects reliably.
+	EnsureClusterRoleBinding(crb *rbacv1.ClusterRoleBinding) error
+	// DeleteClusterRoleBinding deletes a ClusterRoleBinding, ignoring not-found errors.
+	DeleteClusterRoleBinding(name string) error
 	Scheme() *runtime.Scheme
 	Context() context.Context
 }
@@ -290,6 +297,40 @@ func (c K8sClientImpl) UpdatePodLabels(pod *corev1.Pod, newLabels map[string]str
 		podCopy.Labels[k] = v
 	}
 	return c.Update(c.ctx, podCopy)
+}
+
+// EnsureClusterRoleBinding creates or updates a ClusterRoleBinding using the raw client.
+// ReconcileResource is not used because the operator-tools reconciler does not
+// reliably handle cluster-scoped (non-namespaced) objects.
+func (c K8sClientImpl) EnsureClusterRoleBinding(desired *rbacv1.ClusterRoleBinding) error {
+	existing := &rbacv1.ClusterRoleBinding{}
+	err := c.Get(c.ctx, client.ObjectKey{Name: desired.Name}, existing)
+	if k8serrors.IsNotFound(err) {
+		return c.Create(c.ctx, desired)
+	}
+	if err != nil {
+		return err
+	}
+	if existing.RoleRef != desired.RoleRef {
+		// RoleRef is immutable for (Cluster)RoleBindings; recreate if it changed.
+		if err := c.Delete(c.ctx, existing); err != nil {
+			return err
+		}
+		return c.Create(c.ctx, desired)
+	}
+	existing.Subjects = desired.Subjects
+	existing.Labels = desired.Labels
+	return c.Update(c.ctx, existing)
+}
+
+// DeleteClusterRoleBinding deletes a ClusterRoleBinding by name, ignoring not-found errors.
+func (c K8sClientImpl) DeleteClusterRoleBinding(name string) error {
+	crb := &rbacv1.ClusterRoleBinding{ObjectMeta: metav1.ObjectMeta{Name: name}}
+	err := c.Delete(c.ctx, crb)
+	if k8serrors.IsNotFound(err) {
+		return nil
+	}
+	return err
 }
 
 // Validate K8sClientImpl implements the interface
