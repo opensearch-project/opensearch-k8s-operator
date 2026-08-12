@@ -304,8 +304,13 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 		}
 		messageTemplate := requests.MessageTemplate{Source: r.instance.Spec.ErrorNotification.MessageTemplate.Source}
 
+		channel := requests.NotificationChannel{}
+		if r.instance.Spec.ErrorNotification.Channel != "" {
+			channel.ID = r.instance.Spec.ErrorNotification.Channel
+		}
+
 		policy.ErrorNotification = &requests.ErrorNotification{
-			Channel:         r.instance.Spec.ErrorNotification.Channel,
+			Channel:         channel,
 			MessageTemplate: &messageTemplate,
 		}
 
