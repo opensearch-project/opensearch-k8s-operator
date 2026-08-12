@@ -742,25 +742,6 @@ func ReadyReplicasForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSear
 	return int32(numReadyPods), nil
 }
 
-// Count the number of PVCs created for the given NodePool
-func CountPVCsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
-	if err != nil {
-		return 0, err
-	}
-	componentReq, err := labels.NewRequirement(NodePoolLabel, selection.Equals, []string{nodePool.Component})
-	if err != nil {
-		return 0, err
-	}
-	selector := labels.NewSelector()
-	selector = selector.Add(*clusterReq, *componentReq)
-	list, err := k8sClient.ListPVCs(&client.ListOptions{Namespace: cr.Namespace, LabelSelector: selector})
-	if err != nil {
-		return 0, err
-	}
-	return len(list.Items), nil
-}
-
 // Delete a STS with cascade=orphan and wait until it is actually deleted from the kubernetes API
 func WaitForSTSDelete(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) error {
 	cond := func(ctx context.Context) (bool, error) {
@@ -774,44 +755,6 @@ func WaitForSTSDelete(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.
 		return err
 	}
 	return wait.PollUntilContextTimeout(ctx, time.Second*updateStepTime, time.Second*stsUpdateWaitTime, true, cond)
-}
-
-// Wait for max 30s until a STS has at least the given number of replicas
-func WaitForSTSReplicas(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet, replicas int32) error {
-	cond := func(ctx context.Context) (bool, error) {
-		existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
-		if err != nil {
-			if k8serrors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		if existing.Status.Replicas >= replicas {
-			return true, nil
-		}
-		return false, nil
-	}
-	return wait.PollUntilContextTimeout(ctx, time.Second*updateStepTime, time.Second*stsUpdateWaitTime, true, cond)
-}
-
-func WaitForSTSStatus(ctx context.Context, k8sClient k8s.K8sClient, obj *appsv1.StatefulSet) (*appsv1.StatefulSet, error) {
-	var result appsv1.StatefulSet
-	cond := func(ctx context.Context) (bool, error) {
-		existing, err := k8sClient.GetStatefulSet(obj.Name, obj.Namespace)
-		if err != nil {
-			if k8serrors.IsNotFound(err) {
-				return false, nil
-			}
-			return false, err
-		}
-		result = existing
-		if existing.Status.CurrentRevision != "" {
-			return true, nil
-		}
-		return false, nil
-	}
-	err := wait.PollUntilContextTimeout(ctx, time.Second*updateStepTime, time.Second*stsUpdateWaitTime, true, cond)
-	return &result, err
 }
 
 // GetSTSForNodePool returns the corresponding sts for a given nodePool and cluster name

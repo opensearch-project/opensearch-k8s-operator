@@ -1431,7 +1431,16 @@ The operator contains several features that automate management tasks that might
 
 The operator uses `Parallel` pod management for StatefulSets by default, so pods are started in parallel. This allows the cluster to form quorum and recover when multiple pods are missing or crashed, without a separate recovery mode.
 
-If the cluster is using emptyDir i.e. every node pool is using emptyDir, data is lost and not recoverable in failure scenarios. So, it is impossible to restore the cluster to its old state. Therefore, the operator deletes and recreates the entire OpenSearch cluster.
+Scaling, rolling restarts, and version upgrades remain sequenced by the operator (one replica / one node at a time). `Parallel` only removes the StatefulSet controller's readiness gate on pod creation and recreation.
+
+`podManagementPolicy` is immutable on StatefulSets. After upgrading to an operator version that sets `Parallel`, existing node-pool StatefulSets are recreated once via orphan delete (pods are retained and re-adopted). This is a one-time, fleet-wide STS recreate that normally converges within one or two reconciles.
+
+If the cluster is using emptyDir i.e. every node pool is using emptyDir, the operator starts recovery in case of these failure scenarios:
+
+1. More than half the master nodes are missing or crashed and thus, the quorum is broken.
+2. All data nodes are missing or crashed and thus, no data node is available.
+
+But since the cluster is using emptyDir, data is lost and not recoverable. So, it is impossible to restore the cluster to its old state. Therefore, the operator deletes and recreates the entire OpenSearch cluster.
 
 ### Rolling Upgrades
 
