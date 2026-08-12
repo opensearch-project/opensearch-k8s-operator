@@ -299,6 +299,9 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 		Description:  r.instance.Spec.Description,
 	}
 	if r.instance.Spec.ErrorNotification != nil {
+		if r.instance.Spec.ErrorNotification.MessageTemplate == nil {
+			return nil, errors.New("errorNotification.messageTemplate must be set")
+		}
 		messageTemplate := requests.MessageTemplate{Source: r.instance.Spec.ErrorNotification.MessageTemplate.Source}
 
 		policy.ErrorNotification = &requests.ErrorNotification{
