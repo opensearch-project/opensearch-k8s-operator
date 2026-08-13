@@ -291,9 +291,14 @@ func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret
 		filePath := fmt.Sprintf("%s/%s", securityconfigPath, k)
 		fileType, ok := ymlToFileType[k]
 		if !ok {
-			// If the yml file is invalid, do not return the error
-			// Just log it and build the commands for valid yml files
-			log.Error(fmt.Errorf("invalid yml file %s in securityconfig secret", k), fmt.Sprintf("skipping %s", k))
+			if strings.HasSuffix(k, ".yml") || strings.HasSuffix(k, ".yaml") {
+				// If the yml file is invalid, do not return the error
+				// Just log it and build the commands for valid yml files
+				log.Error(fmt.Errorf("invalid yml file %s in securityconfig secret", k), fmt.Sprintf("skipping %s", k))
+			} else {
+				// Non-yml files (e.g. log4j2.properties) are not applied by securityadmin, skip them silently
+				log.Info(fmt.Sprintf("skipping non-yml file %s in securityconfig secret", k))
+			}
 			continue
 		}
 		// Necessary as kubectl apply for stringData doesn't completely remove the field from the secret
