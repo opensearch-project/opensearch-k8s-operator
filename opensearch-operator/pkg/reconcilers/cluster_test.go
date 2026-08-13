@@ -1,14 +1,18 @@
 package reconcilers
 
 import (
+	"errors"
 	"time"
 
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/stretchr/testify/mock"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -189,6 +193,64 @@ var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
 			)
 			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
 		})
+	})
+})
+
+var _ = Describe("ServiceMonitor reconciliation", func() {
+	newMonitoringInstance := func() *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "monitoring-test",
+				Namespace: "test-namespace",
+			},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
+					Monitoring: opensearchv1.MonitoringConfig{Enable: true},
+				},
+			},
+		}
+	}
+
+	It("should not fail the reconcile when monitoring is enabled but the ServiceMonitor CRD is missing", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newMonitoringInstance()
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: instance,
+			recorder: record.NewFakeRecorder(1),
+		}
+
+		mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+		mockClient.EXPECT().
+			ReconcileResource(mock.AnythingOfType("*v1.ServiceMonitor"), reconciler.StatePresent).
+			Return(nil, &apimeta.NoKindMatchError{
+				GroupKind: schema.GroupKind{Group: "monitoring.coreos.com", Kind: "ServiceMonitor"},
+			})
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileServiceMonitor(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
+	})
+
+	It("should surface other ServiceMonitor errors", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newMonitoringInstance()
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: instance,
+			recorder: record.NewFakeRecorder(1),
+		}
+
+		mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+		mockClient.EXPECT().
+			ReconcileResource(mock.AnythingOfType("*v1.ServiceMonitor"), reconciler.StatePresent).
+			Return(nil, errors.New("some other failure"))
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileServiceMonitor(&result)
+
+		Expect(result.Err).To(MatchError(ContainSubstring("some other failure")))
 	})
 })
 
