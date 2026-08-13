@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -21,6 +22,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
@@ -91,6 +93,47 @@ func (r *ClusterReconciler) canManageClusterRoleBindings() bool {
 	return !r.skipClusterRoleBindingManagement
 }
 
+// reconcileServiceMonitor creates or removes the prometheus-operator
+// ServiceMonitor. A missing ServiceMonitor CRD is tolerated in both
+// directions so that it never blocks the rest of the reconcile chain
+// (e.g. the dashboards deployment, see #746).
+func (r *ClusterReconciler) reconcileServiceMonitor(result *reconciler.CombinedResult) {
+	serviceMonitor := builders.NewServiceMonitor(r.instance)
+	if r.instance.Spec.General.Monitoring.Enable {
+		result.CombineErr(ctrl.SetControllerReference(r.instance, serviceMonitor, r.client.Scheme()))
+		res, err := r.client.ReconcileResource(serviceMonitor, reconciler.StatePresent)
+		if err != nil && isServiceMonitorCRDMissing(err) {
+			r.logger.Info("ServiceMonitor CRD not found, skipping ServiceMonitor creation. Install the prometheus-operator CRDs to enable monitoring")
+			if r.recorder != nil {
+				r.recorder.Event(r.instance, "Warning", "Monitoring", "ServiceMonitor CRD not installed, skipping ServiceMonitor creation")
+			}
+			return
+		}
+		result.Combine(res, err)
+	} else {
+		res, err := r.client.ReconcileResource(serviceMonitor, reconciler.StateAbsent)
+		if err != nil && isServiceMonitorCRDMissing(err) {
+			r.logger.Info("ServiceMonitor crd not found, skipping deletion")
+			return
+		}
+		result.Combine(res, err)
+	}
+}
+
+// isServiceMonitorCRDMissing reports whether err indicates that the
+// prometheus-operator ServiceMonitor CRD is not installed in the cluster.
+func isServiceMonitorCRDMissing(err error) bool {
+	if err == nil {
+		return false
+	}
+	var noMatch *apimeta.NoKindMatchError
+	if errors.As(err, &noMatch) {
+		return true
+	}
+	return strings.Contains(err.Error(), "no matches for kind \"ServiceMonitor\"") ||
+		strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs: monitoring.coreos.com/v1")
+}
+
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// lg := log.FromContext(r.ctx)
 	result := reconciler.CombinedResult{}
@@ -99,25 +142,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
-	if r.instance.Spec.General.Monitoring.Enable {
-		serviceMonitor := builders.NewServiceMonitor(r.instance)
-		result.CombineErr(ctrl.SetControllerReference(r.instance, serviceMonitor, r.client.Scheme()))
-		result.Combine(r.client.ReconcileResource(serviceMonitor, reconciler.StatePresent))
-
-	} else {
-		serviceMonitor := builders.NewServiceMonitor(r.instance)
-		res, err := r.client.ReconcileResource(serviceMonitor, reconciler.StateAbsent)
-		if err != nil {
-			if strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs: monitoring.coreos.com/v1") {
-				r.logger.Info("ServiceMonitor crd not found, skipping deletion")
-			} else {
-				result.Combine(res, err)
-			}
-		} else {
-			result.Combine(res, err)
-		}
-
-	}
+	r.reconcileServiceMonitor(&result)
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(clusterService, reconciler.StatePresent))
