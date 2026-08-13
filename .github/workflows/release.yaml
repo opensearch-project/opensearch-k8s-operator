@@ -5,6 +5,8 @@ on:
       - 'v*'
 jobs:
   release:
+    permissions:
+      contents: write
     runs-on: ubuntu-latest
     environment:
       name: k8s-operator
@@ -53,12 +55,18 @@ jobs:
           CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
 
       - name: Create Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
-        id: create_release
-        with:
-          draft: true
-          prerelease: false
-          token: ${{ secrets.GITHUB_TOKEN }}
-          tag_name: ${{ github.ref }}
-          name: ${{ github.ref }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Generate notes against the previous operator (v*) tag explicitly:
+          # GitHub's default baseline is the latest published release, which is
+          # usually an interleaved helm chart release with an unrelated diff range.
+          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -vx "$GITHUB_REF_NAME" | head -1)
+          EXTRA_ARGS=""
+          [ -n "$PREV_TAG" ] && EXTRA_ARGS="--notes-start-tag $PREV_TAG"
+          case "$GITHUB_REF_NAME" in *-*) EXTRA_ARGS="$EXTRA_ARGS --prerelease";; esac
+          gh release create "$GITHUB_REF_NAME" \
+            --draft $EXTRA_ARGS \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes
 
