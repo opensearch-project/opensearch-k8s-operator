@@ -150,6 +150,8 @@ config:
 					"internal_users.yml": internalUsersYAML("", ""),
 					// Invalid yml in secret should not throw an error
 					"invalid.yml": []byte("foo"),
+					// Non-yml files in secret should be skipped without an error
+					"log4j2.properties": []byte("rootLogger.level = info"),
 					// Empty contents for a yml should be ignored
 					"action_groups.yml": []byte(actionGroupsYAML),
 				},
@@ -235,6 +237,8 @@ config:
 			Expect(actualCmdArg).To(ContainSubstring("action_groups.yml"))
 			// Verify that invalid files were not included in the command
 			Expect(actualCmdArg).ToNot(ContainSubstring("invalid.yml"))
+			// Verify that non-yml files were not included in the command
+			Expect(actualCmdArg).ToNot(ContainSubstring("log4j2.properties"))
 			// Verify that files not present in the secret are not included
 			Expect(actualCmdArg).ToNot(ContainSubstring("audit.yml"))
 		})
