@@ -199,50 +199,52 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 
 	var res *ctrl.Result
 	var certDN string
-	var shouldGenerate bool
 
-	if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
-		shouldGenerate = false
-	} else {
-		shouldGenerate = true
-	}
+	shouldGenerate := r.instance.Spec.Security.Config == nil || r.instance.Spec.Security.Config.AdminSecret.Name == ""
 
-	if helpers.SecurityChangeVersion(r.instance) {
-		tlsConfig := r.instance.Spec.Security.Tls.Http
-		if shouldGenerate {
-			ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
-			if err != nil {
-				return nil, err
-			}
-
-			res, err = r.createAdminSecret(ca)
-			if err != nil {
-				return nil, err
-			}
-			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
-		} else {
-			certDN = strings.Join(tlsConfig.AdminDn, "\",\"")
+	if shouldGenerate {
+		ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		tlsConfig := r.instance.Spec.Security.Tls.Transport
-		if shouldGenerate {
-			ca, err := r.getReferencedCaCertOrDefault(r.adminCAConfig())
-			if err != nil {
-				return nil, err
-			}
 
-			res, err = r.createAdminSecret(ca)
-			if err != nil {
-				return nil, err
-			}
-			certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
-		} else {
-			certDN = strings.Join(tlsConfig.AdminDn, "\",\"") //nolint:staticcheck
+		res, err = r.createAdminSecret(ca)
+		if err != nil {
+			return nil, err
 		}
+		certDN = fmt.Sprintf("CN=admin,OU=%s", clusterName)
+	} else {
+		adminDn := r.configuredAdminDn()
+		if len(adminDn) == 0 {
+			r.logger.Info("An admin cert secret is configured but no adminDn is set; securityadmin.sh will not be able to authenticate. Set security.tls.http.adminDn to the DN of the admin certificate.")
+		}
+		certDN = strings.Join(adminDn, "\",\"")
 	}
 
 	r.reconcilerContext.AddConfig("plugins.security.authcz.admin_dn", fmt.Sprintf("[\"%s\"]", certDN))
 	return res, nil
+}
+
+// configuredAdminDn returns the admin DNs configured in the spec.
+// OpenSearch >= 2.0.0 reads security.tls.http.adminDn; the deprecated
+// security.tls.transport.adminDn is honored as a fallback so clusters created
+// before the field moved (operator <= 2.x) keep working after an upgrade.
+func (r *TLSReconciler) configuredAdminDn() []string {
+	tlsConfig := r.instance.Spec.Security.Tls
+	if helpers.SecurityChangeVersion(r.instance) {
+		if tlsConfig.Http != nil && len(tlsConfig.Http.AdminDn) > 0 {
+			return tlsConfig.Http.AdminDn
+		}
+		if tlsConfig.Transport != nil && len(tlsConfig.Transport.AdminDn) > 0 { //nolint:staticcheck
+			r.logger.Info("security.tls.http.adminDn is not set, falling back to the deprecated security.tls.transport.adminDn")
+			return tlsConfig.Transport.AdminDn //nolint:staticcheck
+		}
+		return nil
+	}
+	if tlsConfig.Transport != nil {
+		return tlsConfig.Transport.AdminDn //nolint:staticcheck
+	}
+	return nil
 }
 
 func (r *TLSReconciler) adminCAConfig() corev1.LocalObjectReference {
