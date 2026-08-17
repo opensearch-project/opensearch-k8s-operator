@@ -45,9 +45,11 @@ import (
 // Now reconciles opensearch.org/v1 API group (new API) instead of opensearch.opster.io/v1 (old API)
 type OpenSearchClusterReconciler struct {
 	client.Client
-	Scheme   *runtime.Scheme
-	Recorder record.EventRecorder
-	Instance *opensearchv1.OpenSearchCluster
+	Scheme                           *runtime.Scheme
+	Recorder                         record.EventRecorder
+	Instance                         *opensearchv1.OpenSearchCluster
+	SkipClusterRoleBindingManagement bool
+	NodeAttributesClusterRoleName    string
 	logr.Logger
 }
 
@@ -68,6 +70,9 @@ type OpenSearchClusterReconciler struct {
 //+kubebuilder:rbac:groups=batch,resources=jobs,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=policy,resources=poddisruptionbudgets,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=monitoring.coreos.com,resources=servicemonitors,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=core,resources=serviceaccounts,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterrolebindings,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=clusterroles,resourceNames=opensearch-node-attributes,verbs=bind
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -205,6 +210,10 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		&reconcilerContext,
 		r.Instance,
 	)
+	if r.SkipClusterRoleBindingManagement {
+		cluster.DisableClusterRoleBindingManagement()
+	}
+	cluster.SetNodeAttributesClusterRoleName(r.NodeAttributesClusterRoleName)
 	dashboards := reconcilers.NewDashboardsReconciler(
 		r.Client,
 		ctx,
@@ -294,6 +303,10 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		&reconcilerContext,
 		r.Instance,
 	)
+	if r.SkipClusterRoleBindingManagement {
+		cluster.DisableClusterRoleBindingManagement()
+	}
+	cluster.SetNodeAttributesClusterRoleName(r.NodeAttributesClusterRoleName)
 	scaler := reconcilers.NewScalerReconciler(
 		r.Client,
 		ctx,
@@ -340,17 +353,42 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 		{Name: restart.Name(), Func: restart.Reconcile},
 		{Name: snapshotrepository.Name(), Func: snapshotrepository.Reconcile},
 	}
+
+	const defaultRequeueAfter = 30 * time.Second
+	var minRequeueAfter time.Duration
+
 	for _, rec := range componentReconcilers {
 		result, err := rec.Func()
 		if err != nil {
+			if reconcilers.IsTerminal(err) {
+				// Permanent config/validation failure: surface via metrics/logs but
+				// keep running later reconcilers (e.g. bad version must not block restart).
+				helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
+				r.Info("terminal reconciler error, continuing chain", "reconciler", rec.Name, "error", err.Error())
+				continue
+			}
 			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
 			return result, err
 		}
+		// Requeue=true short-circuits so in-progress scaler/upgrade work is exclusive.
 		if result.Requeue {
 			return result, nil
 		}
+		// RequeueAfter-only is valid controller-runtime semantics; CombinedResult
+		// often produces it. Track the soonest requested delay instead of always
+		// falling through to the fixed 30s tick.
+		if result.RequeueAfter > 0 {
+			if minRequeueAfter == 0 || result.RequeueAfter < minRequeueAfter {
+				minRequeueAfter = result.RequeueAfter
+			}
+		}
+	}
+
+	requeueAfter := defaultRequeueAfter
+	if minRequeueAfter > 0 && minRequeueAfter < defaultRequeueAfter {
+		requeueAfter = minRequeueAfter
 	}
 
 	// -------- all resources has been created -----------
-	return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+	return ctrl.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
 }

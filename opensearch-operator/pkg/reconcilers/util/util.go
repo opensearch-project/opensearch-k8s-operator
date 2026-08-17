@@ -481,7 +481,14 @@ func isDefaultNodeLifecycleToleration(t corev1.Toleration) bool {
 // been restarted (updated revision) or no longer exists. Call this when DrainDataNodes or
 // SmartScaler use the exclude list, so that a failed RemoveExcludeNodeHost (e.g. connection
 // refused after DeletePod) gets retried and does not leave nodes permanently excluded.
+//
+// Skips cleanup while the scaler has a node in Excluded/Drained — isPodStale treats an
+// up-to-date existing pod as stale, which would strip the live drain exclusion.
 func CleanStaleExclusionList(k8sClient k8s.K8sClient, instance *opensearchv1.OpenSearchCluster, osClient *services.OsClusterClient, logger logr.Logger) (ctrl.Result, error) {
+	if scalerHasExcludeOrDrainInProgress(instance) {
+		logger.V(1).Info("Skipping stale exclusion cleanup; scaler drain in progress")
+		return ctrl.Result{}, nil
+	}
 	excluded, err := services.GetExcludedNodeNames(osClient)
 	if err != nil {
 		return ctrl.Result{}, err
@@ -505,6 +512,20 @@ func CleanStaleExclusionList(k8sClient k8s.K8sClient, instance *opensearchv1.Ope
 		}
 	}
 	return ctrl.Result{}, nil
+}
+
+// scalerHasExcludeOrDrainInProgress reports whether any Scaler component status is
+// Excluded or Drained (active smart scale-down).
+func scalerHasExcludeOrDrainInProgress(instance *opensearchv1.OpenSearchCluster) bool {
+	for _, cs := range instance.Status.ComponentsStatus {
+		if cs.Component != "Scaler" {
+			continue
+		}
+		if cs.Status == "Excluded" || cs.Status == "Drained" {
+			return true
+		}
+	}
+	return false
 }
 
 // isPodStale returns true if the named pod should no longer be in the exclude list:

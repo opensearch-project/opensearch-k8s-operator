@@ -286,6 +286,19 @@ func FindByPath(obj interface{}, keys []string) (interface{}, bool) {
 	return val, ok
 }
 
+// GenerateSecurePassword returns a cryptographically secure random password
+// that satisfies the OpenSearch security plugin's default password policy:
+// minimum 8 characters with at least one uppercase letter, one lowercase
+// letter, one digit and one special character. The entropy comes from the 26
+// random base32 characters returned by rand.Text (130 bits); the fixed suffix
+// only guarantees the required character classes. Shell glob characters
+// (e.g. '*', '?', '[') are deliberately avoided so the password is not
+// mangled by unquoted variable expansions in the OpenSearch image's startup
+// scripts (see issue #955).
+func GenerateSecurePassword() string {
+	return rand.Text() + "aB3!"
+}
+
 func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
 	// Check if user provided AdminCredentialsSecret via Security.Config
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.AdminCredentialsSecret.Name != "" {
@@ -303,7 +316,7 @@ func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 		return nil, true, err
 	}
 
-	randomPassword := rand.Text()
+	randomPassword := GenerateSecurePassword()
 
 	adminSecret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{
@@ -411,9 +424,20 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 }
 
 func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
-	var data InternalUserConfig
+	// Use a generic map to preserve all users (including custom ones).
+	// Only "admin" and "kibanaserver" are modified; all other entries
+	// (including _meta and any custom users) pass through unchanged.
+	var data map[string]interface{}
 	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
+	}
+
+	// Update admin user.
+	// NOTE: yaml.v2 deserializes nested mappings as map[interface{}]interface{}.
+	// If migrating to yaml.v3, these assertions must change to map[string]interface{}.
+	adminUser, ok := data["admin"].(map[interface{}]interface{})
+	if !ok {
+		return nil, fmt.Errorf("admin user not found or has invalid format")
 	}
 
 	var adminHash string
@@ -426,28 +450,43 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		}
 		adminHash = string(hashed)
 	}
-	data.Admin.Hash = adminHash
+	adminUser["hash"] = adminHash
 
-	if !data.Admin.Reserved {
-		data.Admin.Reserved = true
+	if reserved, ok := adminUser["reserved"].(bool); !ok || !reserved {
+		adminUser["reserved"] = true
 	}
-	if len(data.Admin.BackendRoles) == 0 {
-		data.Admin.BackendRoles = []string{"admin"}
+
+	// Ensure admin has "admin" backend role
+	var backendRoles []string
+	if roles, ok := adminUser["backend_roles"].([]interface{}); ok {
+		for _, role := range roles {
+			if roleStr, ok := role.(string); ok {
+				backendRoles = append(backendRoles, roleStr)
+			}
+		}
+	}
+	if len(backendRoles) == 0 {
+		backendRoles = []string{"admin"}
 	} else {
 		found := false
-		for _, role := range data.Admin.BackendRoles {
+		for _, role := range backendRoles {
 			if role == "admin" {
 				found = true
 				break
 			}
 		}
 		if !found {
-			data.Admin.BackendRoles = append(data.Admin.BackendRoles, "admin")
+			backendRoles = append(backendRoles, "admin")
 		}
 	}
+	adminUser["backend_roles"] = backendRoles
 
-	if data.Kibanaserver == nil {
-		data.Kibanaserver = &User{}
+	// Update kibanaserver user (same yaml.v2 map type as above)
+	kibanaUser, ok := data["kibanaserver"].(map[interface{}]interface{})
+	if !ok {
+		// Create kibanaserver if it doesn't exist
+		kibanaUser = make(map[interface{}]interface{})
+		data["kibanaserver"] = kibanaUser
 	}
 
 	var dashboardsHash string
@@ -460,14 +499,17 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		}
 		dashboardsHash = string(hashed)
 	}
-	data.Kibanaserver.Hash = dashboardsHash
-	if !data.Kibanaserver.Reserved {
-		data.Kibanaserver.Reserved = true
-	}
-	if data.Kibanaserver.Description == "" {
-		data.Kibanaserver.Description = "Demo user for the OpenSearch Dashboards server"
+	kibanaUser["hash"] = dashboardsHash
+
+	if reserved, ok := kibanaUser["reserved"].(bool); !ok || !reserved {
+		kibanaUser["reserved"] = true
 	}
 
+	if description, ok := kibanaUser["description"].(string); !ok || description == "" {
+		kibanaUser["description"] = "Demo user for the OpenSearch Dashboards server"
+	}
+
+	// Marshal back to YAML, preserving all users (base + custom)
 	modifiedYaml, err := yaml.Marshal(data)
 	if err != nil {
 		return nil, err
@@ -616,28 +658,49 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 	return diff
 }
 
-// Count the number of pods running and ready and not terminating for a given nodePool
-func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	// Constrict selector from labels
+func listPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) ([]corev1.Pod, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	componentReq, err := labels.NewRequirement(NodePoolLabel, selection.Equals, []string{nodePool.Component})
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	selector := labels.NewSelector()
 	selector = selector.Add(*clusterReq, *componentReq)
-	// List pods matching selector
 	list, err := k8sClient.ListPods(&client.ListOptions{Namespace: cr.Namespace, LabelSelector: selector})
+	if err != nil {
+		return nil, err
+	}
+	return list.Items, nil
+}
+
+// CountExistingPodsForNodePool returns the number of non-terminating pods for a node pool,
+// regardless of readiness. emptyDir data survives in-place pod restarts while the pod exists.
+func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
+	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
 	}
-	// Count pods that are ready
+	numExistingPods := 0
+	for _, pod := range pods {
+		if pod.DeletionTimestamp != nil {
+			continue
+		}
+		numExistingPods++
+	}
+	return numExistingPods, nil
+}
+
+// Count the number of pods running and ready and not terminating for a given nodePool
+func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
+	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
+	if err != nil {
+		return 0, err
+	}
 	numReadyPods := 0
-	for _, pod := range list.Items {
-		// If DeletionTimestamp is set the pod is terminating
+	for _, pod := range pods {
 		if pod.DeletionTimestamp != nil {
 			continue
 		}
@@ -649,7 +712,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 			}
 		}
 		if podReady {
-			numReadyPods += 1
+			numReadyPods++
 		}
 	}
 	return numReadyPods, nil
@@ -1046,7 +1109,7 @@ func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1
 		return nil, true, err
 	}
 
-	randomPassword := rand.Text()
+	randomPassword := GenerateSecurePassword()
 	// NOTE(joseb): we cannot set random password when security plugin is disabled.
 	if !IsSecurityPluginEnabled(cr) {
 		randomPassword = "kibanaserver"

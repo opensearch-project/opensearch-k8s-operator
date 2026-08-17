@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"time"
 
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
@@ -31,12 +32,14 @@ import (
 const clusterReconcilerName = "cluster"
 
 type ClusterReconciler struct {
-	client            k8s.K8sClient
-	ctx               context.Context
-	recorder          record.EventRecorder
-	reconcilerContext *ReconcilerContext
-	instance          *opensearchv1.OpenSearchCluster
-	logger            logr.Logger
+	client                           k8s.K8sClient
+	ctx                              context.Context
+	recorder                         record.EventRecorder
+	reconcilerContext                *ReconcilerContext
+	instance                         *opensearchv1.OpenSearchCluster
+	logger                           logr.Logger
+	nodeAttributesClusterRoleName    string
+	skipClusterRoleBindingManagement bool
 }
 
 func NewClusterReconciler(
@@ -53,15 +56,40 @@ func NewClusterReconciler(
 			reconciler.WithPatchCalculateOptions(patch.IgnoreVolumeClaimTemplateTypeMetaAndStatus(), patch.IgnoreStatusFields()),
 			reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", clusterReconcilerName)),
 		)...),
-		ctx:               ctx,
-		recorder:          recorder,
-		reconcilerContext: reconcilerContext,
-		instance:          instance,
-		logger:            log.FromContext(ctx),
+		ctx:                           ctx,
+		recorder:                      recorder,
+		reconcilerContext:             reconcilerContext,
+		instance:                      instance,
+		logger:                        log.FromContext(ctx),
+		nodeAttributesClusterRoleName: builders.NodeAttributesClusterRoleName,
 	}
 }
 
 func (r *ClusterReconciler) Name() string { return clusterReconcilerName }
+
+// DisableClusterRoleBindingManagement prevents this reconciler from creating or
+// deleting cluster-scoped RBAC. It is used by namespace-scoped installs that
+// intentionally run without ClusterRoleBinding permissions.
+func (r *ClusterReconciler) DisableClusterRoleBindingManagement() {
+	r.skipClusterRoleBindingManagement = true
+}
+
+func (r *ClusterReconciler) SetNodeAttributesClusterRoleName(name string) {
+	if name != "" {
+		r.nodeAttributesClusterRoleName = name
+	}
+}
+
+func (r *ClusterReconciler) getNodeAttributesClusterRoleName() string {
+	if r.nodeAttributesClusterRoleName == "" {
+		return builders.NodeAttributesClusterRoleName
+	}
+	return r.nodeAttributesClusterRoleName
+}
+
+func (r *ClusterReconciler) canManageClusterRoleBindings() bool {
+	return !r.skipClusterRoleBindingManagement
+}
 
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// lg := log.FromContext(r.ctx)
@@ -113,6 +141,10 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	passwordSecret := builders.PasswordSecret(r.instance, username, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
+
+	if !r.reconcileNodeAttributesRBAC(&result) {
+		return result.Result, result.Err
+	}
 
 	// Create bootstrap PVC for persistent storage
 	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
@@ -362,7 +394,47 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 
 func (r *ClusterReconciler) DeleteResources() (ctrl.Result, error) {
 	result := reconciler.CombinedResult{}
+	// Clean up the cluster-scoped ClusterRoleBinding created for node-attributes (it
+	// has no owner reference and won't be garbage-collected automatically). The
+	// shared ClusterRole is chart-managed and intentionally left in place.
+	if r.canManageClusterRoleBindings() {
+		result.CombineErr(r.client.DeleteClusterRoleBinding(builders.NodeAttributesClusterRoleBindingName(r.instance)))
+	}
 	return result.Result, result.Err
+}
+
+func (r *ClusterReconciler) reconcileNodeAttributesRBAC(result *reconciler.CombinedResult) bool {
+	// When nodeAttributes are enabled and no custom serviceAccount is set, create a
+	// dedicated ServiceAccount and a ClusterRoleBinding to the shared, chart-managed
+	// node-attributes ClusterRole so the init container can read node labels. The
+	// operator never creates the ClusterRole itself (it is shipped by the Helm chart
+	// and explicitly allowed via the "bind" verb), which avoids granting broad node
+	// read access or the "escalate" verb to the operator.
+	if len(r.instance.Spec.General.NodeAttributes) > 0 && r.instance.Spec.General.ServiceAccount == "" {
+		if !r.canManageClusterRoleBindings() {
+			result.CombineErr(fmt.Errorf(
+				"spec.general.nodeAttributes with a managed serviceAccount requires ClusterRoleBinding management; " +
+					"set spec.general.serviceAccount to an account that can get nodes or install the operator with cluster-scoped RBAC",
+			))
+			return false
+		}
+		sa := builders.NodeAttributesManagedServiceAccount(r.instance)
+		result.CombineErr(ctrl.SetControllerReference(r.instance, sa, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(sa, reconciler.StatePresent))
+
+		result.CombineErr(r.client.EnsureClusterRoleBinding(
+			builders.NodeAttributesClusterRoleBindingWithRoleName(r.instance, r.getNodeAttributesClusterRoleName()),
+		))
+		return true
+	}
+
+	// Ensure they are removed when nodeAttributes are disabled or a custom SA is in use.
+	if r.canManageClusterRoleBindings() {
+		result.CombineErr(r.client.DeleteClusterRoleBinding(builders.NodeAttributesClusterRoleBindingName(r.instance)))
+	}
+	sa := builders.NodeAttributesManagedServiceAccount(r.instance)
+	result.Combine(r.client.ReconcileResource(sa, reconciler.StateAbsent))
+	return true
 }
 
 // isImmutableFieldChangeError checks if an error is due to immutable field changes in StatefulSet
@@ -411,94 +483,167 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 		}
 	}
 
-	// Check at least one data node is running
-	// Check at least half of master pods are running
-	var readyDataNodes int32
-	var readyMasterNodes int32
-	var totalMasterNodes int32
+	stats, err := r.collectEmptyDirPodStats()
+	if err != nil {
+		return &ctrl.Result{Requeue: true}, err
+	}
 
+	if !emptyDirDataLossSuspected(stats) {
+		if err := r.clearEmptyDirRecoveryStatus(); err != nil {
+			return &ctrl.Result{Requeue: true}, err
+		}
+		return &ctrl.Result{}, nil
+	}
+
+	clusterName := r.instance.Name
+	clusterNamespace := r.instance.Namespace
+	annotations := map[string]string{"cluster-name": clusterName}
+	now := time.Now().UTC()
+	firstObserved, hasObservation := emptyDirRecoveryFirstObserved(r.instance.Status.ComponentsStatus)
+
+	if !hasObservation {
+		componentStatus := opensearchv1.ComponentStatus{
+			Component:   emptyDirRecoveryComponent,
+			Status:      emptyDirRecoveryStatusPending,
+			Description: now.Format(time.RFC3339),
+		}
+		currentStatus := opensearchv1.ComponentStatus{Component: emptyDirRecoveryComponent}
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+		})
+		if err != nil {
+			lg.Error(err, "Failed to update emptyDir recovery status")
+			return &ctrl.Result{Requeue: true}, err
+		}
+		r.recorder.AnnotatedEventf(
+			r.instance,
+			annotations,
+			"Warning",
+			"EmptyDirRecovery",
+			"Detected missing pods for emptyDir cluster %s/%s; waiting %s before recreating cluster to avoid acting on transient failures",
+			clusterNamespace,
+			clusterName,
+			emptyDirRecoveryGracePeriod,
+		)
+		return &ctrl.Result{Requeue: true, RequeueAfter: emptyDirRecoveryGracePeriod}, nil
+	}
+
+	if now.Sub(firstObserved) < emptyDirRecoveryGracePeriod {
+		remaining := emptyDirRecoveryGracePeriod - now.Sub(firstObserved)
+		return &ctrl.Result{Requeue: true, RequeueAfter: remaining}, nil
+	}
+
+	lg.Info(fmt.Sprintf("Detected sustained emptyDir data loss for cluster %s in ns %s", clusterName, clusterNamespace))
+	lg.Info("Deleting all sts, dashboards and securityconfig job to re-create cluster")
+	r.recorder.AnnotatedEventf(
+		r.instance,
+		annotations,
+		"Warning",
+		"EmptyDirRecovery",
+		"Recreating emptyDir cluster %s/%s after pods were missing for %s",
+		clusterNamespace,
+		clusterName,
+		emptyDirRecoveryGracePeriod,
+	)
+
+	for _, nodePool := range r.instance.Spec.NodePools {
+		err := helpers.DeleteSTSForNodePool(r.ctx, r.client, nodePool, clusterName, clusterNamespace)
+		if err != nil {
+			lg.Error(err, fmt.Sprintf("Failed to delete sts for nodePool %s", nodePool.Component))
+			return &ctrl.Result{Requeue: true}, err
+		}
+	}
+
+	// Also Delete Dashboards deployment so .kibana index can be recreated when cluster is started again
+	if r.instance.Spec.Dashboards.Enable {
+		err := helpers.DeleteDashboardsDeployment(r.ctx, r.client, clusterName, clusterNamespace)
+		if err != nil {
+			lg.Error(err, "Failed to delete OSD pod")
+			return &ctrl.Result{Requeue: true}, err
+		}
+		// Dashboards deployment will be recreated normally through the reconcile cycle
+	}
+
+	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		instance.Status.Initialized = false
+		currentStatus := opensearchv1.ComponentStatus{Component: emptyDirRecoveryComponent}
+		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+	})
+	if err != nil {
+		lg.Error(err, "Failed to update cluster status")
+		return &ctrl.Result{Requeue: true}, err
+	}
+
+	// Delete the job after setting initialized to false
+	// So the pod is not created with partial config commands
+	err = helpers.DeleteSecurityUpdateJob(r.client, clusterName, clusterNamespace)
+	if err != nil {
+		lg.Error(err, "Failed to delete security update job")
+		return &ctrl.Result{Requeue: true}, err
+	}
+
+	return &ctrl.Result{}, nil
+}
+
+func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) {
+	var stats emptyDirPodStats
 	clusterName := r.instance.Name
 	clusterNamespace := r.instance.Namespace
 
 	for _, nodePool := range r.instance.Spec.NodePools {
-		var sts *appsv1.StatefulSet
-		var err error
-		if helpers.HasDataRole(&nodePool) || helpers.HasManagerRole(&nodePool) {
-			sts, err = helpers.GetSTSForNodePool(r.client, nodePool, clusterName, clusterNamespace)
-			if err != nil {
-				return &ctrl.Result{Requeue: true}, err
-			}
-			readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, &nodePool)
-			if err != nil {
-				return &ctrl.Result{Requeue: true}, err
-			}
-			sts.Status.ReadyReplicas = readyReplicas
+		if !helpers.HasDataRole(&nodePool) && !helpers.HasManagerRole(&nodePool) {
+			continue
+		}
+
+		sts, err := helpers.GetSTSForNodePool(r.client, nodePool, clusterName, clusterNamespace)
+		if err != nil {
+			return emptyDirPodStats{}, err
+		}
+
+		existingPods, err := helpers.CountExistingPodsForNodePool(r.client, r.instance, &nodePool)
+		if err != nil {
+			return emptyDirPodStats{}, err
 		}
 
 		if helpers.HasDataRole(&nodePool) {
-			readyDataNodes += sts.Status.ReadyReplicas
+			stats.totalDataPods += *sts.Spec.Replicas
+			stats.existingDataPods += int32(existingPods)
 		}
 
 		if helpers.HasManagerRole(&nodePool) {
-			totalMasterNodes += *sts.Spec.Replicas
-			readyMasterNodes += sts.Status.ReadyReplicas
+			stats.totalMasterPods += *sts.Spec.Replicas
+			stats.existingMasterPods += int32(existingPods)
 		}
 	}
 
-	// If the failure condition is met,
-	// Delete all the sts so that everything will be created
-	// Then delete the securityconfig job and set cluster initialized to false
-	// This will cause the bootstrap pod to run again and security indices to be initialized again
-	if readyDataNodes == 0 || readyMasterNodes < (totalMasterNodes+1)/2 {
-		lg.Info(fmt.Sprintf("Detected failure for cluster with emptyDir %s in ns %s", clusterName, clusterNamespace))
-		lg.Info("Deleting all sts, dashboards and securityconfig job to re-create cluster")
-		for _, nodePool := range r.instance.Spec.NodePools {
-			err := helpers.DeleteSTSForNodePool(r.ctx, r.client, nodePool, clusterName, clusterNamespace)
-			if err != nil {
-				lg.Error(err, fmt.Sprintf("Failed to delete sts for nodePool %s", nodePool.Component))
-				return &ctrl.Result{Requeue: true}, err
-			}
-		}
+	return stats, nil
+}
 
-		// Also Delete Dashboards deployment so .kibana index can be recreated when cluster is started again
-		if r.instance.Spec.Dashboards.Enable {
-			err := helpers.DeleteDashboardsDeployment(r.ctx, r.client, clusterName, clusterNamespace)
-			if err != nil {
-				lg.Error(err, "Failed to delete OSD pod")
-				return &ctrl.Result{Requeue: true}, err
-			}
-			// Dashboards deployment will be recreated normally through the reconcile cycle
-		}
-
-		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
-			instance.Status.Initialized = false
-		})
-		if err != nil {
-			lg.Error(err, "Failed to update cluster status")
-			return &ctrl.Result{Requeue: true}, err
-		}
-
-		// Delete the job after setting initialized to false
-		// So the pod is not created with partial config commands
-		err = helpers.DeleteSecurityUpdateJob(r.client, clusterName, clusterNamespace)
-		if err != nil {
-			lg.Error(err, "Failed to delete security update job")
-			return &ctrl.Result{Requeue: true}, err
-		}
+func (r *ClusterReconciler) clearEmptyDirRecoveryStatus() error {
+	currentStatus := opensearchv1.ComponentStatus{Component: emptyDirRecoveryComponent}
+	_, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, currentStatus, helpers.GetByComponent)
+	if !found {
+		return nil
 	}
 
-	return &ctrl.Result{}, nil
+	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+	})
 }
 
 func (r *ClusterReconciler) handlePDB(nodePool *opensearchv1.NodePool) (*ctrl.Result, error) {
 	pdb := policyv1.PodDisruptionBudget{}
 
 	if nodePool.Pdb != nil && nodePool.Pdb.Enable {
-		// Check if provided parameters are valid
+		// Check if provided parameters are valid. Invalid PDB config is a
+		// permanent spec error — skip PDB creation and continue so scaler /
+		// upgrade / restart are not blocked indefinitely.
 		if (nodePool.Pdb.MinAvailable != nil && nodePool.Pdb.MaxUnavailable != nil) || (nodePool.Pdb.MinAvailable == nil && nodePool.Pdb.MaxUnavailable == nil) {
-			r.logger.Info("Please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
-			return &ctrl.Result{}, fmt.Errorf("please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget")
-
+			msg := "please provide only one parameter (minAvailable OR maxUnavailable) in order to configure a PodDisruptionBudget"
+			r.logger.Info(msg, "nodePool", nodePool.Component)
+			annotations := map[string]string{"cluster-name": r.instance.GetName()}
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "PDB", "%s (nodePool %s)", msg, nodePool.Component)
+			return &ctrl.Result{}, nil
 		}
 		pdb = helpers.ComposePDB(r.instance, nodePool)
 		if err := ctrl.SetControllerReference(r.instance, &pdb, r.client.Scheme()); err != nil {

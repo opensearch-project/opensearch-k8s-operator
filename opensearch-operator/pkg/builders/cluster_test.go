@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -234,6 +235,19 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.InitContainers[0].Image).To(Equal("docker.io/busybox:latest"))
 		})
+		It("should use node pool image when configured", func() {
+			clusterObject := ClusterDescWithVersion("2.17.1")
+			customImage := "custom/cuda-opensearch:2.17.1"
+			nodePool := opensearchv1.NodePool{
+				Component: "ml",
+				Roles:     []string{"ml"},
+				ImageSpec: &opensearchv1.ImageSpec{
+					Image: &customImage,
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Image).To(Equal(customImage))
+		})
 		It("should use a custom dns name when env variable is set as cluster url", func() {
 			customDns := "custom.domain"
 			serviceName := "opensearch"
@@ -348,6 +362,37 @@ var _ = Describe("Builders", func() {
 			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			Expect(result.Spec.Template.Spec.SecurityContext).To(Equal(podSecurityContext))
 			Expect(result.Spec.Template.Spec.Containers[0].SecurityContext).To(Equal(securityContext))
+		})
+
+		It("should use the custom initHelper security context for init containers if set", func() {
+			initSecurityContext := &corev1.SecurityContext{
+				RunAsUser:      ptr.To(int64(0)),
+				Privileged:     ptr.To(true),
+				SeccompProfile: &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeRuntimeDefault},
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(true)
+			clusterObject.Spec.InitHelper.SecurityContext = initSecurityContext
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			for _, container := range result.Spec.Template.Spec.InitContainers {
+				Expect(container.SecurityContext).To(Equal(initSecurityContext))
+			}
+
+			bootstrapPod := NewBootstrapPod(&clusterObject, nil, nil)
+			for _, container := range bootstrapPod.Spec.InitContainers {
+				Expect(container.SecurityContext).To(Equal(initSecurityContext))
+			}
+		})
+
+		It("should keep the default init container security contexts if no custom one is set", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.SetVMMaxMapCount = ptr.To(true)
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			initContainers := result.Spec.Template.Spec.InitContainers
+			Expect(initContainers[0].Name).To(Equal("init"))
+			Expect(initContainers[0].SecurityContext.RunAsUser).To(Equal(ptr.To(int64(0))))
+			Expect(initContainers[1].Name).To(Equal("init-sysctl"))
+			Expect(initContainers[1].SecurityContext.Privileged).To(Equal(ptr.To(true)))
 		})
 		It("should use default storageclass if no persistence specified", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
@@ -1338,6 +1383,47 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Endpoints[0].BasicAuth).ToNot(BeNil())
 			Expect(result.Spec.Endpoints[0].BearerTokenFile).To(BeEmpty()) //nolint:staticcheck // SA1019 intentionally testing deprecated field is not set
 		})
+
+		It("should propagate relabelings and metric relabelings to the ServiceMonitor endpoint", func() {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Name = "test-cluster"
+			clusterObject.Namespace = "default"
+			clusterObject.Spec.General.ServiceName = "test-cluster"
+			clusterObject.Spec.General.Monitoring.Enable = true
+			clusterObject.Spec.General.Monitoring.ScrapeInterval = "30s"
+
+			clusterObject.Spec.General.Monitoring.Relabelings = []monitoring.RelabelConfig{
+				{
+					SourceLabels: []monitoring.LabelName{"pod"},
+					Regex:        "test-cluster-masters-.*",
+					Action:       "drop",
+				},
+				{
+					SourceLabels: []monitoring.LabelName{"__meta_kubernetes_pod_label_app"},
+					Regex:        "(.+)",
+					Action:       "replace",
+					TargetLabel:  "app",
+				},
+			}
+			clusterObject.Spec.General.Monitoring.MetricRelabelings = []monitoring.RelabelConfig{
+				{
+					SourceLabels: []monitoring.LabelName{"__name__"},
+					Regex:        "jvm_(.+)",
+					Action:       "keep",
+				},
+				{
+					SourceLabels: []monitoring.LabelName{"__name__", "pod"},
+					Regex:        "(opensearch_cluster_.*);test-cluster-masters-.*",
+					Action:       "drop",
+				},
+			}
+
+			result := NewServiceMonitor(&clusterObject)
+
+			Expect(result.Spec.Endpoints).To(HaveLen(1))
+			Expect(result.Spec.Endpoints[0].RelabelConfigs).To(Equal(clusterObject.Spec.General.Monitoring.Relabelings))
+			Expect(result.Spec.Endpoints[0].MetricRelabelConfigs).To(Equal(clusterObject.Spec.General.Monitoring.MetricRelabelings))
+		})
 	})
 
 	When("Configuring InitHelper Resources", func() {
@@ -1493,6 +1579,14 @@ var _ = Describe("Builders", func() {
 			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
 			Expect(job.Spec.Template.Spec.HostNetwork).To(BeTrue())
 		})
+
+		It("should retry failed securityconfig update jobs and enforce a deadline", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
+			Expect(*job.Spec.BackoffLimit).To(Equal(int32(1)))
+			Expect(*job.Spec.ActiveDeadlineSeconds).To(Equal(int64(2400)))
+		})
 	})
 
 	When("Configuring Security Config UpdateJob Tolerations", func() {
@@ -1642,6 +1736,95 @@ var _ = Describe("Builders", func() {
 
 			pod := NewBootstrapPod(&clusterObject, nil, nil)
 			Expect(pod.Spec.HostAliases).To(Equal([]corev1.HostAlias{bootstrapHostAlias}))
+		})
+	})
+
+	When("configuring node attributes from node labels", func() {
+		clusterWithAttributes := func() opensearchv1.OpenSearchCluster {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.NodeAttributes = []opensearchv1.NodeAttribute{
+				{Name: "zone", NodeLabel: "topology.kubernetes.io/zone"},
+			}
+			return clusterObject
+		}
+
+		findContainer := func(containers []corev1.Container, name string) *corev1.Container {
+			for i := range containers {
+				if containers[i].Name == name {
+					return &containers[i]
+				}
+			}
+			return nil
+		}
+
+		It("should not touch pods when no attributes are configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			sts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			Expect(findContainer(sts.Spec.Template.Spec.InitContainers, nodeAttributesVolumeName)).To(BeNil())
+			for _, v := range sts.Spec.Template.Spec.Volumes {
+				Expect(v.Name).NotTo(Equal(nodeAttributesVolumeName))
+			}
+		})
+
+		It("should add the init container, shared volume and mount to the node pool STS", func() {
+			clusterObject := clusterWithAttributes()
+			sts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+
+			initContainer := findContainer(sts.Spec.Template.Spec.InitContainers, nodeAttributesVolumeName)
+			Expect(initContainer).NotTo(BeNil())
+			Expect(initContainer.Env).To(ContainElement(corev1.EnvVar{
+				Name:      "NODE_NAME",
+				ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "spec.nodeName"}},
+			}))
+			// The init container must reference the requested label and write the
+			// matching placeholder variable, while logging the resolved mapping.
+			Expect(initContainer.Command[2]).To(ContainSubstring("topology.kubernetes.io/zone"))
+			Expect(initContainer.Command[2]).To(ContainSubstring(helpers.NodeAttributeEnvVar("zone")))
+			Expect(initContainer.Command[2]).To(ContainSubstring("node-attributes: node.attr.zone from node label topology.kubernetes.io/zone -> " + helpers.NodeAttributeEnvVar("zone")))
+
+			Expect(sts.Spec.Template.Spec.Volumes).To(ContainElement(nodeAttributesVolume()))
+			Expect(sts.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(nodeAttributesVolumeMount(&clusterObject)))
+		})
+
+		It("should source the attributes file before the OpenSearch entrypoint", func() {
+			clusterObject := clusterWithAttributes()
+			sts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			command := sts.Spec.Template.Spec.Containers[0].Command
+			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && set -f && ./opensearch-docker-entrypoint.sh"))
+		})
+
+		It("should wire the same mechanism into the bootstrap pod", func() {
+			clusterObject := clusterWithAttributes()
+			pod := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(findContainer(pod.Spec.InitContainers, nodeAttributesVolumeName)).NotTo(BeNil())
+			Expect(pod.Spec.Volumes).To(ContainElement(nodeAttributesVolume()))
+			command := pod.Spec.Containers[0].Command
+			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && set -f && ./opensearch-docker-entrypoint.sh"))
+		})
+
+		It("should bind the managed ServiceAccount to the shared node-attributes ClusterRole", func() {
+			clusterObject := clusterWithAttributes()
+			clusterObject.Name = "mycluster"
+			clusterObject.Namespace = "myns"
+
+			sa := NodeAttributesManagedServiceAccount(&clusterObject)
+			Expect(sa.Name).To(Equal("mycluster-node-attributes"))
+			Expect(sa.Namespace).To(Equal("myns"))
+
+			crb := NodeAttributesClusterRoleBinding(&clusterObject)
+			// Binding name is per-cluster (namespace embedded) to avoid collisions.
+			Expect(crb.Name).To(Equal("mycluster-myns-node-attributes"))
+			Expect(crb.Name).To(Equal(NodeAttributesClusterRoleBindingName(&clusterObject)))
+			// It must reference the shared, chart-managed ClusterRole, never a
+			// per-cluster one, so the operator needs no ClusterRole create rights.
+			Expect(crb.RoleRef.Kind).To(Equal("ClusterRole"))
+			Expect(crb.RoleRef.Name).To(Equal(NodeAttributesClusterRoleName))
+			Expect(NodeAttributesClusterRoleName).To(Equal("opensearch-node-attributes"))
+			Expect(crb.Subjects).To(HaveLen(1))
+			Expect(crb.Subjects[0].Kind).To(Equal("ServiceAccount"))
+			Expect(crb.Subjects[0].Name).To(Equal("mycluster-node-attributes"))
+			Expect(crb.Subjects[0].Namespace).To(Equal("myns"))
 		})
 	})
 })

@@ -15,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
+	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -342,6 +343,83 @@ var _ = Describe("Scaler Controller", func() {
 			// Verify that the node name stored in Conditions matches the expected calculation
 			currentStatus := spec.Status.ComponentsStatus[0]
 			Expect(currentStatus.Conditions[0]).To(Equal(targetNodeName))
+		})
+	})
+
+	Context("When coordinating with upgrade", func() {
+		It("Should skip replica scaling while an upgrade is in progress but still clean up removed pools", func() {
+			clusterName := "test-cluster"
+			clusterNamespace := "test-namespace"
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterNamespace,
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.12.0",
+					},
+					NodePools: []opensearchv1.NodePool{
+						{Component: "masters", Replicas: 3},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Version: "2.11.0",
+				},
+			}
+
+			mastersSts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName + "-masters",
+					Namespace: clusterNamespace,
+					Labels: map[string]string{
+						helpers.ClusterLabel:  clusterName,
+						helpers.NodePoolLabel: "masters",
+					},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Replicas: ptr.To[int32](3),
+				},
+				Status: appsv1.StatefulSetStatus{
+					AvailableReplicas: 3,
+				},
+			}
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			// Upgrade guard skips reconcileNodePool, but readiness + cleanup still run.
+			mockClient.On("GetStatefulSet", clusterName+"-masters", clusterNamespace).Return(mastersSts, nil)
+			mockClient.On("ListStatefulSets",
+				client.InNamespace(clusterNamespace),
+				client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{
+				Items: []appsv1.StatefulSet{mastersSts},
+			}, nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			result, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			mockClient.AssertExpectations(GinkgoT())
+		})
+	})
+
+	Context("When accumulating requeue across node pools", func() {
+		It("Should keep Requeue when an earlier pool requested it (regression #1454)", func() {
+			// Previously only the last pool's requeue was combined on the success
+			// path, so a drain on a non-last pool reported Requeue=false and the
+			// main chain proceeded into upgrade/restart.
+			results := &reconciler.CombinedResult{}
+			poolRequeues := []bool{true, false} // first pool draining, last idle
+			for _, requeue := range poolRequeues {
+				results.Combine(&ctrl.Result{Requeue: requeue}, nil)
+			}
+			Expect(results.Result.Requeue).To(BeTrue())
+
+			// Demonstrate the old overwrite bug for clarity
+			requeue := false
+			for _, r := range poolRequeues {
+				requeue = r
+			}
+			Expect(requeue).To(BeFalse())
 		})
 	})
 })

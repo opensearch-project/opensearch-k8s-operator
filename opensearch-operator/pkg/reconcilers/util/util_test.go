@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/go-logr/logr"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -456,6 +457,50 @@ var _ = Describe("isPodStale", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(stale).To(BeTrue())
 		})
+	})
+})
+
+var _ = Describe("CleanStaleExclusionList drain guard", func() {
+	It("skips OpenSearch calls when scaler has Excluded status", func() {
+		instance := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "default"},
+			Status: opensearchv1.ClusterStatus{
+				ComponentsStatus: []opensearchv1.ComponentStatus{
+					{Component: "Scaler", Status: "Excluded", Description: "data"},
+				},
+			},
+		}
+		Expect(scalerHasExcludeOrDrainInProgress(instance)).To(BeTrue())
+		// nil clients would panic if cleanup did not short-circuit
+		res, err := CleanStaleExclusionList(nil, instance, nil, logr.Discard())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.IsZero()).To(BeTrue())
+	})
+
+	It("skips OpenSearch calls when scaler has Drained status", func() {
+		instance := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "default"},
+			Status: opensearchv1.ClusterStatus{
+				ComponentsStatus: []opensearchv1.ComponentStatus{
+					{Component: "Scaler", Status: "Drained", Description: "data"},
+				},
+			},
+		}
+		Expect(scalerHasExcludeOrDrainInProgress(instance)).To(BeTrue())
+		res, err := CleanStaleExclusionList(nil, instance, nil, logr.Discard())
+		Expect(err).NotTo(HaveOccurred())
+		Expect(res.IsZero()).To(BeTrue())
+	})
+
+	It("does not treat Running scaler status as in-progress drain", func() {
+		instance := &opensearchv1.OpenSearchCluster{
+			Status: opensearchv1.ClusterStatus{
+				ComponentsStatus: []opensearchv1.ComponentStatus{
+					{Component: "Scaler", Status: "Running", Description: "data"},
+				},
+			},
+		}
+		Expect(scalerHasExcludeOrDrainInProgress(instance)).To(BeFalse())
 	})
 })
 

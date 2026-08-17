@@ -7,6 +7,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 
 	batchv1 "k8s.io/api/batch/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -1592,6 +1593,18 @@ func (_c *MockK8sClient_WaitForPodDeletion_Call) Return(_a0 error) *MockK8sClien
 func (_c *MockK8sClient_WaitForPodDeletion_Call) RunAndReturn(run func(string, string) error) *MockK8sClient_WaitForPodDeletion_Call {
 	_c.Call.Return(run)
 	return _c
+}
+
+// EnsureClusterRoleBinding provides a mock function for EnsureClusterRoleBinding.
+func (_m *MockK8sClient) EnsureClusterRoleBinding(crb *rbacv1.ClusterRoleBinding) error {
+	ret := _m.Called(crb)
+	return ret.Error(0)
+}
+
+// DeleteClusterRoleBinding provides a mock function for DeleteClusterRoleBinding.
+func (_m *MockK8sClient) DeleteClusterRoleBinding(name string) error {
+	ret := _m.Called(name)
+	return ret.Error(0)
 }
 
 // NewMockK8sClient creates a new instance of MockK8sClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.

@@ -1,10 +1,12 @@
 package helpers
 
 import (
+	"encoding/hex"
 	"fmt"
 	"path"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/hashicorp/go-version"
@@ -37,6 +39,15 @@ func ResolveInitHelperImage(cr *opensearchv1.OpenSearchCluster) (result opensear
 	return
 }
 
+// ResolveInitHelperSecurityContext returns the user-provided security context for
+// init helper containers, or the given default if none is configured.
+func ResolveInitHelperSecurityContext(cr *opensearchv1.OpenSearchCluster, defaultContext *corev1.SecurityContext) *corev1.SecurityContext {
+	if cr.Spec.InitHelper.SecurityContext != nil {
+		return cr.Spec.InitHelper.SecurityContext
+	}
+	return defaultContext
+}
+
 func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (result opensearchv1.ImageSpec) {
 	if cr == nil {
 		return
@@ -47,13 +58,13 @@ func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.Nod
 	if cr.Spec.General.DefaultRepo != nil {
 		defaultRepo = *cr.Spec.General.DefaultRepo
 	}
-	imageSpec := cr.Spec.General.ImageSpec
-
-	defaultImage := "opensearch"
 
 	// If a general custom image is specified, use it.
-	if imageSpec != nil {
-		if useCustomImage(imageSpec, &result) {
+	if cr.Spec.General.ImageSpec != nil {
+		if useCustomImage(cr.Spec.General.ImageSpec, &result) {
+			if nodePool != nil {
+				mergeImageSpec(nodePool.ImageSpec, &result)
+			}
 			return
 		}
 	}
@@ -61,8 +72,27 @@ func ResolveImage(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.Nod
 	// If a different image repo is requested, use that with the default image
 	// name and version tag.
 	result.Image = ptr.To(fmt.Sprintf("%s:%s",
-		path.Join(defaultRepo, defaultImage), version))
+		path.Join(defaultRepo, "opensearch"), version))
+	mergeImageSpec(cr.Spec.General.ImageSpec, &result)
+	if nodePool != nil {
+		mergeImageSpec(nodePool.ImageSpec, &result)
+	}
 	return
+}
+
+func mergeImageSpec(customImageSpec *opensearchv1.ImageSpec, result *opensearchv1.ImageSpec) {
+	if customImageSpec == nil {
+		return
+	}
+	if customImageSpec.ImagePullPolicy != nil {
+		result.ImagePullPolicy = customImageSpec.ImagePullPolicy
+	}
+	if len(customImageSpec.ImagePullSecrets) > 0 {
+		result.ImagePullSecrets = customImageSpec.ImagePullSecrets
+	}
+	if customImageSpec.Image != nil {
+		result.Image = customImageSpec.Image
+	}
 }
 
 func ResolveDashboardsImage(cr *opensearchv1.OpenSearchCluster) (result opensearchv1.ImageSpec) {
@@ -163,6 +193,18 @@ func VersionCheck(instance *opensearchv1.OpenSearchCluster) (int32, int32, strin
 		securityConfigPath = opensearchHome + "/plugins/opensearch-security/securityconfig"
 	}
 	return httpPort, securityConfigPort, securityConfigPath
+}
+
+// NodeAttributeEnvVar returns the shell- and OpenSearch-safe environment
+// variable name used to carry the value of a node attribute from the init
+// container to the OpenSearch process. OpenSearch resolves node.attr.<name>
+// from this variable via the ${...} placeholder in opensearch.yml, so the name
+// must not contain the dots or dashes that a raw attribute name may have.
+// Hex-encoding the original name is less readable than replacing separators
+// with underscores, but it avoids collisions between valid attributes such as
+// "rack.id", "rack-id", and "rack_id".
+func NodeAttributeEnvVar(attribute string) string {
+	return "NODE_ATTR_" + strings.ToUpper(hex.EncodeToString([]byte(attribute)))
 }
 
 func BuildMainCommand(installerBinary string, pluginsList []string, batchMode bool, entrypoint string) []string {

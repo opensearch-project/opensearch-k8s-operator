@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"io"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -91,6 +92,16 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 			}
 			return &http.Transport{
 				TLSClientConfig: tlsCfg,
+				// Bound every phase of a request so that an unresponsive endpoint
+				// (e.g. a node that died without closing connections, or a wedged
+				// load balancer) cannot block a reconcile worker indefinitely.
+				// GetClusterHealth's Timeout parameter is a server-side master
+				// timeout and does not protect the client.
+				DialContext: (&net.Dialer{
+					Timeout: 5 * time.Second,
+				}).DialContext,
+				TLSHandshakeTimeout:   10 * time.Second,
+				ResponseHeaderTimeout: 30 * time.Second,
 				// These options are needed as otherwise connections would be kept and leak memory
 				// Connection reuse is not really possible due to each reconcile run being independent
 				DisableKeepAlives: true,

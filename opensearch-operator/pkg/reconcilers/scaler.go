@@ -55,33 +55,42 @@ func NewScalerReconciler(
 func (r *ScalerReconciler) Name() string { return scalerReconcilerName }
 
 func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
-	requeue := false
 	results := &reconciler.CombinedResult{}
-	var err error
+	lg := log.FromContext(r.ctx)
 
-	// Clean stale allocation exclusions (e.g. from a failed RemoveExcludeNodeHost after scale-down or upgrade).
-	// Skip cleanup when we are in the middle of a scale-down (Excluded or Drained), otherwise we would remove
-	// the node from the exclude list before drain completes and the scale-down would get stuck.
-	if r.instance.Spec.ConfMgmt.SmartScaler && !r.scalerHasExcludeOrDrainInProgress() {
-		clusterClient, clientErr := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
-		if clientErr == nil {
-			if res, cleanupErr := util.CleanStaleExclusionList(r.client, r.instance, clusterClient, log.FromContext(r.ctx)); cleanupErr != nil {
-				return ctrl.Result{}, cleanupErr
-			} else if res.Requeue {
-				return res, nil
+	upgradeInProgress := r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version
+
+	// Skip replica scaling while an upgrade is changing versions — mirrors the
+	// rolling-restart guard so scaler and upgrader do not delete pods at once.
+	// Cleanup of entirely removed node pools still runs below.
+	if !upgradeInProgress {
+		// Clean stale allocation exclusions (e.g. from a failed RemoveExcludeNodeHost after scale-down or upgrade).
+		// CleanStaleExclusionList itself skips when a scale-down drain is in progress.
+		if r.instance.Spec.ConfMgmt.SmartScaler {
+			clusterClient, clientErr := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+			if clientErr == nil {
+				if res, cleanupErr := util.CleanStaleExclusionList(r.client, r.instance, clusterClient, lg); cleanupErr != nil {
+					return ctrl.Result{}, cleanupErr
+				} else if res.Requeue {
+					return res, nil
+				}
 			}
 		}
-	}
 
-	for _, nodePool := range r.instance.Spec.NodePools {
-		requeue, err = r.reconcileNodePool(&nodePool)
-		if err != nil {
-			results.Combine(&ctrl.Result{Requeue: requeue}, err)
+		// Accumulate requeue across all pools — previously only the last pool's
+		// value was kept, so a drain on a non-last pool failed to short-circuit
+		// the main reconcile chain before upgrade/restart.
+		for _, nodePool := range r.instance.Spec.NodePools {
+			requeue, poolErr := r.reconcileNodePool(&nodePool)
+			results.Combine(&ctrl.Result{Requeue: requeue}, poolErr)
 		}
+	} else {
+		lg.V(1).Info("Upgrade in progress, skipping replica scaling")
 	}
-	results.Combine(&ctrl.Result{Requeue: requeue}, nil)
 
-	// Check readiness of current NodePools before cleaning up old node pools
+	// Check readiness of current NodePools before cleaning up old node pools.
+	// Cleanup of removed pools must happen even during upgrades so that
+	// deleted node pools do not linger.
 	ready, err := r.nodePoolsReady()
 	if err != nil {
 		results.Combine(&ctrl.Result{}, err)
@@ -94,21 +103,6 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	return results.Result, results.Err
-}
-
-// scalerHasExcludeOrDrainInProgress returns true if any node pool is in Excluded or Drained state,
-// i.e. we are in the middle of a scale-down and should not run CleanStaleExclusionList (would remove
-// the node we are draining from the exclude list and break the flow).
-func (r *ScalerReconciler) scalerHasExcludeOrDrainInProgress() bool {
-	for _, cs := range r.instance.Status.ComponentsStatus {
-		if cs.Component != "Scaler" {
-			continue
-		}
-		if cs.Status == "Excluded" || cs.Status == "Drained" {
-			return true
-		}
-	}
-	return false
 }
 
 func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (bool, error) {

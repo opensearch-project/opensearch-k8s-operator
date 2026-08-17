@@ -4,7 +4,11 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	k8smocks "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/stretchr/testify/mock"
+	"gopkg.in/yaml.v2"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -341,5 +345,353 @@ var _ = Describe("TlsCASecretRef", func() {
 		}
 
 		Expect(TlsCASecretRef(cluster).Name).To(BeEmpty())
+	})
+})
+
+var _ = Describe("applyUserHashes", func() {
+	It("should preserve custom users alongside admin and kibanaserver", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "oldadminhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "Admin user"
+kibanaserver:
+  hash: "oldkibanahash"
+  reserved: true
+  description: "Demo user for the OpenSearch Dashboards server"
+readall:
+  hash: "$2a$12$readallhash"
+  reserved: false
+  backend_roles:
+    - "readall"
+  description: "readall user"
+snapshotrestore:
+  hash: "$2a$12$snapshothash"
+  reserved: false
+  backend_roles:
+    - "snapshotrestore"
+  description: "snapshotrestore user"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			"",
+			[]byte("dashboardspass"),
+			"",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		// admin and kibanaserver must still exist
+		Expect(output).To(HaveKey("admin"))
+		Expect(output).To(HaveKey("kibanaserver"))
+
+		// Custom users must be preserved
+		Expect(output).To(HaveKey("readall"))
+		Expect(output).To(HaveKey("snapshotrestore"))
+
+		// Verify custom user data is intact
+		readall, ok := output["readall"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(readall["hash"]).To(Equal("$2a$12$readallhash"))
+		Expect(readall["description"]).To(Equal("readall user"))
+
+		snapshotrestore, ok := output["snapshotrestore"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(snapshotrestore["hash"]).To(Equal("$2a$12$snapshothash"))
+		Expect(snapshotrestore["description"]).To(Equal("snapshotrestore user"))
+	})
+
+	It("should update admin and kibanaserver hashes while keeping custom users", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "oldadminhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+kibanaserver:
+  hash: "oldkibanahash"
+  reserved: true
+  description: "Demo user for the OpenSearch Dashboards server"
+customuser:
+  hash: "$2a$12$customhash"
+  reserved: false
+  backend_roles:
+    - "custom_role"
+  description: "A custom user"
+`
+		adminHashOverride := "$2a$12$overriddenadminhash"
+		dashboardsHashOverride := "$2a$12$overriddendashboardshash"
+
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			adminHashOverride,
+			[]byte("dashboardspass"),
+			dashboardsHashOverride,
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		// Admin hash should be updated
+		admin, ok := output["admin"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(admin["hash"]).To(Equal(adminHashOverride))
+
+		// Kibanaserver hash should be updated
+		kibana, ok := output["kibanaserver"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(kibana["hash"]).To(Equal(dashboardsHashOverride))
+
+		// Custom user must still exist with original data
+		custom, ok := output["customuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).To(Equal("$2a$12$customhash"))
+		Expect(custom["description"]).To(Equal("A custom user"))
+	})
+
+	It("should preserve multiple custom users with various configurations", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "adminhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+kibanaserver:
+  hash: "kibanahash"
+  reserved: true
+  description: "Demo user for the OpenSearch Dashboards server"
+logstash:
+  hash: "$2a$12$logstashhash"
+  reserved: false
+  backend_roles:
+    - "logstash"
+  description: "Logstash user"
+kibanaro:
+  hash: "$2a$12$kibanarohash"
+  reserved: false
+  backend_roles:
+    - "kibanauser"
+    - "readall"
+  attributes:
+    attribute1: "value1"
+  description: "kibanaro user"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			"$2a$12$newhash",
+			[]byte("dashboardspass"),
+			"$2a$12$newkibanahash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		// All users must be present
+		Expect(output).To(HaveKey("_meta"))
+		Expect(output).To(HaveKey("admin"))
+		Expect(output).To(HaveKey("kibanaserver"))
+		Expect(output).To(HaveKey("logstash"))
+		Expect(output).To(HaveKey("kibanaro"))
+
+		// Verify logstash user is untouched
+		logstash, ok := output["logstash"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(logstash["hash"]).To(Equal("$2a$12$logstashhash"))
+
+		// Verify kibanaro user preserves attributes and multiple backend_roles
+		kibanaro, ok := output["kibanaro"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(kibanaro["hash"]).To(Equal("$2a$12$kibanarohash"))
+		Expect(kibanaro["description"]).To(Equal("kibanaro user"))
+	})
+
+	It("should create kibanaserver if it does not exist", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "adminhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+customuser:
+  hash: "$2a$12$customhash"
+  reserved: false
+  description: "custom"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			"$2a$12$adminhash",
+			[]byte("dashboardspass"),
+			"$2a$12$dashhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		// kibanaserver should be created
+		Expect(output).To(HaveKey("kibanaserver"))
+		kibana, ok := output["kibanaserver"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(kibana["hash"]).To(Equal("$2a$12$dashhash"))
+		Expect(kibana["reserved"]).To(Equal(true))
+
+		// Custom user must still be present
+		Expect(output).To(HaveKey("customuser"))
+		custom, ok := output["customuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).To(Equal("$2a$12$customhash"))
+	})
+
+	It("should add admin backend role if missing", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "adminhash"
+  reserved: true
+  backend_roles:
+    - "other_role"
+kibanaserver:
+  hash: "kibanahash"
+  reserved: true
+  description: "Demo user for the OpenSearch Dashboards server"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			"$2a$12$newhash",
+			[]byte("dashboardspass"),
+			"$2a$12$newkibanahash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		admin, ok := output["admin"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+
+		roles, ok := admin["backend_roles"].([]interface{})
+		Expect(ok).To(BeTrue())
+
+		// Should contain both the original role and "admin"
+		roleStrings := make([]string, len(roles))
+		for i, r := range roles {
+			roleStrings[i] = r.(string)
+		}
+		Expect(roleStrings).To(ContainElement("other_role"))
+		Expect(roleStrings).To(ContainElement("admin"))
+	})
+})
+
+// OpenSearch 2.12+ rejects admin passwords missing any of: uppercase,
+// lowercase, digit, special character (see issue #1415).
+func expectPolicyCompliant(password string) {
+	GinkgoHelper()
+	Expect(len(password)).To(BeNumerically(">=", 8))
+	Expect(password).To(MatchRegexp(`[A-Z]`), "password must contain an uppercase letter")
+	Expect(password).To(MatchRegexp(`[a-z]`), "password must contain a lowercase letter")
+	Expect(password).To(MatchRegexp(`[0-9]`), "password must contain a digit")
+	Expect(password).To(MatchRegexp(`[^A-Za-z0-9]`), "password must contain a special character")
+}
+
+var _ = Describe("GenerateSecurePassword", func() {
+	It("satisfies the security plugin password policy", func() {
+		for i := 0; i < 100; i++ {
+			expectPolicyCompliant(GenerateSecurePassword())
+		}
+	})
+
+	It("avoids shell glob characters that get mangled by unquoted expansion (issue #955)", func() {
+		for i := 0; i < 100; i++ {
+			Expect(GenerateSecurePassword()).ToNot(MatchRegexp(`[*?\[\]$` + "`" + `\\'"]`))
+		}
+	})
+
+	It("returns unique passwords", func() {
+		Expect(GenerateSecurePassword()).ToNot(Equal(GenerateSecurePassword()))
+	})
+})
+
+var _ = Describe("EnsureAdminCredentialsSecret", func() {
+	It("generates a password that satisfies the security plugin password policy", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+		}
+		secretName := GeneratedAdminCredentialsSecretName(cr)
+
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+		mockClient.EXPECT().GetSecret(secretName, "pwtest").Return(corev1.Secret{}, notFound).Once()
+		var created *corev1.Secret
+		mockClient.EXPECT().CreateSecret(mock.Anything).Run(func(secret *corev1.Secret) {
+			created = secret
+		}).Return(nil, nil).Once()
+		mockClient.EXPECT().GetSecret(secretName, "pwtest").Return(corev1.Secret{}, nil).Once()
+
+		_, _, err := EnsureAdminCredentialsSecret(mockClient, cr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(created).ToNot(BeNil())
+		Expect(created.StringData["username"]).To(Equal("admin"))
+		expectPolicyCompliant(created.StringData["password"])
+	})
+})
+
+var _ = Describe("EnsureDashboardsCredentialsSecret", func() {
+	It("generates a password that satisfies the security plugin password policy", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+			Spec: opensearchv1.ClusterSpec{
+				Security: &opensearchv1.Security{
+					Tls: &opensearchv1.TlsConfig{
+						Http: &opensearchv1.TlsConfigHttp{Enabled: ptr.To(true)},
+					},
+				},
+			},
+		}
+		secretName := GeneratedDashboardsCredentialsSecretName(cr)
+
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+		mockClient.EXPECT().GetSecret(secretName, "pwtest").Return(corev1.Secret{}, notFound).Once()
+		var created *corev1.Secret
+		mockClient.EXPECT().CreateSecret(mock.Anything).Run(func(secret *corev1.Secret) {
+			created = secret
+		}).Return(nil, nil).Once()
+		mockClient.EXPECT().GetSecret(secretName, "pwtest").Return(corev1.Secret{}, nil).Once()
+
+		_, _, err := EnsureDashboardsCredentialsSecret(mockClient, cr)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(created).ToNot(BeNil())
+		Expect(created.StringData["username"]).To(Equal("kibanaserver"))
+		expectPolicyCompliant(created.StringData["password"])
 	})
 })

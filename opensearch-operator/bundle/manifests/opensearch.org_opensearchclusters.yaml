@@ -1920,8 +1920,9 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of secret, configMap, emptyDir, csi,
-                          projected, nfs, hostPath must be set
-                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
+                          persistentVolumeClaim, projected, nfs, hostPath must be
+                          set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.persistentVolumeClaim)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
                           == 1
                     type: array
                   affinity:
@@ -3039,6 +3040,11 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
+                  opensearchDashboardsHome:
+                    description: OpenSearch Dashboards installation directory inside
+                      the container. Defaults to /usr/share/opensearch-dashboards
+                      if not set.
+                    type: string
                   pluginsList:
                     items:
                       type: string
@@ -4460,8 +4466,9 @@ spec:
                       type: object
                       x-kubernetes-validations:
                       - message: exactly one of secret, configMap, emptyDir, csi,
-                          projected, nfs, hostPath must be set
-                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
+                          persistentVolumeClaim, projected, nfs, hostPath must be
+                          set
+                        rule: (has(self.secret)?1:0)+(has(self.configMap)?1:0)+(has(self.emptyDir)?1:0)+(has(self.csi)?1:0)+(has(self.persistentVolumeClaim)?1:0)+(has(self.projected)?1:0)+(has(self.nfs)?1:0)+(has(self.hostPath)?1:0)
                           == 1
                     type: array
                   annotations:
@@ -4474,7 +4481,7 @@ spec:
                   defaultRepo:
                     type: string
                   drainDataNodes:
-                    description: Drain data nodes controls whether to drain data notes
+                    description: Drain data nodes controls whether to drain data nodes
                       on rolling restart operations
                     type: boolean
                   grpc:
@@ -4626,10 +4633,182 @@ spec:
                         additionalProperties:
                           type: string
                         type: object
+                      metricRelabelings:
+                        items:
+                          description: |-
+                            RelabelConfig allows dynamic rewriting of the label set for targets, alerts,
+                            scraped samples and remote write samples.
+
+                            More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+                          properties:
+                            action:
+                              default: replace
+                              description: |-
+                                Action to perform based on the regex matching.
+
+                                `Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.
+                                `DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.
+
+                                Default: "Replace"
+                              enum:
+                              - replace
+                              - Replace
+                              - keep
+                              - Keep
+                              - drop
+                              - Drop
+                              - hashmod
+                              - HashMod
+                              - labelmap
+                              - LabelMap
+                              - labeldrop
+                              - LabelDrop
+                              - labelkeep
+                              - LabelKeep
+                              - lowercase
+                              - Lowercase
+                              - uppercase
+                              - Uppercase
+                              - keepequal
+                              - KeepEqual
+                              - dropequal
+                              - DropEqual
+                              type: string
+                            modulus:
+                              description: |-
+                                Modulus to take of the hash of the source label values.
+
+                                Only applicable when the action is `HashMod`.
+                              format: int64
+                              type: integer
+                            regex:
+                              description: Regular expression against which the extracted
+                                value is matched.
+                              type: string
+                            replacement:
+                              description: |-
+                                Replacement value against which a Replace action is performed if the
+                                regular expression matches.
+
+                                Regex capture groups are available.
+                              type: string
+                            separator:
+                              description: Separator is the string between concatenated
+                                SourceLabels.
+                              type: string
+                            sourceLabels:
+                              description: |-
+                                The source labels select values from existing labels. Their content is
+                                concatenated using the configured Separator and matched against the
+                                configured regular expression.
+                              items:
+                                description: |-
+                                  LabelName is a valid Prometheus label name which may only contain ASCII
+                                  letters, numbers, as well as underscores.
+                                pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
+                                type: string
+                              type: array
+                            targetLabel:
+                              description: |-
+                                Label to which the resulting string is written in a replacement.
+
+                                It is mandatory for `Replace`, `HashMod`, `Lowercase`, `Uppercase`,
+                                `KeepEqual` and `DropEqual` actions.
+
+                                Regex capture groups are available.
+                              type: string
+                          type: object
+                        type: array
                       monitoringUserSecret:
                         type: string
                       pluginUrl:
                         type: string
+                      relabelings:
+                        items:
+                          description: |-
+                            RelabelConfig allows dynamic rewriting of the label set for targets, alerts,
+                            scraped samples and remote write samples.
+
+                            More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+                          properties:
+                            action:
+                              default: replace
+                              description: |-
+                                Action to perform based on the regex matching.
+
+                                `Uppercase` and `Lowercase` actions require Prometheus >= v2.36.0.
+                                `DropEqual` and `KeepEqual` actions require Prometheus >= v2.41.0.
+
+                                Default: "Replace"
+                              enum:
+                              - replace
+                              - Replace
+                              - keep
+                              - Keep
+                              - drop
+                              - Drop
+                              - hashmod
+                              - HashMod
+                              - labelmap
+                              - LabelMap
+                              - labeldrop
+                              - LabelDrop
+                              - labelkeep
+                              - LabelKeep
+                              - lowercase
+                              - Lowercase
+                              - uppercase
+                              - Uppercase
+                              - keepequal
+                              - KeepEqual
+                              - dropequal
+                              - DropEqual
+                              type: string
+                            modulus:
+                              description: |-
+                                Modulus to take of the hash of the source label values.
+
+                                Only applicable when the action is `HashMod`.
+                              format: int64
+                              type: integer
+                            regex:
+                              description: Regular expression against which the extracted
+                                value is matched.
+                              type: string
+                            replacement:
+                              description: |-
+                                Replacement value against which a Replace action is performed if the
+                                regular expression matches.
+
+                                Regex capture groups are available.
+                              type: string
+                            separator:
+                              description: Separator is the string between concatenated
+                                SourceLabels.
+                              type: string
+                            sourceLabels:
+                              description: |-
+                                The source labels select values from existing labels. Their content is
+                                concatenated using the configured Separator and matched against the
+                                configured regular expression.
+                              items:
+                                description: |-
+                                  LabelName is a valid Prometheus label name which may only contain ASCII
+                                  letters, numbers, as well as underscores.
+                                pattern: ^[a-zA-Z_][a-zA-Z0-9_]*$
+                                type: string
+                              type: array
+                            targetLabel:
+                              description: |-
+                                Label to which the resulting string is written in a replacement.
+
+                                It is mandatory for `Replace`, `HashMod`, `Lowercase`, `Uppercase`,
+                                `KeepEqual` and `DropEqual` actions.
+
+                                Regex capture groups are available.
+                              type: string
+                          type: object
+                        type: array
                       scrapeInterval:
                         type: string
                       tlsConfig:
@@ -4640,6 +4819,10 @@ spec:
                             type: string
                         type: object
                     type: object
+                  opensearchHome:
+                    description: OpenSearch installation directory inside the container.
+                      Defaults to /usr/share/opensearch if not set.
+                    type: string
                   operatorClusterURL:
                     description: |-
                       Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch
@@ -5193,6 +5376,202 @@ spec:
                           If Requests is omitted for a container, it defaults to Limits if that is explicitly specified,
                           otherwise to an implementation-defined value. Requests cannot exceed Limits.
                           More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/
+                        type: object
+                    type: object
+                  securityContext:
+                    description: |-
+                      SecurityContext replaces the default security context of the init helper containers.
+                      Note that the chown init container needs to run as root and the sysctl init container
+                      needs to run privileged, so an override must provide equivalent permissions for those
+                      containers to keep working.
+                    properties:
+                      allowPrivilegeEscalation:
+                        description: |-
+                          AllowPrivilegeEscalation controls whether a process can gain more
+                          privileges than its parent process. This bool directly controls if
+                          the no_new_privs flag will be set on the container process.
+                          AllowPrivilegeEscalation is true always when the container is:
+                          1) run as Privileged
+                          2) has CAP_SYS_ADMIN
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      appArmorProfile:
+                        description: |-
+                          appArmorProfile is the AppArmor options to use by this container. If set, this profile
+                          overrides the pod's appArmorProfile.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          localhostProfile:
+                            description: |-
+                              localhostProfile indicates a profile loaded on the node that should be used.
+                              The profile must be preconfigured on the node to work.
+                              Must match the loaded name of the profile.
+                              Must be set if and only if type is "Localhost".
+                            type: string
+                          type:
+                            description: |-
+                              type indicates which kind of AppArmor profile will be applied.
+                              Valid options are:
+                                Localhost - a profile pre-loaded on the node.
+                                RuntimeDefault - the container runtime's default profile.
+                                Unconfined - no AppArmor enforcement.
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      capabilities:
+                        description: |-
+                          The capabilities to add/drop when running containers.
+                          Defaults to the default set of capabilities granted by the container runtime.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          add:
+                            description: Added capabilities
+                            items:
+                              description: Capability represent POSIX capabilities
+                                type
+                              type: string
+                            type: array
+                            x-kubernetes-list-type: atomic
+                          drop:
+                            description: Removed capabilities
+                            items:
+                              description: Capability represent POSIX capabilities
+                                type
+                              type: string
+                            type: array
+                            x-kubernetes-list-type: atomic
+                        type: object
+                      privileged:
+                        description: |-
+                          Run container in privileged mode.
+                          Processes in privileged containers are essentially equivalent to root on the host.
+                          Defaults to false.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      procMount:
+                        description: |-
+                          procMount denotes the type of proc mount to use for the containers.
+                          The default value is Default which uses the container runtime defaults for
+                          readonly paths and masked paths.
+                          This requires the ProcMountType feature flag to be enabled.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: string
+                      readOnlyRootFilesystem:
+                        description: |-
+                          Whether this container has a read-only root filesystem.
+                          Default is false.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        type: boolean
+                      runAsGroup:
+                        description: |-
+                          The GID to run the entrypoint of the container process.
+                          Uses runtime default if unset.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        format: int64
+                        type: integer
+                      runAsNonRoot:
+                        description: |-
+                          Indicates that the container must run as a non-root user.
+                          If true, the Kubelet will validate the image at runtime to ensure that it
+                          does not run as UID 0 (root) and fail to start the container if it does.
+                          If unset or false, no such validation will be performed.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                        type: boolean
+                      runAsUser:
+                        description: |-
+                          The UID to run the entrypoint of the container process.
+                          Defaults to user specified in image metadata if unspecified.
+                          May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        format: int64
+                        type: integer
+                      seLinuxOptions:
+                        description: |-
+                          The SELinux context to be applied to the container.
+                          If unspecified, the container runtime will allocate a random SELinux context for each
+                          container.  May also be set in PodSecurityContext.  If set in both SecurityContext and
+                          PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          level:
+                            description: Level is SELinux level label that applies
+                              to the container.
+                            type: string
+                          role:
+                            description: Role is a SELinux role label that applies
+                              to the container.
+                            type: string
+                          type:
+                            description: Type is a SELinux type label that applies
+                              to the container.
+                            type: string
+                          user:
+                            description: User is a SELinux user label that applies
+                              to the container.
+                            type: string
+                        type: object
+                      seccompProfile:
+                        description: |-
+                          The seccomp options to use by this container. If seccomp options are
+                          provided at both the pod & container level, the container options
+                          override the pod options.
+                          Note that this field cannot be set when spec.os.name is windows.
+                        properties:
+                          localhostProfile:
+                            description: |-
+                              localhostProfile indicates a profile defined in a file on the node should be used.
+                              The profile must be preconfigured on the node to work.
+                              Must be a descending path, relative to the kubelet's configured seccomp profile location.
+                              Must be set if type is "Localhost". Must NOT be set for any other type.
+                            type: string
+                          type:
+                            description: |-
+                              type indicates which kind of seccomp profile will be applied.
+                              Valid options are:
+
+                              Localhost - a profile defined in a file on the node should be used.
+                              RuntimeDefault - the container runtime default profile should be used.
+                              Unconfined - no profile should be applied.
+                            type: string
+                        required:
+                        - type
+                        type: object
+                      windowsOptions:
+                        description: |-
+                          The Windows specific settings applied to all containers.
+                          If unspecified, the options from the PodSecurityContext will be used.
+                          If set in both SecurityContext and PodSecurityContext, the value specified in SecurityContext takes precedence.
+                          Note that this field cannot be set when spec.os.name is linux.
+                        properties:
+                          gmsaCredentialSpec:
+                            description: |-
+                              GMSACredentialSpec is where the GMSA admission webhook
+                              (https://github.com/kubernetes-sigs/windows-gmsa) inlines the contents of the
+                              GMSA credential spec named by the GMSACredentialSpecName field.
+                            type: string
+                          gmsaCredentialSpecName:
+                            description: GMSACredentialSpecName is the name of the
+                              GMSA credential spec to use.
+                            type: string
+                          hostProcess:
+                            description: |-
+                              HostProcess determines if a container should be run as a 'Host Process' container.
+                              All of a Pod's containers must have the same effective HostProcess value
+                              (it is not allowed to have a mix of HostProcess containers and non-HostProcess containers).
+                              In addition, if HostProcess is true then HostNetwork must also be set to true.
+                            type: boolean
+                          runAsUserName:
+                            description: |-
+                              The UserName in Windows to run the entrypoint of the container process.
+                              Defaults to the user specified in image metadata if unspecified.
+                              May also be set in PodSecurityContext. If set in both SecurityContext and
+                              PodSecurityContext, the value specified in SecurityContext takes precedence.
+                            type: string
                         type: object
                     type: object
                   version:
@@ -6258,6 +6637,30 @@ spec:
                         - name
                         type: object
                       type: array
+                    image:
+                      type: string
+                    imagePullPolicy:
+                      description: PullPolicy describes a policy for if/when to pull
+                        a container image
+                      type: string
+                    imagePullSecrets:
+                      items:
+                        description: |-
+                          LocalObjectReference contains enough information to let you locate the
+                          referenced object inside the same namespace.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      type: array
                     initContainers:
                       x-kubernetes-preserve-unknown-fields: true
                     jvm:
@@ -6745,6 +7148,28 @@ spec:
                             type: string
                         type: object
                         x-kubernetes-map-type: atomic
+                      operatorClientCert:
+                        description: |-
+                          Optional kubernetes.io/tls secret (tls.crt, tls.key, optional ca.crt) used by the operator's runtime REST client to authenticate to the OpenSearch HTTP API via mTLS instead of basic auth.
+                          The certificate's DN must be mapped to a user/role with the necessary privileges in the OpenSearch security configuration (e.g. via plugins.security.authcz.admin_dn or a clientcert auth domain).
+                          When set, the operator omits basic-auth credentials from outgoing requests. If ca.crt is present in the secret, it is used to verify the OpenSearch HTTP server certificate; otherwise TLS verification is skipped.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
+                      operatorClientServerName:
+                        description: |-
+                          Optional. Overrides the TLS SNI / ServerName used when verifying the OpenSearch HTTP server certificate.
+                          Defaults to the host portion of the cluster URL.
+                        type: string
                       securityConfigSecret:
                         description: |-
                           Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).

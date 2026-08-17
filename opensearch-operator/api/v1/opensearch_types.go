@@ -63,7 +63,7 @@ type GeneralConfig struct {
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
 	Annotations map[string]string `json:"annotations,omitempty"`
-	// Drain data nodes controls whether to drain data notes on rolling restart operations
+	// Drain data nodes controls whether to drain data nodes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
 	Command        string   `json:"command,omitempty"`
@@ -95,6 +95,11 @@ type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
 	Version    *string                     `json:"version,omitempty"`
+	// SecurityContext replaces the default security context of the init helper containers.
+	// Note that the chown init container needs to run as root and the sysctl init container
+	// needs to run privileged, so an override must provide equivalent permissions for those
+	// containers to keep working.
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type ProbesConfig struct {
@@ -121,6 +126,7 @@ type CommandProbeConfig struct {
 }
 
 type NodePool struct {
+	*ImageSpec                `json:",inline,omitempty"`
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
 	DiskSize                  resource.Quantity                 `json:"diskSize,omitempty"`

@@ -74,6 +74,10 @@ manager:
 # Install the Custom Resource Definitions with Helm
 installCRDs: true
 
+legacyAPI:
+  # -- Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped.
+  enabled: true
+
 serviceAccount:
   # Specifies whether a service account should be created
   create: true

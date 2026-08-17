@@ -108,6 +108,24 @@ manager:
   #    value: somevalue
 ```
 
+### Legacy API support
+
+Support for the deprecated `opensearch.opster.io/v1` API group is enabled by
+default. After migrating to `opensearch.org/v1`, it can be disabled in the
+operator Helm values:
+
+```yaml
+legacyAPI:
+  enabled: false
+```
+
+> **Warning:** Do not disable legacy API support while
+> `opensearch.opster.io` resources still exist. The legacy CRDs are managed as
+> regular Helm release resources, so disabling the legacy API during an upgrade
+> removes those CRDs and deletes all remaining custom resources stored under
+> them. Follow the [migration guide](./migration-guide.md) to migrate, verify,
+> and delete every legacy resource before changing this setting.
+
 ### Pprof endpoints
 
 There have been situations reported where the operator is leaking memory. To help diagnose these situations the standard go [pprof](https://pkg.go.dev/net/http/pprof) endpoints can be enabled by adding the following to your `values.yaml`:
@@ -201,6 +219,31 @@ Using `spec.general.additionalConfig` you can add settings that will be applied 
 The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`.
 
 Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If want to avoid that please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
+
+### Per-node pool image override
+
+By default, all node pools use the image configured in `spec.general` (or the default `opensearchproject/opensearch` image for the cluster version). You can override the OpenSearch container image for a specific node pool by setting `image` on that node pool. This is useful when some node pools require a specialized image, such as GPU-enabled nodes that need a CUDA build of OpenSearch.
+
+Node pool image settings override `spec.general` for that pool only. You can also set `imagePullPolicy` and `imagePullSecrets` per node pool.
+
+```yaml
+spec:
+  general:
+    version: "2.17.1"
+  nodePools:
+    - component: masters
+      replicas: 3
+      roles:
+        - cluster_manager
+    - component: ml
+      replicas: 2
+      roles:
+        - ml
+      image: "myregistry.example.com/opensearch-cuda:2.17.1"
+      imagePullPolicy: IfNotPresent
+      imagePullSecrets:
+        - name: docker-pull-secret
+```
 
 ### TLS
 
@@ -701,9 +744,9 @@ spec:
       privileged: false
 ```
 
-The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions and does not use any defined securityContext. If your kubernetes environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches an init container with root.
+The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions (`runAsUser: 0`) and does not inherit `general.securityContext`; configure it via `initHelper.securityContext` instead (see [Custom init container security context](#custom-init-container-security-context)). If your k8s environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches a privileged init container.
 
-Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods (with the same limitations for the init containers).
+Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods, and the same `initHelper.securityContext` for its init containers.
 
 The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod.
 
@@ -853,6 +896,51 @@ spec:
 ```
 
 If you set an explicit `affinity`, it will completely replace the default anti-affinity behavior. To disable anti-affinity entirely, you can set `affinity: {}`.
+
+### Shard allocation awareness from node labels
+
+OpenSearch can spread shard copies across failure domains such as zones or racks using [shard allocation awareness](https://opensearch.org/docs/latest/tuning-your-cluster/availability-and-recovery/configuring-allocation-awareness/). This requires every node to advertise its own location through a `node.attr.<attribute>` setting. Kubernetes does not expose node labels to pods through the Downward API, so the operator can populate these attributes from node labels at runtime using `spec.general.nodeAttributes`:
+
+```yaml
+spec:
+  general:
+    nodeAttributes:
+      - name: zone
+        nodeLabel: topology.kubernetes.io/zone
+    additionalConfig:
+      cluster.routing.allocation.awareness.attributes: zone
+      cluster.routing.allocation.awareness.force.zone.values: dc1,dc2
+```
+
+For each entry the operator injects an init container that reads the given label off the node hosting the pod (via the Kubernetes API) and writes its value into a small file on a shared volume. The OpenSearch container sources that file on startup, so `node.attr.zone` resolves to the zone of the node the pod actually landed on. The example above yields `node.attr.zone: dc1` (or `dc2`) per pod, which the awareness settings then use to balance and force shard copies across both data centers.
+
+You can map several attributes at once (for example a `zone` and a `rack`), and combine this with `topologySpreadConstraints` to also control pod placement:
+
+```yaml
+spec:
+  nodePools:
+    - component: data
+      replicas: 6
+      roles:
+        - "data"
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              opensearch.org/opensearch-nodepool: data
+```
+
+> **Note:** The init container queries the Kubernetes API for the node object, so the pods'
+`ServiceAccount` must be allowed to `get` `nodes`. By default (no `spec.general.serviceAccount`
+set) the operator handles this for you: it creates a dedicated `ServiceAccount` for the
+cluster and binds it to the shared `opensearch-node-attributes` `ClusterRole` shipped by
+the operator's Helm chart — no manual RBAC required. If you set a custom `spec.general.serviceAccount`,
+the operator leaves RBAC to you and you must grant that account `get` on `nodes` yourself
+(see the [example manifest](../../opensearch-operator/examples/opensearch-zone-awareness.yaml)).
+Automatic RBAC management requires a cluster-scoped installation (the Helm chart must be
+installed with `useRoleBindings=false`). Node label values must not contain `,`, `{` or `}`.
 
 ### Sidecar Containers
 
@@ -1096,6 +1184,27 @@ spec:
         memory: "512Mi"
         cpu: "500m"
 ```
+
+### Custom init container security context
+
+By default the chown init container runs with `runAsUser: 0` and the sysctl init container (enabled via `general.setVMMaxMapCount`) runs with `privileged: true`. If your cluster enforces admission policies that require additional security context fields (for example a seccomp profile or dropped capabilities), you can replace the security context of these init containers:
+
+```yaml
+spec:
+  initHelper:
+    securityContext:
+      runAsUser: 0
+      privileged: true  # required when general.setVMMaxMapCount is enabled
+      seccompProfile:
+        type: RuntimeDefault
+      capabilities:
+        drop:
+          - ALL
+        add:
+          - CHOWN
+```
+
+Note that this replaces the defaults entirely for all init helper containers (chown and sysctl share one context): the chown init container still needs to run as root, and the sysctl init container still needs privileged access, so make sure your custom security context grants the required permissions for both.
 
 ### Disabling the init helper
 
@@ -1710,6 +1819,8 @@ By default the Opensearch admin user will be used to access the monitoring API. 
 a. Create new applicative User using OpenSearch API/UI, create new secret with 'username' and 'password' keys and provide that secret name under `monitoringUserSecret`.
 b. Use Our OpenSearchUser CRD and provide the secret under monitoringUserSecret.
 
+### Configuration
+
 To configure monitoring you can add the following fields to your cluster spec:
 
 ```yaml
@@ -1731,8 +1842,25 @@ spec:
       tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor, only the following provided options can be set currently
         serverName: "testserver.test.local"
         insecureSkipVerify: true # The operator currently does not allow configuring the ServiceMonitor with certificates, so this needs to be set
+      # Optional: customize relabeling behavior
+      relabelings:
+        - sourceLabels: [pod]
+          regex: "service-east-opensearch-cluster-(masters|nodes)-[1-9][0-9]*"
+          action: drop
+
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: "opensearch_indices_.*"
+          action: keep
   # ...
 ```
+
+#### Relabeling and metric relabeling
+
+You can customize the generated Prometheus `ServiceMonitor` endpoint with relabeling rules.
+
+- `relabelings` are applied **before scraping** and allow modifying target labels.
+- `metricRelabelings` are applied **after scraping** and allow filtering or transforming metrics.
 
 ### Managing ISM policies with Kubernetes resources
 

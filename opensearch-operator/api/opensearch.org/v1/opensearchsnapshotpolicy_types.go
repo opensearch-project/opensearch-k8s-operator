@@ -46,14 +46,17 @@ type OpensearchSnapshotPolicySpec struct {
 }
 
 type SnapshotConfig struct {
-	DateFormat         string            `json:"dateFormat,omitempty"`
-	DateFormatTimezone string            `json:"dateFormatTimezone,omitempty"`
-	Indices            string            `json:"indices,omitempty"`
-	Repository         string            `json:"repository"`
-	IgnoreUnavailable  bool              `json:"ignoreUnavailable,omitempty"`
-	IncludeGlobalState bool              `json:"includeGlobalState,omitempty"`
-	Partial            bool              `json:"partial,omitempty"`
-	Metadata           map[string]string `json:"metadata,omitempty"`
+	DateFormat         string `json:"dateFormat,omitempty"`
+	DateFormatTimezone string `json:"dateFormatTimezone,omitempty"`
+	Indices            string `json:"indices,omitempty"`
+	Repository         string `json:"repository"`
+	// +optional
+	IgnoreUnavailable *bool `json:"ignoreUnavailable,omitempty"`
+	// +optional
+	IncludeGlobalState *bool `json:"includeGlobalState,omitempty"`
+	// +optional
+	Partial  *bool             `json:"partial,omitempty"`
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 type SnapshotCreation struct {

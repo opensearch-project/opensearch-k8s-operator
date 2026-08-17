@@ -411,11 +411,11 @@ func (r *RollingRestartReconciler) updateStatus(status string) error {
 
 func (r *RollingRestartReconciler) findStatus() *opensearchv1.ComponentStatus {
 	comp := r.instance.Status.ComponentsStatus
-	_, found := helpers.FindFirstPartial(comp, opensearchv1.ComponentStatus{
+	found, ok := helpers.FindFirstPartial(comp, opensearchv1.ComponentStatus{
 		Component: componentName,
 	}, helpers.GetByComponent)
-	if found {
-		return &comp[0]
+	if ok {
+		return &found
 	}
 	return nil
 }

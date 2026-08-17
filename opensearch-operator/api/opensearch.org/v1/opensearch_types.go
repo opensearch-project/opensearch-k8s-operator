@@ -19,6 +19,7 @@ package v1
 import (
 	"strings"
 
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -61,7 +62,7 @@ type GeneralConfig struct {
 	AdditionalConfig map[string]string `json:"additionalConfig,omitempty"`
 	// Adds support for annotations in services
 	Annotations map[string]string `json:"annotations,omitempty"`
-	// Drain data nodes controls whether to drain data notes on rolling restart operations
+	// Drain data nodes controls whether to drain data nodes on rolling restart operations
 	DrainDataNodes bool     `json:"drainDataNodes,omitempty"`
 	PluginsList    []string `json:"pluginsList,omitempty"`
 	Command        string   `json:"command,omitempty"`
@@ -85,6 +86,29 @@ type GeneralConfig struct {
 	HostNetwork bool `json:"hostNetwork,omitempty"`
 	// OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set.
 	OpenSearchHome string `json:"opensearchHome,omitempty"`
+	// NodeAttributes derives OpenSearch node attributes (node.attr.*) from
+	// Kubernetes node labels at runtime. For each entry the operator injects an
+	// init container that reads the label off the node hosting the pod and
+	// exposes its value to OpenSearch, enabling shard allocation awareness
+	// (e.g. zone or rack awareness) without splitting topology into separate
+	// node pools. The pods' ServiceAccount must be allowed to "get" nodes.
+	NodeAttributes []NodeAttribute `json:"nodeAttributes,omitempty"`
+}
+
+// NodeAttribute maps a Kubernetes node label onto an OpenSearch node attribute
+// so that shard allocation awareness can follow the cluster's physical topology.
+type NodeAttribute struct {
+	// Name is the OpenSearch node attribute, i.e. the suffix after "node.attr.".
+	// For zone awareness configured with
+	// cluster.routing.allocation.awareness.attributes: zone this is "zone",
+	// yielding the node.attr.zone setting.
+	//+kubebuilder:validation:Required
+	//+kubebuilder:validation:Pattern=`^[a-zA-Z0-9][a-zA-Z0-9_.-]*$`
+	Name string `json:"name"`
+	// NodeLabel is the Kubernetes node label whose value is copied into the
+	// attribute, e.g. "topology.kubernetes.io/zone".
+	//+kubebuilder:validation:Required
+	NodeLabel string `json:"nodeLabel"`
 }
 
 type PdbConfig struct {
@@ -97,6 +121,11 @@ type InitHelperConfig struct {
 	*ImageSpec `json:",inline,omitempty"`
 	Resources  corev1.ResourceRequirements `json:"resources,omitempty"`
 	Version    *string                     `json:"version,omitempty"`
+	// SecurityContext replaces the default security context of the init helper containers.
+	// Note that the chown init container needs to run as root and the sysctl init container
+	// needs to run privileged, so an override must provide equivalent permissions for those
+	// containers to keep working.
+	SecurityContext *corev1.SecurityContext `json:"securityContext,omitempty"`
 }
 
 type ProbesConfig struct {
@@ -123,6 +152,7 @@ type CommandProbeConfig struct {
 }
 
 type NodePool struct {
+	*ImageSpec                `json:",inline,omitempty"`
 	Component                 string                            `json:"component"`
 	Replicas                  int32                             `json:"replicas"`
 	DiskSize                  resource.Quantity                 `json:"diskSize,omitempty"`
@@ -178,12 +208,14 @@ type ConfMgmt struct {
 }
 
 type MonitoringConfig struct {
-	Enable               bool                 `json:"enable,omitempty"`
-	MonitoringUserSecret string               `json:"monitoringUserSecret,omitempty"`
-	ScrapeInterval       string               `json:"scrapeInterval,omitempty"`
-	PluginURL            string               `json:"pluginUrl,omitempty"`
-	TLSConfig            *MonitoringConfigTLS `json:"tlsConfig,omitempty"`
-	Labels               map[string]string    `json:"labels,omitempty"`
+	Enable               bool                       `json:"enable,omitempty"`
+	MonitoringUserSecret string                     `json:"monitoringUserSecret,omitempty"`
+	ScrapeInterval       string                     `json:"scrapeInterval,omitempty"`
+	PluginURL            string                     `json:"pluginUrl,omitempty"`
+	TLSConfig            *MonitoringConfigTLS       `json:"tlsConfig,omitempty"`
+	Labels               map[string]string          `json:"labels,omitempty"`
+	Relabelings          []monitoring.RelabelConfig `json:"relabelings,omitempty"`
+	MetricRelabelings    []monitoring.RelabelConfig `json:"metricRelabelings,omitempty"`
 }
 
 type MonitoringConfigTLS struct {

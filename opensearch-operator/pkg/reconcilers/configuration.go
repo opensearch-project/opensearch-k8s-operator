@@ -62,9 +62,11 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
+	hasNodeAttributes := len(r.instance.Spec.General.NodeAttributes) > 0
+
 	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
 		len(r.reconcilerContext.OpenSearchConfig) == 0 &&
-		!hasGeneralConfig && !hasNodePoolConfig {
+		!hasGeneralConfig && !hasNodePoolConfig && !hasNodeAttributes {
 		return ctrl.Result{}, nil
 	}
 	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
@@ -80,6 +82,8 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
+	} else {
+		r.reconcilerContext.AddConfig("plugins.security.disabled", "true")
 	}
 
 	// Process gRPC configuration
@@ -88,6 +92,16 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 	// Add General.AdditionalConfig to reconciler context (for base config)
 	for k, v := range r.instance.Spec.General.AdditionalConfig {
 		r.reconcilerContext.AddConfig(k, v)
+	}
+
+	// Map each Kubernetes node label onto a node.attr.* setting. The value is an
+	// environment variable placeholder resolved per-pod at startup by the
+	// node-attributes init container (see pkg/builders).
+	for _, attr := range r.instance.Spec.General.NodeAttributes {
+		r.reconcilerContext.AddConfig(
+			fmt.Sprintf("node.attr.%s", attr.Name),
+			fmt.Sprintf("${%s}", helpers.NodeAttributeEnvVar(attr.Name)),
+		)
 	}
 
 	// Helper function to parse string value to determine its actual type
@@ -308,15 +322,18 @@ func (r *ConfigurationReconciler) processGrpcConfig() {
 		return
 	}
 
-	// Set aux.transport.types to use transport-grpc
-	r.reconcilerContext.AddConfig("aux.transport.types", "[transport-grpc]")
+	// Set aux.transport.types to use transport-grpc.
+	// Values are passed in JSON form so buildConfigString's parseConfigValue
+	// turns them into real YAML types; hand-quoting here would end up inside
+	// the marshalled string values.
+	r.reconcilerContext.AddConfig("aux.transport.types", `["transport-grpc"]`)
 
 	// Set port if specified, otherwise use default
 	port := grpcConfig.Port
 	if port == "" {
 		port = "9400-9500"
 	}
-	r.reconcilerContext.AddConfig("aux.transport.transport-grpc.port", fmt.Sprintf("'%s'", port))
+	r.reconcilerContext.AddConfig("aux.transport.transport-grpc.port", port)
 
 	// Set host addresses
 	if len(grpcConfig.Host) > 0 {

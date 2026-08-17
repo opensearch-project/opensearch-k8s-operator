@@ -22,9 +22,9 @@ type SnapshotConfig struct {
 	DateFormatTimezone string            `json:"date_format_timezone,omitempty"` // Timezone for date_format (e.g. UTC, PST).
 	Indices            string            `json:"indices,omitempty"`              // Indices to include in the snapshot, supports wildcards.
 	Repository         string            `json:"repository"`                     // Repository name where snapshots are stored.
-	IgnoreUnavailable  bool              `json:"ignore_unavailable,omitempty"`   // Whether to ignore unavailable indices.
-	IncludeGlobalState bool              `json:"include_global_state,omitempty"` // Whether to include global cluster state in the snapshot.
-	Partial            bool              `json:"partial,omitempty"`              // Whether to allow partial snapshots.
+	IgnoreUnavailable  *bool             `json:"ignore_unavailable,omitempty"`   // Whether to ignore unavailable indices.
+	IncludeGlobalState *bool             `json:"include_global_state,omitempty"` // Whether to include global cluster state in the snapshot.
+	Partial            *bool             `json:"partial,omitempty"`              // Whether to allow partial snapshots.
 	Metadata           map[string]string `json:"metadata,omitempty"`             // Optional custom metadata to associate with the snapshot.
 }
 
