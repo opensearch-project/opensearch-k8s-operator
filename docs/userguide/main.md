@@ -1731,6 +1731,14 @@ spec:
       tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor, only the following provided options can be set currently
         serverName: "testserver.test.local"
         insecureSkipVerify: true # The operator currently does not allow configuring the ServiceMonitor with certificates, so this needs to be set
+      relabelings: # Optional, Prometheus relabel_configs applied to scrape targets
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: nodename
+          action: replace
+      metricRelabelings: # Optional, Prometheus metric_relabel_configs applied before sample ingestion
+        - sourceLabels: [__name__]
+          regex: "expensive_metric_.*"
+          action: drop
   # ...
 ```
 

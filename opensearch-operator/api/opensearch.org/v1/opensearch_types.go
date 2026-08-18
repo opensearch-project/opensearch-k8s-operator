@@ -19,6 +19,7 @@ package v1
 import (
 	"strings"
 
+	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -184,6 +185,12 @@ type MonitoringConfig struct {
 	PluginURL            string               `json:"pluginUrl,omitempty"`
 	TLSConfig            *MonitoringConfigTLS `json:"tlsConfig,omitempty"`
 	Labels               map[string]string    `json:"labels,omitempty"`
+	// Relabelings configures ServiceMonitor endpoint relabelings applied to target metadata before scraping.
+	// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#relabel_config
+	Relabelings []monitoring.RelabelConfig `json:"relabelings,omitempty"`
+	// MetricRelabelings configures ServiceMonitor endpoint metricRelabelings applied to samples before ingestion.
+	// More info: https://prometheus.io/docs/prometheus/latest/configuration/configuration/#metric_relabel_configs
+	MetricRelabelings []monitoring.RelabelConfig `json:"metricRelabelings,omitempty"`
 }
 
 type MonitoringConfigTLS struct {

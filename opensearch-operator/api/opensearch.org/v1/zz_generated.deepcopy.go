@@ -21,6 +21,7 @@ limitations under the License.
 package v1
 
 import (
+	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -1183,6 +1184,20 @@ func (in *MonitoringConfig) DeepCopyInto(out *MonitoringConfig) {
 		*out = make(map[string]string, len(*in))
 		for key, val := range *in {
 			(*out)[key] = val
+		}
+	}
+	if in.Relabelings != nil {
+		in, out := &in.Relabelings, &out.Relabelings
+		*out = make([]monitoringv1.RelabelConfig, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.MetricRelabelings != nil {
+		in, out := &in.MetricRelabelings, &out.MetricRelabelings
+		*out = make([]monitoringv1.RelabelConfig, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
 }

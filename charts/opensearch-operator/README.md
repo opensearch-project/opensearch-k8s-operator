@@ -78,6 +78,15 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.loglevel` | string | `"info"` |  |
 | `manager.watchNamespace` | string | `nil` |  |
 | `manager.metricsBindAddress` | string | `"127.0.0.1:8080"` |  |
+| `manager.serviceMonitor.enabled` | bool | `false` |  |
+| `manager.serviceMonitor.labels` | object | `{}` |  |
+| `manager.serviceMonitor.endpoints[0].port` | string | `"metrics"` |  |
+| `manager.serviceMonitor.endpoints[0].path` | string | `"/metrics"` |  |
+| `manager.serviceMonitor.endpoints[0].interval` | string | `"60s"` |  |
+| `manager.serviceMonitor.endpoints[0].scheme` | string | `"https"` |  |
+| `manager.serviceMonitor.endpoints[0].bearerTokenFile` | string | `"/var/run/secrets/kubernetes.io/serviceaccount/token"` |  |
+| `manager.serviceMonitor.endpoints[0].tlsConfig.insecureSkipVerify` | bool | `true` |  |
+| `manager.serviceMonitor.endpoints[0].relabelings` | list | `[]` |  |
 | `installCRDs` | bool | `true` |  |
 | `serviceAccount.create` | bool | `true` |  |
 | `serviceAccount.name` | string | `""` |  |

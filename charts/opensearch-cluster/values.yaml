@@ -76,7 +76,7 @@ cluster:
     # Monitoring configuration. Check [documentation](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#adding-opensearch-monitoring-to-your-cluster) how to configure it.
     monitoring:
       # -- Enable cluster monitoring
-      enable: false
+      enable: true
 
       # -- Additional labels to apply to the generated ServiceMonitor
       labels: {}
@@ -93,6 +93,18 @@ cluster:
       # -- Override the tlsConfig of the generated ServiceMonitor
       tlsConfig: {}
 #        insecureSkipVerify: true
+
+      # -- Relabelings applied to ServiceMonitor scrape targets (Prometheus relabel_configs)
+      relabelings:
+        - targetLabel: instance_name
+          replacement: test
+          action: replace
+
+      # -- Metric relabelings applied before sample ingestion (Prometheus metric_relabel_configs)
+      metricRelabelings: []
+#        - sourceLabels: [__name__]
+#          regex: 'expensive_metric_.*'
+#          action: drop
 
     # Enables host networking for all pods in the cluster.
     hostNetwork: false

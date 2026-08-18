@@ -25,12 +25,14 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.general.imagePullPolicy` | string | `"IfNotPresent"` | Default image pull policy |
 | `cluster.general.operatorClusterURL` | string | `""` | Optional custom URL for operator to communicate with OpenSearch This is useful when using external certificates (e.g., from cert-manager) that are valid for a specific FQDN. The operator will use this URL instead of the default internal Kubernetes service DNS name. |
 | `cluster.general.keystore` | list | `[]` | Populate opensearch keystore before startup |
-| `cluster.general.monitoring.enable` | bool | `false` | Enable cluster monitoring |
+| `cluster.general.monitoring.enable` | bool | `true` | Enable cluster monitoring |
 | `cluster.general.monitoring.labels` | object | `{}` | Additional labels to apply to the generated ServiceMonitor |
 | `cluster.general.monitoring.monitoringUserSecret` | string | `""` | Secret with 'username' and 'password' keys for monitoring user. You could also use OpenSearchUser CRD instead of setting it. |
 | `cluster.general.monitoring.pluginUrl` | string | `""` | Custom URL for the monitoring plugin |
 | `cluster.general.monitoring.scrapeInterval` | string | `"30s"` | How often to scrape metrics |
 | `cluster.general.monitoring.tlsConfig` | object | `{}` | Override the tlsConfig of the generated ServiceMonitor |
+| `cluster.general.monitoring.relabelings` | list | `[{"action":"replace","replacement":"test","targetLabel":"instance_name"}]` | Relabelings applied to ServiceMonitor scrape targets (Prometheus relabel_configs) |
+| `cluster.general.monitoring.metricRelabelings` | list | `[]` | Metric relabelings applied before sample ingestion (Prometheus metric_relabel_configs) |
 | `cluster.general.hostNetwork` | bool | `false` |  |
 | `cluster.general.pluginsList` | list | `[]` | List of Opensearch plugins to install |
 | `cluster.general.podSecurityContext` | object | `{}` | Opensearch pod security context configuration |
@@ -72,7 +74,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.dashboards.tls.caSecret` | object | `{}` | Secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields |
 | `cluster.dashboards.tls.enable` | bool | `false` | Enable HTTPS for dashboards |
 | `cluster.dashboards.tls.generate` | bool | `true` | generate certificate, if false secret must be provided |
-| `cluster.dashboards.tls.secret` | string | `nil` | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |
+| `cluster.dashboards.tls.secret` | object | `{}` | Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field |
 | `cluster.dashboards.tls.duration` | string | `"8760h"` | Duration controls the validity period of generated certificates (e.g. "8760h", "720h"). This is used only when generate is true. |
 | `cluster.dashboards.tolerations` | list | `[]` | dashboards pod tolerations |
 | `cluster.dashboards.version` | string | `""` | dashboards version |
