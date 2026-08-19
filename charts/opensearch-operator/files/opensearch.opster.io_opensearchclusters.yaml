@@ -3566,10 +3566,10 @@ spec:
                         description: Enable HTTPS for Dashboards
                         type: boolean
                       enableHotReload:
-                        description: Enable hot reloading of TLS certificates so nodes
-                          pick up renewed certificates without a restart. Requires
-                          OpenSearch >= 2.19.1. Defaults to true on OpenSearch 3.x
-                          and above.
+                        description: Enable hot reloading of OpenSearch node TLS certificates
+                          so nodes pick up renewed certificates without a restart.
+                          Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch
+                          3.x and above. Not used for Dashboards TLS.
                         type: boolean
                       generate:
                         description: Generate certificate, if false secret must be
@@ -6998,10 +6998,11 @@ spec:
                               generated certificates (e.g. "8760h", "720h").
                             type: string
                           enableHotReload:
-                            description: Enable hot reloading of TLS certificates
-                              so nodes pick up renewed certificates without a restart.
-                              Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch
-                              3.x and above.
+                            description: Enable hot reloading of OpenSearch node TLS
+                              certificates so nodes pick up renewed certificates without
+                              a restart. Requires OpenSearch >= 2.19.1. Defaults to
+                              true on OpenSearch 3.x and above. Not used for Dashboards
+                              TLS.
                             type: boolean
                           enabled:
                             description: |-
@@ -7074,10 +7075,11 @@ spec:
                               generated certificates (e.g. "8760h", "720h").
                             type: string
                           enableHotReload:
-                            description: Enable hot reloading of TLS certificates
-                              so nodes pick up renewed certificates without a restart.
-                              Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch
-                              3.x and above.
+                            description: Enable hot reloading of OpenSearch node TLS
+                              certificates so nodes pick up renewed certificates without
+                              a restart. Requires OpenSearch >= 2.19.1. Defaults to
+                              true on OpenSearch 3.x and above. Not used for Dashboards
+                              TLS.
                             type: boolean
                           enabled:
                             description: |-

@@ -112,7 +112,7 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 	// The hot reload setting is global, so enable it once if any TLS interface
 	// wants it. With hot reload active nodes pick up renewed certificates from
 	// the mounted secrets without a restart.
-	if r.transportHotReloadEnabled() || r.httpHotReloadEnabled() {
+	if r.certificatesHotReloadEnabled() {
 		r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
 	}
 
@@ -134,6 +134,13 @@ func (r *TLSReconciler) httpHotReloadEnabled() bool {
 	tlsConfig := r.instance.Spec.Security.Tls
 	return r.isHttpTlsEnabled(tlsConfig) &&
 		helpers.HotReloadEnabled(r.instance, tlsConfig.Http.EnableHotReload)
+}
+
+// certificatesHotReloadEnabled is true when OpenSearch will reload any renewed
+// TLS material in place. The plugin setting is global, so a restart marker is
+// unnecessary if either interface enabled hot reload.
+func (r *TLSReconciler) certificatesHotReloadEnabled() bool {
+	return r.transportHotReloadEnabled() || r.httpHotReloadEnabled()
 }
 
 // isTransportTlsEnabled determines if transport TLS should be enabled.
@@ -478,7 +485,7 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 
 	// With hot reload active nodes reload renewed certificates in place; the
 	// restart marker is only needed as a fallback when it is off.
-	if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" && !r.transportHotReloadEnabled() {
+	if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" && !r.certificatesHotReloadEnabled() {
 		r.reconcilerContext.CertHashData = append(r.reconcilerContext.CertHashData, "transport-certs:"+marker)
 	}
 
@@ -746,7 +753,7 @@ func (r *TLSReconciler) handleHttp() error {
 
 		// With hot reload active nodes reload renewed certificates in place; the
 		// restart marker is only needed as a fallback when it is off.
-		if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" && !r.httpHotReloadEnabled() {
+		if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" && !r.certificatesHotReloadEnabled() {
 			r.reconcilerContext.CertHashData = append(r.reconcilerContext.CertHashData, "http-certs:"+marker)
 		}
 

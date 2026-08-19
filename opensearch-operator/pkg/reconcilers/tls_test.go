@@ -57,6 +57,18 @@ func newTLSReconciler(k8sClient *k8s.MockK8sClient, spec *opensearchv1.OpenSearc
 	return &reconcilerContext, underTest
 }
 
+func newTLSReconcilerWithPKI(k8sClient *k8s.MockK8sClient, spec *opensearchv1.OpenSearchCluster) (*ReconcilerContext, *TLSReconciler) {
+	reconcilerContext, underTest := newTLSReconciler(k8sClient, spec)
+	underTest.pki = pkitls.NewPKI()
+	return reconcilerContext, underTest
+}
+
+func signTestCert(ca pkitls.Cert, commonName, orgUnit string, validity time.Duration) []byte {
+	cert, err := ca.CreateAndSignCertificate(commonName, orgUnit, nil, validity)
+	Expect(err).ToNot(HaveOccurred())
+	return cert.CertData()
+}
+
 var _ = Describe("TLS Controller", func() {
 
 	Context("When Reconciling the TLS configuration with no existing secrets", func() {
@@ -734,6 +746,7 @@ var _ = Describe("TLS Controller", func() {
 
 	Context("When Reconciling the TLS configuration with existing generated certificates", func() {
 		clusterName := "tls-renewal"
+		validFor := 200 * 24 * time.Hour
 
 		newRenewalSpec := func(perNode bool) *opensearchv1.OpenSearchCluster {
 			return &opensearchv1.OpenSearchCluster{
@@ -750,15 +763,23 @@ var _ = Describe("TLS Controller", func() {
 			}
 		}
 
-		setupMocks := func(transportSecret corev1.Secret, httpSecret corev1.Secret) (*k8s.MockK8sClient, func() *corev1.Secret, func() *corev1.Secret) {
+		newCA := func() (pkitls.Cert, corev1.Secret) {
+			ca, err := pkitls.NewPKI().GenerateCA(clusterName)
+			Expect(err).ToNot(HaveOccurred())
+			return ca, corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-ca", Namespace: clusterName},
+				Data:       ca.SecretDataCA(),
+			}
+		}
+
+		setupMocks := func(caSecret corev1.Secret, transportSecret corev1.Secret, httpSecret corev1.Secret) (*k8s.MockK8sClient, func() *corev1.Secret, func() *corev1.Secret) {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			mockClient.EXPECT().Context().Return(context.Background()).Maybe()
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
-			mockClient.EXPECT().GetSecret(clusterName+"-ca", clusterName).Return(corev1.Secret{}, NotFoundError())
+			mockClient.On("GetSecret", clusterName+"-ca", clusterName).Return(caSecret, nil)
 			mockClient.EXPECT().GetSecret(clusterName+"-transport-cert", clusterName).Return(transportSecret, nil)
 			mockClient.EXPECT().GetSecret(clusterName+"-http-cert", clusterName).Return(httpSecret, nil)
 			mockClient.EXPECT().GetSecret(clusterName+"-admin-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
-			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-ca" })).Return(&ctrl.Result{}, nil)
 			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-admin-cert" })).Return(&ctrl.Result{}, nil)
 			var storedTransport, storedHttp *corev1.Secret
 			mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool { return secret.ObjectMeta.Name == clusterName+"-transport-cert" })).
@@ -775,21 +796,22 @@ var _ = Describe("TLS Controller", func() {
 		}
 
 		It("should renew an expired certificate and mark the secret for a rolling restart", func() {
+			ca, caSecret := newCA()
 			expiredCert := makeTestCertPEM(time.Now().AddDate(-1, 0, 0), time.Now().AddDate(0, 0, -1))
-			validCert := makeTestCertPEM(time.Now(), time.Now().AddDate(0, 0, 200))
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
 			transportSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
 				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"tls.crt": expiredCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data:       map[string][]byte{"tls.crt": expiredCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
 			httpSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
 				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
-			mockClient, storedTransport, storedHttp := setupMocks(transportSecret, httpSecret)
+			mockClient, storedTransport, storedHttp := setupMocks(caSecret, transportSecret, httpSecret)
 
-			reconcilerContext, underTest := newTLSReconciler(mockClient, newRenewalSpec(false))
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, newRenewalSpec(false))
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -802,20 +824,21 @@ var _ = Describe("TLS Controller", func() {
 		})
 
 		It("should not touch certificates outside the rotation window", func() {
-			validCert := makeTestCertPEM(time.Now(), time.Now().AddDate(0, 0, 200))
+			ca, caSecret := newCA()
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
 			transportSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
 				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
 			httpSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
 				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
-			mockClient, storedTransport, _ := setupMocks(transportSecret, httpSecret)
+			mockClient, storedTransport, _ := setupMocks(caSecret, transportSecret, httpSecret)
 
-			reconcilerContext, underTest := newTLSReconciler(mockClient, newRenewalSpec(false))
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, newRenewalSpec(false))
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -825,7 +848,8 @@ var _ = Describe("TLS Controller", func() {
 		})
 
 		It("should keep the restart marker from a previous renewal", func() {
-			validCert := makeTestCertPEM(time.Now(), time.Now().AddDate(0, 0, 200))
+			ca, caSecret := newCA()
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
 			transportSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:        clusterName + "-transport-cert",
@@ -833,16 +857,16 @@ var _ = Describe("TLS Controller", func() {
 					Annotations: map[string]string{CertRenewalAnnotation: "2027-01-01T00:00:00Z"},
 				},
 				Type: corev1.SecretTypeTLS,
-				Data: map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data: map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
 			httpSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
 				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
-			mockClient, _, _ := setupMocks(transportSecret, httpSecret)
+			mockClient, _, _ := setupMocks(caSecret, transportSecret, httpSecret)
 
-			reconcilerContext, underTest := newTLSReconciler(mockClient, newRenewalSpec(false))
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, newRenewalSpec(false))
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -850,12 +874,13 @@ var _ = Describe("TLS Controller", func() {
 		})
 
 		It("should renew expired per-node certificates and mark the secret for a rolling restart", func() {
+			ca, caSecret := newCA()
 			expiredCert := makeTestCertPEM(time.Now().AddDate(-1, 0, 0), time.Now().AddDate(0, 0, -1))
-			validCert := makeTestCertPEM(time.Now(), time.Now().AddDate(0, 0, 200))
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
 			transportSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
 				Data: map[string][]byte{
-					"ca.crt":                       []byte("ca.crt"),
+					"ca.crt":                       ca.CertData(),
 					clusterName + "-masters-0.crt": expiredCert,
 					clusterName + "-masters-0.key": []byte("key"),
 					clusterName + "-masters-1.crt": expiredCert,
@@ -865,11 +890,11 @@ var _ = Describe("TLS Controller", func() {
 			httpSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
 				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
-			mockClient, storedTransport, _ := setupMocks(transportSecret, httpSecret)
+			mockClient, storedTransport, _ := setupMocks(caSecret, transportSecret, httpSecret)
 
-			reconcilerContext, underTest := newTLSReconciler(mockClient, newRenewalSpec(true))
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, newRenewalSpec(true))
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -882,24 +907,25 @@ var _ = Describe("TLS Controller", func() {
 		})
 
 		It("should not mark the secret for a restart when hot reload is active", func() {
+			ca, caSecret := newCA()
 			expiredCert := makeTestCertPEM(time.Now().AddDate(-1, 0, 0), time.Now().AddDate(0, 0, -1))
-			validCert := makeTestCertPEM(time.Now(), time.Now().AddDate(0, 0, 200))
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
 			transportSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
 				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"tls.crt": expiredCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data:       map[string][]byte{"tls.crt": expiredCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
 			httpSecret := corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
 				Type:       corev1.SecretTypeTLS,
-				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": []byte("ca.crt")},
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
 			}
-			mockClient, storedTransport, _ := setupMocks(transportSecret, httpSecret)
+			mockClient, storedTransport, _ := setupMocks(caSecret, transportSecret, httpSecret)
 
 			spec := newRenewalSpec(false)
 			// Hot reload is on by default for OpenSearch 3.x
 			spec.Spec.General.Version = "3.0.0"
-			reconcilerContext, underTest := newTLSReconciler(mockClient, spec)
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, spec)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 
@@ -907,6 +933,65 @@ var _ = Describe("TLS Controller", func() {
 			Expect(storedTransport().Annotations[CertRenewalAnnotation]).ToNot(BeEmpty())
 			Expect(reconcilerContext.CertHashData).To(BeEmpty())
 			Expect(reconcilerContext.OpenSearchConfig["plugins.security.ssl.certificates_hot_reload.enabled"]).To(Equal("true"))
+		})
+
+		It("should not restart when hot reload is enabled on either TLS interface", func() {
+			ca, caSecret := newCA()
+			expiredCert := makeTestCertPEM(time.Now().AddDate(-1, 0, 0), time.Now().AddDate(0, 0, -1))
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
+			transportSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": expiredCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			httpSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			mockClient, storedTransport, _ := setupMocks(caSecret, transportSecret, httpSecret)
+
+			spec := newRenewalSpec(false)
+			spec.Spec.General.Version = "3.0.0"
+			spec.Spec.Security.Tls.Transport.EnableHotReload = ptr.To(false)
+			spec.Spec.Security.Tls.Http.EnableHotReload = ptr.To(true)
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(storedTransport().Annotations[CertRenewalAnnotation]).ToNot(BeEmpty())
+			Expect(reconcilerContext.CertHashData).To(BeEmpty())
+			Expect(reconcilerContext.OpenSearchConfig["plugins.security.ssl.certificates_hot_reload.enabled"]).To(Equal("true"))
+		})
+
+		It("should renew certificates through Reconcile when the CA is replaced", func() {
+			originalCA, _ := newCA()
+			_, replacedSecret := newCA()
+			validCert := signTestCert(originalCA, clusterName, clusterName, validFor)
+			transportSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": originalCA.CertData()},
+			}
+			httpSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": originalCA.CertData()},
+			}
+			mockClient, storedTransport, storedHttp := setupMocks(replacedSecret, transportSecret, httpSecret)
+
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, newRenewalSpec(false))
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(storedTransport().Data["tls.crt"]).ToNot(Equal(validCert))
+			Expect(storedHttp().Data["tls.crt"]).ToNot(Equal(validCert))
+			Expect(storedTransport().Annotations[CertRenewalAnnotation]).ToNot(BeEmpty())
+			Expect(storedHttp().Annotations[CertRenewalAnnotation]).ToNot(BeEmpty())
+			Expect(reconcilerContext.CertHashData).To(ConsistOf(
+				"transport-certs:"+storedTransport().Annotations[CertRenewalAnnotation],
+				"http-certs:"+storedHttp().Annotations[CertRenewalAnnotation],
+			))
 		})
 	})
 })

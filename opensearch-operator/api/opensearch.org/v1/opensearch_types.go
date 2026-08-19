@@ -368,7 +368,7 @@ type TlsCertificateConfig struct {
 	// Duration controls the validity period of generated certificates (e.g. "8760h", "720h").
 	//+kubebuilder:default:="8760h"
 	Duration *metav1.Duration `json:"duration,omitempty"`
-	// Enable hot reloading of TLS certificates so nodes pick up renewed certificates without a restart. Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch 3.x and above.
+	// Enable hot reloading of OpenSearch node TLS certificates so nodes pick up renewed certificates without a restart. Requires OpenSearch >= 2.19.1. Defaults to true on OpenSearch 3.x and above. Not used for Dashboards TLS.
 	EnableHotReload *bool `json:"enableHotReload,omitempty"`
 }
 
