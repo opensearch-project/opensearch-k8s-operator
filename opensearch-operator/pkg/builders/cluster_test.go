@@ -1790,7 +1790,7 @@ var _ = Describe("Builders", func() {
 			clusterObject := clusterWithAttributes()
 			sts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			command := sts.Spec.Template.Spec.Containers[0].Command
-			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && set -f && ./opensearch-docker-entrypoint.sh"))
+			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && ./opensearch-docker-entrypoint.sh"))
 		})
 
 		It("should wire the same mechanism into the bootstrap pod", func() {
@@ -1800,7 +1800,7 @@ var _ = Describe("Builders", func() {
 			Expect(findContainer(pod.Spec.InitContainers, nodeAttributesVolumeName)).NotTo(BeNil())
 			Expect(pod.Spec.Volumes).To(ContainElement(nodeAttributesVolume()))
 			command := pod.Spec.Containers[0].Command
-			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && set -f && ./opensearch-docker-entrypoint.sh"))
+			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && ./opensearch-docker-entrypoint.sh"))
 		})
 
 		It("should bind the managed ServiceAccount to the shared node-attributes ClusterRole", func() {

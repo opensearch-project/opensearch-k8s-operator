@@ -156,9 +156,9 @@ rules:
   - watch
 - apiGroups:
   - rbac.authorization.k8s.io
-  resources:
-  - clusterroles
   resourceNames:
   - opensearch-node-attributes
+  resources:
+  - clusterroles
   verbs:
   - bind
