@@ -216,7 +216,11 @@ func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
 	} else {
 		adminDn := r.configuredAdminDn()
 		if len(adminDn) == 0 {
-			r.logger.Info("An admin cert secret is configured but no adminDn is set; securityadmin.sh will not be able to authenticate. Set security.tls.http.adminDn to the DN of the admin certificate.")
+			// Do not render plugins.security.authcz.admin_dn: [""] ΓÇö that makes
+			// securityadmin.sh fail with "is not an admin user". Leave the key
+			// unset so additionalConfig can still supply it.
+			r.logger.Error(nil, "An admin cert secret is configured but no adminDn is set; securityadmin.sh will not be able to authenticate. Set security.tls.http.adminDn to the DN of the admin certificate.")
+			return res, nil
 		}
 		certDN = strings.Join(adminDn, "\",\"")
 	}

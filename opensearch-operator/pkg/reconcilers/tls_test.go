@@ -1065,5 +1065,17 @@ var _ = Describe("TLS Controller", func() {
 			Expect(exists).To(BeTrue())
 			Expect(value).To(Equal("[\"CN=newadmin\"]"))
 		})
+
+		It("Should not render an empty admin_dn when neither field is set", func() {
+			spec := makeSpec("tls-admindn-empty", nil, nil)
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeFalse())
+			Expect(value).ToNot(Equal("[\"\"]"))
+		})
 	})
 })
