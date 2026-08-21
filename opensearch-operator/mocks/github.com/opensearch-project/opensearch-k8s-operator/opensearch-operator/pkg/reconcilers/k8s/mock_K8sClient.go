@@ -5,7 +5,6 @@ package k8s
 import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
-	rbacv1 "k8s.io/api/rbac/v1"
 
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -14,6 +13,8 @@ import (
 	mock "github.com/stretchr/testify/mock"
 
 	opensearch_orgv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+
+	rbacv1 "k8s.io/api/rbac/v1"
 
 	reconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -376,6 +377,52 @@ func (_c *MockK8sClient_CreateService_Call) RunAndReturn(run func(*v1.Service) (
 	return _c
 }
 
+// DeleteClusterRoleBinding provides a mock function with given fields: name
+func (_m *MockK8sClient) DeleteClusterRoleBinding(name string) error {
+	ret := _m.Called(name)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteClusterRoleBinding")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string) error); ok {
+		r0 = rf(name)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_DeleteClusterRoleBinding_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteClusterRoleBinding'
+type MockK8sClient_DeleteClusterRoleBinding_Call struct {
+	*mock.Call
+}
+
+// DeleteClusterRoleBinding is a helper method to define mock.On call
+//   - name string
+func (_e *MockK8sClient_Expecter) DeleteClusterRoleBinding(name interface{}) *MockK8sClient_DeleteClusterRoleBinding_Call {
+	return &MockK8sClient_DeleteClusterRoleBinding_Call{Call: _e.mock.On("DeleteClusterRoleBinding", name)}
+}
+
+func (_c *MockK8sClient_DeleteClusterRoleBinding_Call) Run(run func(name string)) *MockK8sClient_DeleteClusterRoleBinding_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_DeleteClusterRoleBinding_Call) Return(_a0 error) *MockK8sClient_DeleteClusterRoleBinding_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_DeleteClusterRoleBinding_Call) RunAndReturn(run func(string) error) *MockK8sClient_DeleteClusterRoleBinding_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // DeleteDeployment provides a mock function with given fields: deployment, orphan
 func (_m *MockK8sClient) DeleteDeployment(deployment *appsv1.Deployment, orphan bool) error {
 	ret := _m.Called(deployment, orphan)
@@ -558,6 +605,52 @@ func (_c *MockK8sClient_DeleteStatefulSet_Call) Return(_a0 error) *MockK8sClient
 }
 
 func (_c *MockK8sClient_DeleteStatefulSet_Call) RunAndReturn(run func(*appsv1.StatefulSet, bool) error) *MockK8sClient_DeleteStatefulSet_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// EnsureClusterRoleBinding provides a mock function with given fields: crb
+func (_m *MockK8sClient) EnsureClusterRoleBinding(crb *rbacv1.ClusterRoleBinding) error {
+	ret := _m.Called(crb)
+
+	if len(ret) == 0 {
+		panic("no return value specified for EnsureClusterRoleBinding")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*rbacv1.ClusterRoleBinding) error); ok {
+		r0 = rf(crb)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_EnsureClusterRoleBinding_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'EnsureClusterRoleBinding'
+type MockK8sClient_EnsureClusterRoleBinding_Call struct {
+	*mock.Call
+}
+
+// EnsureClusterRoleBinding is a helper method to define mock.On call
+//   - crb *rbacv1.ClusterRoleBinding
+func (_e *MockK8sClient_Expecter) EnsureClusterRoleBinding(crb interface{}) *MockK8sClient_EnsureClusterRoleBinding_Call {
+	return &MockK8sClient_EnsureClusterRoleBinding_Call{Call: _e.mock.On("EnsureClusterRoleBinding", crb)}
+}
+
+func (_c *MockK8sClient_EnsureClusterRoleBinding_Call) Run(run func(crb *rbacv1.ClusterRoleBinding)) *MockK8sClient_EnsureClusterRoleBinding_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*rbacv1.ClusterRoleBinding))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_EnsureClusterRoleBinding_Call) Return(_a0 error) *MockK8sClient_EnsureClusterRoleBinding_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_EnsureClusterRoleBinding_Call) RunAndReturn(run func(*rbacv1.ClusterRoleBinding) error) *MockK8sClient_EnsureClusterRoleBinding_Call {
 	_c.Call.Return(run)
 	return _c
 }
@@ -1640,18 +1733,6 @@ func (_c *MockK8sClient_WaitForPodDeletion_Call) Return(_a0 error) *MockK8sClien
 func (_c *MockK8sClient_WaitForPodDeletion_Call) RunAndReturn(run func(string, string) error) *MockK8sClient_WaitForPodDeletion_Call {
 	_c.Call.Return(run)
 	return _c
-}
-
-// EnsureClusterRoleBinding provides a mock function for EnsureClusterRoleBinding.
-func (_m *MockK8sClient) EnsureClusterRoleBinding(crb *rbacv1.ClusterRoleBinding) error {
-	ret := _m.Called(crb)
-	return ret.Error(0)
-}
-
-// DeleteClusterRoleBinding provides a mock function for DeleteClusterRoleBinding.
-func (_m *MockK8sClient) DeleteClusterRoleBinding(name string) error {
-	ret := _m.Called(name)
-	return ret.Error(0)
 }
 
 // NewMockK8sClient creates a new instance of MockK8sClient. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
