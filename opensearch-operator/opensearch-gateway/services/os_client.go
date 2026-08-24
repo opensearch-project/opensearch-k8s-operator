@@ -207,6 +207,9 @@ func (client *OsClusterClient) CatShards(headers []string) ([]responses.CatShard
 		return response, err
 	}
 	defer helpers.SafeClose(indicesRes.Body)
+	if indicesRes.IsError() {
+		return response, ErrCatShardsFailed(indicesRes.String())
+	}
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }
@@ -223,6 +226,9 @@ func (client *OsClusterClient) CatNamedIndicesShards(headers []string, indices [
 		return response, err
 	}
 	defer helpers.SafeClose(indicesRes.Body)
+	if indicesRes.IsError() {
+		return response, ErrCatShardsFailed(indicesRes.String())
+	}
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
 	return response, err
 }

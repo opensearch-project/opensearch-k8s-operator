@@ -57,15 +57,24 @@ func extractNodeName(fullNodeName string) string {
 	return trimmed
 }
 
+// shardsOnNodeFromResponse returns shards whose source node matches nodeName.
+// Relocating shards (_cat/shards "source -> ip id target") are counted against
+// the source node via extractNodeName, so a drain cannot treat an in-flight
+// relocation as an empty node.
+func shardsOnNodeFromResponse(response []responses.CatShardsResponse, nodeName string) []responses.CatShardsResponse {
+	var matched []responses.CatShardsResponse
+	for _, shard := range response {
+		if extractNodeName(shard.NodeName) == nodeName {
+			matched = append(matched, shard)
+		}
+	}
+	return matched
+}
+
 // hasShardsOnNodeFromResponse returns true if any shard in the response is on the given node.
 // It uses extractNodeName so that relocation format (source -> ip id target) is handled correctly.
 func hasShardsOnNodeFromResponse(response []responses.CatShardsResponse, nodeName string) bool {
-	for _, shardsData := range response {
-		if extractNodeName(shardsData.NodeName) == nodeName {
-			return true
-		}
-	}
-	return false
+	return len(shardsOnNodeFromResponse(response, nodeName)) > 0
 }
 
 func HasShardsOnNode(service *OsClusterClient, nodeName string) (bool, error) {
@@ -640,22 +649,21 @@ func CheckPodSafeToDelete(service *OsClusterClient, nodeName string) (bool, erro
 		return false, err
 	}
 
-	// Check each shard on the node
+	// Check each shard on the node. Relocating shards must count as still on the
+	// source node; comparing the raw _cat/shards node field misses "source -> ...".
 	nodeShardsCount := 0
 	nodeStuckReplicasCount := 0
 
-	for _, shard := range shards {
-		if shard.NodeName == nodeName {
-			nodeShardsCount += 1
+	for _, shard := range shardsOnNodeFromResponse(shards, nodeName) {
+		nodeShardsCount += 1
 
-			if shard.PrimaryOrReplica == "r" {
-				isStuck, err := DetectShardStuckVersionMismatch(service, shard)
-				if err != nil {
-					return false, err
-				}
-				if isStuck {
-					nodeStuckReplicasCount += 1
-				}
+		if shard.PrimaryOrReplica == "r" {
+			isStuck, err := DetectShardStuckVersionMismatch(service, shard)
+			if err != nil {
+				return false, err
+			}
+			if isStuck {
+				nodeStuckReplicasCount += 1
 			}
 		}
 	}

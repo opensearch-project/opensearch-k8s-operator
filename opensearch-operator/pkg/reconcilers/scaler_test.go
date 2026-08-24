@@ -3,7 +3,10 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"time"
 
+	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -12,6 +15,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/stretchr/testify/mock"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
@@ -29,6 +33,100 @@ func newScalerReconciler(client *k8s.MockK8sClient, spec *opensearchv1.OpenSearc
 		instance:          spec,
 	}
 	return underTest
+}
+
+func mockScalerAdminSecret(mockClient *k8s.MockK8sClient, clusterName, namespace string) {
+	mockClient.On("GetSecret", clusterName+"-admin-password", namespace).Return(corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName + "-admin-password",
+			Namespace: namespace,
+		},
+		Data: map[string][]byte{
+			"username": []byte("admin"),
+			"password": []byte("admin"),
+		},
+	}, nil)
+}
+
+func registerOsPingResponders(transport *httpmock.MockTransport, cluster *opensearchv1.OpenSearchCluster) {
+	clusterURL := helpers.ClusterURL(cluster)
+	mainBody := `{"name":"test","cluster_name":"test","version":{"number":"2.11.0"}}`
+	for _, u := range []string{clusterURL, clusterURL + "/"} {
+		transport.RegisterResponder(http.MethodHead, u, httpmock.NewStringResponder(200, "OK"))
+		transport.RegisterResponder(http.MethodGet, u, httpmock.NewStringResponder(200, mainBody))
+	}
+}
+
+func registerClusterSettingsResponders(transport *httpmock.MockTransport) {
+	transport.RegisterResponder(
+		http.MethodGet,
+		`=~.*/_cluster/settings.*`,
+		httpmock.NewStringResponder(200, `{"transient":{},"persistent":{}}`),
+	)
+	transport.RegisterResponder(
+		http.MethodPut,
+		`=~.*/_cluster/settings.*`,
+		httpmock.NewStringResponder(200, `{"transient":{},"persistent":{}}`),
+	)
+}
+
+func registerCatShardsResponder(transport *httpmock.MockTransport, status int, body string) {
+	transport.RegisterResponder(
+		http.MethodGet,
+		`=~.*/_cat/shards.*`,
+		httpmock.NewStringResponder(status, body),
+	)
+}
+
+func scalerDrainTestCluster(clusterName, namespace, nodePoolComponent, status, nodeName string, extraConditions []string) opensearchv1.OpenSearchCluster {
+	conditions := append([]string{nodeName}, extraConditions...)
+	return opensearchv1.OpenSearchCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      clusterName,
+			Namespace: namespace,
+			UID:       "dummyuid",
+		},
+		Spec: opensearchv1.ClusterSpec{
+			General: opensearchv1.GeneralConfig{
+				ServiceName: clusterName,
+				HttpPort:    9200,
+			},
+			ConfMgmt: opensearchv1.ConfMgmt{
+				SmartScaler: true,
+			},
+			NodePools: []opensearchv1.NodePool{
+				{
+					Component: nodePoolComponent,
+					Replicas:  2,
+				},
+			},
+		},
+		Status: opensearchv1.ClusterStatus{
+			ComponentsStatus: []opensearchv1.ComponentStatus{
+				{
+					Component:   "Scaler",
+					Status:      status,
+					Description: nodePoolComponent,
+					Conditions:  conditions,
+				},
+			},
+		},
+	}
+}
+
+func scalerDrainTestSts(clusterName, namespace, nodePoolComponent string, replicas int32) appsv1.StatefulSet {
+	return appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%s", clusterName, nodePoolComponent),
+			Namespace: namespace,
+		},
+		Spec: appsv1.StatefulSetSpec{
+			Replicas: ptr.To(replicas),
+		},
+		Status: appsv1.StatefulSetStatus{
+			ReadyReplicas: replicas,
+		},
+	}
 }
 
 var _ = Describe("Scaler Controller", func() {
@@ -420,6 +518,230 @@ var _ = Describe("Scaler Controller", func() {
 				requeue = r
 			}
 			Expect(requeue).To(BeFalse())
+		})
+	})
+
+	Context("When computing drain stall", func() {
+		It("Should not stall before the threshold", func() {
+			started := time.Now().UTC().Add(-14 * time.Minute)
+			Expect(drainHasStalled(started, time.Now().UTC(), drainStallWarningAfter)).To(BeFalse())
+		})
+
+		It("Should stall once the threshold has elapsed", func() {
+			started := time.Now().UTC().Add(-16 * time.Minute)
+			Expect(drainHasStalled(started, time.Now().UTC(), drainStallWarningAfter)).To(BeTrue())
+		})
+
+		It("Should keep the node name as the first condition", func() {
+			started := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+			conditions := scalerDrainConditions("node-1", started, true)
+			Expect(scalerTargetNodeName(conditions)).To(Equal("node-1"))
+			got, ok := drainStartedAt(conditions)
+			Expect(ok).To(BeTrue())
+			Expect(got).To(Equal(started))
+			Expect(hasDrainStalledCondition(conditions)).To(BeTrue())
+		})
+	})
+
+	Context("When draining nodes (issue #1447)", func() {
+		const (
+			clusterName       = "test-cluster"
+			clusterNamespace  = "test-namespace"
+			nodePoolComponent = "data"
+		)
+
+		It("Should fail closed when _cat/shards errors instead of marking the node drained", func() {
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Excluded", targetNodeName, nil)
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusInternalServerError, `{"error":"unavailable"}`)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			err := underTest.drainNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent)
+
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("cat shards failed"))
+			for _, status := range spec.Status.ComponentsStatus {
+				Expect(status.Status).ToNot(Equal("Drained"))
+			}
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+		})
+
+		It("Should keep waiting when the node still has shards", func() {
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			started := time.Now().UTC().Add(-time.Minute)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Excluded", targetNodeName, []string{
+				drainStartedConditionPrefix + started.Format(time.RFC3339),
+			})
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, fmt.Sprintf(
+				`[{"index":"idx","shard":"0","prirep":"p","state":"STARTED","node":"%s"}]`, targetNodeName,
+			))
+			registerClusterSettingsResponders(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			err := underTest.drainNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent)
+
+			Expect(err).NotTo(HaveOccurred())
+			for _, status := range spec.Status.ComponentsStatus {
+				Expect(status.Status).ToNot(Equal("Drained"))
+			}
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+		})
+
+		It("Should mark the node drained only when it has no shards", func() {
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Excluded", targetNodeName, nil)
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, `[]`)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			var markedDrained bool
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(&spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+				updateFn(&spec)
+				for _, status := range spec.Status.ComponentsStatus {
+					if status.Component == "Scaler" && status.Status == "Drained" {
+						markedDrained = true
+					}
+				}
+			}).Return(nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			err := underTest.drainNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(markedDrained).To(BeTrue())
+		})
+
+		It("Should emit a Warning and DrainStalled condition when a drain makes no progress", func() {
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			started := time.Now().UTC().Add(-16 * time.Minute)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Excluded", targetNodeName, []string{
+				drainStartedConditionPrefix + started.Format(time.RFC3339),
+			})
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, fmt.Sprintf(
+				`[{"index":"idx","shard":"0","prirep":"p","state":"STARTED","node":"%s"}]`, targetNodeName,
+			))
+			registerClusterSettingsResponders(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			var stalled bool
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(&spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+				updateFn(&spec)
+				for _, status := range spec.Status.ComponentsStatus {
+					if status.Component == "Scaler" && hasDrainStalledCondition(status.Conditions) {
+						stalled = true
+						Expect(status.Status).To(Equal("Excluded"))
+					}
+				}
+			}).Return(nil)
+
+			recorder := record.NewFakeRecorder(5)
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			underTest.recorder = recorder
+			err := underTest.drainNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(stalled).To(BeTrue())
+			var events []string
+			close(recorder.Events)
+			for event := range recorder.Events {
+				events = append(events, event)
+			}
+			Expect(events).To(ContainElement(ContainSubstring("has made no progress")))
+		})
+
+		It("Should not shrink the StatefulSet when decreaseOneNode finds shards still on the node", func() {
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Drained", targetNodeName, nil)
+			spec.Spec.NodePools[0].Replicas = 1
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, fmt.Sprintf(
+				`[{"index":"idx","shard":"0","prirep":"p","state":"STARTED","node":"%s"}]`, targetNodeName,
+			))
+			registerClusterSettingsResponders(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			var resetToExcluded bool
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(&spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+				updateFn(&spec)
+				for _, status := range spec.Status.ComponentsStatus {
+					if status.Component == "Scaler" && status.Status == "Excluded" {
+						resetToExcluded = true
+					}
+				}
+			}).Return(nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeTrue())
+			Expect(resetToExcluded).To(BeTrue())
+			Expect(*currentSts.Spec.Replicas).To(Equal(int32(3)))
+			mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
+		})
+
+		It("Should not shrink the StatefulSet when decreaseOneNode cannot verify emptiness", func() {
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Drained", targetNodeName, nil)
+			spec.Spec.NodePools[0].Replicas = 1
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusInternalServerError, `{"error":"unavailable"}`)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true)
+
+			Expect(err).To(HaveOccurred())
+			Expect(requeue).To(BeTrue())
+			Expect(*currentSts.Spec.Replicas).To(Equal(int32(3)))
+			mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
 		})
 	})
 })
