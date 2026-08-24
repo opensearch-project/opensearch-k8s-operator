@@ -10,6 +10,7 @@ var (
 	ErrClusterHealthOperation            = errors.New("cluster health failed")
 	ErrClusterSettingsOperation          = errors.New("cluster settings failed")
 	ErrCatIndicesOperation               = errors.New("cat indices failed")
+	ErrCatShardsOperation                = errors.New("cat shards failed")
 )
 
 func ErrClusterAllocationExplainGetFailed(resp string) error {
@@ -30,4 +31,8 @@ func ErrClusterSettingsPutFailed(resp string) error {
 
 func ErrCatIndicesFailed(resp string) error {
 	return fmt.Errorf("%w: %s", ErrCatIndicesOperation, resp)
+}
+
+func ErrCatShardsFailed(resp string) error {
+	return fmt.Errorf("%w: %s", ErrCatShardsOperation, resp)
 }

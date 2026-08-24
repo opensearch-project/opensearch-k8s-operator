@@ -211,6 +211,31 @@ func TestHasShardsOnNodeFromResponse(t *testing.T) {
 	}
 }
 
+// TestShardsOnNodeFromResponseRelocatingSource is the CheckPodSafeToDelete
+// regression for issue #1447: a shard relocating off the node must still count
+// as present so the pod is not deleted while it is the relocation source.
+func TestShardsOnNodeFromResponseRelocatingSource(t *testing.T) {
+	shards := []responses.CatShardsResponse{
+		{Index: "idx", Shard: "0", PrimaryOrReplica: "p", State: "RELOCATING", NodeName: "opensearch-data-1 -> 172.31.233.51 4kGSHQhmRQ-83pvvBbTYow opensearch-data-8"},
+	}
+
+	onSource := shardsOnNodeFromResponse(shards, "opensearch-data-1")
+	if len(onSource) != 1 {
+		t.Fatalf("relocating shard should count on source node, got %d", len(onSource))
+	}
+
+	onTarget := shardsOnNodeFromResponse(shards, "opensearch-data-8")
+	if len(onTarget) != 0 {
+		t.Fatalf("relocating shard should not count on target node, got %d", len(onTarget))
+	}
+
+	// Raw string equality is what CheckPodSafeToDelete used to do and would
+	// miss this shard entirely, reporting the node as empty.
+	if shards[0].NodeName == "opensearch-data-1" {
+		t.Fatal("test fixture is wrong: raw NodeName should be the relocation string")
+	}
+}
+
 func TestDetermineUnsupportedClusterSettings(t *testing.T) {
 	tests := []struct {
 		name                string

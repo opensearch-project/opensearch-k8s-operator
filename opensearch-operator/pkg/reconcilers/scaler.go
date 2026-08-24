@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"k8s.io/utils/ptr"
@@ -21,7 +22,15 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-const scalerReconcilerName = "scaler"
+const (
+	scalerReconcilerName        = "scaler"
+	drainStartedConditionPrefix = "drainStarted:"
+	drainStalledCondition       = "DrainStalled"
+	// drainStallWarningAfter is how long a scale-down drain may wait with no
+	// observed emptiness before a Warning event and DrainStalled condition are
+	// recorded. The drain itself is not aborted.
+	drainStallWarningAfter = 15 * time.Minute
+)
 
 type ScalerReconciler struct {
 	client            k8s.K8sClient
@@ -220,8 +229,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
 
 	// Verify that the node being removed is the same one that was excluded/drained
-	if len(currentStatus.Conditions) > 0 {
-		targetNodeName := currentStatus.Conditions[0]
+	if targetNodeName := scalerTargetNodeName(currentStatus.Conditions); targetNodeName != "" {
 		if lastReplicaNodeName != targetNodeName {
 			lg.Info(fmt.Sprintf("Group: %s, Target node %s does not match last replica %s, resetting to Running", nodePoolGroupName, targetNodeName, lastReplicaNodeName))
 			*currentSts.Spec.Replicas++
@@ -237,6 +245,55 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 				lg.Error(err, "failed to update status")
 			}
 			return true, fmt.Errorf("target node mismatch during decrease: excluded/drained %s but would remove %s, reset to Running", targetNodeName, lastReplicaNodeName)
+		}
+	}
+
+	var clusterClient *services.OsClusterClient
+	if smartDecrease {
+		var err error
+		clusterClient, err = util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+		if err != nil {
+			*currentSts.Spec.Replicas++
+			lg.Error(err, "failed to create os client")
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client before removing node %s", lastReplicaNodeName)
+			return true, err
+		}
+
+		// Drained is persisted on the CR; allocation exclusions are only transient
+		// cluster settings. Re-check emptiness before shrinking so a lost exclusion
+		// cannot delete a node that still holds data.
+		nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
+		if err != nil {
+			*currentSts.Spec.Replicas++
+			lg.Error(err, "failed to verify node is empty before scale-down")
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to verify node %s is empty before scale-down", lastReplicaNodeName)
+			return true, err
+		}
+		if nodeNotEmpty {
+			*currentSts.Spec.Replicas++
+			lg.Info(fmt.Sprintf("Group: %s, Node %s still has shards after drain, resetting to Excluded", nodePoolGroupName, lastReplicaNodeName))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Node %s still has shards after being marked drained; re-excluding and waiting", lastReplicaNodeName)
+			if _, excludeErr := services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName); excludeErr != nil {
+				lg.Error(excludeErr, fmt.Sprintf("failed to re-apply exclusion for node %s", lastReplicaNodeName))
+			}
+			startedAt, ok := drainStartedAt(currentStatus.Conditions)
+			if !ok {
+				startedAt = time.Now().UTC()
+			}
+			stalled := drainHasStalled(startedAt, time.Now().UTC(), drainStallWarningAfter)
+			componentStatus := opensearchv1.ComponentStatus{
+				Component:   "Scaler",
+				Status:      "Excluded",
+				Description: nodePoolGroupName,
+				Conditions:  scalerDrainConditions(lastReplicaNodeName, startedAt, stalled),
+			}
+			if err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+				instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+			}); err != nil {
+				lg.Error(err, "failed to update status")
+				return true, err
+			}
+			return true, nil
 		}
 	}
 
@@ -258,12 +315,6 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 
 	if !smartDecrease {
 		return false, err
-	}
-	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
-	if err != nil {
-		lg.Error(err, "failed to create os client")
-		r.recorder.AnnotatedEventf(r.instance, annotations, "WARN", "failed to remove node exclude", "Group-%s . failed to remove node exclude %s", nodePoolGroupName, lastReplicaNodeName)
-		return true, err
 	}
 
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
@@ -298,7 +349,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatu
 			Component:   "Scaler",
 			Status:      "Excluded",
 			Description: nodePoolGroupName,
-			Conditions:  []string{lastReplicaNodeName},
+			Conditions:  scalerDrainConditions(lastReplicaNodeName, time.Now().UTC(), false),
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished to Exclude %s/%s", r.instance.Namespace, r.instance.Name)
 		lg.Info(fmt.Sprintf("Group: %s, Excluded node: %s", nodePoolGroupName, lastReplicaNodeName))
@@ -339,8 +390,8 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 
 	// Retrieve the target node name from the status conditions set during exclude phase
 	var lastReplicaNodeName string
-	if len(currentStatus.Conditions) > 0 {
-		lastReplicaNodeName = currentStatus.Conditions[0]
+	if target := scalerTargetNodeName(currentStatus.Conditions); target != "" {
+		lastReplicaNodeName = target
 	} else {
 		// Fallback for backwards compatibility
 		lastReplicaNodeName = helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
@@ -369,9 +420,17 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		return err
 	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
+	if err != nil {
+		lg.Error(err, "failed to check shards on node")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to check shards on node %s; not marking drained", lastReplicaNodeName)
+		return err
+	}
 	if nodeNotEmpty {
 		lg.Info(fmt.Sprintf("Group: %s, Waiting for node %s to drain", nodePoolGroupName, lastReplicaNodeName))
-		return err
+		if _, excludeErr := services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName); excludeErr != nil {
+			lg.Error(excludeErr, fmt.Sprintf("failed to re-apply exclusion for node %s during drain", lastReplicaNodeName))
+		}
+		return r.recordDrainWait(currentStatus, lastReplicaNodeName, nodePoolGroupName, annotations)
 	}
 
 	componentStatus := opensearchv1.ComponentStatus{
@@ -489,4 +548,95 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished scaling")
 	return result, err
+}
+
+func (r *ScalerReconciler) recordDrainWait(currentStatus opensearchv1.ComponentStatus, nodeName, nodePoolGroupName string, annotations map[string]string) error {
+	lg := log.FromContext(r.ctx)
+	startedAt, ok := drainStartedAt(currentStatus.Conditions)
+	if !ok {
+		startedAt = time.Now().UTC()
+	}
+	stalled := drainHasStalled(startedAt, time.Now().UTC(), drainStallWarningAfter)
+	alreadyStalled := hasDrainStalledCondition(currentStatus.Conditions)
+	if stalled && !alreadyStalled {
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler",
+			"Drain of node %s in group %s has made no progress for %s; check remaining capacity, disk watermarks, or replica settings",
+			nodeName, nodePoolGroupName, drainStallWarningAfter)
+	}
+	newConditions := scalerDrainConditions(nodeName, startedAt, stalled || alreadyStalled)
+	if drainConditionsEqual(currentStatus.Conditions, newConditions) {
+		return nil
+	}
+	componentStatus := opensearchv1.ComponentStatus{
+		Component:   "Scaler",
+		Status:      "Excluded",
+		Description: nodePoolGroupName,
+		Conditions:  newConditions,
+	}
+	err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+	})
+	if err != nil {
+		lg.Error(err, "failed to update drain wait status")
+		return err
+	}
+	return nil
+}
+
+func scalerTargetNodeName(conditions []string) string {
+	if len(conditions) == 0 {
+		return ""
+	}
+	return conditions[0]
+}
+
+func drainStartedAt(conditions []string) (time.Time, bool) {
+	for _, condition := range conditions {
+		if strings.HasPrefix(condition, drainStartedConditionPrefix) {
+			startedAt, err := time.Parse(time.RFC3339, strings.TrimPrefix(condition, drainStartedConditionPrefix))
+			if err == nil {
+				return startedAt, true
+			}
+		}
+	}
+	return time.Time{}, false
+}
+
+func hasDrainStalledCondition(conditions []string) bool {
+	for _, condition := range conditions {
+		if condition == drainStalledCondition {
+			return true
+		}
+	}
+	return false
+}
+
+func scalerDrainConditions(nodeName string, startedAt time.Time, stalled bool) []string {
+	conditions := []string{nodeName}
+	if !startedAt.IsZero() {
+		conditions = append(conditions, drainStartedConditionPrefix+startedAt.UTC().Format(time.RFC3339))
+	}
+	if stalled {
+		conditions = append(conditions, drainStalledCondition)
+	}
+	return conditions
+}
+
+func drainHasStalled(startedAt, now time.Time, threshold time.Duration) bool {
+	if startedAt.IsZero() || threshold <= 0 {
+		return false
+	}
+	return !now.Before(startedAt.Add(threshold))
+}
+
+func drainConditionsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
