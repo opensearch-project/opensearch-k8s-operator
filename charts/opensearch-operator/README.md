@@ -70,10 +70,10 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.readinessProbe.initialDelaySeconds` | int | `10` |  |
 | `manager.parallelRecoveryEnabled` | bool | `true` |  |
 | `manager.pprofEndpointsEnabled` | bool | `false` |  |
-| `manager.image.repository` | string | `"opensearchproject/opensearch-operator"` |  |
-| `manager.image.tag` | string | `""` |  |
+| `manager.image.repository` | string | `"docker.io/tmdcio/opensearch-operator"` |  |
+| `manager.image.tag` | string | `"relabel-test"` |  |
 | `manager.image.pullPolicy` | string | `"Always"` |  |
-| `manager.imagePullSecrets` | list | `[]` |  |
+| `manager.imagePullSecrets[0].name` | string | `"dataos-container-registry"` |  |
 | `manager.dnsBase` | string | `"cluster.local"` |  |
 | `manager.loglevel` | string | `"info"` |  |
 | `manager.watchNamespace` | string | `nil` |  |

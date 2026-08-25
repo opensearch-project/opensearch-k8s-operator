@@ -49,7 +49,7 @@ manager:
   image:
     repository: docker.io/tmdcio/opensearch-operator
     ## tag default uses appVersion from Chart.yaml, to override specify tag tag: "v1.1"
-    tag: "relabel-test"
+    tag: "relabel-test-v1"
     pullPolicy: "Always"
 
   ## Optional array of imagePullSecrets containing private registry credentials

@@ -76,7 +76,7 @@ cluster:
     # Monitoring configuration. Check [documentation](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#adding-opensearch-monitoring-to-your-cluster) how to configure it.
     monitoring:
       # -- Enable cluster monitoring
-      enable: true
+      enable: false
 
       # -- Additional labels to apply to the generated ServiceMonitor
       labels: {}
@@ -91,8 +91,8 @@ cluster:
       scrapeInterval: 30s
 
       # -- Override the tlsConfig of the generated ServiceMonitor
-      tlsConfig: {}
-#        insecureSkipVerify: true
+      tlsConfig:
+        insecureSkipVerify: true
 
       # -- Relabelings applied to ServiceMonitor scrape targets (Prometheus relabel_configs)
       relabelings:
