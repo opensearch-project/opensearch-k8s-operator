@@ -695,3 +695,28 @@ var _ = Describe("EnsureDashboardsCredentialsSecret", func() {
 		expectPolicyCompliant(created.StringData["password"])
 	})
 })
+
+var _ = Describe("HotReloadEnabled", func() {
+	cluster := func(version string) *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{Version: version}},
+		}
+	}
+
+	It("defaults to enabled on OpenSearch 3.x when unset", func() {
+		Expect(HotReloadEnabled(cluster("3.0.0"), nil)).To(BeTrue())
+	})
+
+	It("defaults to disabled below 3.x when unset", func() {
+		Expect(HotReloadEnabled(cluster("2.19.1"), nil)).To(BeFalse())
+	})
+
+	It("honors explicit true only when the version supports hot reload", func() {
+		Expect(HotReloadEnabled(cluster("2.19.1"), ptr.To(true))).To(BeTrue())
+		Expect(HotReloadEnabled(cluster("2.18.0"), ptr.To(true))).To(BeFalse())
+	})
+
+	It("honors explicit false on OpenSearch 3.x", func() {
+		Expect(HotReloadEnabled(cluster("3.0.0"), ptr.To(false))).To(BeFalse())
+	})
+})

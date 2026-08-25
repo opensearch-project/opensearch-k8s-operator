@@ -397,8 +397,11 @@ cluster:
         # This is used only when generate is true.
         duration: "8760h"
 
-        # -- Enable hot reloading of TLS certificates.
-        enableHotReload: false
+        # -- Enable hot reloading of TLS certificates so nodes pick up renewed
+        # certificates without a restart. Requires OpenSearch >= 2.19.1.
+        # Unset (~) defers to the operator: enabled on OpenSearch 3.x+, off below.
+        # Set true/false to override.
+        enableHotReload: ~
 
       transport:
         # -- Controls if TLS should be enabled for transport.
@@ -436,8 +439,11 @@ cluster:
         # This is used only when generate is true.
         duration: "8760h"
 
-        # -- Enable hot reloading of TLS certificates.
-        enableHotReload: false
+        # -- Enable hot reloading of TLS certificates so nodes pick up renewed
+        # certificates without a restart. Requires OpenSearch >= 2.19.1.
+        # Unset (~) defers to the operator: enabled on OpenSearch 3.x+, off below.
+        # Set true/false to override.
+        enableHotReload: ~
 
   # Opensearch Ingress configuration
   ingress:

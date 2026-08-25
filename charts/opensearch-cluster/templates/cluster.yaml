@@ -71,8 +71,10 @@ spec:
         {{- if .tls.transport.duration }}
         duration: {{ .tls.transport.duration }}
         {{- end }}
-        {{- if .tls.transport.enableHotReload }}
-        enableHotReload: {{ .tls.transport.enableHotReload }}
+        {{- if eq (toString .tls.transport.enableHotReload) "false" }}
+        enableHotReload: false
+        {{- else if eq (toString .tls.transport.enableHotReload) "true" }}
+        enableHotReload: true
         {{- end }}
       http:
         {{- if eq (toString .tls.http.enabled) "false" }}
@@ -98,8 +100,10 @@ spec:
         {{- if .tls.http.duration }}
         duration: {{ .tls.http.duration }}
         {{- end }}
-        {{- if .tls.http.enableHotReload }}
-        enableHotReload: {{ .tls.http.enableHotReload }}
+        {{- if eq (toString .tls.http.enableHotReload) "false" }}
+        enableHotReload: false
+        {{- else if eq (toString .tls.http.enableHotReload) "true" }}
+        enableHotReload: true
         {{- end }}
     {{- with .config }}
     config: {{ . | toYaml | nindent 6 }}
