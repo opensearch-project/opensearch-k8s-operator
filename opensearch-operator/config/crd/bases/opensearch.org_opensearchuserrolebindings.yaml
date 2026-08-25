@@ -8,8 +8,8 @@ metadata:
 spec:
   group: opensearch.org
   names:
-    kind: OpensearchUserRoleBinding
-    listKind: OpensearchUserRoleBindingList
+    kind: OpenSearchUserRoleBinding
+    listKind: OpenSearchUserRoleBindingList
     plural: opensearchuserrolebindings
     shortNames:
     - opensearchuserrolebinding
@@ -19,7 +19,7 @@ spec:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings
+        description: OpenSearchUserRoleBinding is the Schema for the opensearchuserrolebindings
           API
         properties:
           apiVersion:
@@ -40,8 +40,8 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchUserRoleBindingSpec defines the desired state of
-              OpensearchUserRoleBinding
+            description: OpenSearchUserRoleBindingSpec defines the desired state of
+              OpenSearchUserRoleBinding
             properties:
               backendRoles:
                 items:
@@ -76,8 +76,8 @@ spec:
             - roles
             type: object
           status:
-            description: OpensearchUserRoleBindingStatus defines the observed state
-              of OpensearchUserRoleBinding
+            description: OpenSearchUserRoleBindingStatus defines the observed state
+              of OpenSearchUserRoleBinding
             properties:
               managedCluster:
                 description: |-

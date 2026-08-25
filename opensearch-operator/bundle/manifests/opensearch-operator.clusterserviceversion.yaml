@@ -38,7 +38,7 @@ metadata:
         },
         {
           "apiVersion": "opensearch.org/v1",
-          "kind": "OpensearchUser",
+          "kind": "OpenSearchUser",
           "metadata": {
             "name": "sample-user",
             "namespace": "default"
@@ -55,7 +55,7 @@ metadata:
         },
         {
           "apiVersion": "opensearch.org/v1",
-          "kind": "OpensearchRole",
+          "kind": "OpenSearchRole",
           "metadata": {
             "name": "sample-role",
             "namespace": "default"
@@ -75,7 +75,7 @@ metadata:
         },
         {
           "apiVersion": "opensearch.org/v1",
-          "kind": "OpensearchUserRoleBinding",
+          "kind": "OpenSearchUserRoleBinding",
           "metadata": {
             "name": "sample-user-role-binding",
             "namespace": "default"
@@ -90,7 +90,7 @@ metadata:
         },
         {
           "apiVersion": "opensearch.org/v1",
-          "kind": "OpensearchTenant",
+          "kind": "OpenSearchTenant",
           "metadata": {
             "name": "sample-tenant",
             "namespace": "default"
@@ -104,7 +104,7 @@ metadata:
         },
         {
           "apiVersion": "opensearch.org/v1",
-          "kind": "OpensearchActionGroup",
+          "kind": "OpenSearchActionGroup",
           "metadata": {
             "name": "sample-action-group",
             "namespace": "default"
@@ -157,7 +157,7 @@ metadata:
         },
         {
           "apiVersion": "opensearch.org/v1",
-          "kind": "OpensearchIndexTemplate",
+          "kind": "OpenSearchIndexTemplate",
           "metadata": {
             "name": "sample-index-template",
             "namespace": "default"
@@ -179,7 +179,7 @@ metadata:
         },
         {
           "apiVersion": "opensearch.org/v1",
-          "kind": "OpensearchComponentTemplate",
+          "kind": "OpenSearchComponentTemplate",
           "metadata": {
             "name": "sample-component-template",
             "namespace": "default"
@@ -198,7 +198,7 @@ metadata:
         },
         {
           "apiVersion": "opensearch.org/v1",
-          "kind": "OpensearchSnapshotPolicy",
+          "kind": "OpenSearchSnapshotPolicy",
           "metadata": {
             "name": "sample-snapshot-policy",
             "namespace": "default"
@@ -283,29 +283,29 @@ spec:
           - description: Component status
             displayName: Component Status
             path: componentStatus
-      - description: OpensearchUser is the Schema for the opensearchusers API
+      - description: OpenSearchUser is the Schema for the opensearchusers API
         displayName: OpenSearch User
-        kind: OpensearchUser
+        kind: OpenSearchUser
         name: opensearchusers.opensearch.org
         version: v1
-      - description: OpensearchRole is the Schema for the opensearchroles API
+      - description: OpenSearchRole is the Schema for the opensearchroles API
         displayName: OpenSearch Role
-        kind: OpensearchRole
+        kind: OpenSearchRole
         name: opensearchroles.opensearch.org
         version: v1
-      - description: OpensearchUserRoleBinding binds users to roles
+      - description: OpenSearchUserRoleBinding binds users to roles
         displayName: OpenSearch User Role Binding
-        kind: OpensearchUserRoleBinding
+        kind: OpenSearchUserRoleBinding
         name: opensearchuserrolebindings.opensearch.org
         version: v1
-      - description: OpensearchTenant is the Schema for the opensearchtenants API
+      - description: OpenSearchTenant is the Schema for the opensearchtenants API
         displayName: OpenSearch Tenant
-        kind: OpensearchTenant
+        kind: OpenSearchTenant
         name: opensearchtenants.opensearch.org
         version: v1
-      - description: OpensearchActionGroup is the Schema for the opensearchactiongroups API
+      - description: OpenSearchActionGroup is the Schema for the opensearchactiongroups API
         displayName: OpenSearch Action Group
-        kind: OpensearchActionGroup
+        kind: OpenSearchActionGroup
         name: opensearchactiongroups.opensearch.org
         version: v1
       - description: OpenSearchISMPolicy is the Schema for the opensearchismpolicies API
@@ -313,19 +313,19 @@ spec:
         kind: OpenSearchISMPolicy
         name: opensearchismpolicies.opensearch.org
         version: v1
-      - description: OpensearchIndexTemplate is the Schema for index templates
+      - description: OpenSearchIndexTemplate is the Schema for index templates
         displayName: OpenSearch Index Template
-        kind: OpensearchIndexTemplate
+        kind: OpenSearchIndexTemplate
         name: opensearchindextemplates.opensearch.org
         version: v1
-      - description: OpensearchComponentTemplate is the Schema for component templates
+      - description: OpenSearchComponentTemplate is the Schema for component templates
         displayName: OpenSearch Component Template
-        kind: OpensearchComponentTemplate
+        kind: OpenSearchComponentTemplate
         name: opensearchcomponenttemplates.opensearch.org
         version: v1
-      - description: OpensearchSnapshotPolicy is the Schema for snapshot policies
+      - description: OpenSearchSnapshotPolicy is the Schema for snapshot policies
         displayName: OpenSearch Snapshot Policy
-        kind: OpensearchSnapshotPolicy
+        kind: OpenSearchSnapshotPolicy
         name: opensearchsnapshotpolicies.opensearch.org
         version: v1
   description: |

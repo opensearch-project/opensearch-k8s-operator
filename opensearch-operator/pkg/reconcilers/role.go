@@ -31,7 +31,7 @@ type RoleReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opensearchv1.OpensearchRole
+	instance *opensearchv1.OpenSearchRole
 	cluster  *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
@@ -40,7 +40,7 @@ func NewRoleReconciler(
 	client client.Client,
 	ctx context.Context,
 	recorder record.EventRecorder,
-	instance *opensearchv1.OpensearchRole,
+	instance *opensearchv1.OpenSearchRole,
 	opts ...ReconcilerOption,
 ) *RoleReconciler {
 	options := ReconcilerOptions{}
@@ -65,19 +65,19 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opensearchv1.OpensearchRole)
+			instance := object.(*opensearchv1.OpenSearchRole)
 			instance.Status.Reason = reason
 			if retErr != nil {
-				instance.Status.State = opensearchv1.OpensearchRoleStateError
+				instance.Status.State = opensearchv1.OpenSearchRoleStateError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				instance.Status.State = opensearchv1.OpensearchRoleStatePending
+				instance.Status.State = opensearchv1.OpenSearchRoleStatePending
 			}
 			if retErr == nil && retResult.Requeue {
-				instance.Status.State = opensearchv1.OpensearchRoleStateCreated
+				instance.Status.State = opensearchv1.OpenSearchRoleStateCreated
 			}
 			if reason == opensearchRoleExists {
-				instance.Status.State = opensearchv1.OpensearchRoleIgnored
+				instance.Status.State = opensearchv1.OpenSearchRoleIgnored
 			}
 		})
 		if err != nil {
@@ -85,8 +85,8 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, retErr = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if retErr != nil {
@@ -117,7 +117,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	} else {
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchRole)
+				instance := object.(*opensearchv1.OpenSearchRole)
 				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
@@ -159,7 +159,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchRole)
+				instance := object.(*opensearchv1.OpenSearchRole)
 				instance.Status.ExistingRole = &exists
 			})
 			if retErr != nil {
@@ -236,8 +236,8 @@ func (r *RoleReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {

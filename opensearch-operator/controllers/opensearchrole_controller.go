@@ -31,12 +31,12 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
-// OpensearchRoleReconciler reconciles a OpensearchRole object
-type OpensearchRoleReconciler struct {
+// OpenSearchRoleReconciler reconciles a OpenSearchRole object
+type OpenSearchRoleReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchRole
+	Instance *opensearchv1.OpenSearchRole
 	logr.Logger
 }
 
@@ -48,11 +48,11 @@ type OpensearchRoleReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("role", req.NamespacedName)
-	r.Info("Reconciling OpensearchRole")
+	r.Info("Reconciling OpenSearchRole")
 
-	r.Instance = &opensearchv1.OpensearchRole{}
+	r.Instance = &opensearchv1.OpenSearchRole{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -66,19 +66,19 @@ func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	)
 
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return roleReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = roleReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -87,9 +87,9 @@ func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchRoleReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchRole{}).
+		For(&opensearchv1.OpenSearchRole{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }

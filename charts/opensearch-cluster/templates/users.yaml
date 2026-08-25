@@ -4,7 +4,7 @@
 {{- range .Values.users }}
 ---
 apiVersion: {{ $apiGroup }}/v1
-kind: OpensearchUser
+kind: {{ include "opensearch-cluster.kind" (dict "name" "User" "apiGroup" $apiGroup) }}
 metadata:
   name: {{ .name }}
   namespace: {{ $.Release.Namespace }}

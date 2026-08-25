@@ -505,22 +505,42 @@ func cleanupMigrationTestCRDs(clusterName, namespace string) {
 	cleanupOldAPIGroupCRD("migration-test-user", namespace, "opensearchusers", "opensearch.opster.io")
 }
 
-// kindNameMap maps plural resource names to their Kind names
+// kindNameMap maps plural resource names to their Kind names for opensearch.org
 var kindNameMap = map[string]string{
+	"opensearchclusters":           "OpenSearchCluster",
+	"opensearchactiongroups":       "OpenSearchActionGroup",
+	"opensearchroles":              "OpenSearchRole",
+	"opensearchusers":              "OpenSearchUser",
+	"opensearchuserrolebindings":   "OpenSearchUserRoleBinding",
+	"opensearchtenants":            "OpenSearchTenant",
+	"opensearchismpolicies":        "OpenSearchISMPolicy",
+	"opensearchsnapshotpolicies":   "OpenSearchSnapshotPolicy",
+	"opensearchindextemplates":     "OpenSearchIndexTemplate",
+	"opensearchcomponenttemplates": "OpenSearchComponentTemplate",
+}
+
+// legacyKindNameMap maps plural resource names to Kind names for opensearch.opster.io
+var legacyKindNameMap = map[string]string{
 	"opensearchclusters":           "OpenSearchCluster",
 	"opensearchactiongroups":       "OpensearchActionGroup",
 	"opensearchroles":              "OpensearchRole",
 	"opensearchusers":              "OpensearchUser",
 	"opensearchuserrolebindings":   "OpensearchUserRoleBinding",
 	"opensearchtenants":            "OpensearchTenant",
-	"opensearchismpolicies":        "OpensearchISMPolicy",
+	"opensearchismpolicies":        "OpenSearchISMPolicy",
 	"opensearchsnapshotpolicies":   "OpensearchSnapshotPolicy",
 	"opensearchindextemplates":     "OpensearchIndexTemplate",
 	"opensearchcomponenttemplates": "OpensearchComponentTemplate",
 }
 
-func getKindName(plural string) string {
-	if kind, ok := kindNameMap[strings.ToLower(plural)]; ok {
+func getKindName(plural, group string) string {
+	key := strings.ToLower(plural)
+	if group == "opensearch.opster.io" {
+		if kind, ok := legacyKindNameMap[key]; ok {
+			return kind
+		}
+	}
+	if kind, ok := kindNameMap[key]; ok {
 		return kind
 	}
 	// Fallback: capitalize first letter and remove trailing 's'
@@ -535,7 +555,7 @@ func cleanupNewAPIGroupCRD(name, namespace, kind, group string) {
 	obj.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   group,
 		Version: "v1",
-		Kind:    getKindName(kind),
+		Kind:    getKindName(kind, group),
 	})
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
@@ -547,7 +567,7 @@ func cleanupOldAPIGroupCRD(name, namespace, kind, group string) {
 	obj.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   group,
 		Version: "v1",
-		Kind:    getKindName(kind),
+		Kind:    getKindName(kind, group),
 	})
 	obj.SetName(name)
 	obj.SetNamespace(namespace)
@@ -691,7 +711,7 @@ func waitForNewAPIGroupResource(name, namespace, kind, group string, timeout tim
 			obj.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   group,
 				Version: "v1",
-				Kind:    getKindName(kind),
+				Kind:    getKindName(kind, group),
 			})
 			err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: namespace}, obj)
 			if err == nil {
@@ -721,7 +741,7 @@ func waitForResourceDeletion(name, namespace, kind, group string, timeout time.D
 			obj.SetGroupVersionKind(schema.GroupVersionKind{
 				Group:   group,
 				Version: "v1",
-				Kind:    getKindName(kind),
+				Kind:    getKindName(kind, group),
 			})
 			err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: namespace}, obj)
 			if err != nil {

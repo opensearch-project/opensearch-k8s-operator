@@ -6,24 +6,24 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type OpensearchTenantState string
+type OpenSearchTenantState string
 
 const (
-	OpensearchTenantPending OpensearchTenantState = "PENDING"
-	OpensearchTenantCreated OpensearchTenantState = "CREATED"
-	OpensearchTenantError   OpensearchTenantState = "ERROR"
-	OpensearchTenantIgnored OpensearchTenantState = "IGNORED"
+	OpenSearchTenantPending OpenSearchTenantState = "PENDING"
+	OpenSearchTenantCreated OpenSearchTenantState = "CREATED"
+	OpenSearchTenantError   OpenSearchTenantState = "ERROR"
+	OpenSearchTenantIgnored OpenSearchTenantState = "IGNORED"
 )
 
-// OpensearchTenantSpec defines the desired state of OpensearchTenant
-type OpensearchTenantSpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
+// OpenSearchTenantSpec defines the desired state of OpenSearchTenant
+type OpenSearchTenantSpec struct {
+	OpenSearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
 	Description   string                      `json:"description,omitempty"`
 }
 
-// OpensearchTenantStatus defines the observed state of OpensearchTenant
-type OpensearchTenantStatus struct {
-	State          OpensearchTenantState `json:"state,omitempty"`
+// OpenSearchTenantStatus defines the observed state of OpenSearchTenant
+type OpenSearchTenantStatus struct {
+	State          OpenSearchTenantState `json:"state,omitempty"`
 	Reason         string                `json:"reason,omitempty"`
 	ExistingTenant *bool                 `json:"existingTenant,omitempty"`
 	ManagedCluster *types.UID            `json:"managedCluster,omitempty"`
@@ -33,29 +33,29 @@ type OpensearchTenantStatus struct {
 //+kubebuilder:resource:shortName=opensearchtenant
 //+kubebuilder:subresource:status
 
-// OpensearchTenant is the Schema for the opensearchtenants API
-type OpensearchTenant struct {
+// OpenSearchTenant is the Schema for the opensearchtenants API
+type OpenSearchTenant struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpensearchTenantSpec   `json:"spec,omitempty"`
-	Status OpensearchTenantStatus `json:"status,omitempty"`
+	Spec   OpenSearchTenantSpec   `json:"spec,omitempty"`
+	Status OpenSearchTenantStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// OpensearchTenantList contains a list of OpensearchTenant
-type OpensearchTenantList struct {
+// OpenSearchTenantList contains a list of OpenSearchTenant
+type OpenSearchTenantList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpensearchTenant `json:"items"`
+	Items           []OpenSearchTenant `json:"items"`
 }
 
-// GetOpensearchRef returns the OpenSearch cluster reference
-func (t *OpensearchTenant) GetOpensearchRef() corev1.LocalObjectReference {
-	return t.Spec.OpensearchRef
+// GetOpenSearchRef returns the OpenSearch cluster reference
+func (t *OpenSearchTenant) GetOpenSearchRef() corev1.LocalObjectReference {
+	return t.Spec.OpenSearchRef
 }
 
 func init() {
-	SchemeBuilder.Register(&OpensearchTenant{}, &OpensearchTenantList{})
+	SchemeBuilder.Register(&OpenSearchTenant{}, &OpenSearchTenantList{})
 }

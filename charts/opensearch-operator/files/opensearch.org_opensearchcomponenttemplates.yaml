@@ -8,8 +8,8 @@ metadata:
 spec:
   group: opensearch.org
   names:
-    kind: OpensearchComponentTemplate
-    listKind: OpensearchComponentTemplateList
+    kind: OpenSearchComponentTemplate
+    listKind: OpenSearchComponentTemplateList
     plural: opensearchcomponenttemplates
     shortNames:
     - opensearchcomponenttemplate
@@ -19,7 +19,7 @@ spec:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchComponentTemplate is the schema for the OpenSearch
+        description: OpenSearchComponentTemplate is the schema for the OpenSearch
           component templates API
         properties:
           apiVersion:

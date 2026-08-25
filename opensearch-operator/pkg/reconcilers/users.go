@@ -29,7 +29,7 @@ type UserReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opensearchv1.OpensearchUser
+	instance *opensearchv1.OpenSearchUser
 	cluster  *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
@@ -38,7 +38,7 @@ func NewUserReconciler(
 	client client.Client,
 	ctx context.Context,
 	recorder record.EventRecorder,
-	instance *opensearchv1.OpensearchUser,
+	instance *opensearchv1.OpenSearchUser,
 	opts ...ReconcilerOption,
 ) *UserReconciler {
 	options := ReconcilerOptions{}
@@ -64,16 +64,16 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		// When the reconciler is done, figure out what the state of the resource is
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opensearchv1.OpensearchUser)
+			instance := object.(*opensearchv1.OpenSearchUser)
 			instance.Status.Reason = reason
 			if retErr != nil {
-				instance.Status.State = opensearchv1.OpensearchUserStateError
+				instance.Status.State = opensearchv1.OpenSearchUserStateError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				instance.Status.State = opensearchv1.OpensearchUserStatePending
+				instance.Status.State = opensearchv1.OpenSearchUserStatePending
 			}
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				instance.Status.State = opensearchv1.OpensearchUserStateCreated
+				instance.Status.State = opensearchv1.OpenSearchUserStateCreated
 			}
 		})
 		if err != nil {
@@ -81,8 +81,8 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, retErr = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if retErr != nil {
@@ -113,7 +113,7 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 	} else {
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchUser)
+				instance := object.(*opensearchv1.OpenSearchUser)
 				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
@@ -198,8 +198,8 @@ func (r *UserReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 
 func (r *UserReconciler) Delete() error {
 	var err error
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {

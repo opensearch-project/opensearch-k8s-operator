@@ -31,7 +31,7 @@ type ActionGroupReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opensearchv1.OpensearchActionGroup
+	instance *opensearchv1.OpenSearchActionGroup
 	cluster  *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
@@ -40,7 +40,7 @@ func NewActionGroupReconciler(
 	client client.Client,
 	ctx context.Context,
 	recorder record.EventRecorder,
-	instance *opensearchv1.OpensearchActionGroup,
+	instance *opensearchv1.OpenSearchActionGroup,
 	opts ...ReconcilerOption,
 ) *ActionGroupReconciler {
 	options := ReconcilerOptions{}
@@ -65,19 +65,19 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opensearchv1.OpensearchActionGroup)
+			instance := object.(*opensearchv1.OpenSearchActionGroup)
 			instance.Status.Reason = reason
 			if retErr != nil {
-				instance.Status.State = opensearchv1.OpensearchActionGroupError
+				instance.Status.State = opensearchv1.OpenSearchActionGroupError
 			}
 			if retResult.Requeue && retResult.RequeueAfter == 10*time.Second {
-				instance.Status.State = opensearchv1.OpensearchActionGroupPending
+				instance.Status.State = opensearchv1.OpenSearchActionGroupPending
 			}
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
-				instance.Status.State = opensearchv1.OpensearchActionGroupCreated
+				instance.Status.State = opensearchv1.OpenSearchActionGroupCreated
 			}
 			if reason == opensearchActionGroupExists {
-				instance.Status.State = opensearchv1.OpensearchActionGroupIgnored
+				instance.Status.State = opensearchv1.OpenSearchActionGroupIgnored
 			}
 		})
 		if err != nil {
@@ -85,8 +85,8 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, retErr = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if retErr != nil {
@@ -117,7 +117,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 	} else {
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchActionGroup)
+				instance := object.(*opensearchv1.OpenSearchActionGroup)
 				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if retErr != nil {
@@ -159,7 +159,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		}
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchActionGroup)
+				instance := object.(*opensearchv1.OpenSearchActionGroup)
 				instance.Status.ExistingActionGroup = &exists
 			})
 			if retErr != nil {
@@ -230,8 +230,8 @@ func (r *ActionGroupReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {

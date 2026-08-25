@@ -28,7 +28,7 @@ var _ = Describe("componenttemplate reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *ComponentTemplateReconciler
-		instance   *opensearchv1.OpensearchComponentTemplate
+		instance   *opensearchv1.OpenSearchComponentTemplate
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
@@ -41,21 +41,21 @@ var _ = Describe("componenttemplate reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opensearchv1.OpensearchComponentTemplate{
+		instance = &opensearchv1.OpenSearchComponentTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-componenttemplate",
 				Namespace: "test-componenttemplate",
 				UID:       "testuid",
 			},
-			Spec: opensearchv1.OpensearchComponentTemplateSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+			Spec: opensearchv1.OpenSearchComponentTemplateSpec{
+				OpenSearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 				Name: "my-template",
-				Template: opensearchv1.OpensearchIndexSpec{
+				Template: opensearchv1.OpenSearchIndexSpec{
 					Settings: &apiextensionsv1.JSON{},
 					Mappings: &apiextensionsv1.JSON{},
-					Aliases:  make(map[string]opensearchv1.OpensearchIndexAliasSpec),
+					Aliases:  make(map[string]opensearchv1.OpenSearchIndexAliasSpec),
 				},
 				Version: 0,
 				Meta:    &apiextensionsv1.JSON{},
@@ -115,7 +115,7 @@ var _ = Describe("componenttemplate reconciler", func() {
 
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
-			instance.Spec.OpensearchRef.Name = "doesnotexist"
+			instance.Spec.OpenSearchRef.Name = "doesnotexist"
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
@@ -464,7 +464,7 @@ var _ = Describe("componenttemplate reconciler", func() {
 
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
-					instance.Spec.OpensearchRef.Name = "doesnotexist"
+					instance.Spec.OpenSearchRef.Name = "doesnotexist"
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 				It("should do nothing and exit", func() {

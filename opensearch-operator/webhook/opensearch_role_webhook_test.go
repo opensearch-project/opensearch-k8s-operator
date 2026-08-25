@@ -68,13 +68,13 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 
 	Describe("ValidateCreate", func() {
 		It("should allow valid role creation with cluster permissions", func() {
-			role := &opensearchv1.OpensearchRole{
+			role := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -87,13 +87,13 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 		})
 
 		It("should allow valid role creation with index permissions", func() {
-			role := &opensearchv1.OpensearchRole{
+			role := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					IndexPermissions: []opensearchv1.IndexPermissionSpec{
@@ -113,13 +113,13 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 		})
 
 		It("should allow valid role creation with tenant permissions", func() {
-			role := &opensearchv1.OpensearchRole{
+			role := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					TenantPermissions: []opensearchv1.TenantPermissionsSpec{
@@ -137,13 +137,13 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 		})
 
 		It("should reject role with missing cluster reference", func() {
-			role := &opensearchv1.OpensearchRole{
+			role := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "non-existent-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -157,13 +157,13 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 		})
 
 		It("should reject role with no permissions", func() {
-			role := &opensearchv1.OpensearchRole{
+			role := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					// No permissions specified
@@ -191,13 +191,13 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 			clientWithOldCluster := fake.NewClientBuilder().WithScheme(scheme).WithObjects(oldCluster).Build()
 			validator.Client = clientWithOldCluster
 
-			role := &opensearchv1.OpensearchRole{
+			role := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "old-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -212,25 +212,25 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 
 	Describe("ValidateUpdate", func() {
 		It("should allow valid role update", func() {
-			oldRole := &opensearchv1.OpensearchRole{
+			oldRole := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
 				},
 			}
-			newRole := &opensearchv1.OpensearchRole{
+			newRole := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops", "cluster_monitor"},
@@ -243,25 +243,25 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 		})
 
 		It("should reject cluster reference change", func() {
-			oldRole := &opensearchv1.OpensearchRole{
+			oldRole := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
 				},
 			}
-			newRole := &opensearchv1.OpensearchRole{
+			newRole := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "different-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
@@ -275,25 +275,25 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 		})
 
 		It("should reject update with no permissions", func() {
-			oldRole := &opensearchv1.OpensearchRole{
+			oldRole := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					ClusterPermissions: []string{"cluster_composite_ops"},
 				},
 			}
-			newRole := &opensearchv1.OpensearchRole{
+			newRole := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchRoleSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchRoleSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					// No permissions
@@ -309,7 +309,7 @@ var _ = Describe("OpenSearchRoleValidator", func() {
 
 	Describe("ValidateDelete", func() {
 		It("should always allow deletion", func() {
-			role := &opensearchv1.OpensearchRole{
+			role := &opensearchv1.OpenSearchRole{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-role",
 					Namespace: "default",

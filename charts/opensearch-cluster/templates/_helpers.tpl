@@ -58,3 +58,21 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+CRD kind for the selected API group.
+opensearch.org uses OpenSearch* (capital S). The deprecated opensearch.opster.io
+group keeps the original Opensearch* kinds except Cluster and ISMPolicy.
+Usage: {{ include "opensearch-cluster.kind" (dict "name" "Role" "apiGroup" $apiGroup) }}
+*/}}
+{{- define "opensearch-cluster.kind" -}}
+{{- $apiGroup := .apiGroup | default "opensearch.org" -}}
+{{- $name := .name -}}
+{{- if eq $apiGroup "opensearch.org" -}}
+OpenSearch{{ $name }}
+{{- else if or (eq $name "Cluster") (eq $name "ISMPolicy") -}}
+OpenSearch{{ $name }}
+{{- else -}}
+Opensearch{{ $name }}
+{{- end -}}
+{{- end }}

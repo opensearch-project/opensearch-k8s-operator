@@ -6,7 +6,7 @@ import (
 )
 
 // TranslateIndexTemplateToRequest rewrites the CRD format to the gateway format
-func TranslateIndexTemplateToRequest(spec opensearchv1.OpensearchIndexTemplateSpec) requests.IndexTemplate {
+func TranslateIndexTemplateToRequest(spec opensearchv1.OpenSearchIndexTemplateSpec) requests.IndexTemplate {
 	request := requests.IndexTemplate{
 		IndexPatterns: spec.IndexPatterns,
 		DataStream:    TranslateDatastreamToRequest(spec.DataStream),
@@ -25,7 +25,7 @@ func TranslateIndexTemplateToRequest(spec opensearchv1.OpensearchIndexTemplateSp
 }
 
 // TranslateComponentTemplateToRequest rewrites the CRD format to the gateway format
-func TranslateComponentTemplateToRequest(spec opensearchv1.OpensearchComponentTemplateSpec) requests.ComponentTemplate {
+func TranslateComponentTemplateToRequest(spec opensearchv1.OpenSearchComponentTemplateSpec) requests.ComponentTemplate {
 	request := requests.ComponentTemplate{
 		Template: TranslateIndexToRequest(spec.Template),
 		Version:  spec.Version,
@@ -38,7 +38,7 @@ func TranslateComponentTemplateToRequest(spec opensearchv1.OpensearchComponentTe
 }
 
 // TranslateDatastreamToRequest rewrites the CRD format to the gateway format
-func TranslateDatastreamToRequest(spec *opensearchv1.OpensearchDatastreamSpec) *requests.Datastream {
+func TranslateDatastreamToRequest(spec *opensearchv1.OpenSearchDatastreamSpec) *requests.Datastream {
 	if spec == nil {
 		return nil
 	}
@@ -51,7 +51,7 @@ func TranslateDatastreamToRequest(spec *opensearchv1.OpensearchDatastreamSpec) *
 }
 
 // TranslateIndexToRequest rewrites the CRD format to the gateway format
-func TranslateIndexToRequest(spec opensearchv1.OpensearchIndexSpec) requests.Index {
+func TranslateIndexToRequest(spec opensearchv1.OpenSearchIndexSpec) requests.Index {
 	aliases := make(map[string]requests.IndexAlias)
 	for key, val := range spec.Aliases {
 		aliases[key] = requests.IndexAlias{

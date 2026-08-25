@@ -22,7 +22,7 @@ as it is defined in the CRD
 - Ingress configuration for Opensearch and Dashboards
 - Auto-generated README.md file with description for all possible configuration values
 ### Changed
-- `opensearchCluster` variable was replaced by `cluster`. The configuration structure of each custom resource (OpenSearchCluster, OpensearchIndexTemplate, etc) follows the corresponding CRD documentation
+- `opensearchCluster` variable was replaced by `cluster`. The configuration structure of each custom resource (OpenSearchCluster, OpenSearchIndexTemplate, etc) follows the corresponding CRD documentation
 ### Deprecated
 - opensearch-cluster helm chart is a fully refactored chart. Before upgrading to v3 check that [default chart values](../../charts/opensearch-cluster/values.yaml)
   matches with your configuration.

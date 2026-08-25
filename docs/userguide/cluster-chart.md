@@ -21,7 +21,7 @@ helm uninstall [RELEASE_NAME]
 Version 3.0.0 of opensearch-cluster helm chart is a fully refactored chart. Before upgrading to v3 check that [default chart values](../../charts/opensearch-cluster/values.yaml)
 matches with your configuration.
 
-In v3 `opensearchCluster` variable was replaced by `cluster`. The configuration structure of each custom resource (OpenSearchCluster, OpensearchIndexTemplate, etc) follows the corresponding CRD documentation.
+In v3 `opensearchCluster` variable was replaced by `cluster`. The configuration structure of each custom resource (OpenSearchCluster, OpenSearchIndexTemplate, etc) follows the corresponding CRD documentation.
 
 **Make sure to test the upgrade process on none-production environment first.**
 

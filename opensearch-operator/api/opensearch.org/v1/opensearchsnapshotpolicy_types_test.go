@@ -10,9 +10,9 @@ import (
 )
 
 // Regression: plain bool + omitempty omitted explicit false and broke GitOps sync (issue #1172).
-func TestOpensearchSnapshotPolicySpec_JSONRetainsExplicitFalseBooleans(t *testing.T) {
-	spec := OpensearchSnapshotPolicySpec{
-		OpensearchRef: corev1.LocalObjectReference{Name: "cluster"},
+func TestOpenSearchSnapshotPolicySpec_JSONRetainsExplicitFalseBooleans(t *testing.T) {
+	spec := OpenSearchSnapshotPolicySpec{
+		OpenSearchRef: corev1.LocalObjectReference{Name: "cluster"},
 		PolicyName:    "policy",
 		SnapshotConfig: SnapshotConfig{
 			Repository:         "repo",
@@ -41,9 +41,9 @@ func TestOpensearchSnapshotPolicySpec_JSONRetainsExplicitFalseBooleans(t *testin
 	}
 }
 
-func TestOpensearchSnapshotPolicySpec_JSONOmitsUnsetSnapshotBooleans(t *testing.T) {
-	spec := OpensearchSnapshotPolicySpec{
-		OpensearchRef: corev1.LocalObjectReference{Name: "cluster"},
+func TestOpenSearchSnapshotPolicySpec_JSONOmitsUnsetSnapshotBooleans(t *testing.T) {
+	spec := OpenSearchSnapshotPolicySpec{
+		OpenSearchRef: corev1.LocalObjectReference{Name: "cluster"},
 		PolicyName:    "policy",
 		SnapshotConfig: SnapshotConfig{
 			Repository: "repo",

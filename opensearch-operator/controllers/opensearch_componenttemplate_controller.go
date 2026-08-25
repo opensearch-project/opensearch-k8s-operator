@@ -14,12 +14,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// OpensearchComponentTemplateReconciler reconciles a OpensearchComponentTemplate object
-type OpensearchComponentTemplateReconciler struct {
+// OpenSearchComponentTemplateReconciler reconciles a OpenSearchComponentTemplate object
+type OpenSearchComponentTemplateReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchComponentTemplate
+	Instance *opensearchv1.OpenSearchComponentTemplate
 	logr.Logger
 }
 
@@ -31,11 +31,11 @@ type OpensearchComponentTemplateReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchComponentTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("componenttemplate", req.NamespacedName)
-	r.Info("Reconciling OpensearchComponentTemplate")
+	r.Info("Reconciling OpenSearchComponentTemplate")
 
-	r.Instance = &opensearchv1.OpensearchComponentTemplate{}
+	r.Instance = &opensearchv1.OpenSearchComponentTemplate{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -49,19 +49,19 @@ func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, r
 	)
 
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return componentTemplateReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = componentTemplateReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -70,9 +70,9 @@ func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, r
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchComponentTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchComponentTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchComponentTemplate{}).
+		For(&opensearchv1.OpenSearchComponentTemplate{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }

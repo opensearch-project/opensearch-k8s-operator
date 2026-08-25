@@ -22,18 +22,18 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type OpensearchRoleState string
+type OpenSearchRoleState string
 
 const (
-	OpensearchRoleStatePending OpensearchRoleState = "PENDING"
-	OpensearchRoleStateCreated OpensearchRoleState = "CREATED"
-	OpensearchRoleStateError   OpensearchRoleState = "ERROR"
-	OpensearchRoleIgnored      OpensearchRoleState = "IGNORED"
+	OpenSearchRoleStatePending OpenSearchRoleState = "PENDING"
+	OpenSearchRoleStateCreated OpenSearchRoleState = "CREATED"
+	OpenSearchRoleStateError   OpenSearchRoleState = "ERROR"
+	OpenSearchRoleIgnored      OpenSearchRoleState = "IGNORED"
 )
 
-// OpensearchRoleSpec defines the desired state of OpensearchRole
-type OpensearchRoleSpec struct {
-	OpensearchRef      corev1.LocalObjectReference `json:"opensearchCluster"`
+// OpenSearchRoleSpec defines the desired state of OpenSearchRole
+type OpenSearchRoleSpec struct {
+	OpenSearchRef      corev1.LocalObjectReference `json:"opensearchCluster"`
 	ClusterPermissions []string                    `json:"clusterPermissions,omitempty"`
 	IndexPermissions   []IndexPermissionSpec       `json:"indexPermissions,omitempty"`
 	TenantPermissions  []TenantPermissionsSpec     `json:"tenantPermissions,omitempty"`
@@ -52,9 +52,9 @@ type TenantPermissionsSpec struct {
 	AllowedActions []string `json:"allowedActions,omitempty"`
 }
 
-// OpensearchRoleStatus defines the observed state of OpensearchRole
-type OpensearchRoleStatus struct {
-	State          OpensearchRoleState `json:"state,omitempty"`
+// OpenSearchRoleStatus defines the observed state of OpenSearchRole
+type OpenSearchRoleStatus struct {
+	State          OpenSearchRoleState `json:"state,omitempty"`
 	Reason         string              `json:"reason,omitempty"`
 	ExistingRole   *bool               `json:"existingRole,omitempty"`
 	ManagedCluster *types.UID          `json:"managedCluster,omitempty"`
@@ -64,29 +64,29 @@ type OpensearchRoleStatus struct {
 //+kubebuilder:resource:shortName=opensearchrole
 //+kubebuilder:subresource:status
 
-// OpensearchRole is the Schema for the opensearchroles API
-type OpensearchRole struct {
+// OpenSearchRole is the Schema for the opensearchroles API
+type OpenSearchRole struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpensearchRoleSpec   `json:"spec,omitempty"`
-	Status OpensearchRoleStatus `json:"status,omitempty"`
+	Spec   OpenSearchRoleSpec   `json:"spec,omitempty"`
+	Status OpenSearchRoleStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// OpensearchRoleList contains a list of OpensearchRole
-type OpensearchRoleList struct {
+// OpenSearchRoleList contains a list of OpenSearchRole
+type OpenSearchRoleList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpensearchRole `json:"items"`
+	Items           []OpenSearchRole `json:"items"`
 }
 
-// GetOpensearchRef returns the OpenSearch cluster reference
-func (r *OpensearchRole) GetOpensearchRef() corev1.LocalObjectReference {
-	return r.Spec.OpensearchRef
+// GetOpenSearchRef returns the OpenSearch cluster reference
+func (r *OpenSearchRole) GetOpenSearchRef() corev1.LocalObjectReference {
+	return r.Spec.OpenSearchRef
 }
 
 func init() {
-	SchemeBuilder.Register(&OpensearchRole{}, &OpensearchRoleList{})
+	SchemeBuilder.Register(&OpenSearchRole{}, &OpenSearchRoleList{})
 }

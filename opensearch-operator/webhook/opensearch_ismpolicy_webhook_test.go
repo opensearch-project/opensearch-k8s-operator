@@ -74,7 +74,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "hot",
@@ -101,7 +101,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "non-existent-cluster",
 					},
 					DefaultState: "hot",
@@ -124,7 +124,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "hot",
@@ -145,7 +145,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "", // Empty
@@ -168,7 +168,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "cold", // Not in states
@@ -206,7 +206,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "old-cluster",
 					},
 					DefaultState: "hot",
@@ -230,7 +230,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "hot",
@@ -245,7 +245,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "hot",
@@ -268,7 +268,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "hot",
@@ -283,7 +283,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "different-cluster",
 					},
 					DefaultState: "hot",
@@ -306,7 +306,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PolicyID:     "original-policy-id",
@@ -315,7 +315,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 						{Name: "hot"},
 					},
 				},
-				Status: opensearchv1.OpensearchISMPolicyStatus{
+				Status: opensearchv1.OpenSearchISMPolicyStatus{
 					PolicyId: "original-policy-id",
 				},
 			}
@@ -325,7 +325,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PolicyID:     "new-policy-id", // Changed
@@ -349,7 +349,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "hot",
@@ -364,7 +364,7 @@ var _ = Describe("OpenSearchISMPolicyValidator", func() {
 					Namespace: "default",
 				},
 				Spec: opensearchv1.OpenSearchISMPolicySpec{
-					OpensearchRef: corev1.LocalObjectReference{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					DefaultState: "hot",

@@ -68,13 +68,13 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 
 	Describe("ValidateCreate", func() {
 		It("should allow valid binding creation with users", func() {
-			binding := &opensearchv1.OpensearchUserRoleBinding{
+			binding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{"test-role"},
@@ -88,13 +88,13 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 		})
 
 		It("should allow valid binding creation with backendRoles", func() {
-			binding := &opensearchv1.OpensearchUserRoleBinding{
+			binding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles:        []string{"test-role"},
@@ -108,13 +108,13 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 		})
 
 		It("should allow valid binding creation with both users and backendRoles", func() {
-			binding := &opensearchv1.OpensearchUserRoleBinding{
+			binding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles:        []string{"test-role"},
@@ -129,13 +129,13 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 		})
 
 		It("should reject binding with missing cluster reference", func() {
-			binding := &opensearchv1.OpensearchUserRoleBinding{
+			binding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "non-existent-cluster",
 					},
 					Roles: []string{"test-role"},
@@ -150,13 +150,13 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 		})
 
 		It("should reject binding with empty roles", func() {
-			binding := &opensearchv1.OpensearchUserRoleBinding{
+			binding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{}, // Empty
@@ -171,13 +171,13 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 		})
 
 		It("should reject binding with no users or backendRoles", func() {
-			binding := &opensearchv1.OpensearchUserRoleBinding{
+			binding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{"test-role"},
@@ -206,13 +206,13 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 			clientWithOldCluster := fake.NewClientBuilder().WithScheme(scheme).WithObjects(oldCluster).Build()
 			validator.Client = clientWithOldCluster
 
-			binding := &opensearchv1.OpensearchUserRoleBinding{
+			binding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "old-cluster",
 					},
 					Roles: []string{"test-role"},
@@ -228,26 +228,26 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 
 	Describe("ValidateUpdate", func() {
 		It("should allow valid binding update", func() {
-			oldBinding := &opensearchv1.OpensearchUserRoleBinding{
+			oldBinding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{"test-role"},
 					Users: []string{"test-user"},
 				},
 			}
-			newBinding := &opensearchv1.OpensearchUserRoleBinding{
+			newBinding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{"test-role", "another-role"},
@@ -261,26 +261,26 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 		})
 
 		It("should reject cluster reference change", func() {
-			oldBinding := &opensearchv1.OpensearchUserRoleBinding{
+			oldBinding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{"test-role"},
 					Users: []string{"test-user"},
 				},
 			}
-			newBinding := &opensearchv1.OpensearchUserRoleBinding{
+			newBinding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "different-cluster",
 					},
 					Roles: []string{"test-role"},
@@ -295,26 +295,26 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 		})
 
 		It("should reject update with empty roles", func() {
-			oldBinding := &opensearchv1.OpensearchUserRoleBinding{
+			oldBinding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{"test-role"},
 					Users: []string{"test-user"},
 				},
 			}
-			newBinding := &opensearchv1.OpensearchUserRoleBinding{
+			newBinding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{}, // Empty
@@ -329,26 +329,26 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 		})
 
 		It("should reject update with no users or backendRoles", func() {
-			oldBinding := &opensearchv1.OpensearchUserRoleBinding{
+			oldBinding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{"test-role"},
 					Users: []string{"test-user"},
 				},
 			}
-			newBinding := &opensearchv1.OpensearchUserRoleBinding{
+			newBinding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					Roles: []string{"test-role"},
@@ -365,7 +365,7 @@ var _ = Describe("OpenSearchUserRoleBindingValidator", func() {
 
 	Describe("ValidateDelete", func() {
 		It("should always allow deletion", func() {
-			binding := &opensearchv1.OpensearchUserRoleBinding{
+			binding := &opensearchv1.OpenSearchUserRoleBinding{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-binding",
 					Namespace: "default",

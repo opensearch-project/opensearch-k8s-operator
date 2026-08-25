@@ -1,5 +1,5 @@
 apiVersion: opensearch.org/v1
-kind: OpensearchRole
+kind: OpenSearchRole
 metadata:
   name: opensearch-role-sample
 spec:

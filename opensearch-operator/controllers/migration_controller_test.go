@@ -423,11 +423,11 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			// usermigration / userrolebindingmigration / etc.): adding a finalizer
 			// to an object that is already being deleted is rejected by the API
 			// server and causes a reconcile error loop.
-			newUser := &opensearchv1.OpensearchUser{
+			newUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-cluster",
 					Namespace:  "default",
-					Finalizers: []string{OpensearchFinalizer},
+					Finalizers: []string{OpenSearchFinalizer},
 				},
 			}
 			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
@@ -438,14 +438,14 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
 
-			updatedUser := &opensearchv1.OpensearchUser{}
+			updatedUser := &opensearchv1.OpenSearchUser{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
 			Expect(updatedUser.DeletionTimestamp.IsZero()).To(BeFalse())
 			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeFalse())
 		})
 
 		It("should add migration finalizer to a new resource that is not being deleted", func() {
-			newUser := &opensearchv1.OpensearchUser{
+			newUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
 					Namespace: "default",
@@ -458,7 +458,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
 
-			updatedUser := &opensearchv1.OpensearchUser{}
+			updatedUser := &opensearchv1.OpenSearchUser{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
 			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeTrue())
 		})
@@ -466,11 +466,11 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 		It("should wait while other finalizers are still present on a deleting resource", func() {
 			// The migration controller must not remove its finalizer (and delete the
 			// old resource) until the main reconciler has removed its own finalizer.
-			newUser := &opensearchv1.OpensearchUser{
+			newUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-cluster",
 					Namespace:  "default",
-					Finalizers: []string{OpensearchFinalizer, MigrationFinalizer},
+					Finalizers: []string{OpenSearchFinalizer, MigrationFinalizer},
 				},
 			}
 			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
@@ -481,14 +481,14 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.RequeueAfter).To(Equal(5 * time.Second))
 
-			updatedUser := &opensearchv1.OpensearchUser{}
+			updatedUser := &opensearchv1.OpenSearchUser{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
 			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeTrue())
-			Expect(containsString(updatedUser.Finalizers, OpensearchFinalizer)).To(BeTrue())
+			Expect(containsString(updatedUser.Finalizers, OpenSearchFinalizer)).To(BeTrue())
 		})
 
 		It("should remove the migration finalizer once only it remains on a deleting resource", func() {
-			newUser := &opensearchv1.OpensearchUser{
+			newUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:       "test-cluster",
 					Namespace:  "default",
@@ -513,7 +513,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(result.RequeueAfter).To(BeZero())
 
 			// Migration finalizer was the only one left, so the new resource is removed.
-			updatedUser := &opensearchv1.OpensearchUser{}
+			updatedUser := &opensearchv1.OpenSearchUser{}
 			err = fakeClient.Get(ctx, req.NamespacedName, updatedUser)
 			Expect(errors.IsNotFound(err)).To(BeTrue())
 

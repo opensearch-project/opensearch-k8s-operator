@@ -36,12 +36,12 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
-// OpensearchUserReconciler reconciles a OpensearchUser object
-type OpensearchUserReconciler struct {
+// OpenSearchUserReconciler reconciles a OpenSearchUser object
+type OpenSearchUserReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchUser
+	Instance *opensearchv1.OpenSearchUser
 	logr.Logger
 }
 
@@ -54,11 +54,11 @@ type OpensearchUserReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("user", req.NamespacedName)
-	r.Logger.V(4).Info("Reconciling OpensearchUser")
+	r.Logger.V(4).Info("Reconciling OpenSearchUser")
 
-	r.Instance = &opensearchv1.OpensearchUser{}
+	r.Instance = &opensearchv1.OpenSearchUser{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -72,19 +72,19 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	)
 
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return userReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = userReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -92,7 +92,7 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	return ctrl.Result{}, nil
 }
 
-func (r *OpensearchUserReconciler) handleSecretEvent(_ context.Context, secret client.Object) []reconcile.Request {
+func (r *OpenSearchUserReconciler) handleSecretEvent(_ context.Context, secret client.Object) []reconcile.Request {
 	var reconcileRequests []reconcile.Request
 
 	if secret == nil {
@@ -140,9 +140,9 @@ func (r *OpensearchUserReconciler) handleSecretEvent(_ context.Context, secret c
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchUserReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchUser{}).
+		For(&opensearchv1.OpenSearchUser{}).
 		// Get notified when opensearch clusters change
 		Owns(&opensearchv1.OpenSearchCluster{}).
 		// Get notified when password backing secret changes

@@ -112,7 +112,7 @@ var _ = BeforeSuite(func() {
 	err = (&OpenSearchClusterReconciler{
 		Client: k8sManager.GetClient(),
 		Scheme: scheme.Scheme,
-		//	Instance: &OpensearchCluster,
+		//	Instance: &OpenSearchCluster,
 		Recorder: record.NewFakeRecorder(20),
 	}).SetupWithManager(k8sManager)
 	Expect(err).ToNot(HaveOccurred())

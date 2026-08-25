@@ -42,14 +42,14 @@ func (v *OpenSearchIndexTemplateValidator) SetupWithManager(mgr ctrl.Manager) er
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opensearchv1.OpensearchIndexTemplate{}).
+		For(&opensearchv1.OpenSearchIndexTemplate{}).
 		WithValidator(v).
 		Complete()
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchIndexTemplateValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	indexTemplate := obj.(*opensearchv1.OpensearchIndexTemplate)
+	indexTemplate := obj.(*opensearchv1.OpenSearchIndexTemplate)
 
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, indexTemplate); err != nil {
@@ -61,8 +61,8 @@ func (v *OpenSearchIndexTemplateValidator) ValidateCreate(ctx context.Context, o
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchIndexTemplateValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldIndexTemplate := oldObj.(*opensearchv1.OpensearchIndexTemplate)
-	newIndexTemplate := newObj.(*opensearchv1.OpensearchIndexTemplate)
+	oldIndexTemplate := oldObj.(*opensearchv1.OpenSearchIndexTemplate)
+	newIndexTemplate := newObj.(*opensearchv1.OpenSearchIndexTemplate)
 
 	// Skip validation for resources being deleted (allow finalizer removal)
 	if !newIndexTemplate.DeletionTimestamp.IsZero() {
@@ -89,11 +89,11 @@ func (v *OpenSearchIndexTemplateValidator) ValidateDelete(ctx context.Context, o
 }
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
-func (v *OpenSearchIndexTemplateValidator) validateClusterReference(ctx context.Context, indexTemplate *opensearchv1.OpensearchIndexTemplate) error {
+func (v *OpenSearchIndexTemplateValidator) validateClusterReference(ctx context.Context, indexTemplate *opensearchv1.OpenSearchIndexTemplate) error {
 	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
-		Name:      indexTemplate.Spec.OpensearchRef.Name,
+		Name:      indexTemplate.Spec.OpenSearchRef.Name,
 		Namespace: indexTemplate.Namespace,
 	}, cluster)
 
@@ -101,10 +101,10 @@ func (v *OpenSearchIndexTemplateValidator) validateClusterReference(ctx context.
 		// Fall back to old API group for backward compatibility
 		oldCluster := &opsterv1.OpenSearchCluster{}
 		if err := v.Client.Get(ctx, types.NamespacedName{
-			Name:      indexTemplate.Spec.OpensearchRef.Name,
+			Name:      indexTemplate.Spec.OpenSearchRef.Name,
 			Namespace: indexTemplate.Namespace,
 		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", indexTemplate.Spec.OpensearchRef.Name, err)
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", indexTemplate.Spec.OpenSearchRef.Name, err)
 		}
 	}
 
@@ -112,15 +112,15 @@ func (v *OpenSearchIndexTemplateValidator) validateClusterReference(ctx context.
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
-func (v *OpenSearchIndexTemplateValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchIndexTemplate) error {
-	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
+func (v *OpenSearchIndexTemplateValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpenSearchIndexTemplate) error {
+	if old.Spec.OpenSearchRef.Name != new.Spec.OpenSearchRef.Name {
 		return fmt.Errorf("cannot change the cluster an index template refers to")
 	}
 	return nil
 }
 
 // validateIndexTemplateNameUnchanged validates that the index template name hasn't changed
-func (v *OpenSearchIndexTemplateValidator) validateIndexTemplateNameUnchanged(old, new *opensearchv1.OpensearchIndexTemplate) error {
+func (v *OpenSearchIndexTemplateValidator) validateIndexTemplateNameUnchanged(old, new *opensearchv1.OpenSearchIndexTemplate) error {
 	// Only validate if the old template had a name set in status
 	if old.Status.IndexTemplateName != "" {
 		newTemplateName := helpers.GenIndexTemplateName(new)

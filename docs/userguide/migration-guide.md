@@ -12,6 +12,42 @@ The OpenSearch Kubernetes Operator is transitioning from `opensearch.opster.io/v
 - **Deprecation Period**: 2-3 releases (old API group logs warnings)
 - **Future Release**: `opensearch.opster.io` will be removed
 
+## Breaking Change in 3.0: CRD Kind Capitalization
+
+Kubernetes does not allow changing `spec.names.kind` on an Established CRD. Because of that, 3.0 does **not** rename kinds on the deprecated `opensearch.opster.io` group. Existing 2.x clusters can keep applying `kind: OpensearchRole` (and the other original names) on that group.
+
+The new `opensearch.org` group uses `OpenSearch` (capital **S**) for every kind. `OpenSearchCluster` and `OpenSearchISMPolicy` already used that spelling in both groups.
+
+| `opensearch.opster.io` `kind` (unchanged) | `opensearch.org` `kind` (3.0) |
+|-------------------------------------------|-------------------------------|
+| `OpenSearchCluster` | `OpenSearchCluster` |
+| `OpensearchUser` | `OpenSearchUser` |
+| `OpensearchRole` | `OpenSearchRole` |
+| `OpensearchUserRoleBinding` | `OpenSearchUserRoleBinding` |
+| `OpensearchTenant` | `OpenSearchTenant` |
+| `OpensearchActionGroup` | `OpenSearchActionGroup` |
+| `OpenSearchISMPolicy` | `OpenSearchISMPolicy` |
+| `OpensearchSnapshotPolicy` | `OpenSearchSnapshotPolicy` |
+| `OpensearchIndexTemplate` | `OpenSearchIndexTemplate` |
+| `OpensearchComponentTemplate` | `OpenSearchComponentTemplate` |
+
+Plural names, short names, and REST paths are unchanged (`kubectl get opensearchroles` still works).
+
+When migrating manifests to `opensearch.org/v1`, update `kind` as well:
+
+```yaml
+# deprecated group (2.x and 3.0)
+apiVersion: opensearch.opster.io/v1
+kind: OpensearchRole
+# current group (3.0)
+apiVersion: opensearch.org/v1
+kind: OpenSearchRole
+```
+
+### 3.0-alpha users of `opensearch.org`
+
+3.0-alpha shipped `opensearch.org` CRDs with the old `Opensearch*` kinds. Those CRDs cannot be patched in place. Before upgrading to 3.0 stable, back up any `opensearch.org` resources, delete the `opensearch.org` CRDs, then install 3.0 stable so the CRDs are created with the new kinds. Resources that still exist on `opensearch.opster.io` are migrated again by the operator.
+
 ## Automatic Migration
 
 The operator includes a migration controller that automatically handles the transition from old to new API groups. The migration process is designed to be seamless and safe.
@@ -57,15 +93,15 @@ Migration will be **skipped** (and requeued) if the old resource is not ready:
 | Resource Type | Ready Status | Not Ready Statuses |
 |--------------|--------------|-------------------|
 | OpenSearchCluster | `Phase: RUNNING` | `PENDING`, `UPGRADING`, or any other phase |
-| OpensearchUser | `State: CREATED` | `PENDING`, `ERROR` |
-| OpensearchRole | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
-| OpensearchUserRoleBinding | `State: CREATED` | `PENDING`, `ERROR` |
-| OpensearchTenant | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
-| OpensearchActionGroup | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
+| OpenSearchUser | `State: CREATED` | `PENDING`, `ERROR` |
+| OpenSearchRole | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
+| OpenSearchUserRoleBinding | `State: CREATED` | `PENDING`, `ERROR` |
+| OpenSearchTenant | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
+| OpenSearchActionGroup | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
 | OpenSearchISMPolicy | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
-| OpensearchSnapshotPolicy | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
-| OpensearchIndexTemplate | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
-| OpensearchComponentTemplate | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
+| OpenSearchSnapshotPolicy | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
+| OpenSearchIndexTemplate | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
+| OpenSearchComponentTemplate | `State: CREATED` | `PENDING`, `ERROR`, `IGNORED` |
 
 ### Legacy Webhook Behavior
 
@@ -217,15 +253,15 @@ All CRDs have equivalent types in the new API group:
 | Old Resource (opensearch.opster.io/v1) | New Resource (opensearch.org/v1) |
 |----------------------------------------|----------------------------------|
 | OpenSearchCluster | OpenSearchCluster |
-| OpensearchUser | OpensearchUser |
-| OpensearchRole | OpensearchRole |
-| OpensearchUserRoleBinding | OpensearchUserRoleBinding |
-| OpensearchTenant | OpensearchTenant |
-| OpensearchActionGroup | OpensearchActionGroup |
+| OpensearchUser | OpenSearchUser |
+| OpensearchRole | OpenSearchRole |
+| OpensearchUserRoleBinding | OpenSearchUserRoleBinding |
+| OpensearchTenant | OpenSearchTenant |
+| OpensearchActionGroup | OpenSearchActionGroup |
 | OpenSearchISMPolicy | OpenSearchISMPolicy |
-| OpensearchSnapshotPolicy | OpensearchSnapshotPolicy |
-| OpensearchIndexTemplate | OpensearchIndexTemplate |
-| OpensearchComponentTemplate | OpensearchComponentTemplate |
+| OpensearchSnapshotPolicy | OpenSearchSnapshotPolicy |
+| OpensearchIndexTemplate | OpenSearchIndexTemplate |
+| OpensearchComponentTemplate | OpenSearchComponentTemplate |
 
 ## Deletion Behavior
 

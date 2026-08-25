@@ -58,9 +58,9 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 	}
 
 	var secretRef corev1.LocalObjectReference
-	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
+	if cr.Spec.Dashboards.OpenSearchCredentialsSecret.Name != "" {
 		// Custom credentials supplied
-		secretRef = cr.Spec.Dashboards.OpensearchCredentialsSecret
+		secretRef = cr.Spec.Dashboards.OpenSearchCredentialsSecret
 	} else {
 		// Use generated Dashboards password secret (always available, regardless of security settings)
 		generatedSecretName := helpers.GeneratedDashboardsCredentialsSecretName(cr)

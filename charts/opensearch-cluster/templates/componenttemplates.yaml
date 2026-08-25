@@ -4,7 +4,7 @@
 {{- range .Values.componentTemplates }}
 ---
 apiVersion: {{ $apiGroup }}/v1
-kind: OpensearchComponentTemplate
+kind: {{ include "opensearch-cluster.kind" (dict "name" "ComponentTemplate" "apiGroup" $apiGroup) }}
 metadata:
   name: {{ .name }}
   namespace: {{ $.Release.Namespace }}

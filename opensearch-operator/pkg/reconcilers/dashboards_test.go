@@ -162,7 +162,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
 					Dashboards: opensearchv1.DashboardsConfig{
 						Enable:                      true,
-						OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: credentialsSecret},
+						OpenSearchCredentialsSecret: corev1.LocalObjectReference{Name: credentialsSecret},
 						Service:                     opensearchv1.DashboardsServiceSpec{Labels: map[string]string{}},
 					},
 				}}

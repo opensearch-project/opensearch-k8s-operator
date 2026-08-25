@@ -6,26 +6,26 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type OpensearchActionGroupState string
+type OpenSearchActionGroupState string
 
 const (
-	OpensearchActionGroupPending OpensearchActionGroupState = "PENDING"
-	OpensearchActionGroupCreated OpensearchActionGroupState = "CREATED"
-	OpensearchActionGroupError   OpensearchActionGroupState = "ERROR"
-	OpensearchActionGroupIgnored OpensearchActionGroupState = "IGNORED"
+	OpenSearchActionGroupPending OpenSearchActionGroupState = "PENDING"
+	OpenSearchActionGroupCreated OpenSearchActionGroupState = "CREATED"
+	OpenSearchActionGroupError   OpenSearchActionGroupState = "ERROR"
+	OpenSearchActionGroupIgnored OpenSearchActionGroupState = "IGNORED"
 )
 
-// OpensearchActionGroupSpec defines the desired state of OpensearchActionGroup
-type OpensearchActionGroupSpec struct {
-	OpensearchRef  corev1.LocalObjectReference `json:"opensearchCluster"`
+// OpenSearchActionGroupSpec defines the desired state of OpenSearchActionGroup
+type OpenSearchActionGroupSpec struct {
+	OpenSearchRef  corev1.LocalObjectReference `json:"opensearchCluster"`
 	AllowedActions []string                    `json:"allowedActions"`
 	Type           string                      `json:"type,omitempty"`
 	Description    string                      `json:"description,omitempty"`
 }
 
-// OpensearchActionGroupStatus defines the observed state of OpensearchActionGroup
-type OpensearchActionGroupStatus struct {
-	State               OpensearchActionGroupState `json:"state,omitempty"`
+// OpenSearchActionGroupStatus defines the observed state of OpenSearchActionGroup
+type OpenSearchActionGroupStatus struct {
+	State               OpenSearchActionGroupState `json:"state,omitempty"`
 	Reason              string                     `json:"reason,omitempty"`
 	ExistingActionGroup *bool                      `json:"existingActionGroup,omitempty"`
 	ManagedCluster      *types.UID                 `json:"managedCluster,omitempty"`
@@ -35,29 +35,29 @@ type OpensearchActionGroupStatus struct {
 //+kubebuilder:resource:shortName=opensearchactiongroup
 //+kubebuilder:subresource:status
 
-// OpensearchActionGroup is the Schema for the opensearchactiongroups API
-type OpensearchActionGroup struct {
+// OpenSearchActionGroup is the Schema for the opensearchactiongroups API
+type OpenSearchActionGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpensearchActionGroupSpec   `json:"spec,omitempty"`
-	Status OpensearchActionGroupStatus `json:"status,omitempty"`
+	Spec   OpenSearchActionGroupSpec   `json:"spec,omitempty"`
+	Status OpenSearchActionGroupStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// OpensearchActionGroupList contains a list of OpensearchActionGroup
-type OpensearchActionGroupList struct {
+// OpenSearchActionGroupList contains a list of OpenSearchActionGroup
+type OpenSearchActionGroupList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpensearchActionGroup `json:"items"`
+	Items           []OpenSearchActionGroup `json:"items"`
 }
 
-// GetOpensearchRef returns the OpenSearch cluster reference
-func (ag *OpensearchActionGroup) GetOpensearchRef() corev1.LocalObjectReference {
-	return ag.Spec.OpensearchRef
+// GetOpenSearchRef returns the OpenSearch cluster reference
+func (ag *OpenSearchActionGroup) GetOpenSearchRef() corev1.LocalObjectReference {
+	return ag.Spec.OpenSearchRef
 }
 
 func init() {
-	SchemeBuilder.Register(&OpensearchActionGroup{}, &OpensearchActionGroupList{})
+	SchemeBuilder.Register(&OpenSearchActionGroup{}, &OpenSearchActionGroupList{})
 }

@@ -41,14 +41,14 @@ func (v *OpenSearchUserRoleBindingValidator) SetupWithManager(mgr ctrl.Manager) 
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opensearchv1.OpensearchUserRoleBinding{}).
+		For(&opensearchv1.OpenSearchUserRoleBinding{}).
 		WithValidator(v).
 		Complete()
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchUserRoleBindingValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	binding := obj.(*opensearchv1.OpensearchUserRoleBinding)
+	binding := obj.(*opensearchv1.OpenSearchUserRoleBinding)
 
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, binding); err != nil {
@@ -70,8 +70,8 @@ func (v *OpenSearchUserRoleBindingValidator) ValidateCreate(ctx context.Context,
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchUserRoleBindingValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldBinding := oldObj.(*opensearchv1.OpensearchUserRoleBinding)
-	newBinding := newObj.(*opensearchv1.OpensearchUserRoleBinding)
+	oldBinding := oldObj.(*opensearchv1.OpenSearchUserRoleBinding)
+	newBinding := newObj.(*opensearchv1.OpenSearchUserRoleBinding)
 
 	// Validate that the OpenSearch cluster reference hasn't changed
 	if err := v.validateClusterReferenceUnchanged(oldBinding, newBinding); err != nil {
@@ -98,11 +98,11 @@ func (v *OpenSearchUserRoleBindingValidator) ValidateDelete(ctx context.Context,
 }
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
-func (v *OpenSearchUserRoleBindingValidator) validateClusterReference(ctx context.Context, binding *opensearchv1.OpensearchUserRoleBinding) error {
+func (v *OpenSearchUserRoleBindingValidator) validateClusterReference(ctx context.Context, binding *opensearchv1.OpenSearchUserRoleBinding) error {
 	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
-		Name:      binding.Spec.OpensearchRef.Name,
+		Name:      binding.Spec.OpenSearchRef.Name,
 		Namespace: binding.Namespace,
 	}, cluster)
 
@@ -110,10 +110,10 @@ func (v *OpenSearchUserRoleBindingValidator) validateClusterReference(ctx contex
 		// Fall back to old API group for backward compatibility
 		oldCluster := &opsterv1.OpenSearchCluster{}
 		if err := v.Client.Get(ctx, types.NamespacedName{
-			Name:      binding.Spec.OpensearchRef.Name,
+			Name:      binding.Spec.OpenSearchRef.Name,
 			Namespace: binding.Namespace,
 		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", binding.Spec.OpensearchRef.Name, err)
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", binding.Spec.OpenSearchRef.Name, err)
 		}
 	}
 
@@ -121,15 +121,15 @@ func (v *OpenSearchUserRoleBindingValidator) validateClusterReference(ctx contex
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
-func (v *OpenSearchUserRoleBindingValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchUserRoleBinding) error {
-	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
+func (v *OpenSearchUserRoleBindingValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpenSearchUserRoleBinding) error {
+	if old.Spec.OpenSearchRef.Name != new.Spec.OpenSearchRef.Name {
 		return fmt.Errorf("cannot change the cluster a user role binding refers to")
 	}
 	return nil
 }
 
 // validateSubjects validates that at least one of users or backendRoles is specified
-func (v *OpenSearchUserRoleBindingValidator) validateSubjects(binding *opensearchv1.OpensearchUserRoleBinding) error {
+func (v *OpenSearchUserRoleBindingValidator) validateSubjects(binding *opensearchv1.OpenSearchUserRoleBinding) error {
 	if len(binding.Spec.Users) == 0 && len(binding.Spec.BackendRoles) == 0 {
 		return fmt.Errorf("at least one of users or backendRoles must be specified")
 	}

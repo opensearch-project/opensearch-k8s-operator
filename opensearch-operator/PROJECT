@@ -115,7 +115,7 @@ resources:
   controller: true
   domain: opensearch.org
   group: opensearch.org
-  kind: OpensearchUser
+  kind: OpenSearchUser
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 - api:
@@ -124,7 +124,7 @@ resources:
   controller: true
   domain: opensearch.org
   group: opensearch.org
-  kind: OpensearchRole
+  kind: OpenSearchRole
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 - api:
@@ -133,7 +133,7 @@ resources:
   controller: true
   domain: opensearch.org
   group: opensearch.org
-  kind: OpensearchUserRoleBinding
+  kind: OpenSearchUserRoleBinding
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 - api:
@@ -142,7 +142,7 @@ resources:
   controller: true
   domain: opensearch.org
   group: opensearch.org
-  kind: OpensearchTenant
+  kind: OpenSearchTenant
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 - api:
@@ -151,7 +151,7 @@ resources:
   controller: true
   domain: opensearch.org
   group: opensearch.org
-  kind: OpensearchActionGroup
+  kind: OpenSearchActionGroup
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 - api:
@@ -169,7 +169,7 @@ resources:
   controller: true
   domain: opensearch.org
   group: opensearch.org
-  kind: OpensearchSnapshotPolicy
+  kind: OpenSearchSnapshotPolicy
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 - api:
@@ -178,7 +178,7 @@ resources:
   controller: true
   domain: opensearch.org
   group: opensearch.org
-  kind: OpensearchIndexTemplate
+  kind: OpenSearchIndexTemplate
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 - api:
@@ -187,7 +187,7 @@ resources:
   controller: true
   domain: opensearch.org
   group: opensearch.org
-  kind: OpensearchComponentTemplate
+  kind: OpenSearchComponentTemplate
   path: github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1
   version: v1
 version: "3"

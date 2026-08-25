@@ -82,8 +82,8 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	volumeMounts = append(volumeMounts, addVolumeMounts...)
 
 	// Ensure Dashboards credentials secret exists (always generated/administered)
-	// OpensearchCredentialsSecret is optional - check if Name is set
-	if r.instance.Spec.Dashboards.OpensearchCredentialsSecret.Name == "" {
+	// OpenSearchCredentialsSecret is optional - check if Name is set
+	if r.instance.Spec.Dashboards.OpenSearchCredentialsSecret.Name == "" {
 		dashboardsCredSecret, managedByOperator, err := helpers.EnsureDashboardsCredentialsSecret(r.client, r.instance)
 		if err != nil {
 			r.logger.Error(err, "Unable to ensure Dashboards credentials secret")

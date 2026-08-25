@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var _ = Describe("OpensearchCLuster API", func() {
+var _ = Describe("OpenSearchCLuster API", func() {
 	//	ctx := context.Background()
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.

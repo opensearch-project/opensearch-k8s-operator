@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-var _ = Describe("OpensearchCLuster data service tests", func() {
+var _ = Describe("OpenSearchCLuster data service tests", func() {
 	//	ctx := context.Background()
 
 	// Define utility constants for object names and testing timeouts/durations and intervals.

@@ -102,7 +102,7 @@ func (v *OpenSearchISMPolicyValidator) validateClusterReference(ctx context.Cont
 	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
-		Name:      policy.Spec.OpensearchRef.Name,
+		Name:      policy.Spec.OpenSearchRef.Name,
 		Namespace: policy.Namespace,
 	}, cluster)
 
@@ -110,17 +110,17 @@ func (v *OpenSearchISMPolicyValidator) validateClusterReference(ctx context.Cont
 		// Fall back to old API group for backward compatibility
 		oldCluster := &opsterv1.OpenSearchCluster{}
 		if err := v.Client.Get(ctx, types.NamespacedName{
-			Name:      policy.Spec.OpensearchRef.Name,
+			Name:      policy.Spec.OpenSearchRef.Name,
 			Namespace: policy.Namespace,
 		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpensearchRef.Name, err)
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", policy.Spec.OpenSearchRef.Name, err)
 		}
 	}
 	return nil
 }
 
 func (v *OpenSearchISMPolicyValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpenSearchISMPolicy) error {
-	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
+	if old.Spec.OpenSearchRef.Name != new.Spec.OpenSearchRef.Name {
 		return fmt.Errorf("cannot change the cluster an ISM policy refers to")
 	}
 	return nil

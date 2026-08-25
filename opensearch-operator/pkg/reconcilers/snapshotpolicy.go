@@ -34,7 +34,7 @@ type SnapshotPolicyReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opensearchv1.OpensearchSnapshotPolicy
+	instance *opensearchv1.OpenSearchSnapshotPolicy
 	cluster  *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
@@ -43,7 +43,7 @@ func NewSnapshotPolicyReconciler(
 	ctx context.Context,
 	client client.Client,
 	recorder record.EventRecorder,
-	instance *opensearchv1.OpensearchSnapshotPolicy,
+	instance *opensearchv1.OpenSearchSnapshotPolicy,
 	opts ...ReconcilerOption,
 ) *SnapshotPolicyReconciler {
 	options := ReconcilerOptions{}
@@ -69,20 +69,20 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opensearchv1.OpensearchSnapshotPolicy)
+			instance := object.(*opensearchv1.OpenSearchSnapshotPolicy)
 			instance.Status.Reason = reason
 			if err != nil {
-				instance.Status.State = opensearchv1.OpensearchSnapshotPolicyError
+				instance.Status.State = opensearchv1.OpenSearchSnapshotPolicyError
 			}
 			if result.Requeue && result.RequeueAfter == 10*time.Second {
-				instance.Status.State = opensearchv1.OpensearchSnapshotPolicyPending
+				instance.Status.State = opensearchv1.OpenSearchSnapshotPolicyPending
 			}
 			if err == nil && result.RequeueAfter == 30*time.Second {
-				instance.Status.State = opensearchv1.OpensearchSnapshotPolicyCreated
+				instance.Status.State = opensearchv1.OpenSearchSnapshotPolicyCreated
 				instance.Status.SnapshotPolicyName = policyName
 			}
 			if reason == opensearchSnapshotPolicyExists {
-				instance.Status.State = opensearchv1.OpensearchSnapshotPolicyIgnored
+				instance.Status.State = opensearchv1.OpenSearchSnapshotPolicyIgnored
 			}
 		})
 
@@ -91,8 +91,8 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 		}
 	}()
 
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {
@@ -127,7 +127,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 
 	if ptr.Deref(r.updateStatus, true) {
 		err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opensearchv1.OpensearchSnapshotPolicy).Status.ManagedCluster = &r.cluster.UID
+			object.(*opensearchv1.OpenSearchSnapshotPolicy).Status.ManagedCluster = &r.cluster.UID
 		})
 		if err != nil {
 			reason = fmt.Sprintf("failed to update status: %s", err)
@@ -196,7 +196,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 		}
 		// Mark the Snapshot Policy as not pre-existing (created by the operator)
 		err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opensearchv1.OpensearchSnapshotPolicy).Status.ExistingSnapshotPolicy = ptr.To(false)
+			object.(*opensearchv1.OpenSearchSnapshotPolicy).Status.ExistingSnapshotPolicy = ptr.To(false)
 		})
 		if err != nil {
 			reason = "failed to update custom resource object"
@@ -228,7 +228,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 	// If the Snapshot policy exists in OpenSearch cluster and was not created by the operator, update the status and return
 	if r.instance.Status.ExistingSnapshotPolicy == nil || *r.instance.Status.ExistingSnapshotPolicy {
 		err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opensearchv1.OpensearchSnapshotPolicy).Status.ExistingSnapshotPolicy = ptr.To(true)
+			object.(*opensearchv1.OpenSearchSnapshotPolicy).Status.ExistingSnapshotPolicy = ptr.To(true)
 		})
 		if err != nil {
 			reason = "failed to update custom resource object"
@@ -363,8 +363,8 @@ func (r *SnapshotPolicyReconciler) Delete() error {
 	}
 
 	var err error
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {

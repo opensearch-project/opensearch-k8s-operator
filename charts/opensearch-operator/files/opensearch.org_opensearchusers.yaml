@@ -8,8 +8,8 @@ metadata:
 spec:
   group: opensearch.org
   names:
-    kind: OpensearchUser
-    listKind: OpensearchUserList
+    kind: OpenSearchUser
+    listKind: OpenSearchUserList
     plural: opensearchusers
     shortNames:
     - opensearchuser
@@ -19,7 +19,7 @@ spec:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchUser is the Schema for the opensearchusers API
+        description: OpenSearchUser is the Schema for the opensearchusers API
         properties:
           apiVersion:
             description: |-
@@ -39,7 +39,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchUserSpec defines the desired state of OpensearchUser
+            description: OpenSearchUserSpec defines the desired state of OpenSearchUser
             properties:
               attributes:
                 additionalProperties:
@@ -97,7 +97,7 @@ spec:
             - passwordFrom
             type: object
           status:
-            description: OpensearchUserStatus defines the observed state of OpensearchUser
+            description: OpenSearchUserStatus defines the observed state of OpenSearchUser
             properties:
               managedCluster:
                 description: |-

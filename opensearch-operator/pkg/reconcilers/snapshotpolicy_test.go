@@ -27,7 +27,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *SnapshotPolicyReconciler
-		instance   *opensearchv1.OpensearchSnapshotPolicy
+		instance   *opensearchv1.OpenSearchSnapshotPolicy
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
@@ -40,19 +40,19 @@ var _ = Describe("snapshot policy reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opensearchv1.OpensearchSnapshotPolicy{
+		instance = &opensearchv1.OpenSearchSnapshotPolicy{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-policy",
 				Namespace: "test-policy",
 				UID:       types.UID("testuid"),
 			},
-			Spec: opensearchv1.OpensearchSnapshotPolicySpec{
+			Spec: opensearchv1.OpenSearchSnapshotPolicySpec{
 				PolicyName: "test-policy",
-				OpensearchRef: corev1.LocalObjectReference{
+				OpenSearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 			},
-			Status: opensearchv1.OpensearchSnapshotPolicyStatus{
+			Status: opensearchv1.OpenSearchSnapshotPolicyStatus{
 				SnapshotPolicyName: "test-policy",
 			},
 		}
@@ -110,7 +110,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
-			instance.Spec.OpensearchRef.Name = "doesnotexist"
+			instance.Spec.OpenSearchRef.Name = "doesnotexist"
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
@@ -442,7 +442,7 @@ var _ = Describe("snapshot policy reconciler", func() {
 
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
-					instance.Spec.OpensearchRef.Name = "doesnotexist"
+					instance.Spec.OpenSearchRef.Name = "doesnotexist"
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 				It("should do nothing and exit", func() {

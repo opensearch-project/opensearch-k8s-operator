@@ -4,7 +4,7 @@
 {{- range .Values.actionGroups }}
 ---
 apiVersion: {{ $apiGroup }}/v1
-kind: OpensearchActionGroup
+kind: {{ include "opensearch-cluster.kind" (dict "name" "ActionGroup" "apiGroup" $apiGroup) }}
 metadata:
   name: {{ .name }}
   namespace: {{ $.Release.Namespace }}

@@ -1053,7 +1053,7 @@ func GetChownCommand(uid, gid int64, path string) string {
 }
 
 // GenComponentTemplateName generates the component template name from the resource
-func GenComponentTemplateName(template *opensearchv1.OpensearchComponentTemplate) string {
+func GenComponentTemplateName(template *opensearchv1.OpenSearchComponentTemplate) string {
 	if template.Spec.Name != "" {
 		return template.Spec.Name
 	}
@@ -1061,7 +1061,7 @@ func GenComponentTemplateName(template *opensearchv1.OpensearchComponentTemplate
 }
 
 // GenIndexTemplateName generates the index template name from the resource
-func GenIndexTemplateName(template *opensearchv1.OpensearchIndexTemplate) string {
+func GenIndexTemplateName(template *opensearchv1.OpenSearchIndexTemplate) string {
 	if template.Spec.Name != "" {
 		return template.Spec.Name
 	}
@@ -1087,9 +1087,9 @@ func DiscoverRandomContextSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 // EnsureDashboardsCredentialsSecret ensures a credentials secret exists for Dashboards.
 // It generates a separate password for Dashboards (not the admin password).
 func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (*corev1.Secret, bool, error) {
-	// Check if user provided OpensearchCredentialsSecret via Dashboards config
-	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
-		secret, err := k8sClient.GetSecret(cr.Spec.Dashboards.OpensearchCredentialsSecret.Name, cr.Namespace)
+	// Check if user provided OpenSearchCredentialsSecret via Dashboards config
+	if cr.Spec.Dashboards.OpenSearchCredentialsSecret.Name != "" {
+		secret, err := k8sClient.GetSecret(cr.Spec.Dashboards.OpenSearchCredentialsSecret.Name, cr.Namespace)
 		return &secret, false, err
 	}
 

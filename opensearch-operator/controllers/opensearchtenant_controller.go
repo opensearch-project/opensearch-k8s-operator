@@ -14,12 +14,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// OpensearchTenantReconciler reconciles a OpensearchTenant object
-type OpensearchTenantReconciler struct {
+// OpenSearchTenantReconciler reconciles a OpenSearchTenant object
+type OpenSearchTenantReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchTenant
+	Instance *opensearchv1.OpenSearchTenant
 	logr.Logger
 }
 
@@ -31,11 +31,11 @@ type OpensearchTenantReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("tenant", req.NamespacedName)
-	r.Info("Reconciling OpensearchTenant")
+	r.Info("Reconciling OpenSearchTenant")
 
-	r.Instance = &opensearchv1.OpensearchTenant{}
+	r.Instance = &opensearchv1.OpenSearchTenant{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -49,19 +49,19 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	)
 
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return tenantReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = tenantReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -70,9 +70,9 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchTenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchTenantReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchTenant{}).
+		For(&opensearchv1.OpenSearchTenant{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }

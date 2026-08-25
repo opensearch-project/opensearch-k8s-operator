@@ -47,7 +47,7 @@ func (v *OpenSearchUserRoleBindingLegacyValidator) SetupWithManager(mgr ctrl.Man
 
 // ValidateCreate implements webhook.Validator
 func (v *OpenSearchUserRoleBindingLegacyValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Please use opensearch.org/v1 instead. Creation of old API group OpensearchUserRoleBinding resources is not allowed")
+	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Please use opensearch.org/v1 instead. Creation of old API group OpenSearchUserRoleBinding resources is not allowed")
 }
 
 // ValidateUpdate implements webhook.Validator
@@ -66,7 +66,7 @@ func (v *OpenSearchUserRoleBindingLegacyValidator) ValidateUpdate(ctx context.Co
 	}
 
 	// Deny spec changes
-	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Direct updates to old API group OpensearchUserRoleBinding resources are not allowed. Please update the opensearch.org/v1 resource instead")
+	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Direct updates to old API group OpenSearchUserRoleBinding resources are not allowed. Please update the opensearch.org/v1 resource instead")
 }
 
 // ValidateDelete implements webhook.Validator

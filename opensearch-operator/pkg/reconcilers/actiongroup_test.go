@@ -27,7 +27,7 @@ var _ = Describe("actiongroup reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *ActionGroupReconciler
-		instance   *opensearchv1.OpensearchActionGroup
+		instance   *opensearchv1.OpenSearchActionGroup
 		recorder   *record.FakeRecorder
 
 		// Objects
@@ -40,14 +40,14 @@ var _ = Describe("actiongroup reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opensearchv1.OpensearchActionGroup{
+		instance = &opensearchv1.OpenSearchActionGroup{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-actiongroup",
 				Namespace: "test-actiongroup",
 				UID:       "testuid",
 			},
-			Spec: opensearchv1.OpensearchActionGroupSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+			Spec: opensearchv1.OpenSearchActionGroupSpec{
+				OpenSearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 				AllowedActions: []string{
@@ -111,7 +111,7 @@ var _ = Describe("actiongroup reconciler", func() {
 
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
-			instance.Spec.OpensearchRef.Name = "doesnotexist"
+			instance.Spec.OpenSearchRef.Name = "doesnotexist"
 			recorder = record.NewFakeRecorder(1)
 		})
 		It("should wait for the cluster to exist", func() {
@@ -422,7 +422,7 @@ var _ = Describe("actiongroup reconciler", func() {
 
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
-					instance.Spec.OpensearchRef.Name = "doesnotexist"
+					instance.Spec.OpenSearchRef.Name = "doesnotexist"
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 				It("should do nothing and exit", func() {

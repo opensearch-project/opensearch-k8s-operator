@@ -7,30 +7,30 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type OpensearchComponentTemplateState string
+type OpenSearchComponentTemplateState string
 
 const (
-	OpensearchComponentTemplatePending OpensearchComponentTemplateState = "PENDING"
-	OpensearchComponentTemplateCreated OpensearchComponentTemplateState = "CREATED"
-	OpensearchComponentTemplateError   OpensearchComponentTemplateState = "ERROR"
-	OpensearchComponentTemplateIgnored OpensearchComponentTemplateState = "IGNORED"
+	OpenSearchComponentTemplatePending OpenSearchComponentTemplateState = "PENDING"
+	OpenSearchComponentTemplateCreated OpenSearchComponentTemplateState = "CREATED"
+	OpenSearchComponentTemplateError   OpenSearchComponentTemplateState = "ERROR"
+	OpenSearchComponentTemplateIgnored OpenSearchComponentTemplateState = "IGNORED"
 )
 
 //+kubebuilder:object:root=true
 //+kubebuilder:resource:shortName=opensearchcomponenttemplate
 //+kubebuilder:subresource:status
 
-// OpensearchComponentTemplate is the schema for the OpenSearch component templates API
-type OpensearchComponentTemplate struct {
+// OpenSearchComponentTemplate is the schema for the OpenSearch component templates API
+type OpenSearchComponentTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpensearchComponentTemplateSpec   `json:"spec,omitempty"`
-	Status OpensearchComponentTemplateStatus `json:"status,omitempty"`
+	Spec   OpenSearchComponentTemplateSpec   `json:"spec,omitempty"`
+	Status OpenSearchComponentTemplateStatus `json:"status,omitempty"`
 }
 
-type OpensearchComponentTemplateStatus struct {
-	State                     OpensearchComponentTemplateState `json:"state,omitempty"`
+type OpenSearchComponentTemplateStatus struct {
+	State                     OpenSearchComponentTemplateState `json:"state,omitempty"`
 	Reason                    string                           `json:"reason,omitempty"`
 	ExistingComponentTemplate *bool                            `json:"existingComponentTemplate,omitempty"`
 	ManagedCluster            *types.UID                       `json:"managedCluster,omitempty"`
@@ -38,15 +38,15 @@ type OpensearchComponentTemplateStatus struct {
 	ComponentTemplateName string `json:"componentTemplateName,omitempty"`
 }
 
-type OpensearchComponentTemplateSpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
+type OpenSearchComponentTemplateSpec struct {
+	OpenSearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
 
 	// The name of the component template. Defaults to metadata.name
 	// +immutable
 	Name string `json:"name,omitempty"`
 
 	// The template that should be applied
-	Template OpensearchIndexSpec `json:"template"`
+	Template OpenSearchIndexSpec `json:"template"`
 
 	// Version number used to manage the component template externally
 	Version int `json:"version,omitempty"`
@@ -60,13 +60,13 @@ type OpensearchComponentTemplateSpec struct {
 
 //+kubebuilder:object:root=true
 
-// OpensearchComponentTemplateList contains a list of OpensearchComponentTemplate
-type OpensearchComponentTemplateList struct {
+// OpenSearchComponentTemplateList contains a list of OpenSearchComponentTemplate
+type OpenSearchComponentTemplateList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpensearchComponentTemplate `json:"items"`
+	Items           []OpenSearchComponentTemplate `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&OpensearchComponentTemplate{}, &OpensearchComponentTemplateList{})
+	SchemeBuilder.Register(&OpenSearchComponentTemplate{}, &OpenSearchComponentTemplateList{})
 }

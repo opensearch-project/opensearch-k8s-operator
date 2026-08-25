@@ -494,7 +494,7 @@ cluster:
       #      - example.com
       #    secretName: tls-secret
 
-# -- List of OpensearchRole. Check values.yaml file for examples.
+# -- List of OpenSearchRole. Check values.yaml file for examples.
 roles: []
 #  - name: "example-role"
 #    clusterPermissions:
@@ -526,7 +526,7 @@ roles: []
 #      tenantPatterns:
 #        - "*"
 
-# -- List of OpensearchUser. Check values.yaml file for examples.
+# -- List of OpenSearchUser. Check values.yaml file for examples.
 users: []
 #  - name: "example-user"
 #    secretName: "example-secret"
@@ -535,7 +535,7 @@ users: []
 #    opendistroSecurityRoles:
 #      - example-role
 
-# -- Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role
+# -- Allows to link any number of users, backend roles and roles with a OpenSearchUserRoleBinding. Each user in the binding will be granted each role
 # Check values.yaml file for examples.
 usersRoleBinding: []
 #  - name: admin_access
@@ -552,7 +552,7 @@ tenants: []
 #  - name: "example-tenant"
 #    description: "example-tenant"
 
-# -- List of OpensearchActionGroup. Check values.yaml file for examples.
+# -- List of OpenSearchActionGroup. Check values.yaml file for examples.
 actionGroups: []
 #  - name: "example-action-group"
 #    description: "Example of action group"
@@ -561,7 +561,7 @@ actionGroups: []
 #      - indices:admin/aliases/exists
 #    type: index
 
-# -- List of OpensearchComponentTemplate. Check values.yaml file for examples.
+# -- List of OpenSearchComponentTemplate. Check values.yaml file for examples.
 componentTemplates: []
 #  - name: example-component-template
 #    templateSpec: # required
@@ -582,7 +582,7 @@ componentTemplates: []
 #    _meta: # optional
 #      description: example description
 
-# -- List of OpensearchIndexTemplate. Check values.yaml file for examples.
+# -- List of OpenSearchIndexTemplate. Check values.yaml file for examples.
 indexTemplates: []
 #  - name: example-index-template
 #    indexPatterns:

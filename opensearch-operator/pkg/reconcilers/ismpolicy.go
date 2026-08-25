@@ -26,7 +26,7 @@ import (
 
 const (
 	opensearchIsmPolicyExists       = "ISM Policy already exists in Opensearch"
-	opensearchIsmPolicyNameMismatch = "OpensearchISMPolicyNameMismatch"
+	opensearchIsmPolicyNameMismatch = "OpenSearchISMPolicyNameMismatch"
 	opensearchClusterRequeueAfter   = 10 * time.Second
 	defaultRequeueAfter             = 30 * time.Second
 )
@@ -75,18 +75,18 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 			instance := object.(*opensearchv1.OpenSearchISMPolicy)
 			instance.Status.Reason = reason
 			if retErr != nil {
-				instance.Status.State = opensearchv1.OpensearchISMPolicyError
+				instance.Status.State = opensearchv1.OpenSearchISMPolicyError
 			}
 			// Requeue after is 10 seconds if waiting for OpenSearch cluster
 			if retResult.Requeue && retResult.RequeueAfter == opensearchClusterRequeueAfter {
-				instance.Status.State = opensearchv1.OpensearchISMPolicyPending
+				instance.Status.State = opensearchv1.OpenSearchISMPolicyPending
 			}
 			if retErr == nil && retResult.Requeue {
-				instance.Status.State = opensearchv1.OpensearchISMPolicyCreated
+				instance.Status.State = opensearchv1.OpenSearchISMPolicyCreated
 				instance.Status.PolicyId = policyId
 			}
 			if reason == opensearchIsmPolicyExists {
-				instance.Status.State = opensearchv1.OpensearchISMPolicyIgnored
+				instance.Status.State = opensearchv1.OpenSearchISMPolicyIgnored
 			}
 		})
 
@@ -95,8 +95,8 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 		}
 	}()
 
-	r.cluster, retErr = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, retErr = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if retErr != nil {
@@ -607,8 +607,8 @@ func (r *IsmPolicyReconciler) Delete() error {
 	}
 
 	var err error
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {

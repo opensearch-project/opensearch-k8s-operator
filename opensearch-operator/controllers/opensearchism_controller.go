@@ -14,8 +14,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// OpensearchISMReconciler reconciles a ISMPolicy object
-type OpensearchISMPolicyReconciler struct {
+// OpenSearchISMReconciler reconciles a ISMPolicy object
+type OpenSearchISMPolicyReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
@@ -31,9 +31,9 @@ type OpensearchISMPolicyReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("tenant", req.NamespacedName)
-	r.Info("Reconciling OpensearchISMPolicy")
+	r.Info("Reconciling OpenSearchISMPolicy")
 	r.Instance = &opensearchv1.OpenSearchISMPolicy{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
@@ -47,19 +47,19 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 		r.Instance,
 	)
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return ismReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = ismReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -67,7 +67,7 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchISMPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchISMPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpenSearchISMPolicy{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change

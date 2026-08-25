@@ -27,6 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -54,7 +55,7 @@ const (
 
 	// Old finalizers that need to be removed during deletion
 	OldClusterFinalizer  = "Opster"                    // Old cluster finalizer corresponding myFinalizerName
-	OldResourceFinalizer = "opster.io/opensearch-data" // Old resource finalizer (User, Role, etc.) coresponding to OpensearchFinalizer)
+	OldResourceFinalizer = "opster.io/opensearch-data" // Old resource finalizer (User, Role, etc.) coresponding to OpenSearchFinalizer)
 )
 
 // ClusterMigrationReconciler reconciles OpenSearchCluster resources between old and new API groups
@@ -417,7 +418,7 @@ func (r *ClusterMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
-// UserMigrationReconciler reconciles OpensearchUser resources between old and new API groups
+// UserMigrationReconciler reconciles OpenSearchUser resources between old and new API groups
 type UserMigrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -431,18 +432,18 @@ type UserMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchusers/finalizers,verbs=update
 
 func (r *UserMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconcileGenericMigration[opsterv1.OpensearchUser, opensearchv1.OpensearchUser](ctx, r.Client, req, "OpensearchUser")
+	return reconcileGenericMigration[opsterv1.OpensearchUser, opensearchv1.OpenSearchUser](ctx, r.Client, req, "OpenSearchUser")
 }
 
 func (r *UserMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("usermigration").
 		For(&opsterv1.OpensearchUser{}).
-		Watches(&opensearchv1.OpensearchUser{}, &handler.EnqueueRequestForObject{}).
+		Watches(&opensearchv1.OpenSearchUser{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
-// RoleMigrationReconciler reconciles OpensearchRole resources between old and new API groups
+// RoleMigrationReconciler reconciles OpenSearchRole resources between old and new API groups
 type RoleMigrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -456,18 +457,18 @@ type RoleMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchroles/finalizers,verbs=update
 
 func (r *RoleMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconcileGenericMigration[opsterv1.OpensearchRole, opensearchv1.OpensearchRole](ctx, r.Client, req, "OpensearchRole")
+	return reconcileGenericMigration[opsterv1.OpensearchRole, opensearchv1.OpenSearchRole](ctx, r.Client, req, "OpenSearchRole")
 }
 
 func (r *RoleMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("rolemigration").
 		For(&opsterv1.OpensearchRole{}).
-		Watches(&opensearchv1.OpensearchRole{}, &handler.EnqueueRequestForObject{}).
+		Watches(&opensearchv1.OpenSearchRole{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
-// UserRoleBindingMigrationReconciler reconciles OpensearchUserRoleBinding resources
+// UserRoleBindingMigrationReconciler reconciles OpenSearchUserRoleBinding resources
 type UserRoleBindingMigrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -481,18 +482,18 @@ type UserRoleBindingMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchuserrolebindings/finalizers,verbs=update
 
 func (r *UserRoleBindingMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconcileGenericMigration[opsterv1.OpensearchUserRoleBinding, opensearchv1.OpensearchUserRoleBinding](ctx, r.Client, req, "OpensearchUserRoleBinding")
+	return reconcileGenericMigration[opsterv1.OpensearchUserRoleBinding, opensearchv1.OpenSearchUserRoleBinding](ctx, r.Client, req, "OpenSearchUserRoleBinding")
 }
 
 func (r *UserRoleBindingMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("userrolebindingmigration").
 		For(&opsterv1.OpensearchUserRoleBinding{}).
-		Watches(&opensearchv1.OpensearchUserRoleBinding{}, &handler.EnqueueRequestForObject{}).
+		Watches(&opensearchv1.OpenSearchUserRoleBinding{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
-// TenantMigrationReconciler reconciles OpensearchTenant resources
+// TenantMigrationReconciler reconciles OpenSearchTenant resources
 type TenantMigrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -506,18 +507,18 @@ type TenantMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchtenants/finalizers,verbs=update
 
 func (r *TenantMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconcileGenericMigration[opsterv1.OpensearchTenant, opensearchv1.OpensearchTenant](ctx, r.Client, req, "OpensearchTenant")
+	return reconcileGenericMigration[opsterv1.OpensearchTenant, opensearchv1.OpenSearchTenant](ctx, r.Client, req, "OpenSearchTenant")
 }
 
 func (r *TenantMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("tenantmigration").
 		For(&opsterv1.OpensearchTenant{}).
-		Watches(&opensearchv1.OpensearchTenant{}, &handler.EnqueueRequestForObject{}).
+		Watches(&opensearchv1.OpenSearchTenant{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
-// ActionGroupMigrationReconciler reconciles OpensearchActionGroup resources
+// ActionGroupMigrationReconciler reconciles OpenSearchActionGroup resources
 type ActionGroupMigrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -531,14 +532,14 @@ type ActionGroupMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchactiongroups/finalizers,verbs=update
 
 func (r *ActionGroupMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconcileGenericMigration[opsterv1.OpensearchActionGroup, opensearchv1.OpensearchActionGroup](ctx, r.Client, req, "OpensearchActionGroup")
+	return reconcileGenericMigration[opsterv1.OpensearchActionGroup, opensearchv1.OpenSearchActionGroup](ctx, r.Client, req, "OpenSearchActionGroup")
 }
 
 func (r *ActionGroupMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("actiongroupmigration").
 		For(&opsterv1.OpensearchActionGroup{}).
-		Watches(&opensearchv1.OpensearchActionGroup{}, &handler.EnqueueRequestForObject{}).
+		Watches(&opensearchv1.OpenSearchActionGroup{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -567,7 +568,7 @@ func (r *ISMPolicyMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error 
 		Complete(r)
 }
 
-// SnapshotPolicyMigrationReconciler reconciles OpensearchSnapshotPolicy resources
+// SnapshotPolicyMigrationReconciler reconciles OpenSearchSnapshotPolicy resources
 type SnapshotPolicyMigrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -581,18 +582,18 @@ type SnapshotPolicyMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchsnapshotpolicies/finalizers,verbs=update
 
 func (r *SnapshotPolicyMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconcileGenericMigration[opsterv1.OpensearchSnapshotPolicy, opensearchv1.OpensearchSnapshotPolicy](ctx, r.Client, req, "OpensearchSnapshotPolicy")
+	return reconcileGenericMigration[opsterv1.OpensearchSnapshotPolicy, opensearchv1.OpenSearchSnapshotPolicy](ctx, r.Client, req, "OpenSearchSnapshotPolicy")
 }
 
 func (r *SnapshotPolicyMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("snapshotpolicymigration").
 		For(&opsterv1.OpensearchSnapshotPolicy{}).
-		Watches(&opensearchv1.OpensearchSnapshotPolicy{}, &handler.EnqueueRequestForObject{}).
+		Watches(&opensearchv1.OpenSearchSnapshotPolicy{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
-// IndexTemplateMigrationReconciler reconciles OpensearchIndexTemplate resources
+// IndexTemplateMigrationReconciler reconciles OpenSearchIndexTemplate resources
 type IndexTemplateMigrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -606,18 +607,18 @@ type IndexTemplateMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchindextemplates/finalizers,verbs=update
 
 func (r *IndexTemplateMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconcileGenericMigration[opsterv1.OpensearchIndexTemplate, opensearchv1.OpensearchIndexTemplate](ctx, r.Client, req, "OpensearchIndexTemplate")
+	return reconcileGenericMigration[opsterv1.OpensearchIndexTemplate, opensearchv1.OpenSearchIndexTemplate](ctx, r.Client, req, "OpenSearchIndexTemplate")
 }
 
 func (r *IndexTemplateMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("indextemplatemigration").
 		For(&opsterv1.OpensearchIndexTemplate{}).
-		Watches(&opensearchv1.OpensearchIndexTemplate{}, &handler.EnqueueRequestForObject{}).
+		Watches(&opensearchv1.OpenSearchIndexTemplate{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
-// ComponentTemplateMigrationReconciler reconciles OpensearchComponentTemplate resources
+// ComponentTemplateMigrationReconciler reconciles OpenSearchComponentTemplate resources
 type ComponentTemplateMigrationReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -631,14 +632,14 @@ type ComponentTemplateMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchcomponenttemplates/finalizers,verbs=update
 
 func (r *ComponentTemplateMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	return reconcileGenericMigration[opsterv1.OpensearchComponentTemplate, opensearchv1.OpensearchComponentTemplate](ctx, r.Client, req, "OpensearchComponentTemplate")
+	return reconcileGenericMigration[opsterv1.OpensearchComponentTemplate, opensearchv1.OpenSearchComponentTemplate](ctx, r.Client, req, "OpenSearchComponentTemplate")
 }
 
 func (r *ComponentTemplateMigrationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		Named("componenttemplatemigration").
 		For(&opsterv1.OpensearchComponentTemplate{}).
-		Watches(&opensearchv1.OpensearchComponentTemplate{}, &handler.EnqueueRequestForObject{}).
+		Watches(&opensearchv1.OpenSearchComponentTemplate{}, &handler.EnqueueRequestForObject{}).
 		Complete(r)
 }
 
@@ -749,7 +750,7 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 				}
 				// Create new resource
 				logger.Info("Creating new API group resource from old", "kind", resourceKind, "name", req.Name)
-				return createGenericNewFromOld[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req)
+				return createGenericNewFromOld[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req, resourceKind)
 			}
 			return ctrl.Result{}, err
 		}
@@ -771,7 +772,7 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 }, NewPtr interface {
 	*NewType
 	client.Object
-}](ctx context.Context, c client.Client, oldResource OldPtr, req ctrl.Request) (ctrl.Result, error) {
+}](ctx context.Context, c client.Client, oldResource OldPtr, req ctrl.Request, resourceKind string) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
 
 	// Create new resource with same name/namespace
@@ -786,6 +787,14 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 	if err := json.Unmarshal(oldBytes, newResource); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to unmarshal to new resource: %w", err)
 	}
+
+	// JSON copy preserves the old TypeMeta kind (for example OpensearchRole).
+	// Reset GVK to the destination API group's kind (OpenSearchRole).
+	newResource.GetObjectKind().SetGroupVersionKind(schema.GroupVersionKind{
+		Group:   "opensearch.org",
+		Version: "v1",
+		Kind:    resourceKind,
+	})
 
 	// Set metadata
 	newResource.SetName(oldResource.GetName())

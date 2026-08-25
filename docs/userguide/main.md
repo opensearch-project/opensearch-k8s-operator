@@ -82,6 +82,25 @@ The minimal cluster you deployed in this section is only intended for demo purpo
 
 **Single-Node clusters are currently not supported**. Your cluster must have at least 3 nodes with the `master/cluster_manager` role configured.
 
+### Custom resource kinds
+
+All operator CRDs in the `opensearch.org` API group use the `OpenSearch` prefix (capital **S**) for `kind`:
+
+| Kind | Short names |
+|------|-------------|
+| `OpenSearchCluster` | `os`, `opensearch` |
+| `OpenSearchUser` | `opensearchuser` |
+| `OpenSearchRole` | `opensearchrole` |
+| `OpenSearchUserRoleBinding` | `opensearchuserrolebinding` |
+| `OpenSearchActionGroup` | `opensearchactiongroup` |
+| `OpenSearchTenant` | `opensearchtenant` |
+| `OpenSearchISMPolicy` | `ismp`, `ismpolicy` |
+| `OpenSearchIndexTemplate` | `opensearchindextemplate` |
+| `OpenSearchComponentTemplate` | `opensearchcomponenttemplate` |
+| `OpenSearchSnapshotPolicy` | *(none)* |
+
+In 2.x most of these kinds were spelled `Opensearch*` (lowercase **s**). The deprecated `opensearch.opster.io` group keeps those original kind names; manifests that move to `opensearch.org/v1` must use the names above. See the [Migration Guide](./migration-guide.md#breaking-change-in-30-crd-kind-capitalization).
+
 ## Configuring the operator
 
 The majority of this guide deals with configuring and managing OpenSearch clusters. But there are some general options that can be configured for the operator itself. All of this is done using helm values your provide during installation: `helm install opensearch-operator opensearch-operator/opensearch-operator -f values.yaml`.
@@ -1603,13 +1622,13 @@ spec:
 
 The operator provides custom kubernetes resources that allow you to create/update/manage security configuration resources such as users, roles, action groups etc. as kubernetes objects.
 
-#### Opensearch Users
+#### OpenSearch Users
 
 It is possible to manage Opensearch users in Kubernetes with the operator. The operator will not modify users that already exist. You can create an example user as follows:
 
 ```yaml
 apiVersion: opensearch.org/v1
-kind: OpensearchUser
+kind: OpenSearchUser
 metadata:
   name: sample-user
   namespace: default
@@ -1631,13 +1650,13 @@ Also, it is possible to store multiple Users password in the same Secret. To do 
 each key will be equal to a **User name** and value is a user password. **Otherwise, changes in the secret will not trigger User
 reconcile!**
 
-#### Opensearch Roles
+#### OpenSearch Roles
 
 It is possible to manage Opensearch roles in Kubernetes with the operator. The operator will not modify roles that already exist. You can create an example role as follows:
 
 ```yaml
 apiVersion: opensearch.org/v1
-kind: OpensearchRole
+kind: OpenSearchRole
 metadata:
   name: sample-role
   namespace: default
@@ -1655,13 +1674,13 @@ spec:
         - read
 ```
 
-#### Linking Opensearch Users and Roles
+#### Linking OpenSearch Users and Roles
 
-The operator allows you link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role. E.g:
+The operator allows you link any number of users, backend roles and roles with a OpenSearchUserRoleBinding. Each user in the binding will be granted each role. E.g:
 
 ```yaml
 apiVersion: opensearch.org/v1
-kind: OpensearchUserRoleBinding
+kind: OpenSearchUserRoleBinding
 metadata:
   name: sample-urb
   namespace: default
@@ -1676,13 +1695,13 @@ spec:
     - sample-role
 ```
 
-#### Opensearch Action Groups
+#### OpenSearch Action Groups
 
 It is possible to manage Opensearch action groups in Kubernetes with the operator. The operator will not modify action groups that already exist. You can create an example action group as follows:
 
 ```yaml
 apiVersion: opensearch.org/v1
-kind: OpensearchActionGroup
+kind: OpenSearchActionGroup
 metadata:
   name: sample-action-group
   namespace: default
@@ -1696,13 +1715,13 @@ spec:
   description: Sample action group
 ```
 
-#### Opensearch Tenants
+#### OpenSearch Tenants
 
 It is possible to manage Opensearch tenants in Kubernetes with the operator. The operator will not modify tenants that already exist. You can create an example tenant as follows:
 
 ```yaml
 apiVersion: opensearch.org/v1
-kind: OpensearchTenant
+kind: OpenSearchTenant
 metadata:
   name: sample-tenant
   namespace: default
@@ -1908,16 +1927,16 @@ The namespace of the `OpenSearchISMPolicy` must be the namespace the OpenSearch 
 
 ## Managing index and component templates
 
-The operator provides the OpensearchIndexTemplate and OpensearchComponentTemplate CRDs, which is used for managing index and component templates respectively.
+The operator provides the OpenSearchIndexTemplate and OpenSearchComponentTemplate CRDs, which is used for managing index and component templates respectively.
 
 The two CRD specifications attempts to be as close as possible to what the OpenSearch API expects, with some changes from snake_case to camelCase.
-The fields that have been changed, is `index_patterns` to `indexPatterns` (OpensearchIndexTemplate only), `composed_of` to `composedOf` (OpensearchIndexTemplate only) and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
+The fields that have been changed, is `index_patterns` to `indexPatterns` (OpenSearchIndexTemplate only), `composed_of` to `composedOf` (OpenSearchIndexTemplate only) and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
 
 The following example creates a component template for setting the number of shards and replicas, together with specifying a specific time format for documents:
 
 ```yaml
 apiVersion: opensearch.org/v1
-kind: OpensearchComponentTemplate
+kind: OpenSearchComponentTemplate
 metadata:
   name: sample-component-template
 spec:
@@ -1946,7 +1965,7 @@ The following index template makes use of the above component template (see `com
 
 ```yaml
 apiVersion: opensearch.org/v1
-kind: OpensearchIndexTemplate
+kind: OpenSearchIndexTemplate
 metadata:
   name: sample-index-template
 spec:
@@ -2014,7 +2033,7 @@ Fields in the CRD map directly to the OpenSearch snapshot policy structure, allo
 
 ```
 apiVersion: opensearch.org/v1
-kind: OpensearchSnapshotPolicy
+kind: OpenSearchSnapshotPolicy
 metadata:
   name: sample-policy
   namespace: default
@@ -2054,7 +2073,7 @@ spec:
 
 Note:
 
-- The OpensearchSnapshotPolicy must be created in the same namespace as the OpenSearch cluster it targets.
+- The OpenSearchSnapshotPolicy must be created in the same namespace as the OpenSearch cluster it targets.
 
 - `policyName` is an optional field, and if not provided `metadata.name` is used as the default.
 

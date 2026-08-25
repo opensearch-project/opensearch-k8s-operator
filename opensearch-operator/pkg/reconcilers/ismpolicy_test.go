@@ -48,11 +48,11 @@ var _ = Describe("ism policy reconciler", func() {
 			},
 			Spec: opensearchv1.OpenSearchISMPolicySpec{
 				PolicyID: "test-policy",
-				OpensearchRef: corev1.LocalObjectReference{
+				OpenSearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 			},
-			Status: opensearchv1.OpensearchISMPolicyStatus{
+			Status: opensearchv1.OpenSearchISMPolicyStatus{
 				PolicyId: "test-policy",
 			},
 		}
@@ -110,7 +110,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
-			instance.Spec.OpensearchRef.Name = "doesnotexist"
+			instance.Spec.OpenSearchRef.Name = "doesnotexist"
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
@@ -823,7 +823,7 @@ var _ = Describe("ism policy reconciler", func() {
 
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
-					instance.Spec.OpensearchRef.Name = "doesnotexist"
+					instance.Spec.OpenSearchRef.Name = "doesnotexist"
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 

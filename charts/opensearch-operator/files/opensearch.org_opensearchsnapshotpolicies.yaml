@@ -8,8 +8,8 @@ metadata:
 spec:
   group: opensearch.org
   names:
-    kind: OpensearchSnapshotPolicy
-    listKind: OpensearchSnapshotPolicyList
+    kind: OpenSearchSnapshotPolicy
+    listKind: OpenSearchSnapshotPolicyList
     plural: opensearchsnapshotpolicies
     singular: opensearchsnapshotpolicy
   scope: Namespaced
@@ -32,7 +32,7 @@ spec:
     name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies
+        description: OpenSearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies
           API
         properties:
           apiVersion:
@@ -178,8 +178,8 @@ spec:
             - snapshotConfig
             type: object
           status:
-            description: OpensearchSnapshotPolicyStatus defines the observed state
-              of OpensearchSnapshotPolicy
+            description: OpenSearchSnapshotPolicyStatus defines the observed state
+              of OpenSearchSnapshotPolicy
             properties:
               existingSnapshotPolicy:
                 type: boolean

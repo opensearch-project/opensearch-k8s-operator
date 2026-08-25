@@ -8,8 +8,8 @@ metadata:
 spec:
   group: opensearch.org
   names:
-    kind: OpensearchTenant
-    listKind: OpensearchTenantList
+    kind: OpenSearchTenant
+    listKind: OpenSearchTenantList
     plural: opensearchtenants
     shortNames:
     - opensearchtenant
@@ -19,7 +19,7 @@ spec:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchTenant is the Schema for the opensearchtenants API
+        description: OpenSearchTenant is the Schema for the opensearchtenants API
         properties:
           apiVersion:
             description: |-
@@ -39,7 +39,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchTenantSpec defines the desired state of OpensearchTenant
+            description: OpenSearchTenantSpec defines the desired state of OpenSearchTenant
             properties:
               description:
                 type: string
@@ -63,7 +63,7 @@ spec:
             - opensearchCluster
             type: object
           status:
-            description: OpensearchTenantStatus defines the observed state of OpensearchTenant
+            description: OpenSearchTenantStatus defines the observed state of OpenSearchTenant
             properties:
               existingTenant:
                 type: boolean

@@ -68,13 +68,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 
 	Describe("ValidateCreate", func() {
 		It("should allow valid user creation", func() {
-			user := &opensearchv1.OpensearchUser{
+			user := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -92,13 +92,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 		})
 
 		It("should reject user with missing cluster reference", func() {
-			user := &opensearchv1.OpensearchUser{
+			user := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "non-existent-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -131,13 +131,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 			clientWithOldCluster := fake.NewClientBuilder().WithScheme(scheme).WithObjects(oldCluster).Build()
 			validator.Client = clientWithOldCluster
 
-			user := &opensearchv1.OpensearchUser{
+			user := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "old-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -155,13 +155,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 		})
 
 		It("should reject user with missing passwordFrom.name", func() {
-			user := &opensearchv1.OpensearchUser{
+			user := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -180,13 +180,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 		})
 
 		It("should reject user with missing passwordFrom.key", func() {
-			user := &opensearchv1.OpensearchUser{
+			user := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -207,13 +207,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 
 	Describe("ValidateUpdate", func() {
 		It("should allow valid user update", func() {
-			oldUser := &opensearchv1.OpensearchUser{
+			oldUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -224,13 +224,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					},
 				},
 			}
-			newUser := &opensearchv1.OpensearchUser{
+			newUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -248,13 +248,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 		})
 
 		It("should reject cluster reference change", func() {
-			oldUser := &opensearchv1.OpensearchUser{
+			oldUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -265,13 +265,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					},
 				},
 			}
-			newUser := &opensearchv1.OpensearchUser{
+			newUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "different-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -290,13 +290,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 		})
 
 		It("should reject update with missing passwordFrom.name", func() {
-			oldUser := &opensearchv1.OpensearchUser{
+			oldUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -307,13 +307,13 @@ var _ = Describe("OpenSearchUserValidator", func() {
 					},
 				},
 			}
-			newUser := &opensearchv1.OpensearchUser{
+			newUser := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchUserSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchUserSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					PasswordFrom: corev1.SecretKeySelector{
@@ -334,7 +334,7 @@ var _ = Describe("OpenSearchUserValidator", func() {
 
 	Describe("ValidateDelete", func() {
 		It("should always allow deletion", func() {
-			user := &opensearchv1.OpensearchUser{
+			user := &opensearchv1.OpenSearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-user",
 					Namespace: "default",

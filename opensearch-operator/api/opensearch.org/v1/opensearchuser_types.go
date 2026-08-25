@@ -22,26 +22,26 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type OpensearchUserState string
+type OpenSearchUserState string
 
 const (
-	OpensearchUserStatePending OpensearchUserState = "PENDING"
-	OpensearchUserStateCreated OpensearchUserState = "CREATED"
-	OpensearchUserStateError   OpensearchUserState = "ERROR"
+	OpenSearchUserStatePending OpenSearchUserState = "PENDING"
+	OpenSearchUserStateCreated OpenSearchUserState = "CREATED"
+	OpenSearchUserStateError   OpenSearchUserState = "ERROR"
 )
 
-// OpensearchUserSpec defines the desired state of OpensearchUser
-type OpensearchUserSpec struct {
-	OpensearchRef           corev1.LocalObjectReference `json:"opensearchCluster"`
+// OpenSearchUserSpec defines the desired state of OpenSearchUser
+type OpenSearchUserSpec struct {
+	OpenSearchRef           corev1.LocalObjectReference `json:"opensearchCluster"`
 	PasswordFrom            corev1.SecretKeySelector    `json:"passwordFrom"`
 	OpendistroSecurityRoles []string                    `json:"opendistroSecurityRoles,omitempty"`
 	BackendRoles            []string                    `json:"backendRoles,omitempty"`
 	Attributes              map[string]string           `json:"attributes,omitempty"`
 }
 
-// OpensearchUserStatus defines the observed state of OpensearchUser
-type OpensearchUserStatus struct {
-	State          OpensearchUserState `json:"state,omitempty"`
+// OpenSearchUserStatus defines the observed state of OpenSearchUser
+type OpenSearchUserStatus struct {
+	State          OpenSearchUserState `json:"state,omitempty"`
 	Reason         string              `json:"reason,omitempty"`
 	ManagedCluster *types.UID          `json:"managedCluster,omitempty"`
 }
@@ -50,29 +50,29 @@ type OpensearchUserStatus struct {
 //+kubebuilder:resource:shortName=opensearchuser
 //+kubebuilder:subresource:status
 
-// OpensearchUser is the Schema for the opensearchusers API
-type OpensearchUser struct {
+// OpenSearchUser is the Schema for the opensearchusers API
+type OpenSearchUser struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpensearchUserSpec   `json:"spec,omitempty"`
-	Status OpensearchUserStatus `json:"status,omitempty"`
+	Spec   OpenSearchUserSpec   `json:"spec,omitempty"`
+	Status OpenSearchUserStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// OpensearchUserList contains a list of OpensearchUser
-type OpensearchUserList struct {
+// OpenSearchUserList contains a list of OpenSearchUser
+type OpenSearchUserList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpensearchUser `json:"items"`
+	Items           []OpenSearchUser `json:"items"`
 }
 
-// GetOpensearchRef returns the OpenSearch cluster reference
-func (u *OpensearchUser) GetOpensearchRef() corev1.LocalObjectReference {
-	return u.Spec.OpensearchRef
+// GetOpenSearchRef returns the OpenSearch cluster reference
+func (u *OpenSearchUser) GetOpenSearchRef() corev1.LocalObjectReference {
+	return u.Spec.OpenSearchRef
 }
 
 func init() {
-	SchemeBuilder.Register(&OpensearchUser{}, &OpensearchUserList{})
+	SchemeBuilder.Register(&OpenSearchUser{}, &OpenSearchUserList{})
 }

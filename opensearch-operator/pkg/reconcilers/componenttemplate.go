@@ -23,7 +23,7 @@ import (
 
 const (
 	opensearchComponentTemplateExists       = "component template already exists in OpenSearch; not modifying"
-	opensearchComponentTemplateNameMismatch = "OpensearchComponentTemplateNameMismatch"
+	opensearchComponentTemplateNameMismatch = "OpenSearchComponentTemplateNameMismatch"
 )
 
 type ComponentTemplateReconciler struct {
@@ -32,7 +32,7 @@ type ComponentTemplateReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opensearchv1.OpensearchComponentTemplate
+	instance *opensearchv1.OpenSearchComponentTemplate
 	cluster  *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
@@ -41,7 +41,7 @@ func NewComponentTemplateReconciler(
 	ctx context.Context,
 	client client.Client,
 	recorder record.EventRecorder,
-	instance *opensearchv1.OpensearchComponentTemplate,
+	instance *opensearchv1.OpenSearchComponentTemplate,
 	opts ...ReconcilerOption,
 ) *ComponentTemplateReconciler {
 	options := ReconcilerOptions{}
@@ -66,19 +66,19 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opensearchv1.OpensearchComponentTemplate)
+			instance := object.(*opensearchv1.OpenSearchComponentTemplate)
 			instance.Status.Reason = reason
 			if err != nil {
-				instance.Status.State = opensearchv1.OpensearchComponentTemplateError
+				instance.Status.State = opensearchv1.OpenSearchComponentTemplateError
 			}
 			if result.Requeue && result.RequeueAfter == 10*time.Second {
-				instance.Status.State = opensearchv1.OpensearchComponentTemplatePending
+				instance.Status.State = opensearchv1.OpenSearchComponentTemplatePending
 			}
 			if err == nil && result.RequeueAfter == 30*time.Second {
-				instance.Status.State = opensearchv1.OpensearchComponentTemplateCreated
+				instance.Status.State = opensearchv1.OpenSearchComponentTemplateCreated
 			}
 			if reason == opensearchComponentTemplateExists {
-				instance.Status.State = opensearchv1.OpensearchComponentTemplateIgnored
+				instance.Status.State = opensearchv1.OpenSearchComponentTemplateIgnored
 			}
 		})
 
@@ -91,8 +91,8 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		r.recorder.Event(r.instance, "Warning", opensearchAPIUpdated, "OpenSearch Component Index template does not support allow_auto_create")
 	}
 
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {
@@ -124,7 +124,7 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 	} else {
 		if ptr.Deref(r.updateStatus, true) {
 			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchComponentTemplate)
+				instance := object.(*opensearchv1.OpenSearchComponentTemplate)
 				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if err != nil {
@@ -171,7 +171,7 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		}
 		if ptr.Deref(r.updateStatus, true) {
 			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchComponentTemplate)
+				instance := object.(*opensearchv1.OpenSearchComponentTemplate)
 				instance.Status.ExistingComponentTemplate = &exists
 			})
 			if err != nil {
@@ -243,8 +243,8 @@ func (r *ComponentTemplateReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {

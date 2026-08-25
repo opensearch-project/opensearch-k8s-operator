@@ -4,18 +4,18 @@ import (
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 )
 
-type OpensearchDatastreamTimestampFieldSpec struct {
+type OpenSearchDatastreamTimestampFieldSpec struct {
 	// Name of the field that are used for the DataStream
 	Name string `json:"name"`
 }
 
-type OpensearchDatastreamSpec struct {
+type OpenSearchDatastreamSpec struct {
 	// TimestampField for dataStream
-	TimestampField OpensearchDatastreamTimestampFieldSpec `json:"timestamp_field,omitempty"`
+	TimestampField OpenSearchDatastreamTimestampFieldSpec `json:"timestamp_field,omitempty"`
 }
 
 // Describes the specs of an index
-type OpensearchIndexSpec struct {
+type OpenSearchIndexSpec struct {
 	// Configuration options for the index
 	Settings *apiextensionsv1.JSON `json:"settings,omitempty"`
 
@@ -23,11 +23,11 @@ type OpensearchIndexSpec struct {
 	Mappings *apiextensionsv1.JSON `json:"mappings,omitempty"`
 
 	// Aliases to add
-	Aliases map[string]OpensearchIndexAliasSpec `json:"aliases,omitempty"`
+	Aliases map[string]OpenSearchIndexAliasSpec `json:"aliases,omitempty"`
 }
 
 // Describes the specs of an index alias
-type OpensearchIndexAliasSpec struct {
+type OpenSearchIndexAliasSpec struct {
 	// The name of the index that the alias points to.
 	Index string `json:"index,omitempty"`
 

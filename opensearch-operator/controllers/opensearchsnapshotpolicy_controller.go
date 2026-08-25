@@ -32,11 +32,11 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
-// OpensearchSnapshotPolicyReconciler reconciles a OpensearchSnapshotPolicy object
-type OpensearchSnapshotPolicyReconciler struct {
+// OpenSearchSnapshotPolicyReconciler reconciles a OpenSearchSnapshotPolicy object
+type OpenSearchSnapshotPolicyReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
-	Instance *opensearchv1.OpensearchSnapshotPolicy
+	Instance *opensearchv1.OpenSearchSnapshotPolicy
 	logr.Logger
 	Recorder record.EventRecorder
 }
@@ -50,17 +50,17 @@ type OpensearchSnapshotPolicyReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
-// the OpensearchSnapshotPolicy object against the actual cluster state, and then
+// the OpenSearchSnapshotPolicy object against the actual cluster state, and then
 // perform operations to make the cluster state reflect the state specified by
 // the user.
 //
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.4/pkg/reconcile
-func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("snapshotpolicy", req.NamespacedName)
-	r.Info("Reconciling OpensearchSnapshotPolicy")
+	r.Info("Reconciling OpenSearchSnapshotPolicy")
 
-	r.Instance = &opensearchv1.OpensearchSnapshotPolicy{}
+	r.Instance = &opensearchv1.OpenSearchSnapshotPolicy{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -74,19 +74,19 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 	)
 
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return snapshotPolicyReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = snapshotPolicyReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -95,9 +95,9 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchSnapshotPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchSnapshotPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchSnapshotPolicy{}).
+		For(&opensearchv1.OpenSearchSnapshotPolicy{}).
 		Owns(&opensearchv1.OpenSearchCluster{}).
 		Complete(r)
 }

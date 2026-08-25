@@ -116,13 +116,13 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.ingress.dashboards.className` | string | `""` | Ingress class name |
 | `cluster.ingress.dashboards.hosts` | list | `[]` | Ingress hostnames |
 | `cluster.ingress.dashboards.tls` | list | `[]` | Ingress tls configuration |
-| `roles` | list | `[]` | List of OpensearchRole. Check values.yaml file for examples. |
-| `users` | list | `[]` | List of OpensearchUser. Check values.yaml file for examples. |
-| `usersRoleBinding` | list | `[]` | Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role Check values.yaml file for examples. |
+| `roles` | list | `[]` | List of OpenSearchRole. Check values.yaml file for examples. |
+| `users` | list | `[]` | List of OpenSearchUser. Check values.yaml file for examples. |
+| `usersRoleBinding` | list | `[]` | Allows to link any number of users, backend roles and roles with a OpenSearchUserRoleBinding. Each user in the binding will be granted each role Check values.yaml file for examples. |
 | `tenants` | list | `[]` | List of additional tenants. Check values.yaml file for examples. |
-| `actionGroups` | list | `[]` | List of OpensearchActionGroup. Check values.yaml file for examples. |
-| `componentTemplates` | list | `[]` | List of OpensearchComponentTemplate. Check values.yaml file for examples. |
-| `indexTemplates` | list | `[]` | List of OpensearchIndexTemplate. Check values.yaml file for examples. |
+| `actionGroups` | list | `[]` | List of OpenSearchActionGroup. Check values.yaml file for examples. |
+| `componentTemplates` | list | `[]` | List of OpenSearchComponentTemplate. Check values.yaml file for examples. |
+| `indexTemplates` | list | `[]` | List of OpenSearchIndexTemplate. Check values.yaml file for examples. |
 | `ismPolicies` | list | `[]` | List of OpenSearchISMPolicy. Check values.yaml file for examples. |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.

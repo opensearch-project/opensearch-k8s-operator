@@ -6,18 +6,18 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type OpensearchISMPolicyState string
+type OpenSearchISMPolicyState string
 
 const (
-	OpensearchISMPolicyPending OpensearchISMPolicyState = "PENDING"
-	OpensearchISMPolicyCreated OpensearchISMPolicyState = "CREATED"
-	OpensearchISMPolicyError   OpensearchISMPolicyState = "ERROR"
-	OpensearchISMPolicyIgnored OpensearchISMPolicyState = "IGNORED"
+	OpenSearchISMPolicyPending OpenSearchISMPolicyState = "PENDING"
+	OpenSearchISMPolicyCreated OpenSearchISMPolicyState = "CREATED"
+	OpenSearchISMPolicyError   OpenSearchISMPolicyState = "ERROR"
+	OpenSearchISMPolicyIgnored OpenSearchISMPolicyState = "IGNORED"
 )
 
-// OpensearchISMPolicyStatus defines the observed state of OpensearchISMPolicy
-type OpensearchISMPolicyStatus struct {
-	State             OpensearchISMPolicyState `json:"state,omitempty"`
+// OpenSearchISMPolicyStatus defines the observed state of OpenSearchISMPolicy
+type OpenSearchISMPolicyStatus struct {
+	State             OpenSearchISMPolicyState `json:"state,omitempty"`
 	Reason            string                   `json:"reason,omitempty"`
 	ExistingISMPolicy *bool                    `json:"existingISMPolicy,omitempty"`
 	ManagedCluster    *types.UID               `json:"managedCluster,omitempty"`
@@ -34,12 +34,12 @@ type OpenSearchISMPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              OpenSearchISMPolicySpec   `json:"spec,omitempty"`
-	Status            OpensearchISMPolicyStatus `json:"status,omitempty"`
+	Status            OpenSearchISMPolicyStatus `json:"status,omitempty"`
 }
 
 // ISMPolicySpec is the specification for the ISM policy for OS.
 type OpenSearchISMPolicySpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster,omitempty"`
+	OpenSearchRef corev1.LocalObjectReference `json:"opensearchCluster,omitempty"`
 	// The default starting state for each index that uses this policy.
 	DefaultState string `json:"defaultState"`
 	// A human-readable description of the policy.
@@ -272,9 +272,9 @@ type OpenSearchISMPolicyList struct {
 	Items           []OpenSearchISMPolicy `json:"items"`
 }
 
-// GetOpensearchRef returns the OpenSearch cluster reference
-func (p *OpenSearchISMPolicy) GetOpensearchRef() corev1.LocalObjectReference {
-	return p.Spec.OpensearchRef
+// GetOpenSearchRef returns the OpenSearch cluster reference
+func (p *OpenSearchISMPolicy) GetOpenSearchRef() corev1.LocalObjectReference {
+	return p.Spec.OpenSearchRef
 }
 
 func init() {

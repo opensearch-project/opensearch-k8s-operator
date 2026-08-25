@@ -5,6 +5,8 @@
 The Kubernetes OpenSearch Operator is used for automating the deployment, provisioning, management, and orchestration of OpenSearch clusters and OpenSearch dashboards.
 
 > **API Group Migration Notice:** The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Please see the Migration Guide for details.
+>
+> **3.0 CRD kind names:** On `opensearch.org`, all custom resource `kind` values use `OpenSearch*` (capital **S**), for example `OpenSearchRole`. The deprecated `opensearch.opster.io` group keeps the original `Opensearch*` kinds. See the [kind rename notes](./docs/userguide/migration-guide.md#breaking-change-in-30-crd-kind-capitalization).
 
 ## Getting started
 

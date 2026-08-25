@@ -8,8 +8,8 @@ metadata:
 spec:
   group: opensearch.org
   names:
-    kind: OpensearchRole
-    listKind: OpensearchRoleList
+    kind: OpenSearchRole
+    listKind: OpenSearchRoleList
     plural: opensearchroles
     shortNames:
     - opensearchrole
@@ -19,7 +19,7 @@ spec:
   - name: v1
     schema:
       openAPIV3Schema:
-        description: OpensearchRole is the Schema for the opensearchroles API
+        description: OpenSearchRole is the Schema for the opensearchroles API
         properties:
           apiVersion:
             description: |-
@@ -39,7 +39,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: OpensearchRoleSpec defines the desired state of OpensearchRole
+            description: OpenSearchRoleSpec defines the desired state of OpenSearchRole
             properties:
               clusterPermissions:
                 items:
@@ -101,7 +101,7 @@ spec:
             - opensearchCluster
             type: object
           status:
-            description: OpensearchRoleStatus defines the observed state of OpensearchRole
+            description: OpenSearchRoleStatus defines the observed state of OpenSearchRole
             properties:
               existingRole:
                 type: boolean

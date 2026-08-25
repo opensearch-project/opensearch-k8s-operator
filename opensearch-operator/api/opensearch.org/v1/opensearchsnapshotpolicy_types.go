@@ -25,17 +25,17 @@ import (
 // NOTE: Add or update CRD fields below to introduce new features or modify functionality.
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-type OpensearchSnapshotPolicyState string
+type OpenSearchSnapshotPolicyState string
 
 const (
-	OpensearchSnapshotPolicyPending OpensearchSnapshotPolicyState = "PENDING"
-	OpensearchSnapshotPolicyCreated OpensearchSnapshotPolicyState = "CREATED"
-	OpensearchSnapshotPolicyError   OpensearchSnapshotPolicyState = "ERROR"
-	OpensearchSnapshotPolicyIgnored OpensearchSnapshotPolicyState = "IGNORED"
+	OpenSearchSnapshotPolicyPending OpenSearchSnapshotPolicyState = "PENDING"
+	OpenSearchSnapshotPolicyCreated OpenSearchSnapshotPolicyState = "CREATED"
+	OpenSearchSnapshotPolicyError   OpenSearchSnapshotPolicyState = "ERROR"
+	OpenSearchSnapshotPolicyIgnored OpenSearchSnapshotPolicyState = "IGNORED"
 )
 
-type OpensearchSnapshotPolicySpec struct {
-	OpensearchRef  corev1.LocalObjectReference `json:"opensearchCluster"`
+type OpenSearchSnapshotPolicySpec struct {
+	OpenSearchRef  corev1.LocalObjectReference `json:"opensearchCluster"`
 	PolicyName     string                      `json:"policyName"`
 	Description    *string                     `json:"description,omitempty"`
 	Enabled        *bool                       `json:"enabled,omitempty"`
@@ -100,9 +100,9 @@ type NotificationConditions struct {
 	Failure  *bool `json:"failure,omitempty"`
 }
 
-// OpensearchSnapshotPolicyStatus defines the observed state of OpensearchSnapshotPolicy
-type OpensearchSnapshotPolicyStatus struct {
-	State                  OpensearchSnapshotPolicyState `json:"state,omitempty"`
+// OpenSearchSnapshotPolicyStatus defines the observed state of OpenSearchSnapshotPolicy
+type OpenSearchSnapshotPolicyStatus struct {
+	State                  OpenSearchSnapshotPolicyState `json:"state,omitempty"`
 	Reason                 string                        `json:"reason,omitempty"`
 	SnapshotPolicyName     string                        `json:"snapshotPolicyName,omitempty"`
 	ManagedCluster         *types.UID                    `json:"managedCluster,omitempty"`
@@ -112,33 +112,33 @@ type OpensearchSnapshotPolicyStatus struct {
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// OpensearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies API
+// OpenSearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies API
 // +kubebuilder:printcolumn:name="existingpolicy",type="boolean",JSONPath=".status.existingSnapshotPolicy",description="Existing policy state"
 // +kubebuilder:printcolumn:name="policyName",type="string",JSONPath=".status.snapshotPolicyName",description="Snapshot policy name"
 // +kubebuilder:printcolumn:name="state",type="string",JSONPath=".status.state"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
-type OpensearchSnapshotPolicy struct {
+type OpenSearchSnapshotPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpensearchSnapshotPolicySpec   `json:"spec,omitempty"`
-	Status OpensearchSnapshotPolicyStatus `json:"status,omitempty"`
+	Spec   OpenSearchSnapshotPolicySpec   `json:"spec,omitempty"`
+	Status OpenSearchSnapshotPolicyStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// OpensearchSnapshotPolicyList contains a list of OpensearchSnapshotPolicy
-type OpensearchSnapshotPolicyList struct {
+// OpenSearchSnapshotPolicyList contains a list of OpenSearchSnapshotPolicy
+type OpenSearchSnapshotPolicyList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpensearchSnapshotPolicy `json:"items"`
+	Items           []OpenSearchSnapshotPolicy `json:"items"`
 }
 
-// GetOpensearchRef returns the OpenSearch cluster reference
-func (sp *OpensearchSnapshotPolicy) GetOpensearchRef() corev1.LocalObjectReference {
-	return sp.Spec.OpensearchRef
+// GetOpenSearchRef returns the OpenSearch cluster reference
+func (sp *OpenSearchSnapshotPolicy) GetOpenSearchRef() corev1.LocalObjectReference {
+	return sp.Spec.OpenSearchRef
 }
 
 func init() {
-	SchemeBuilder.Register(&OpensearchSnapshotPolicy{}, &OpensearchSnapshotPolicyList{})
+	SchemeBuilder.Register(&OpenSearchSnapshotPolicy{}, &OpenSearchSnapshotPolicyList{})
 }

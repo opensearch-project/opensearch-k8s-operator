@@ -370,7 +370,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchActionGroup",
+		Kind:    "OpenSearchActionGroup",
 	})
 	actionGroup.SetName("test-action-group")
 	actionGroup.SetNamespace(namespace)
@@ -401,7 +401,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	role.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchRole",
+		Kind:    "OpenSearchRole",
 	})
 	role.SetName("test-role")
 	role.SetNamespace(namespace)
@@ -446,7 +446,7 @@ func createTestCRDs(clusterName, namespace string) error {
 	user.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchUser",
+		Kind:    "OpenSearchUser",
 	})
 	user.SetName("test-user")
 	user.SetNamespace(namespace)
@@ -479,7 +479,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchActionGroup",
+		Kind:    "OpenSearchActionGroup",
 	})
 	err := k8sClient.Get(context.Background(), client.ObjectKey{Name: "test-action-group", Namespace: namespace}, actionGroup)
 	if err != nil {
@@ -491,7 +491,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	role.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchRole",
+		Kind:    "OpenSearchRole",
 	})
 	err = k8sClient.Get(context.Background(), client.ObjectKey{Name: "test-role", Namespace: namespace}, role)
 	if err != nil {
@@ -503,7 +503,7 @@ func verifyTestCRDs(clusterName, namespace string) error {
 	user.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchUser",
+		Kind:    "OpenSearchUser",
 	})
 	err = k8sClient.Get(context.Background(), client.ObjectKey{Name: "test-user", Namespace: namespace}, user)
 	if err != nil {
@@ -520,7 +520,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	actionGroup.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchActionGroup",
+		Kind:    "OpenSearchActionGroup",
 	})
 	actionGroup.SetName("test-action-group")
 	actionGroup.SetNamespace(namespace)
@@ -531,7 +531,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	role.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchRole",
+		Kind:    "OpenSearchRole",
 	})
 	role.SetName("test-role")
 	role.SetNamespace(namespace)
@@ -542,7 +542,7 @@ func cleanupTestCRDs(clusterName, namespace string) {
 	user.SetGroupVersionKind(schema.GroupVersionKind{
 		Group:   "opensearch.org",
 		Version: "v1",
-		Kind:    "OpensearchUser",
+		Kind:    "OpenSearchUser",
 	})
 	user.SetName("test-user")
 	user.SetNamespace(namespace)

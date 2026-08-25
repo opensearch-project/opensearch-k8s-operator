@@ -27,7 +27,7 @@ var _ = Describe("tenant reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *TenantReconciler
-		instance   *opensearchv1.OpensearchTenant
+		instance   *opensearchv1.OpenSearchTenant
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
@@ -40,14 +40,14 @@ var _ = Describe("tenant reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opensearchv1.OpensearchTenant{
+		instance = &opensearchv1.OpenSearchTenant{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-tenant",
 				Namespace: "test-tenant",
 				UID:       "testuid",
 			},
-			Spec: opensearchv1.OpensearchTenantSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+			Spec: opensearchv1.OpenSearchTenantSpec{
+				OpenSearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 				Description: "test-description",
@@ -107,7 +107,7 @@ var _ = Describe("tenant reconciler", func() {
 
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
-			instance.Spec.OpensearchRef.Name = "doesnotexist"
+			instance.Spec.OpenSearchRef.Name = "doesnotexist"
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
@@ -408,7 +408,7 @@ var _ = Describe("tenant reconciler", func() {
 
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
-					instance.Spec.OpensearchRef.Name = "doesnotexist"
+					instance.Spec.OpenSearchRef.Name = "doesnotexist"
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 				It("should do nothing and exit", func() {

@@ -14,12 +14,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// OpensearchIndexTemplateReconciler reconciles a OpensearchIndexTemplate object
-type OpensearchIndexTemplateReconciler struct {
+// OpenSearchIndexTemplateReconciler reconciles a OpenSearchIndexTemplate object
+type OpenSearchIndexTemplateReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchIndexTemplate
+	Instance *opensearchv1.OpenSearchIndexTemplate
 	logr.Logger
 }
 
@@ -31,11 +31,11 @@ type OpensearchIndexTemplateReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchIndexTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchIndexTemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("indextemplate", req.NamespacedName)
-	r.Info("Reconciling OpensearchIndexTemplate")
+	r.Info("Reconciling OpenSearchIndexTemplate")
 
-	r.Instance = &opensearchv1.OpensearchIndexTemplate{}
+	r.Instance = &opensearchv1.OpenSearchIndexTemplate{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -49,19 +49,19 @@ func (r *OpensearchIndexTemplateReconciler) Reconcile(ctx context.Context, req c
 	)
 
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return indexTemplateReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = indexTemplateReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -70,9 +70,9 @@ func (r *OpensearchIndexTemplateReconciler) Reconcile(ctx context.Context, req c
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchIndexTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchIndexTemplateReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchIndexTemplate{}).
+		For(&opensearchv1.OpenSearchIndexTemplate{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }

@@ -117,8 +117,8 @@ func ArrayElementContains(array []string, content string) bool {
 	return false
 }
 
-func ComposeOpensearchCrd(clusterName string, namespace string) opensearchv1.OpenSearchCluster {
-	OpensearchCluster := &opensearchv1.OpenSearchCluster{
+func ComposeOpenSearchCrd(clusterName string, namespace string) opensearchv1.OpenSearchCluster {
+	OpenSearchCluster := &opensearchv1.OpenSearchCluster{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "OpenSearchCluster",
 			APIVersion: "opensearch.org/v1",
@@ -310,5 +310,5 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opensearchv1.Ope
 			},
 		},
 	}
-	return *OpensearchCluster
+	return *OpenSearchCluster
 }

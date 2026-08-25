@@ -31,12 +31,12 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
-// OpensearchUserRoleBindingReconciler reconciles a OpensearchUserRoleBinding object
-type OpensearchUserRoleBindingReconciler struct {
+// OpenSearchUserRoleBindingReconciler reconciles a OpenSearchUserRoleBinding object
+type OpenSearchUserRoleBindingReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchUserRoleBinding
+	Instance *opensearchv1.OpenSearchUserRoleBinding
 	logr.Logger
 }
 
@@ -48,11 +48,11 @@ type OpensearchUserRoleBindingReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("userrolebinding", req.NamespacedName)
-	r.Info("Reconciling OpensearchUserRoleBinding")
+	r.Info("Reconciling OpenSearchUserRoleBinding")
 
-	r.Instance = &opensearchv1.OpensearchUserRoleBinding{}
+	r.Instance = &opensearchv1.OpenSearchUserRoleBinding{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -66,19 +66,19 @@ func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req
 	)
 
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return userRoleBindingReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = userRoleBindingReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -87,9 +87,9 @@ func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchUserRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchUserRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchUserRoleBinding{}).
+		For(&opensearchv1.OpenSearchUserRoleBinding{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }

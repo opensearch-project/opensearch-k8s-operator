@@ -15,12 +15,12 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// OpensearchActionGroupReconciler reconciles a OpensearchActionGroup object
-type OpensearchActionGroupReconciler struct {
+// OpenSearchActionGroupReconciler reconciles a OpenSearchActionGroup object
+type OpenSearchActionGroupReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchActionGroup
+	Instance *opensearchv1.OpenSearchActionGroup
 	logr.Logger
 }
 
@@ -32,11 +32,11 @@ type OpensearchActionGroupReconciler struct {
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
-func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+func (r *OpenSearchActionGroupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	r.Logger = log.FromContext(ctx).WithValues("actiongroup", req.NamespacedName)
-	r.Info("Reconciling OpensearchActionGroup")
+	r.Info("Reconciling OpenSearchActionGroup")
 
-	r.Instance = &opensearchv1.OpensearchActionGroup{}
+	r.Instance = &opensearchv1.OpenSearchActionGroup{}
 	err := r.Get(ctx, req.NamespacedName, r.Instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
@@ -50,19 +50,19 @@ func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctr
 	)
 
 	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
+		controllerutil.AddFinalizer(r.Instance, OpenSearchFinalizer)
 		err = r.Update(ctx, r.Instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return actionGroupReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(r.Instance, OpenSearchFinalizer) {
 			err = actionGroupReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
+			controllerutil.RemoveFinalizer(r.Instance, OpenSearchFinalizer)
 			return ctrl.Result{}, r.Update(ctx, r.Instance)
 		}
 	}
@@ -71,9 +71,9 @@ func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctr
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchActionGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchActionGroupReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		For(&opensearchv1.OpensearchActionGroup{}).
+		For(&opensearchv1.OpenSearchActionGroup{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
 		Complete(r)
 }

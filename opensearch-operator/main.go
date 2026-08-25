@@ -197,76 +197,76 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err = (&controllers.OpensearchUserReconciler{
+	if err = (&controllers.OpenSearchUserReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("user-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchUser")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchUser")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchRoleReconciler{
+	if err = (&controllers.OpenSearchRoleReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("role-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchRole")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchRole")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchISMPolicyReconciler{
+	if err = (&controllers.OpenSearchISMPolicyReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("ism-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchISM")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchISM")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchTenantReconciler{
+	if err = (&controllers.OpenSearchTenantReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("tenant-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchTenant")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchTenant")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchUserRoleBindingReconciler{
+	if err = (&controllers.OpenSearchUserRoleBindingReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("userrolebinding-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchUserRoleBinding")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchUserRoleBinding")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchActionGroupReconciler{
+	if err = (&controllers.OpenSearchActionGroupReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("actiongroup-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchActionGroup")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchActionGroup")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchIndexTemplateReconciler{
+	if err = (&controllers.OpenSearchIndexTemplateReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("indextemplate-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchIndexTemplate")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchIndexTemplate")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchComponentTemplateReconciler{
+	if err = (&controllers.OpenSearchComponentTemplateReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("componenttemplate-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchComponentTemplate")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchComponentTemplate")
 		os.Exit(1)
 	}
-	if err = (&controllers.OpensearchSnapshotPolicyReconciler{
+	if err = (&controllers.OpenSearchSnapshotPolicyReconciler{
 		Client:   mgr.GetClient(),
 		Scheme:   mgr.GetScheme(),
 		Recorder: mgr.GetEventRecorderFor("snapshotpolicy-controller"),
 	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "OpensearchSnapshotPolicy")
+		setupLog.Error(err, "unable to create controller", "controller", "OpenSearchSnapshotPolicy")
 		os.Exit(1)
 	}
 

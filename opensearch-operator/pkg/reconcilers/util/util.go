@@ -247,7 +247,7 @@ func CreateAdditionalVolumes(
 	return
 }
 
-func OpensearchClusterURL(cluster *opensearchv1.OpenSearchCluster) string {
+func OpenSearchClusterURL(cluster *opensearchv1.OpenSearchCluster) string {
 	return helpers.ClusterURL(cluster)
 }
 
@@ -286,7 +286,7 @@ func CreateClientForCluster(
 	}
 
 	return services.NewOsClusterClient(
-		OpensearchClusterURL(cluster),
+		OpenSearchClusterURL(cluster),
 		username,
 		password,
 		opts...,
@@ -346,7 +346,7 @@ func loadOperatorClientTLSConfig(k8sClient k8s.K8sClient, cluster *opensearchv1.
 	return tlsCfg, nil
 }
 
-func FetchOpensearchCluster(
+func FetchOpenSearchCluster(
 	k8sClient k8s.K8sClient,
 	ctx context.Context,
 	ref types.NamespacedName,

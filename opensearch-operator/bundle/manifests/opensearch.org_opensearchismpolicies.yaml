@@ -437,7 +437,7 @@ spec:
             - states
             type: object
           status:
-            description: OpensearchISMPolicyStatus defines the observed state of OpensearchISMPolicy
+            description: OpenSearchISMPolicyStatus defines the observed state of OpenSearchISMPolicy
             properties:
               existingISMPolicy:
                 type: boolean

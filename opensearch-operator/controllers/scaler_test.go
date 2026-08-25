@@ -31,7 +31,7 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 		interval    = time.Second * 1
 	)
 	var (
-		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace)
+		OpenSearchCluster = ComposeOpenSearchCrd(clusterName, namespace)
 		nodePool          = appsv1.StatefulSet{}
 		cluster2          = opensearchv1.OpenSearchCluster{}
 	)
@@ -40,7 +40,7 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 
 	Context("When create OpenSearch CRD - nodes", func() {
 		It("Should create the namespace first", func() {
-			Expect(CreateNamespace(k8sClient, &OpensearchCluster)).Should(Succeed())
+			Expect(CreateNamespace(k8sClient, &OpenSearchCluster)).Should(Succeed())
 			By("Create cluster ns ")
 			Eventually(func() bool {
 				return IsNsCreated(k8sClient, namespace)
@@ -51,7 +51,7 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-secret",
-					Namespace: OpensearchCluster.Namespace,
+					Namespace: OpenSearchCluster.Namespace,
 				},
 				StringData: map[string]string{
 					"test.yml": "foobar",
@@ -70,7 +70,7 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 			cm := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cm",
-					Namespace: OpensearchCluster.Namespace,
+					Namespace: OpenSearchCluster.Namespace,
 				},
 				Data: map[string]string{
 					"test.yml": "foobar",
@@ -86,7 +86,7 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 		})
 
 		It("should apply the cluster instance successfully", func() {
-			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(k8sClient.Create(context.Background(), &OpenSearchCluster)).Should(Succeed())
 		})
 	})
 
@@ -96,23 +96,23 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 		It("should add a new status about the operation", func() {
 			By("Wait for cluster instance to be created")
 			Eventually(func() bool {
-				return k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &OpensearchCluster) == nil
+				return k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpenSearchCluster.Name}, &OpenSearchCluster) == nil
 			}, time.Second*10, interval).Should(BeTrue())
 			By("Update replicas")
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &OpensearchCluster); err != nil {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpenSearchCluster.Name}, &OpenSearchCluster); err != nil {
 					return err
 				}
-				OpensearchCluster.Spec.NodePools[0].Replicas = 2
+				OpenSearchCluster.Spec.NodePools[0].Replicas = 2
 
-				return k8sClient.Update(context.Background(), &OpensearchCluster)
+				return k8sClient.Update(context.Background(), &OpenSearchCluster)
 			})
 			Expect(err).ToNot(HaveOccurred())
-			status := len(OpensearchCluster.Status.ComponentsStatus)
+			status := len(OpenSearchCluster.Status.ComponentsStatus)
 
 			By("Check ComponentsStatus")
 			Eventually(func() bool {
-				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &cluster2); err != nil {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpenSearchCluster.Name}, &cluster2); err != nil {
 					return false
 				}
 				return status != len(cluster2.Status.ComponentsStatus)
@@ -141,25 +141,25 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 		It("should add a new status about the operation", func() {
 			By("Wait for cluster instance to be created")
 			Eventually(func() bool {
-				return k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &OpensearchCluster) == nil
+				return k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpenSearchCluster.Name}, &OpenSearchCluster) == nil
 			}, time.Second*10, interval).Should(BeTrue())
 			By("Update diskSize")
 			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &OpensearchCluster); err != nil {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpenSearchCluster.Name}, &OpenSearchCluster); err != nil {
 					return err
 				}
-				if OpensearchCluster.Spec.NodePools[0].Persistence == nil || OpensearchCluster.Spec.NodePools[0].Persistence.PVC != nil {
-					OpensearchCluster.Spec.NodePools[0].DiskSize = resource.MustParse("32Gi")
+				if OpenSearchCluster.Spec.NodePools[0].Persistence == nil || OpenSearchCluster.Spec.NodePools[0].Persistence.PVC != nil {
+					OpenSearchCluster.Spec.NodePools[0].DiskSize = resource.MustParse("32Gi")
 				}
 
-				return k8sClient.Update(context.Background(), &OpensearchCluster)
+				return k8sClient.Update(context.Background(), &OpenSearchCluster)
 			})
 			Expect(err).ToNot(HaveOccurred())
-			status := len(OpensearchCluster.Status.ComponentsStatus)
+			status := len(OpenSearchCluster.Status.ComponentsStatus)
 
 			By("Check ComponentsStatus")
 			Eventually(func() bool {
-				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &cluster2); err != nil {
+				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpenSearchCluster.Name}, &cluster2); err != nil {
 					return false
 				}
 				return status != len(cluster2.Status.ComponentsStatus)
@@ -174,7 +174,7 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: clusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
 					return false
 				}
-				if OpensearchCluster.Spec.NodePools[0].Persistence == nil || OpensearchCluster.Spec.NodePools[0].Persistence.PersistenceSource.PVC != nil {
+				if OpenSearchCluster.Spec.NodePools[0].Persistence == nil || OpenSearchCluster.Spec.NodePools[0].Persistence.PersistenceSource.PVC != nil {
 					existingDisk := nodePool.Spec.VolumeClaimTemplates[0].Spec.Resources.Requests.Storage().String()
 					return existingDisk == "32Gi"
 				}
@@ -187,10 +187,10 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 
 	Context("When deleting OpenSearch CRD ", func() {
 		It("should set correct owner references", func() {
-			for _, nodePoolSpec := range OpensearchCluster.Spec.NodePools {
+			for _, nodePoolSpec := range OpenSearchCluster.Spec.NodePools {
 				nodePool := appsv1.StatefulSet{}
 				Expect(k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-" + nodePoolSpec.Component}, &nodePool)).To(Succeed())
-				Expect(HasOwnerReference(&nodePool, &OpensearchCluster)).To(BeTrue())
+				Expect(HasOwnerReference(&nodePool, &OpenSearchCluster)).To(BeTrue())
 			}
 		})
 	})

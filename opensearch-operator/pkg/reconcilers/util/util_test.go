@@ -278,7 +278,7 @@ var _ = Describe("Additional volumes", func() {
 	})
 })
 
-var _ = Describe("OpensearchClusterURL", func() {
+var _ = Describe("OpenSearchClusterURL", func() {
 	When("HTTP TLS is enabled", func() {
 		It("should return https URL", func() {
 			enabled := true
@@ -300,7 +300,7 @@ var _ = Describe("OpensearchClusterURL", func() {
 			cluster.Name = "test-cluster"
 			cluster.Namespace = "test-namespace"
 
-			url := OpensearchClusterURL(cluster)
+			url := OpenSearchClusterURL(cluster)
 			Expect(url).To(ContainSubstring("https://"))
 			Expect(url).To(ContainSubstring("test-service"))
 			Expect(url).To(ContainSubstring("test-namespace"))
@@ -329,7 +329,7 @@ var _ = Describe("OpensearchClusterURL", func() {
 			cluster.Name = "test-cluster"
 			cluster.Namespace = "test-namespace"
 
-			url := OpensearchClusterURL(cluster)
+			url := OpenSearchClusterURL(cluster)
 			Expect(url).To(ContainSubstring("http://"))
 			Expect(url).NotTo(ContainSubstring("https://"))
 			Expect(url).To(ContainSubstring("test-service"))

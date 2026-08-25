@@ -4,7 +4,7 @@
 {{- range .Values.tenants }}
 ---
 apiVersion: {{ $apiGroup }}/v1
-kind: OpensearchTenant
+kind: {{ include "opensearch-cluster.kind" (dict "name" "Tenant" "apiGroup" $apiGroup) }}
 metadata:
   name: {{ .name }}
   namespace: {{ $.Release.Namespace }}

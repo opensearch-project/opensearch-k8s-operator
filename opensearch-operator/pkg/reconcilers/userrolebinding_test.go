@@ -26,7 +26,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *UserRoleBindingReconciler
-		instance   *opensearchv1.OpensearchUserRoleBinding
+		instance   *opensearchv1.OpenSearchUserRoleBinding
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
@@ -39,14 +39,14 @@ var _ = Describe("userrolebinding reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opensearchv1.OpensearchUserRoleBinding{
+		instance = &opensearchv1.OpenSearchUserRoleBinding{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-role",
 				Namespace: "test-urb",
 				UID:       types.UID("testuid"),
 			},
-			Spec: opensearchv1.OpensearchUserRoleBindingSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+			Spec: opensearchv1.OpenSearchUserRoleBindingSpec{
+				OpenSearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 				Users: []string{
@@ -114,7 +114,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
-			instance.Spec.OpensearchRef.Name = "doesnotexist"
+			instance.Spec.OpenSearchRef.Name = "doesnotexist"
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
@@ -830,7 +830,7 @@ var _ = Describe("userrolebinding reconciler", func() {
 	Context("deletions", func() {
 		When("cluster does not exist", func() {
 			BeforeEach(func() {
-				instance.Spec.OpensearchRef.Name = "doesnotexist"
+				instance.Spec.OpenSearchRef.Name = "doesnotexist"
 				mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			})
 			It("should do nothing and exit", func() {

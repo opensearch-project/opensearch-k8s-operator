@@ -1,5 +1,5 @@
 apiVersion: opensearch.org/v1
-kind: OpensearchIndexTemplate
+kind: OpenSearchIndexTemplate
 metadata:
   name: sample-index-template
 spec:

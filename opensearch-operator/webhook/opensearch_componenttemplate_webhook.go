@@ -42,14 +42,14 @@ func (v *OpenSearchComponentTemplateValidator) SetupWithManager(mgr ctrl.Manager
 	v.Client = mgr.GetClient()
 	v.decoder = admission.NewDecoder(mgr.GetScheme())
 	return ctrl.NewWebhookManagedBy(mgr).
-		For(&opensearchv1.OpensearchComponentTemplate{}).
+		For(&opensearchv1.OpenSearchComponentTemplate{}).
 		WithValidator(v).
 		Complete()
 }
 
 // ValidateCreate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchComponentTemplateValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	componentTemplate := obj.(*opensearchv1.OpensearchComponentTemplate)
+	componentTemplate := obj.(*opensearchv1.OpenSearchComponentTemplate)
 
 	// Validate that the OpenSearch cluster reference exists
 	if err := v.validateClusterReference(ctx, componentTemplate); err != nil {
@@ -61,8 +61,8 @@ func (v *OpenSearchComponentTemplateValidator) ValidateCreate(ctx context.Contex
 
 // ValidateUpdate implements webhook.Validator so a webhook will be registered for the type
 func (v *OpenSearchComponentTemplateValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
-	oldComponentTemplate := oldObj.(*opensearchv1.OpensearchComponentTemplate)
-	newComponentTemplate := newObj.(*opensearchv1.OpensearchComponentTemplate)
+	oldComponentTemplate := oldObj.(*opensearchv1.OpenSearchComponentTemplate)
+	newComponentTemplate := newObj.(*opensearchv1.OpenSearchComponentTemplate)
 
 	// Validate that the OpenSearch cluster reference hasn't changed
 	if err := v.validateClusterReferenceUnchanged(oldComponentTemplate, newComponentTemplate); err != nil {
@@ -84,11 +84,11 @@ func (v *OpenSearchComponentTemplateValidator) ValidateDelete(ctx context.Contex
 }
 
 // validateClusterReference validates that the referenced OpenSearch cluster exists
-func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx context.Context, componentTemplate *opensearchv1.OpensearchComponentTemplate) error {
+func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx context.Context, componentTemplate *opensearchv1.OpenSearchComponentTemplate) error {
 	// Try new API group first
 	cluster := &opensearchv1.OpenSearchCluster{}
 	err := v.Client.Get(ctx, types.NamespacedName{
-		Name:      componentTemplate.Spec.OpensearchRef.Name,
+		Name:      componentTemplate.Spec.OpenSearchRef.Name,
 		Namespace: componentTemplate.Namespace,
 	}, cluster)
 
@@ -96,10 +96,10 @@ func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx cont
 		// Fall back to old API group for backward compatibility
 		oldCluster := &opsterv1.OpenSearchCluster{}
 		if err := v.Client.Get(ctx, types.NamespacedName{
-			Name:      componentTemplate.Spec.OpensearchRef.Name,
+			Name:      componentTemplate.Spec.OpenSearchRef.Name,
 			Namespace: componentTemplate.Namespace,
 		}, oldCluster); err != nil {
-			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", componentTemplate.Spec.OpensearchRef.Name, err)
+			return fmt.Errorf("referenced OpenSearch cluster '%s' not found: %w", componentTemplate.Spec.OpenSearchRef.Name, err)
 		}
 	}
 
@@ -107,15 +107,15 @@ func (v *OpenSearchComponentTemplateValidator) validateClusterReference(ctx cont
 }
 
 // validateClusterReferenceUnchanged validates that the cluster reference hasn't changed
-func (v *OpenSearchComponentTemplateValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpensearchComponentTemplate) error {
-	if old.Spec.OpensearchRef.Name != new.Spec.OpensearchRef.Name {
+func (v *OpenSearchComponentTemplateValidator) validateClusterReferenceUnchanged(old, new *opensearchv1.OpenSearchComponentTemplate) error {
+	if old.Spec.OpenSearchRef.Name != new.Spec.OpenSearchRef.Name {
 		return fmt.Errorf("cannot change the cluster a component template refers to")
 	}
 	return nil
 }
 
 // validateComponentTemplateNameUnchanged validates that the component template name hasn't changed
-func (v *OpenSearchComponentTemplateValidator) validateComponentTemplateNameUnchanged(old, new *opensearchv1.OpensearchComponentTemplate) error {
+func (v *OpenSearchComponentTemplateValidator) validateComponentTemplateNameUnchanged(old, new *opensearchv1.OpenSearchComponentTemplate) error {
 	// Only validate if the old template had a name set in status
 	if old.Status.ComponentTemplateName != "" {
 		newTemplateName := helpers.GenComponentTemplateName(new)

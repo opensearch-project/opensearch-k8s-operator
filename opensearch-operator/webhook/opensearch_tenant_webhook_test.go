@@ -68,13 +68,13 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 
 	Describe("ValidateCreate", func() {
 		It("should allow valid tenant creation", func() {
-			tenant := &opensearchv1.OpensearchTenant{
+			tenant := &opensearchv1.OpenSearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchTenantSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 				},
@@ -86,13 +86,13 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 		})
 
 		It("should reject tenant with missing cluster reference", func() {
-			tenant := &opensearchv1.OpensearchTenant{
+			tenant := &opensearchv1.OpenSearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchTenantSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "non-existent-cluster",
 					},
 				},
@@ -119,13 +119,13 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 			clientWithOldCluster := fake.NewClientBuilder().WithScheme(scheme).WithObjects(oldCluster).Build()
 			validator.Client = clientWithOldCluster
 
-			tenant := &opensearchv1.OpensearchTenant{
+			tenant := &opensearchv1.OpenSearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchTenantSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "old-cluster",
 					},
 				},
@@ -139,24 +139,24 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 
 	Describe("ValidateUpdate", func() {
 		It("should allow valid tenant update", func() {
-			oldTenant := &opensearchv1.OpensearchTenant{
+			oldTenant := &opensearchv1.OpenSearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchTenantSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 				},
 			}
-			newTenant := &opensearchv1.OpensearchTenant{
+			newTenant := &opensearchv1.OpenSearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchTenantSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 				},
@@ -168,24 +168,24 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 		})
 
 		It("should reject cluster reference change", func() {
-			oldTenant := &opensearchv1.OpensearchTenant{
+			oldTenant := &opensearchv1.OpenSearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchTenantSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 				},
 			}
-			newTenant := &opensearchv1.OpensearchTenant{
+			newTenant := &opensearchv1.OpenSearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchTenantSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchTenantSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "different-cluster",
 					},
 				},
@@ -200,7 +200,7 @@ var _ = Describe("OpenSearchTenantValidator", func() {
 
 	Describe("ValidateDelete", func() {
 		It("should always allow deletion", func() {
-			tenant := &opensearchv1.OpensearchTenant{
+			tenant := &opensearchv1.OpenSearchTenant{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-tenant",
 					Namespace: "default",

@@ -47,7 +47,7 @@ func (v *OpenSearchUserLegacyValidator) SetupWithManager(mgr ctrl.Manager) error
 
 // ValidateCreate implements webhook.Validator
 func (v *OpenSearchUserLegacyValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Please use opensearch.org/v1 instead. Creation of old API group OpensearchUser resources is not allowed")
+	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Please use opensearch.org/v1 instead. Creation of old API group OpenSearchUser resources is not allowed")
 }
 
 // ValidateUpdate implements webhook.Validator
@@ -66,7 +66,7 @@ func (v *OpenSearchUserLegacyValidator) ValidateUpdate(ctx context.Context, oldO
 	}
 
 	// Deny spec changes
-	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Direct updates to old API group OpensearchUser resources are not allowed. Please update the opensearch.org/v1 resource instead")
+	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Direct updates to old API group OpenSearchUser resources are not allowed. Please update the opensearch.org/v1 resource instead")
 }
 
 // ValidateDelete implements webhook.Validator

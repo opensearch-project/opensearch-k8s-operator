@@ -28,7 +28,7 @@ var _ = Describe("indextemplate reconciler", func() {
 	var (
 		transport  *httpmock.MockTransport
 		reconciler *IndexTemplateReconciler
-		instance   *opensearchv1.OpensearchIndexTemplate
+		instance   *opensearchv1.OpenSearchIndexTemplate
 		recorder   *record.FakeRecorder
 		mockClient *k8s.MockK8sClient
 
@@ -41,30 +41,30 @@ var _ = Describe("indextemplate reconciler", func() {
 		mockClient = k8s.NewMockK8sClient(GinkgoT())
 		transport = httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
-		instance = &opensearchv1.OpensearchIndexTemplate{
+		instance = &opensearchv1.OpenSearchIndexTemplate{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "test-indextemplate",
 				Namespace: "test-indextemplate",
 				UID:       "testuid",
 			},
-			Spec: opensearchv1.OpensearchIndexTemplateSpec{
-				OpensearchRef: corev1.LocalObjectReference{
+			Spec: opensearchv1.OpenSearchIndexTemplateSpec{
+				OpenSearchRef: corev1.LocalObjectReference{
 					Name: "test-cluster",
 				},
 				Name:          "my-template",
 				IndexPatterns: []string{"my-logs-*"},
-				Template: opensearchv1.OpensearchIndexSpec{
+				Template: opensearchv1.OpenSearchIndexSpec{
 					Settings: &apiextensionsv1.JSON{
 						Raw: []byte(`{"index":{"number_of_replicas":"1","number_of_shards":"5","refresh_interval":"60s"}}`),
 					},
 					Mappings: &apiextensionsv1.JSON{},
-					Aliases:  make(map[string]opensearchv1.OpensearchIndexAliasSpec),
+					Aliases:  make(map[string]opensearchv1.OpenSearchIndexAliasSpec),
 				},
 				ComposedOf: []string{},
 				Priority:   0,
 				Version:    0,
 				Meta:       &apiextensionsv1.JSON{},
-				DataStream: &opensearchv1.OpensearchDatastreamSpec{TimestampField: opensearchv1.OpensearchDatastreamTimestampFieldSpec{Name: "@mytimestamp"}},
+				DataStream: &opensearchv1.OpenSearchDatastreamSpec{TimestampField: opensearchv1.OpenSearchDatastreamTimestampFieldSpec{Name: "@mytimestamp"}},
 			},
 		}
 
@@ -126,7 +126,7 @@ var _ = Describe("indextemplate reconciler", func() {
 
 	When("cluster doesn't exist", func() {
 		BeforeEach(func() {
-			instance.Spec.OpensearchRef.Name = "doesnotexist"
+			instance.Spec.OpenSearchRef.Name = "doesnotexist"
 			mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 			recorder = record.NewFakeRecorder(1)
 		})
@@ -464,7 +464,7 @@ var _ = Describe("indextemplate reconciler", func() {
 
 			When("cluster does not exist", func() {
 				BeforeEach(func() {
-					instance.Spec.OpensearchRef.Name = "doesnotexist"
+					instance.Spec.OpenSearchRef.Name = "doesnotexist"
 					mockClient.EXPECT().GetOpenSearchCluster(mock.Anything, mock.Anything).Return(opensearchv1.OpenSearchCluster{}, NotFoundError())
 				})
 				It("should do nothing and exit", func() {

@@ -4,7 +4,7 @@
 {{- range .Values.indexTemplates }}
 ---
 apiVersion: {{ $apiGroup }}/v1
-kind: OpensearchIndexTemplate
+kind: {{ include "opensearch-cluster.kind" (dict "name" "IndexTemplate" "apiGroup" $apiGroup) }}
 metadata:
   name: {{ .name }}
   namespace: {{ $.Release.Namespace }}

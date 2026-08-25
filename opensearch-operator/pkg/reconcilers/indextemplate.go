@@ -23,7 +23,7 @@ import (
 
 const (
 	opensearchIndexTemplateExists       = "index template already exists in OpenSearch; not modifying"
-	opensearchIndexTemplateNameMismatch = "OpensearchIndexTemplateNameMismatch"
+	opensearchIndexTemplateNameMismatch = "OpenSearchIndexTemplateNameMismatch"
 )
 
 type IndexTemplateReconciler struct {
@@ -32,7 +32,7 @@ type IndexTemplateReconciler struct {
 	ctx      context.Context
 	osClient *services.OsClusterClient
 	recorder record.EventRecorder
-	instance *opensearchv1.OpensearchIndexTemplate
+	instance *opensearchv1.OpenSearchIndexTemplate
 	cluster  *opensearchv1.OpenSearchCluster
 	logger   logr.Logger
 }
@@ -41,7 +41,7 @@ func NewIndexTemplateReconciler(
 	ctx context.Context,
 	client client.Client,
 	recorder record.EventRecorder,
-	instance *opensearchv1.OpensearchIndexTemplate,
+	instance *opensearchv1.OpenSearchIndexTemplate,
 	opts ...ReconcilerOption,
 ) *IndexTemplateReconciler {
 	options := ReconcilerOptions{}
@@ -67,20 +67,20 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 		// When the reconciler is done, figure out what the state of the resource
 		// is and set it in the state field accordingly.
 		err := r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			instance := object.(*opensearchv1.OpensearchIndexTemplate)
+			instance := object.(*opensearchv1.OpenSearchIndexTemplate)
 			instance.Status.Reason = reason
 			if err != nil {
-				instance.Status.State = opensearchv1.OpensearchIndexTemplateError
+				instance.Status.State = opensearchv1.OpenSearchIndexTemplateError
 			}
 			if result.Requeue && result.RequeueAfter == 10*time.Second {
-				instance.Status.State = opensearchv1.OpensearchIndexTemplatePending
+				instance.Status.State = opensearchv1.OpenSearchIndexTemplatePending
 			}
 			if err == nil && result.RequeueAfter == 30*time.Second {
-				instance.Status.State = opensearchv1.OpensearchIndexTemplateCreated
+				instance.Status.State = opensearchv1.OpenSearchIndexTemplateCreated
 				instance.Status.IndexTemplateName = templateName
 			}
 			if reason == opensearchIndexTemplateExists {
-				instance.Status.State = opensearchv1.OpensearchIndexTemplateIgnored
+				instance.Status.State = opensearchv1.OpenSearchIndexTemplateIgnored
 			}
 		})
 
@@ -89,8 +89,8 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 		}
 	}()
 
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {
@@ -122,7 +122,7 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 	} else {
 		if ptr.Deref(r.updateStatus, true) {
 			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchIndexTemplate)
+				instance := object.(*opensearchv1.OpenSearchIndexTemplate)
 				instance.Status.ManagedCluster = &r.cluster.UID
 			})
 			if err != nil {
@@ -169,7 +169,7 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 		}
 		if ptr.Deref(r.updateStatus, true) {
 			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-				instance := object.(*opensearchv1.OpensearchIndexTemplate)
+				instance := object.(*opensearchv1.OpenSearchIndexTemplate)
 				instance.Status.ExistingIndexTemplate = &exists
 			})
 			if err != nil {
@@ -241,8 +241,8 @@ func (r *IndexTemplateReconciler) Delete() error {
 
 	var err error
 
-	r.cluster, err = util.FetchOpensearchCluster(r.client, r.ctx, types.NamespacedName{
-		Name:      r.instance.Spec.OpensearchRef.Name,
+	r.cluster, err = util.FetchOpenSearchCluster(r.client, r.ctx, types.NamespacedName{
+		Name:      r.instance.Spec.OpenSearchRef.Name,
 		Namespace: r.instance.Namespace,
 	})
 	if err != nil {

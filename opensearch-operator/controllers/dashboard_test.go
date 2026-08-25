@@ -30,7 +30,7 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 		interval    = time.Second * 1
 	)
 	var (
-		OpensearchCluster = ComposeOpensearchCrd(clusterName, namespace)
+		OpenSearchCluster = ComposeOpenSearchCrd(clusterName, namespace)
 		cm                = corev1.ConfigMap{}
 		service           = corev1.Service{}
 		deploy            = sts.Deployment{}
@@ -40,7 +40,7 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 
 	Context("When create OpenSearch CRD - dash", func() {
 		It("Should create the namespace first", func() {
-			Expect(CreateNamespace(k8sClient, &OpensearchCluster)).Should(Succeed())
+			Expect(CreateNamespace(k8sClient, &OpenSearchCluster)).Should(Succeed())
 			By("Create cluster ns ")
 			Eventually(func() bool {
 				return IsNsCreated(k8sClient, namespace)
@@ -51,7 +51,7 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 			secret := &corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-secret",
-					Namespace: OpensearchCluster.Namespace,
+					Namespace: OpenSearchCluster.Namespace,
 				},
 				StringData: map[string]string{
 					"test.yml": "foobar",
@@ -70,7 +70,7 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 			cm := &corev1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cm",
-					Namespace: OpensearchCluster.Namespace,
+					Namespace: OpenSearchCluster.Namespace,
 				},
 				Data: map[string]string{
 					"test.yml": "foobar",
@@ -86,7 +86,7 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 		})
 
 		It("should apply the cluster instance successfully", func() {
-			Expect(k8sClient.Create(context.Background(), &OpensearchCluster)).Should(Succeed())
+			Expect(k8sClient.Create(context.Background(), &OpenSearchCluster)).Should(Succeed())
 		})
 	})
 
@@ -94,7 +94,7 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 
 	Context("When createing a OpenSearchCluster kind Instance - and Dashboard is Enable", func() {
 		It("should create all Opensearch-dashboard resources", func() {
-			//fmt.Println(OpensearchCluster)
+			//fmt.Println(OpenSearchCluster)
 			fmt.Println("\n DAShBOARD - START")
 
 			By("Opensearch Dashboard")
@@ -104,17 +104,17 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 				// Simulate the StatefulSet controller by marking all STS as ready,
 				// so that nodePoolsReady() in the scaler reconciler passes and
 				// the dashboards reconciler is allowed to run.
-				_ = MarkStsReady(k8sClient, OpensearchCluster.Namespace)
+				_ = MarkStsReady(k8sClient, OpenSearchCluster.Namespace)
 
 				//// -------- Dashboard tests ---------
-				if OpensearchCluster.Spec.Dashboards.Enable {
+				if OpenSearchCluster.Spec.Dashboards.Enable {
 					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-dashboards"}, &deploy); err != nil {
 						return false
 					}
 					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: clusterName + "-dashboards-config"}, &cm); err != nil {
 						return false
 					}
-					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: OpensearchCluster.Spec.General.ServiceName + "-dashboards"}, &service); err != nil {
+					if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: clusterName, Name: OpenSearchCluster.Spec.General.ServiceName + "-dashboards"}, &service); err != nil {
 						return false
 					}
 				}
@@ -122,18 +122,18 @@ var _ = Describe("Dashboards Reconciler", Ordered, func() {
 			}, timeout, interval).Should(BeTrue())
 		})
 		It("should set correct owner references", func() {
-			Expect(HasOwnerReference(&deploy, &OpensearchCluster)).To(BeTrue())
-			Expect(HasOwnerReference(&cm, &OpensearchCluster)).To(BeTrue())
-			Expect(HasOwnerReference(&service, &OpensearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&deploy, &OpenSearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&cm, &OpenSearchCluster)).To(BeTrue())
+			Expect(HasOwnerReference(&service, &OpenSearchCluster)).To(BeTrue())
 		})
 		It("should create and configure dashboard deployment correctly", func() {
-			if OpensearchCluster.Spec.Dashboards.Enable {
-				dashboardDeployName := fmt.Sprintf("%s-dashboards", OpensearchCluster.Name)
+			if OpenSearchCluster.Spec.Dashboards.Enable {
+				dashboardDeployName := fmt.Sprintf("%s-dashboards", OpenSearchCluster.Name)
 				deployment := &sts.Deployment{}
 				Eventually(func() error {
 					return k8sClient.Get(context.Background(), types.NamespacedName{
 						Name:      dashboardDeployName,
-						Namespace: OpensearchCluster.Namespace,
+						Namespace: OpenSearchCluster.Namespace,
 					}, deployment)
 				}, timeout, interval).Should(Succeed())
 				Expect(deployment.Spec.Replicas).To(Equal(ptr.To(int32(3))))

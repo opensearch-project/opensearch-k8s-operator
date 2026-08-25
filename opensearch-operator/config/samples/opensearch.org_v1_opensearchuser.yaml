@@ -1,5 +1,5 @@
 apiVersion: opensearch.org/v1
-kind: OpensearchUser
+kind: OpenSearchUser
 metadata:
   name: opensearch-user-sample
 spec:

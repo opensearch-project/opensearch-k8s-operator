@@ -9,16 +9,16 @@
 Package v1 contains API Schema definitions for the opensearch.org v1 API group
 
 ### Resource Types
+- [OpenSearchActionGroup](#opensearchactiongroup)
 - [OpenSearchCluster](#opensearchcluster)
+- [OpenSearchComponentTemplate](#opensearchcomponenttemplate)
 - [OpenSearchISMPolicy](#opensearchismpolicy)
-- [OpensearchActionGroup](#opensearchactiongroup)
-- [OpensearchComponentTemplate](#opensearchcomponenttemplate)
-- [OpensearchIndexTemplate](#opensearchindextemplate)
-- [OpensearchRole](#opensearchrole)
-- [OpensearchSnapshotPolicy](#opensearchsnapshotpolicy)
-- [OpensearchTenant](#opensearchtenant)
-- [OpensearchUser](#opensearchuser)
-- [OpensearchUserRoleBinding](#opensearchuserrolebinding)
+- [OpenSearchIndexTemplate](#opensearchindextemplate)
+- [OpenSearchRole](#opensearchrole)
+- [OpenSearchSnapshotPolicy](#opensearchsnapshotpolicy)
+- [OpenSearchTenant](#opensearchtenant)
+- [OpenSearchUser](#opensearchuser)
+- [OpenSearchUserRoleBinding](#opensearchuserrolebinding)
 
 
 
@@ -593,7 +593,7 @@ _Appears in:_
 
 
 _Appears in:_
-- [OpensearchRoleSpec](#opensearchrolespec)
+- [OpenSearchRoleSpec](#opensearchrolespec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -830,6 +830,45 @@ _Appears in:_
 
 
 
+#### OpenSearchActionGroup
+
+
+
+OpenSearchActionGroup is the Schema for the opensearchactiongroups API
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `opensearch.org/v1` | | |
+| `kind` _string_ | `OpenSearchActionGroup` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[OpenSearchActionGroupSpec](#opensearchactiongroupspec)_ |  |  |  |
+
+
+#### OpenSearchActionGroupSpec
+
+
+
+OpenSearchActionGroupSpec defines the desired state of OpenSearchActionGroup
+
+
+
+_Appears in:_
+- [OpenSearchActionGroup](#opensearchactiongroup)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `opensearchCluster` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ |  |  |  |
+| `allowedActions` _string array_ |  |  |  |
+| `type` _string_ |  |  |  |
+| `description` _string_ |  |  |  |
+
+
+
+
 #### OpenSearchCluster
 
 
@@ -846,6 +885,81 @@ Es is the Schema for the es API
 | `kind` _string_ | `OpenSearchCluster` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
 | `spec` _[ClusterSpec](#clusterspec)_ |  |  |  |
+
+
+
+
+#### OpenSearchComponentTemplate
+
+
+
+OpenSearchComponentTemplate is the schema for the OpenSearch component templates API
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `opensearch.org/v1` | | |
+| `kind` _string_ | `OpenSearchComponentTemplate` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[OpenSearchComponentTemplateSpec](#opensearchcomponenttemplatespec)_ |  |  |  |
+
+
+#### OpenSearchComponentTemplateSpec
+
+
+
+
+
+
+
+_Appears in:_
+- [OpenSearchComponentTemplate](#opensearchcomponenttemplate)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `opensearchCluster` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ |  |  |  |
+| `name` _string_ | The name of the component template. Defaults to metadata.name |  |  |
+| `template` _[OpenSearchIndexSpec](#opensearchindexspec)_ | The template that should be applied |  |  |
+| `version` _integer_ | Version number used to manage the component template externally |  |  |
+| `allowAutoCreate` _boolean_ | If true, then indices can be automatically created using this template |  |  |
+| `_meta` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#json-v1-apiextensions-k8s-io)_ | Optional user metadata about the component template |  |  |
+
+
+
+
+#### OpenSearchDatastreamSpec
+
+
+
+
+
+
+
+_Appears in:_
+- [OpenSearchIndexTemplateSpec](#opensearchindextemplatespec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `timestamp_field` _[OpenSearchDatastreamTimestampFieldSpec](#opensearchdatastreamtimestampfieldspec)_ | TimestampField for dataStream |  |  |
+
+
+#### OpenSearchDatastreamTimestampFieldSpec
+
+
+
+
+
+
+
+_Appears in:_
+- [OpenSearchDatastreamSpec](#opensearchdatastreamspec)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `name` _string_ | Name of the field that are used for the DataStream |  |  |
 
 
 
@@ -891,123 +1005,9 @@ _Appears in:_
 | `states` _[State](#state) array_ | The states that you define in the policy. |  |  |
 
 
-#### OpensearchActionGroup
 
 
-
-OpensearchActionGroup is the Schema for the opensearchactiongroups API
-
-
-
-
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.org/v1` | | |
-| `kind` _string_ | `OpensearchActionGroup` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[OpensearchActionGroupSpec](#opensearchactiongroupspec)_ |  |  |  |
-
-
-#### OpensearchActionGroupSpec
-
-
-
-OpensearchActionGroupSpec defines the desired state of OpensearchActionGroup
-
-
-
-_Appears in:_
-- [OpensearchActionGroup](#opensearchactiongroup)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `opensearchCluster` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ |  |  |  |
-| `allowedActions` _string array_ |  |  |  |
-| `type` _string_ |  |  |  |
-| `description` _string_ |  |  |  |
-
-
-
-
-
-
-#### OpensearchComponentTemplate
-
-
-
-OpensearchComponentTemplate is the schema for the OpenSearch component templates API
-
-
-
-
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.org/v1` | | |
-| `kind` _string_ | `OpensearchComponentTemplate` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[OpensearchComponentTemplateSpec](#opensearchcomponenttemplatespec)_ |  |  |  |
-
-
-#### OpensearchComponentTemplateSpec
-
-
-
-
-
-
-
-_Appears in:_
-- [OpensearchComponentTemplate](#opensearchcomponenttemplate)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `opensearchCluster` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ |  |  |  |
-| `name` _string_ | The name of the component template. Defaults to metadata.name |  |  |
-| `template` _[OpensearchIndexSpec](#opensearchindexspec)_ | The template that should be applied |  |  |
-| `version` _integer_ | Version number used to manage the component template externally |  |  |
-| `allowAutoCreate` _boolean_ | If true, then indices can be automatically created using this template |  |  |
-| `_meta` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#json-v1-apiextensions-k8s-io)_ | Optional user metadata about the component template |  |  |
-
-
-
-
-#### OpensearchDatastreamSpec
-
-
-
-
-
-
-
-_Appears in:_
-- [OpensearchIndexTemplateSpec](#opensearchindextemplatespec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `timestamp_field` _[OpensearchDatastreamTimestampFieldSpec](#opensearchdatastreamtimestampfieldspec)_ | TimestampField for dataStream |  |  |
-
-
-#### OpensearchDatastreamTimestampFieldSpec
-
-
-
-
-
-
-
-_Appears in:_
-- [OpensearchDatastreamSpec](#opensearchdatastreamspec)
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `name` _string_ | Name of the field that are used for the DataStream |  |  |
-
-
-
-
-#### OpensearchIndexAliasSpec
+#### OpenSearchIndexAliasSpec
 
 
 
@@ -1016,7 +1016,7 @@ Describes the specs of an index alias
 
 
 _Appears in:_
-- [OpensearchIndexSpec](#opensearchindexspec)
+- [OpenSearchIndexSpec](#opensearchindexspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1027,7 +1027,7 @@ _Appears in:_
 | `isWriteIndex` _boolean_ | If true, the index is the write index for the alias |  |  |
 
 
-#### OpensearchIndexSpec
+#### OpenSearchIndexSpec
 
 
 
@@ -1036,21 +1036,21 @@ Describes the specs of an index
 
 
 _Appears in:_
-- [OpensearchComponentTemplateSpec](#opensearchcomponenttemplatespec)
-- [OpensearchIndexTemplateSpec](#opensearchindextemplatespec)
+- [OpenSearchComponentTemplateSpec](#opensearchcomponenttemplatespec)
+- [OpenSearchIndexTemplateSpec](#opensearchindextemplatespec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `settings` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#json-v1-apiextensions-k8s-io)_ | Configuration options for the index |  |  |
 | `mappings` _[JSON](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#json-v1-apiextensions-k8s-io)_ | Mapping for fields in the index |  |  |
-| `aliases` _object (keys:string, values:[OpensearchIndexAliasSpec](#opensearchindexaliasspec))_ | Aliases to add |  |  |
+| `aliases` _object (keys:string, values:[OpenSearchIndexAliasSpec](#opensearchindexaliasspec))_ | Aliases to add |  |  |
 
 
-#### OpensearchIndexTemplate
+#### OpenSearchIndexTemplate
 
 
 
-OpensearchIndexTemplate is the schema for the OpenSearch index templates API
+OpenSearchIndexTemplate is the schema for the OpenSearch index templates API
 
 
 
@@ -1059,12 +1059,12 @@ OpensearchIndexTemplate is the schema for the OpenSearch index templates API
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `opensearch.org/v1` | | |
-| `kind` _string_ | `OpensearchIndexTemplate` | | |
+| `kind` _string_ | `OpenSearchIndexTemplate` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[OpensearchIndexTemplateSpec](#opensearchindextemplatespec)_ |  |  |  |
+| `spec` _[OpenSearchIndexTemplateSpec](#opensearchindextemplatespec)_ |  |  |  |
 
 
-#### OpensearchIndexTemplateSpec
+#### OpenSearchIndexTemplateSpec
 
 
 
@@ -1073,15 +1073,15 @@ OpensearchIndexTemplate is the schema for the OpenSearch index templates API
 
 
 _Appears in:_
-- [OpensearchIndexTemplate](#opensearchindextemplate)
+- [OpenSearchIndexTemplate](#opensearchindextemplate)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `opensearchCluster` _[LocalObjectReference](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#localobjectreference-v1-core)_ |  |  |  |
 | `name` _string_ | The name of the index template. Defaults to metadata.name |  |  |
 | `indexPatterns` _string array_ | Array of wildcard expressions used to match the names of indices during creation |  |  |
-| `dataStream` _[OpensearchDatastreamSpec](#opensearchdatastreamspec)_ | The dataStream config that should be applied |  |  |
-| `template` _[OpensearchIndexSpec](#opensearchindexspec)_ | The template that should be applied |  |  |
+| `dataStream` _[OpenSearchDatastreamSpec](#opensearchdatastreamspec)_ | The dataStream config that should be applied |  |  |
+| `template` _[OpenSearchIndexSpec](#opensearchindexspec)_ | The template that should be applied |  |  |
 | `composedOf` _string array_ | An ordered list of component template names. Component templates are merged in the order specified,<br />meaning that the last component template specified has the highest precedence |  |  |
 | `priority` _integer_ | Priority to determine index template precedence when a new data stream or index is created.<br />The index template with the highest priority is chosen |  |  |
 | `version` _integer_ | Version number used to manage the component template externally |  |  |
@@ -1090,11 +1090,11 @@ _Appears in:_
 
 
 
-#### OpensearchRole
+#### OpenSearchRole
 
 
 
-OpensearchRole is the Schema for the opensearchroles API
+OpenSearchRole is the Schema for the opensearchroles API
 
 
 
@@ -1103,21 +1103,21 @@ OpensearchRole is the Schema for the opensearchroles API
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `opensearch.org/v1` | | |
-| `kind` _string_ | `OpensearchRole` | | |
+| `kind` _string_ | `OpenSearchRole` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[OpensearchRoleSpec](#opensearchrolespec)_ |  |  |  |
+| `spec` _[OpenSearchRoleSpec](#opensearchrolespec)_ |  |  |  |
 
 
-#### OpensearchRoleSpec
+#### OpenSearchRoleSpec
 
 
 
-OpensearchRoleSpec defines the desired state of OpensearchRole
+OpenSearchRoleSpec defines the desired state of OpenSearchRole
 
 
 
 _Appears in:_
-- [OpensearchRole](#opensearchrole)
+- [OpenSearchRole](#opensearchrole)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1129,11 +1129,11 @@ _Appears in:_
 
 
 
-#### OpensearchSnapshotPolicy
+#### OpenSearchSnapshotPolicy
 
 
 
-OpensearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies API
+OpenSearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies API
 
 
 
@@ -1142,12 +1142,12 @@ OpensearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies API
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `opensearch.org/v1` | | |
-| `kind` _string_ | `OpensearchSnapshotPolicy` | | |
+| `kind` _string_ | `OpenSearchSnapshotPolicy` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[OpensearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)_ |  |  |  |
+| `spec` _[OpenSearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)_ |  |  |  |
 
 
-#### OpensearchSnapshotPolicySpec
+#### OpenSearchSnapshotPolicySpec
 
 
 
@@ -1156,7 +1156,7 @@ OpensearchSnapshotPolicy is the Schema for the opensearchsnapshotpolicies API
 
 
 _Appears in:_
-- [OpensearchSnapshotPolicy](#opensearchsnapshotpolicy)
+- [OpenSearchSnapshotPolicy](#opensearchsnapshotpolicy)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1172,11 +1172,11 @@ _Appears in:_
 
 
 
-#### OpensearchTenant
+#### OpenSearchTenant
 
 
 
-OpensearchTenant is the Schema for the opensearchtenants API
+OpenSearchTenant is the Schema for the opensearchtenants API
 
 
 
@@ -1185,21 +1185,21 @@ OpensearchTenant is the Schema for the opensearchtenants API
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `opensearch.org/v1` | | |
-| `kind` _string_ | `OpensearchTenant` | | |
+| `kind` _string_ | `OpenSearchTenant` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[OpensearchTenantSpec](#opensearchtenantspec)_ |  |  |  |
+| `spec` _[OpenSearchTenantSpec](#opensearchtenantspec)_ |  |  |  |
 
 
-#### OpensearchTenantSpec
+#### OpenSearchTenantSpec
 
 
 
-OpensearchTenantSpec defines the desired state of OpensearchTenant
+OpenSearchTenantSpec defines the desired state of OpenSearchTenant
 
 
 
 _Appears in:_
-- [OpensearchTenant](#opensearchtenant)
+- [OpenSearchTenant](#opensearchtenant)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1209,29 +1209,11 @@ _Appears in:_
 
 
 
-#### OpensearchUser
+#### OpenSearchUser
 
 
 
-OpensearchUser is the Schema for the opensearchusers API
-
-
-
-
-
-| Field | Description | Default | Validation |
-| --- | --- | --- | --- |
-| `apiVersion` _string_ | `opensearch.org/v1` | | |
-| `kind` _string_ | `OpensearchUser` | | |
-| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[OpensearchUserSpec](#opensearchuserspec)_ |  |  |  |
-
-
-#### OpensearchUserRoleBinding
-
-
-
-OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings API
+OpenSearchUser is the Schema for the opensearchusers API
 
 
 
@@ -1240,21 +1222,39 @@ OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings API
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `apiVersion` _string_ | `opensearch.org/v1` | | |
-| `kind` _string_ | `OpensearchUserRoleBinding` | | |
+| `kind` _string_ | `OpenSearchUser` | | |
 | `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
-| `spec` _[OpensearchUserRoleBindingSpec](#opensearchuserrolebindingspec)_ |  |  |  |
+| `spec` _[OpenSearchUserSpec](#opensearchuserspec)_ |  |  |  |
 
 
-#### OpensearchUserRoleBindingSpec
+#### OpenSearchUserRoleBinding
 
 
 
-OpensearchUserRoleBindingSpec defines the desired state of OpensearchUserRoleBinding
+OpenSearchUserRoleBinding is the Schema for the opensearchuserrolebindings API
+
+
+
+
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `apiVersion` _string_ | `opensearch.org/v1` | | |
+| `kind` _string_ | `OpenSearchUserRoleBinding` | | |
+| `metadata` _[ObjectMeta](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#objectmeta-v1-meta)_ | Refer to Kubernetes API documentation for fields of `metadata`. |  |  |
+| `spec` _[OpenSearchUserRoleBindingSpec](#opensearchuserrolebindingspec)_ |  |  |  |
+
+
+#### OpenSearchUserRoleBindingSpec
+
+
+
+OpenSearchUserRoleBindingSpec defines the desired state of OpenSearchUserRoleBinding
 
 
 
 _Appears in:_
-- [OpensearchUserRoleBinding](#opensearchuserrolebinding)
+- [OpenSearchUserRoleBinding](#opensearchuserrolebinding)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1266,16 +1266,16 @@ _Appears in:_
 
 
 
-#### OpensearchUserSpec
+#### OpenSearchUserSpec
 
 
 
-OpensearchUserSpec defines the desired state of OpensearchUser
+OpenSearchUserSpec defines the desired state of OpenSearchUser
 
 
 
 _Appears in:_
-- [OpensearchUser](#opensearchuser)
+- [OpenSearchUser](#opensearchuser)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1594,7 +1594,7 @@ _Appears in:_
 
 
 _Appears in:_
-- [OpensearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
+- [OpenSearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1617,7 +1617,7 @@ _Appears in:_
 
 
 _Appears in:_
-- [OpensearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
+- [OpenSearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1652,7 +1652,7 @@ _Appears in:_
 
 
 _Appears in:_
-- [OpensearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
+- [OpenSearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1670,7 +1670,7 @@ _Appears in:_
 
 
 _Appears in:_
-- [OpensearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
+- [OpenSearchSnapshotPolicySpec](#opensearchsnapshotpolicyspec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
@@ -1723,7 +1723,7 @@ _Appears in:_
 
 
 _Appears in:_
-- [OpensearchRoleSpec](#opensearchrolespec)
+- [OpenSearchRoleSpec](#opensearchrolespec)
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |

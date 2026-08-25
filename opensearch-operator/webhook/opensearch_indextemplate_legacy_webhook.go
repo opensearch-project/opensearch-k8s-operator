@@ -47,7 +47,7 @@ func (v *OpenSearchIndexTemplateLegacyValidator) SetupWithManager(mgr ctrl.Manag
 
 // ValidateCreate implements webhook.Validator
 func (v *OpenSearchIndexTemplateLegacyValidator) ValidateCreate(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
-	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Please use opensearch.org/v1 instead. Creation of old API group OpensearchIndexTemplate resources is not allowed")
+	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Please use opensearch.org/v1 instead. Creation of old API group OpenSearchIndexTemplate resources is not allowed")
 }
 
 // ValidateUpdate implements webhook.Validator
@@ -66,7 +66,7 @@ func (v *OpenSearchIndexTemplateLegacyValidator) ValidateUpdate(ctx context.Cont
 	}
 
 	// Deny spec changes
-	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Direct updates to old API group OpensearchIndexTemplate resources are not allowed. Please update the opensearch.org/v1 resource instead")
+	return nil, fmt.Errorf("opensearch.opster.io/v1 API group is deprecated. Direct updates to old API group OpenSearchIndexTemplate resources are not allowed. Please update the opensearch.org/v1 resource instead")
 }
 
 // ValidateDelete implements webhook.Validator

@@ -1,5 +1,5 @@
 apiVersion: opensearch.org/v1
-kind: OpensearchComponentTemplate
+kind: OpenSearchComponentTemplate
 metadata:
   name: sample-component-template
 spec:

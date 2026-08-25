@@ -22,25 +22,25 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-type OpensearchUserRoleBindingState string
+type OpenSearchUserRoleBindingState string
 
 const (
-	OpensearchUserRoleBindingPending      OpensearchUserRoleBindingState = "PENDING"
-	OpensearchUserRoleBindingStateCreated OpensearchUserRoleBindingState = "CREATED"
-	OpensearchUserRoleBindingStateError   OpensearchUserRoleBindingState = "ERROR"
+	OpenSearchUserRoleBindingPending      OpenSearchUserRoleBindingState = "PENDING"
+	OpenSearchUserRoleBindingStateCreated OpenSearchUserRoleBindingState = "CREATED"
+	OpenSearchUserRoleBindingStateError   OpenSearchUserRoleBindingState = "ERROR"
 )
 
-// OpensearchUserRoleBindingSpec defines the desired state of OpensearchUserRoleBinding
-type OpensearchUserRoleBindingSpec struct {
-	OpensearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
+// OpenSearchUserRoleBindingSpec defines the desired state of OpenSearchUserRoleBinding
+type OpenSearchUserRoleBindingSpec struct {
+	OpenSearchRef corev1.LocalObjectReference `json:"opensearchCluster"`
 	Roles         []string                    `json:"roles"`
 	Users         []string                    `json:"users,omitempty"`
 	BackendRoles  []string                    `json:"backendRoles,omitempty"`
 }
 
-// OpensearchUserRoleBindingStatus defines the observed state of OpensearchUserRoleBinding
-type OpensearchUserRoleBindingStatus struct {
-	State                   OpensearchUserRoleBindingState `json:"state,omitempty"`
+// OpenSearchUserRoleBindingStatus defines the observed state of OpenSearchUserRoleBinding
+type OpenSearchUserRoleBindingStatus struct {
+	State                   OpenSearchUserRoleBindingState `json:"state,omitempty"`
 	Reason                  string                         `json:"reason,omitempty"`
 	ManagedCluster          *types.UID                     `json:"managedCluster,omitempty"`
 	ProvisionedRoles        []string                       `json:"provisionedRoles,omitempty"`
@@ -52,29 +52,29 @@ type OpensearchUserRoleBindingStatus struct {
 //+kubebuilder:resource:shortName=opensearchuserrolebinding
 //+kubebuilder:subresource:status
 
-// OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings API
-type OpensearchUserRoleBinding struct {
+// OpenSearchUserRoleBinding is the Schema for the opensearchuserrolebindings API
+type OpenSearchUserRoleBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   OpensearchUserRoleBindingSpec   `json:"spec,omitempty"`
-	Status OpensearchUserRoleBindingStatus `json:"status,omitempty"`
+	Spec   OpenSearchUserRoleBindingSpec   `json:"spec,omitempty"`
+	Status OpenSearchUserRoleBindingStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// OpensearchUserRoleBindingList contains a list of OpensearchUserRoleBinding
-type OpensearchUserRoleBindingList struct {
+// OpenSearchUserRoleBindingList contains a list of OpenSearchUserRoleBinding
+type OpenSearchUserRoleBindingList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []OpensearchUserRoleBinding `json:"items"`
+	Items           []OpenSearchUserRoleBinding `json:"items"`
 }
 
-// GetOpensearchRef returns the OpenSearch cluster reference
-func (urb *OpensearchUserRoleBinding) GetOpensearchRef() corev1.LocalObjectReference {
-	return urb.Spec.OpensearchRef
+// GetOpenSearchRef returns the OpenSearch cluster reference
+func (urb *OpenSearchUserRoleBinding) GetOpenSearchRef() corev1.LocalObjectReference {
+	return urb.Spec.OpenSearchRef
 }
 
 func init() {
-	SchemeBuilder.Register(&OpensearchUserRoleBinding{}, &OpensearchUserRoleBindingList{})
+	SchemeBuilder.Register(&OpenSearchUserRoleBinding{}, &OpenSearchUserRoleBindingList{})
 }

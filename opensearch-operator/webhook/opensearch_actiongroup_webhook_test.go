@@ -68,13 +68,13 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 
 	Describe("ValidateCreate", func() {
 		It("should allow valid action group creation", func() {
-			actionGroup := &opensearchv1.OpensearchActionGroup{
+			actionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops", "indices:data/write/*"},
@@ -87,13 +87,13 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 		})
 
 		It("should reject action group with missing cluster reference", func() {
-			actionGroup := &opensearchv1.OpensearchActionGroup{
+			actionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "non-existent-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
@@ -107,13 +107,13 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 		})
 
 		It("should reject action group with empty allowedActions", func() {
-			actionGroup := &opensearchv1.OpensearchActionGroup{
+			actionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{}, // Empty
@@ -141,13 +141,13 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 			clientWithOldCluster := fake.NewClientBuilder().WithScheme(scheme).WithObjects(oldCluster).Build()
 			validator.Client = clientWithOldCluster
 
-			actionGroup := &opensearchv1.OpensearchActionGroup{
+			actionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "old-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
@@ -162,25 +162,25 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 
 	Describe("ValidateUpdate", func() {
 		It("should allow valid action group update", func() {
-			oldActionGroup := &opensearchv1.OpensearchActionGroup{
+			oldActionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
 				},
 			}
-			newActionGroup := &opensearchv1.OpensearchActionGroup{
+			newActionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops", "indices:data/write/*"},
@@ -193,25 +193,25 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 		})
 
 		It("should reject cluster reference change", func() {
-			oldActionGroup := &opensearchv1.OpensearchActionGroup{
+			oldActionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
 				},
 			}
-			newActionGroup := &opensearchv1.OpensearchActionGroup{
+			newActionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "different-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
@@ -225,25 +225,25 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 		})
 
 		It("should reject update with empty allowedActions", func() {
-			oldActionGroup := &opensearchv1.OpensearchActionGroup{
+			oldActionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{"cluster_composite_ops"},
 				},
 			}
-			newActionGroup := &opensearchv1.OpensearchActionGroup{
+			newActionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
 				},
-				Spec: opensearchv1.OpensearchActionGroupSpec{
-					OpensearchRef: corev1.LocalObjectReference{
+				Spec: opensearchv1.OpenSearchActionGroupSpec{
+					OpenSearchRef: corev1.LocalObjectReference{
 						Name: "test-cluster",
 					},
 					AllowedActions: []string{}, // Empty
@@ -259,7 +259,7 @@ var _ = Describe("OpenSearchActionGroupValidator", func() {
 
 	Describe("ValidateDelete", func() {
 		It("should always allow deletion", func() {
-			actionGroup := &opensearchv1.OpensearchActionGroup{
+			actionGroup := &opensearchv1.OpenSearchActionGroup{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-action-group",
 					Namespace: "default",
