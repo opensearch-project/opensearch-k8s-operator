@@ -994,4 +994,88 @@ var _ = Describe("TLS Controller", func() {
 			))
 		})
 	})
+
+	Context("When Reconciling with a provided admin cert secret", func() {
+		makeSpec := func(clusterName string, httpAdminDn, transportAdminDn []string) opensearchv1.OpenSearchCluster {
+			return opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.8.0"},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							AdminSecret: corev1.LocalObjectReference{Name: "my-admin-cert"},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{
+								Generate: false,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret:   corev1.LocalObjectReference{Name: "cert-transport"},
+									CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
+								},
+								NodesDn: []string{"CN=mycn"},
+								AdminDn: transportAdminDn,
+							},
+							Http: &opensearchv1.TlsConfigHttp{
+								Generate: false,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret:   corev1.LocalObjectReference{Name: "cert-http"},
+									CaSecret: corev1.LocalObjectReference{Name: "casecret-http"},
+								},
+								AdminDn: httpAdminDn,
+							},
+						},
+					},
+				},
+			}
+		}
+
+		It("Should use http.adminDn when set", func() {
+			spec := makeSpec("tls-admindn-http", []string{"CN=admin1", "CN=admin2"}, nil)
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=admin1\",\"CN=admin2\"]"))
+		})
+
+		It("Should fall back to the deprecated transport.adminDn when http.adminDn is not set", func() {
+			// Clusters migrated from operator 2.x only carry adminDn under tls.transport
+			spec := makeSpec("tls-admindn-migrated", nil, []string{"CN=admin"})
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=admin\"]"))
+		})
+
+		It("Should prefer http.adminDn over transport.adminDn when both are set", func() {
+			spec := makeSpec("tls-admindn-both", []string{"CN=newadmin"}, []string{"CN=oldadmin"})
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeTrue())
+			Expect(value).To(Equal("[\"CN=newadmin\"]"))
+		})
+
+		It("Should not render an empty admin_dn when neither field is set", func() {
+			spec := makeSpec("tls-admindn-empty", nil, nil)
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			reconcilerContext, underTest := newTLSReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			value, exists := reconcilerContext.OpenSearchConfig["plugins.security.authcz.admin_dn"]
+			Expect(exists).To(BeFalse())
+			Expect(value).ToNot(Equal("[\"\"]"))
+		})
+	})
 })

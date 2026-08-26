@@ -62,6 +62,9 @@ spec:
         {{- with .tls.transport.nodesDn }}
         nodesDn: {{ . | toYaml | nindent 10 }}
         {{- end }}
+        {{- with .tls.transport.adminDn }}
+        adminDn: {{ . | toYaml | nindent 10 }}
+        {{- end }}
         {{- with .tls.transport.secret }}
         secret: {{ . | toYaml | nindent 10 }}
         {{- end }}
