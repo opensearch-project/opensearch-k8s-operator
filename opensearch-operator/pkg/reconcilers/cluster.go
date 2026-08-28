@@ -815,31 +815,31 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 	})
 }
 
-// reconcileBootstrapPod handles bootstrap pod reconciliation with recreation for any changes
+// reconcileBootstrapPod creates the bootstrap pod if it is missing and recreates
+// it only when the operator's last-applied spec has changed. Live spec drift from
+// admission controllers (LimitRange, mutating webhooks) is ignored so the pod is
+// not deleted in a loop. See https://github.com/opensearch-project/opensearch-k8s-operator/issues/1364
 func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
-	// Check if bootstrap pod exists
 	existingPod, err := r.client.GetPod(desiredPod.Name, desiredPod.Namespace)
 	if err != nil && !k8serrors.IsNotFound(err) {
 		return &ctrl.Result{}, err
 	}
 
 	if k8serrors.IsNotFound(err) {
-		// Pod doesn't exist, create it
 		r.logger.Info("Creating bootstrap pod", "pod", desiredPod.Name)
 		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
 	}
 
-	updatePod := desiredPod.DeepCopy()
-	if _, err := r.client.ReconcileResource(updatePod, reconciler.StatePresent); err != nil {
-		if isImmutablePodUpdateErr(err) {
-			r.logger.Info("Bootstrap pod update touched immutable fields, recreating pod", "pod", desiredPod.Name)
-			return r.recreateBootstrapPod(&existingPod, desiredPod)
-		}
-		r.logger.Error(err, "Failed to update bootstrap pod", "pod", desiredPod.Name)
-		return &ctrl.Result{}, err
+	if existingPod.DeletionTimestamp != nil {
+		return &ctrl.Result{Requeue: true, RequeueAfter: 2 * time.Second}, nil
 	}
 
-	return &ctrl.Result{}, nil
+	if !util.BootstrapPodNeedsRecreation(&existingPod, desiredPod) {
+		return &ctrl.Result{}, nil
+	}
+
+	r.logger.Info("Bootstrap pod spec changed, recreating pod", "pod", desiredPod.Name)
+	return r.recreateBootstrapPod(&existingPod, desiredPod)
 }
 
 func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {
@@ -854,16 +854,4 @@ func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desire
 
 	r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
 	return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
-}
-
-func isImmutablePodUpdateErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	if statusErr, ok := err.(*k8serrors.StatusError); ok {
-		if statusErr.ErrStatus.Reason == metav1.StatusReasonInvalid && strings.Contains(statusErr.ErrStatus.Message, "pod updates may not change") {
-			return true
-		}
-	}
-	return strings.Contains(err.Error(), "pod updates may not change")
 }
