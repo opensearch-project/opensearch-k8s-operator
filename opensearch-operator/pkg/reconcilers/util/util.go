@@ -6,6 +6,7 @@ import (
 	cryptotls "crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -20,6 +21,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
@@ -475,6 +477,25 @@ func PodSpecChanged(existing, desired *corev1.Pod) bool {
 	sanitizeBootstrapPodSpec(&desiredSpec)
 
 	return !apiequality.Semantic.DeepEqual(existingSpec, desiredSpec)
+}
+
+// BootstrapPodNeedsRecreation reports whether the operator's desired bootstrap
+// pod spec has changed since the pod was last applied. Live spec mutations from
+// admission controllers (LimitRange, mutating webhooks) are ignored by comparing
+// against the last-applied annotation rather than the live pod spec. Pods
+// without a last-applied annotation are left running to avoid recreate loops.
+func BootstrapPodNeedsRecreation(existing, desired *corev1.Pod) bool {
+	original, err := patch.DefaultAnnotator.GetOriginalConfiguration(existing)
+	if err != nil || len(original) == 0 {
+		return false
+	}
+
+	lastApplied := &corev1.Pod{}
+	if err := json.Unmarshal(original, lastApplied); err != nil {
+		return false
+	}
+
+	return PodSpecChanged(lastApplied, desired)
 }
 
 func sanitizeBootstrapPodSpec(spec *corev1.PodSpec) {
