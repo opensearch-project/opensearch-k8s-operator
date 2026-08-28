@@ -780,7 +780,7 @@ var _ = Describe("Scaler Controller", func() {
 
 			underTest := newScalerReconciler(mockClient, &spec)
 			underTest.osClientTransport = transport
-			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true)
+			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true, false)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requeue).To(BeTrue())
@@ -805,7 +805,7 @@ var _ = Describe("Scaler Controller", func() {
 
 			underTest := newScalerReconciler(mockClient, &spec)
 			underTest.osClientTransport = transport
-			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true)
+			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true, false)
 
 			Expect(err).To(HaveOccurred())
 			Expect(requeue).To(BeTrue())
