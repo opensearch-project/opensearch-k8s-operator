@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	opsterTLS "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
@@ -818,5 +819,26 @@ var _ = Describe("loadOperatorClientTLSConfig", func() {
 			Expect(cfg).NotTo(BeNil())
 			Expect(cfg.ServerName).To(BeEmpty())
 		})
+	})
+})
+
+var _ = Describe("HasNonBootstrapClusterNode", func() {
+	bootstrap := "opensearch-bootstrap-0"
+
+	It("returns false when the cluster has no nodes", func() {
+		Expect(HasNonBootstrapClusterNode(nil, bootstrap)).To(BeFalse())
+	})
+
+	It("returns false when only the bootstrap pod has joined", func() {
+		Expect(HasNonBootstrapClusterNode([]responses.CatNodesResponse{
+			{Name: bootstrap},
+		}, bootstrap)).To(BeFalse())
+	})
+
+	It("returns true when a real node has joined alongside bootstrap", func() {
+		Expect(HasNonBootstrapClusterNode([]responses.CatNodesResponse{
+			{Name: bootstrap},
+			{Name: "opensearch-master-0"},
+		}, bootstrap)).To(BeTrue())
 	})
 })

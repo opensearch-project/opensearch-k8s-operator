@@ -403,6 +403,38 @@ func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *ope
 	return opensearchv1.OpenSearchHealth(healthResponse.Status), healthResponse
 }
 
+// ClusterHasNonBootstrapNode reports whether OpenSearch already contains at
+// least one node that is not the temporary bootstrap pod. Kubernetes pod
+// readiness is not enough to flip status.initialized: GET / returns 200 before
+// cluster state recovers, and AllMastersReady can race ahead of bootstrap
+// (#1486). Until a real node has joined, the bootstrap pod must stay.
+func ClusterHasNonBootstrapNode(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, lg logr.Logger) bool {
+	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, nil)
+	if err != nil {
+		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking bootstrap membership: %v", err))
+		return false
+	}
+
+	nodes, err := osClient.CatNodes()
+	if err != nil {
+		lg.V(1).Info(fmt.Sprintf("Failed to list OpenSearch nodes while checking bootstrap membership: %v", err))
+		return false
+	}
+
+	return HasNonBootstrapClusterNode(nodes, builders.BootstrapPodName(cluster))
+}
+
+// HasNonBootstrapClusterNode reports whether any listed OpenSearch node is not
+// the temporary bootstrap pod.
+func HasNonBootstrapClusterNode(nodes []responses.CatNodesResponse, bootstrapName string) bool {
+	for _, node := range nodes {
+		if node.Name != "" && node.Name != bootstrapName {
+			return true
+		}
+	}
+	return false
+}
+
 // GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
 func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, lg logr.Logger) int32 {
 	clusterName := cluster.Name

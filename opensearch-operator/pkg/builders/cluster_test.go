@@ -1073,6 +1073,123 @@ var _ = Describe("Builders", func() {
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
 			Expect(result).To(BeFalse())
 		})
+
+		It("should return false when no cluster-manager node pool exists", func() {
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Namespace = "default"
+			clusterObject.Name = "no-masters"
+			clusterObject.Spec.NodePools = []opensearchv1.NodePool{{
+				Replicas:  1,
+				Component: "data",
+				Roles:     []string{"data"},
+			}}
+			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeFalse())
+		})
+
+		It("should return false when the STS exists but no pods are ready", func() {
+			namespaceName := "allmastersready-unready"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "unready"
+			clusterObject.Spec.General.ServiceName = "unready"
+			nodePool := opensearchv1.NodePool{
+				Replicas:  1,
+				Component: "master",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("unready", &clusterObject, nodePool, "hash", nil, nil)
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeFalse())
+		})
+
+		It("should return false when only a mislabeled bootstrap pod is ready", func() {
+			namespaceName := "allmastersready-bootstrap"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "bootstrapped"
+			clusterObject.Spec.General.ServiceName = "bootstrapped"
+			nodePool := opensearchv1.NodePool{
+				Replicas:  1,
+				Component: "master",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("bootstrapped", &clusterObject, nodePool, "hash", nil, nil)
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+
+			bootstrap := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      BootstrapPodName(&clusterObject),
+					Namespace: namespaceName,
+					Labels: map[string]string{
+						helpers.ClusterLabel:  clusterObject.Name,
+						helpers.NodePoolLabel: nodePool.Component,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "opensearch",
+						Image: "opensearchproject/opensearch:3.7.0",
+					}},
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), bootstrap)).To(Not(HaveOccurred()))
+			bootstrap.Status.Conditions = []corev1.PodCondition{{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			}}
+			Expect(k8sClient.Status().Update(context.Background(), bootstrap)).To(Succeed())
+
+			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeFalse())
+		})
+
+		It("should return true when all cluster-manager pods are ready", func() {
+			namespaceName := "allmastersready-ready"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "ready"
+			clusterObject.Spec.General.ServiceName = "ready"
+			nodePool := opensearchv1.NodePool{
+				Replicas:  1,
+				Component: "master",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("ready", &clusterObject, nodePool, "hash", nil, nil)
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("%s-0", sts.Name),
+					Namespace: namespaceName,
+					Labels: map[string]string{
+						helpers.ClusterLabel:  clusterObject.Name,
+						helpers.NodePoolLabel: nodePool.Component,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "opensearch",
+						Image: "opensearchproject/opensearch:3.7.0",
+					}},
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), pod)).To(Not(HaveOccurred()))
+			pod.Status.Conditions = []corev1.PodCondition{{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			}}
+			Expect(k8sClient.Status().Update(context.Background(), pod)).To(Succeed())
+
+			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeTrue())
+		})
 	})
 
 	When("Using custom command for OpenSearch startup", func() {

@@ -1673,28 +1673,36 @@ func NewSecurityconfigUpdateJob(
 
 func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearchv1.OpenSearchCluster) bool {
 	wrappedClient := k8s.NewK8sClient(k8sClient, ctx)
+	checkedMasterPool := false
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
-		if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
-			sts := &appsv1.StatefulSet{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      StsName(cr, &nodePool),
-				Namespace: cr.Namespace,
-			}, sts); err != nil {
-				return false
-			}
-			readyReplicas, err := helpers.ReadyReplicasForNodePool(wrappedClient, cr, &nodePool)
-			if err != nil {
-				return false
-			}
-			sts.Status.ReadyReplicas = readyReplicas
-			if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
-				return false
-			}
-
+		if !helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
+			continue
+		}
+		checkedMasterPool = true
+		sts := &appsv1.StatefulSet{}
+		if err := k8sClient.Get(ctx, types.NamespacedName{
+			Name:      StsName(cr, &nodePool),
+			Namespace: cr.Namespace,
+		}, sts); err != nil {
+			return false
+		}
+		desiredReplicas := ptr.Deref(sts.Spec.Replicas, int32(1))
+		if desiredReplicas <= 0 {
+			return false
+		}
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(wrappedClient, cr, &nodePool)
+		if err != nil {
+			return false
+		}
+		if readyReplicas != desiredReplicas {
+			return false
 		}
 	}
-	return true
+	// Fail closed when the spec has no cluster-manager pool: returning true here
+	// previously flipped status.initialized immediately and deleted the bootstrap
+	// pod before the cluster could form (#1486).
+	return checkedMasterPool
 }
 
 func NewServiceMonitor(cr *opensearchv1.OpenSearchCluster) *monitoring.ServiceMonitor {

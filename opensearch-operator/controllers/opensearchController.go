@@ -271,11 +271,20 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 			if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 				return err
 			}
-			allMastersReady := builders.AllMastersReady(ctx, r.Client, r.Instance)
-			k8sClient := k8s.NewK8sClient(r.Client, ctx)
-			health, _ := util.GetClusterHealth(k8sClient, ctx, r.Instance, r.Logger)
-			clusterReachable := health != opensearchv1.OpenSearchUnknownHealth
-			r.Instance.Status.Initialized = allMastersReady && clusterReachable
+			// Pod readiness is necessary but not sufficient: the bootstrap pod
+			// must remain until a real node has joined the OpenSearch cluster
+			// (#1486). Otherwise Initialized flips true, ClusterReconciler
+			// deletes bootstrap, and nodes stay seeded to <name>-bootstrap-0.
+			initialized := builders.AllMastersReady(ctx, r.Client, r.Instance)
+			if initialized {
+				initialized = util.ClusterHasNonBootstrapNode(
+					k8s.NewK8sClient(r.Client, ctx),
+					ctx,
+					r.Instance,
+					r.Logger,
+				)
+			}
+			r.Instance.Status.Initialized = initialized
 			return r.Status().Update(ctx, r.Instance)
 		}); err != nil {
 			return ctrl.Result{}, err
