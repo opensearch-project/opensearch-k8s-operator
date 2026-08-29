@@ -188,28 +188,27 @@ spec:
                               attribute set
                             properties:
                               exclude:
-                                additionalProperties:
-                                  type: string
                                 description: Allocate the index to a node with a specified
                                   attribute.
-                                type: object
+                                type: string
                               include:
-                                additionalProperties:
-                                  type: string
                                 description: Allocate the index to a node with any
                                   of the specified attributes.
-                                type: object
+                                type: string
                               require:
-                                additionalProperties:
-                                  type: string
                                 description: Don’t allocate the index to a node with
                                   any of the specified attributes.
-                                type: object
+                                type: string
                               waitFor:
                                 description: Wait for the policy to execute before
                                   allocating the index to a node with a specified
                                   attribute.
-                                type: boolean
+                                type: string
+                            required:
+                            - exclude
+                            - include
+                            - require
+                            - waitFor
                             type: object
                           close:
                             description: Closes the managed index.

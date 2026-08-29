@@ -783,6 +783,13 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 		return ctrl.Result{}, fmt.Errorf("failed to marshal old resource: %w", err)
 	}
 
+	if resourceKind == "OpenSearchISMPolicy" {
+		oldBytes, err = convertISMPolicyAllocationJSON(oldBytes)
+		if err != nil {
+			return ctrl.Result{}, fmt.Errorf("failed to convert ISM allocation fields: %w", err)
+		}
+	}
+
 	if err := json.Unmarshal(oldBytes, newResource); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to unmarshal to new resource: %w", err)
 	}
