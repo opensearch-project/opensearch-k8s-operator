@@ -1429,10 +1429,11 @@ The operator contains several features that automate management tasks that might
 
 ### Cluster recovery
 
-This operator automatically handles common failure scenarios and restarts crashed pods, normally this is done in a one-by-one fashion to maintain quorum and cluster stability.
-In case the operator detects several crashed or missing pods (for a nodepool) at the same time it will switch into a special recovery mode and start all pods at once and allow the cluster to form a new quorum. This parallel recovery mode is currently experimental and only works with PVC-backed storage as it uses the number of existing PVCs to determine the number of missing pods. The recovery is done by temporarily changing the statefulset underlying each nodepool and setting the `podManagementPolicy` to `Parallel`. If you encounter problems with it, you can disable it by redeploying the operator and adding `manager.parallelRecoveryEnabled: false` to your `values.yaml`. Please also report any problems by opening an issue in the operator github project.
+The operator uses `Parallel` pod management for StatefulSets by default, so pods are started in parallel. This allows the cluster to form quorum and recover when multiple pods are missing or crashed, without a separate recovery mode.
 
-The recovery mode also kicks in if you deleted your cluster but kept the PVCs around and are then reinstalling the cluster.
+Scaling, rolling restarts, and version upgrades remain sequenced by the operator (one replica / one node at a time). `Parallel` only removes the StatefulSet controller's readiness gate on pod creation and recreation.
+
+`podManagementPolicy` is immutable on StatefulSets. After upgrading to an operator version that sets `Parallel`, existing node-pool StatefulSets are recreated once via orphan delete (pods are retained and re-adopted). This is a one-time, fleet-wide STS recreate that normally converges within one or two reconciles.
 
 If the cluster is using emptyDir i.e. every node pool is using emptyDir, the operator starts recovery in case of these failure scenarios:
 

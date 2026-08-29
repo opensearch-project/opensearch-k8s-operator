@@ -735,7 +735,7 @@ func NewSTSForNodePool(
 			Selector: &metav1.LabelSelector{
 				MatchLabels: matchLabels,
 			},
-			PodManagementPolicy: appsv1.OrderedReadyPodManagement,
+			PodManagementPolicy: appsv1.ParallelPodManagement,
 			UpdateStrategy: appsv1.StatefulSetUpdateStrategy{
 				Type: appsv1.OnDeleteStatefulSetStrategyType,
 			},

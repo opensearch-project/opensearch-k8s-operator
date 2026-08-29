@@ -12,6 +12,7 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -76,6 +77,11 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 
 var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool", func() {
+		It("should use Parallel podManagementPolicy", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+			Expect(result.Spec.PodManagementPolicy).To(Equal(appsv1.ParallelPodManagement))
+		})
 		It("should include the init containers as SKIP_INIT_CONTAINER is not set", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
