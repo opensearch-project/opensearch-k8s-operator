@@ -30,6 +30,7 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/kube-openapi/pkg/validation/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -528,6 +529,17 @@ func scalerHasExcludeOrDrainInProgress(instance *opensearchv1.OpenSearchCluster)
 	return false
 }
 
+// stsOwnsPod reports whether podName is one of sts's replicas.
+func stsOwnsPod(sts appsv1.StatefulSet, podName string) bool {
+	replicas := ptr.Deref(sts.Spec.Replicas, 1)
+	for ord := int32(0); ord < replicas; ord++ {
+		if helpers.ReplicaHostName(sts, ord) == podName {
+			return true
+		}
+	}
+	return false
+}
+
 // isPodStale returns true if the named pod should no longer be in the exclude list:
 // the pod does not exist, or it belongs to our cluster and has the updated revision (already restarted).
 func isPodStale(k8sClient k8s.K8sClient, instance *opensearchv1.OpenSearchCluster, podName string) (bool, error) {
@@ -544,16 +556,30 @@ func isPodStale(k8sClient k8s.K8sClient, instance *opensearchv1.OpenSearchCluste
 		if err != nil {
 			return false, err
 		}
-		replicas := ptr.Deref(sts.Spec.Replicas, 1)
-		for ord := int32(0); ord < replicas; ord++ {
-			if helpers.ReplicaHostName(sts, ord) != podName {
-				continue
-			}
+		if stsOwnsPod(sts, podName) {
 			rev, ok := pod.Labels["controller-revision-hash"]
 			if !ok {
 				return false, fmt.Errorf("pod %s has no controller-revision-hash label", podName)
 			}
+			// A revision match means this pod already restarted in place - safe to clean
+			// up its exclusion. Doesn't apply to a removed nodePool (see below): that
+			// StatefulSet never restarts, so its revision matches from the start.
 			return rev == sts.Status.UpdateRevision, nil
+		}
+	}
+
+	// The nodePool may have been renamed (removed from spec.NodePools, replaced by a
+	// new one). Its StatefulSet is still being drained and removed by the Scaler's
+	// removeStatefulSet, which owns the node's exclusion until that finishes - never
+	// treat it as stale. Only a pod with no owning StatefulSet at all is stale.
+	stsList, err := k8sClient.ListStatefulSets(client.InNamespace(instance.Namespace),
+		client.MatchingLabels{helpers.ClusterLabel: instance.Name})
+	if err != nil {
+		return false, err
+	}
+	for i := range stsList.Items {
+		if stsOwnsPod(stsList.Items[i], podName) {
+			return false, nil
 		}
 	}
 	return true, nil

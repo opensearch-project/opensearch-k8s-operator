@@ -2,6 +2,7 @@ package util
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -9,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	opsterTLS "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -16,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 var _ = Describe("Additional volumes", func() {
@@ -410,6 +413,35 @@ var _ = Describe("isPodStale", func() {
 		})
 	})
 
+	When("pod's ordinal is no longer covered by its nodePool's StatefulSet (replicas already decremented)", func() {
+		It("returns true (stale), so a failed RemoveExcludeNodeHost can be retried", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			// The Scaler decremented Spec.Replicas from 3 to 2 as its last step, but a
+			// prior RemoveExcludeNodeHost for the ordinal-2 pod failed, leaving a
+			// leftover exclusion for a pod ordinal the StatefulSet no longer owns.
+			pod := v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-masters-2",
+					Namespace: ns,
+					Labels:    map[string]string{"controller-revision-hash": updateRev},
+				},
+			}
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: stsName, Namespace: ns},
+				Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To(int32(2))},
+				Status:     appsv1.StatefulSetStatus{UpdateRevision: updateRev},
+			}
+			mockClient.EXPECT().GetPod("cluster-masters-2", ns).Return(pod, nil)
+			mockClient.EXPECT().GetStatefulSet(stsName, ns).Return(sts, nil)
+			mockClient.EXPECT().ListStatefulSets(client.InNamespace(ns), client.MatchingLabels{helpers.ClusterLabel: instance.Name}).
+				Return(appsv1.StatefulSetList{Items: []appsv1.StatefulSet{sts}}, nil)
+
+			stale, err := isPodStale(mockClient, instance, "cluster-masters-2")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(stale).To(BeTrue())
+		})
+	})
+
 	When("pod has no controller-revision-hash label", func() {
 		It("returns error", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -435,7 +467,7 @@ var _ = Describe("isPodStale", func() {
 		})
 	})
 
-	When("pod does not belong to any node pool STS", func() {
+	When("pod does not belong to any STS at all", func() {
 		It("returns true (stale)", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			pod := v1.Pod{
@@ -452,10 +484,74 @@ var _ = Describe("isPodStale", func() {
 			}
 			mockClient.EXPECT().GetPod("other-pod-0", ns).Return(pod, nil)
 			mockClient.EXPECT().GetStatefulSet(stsName, ns).Return(sts, nil)
+			mockClient.EXPECT().ListStatefulSets(client.InNamespace(ns), client.MatchingLabels{helpers.ClusterLabel: instance.Name}).
+				Return(appsv1.StatefulSetList{Items: []appsv1.StatefulSet{sts}}, nil)
 
 			stale, err := isPodStale(mockClient, instance, "other-pod-0")
 			Expect(err).NotTo(HaveOccurred())
 			Expect(stale).To(BeTrue())
+		})
+	})
+
+	When("ListStatefulSets fails while checking for a removed nodePool's StatefulSet", func() {
+		It("returns that error instead of falling through and reporting stale", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			pod := v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "other-pod-0",
+					Namespace: ns,
+					Labels:    map[string]string{"controller-revision-hash": "some-rev"},
+				},
+			}
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: stsName, Namespace: ns},
+				Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To(replicas)},
+				Status:     appsv1.StatefulSetStatus{UpdateRevision: updateRev},
+			}
+			listErr := fmt.Errorf("list failed")
+			mockClient.EXPECT().GetPod("other-pod-0", ns).Return(pod, nil)
+			mockClient.EXPECT().GetStatefulSet(stsName, ns).Return(sts, nil)
+			mockClient.EXPECT().ListStatefulSets(client.InNamespace(ns), client.MatchingLabels{helpers.ClusterLabel: instance.Name}).
+				Return(appsv1.StatefulSetList{}, listErr)
+
+			stale, err := isPodStale(mockClient, instance, "other-pod-0")
+			Expect(err).To(MatchError(listErr))
+			Expect(stale).To(BeFalse())
+		})
+	})
+
+	When("pod belongs to a nodePool that has been removed from spec.NodePools but whose StatefulSet is still being gracefully drained", func() {
+		It("returns false (not stale), even though its revision trivially matches UpdateRevision (it was never rolling-restarted)", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			// "basic" was renamed out of instance.Spec.NodePools, but its StatefulSet
+			// still exists while the Scaler drains and removes it one replica at a
+			// time. Its revision matches from the start since it never restarts, so
+			// the restart-in-place heuristic must not apply here.
+			removedPoolSts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: "cluster-basic", Namespace: ns},
+				Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To(int32(2))},
+				Status:     appsv1.StatefulSetStatus{UpdateRevision: updateRev},
+			}
+			pod := v1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "cluster-basic-1",
+					Namespace: ns,
+					Labels:    map[string]string{"controller-revision-hash": updateRev},
+				},
+			}
+			mastersSts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: stsName, Namespace: ns},
+				Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To(replicas)},
+				Status:     appsv1.StatefulSetStatus{UpdateRevision: updateRev},
+			}
+			mockClient.EXPECT().GetPod("cluster-basic-1", ns).Return(pod, nil)
+			mockClient.EXPECT().GetStatefulSet(stsName, ns).Return(mastersSts, nil)
+			mockClient.EXPECT().ListStatefulSets(client.InNamespace(ns), client.MatchingLabels{helpers.ClusterLabel: instance.Name}).
+				Return(appsv1.StatefulSetList{Items: []appsv1.StatefulSet{mastersSts, removedPoolSts}}, nil)
+
+			stale, err := isPodStale(mockClient, instance, "cluster-basic-1")
+			Expect(err).NotTo(HaveOccurred())
+			Expect(stale).To(BeFalse())
 		})
 	})
 })
