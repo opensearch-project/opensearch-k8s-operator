@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"time"
@@ -11,6 +12,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/stretchr/testify/mock"
@@ -68,6 +70,38 @@ func registerClusterSettingsResponders(transport *httpmock.MockTransport) {
 		`=~.*/_cluster/settings.*`,
 		httpmock.NewStringResponder(200, `{"transient":{},"persistent":{}}`),
 	)
+}
+
+// registerAllocationEnableSpy makes GET _cluster/settings report
+// allocation.enable=primaries, and returns a pointer that records the last
+// value any PUT _cluster/settings request actually set allocation.enable to
+// (other PUTs, e.g. AppendExcludeNodeHost's, only touch "exclude" and leave
+// it unchanged).
+func registerAllocationEnableSpy(transport *httpmock.MockTransport) *string {
+	transport.RegisterResponder(
+		http.MethodGet,
+		`=~.*/_cluster/settings.*`,
+		httpmock.NewStringResponder(200, `{"transient":{"cluster.routing.allocation.enable":"primaries"},"persistent":{}}`),
+	)
+	reactivatedTo := new(string)
+	transport.RegisterResponder(
+		http.MethodPut,
+		`=~.*/_cluster/settings.*`,
+		func(req *http.Request) (*http.Response, error) {
+			var body responses.ClusterSettingsResponse
+			if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+				return httpmock.NewStringResponse(500, ""), nil
+			}
+			cluster, _ := body.Transient["cluster"].(map[string]interface{})
+			routing, _ := cluster["routing"].(map[string]interface{})
+			allocation, _ := routing["allocation"].(map[string]interface{})
+			if v, ok := allocation["enable"].(string); ok {
+				*reactivatedTo = v
+			}
+			return httpmock.NewStringResponse(200, `{"transient":{},"persistent":{}}`), nil
+		},
+	)
+	return reactivatedTo
 }
 
 func registerCatShardsResponder(transport *httpmock.MockTransport, status int, body string) {
@@ -559,6 +593,7 @@ var _ = Describe("Scaler Controller", func() {
 			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 			registerOsPingResponders(transport, &spec)
 			registerCatShardsResponder(transport, http.StatusInternalServerError, `{"error":"unavailable"}`)
+			registerClusterSettingsResponders(transport)
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
@@ -614,6 +649,7 @@ var _ = Describe("Scaler Controller", func() {
 			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 			registerOsPingResponders(transport, &spec)
 			registerCatShardsResponder(transport, http.StatusOK, `[]`)
+			registerClusterSettingsResponders(transport)
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
@@ -634,6 +670,39 @@ var _ = Describe("Scaler Controller", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(markedDrained).To(BeTrue())
+		})
+
+		It("Should reactivate shard allocation before checking whether the node has drained", func() {
+			// Regression test: a RollingRestart/Upgrade cycle sets
+			// allocation.enable=primaries while restarting a pod and only clears it
+			// once its own cycle ends. If a Scaler drain starts mid-cycle, primaries
+			// blocks exactly the replica movement the drain is waiting on, and
+			// returning Requeue from drainNode short-circuits the reconciler chain
+			// before RollingRestart/Upgrade run again to clear it - a livelock.
+			// drainNode must reactivate allocation itself before checking for shards.
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Excluded", targetNodeName, nil)
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, `[]`)
+			reactivatedTo := registerAllocationEnableSpy(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(&spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+				updateFn(&spec)
+			}).Return(nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			err := underTest.drainNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*reactivatedTo).To(Equal("all"))
 		})
 
 		It("Should emit a Warning and DrainStalled condition when a drain makes no progress", func() {
@@ -742,6 +811,39 @@ var _ = Describe("Scaler Controller", func() {
 			Expect(requeue).To(BeTrue())
 			Expect(*currentSts.Spec.Replicas).To(Equal(int32(3)))
 			mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
+		})
+
+		It("Should reactivate shard allocation before checking whether a removed nodePool's StatefulSet has drained", func() {
+			// Same deadlock as drainNode: removeStatefulSet's drain (run from
+			// cleanupStatefulSets for a nodePool dropped from spec.NodePools) needs
+			// replica movement off the excluded node, which allocation.enable=primaries
+			// blocks just the same.
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 1)
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterNamespace, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General:  opensearchv1.GeneralConfig{ServiceName: clusterName, HttpPort: 9200},
+					ConfMgmt: opensearchv1.ConfMgmt{SmartScaler: true},
+				},
+			}
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, `[]`)
+			reactivatedTo := registerAllocationEnableSpy(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("ReconcileResource", mock.Anything, reconciler.StateAbsent).Return(&ctrl.Result{}, nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			result, err := underTest.removeStatefulSet(currentSts)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(&ctrl.Result{}))
+			Expect(*reactivatedTo).To(Equal("all"))
 		})
 	})
 })

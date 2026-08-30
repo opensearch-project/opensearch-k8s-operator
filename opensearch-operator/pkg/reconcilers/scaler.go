@@ -419,6 +419,12 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 	if err != nil {
 		return err
 	}
+	// Same reason as removeStatefulSet: the drain needs replica movement, which
+	// allocation.enable=primaries blocks. Idempotent.
+	if err := services.ReactivateShardAllocation(clusterClient); err != nil {
+		lg.Error(err, "failed to reactivate shard allocation before draining")
+		return err
+	}
 	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, "failed to check shards on node")
@@ -506,6 +512,18 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	_, err = services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
+		return nil, err
+	}
+
+	// This drain only finishes once replicas move off the excluded node, which
+	// allocation.enable=primaries prevents. RollingRestart and Upgrade set that
+	// while restarting a pod and clear it when their cycle ends, but a drain
+	// starting mid-cycle would wait forever: returning Requeue below
+	// short-circuits the reconciler chain (see opensearchController.go), so
+	// neither of them runs again to clear it. Reactivating here is idempotent -
+	// it no-ops when allocation is already unrestricted.
+	if err := services.ReactivateShardAllocation(clusterClient); err != nil {
+		lg.Error(err, "failed to reactivate shard allocation before draining")
 		return nil, err
 	}
 
