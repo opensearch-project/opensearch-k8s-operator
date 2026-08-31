@@ -94,6 +94,21 @@ cluster:
       tlsConfig: {}
 #        insecureSkipVerify: true
 
+    # Opt-in ingress-only NetworkPolicy for cluster pods. Default off.
+    # Built-in rules allow intra-cluster traffic, Dashboards, and the operator namespace.
+    # Use extraIngress for Prometheus scrapers or client applications in other namespaces.
+    networkPolicy:
+      # -- Enable operator-managed NetworkPolicy for this cluster. Default false.
+      enable: false
+      # -- Extra NetworkPolicy peers (namespaceSelector / podSelector / ipBlock) allowed to reach cluster ports
+      extraIngress: []
+      # - namespaceSelector:
+      #     matchLabels:
+      #       kubernetes.io/metadata.name: monitoring
+      #   podSelector:
+      #     matchLabels:
+      #       app: prometheus
+
     # Enables host networking for all pods in the cluster.
     hostNetwork: false
 

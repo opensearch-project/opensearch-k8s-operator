@@ -510,6 +510,7 @@ _Appears in:_
 | `command` _string_ |  |  |  |
 | `additionalVolumes` _[AdditionalVolume](#additionalvolume) array_ | Additional volumes to mount to all pods in the cluster |  |  |
 | `monitoring` _[MonitoringConfig](#monitoringconfig)_ |  |  |  |
+| `networkPolicy` _[NetworkPolicyConfig](#networkpolicyconfig)_ | Opt-in, ingress-only NetworkPolicy for cluster pods. Default off. |  |  |
 | `keystore` _[KeystoreValue](#keystorevalue) array_ | Populate opensearch keystore before startup |  |  |
 | `snapshotRepositories` _[SnapshotRepoConfig](#snapshotrepoconfig) array_ |  |  |  |
 | `podSecurityContext` _[PodSecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#podsecuritycontext-v1-core)_ | Set security context for the cluster pods |  |  |
@@ -682,6 +683,24 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `serverName` _string_ |  |  |  |
 | `insecureSkipVerify` _boolean_ |  |  |  |
+
+
+#### NetworkPolicyConfig
+
+
+
+NetworkPolicyConfig controls an operator-managed, ingress-only NetworkPolicy
+for OpenSearch cluster pods. Egress is left unrestricted.
+
+
+
+_Appears in:_
+- [GeneralConfig](#generalconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `enable` _boolean_ | Enable operator-managed NetworkPolicy for this cluster. Default false. |  |  |
+| `extraIngress` _[NetworkPolicyPeer](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicypeer-v1-networking) array_ | Extra ingress peers in addition to the built-in intra-cluster / Dashboards / operator rules. |  |  |
 
 
 #### NodePool

@@ -21,6 +21,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 )
@@ -251,6 +252,65 @@ var _ = Describe("ServiceMonitor reconciliation", func() {
 		underTest.reconcileServiceMonitor(&result)
 
 		Expect(result.Err).To(MatchError(ContainSubstring("some other failure")))
+	})
+})
+
+var _ = Describe("NetworkPolicy reconciliation", func() {
+	newNetworkPolicyInstance := func(enable bool) *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "networkpolicy-test",
+				Namespace: "test-namespace",
+			},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
+					NetworkPolicy: opensearchv1.NetworkPolicyConfig{Enable: enable},
+				},
+			},
+		}
+	}
+
+	It("should create the NetworkPolicy when enabled", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newNetworkPolicyInstance(true)
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: instance,
+		}
+
+		mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+		mockClient.EXPECT().
+			ReconcileResource(mock.MatchedBy(func(obj runtime.Object) bool {
+				np, ok := obj.(*networkingv1.NetworkPolicy)
+				return ok && np.Name == builders.NetworkPolicyName(instance)
+			}), reconciler.StatePresent).
+			Return(&ctrl.Result{}, nil)
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileNetworkPolicy(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
+	})
+
+	It("should delete the NetworkPolicy when disabled", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newNetworkPolicyInstance(false)
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: instance,
+		}
+
+		mockClient.EXPECT().
+			ReconcileResource(mock.MatchedBy(func(obj runtime.Object) bool {
+				np, ok := obj.(*networkingv1.NetworkPolicy)
+				return ok && np.Name == builders.NetworkPolicyName(instance)
+			}), reconciler.StateAbsent).
+			Return(&ctrl.Result{}, nil)
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileNetworkPolicy(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
 	})
 })
 

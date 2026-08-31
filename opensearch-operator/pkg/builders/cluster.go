@@ -16,6 +16,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -37,6 +38,11 @@ const (
 
 	nodeAttributesVolumeName = "node-attributes"
 	nodeAttributesFileName   = "attributes.env"
+
+	transportPort           int32 = 9300
+	metricsPort             int32 = 9600
+	rcaPort                 int32 = 9650
+	dashboardsSelectorLabel       = "opensearch.cluster.dashboards"
 
 	// NodeAttributesClusterRoleName is the name of the shared, install-time
 	// ClusterRole that grants "get" on nodes. The operator is allowed to bind
@@ -1695,6 +1701,107 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearc
 		}
 	}
 	return true
+}
+
+func NetworkPolicyName(cr *opensearchv1.OpenSearchCluster) string {
+	return cr.Name + "-network-policy"
+}
+
+// NewNetworkPolicyForCR builds the ingress-only NetworkPolicy for cluster pods.
+// When the feature is disabled the returned object has only metadata so the
+// reconciler can delete any previously created policy.
+func NewNetworkPolicyForCR(cr *opensearchv1.OpenSearchCluster) *networkingv1.NetworkPolicy {
+	np := &networkingv1.NetworkPolicy{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "NetworkPolicy",
+			APIVersion: networkingv1.SchemeGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      NetworkPolicyName(cr),
+			Namespace: cr.Namespace,
+			Labels: map[string]string{
+				helpers.ClusterLabel: cr.Name,
+			},
+		},
+	}
+	if !cr.Spec.General.NetworkPolicy.Enable {
+		return np
+	}
+
+	clusterPeer := networkingv1.NetworkPolicyPeer{
+		PodSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{helpers.ClusterLabel: cr.Name},
+		},
+	}
+	dashboardsPeer := networkingv1.NetworkPolicyPeer{
+		PodSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{dashboardsSelectorLabel: cr.Name},
+		},
+	}
+
+	ingress := []networkingv1.NetworkPolicyIngressRule{
+		{
+			From:  []networkingv1.NetworkPolicyPeer{clusterPeer},
+			Ports: clusterNetworkPolicyPorts(cr),
+		},
+		{
+			From:  []networkingv1.NetworkPolicyPeer{dashboardsPeer},
+			Ports: httpNetworkPolicyPorts(cr),
+		},
+	}
+
+	if operatorNS := helpers.OperatorNamespace(); operatorNS != "" {
+		ingress = append(ingress, networkingv1.NetworkPolicyIngressRule{
+			From: []networkingv1.NetworkPolicyPeer{{
+				NamespaceSelector: &metav1.LabelSelector{
+					MatchLabels: map[string]string{corev1.LabelMetadataName: operatorNS},
+				},
+			}},
+			Ports: httpNetworkPolicyPorts(cr),
+		})
+	}
+
+	if extra := cr.Spec.General.NetworkPolicy.ExtraIngress; len(extra) > 0 {
+		ingress = append(ingress, networkingv1.NetworkPolicyIngressRule{
+			From:  extra,
+			Ports: clusterNetworkPolicyPorts(cr),
+		})
+	}
+
+	np.Spec = networkingv1.NetworkPolicySpec{
+		PodSelector: metav1.LabelSelector{
+			MatchLabels: map[string]string{helpers.ClusterLabel: cr.Name},
+		},
+		PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+		Ingress:     ingress,
+	}
+	return np
+}
+
+func tcpNetworkPolicyPort(port int32) networkingv1.NetworkPolicyPort {
+	p := intstr.FromInt32(port)
+	proto := corev1.ProtocolTCP
+	return networkingv1.NetworkPolicyPort{
+		Protocol: &proto,
+		Port:     &p,
+	}
+}
+
+func httpNetworkPolicyPorts(cr *opensearchv1.OpenSearchCluster) []networkingv1.NetworkPolicyPort {
+	return []networkingv1.NetworkPolicyPort{tcpNetworkPolicyPort(PortForCluster(cr))}
+}
+
+func clusterNetworkPolicyPorts(cr *opensearchv1.OpenSearchCluster) []networkingv1.NetworkPolicyPort {
+	ports := []networkingv1.NetworkPolicyPort{
+		tcpNetworkPolicyPort(PortForCluster(cr)),
+		tcpNetworkPolicyPort(transportPort),
+		tcpNetworkPolicyPort(metricsPort),
+		tcpNetworkPolicyPort(rcaPort),
+	}
+	if grpcPort := getGrpcPort(cr); grpcPort > 0 {
+		ports = append(ports, tcpNetworkPolicyPort(grpcPort))
+	}
+	return ports
 }
 
 func NewServiceMonitor(cr *opensearchv1.OpenSearchCluster) *monitoring.ServiceMonitor {
