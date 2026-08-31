@@ -54,6 +54,22 @@ _Appears in:_
 | `timeout` _string_ | The timeout period for the action. Accepts time units for minutes, hours, and days. |  |  |
 
 
+#### AdditionalServiceConfig
+
+
+
+AdditionalServiceConfig configures an extra, load-balanced ClusterIP Service for a node pool.
+
+
+
+_Appears in:_
+- [NodePool](#nodepool)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `create` _boolean_ | Create the additional ClusterIP Service for this node pool. |  |  |
+
+
 #### AdditionalVolume
 
 
@@ -764,6 +780,7 @@ _Appears in:_
 | `additionalConfig` _object (keys:string, values:string)_ | Extra items to add to the opensearch.yml for this nodepool (merged with general.additionalConfig) |  |  |
 | `sidecarContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core) array_ |  |  | Schemaless: \{\} <br /> |
 | `initContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core) array_ |  |  | Schemaless: \{\} <br /> |
+| `service` _[AdditionalServiceConfig](#additionalserviceconfig)_ | Additional Service for this node pool. A headless Service is always created for a node pool;<br />this configures an extra, regular ClusterIP Service that load-balances traffic across the<br />node pool's pods, useful for e.g. dedicated coordinating or ingest nodes that clients want to<br />talk to directly without resolving individual pod endpoints. |  |  |
 
 
 #### Notification

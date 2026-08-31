@@ -946,6 +946,74 @@ func NewHeadlessServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool 
 	}
 }
 
+// AdditionalServiceName returns the name of the extra, load-balanced ClusterIP service for a node pool.
+func AdditionalServiceName(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) string {
+	return fmt.Sprintf("%s-%s-lb", cr.Spec.General.ServiceName, nodePool.Component)
+}
+
+// NewServiceForNodePool builds a regular (ClusterIP) Service for a node pool, in addition to the
+// headless Service that is always created. Unlike the headless Service, this one load-balances
+// across the node pool's pods, so clients can talk to those specific nodes (e.g. dedicated
+// coordinating or ingest nodes) without resolving individual pod endpoints.
+func NewServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) *corev1.Service {
+	labels := map[string]string{
+		helpers.ClusterLabel:  cr.Name,
+		helpers.NodePoolLabel: nodePool.Component,
+	}
+
+	annotations := make(map[string]string)
+
+	for key, value := range cr.Spec.General.Annotations {
+		annotations[key] = value
+	}
+
+	for key, value := range nodePool.Annotations {
+		annotations[key] = value
+	}
+
+	appProtocol := "https"
+	if !helpers.IsHttpTlsEnabled(cr) {
+		appProtocol = "http"
+	}
+
+	return &corev1.Service{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "Service",
+			APIVersion: "v1",
+		},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:        AdditionalServiceName(cr, nodePool),
+			Namespace:   cr.Namespace,
+			Labels:      labels,
+			Annotations: annotations,
+		},
+		Spec: corev1.ServiceSpec{
+			Ports: []corev1.ServicePort{
+				{
+					Name:     "http",
+					Protocol: "TCP",
+					Port:     cr.Spec.General.HttpPort,
+					TargetPort: intstr.IntOrString{
+						IntVal: cr.Spec.General.HttpPort,
+					},
+					AppProtocol: &appProtocol,
+				},
+				{
+					Name:     "transport",
+					Protocol: "TCP",
+					Port:     9300,
+					TargetPort: intstr.IntOrString{
+						IntVal: 9300,
+						StrVal: "9300",
+					},
+				},
+			},
+			Selector: labels,
+			Type:     "",
+		},
+	}
+}
+
 func NewServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 	labels := map[string]string{
 		helpers.ClusterLabel: cr.Name,

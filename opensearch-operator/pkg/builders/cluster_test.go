@@ -1166,6 +1166,40 @@ var _ = Describe("Builders", func() {
 				"testAnnotationKey2": "testValue2",
 			}))
 		})
+
+		It("should populate the NewServiceForNodePool function with a ClusterIP service", func() {
+			clusterName := "opensearch"
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "coordinators",
+				Roles:     []string{},
+				Annotations: map[string]string{
+					"testAnnotationKey": "testValue",
+				},
+			}
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Annotations: map[string]string{
+							"testAnnotationKey2": "testValue2",
+						},
+					},
+				},
+			}
+			result := NewServiceForNodePool(&spec, &nodePool)
+			Expect(result.Name).To(Equal("opensearch-coordinators-lb"))
+			Expect(result.Spec.ClusterIP).To(BeEmpty())
+			Expect(result.Spec.Selector).To(Equal(map[string]string{
+				helpers.ClusterLabel:  clusterName,
+				helpers.NodePoolLabel: "coordinators",
+			}))
+			Expect(result.Annotations).To(Equal(map[string]string{
+				"testAnnotationKey":  "testValue",
+				"testAnnotationKey2": "testValue2",
+			}))
+		})
 	})
 
 	When("Using custom probe timeouts and thresholds for OpenSearch startup", func() {

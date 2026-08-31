@@ -193,6 +193,8 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.CombineErr(ctrl.SetControllerReference(r.instance, headlessService, r.client.Scheme()))
 		result.Combine(r.client.ReconcileResource(headlessService, reconciler.StatePresent))
 
+		result.Combine(r.handleAdditionalService(&nodePool))
+
 		result.Combine(r.reconcileNodeStatefulSet(nodePool, username))
 	}
 
@@ -627,6 +629,26 @@ func (r *ClusterReconciler) handlePDB(nodePool *opensearchv1.NodePool) (*ctrl.Re
 		}
 		return r.client.ReconcileResource(&pdb, reconciler.StateAbsent)
 	}
+}
+
+func (r *ClusterReconciler) handleAdditionalService(nodePool *opensearchv1.NodePool) (*ctrl.Result, error) {
+	if nodePool.Service != nil && nodePool.Service.Create {
+		service := builders.NewServiceForNodePool(r.instance, nodePool)
+		if err := ctrl.SetControllerReference(r.instance, service, r.client.Scheme()); err != nil {
+			return &ctrl.Result{}, err
+		}
+
+		return r.client.ReconcileResource(service, reconciler.StatePresent)
+	}
+
+	// Make sure any existing additional service is removed if the feature is not enabled
+	service := corev1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      builders.AdditionalServiceName(r.instance, nodePool),
+			Namespace: r.instance.Namespace,
+		},
+	}
+	return r.client.ReconcileResource(&service, reconciler.StateAbsent)
 }
 
 func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nodePool opensearchv1.NodePool) error {
