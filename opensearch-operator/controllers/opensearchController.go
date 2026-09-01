@@ -271,10 +271,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 			if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
 				return err
 			}
-			// Pod readiness is necessary but not sufficient: the bootstrap pod
-			// must remain until a real node has joined the OpenSearch cluster
-			// (#1486). Otherwise Initialized flips true, ClusterReconciler
-			// deletes bootstrap, and nodes stay seeded to <name>-bootstrap-0.
+			// Check if all master pods are ready and the OpenSearch cluster has at least one real node
 			initialized := builders.AllMastersReady(ctx, r.Client, r.Instance)
 			if initialized {
 				initialized = util.ClusterHasNonBootstrapNode(

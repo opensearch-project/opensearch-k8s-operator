@@ -1699,9 +1699,7 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearc
 			return false
 		}
 	}
-	// Fail closed when the spec has no cluster-manager pool: returning true here
-	// previously flipped status.initialized immediately and deleted the bootstrap
-	// pod before the cluster could form (#1486).
+	// If there is no cluster-manager node pool defined in the spec, return false.
 	return checkedMasterPool
 }
 

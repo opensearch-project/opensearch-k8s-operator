@@ -720,9 +720,9 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 		if pod.DeletionTimestamp != nil {
 			continue
 		}
-		// The bootstrap pod only has the cluster label by default, but a user
-		// (or a copied label set) can attach the node-pool label. Never treat
-		// it as a ready replica of a real node pool (#1486).
+		// By default, the bootstrap pod is labeled only with the cluster label.
+		// However, users or automated processes might add the node-pool label to it.
+		// This pod should never be counted as a ready replica for any node pool.
 		if pod.Name == bootstrapName {
 			continue
 		}
