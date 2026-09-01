@@ -912,26 +912,62 @@ func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSe
 	return "", errors.New("unable to calculate the working pod for rolling restart")
 }
 
-// DeleteStuckPodWithOlderRevision deletes the crashed pod only if there is any update in StatefulSet.
-func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) error {
+// DeleteStuckPodWithOlderRevision deletes a CrashLoopBackOff pod that is still on an older
+// StatefulSet revision so the update can proceed. Returns the deleted pod name when a delete occurs.
+func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
 	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
 	if err != nil {
-		return err
+		return "", err
 	}
 	if podWithOlderRevision != nil {
 		for _, container := range podWithOlderRevision.Status.ContainerStatuses {
 			// If any container is getting crashed, restart it by deleting the pod so that new update in sts can take place.
 			if !container.Ready && container.State.Waiting != nil && container.State.Waiting.Reason == "CrashLoopBackOff" {
-				return k8sClient.DeletePod(&corev1.Pod{
+				err := k8sClient.DeletePod(&corev1.Pod{
 					ObjectMeta: metav1.ObjectMeta{
 						Name:      podWithOlderRevision.Name,
 						Namespace: sts.Namespace,
 					},
 				})
+				if err != nil {
+					return "", err
+				}
+				return podWithOlderRevision.Name, nil
 			}
 		}
 	}
-	return nil
+	return "", nil
+}
+
+// CrashLoopBackOffPods returns names of pods in the StatefulSet that have a container in CrashLoopBackOff.
+func CrashLoopBackOffPods(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) ([]string, error) {
+	var pods []string
+	for i := int32(0); i < lo.FromPtrOr(sts.Spec.Replicas, 1); i++ {
+		podName := ReplicaHostName(*sts, i)
+		pod, err := k8sClient.GetPod(podName, sts.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		for _, container := range pod.Status.ContainerStatuses {
+			if !container.Ready && container.State.Waiting != nil && container.State.Waiting.Reason == "CrashLoopBackOff" {
+				pods = append(pods, pod.Name)
+				break
+			}
+		}
+	}
+	return pods, nil
+}
+
+// ClearUpgraderComponentStatuses removes all Upgrader entries from componentsStatus,
+// including entries for node pools that no longer exist in the spec.
+func ClearUpgraderComponentStatuses(statuses []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
+	result := make([]opensearchv1.ComponentStatus, 0, len(statuses))
+	for _, status := range statuses {
+		if status.Component != "Upgrader" {
+			result = append(result, status)
+		}
+	}
+	return result
 }
 
 // GetPodWithOlderRevision fetches the pod that is not having the updated revision.

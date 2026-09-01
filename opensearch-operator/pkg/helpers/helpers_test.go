@@ -720,3 +720,69 @@ var _ = Describe("HotReloadEnabled", func() {
 		Expect(HotReloadEnabled(cluster("3.0.0"), ptr.To(false))).To(BeFalse())
 	})
 })
+
+var _ = Describe("Upgrade status helpers", func() {
+	Describe("ClearUpgraderComponentStatuses", func() {
+		It("should remove all Upgrader entries including orphaned pools", func() {
+			statuses := []opensearchv1.ComponentStatus{
+				{Component: "RollingRestart", Status: "Finished"},
+				{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				{Component: "Upgrader", Description: "removed-pool", Status: "Upgrading"},
+				{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+				{Component: "Scaler", Description: "masters", Status: "Finished"},
+			}
+
+			result := ClearUpgraderComponentStatuses(statuses)
+			Expect(result).To(ConsistOf(
+				opensearchv1.ComponentStatus{Component: "RollingRestart", Status: "Finished"},
+				opensearchv1.ComponentStatus{Component: "Scaler", Description: "masters", Status: "Finished"},
+			))
+		})
+	})
+
+	Describe("HasPinnedCustomImage", func() {
+		It("should return true when a custom image is set", func() {
+			image := "example.com/opensearch:1"
+			cluster := &opensearchv1.OpenSearchCluster{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ImageSpec: &opensearchv1.ImageSpec{Image: &image},
+					},
+				},
+			}
+			Expect(HasPinnedCustomImage(cluster)).To(BeTrue())
+			Expect(PinnedCustomImage(cluster)).To(Equal(image))
+		})
+
+		It("should return false when no custom image is set", func() {
+			cluster := &opensearchv1.OpenSearchCluster{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.12.0"},
+				},
+			}
+			Expect(HasPinnedCustomImage(cluster)).To(BeFalse())
+			Expect(PinnedCustomImage(cluster)).To(BeEmpty())
+		})
+	})
+
+	Describe("IsUpgradeInProgress", func() {
+		It("should be true while an upgrade target marker exists", func() {
+			status := opensearchv1.ClusterStatus{
+				ComponentsStatus: []opensearchv1.ComponentStatus{
+					{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+					{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				},
+			}
+			Expect(IsUpgradeInProgress(status)).To(BeTrue())
+		})
+
+		It("should be false when only Upgraded entries remain", func() {
+			status := opensearchv1.ClusterStatus{
+				ComponentsStatus: []opensearchv1.ComponentStatus{
+					{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				},
+			}
+			Expect(IsUpgradeInProgress(status)).To(BeFalse())
+		})
+	})
+})
