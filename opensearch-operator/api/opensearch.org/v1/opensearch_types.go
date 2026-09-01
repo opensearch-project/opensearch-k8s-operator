@@ -93,6 +93,8 @@ type GeneralConfig struct {
 	// (e.g. zone or rack awareness) without splitting topology into separate
 	// node pools. The pods' ServiceAccount must be allowed to "get" nodes.
 	NodeAttributes []NodeAttribute `json:"nodeAttributes,omitempty"`
+	// RollingRestart controls operator-managed pod restart behavior.
+	RollingRestart *RollingRestartConfig `json:"rollingRestart,omitempty"`
 }
 
 // NodeAttribute maps a Kubernetes node label onto an OpenSearch node attribute
@@ -109,6 +111,24 @@ type NodeAttribute struct {
 	// attribute, e.g. "topology.kubernetes.io/zone".
 	//+kubebuilder:validation:Required
 	NodeLabel string `json:"nodeLabel"`
+}
+
+// RollingRestartHealthGatePolicy controls which OpenSearch health states allow
+// the operator to continue operator-managed pod restarts.
+type RollingRestartHealthGatePolicy string
+
+const (
+	// RollingRestartHealthGatePolicyGreenOnly preserves the existing restart health gate.
+	RollingRestartHealthGatePolicyGreenOnly RollingRestartHealthGatePolicy = "GreenOnly"
+	// RollingRestartHealthGatePolicyGreenOrRecoverableYellow also allows proven safe yellow states.
+	RollingRestartHealthGatePolicyGreenOrRecoverableYellow RollingRestartHealthGatePolicy = "GreenOrRecoverableYellow"
+)
+
+type RollingRestartConfig struct {
+	// HealthGatePolicy controls when rolling restart or version upgrade pod restarts may continue based on OpenSearch health.
+	// Defaults to GreenOnly, which preserves the existing restart health gate.
+	// +kubebuilder:validation:Enum=GreenOnly;GreenOrRecoverableYellow
+	HealthGatePolicy RollingRestartHealthGatePolicy `json:"healthGatePolicy,omitempty"`
 }
 
 type PdbConfig struct {
@@ -557,6 +577,13 @@ func (g GeneralConfig) GetOpenSearchHome() string {
 		return strings.TrimRight(g.OpenSearchHome, "/")
 	}
 	return DefaultOpenSearchHome
+}
+
+func (g GeneralConfig) GetRollingRestartHealthGatePolicy() RollingRestartHealthGatePolicy {
+	if g.RollingRestart == nil || g.RollingRestart.HealthGatePolicy == "" {
+		return RollingRestartHealthGatePolicyGreenOnly
+	}
+	return g.RollingRestart.HealthGatePolicy
 }
 
 func (d DashboardsConfig) GetOpenSearchDashboardsHome() string {
