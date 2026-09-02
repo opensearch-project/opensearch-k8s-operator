@@ -21,7 +21,7 @@ type ISMPolicySpec struct {
 type ErrorNotification struct {
 	// The destination URL.
 	Destination *Destination `json:"destination,omitempty"`
-	Channel     string       `json:"channel,omitempty"`
+	Channel     NotificationChannel `json:"channel,omitempty"`
 	// The text of the message
 	MessageTemplate *MessageTemplate `json:"message_template,omitempty"`
 }
