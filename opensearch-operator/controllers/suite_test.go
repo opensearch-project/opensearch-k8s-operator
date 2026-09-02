@@ -114,7 +114,7 @@ var _ = BeforeSuite(func() {
 		Scheme: scheme.Scheme,
 		//	Instance: &OpensearchCluster,
 		Recorder: record.NewFakeRecorder(20),
-	}).SetupWithManager(k8sManager)
+	}).SetupWithManager(k8sManager, 1)
 	Expect(err).ToNot(HaveOccurred())
 
 	go func() {

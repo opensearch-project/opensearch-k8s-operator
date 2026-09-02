@@ -97,6 +97,8 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.dnsBase` | string | `"cluster.local"` |  |
 | `manager.loglevel` | string | `"info"` |  |
 | `manager.watchNamespace` | string | `nil` |  |
+| `manager.maxConcurrentReconciles` | int | `1` | Global default max concurrent reconciles for all controllers. Keep at 1 unless a controller is known to be concurrency-safe. Only the cluster controller currently stores no per-request state on the reconciler. |
+| `manager.maxConcurrentReconcilesPerController` | object | `{}` | Per-controller overrides (controller name -> max concurrent reconciles). Only raise above 1 for controllers that do not store per-request state on the reconciler. The cluster controller (`opensearchcluster`) is safe; other controllers currently are not. |
 | `manager.metricsBindAddress` | string | `"127.0.0.1:8080"` |  |
 | `installCRDs` | bool | `true` |  |
 | `legacyAPI.enabled` | bool | `true` | Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped. |
