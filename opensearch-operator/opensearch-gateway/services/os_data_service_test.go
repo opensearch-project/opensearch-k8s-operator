@@ -236,6 +236,39 @@ func TestShardsOnNodeFromResponseRelocatingSource(t *testing.T) {
 	}
 }
 
+func TestGenerateVotingConfigExclusionsPath(t *testing.T) {
+	tests := []struct {
+		name     string
+		query    string
+		expected string
+	}{
+		{
+			name:     "no query",
+			query:    "",
+			expected: "/_cluster/voting_config_exclusions",
+		},
+		{
+			name:     "node_names query",
+			query:    "node_names=masters-2",
+			expected: "/_cluster/voting_config_exclusions?node_names=masters-2",
+		},
+		{
+			name:     "wait_for_removal query",
+			query:    "wait_for_removal=true",
+			expected: "/_cluster/voting_config_exclusions?wait_for_removal=true",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := generateVotingConfigExclusionsPath(tt.query)
+			got := path.String()
+			if got != tt.expected {
+				t.Errorf("generateVotingConfigExclusionsPath(%q) = %q, want %q", tt.query, got, tt.expected)
+			}
+		})
+	}
+}
+
 func TestDetermineUnsupportedClusterSettings(t *testing.T) {
 	tests := []struct {
 		name                string

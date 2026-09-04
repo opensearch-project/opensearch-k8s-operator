@@ -407,7 +407,7 @@ var _ = Describe("Scaler Controller", func() {
 
 			underTest := newScalerReconciler(mockClient, &spec)
 			currentStatus := spec.Status.ComponentsStatus[0]
-			_, err := underTest.decreaseOneNode(currentStatus, currentSts, nodePoolComponent, true)
+			_, err := underTest.decreaseOneNode(currentStatus, currentSts, nodePoolComponent, true, false)
 
 			// Should detect mismatch and reset to Running
 			Expect(err).ToNot(BeNil())
@@ -780,7 +780,7 @@ var _ = Describe("Scaler Controller", func() {
 
 			underTest := newScalerReconciler(mockClient, &spec)
 			underTest.osClientTransport = transport
-			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true)
+			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true, false)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requeue).To(BeTrue())
@@ -805,7 +805,7 @@ var _ = Describe("Scaler Controller", func() {
 
 			underTest := newScalerReconciler(mockClient, &spec)
 			underTest.osClientTransport = transport
-			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true)
+			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, true, false)
 
 			Expect(err).To(HaveOccurred())
 			Expect(requeue).To(BeTrue())

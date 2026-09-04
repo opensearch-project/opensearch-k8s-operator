@@ -30,6 +30,14 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
+func masterNodePool(component string, replicas int32) opensearchv1.NodePool {
+	return opensearchv1.NodePool{
+		Component: component,
+		Replicas:  replicas,
+		Roles:     []string{"cluster_manager"},
+	}
+}
+
 var _ = Describe("OpenSearchClusterValidator", func() {
 	var (
 		validator  *OpenSearchClusterValidator
@@ -62,16 +70,39 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 						Version: "2.19.4",
 					},
 					NodePools: []opensearchv1.NodePool{
-						{
-							Component: "masters",
-							Replicas:  3,
-						},
+						masterNodePool("masters", 3),
 					},
 				},
 			}
 
 			warnings, err := validator.ValidateCreate(ctx, cluster)
 			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should reject cluster with no master-eligible nodes", func() {
+			cluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "data",
+							Replicas:  3,
+							Roles:     []string{"data"},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("at least one master-eligible node"))
 			Expect(warnings).To(BeEmpty())
 		})
 
@@ -117,6 +148,9 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 					General: opensearchv1.GeneralConfig{
 						Version: "2.19.4",
 					},
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 3),
+					},
 					Security: &opensearchv1.Security{
 						Tls: &opensearchv1.TlsConfig{
 							Transport: &opensearchv1.TlsConfigTransport{
@@ -147,6 +181,9 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
 						Version: "2.19.4",
+					},
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 3),
 					},
 					Security: &opensearchv1.Security{
 						Tls: &opensearchv1.TlsConfig{
@@ -179,6 +216,9 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 					General: opensearchv1.GeneralConfig{
 						Version: "2.19.4",
 					},
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 3),
+					},
 					Security: &opensearchv1.Security{
 						Tls: &opensearchv1.TlsConfig{
 							Transport: &opensearchv1.TlsConfigTransport{
@@ -205,6 +245,9 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
 						Version: "2.19.4",
+					},
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 3),
 					},
 					Security: &opensearchv1.Security{
 						Tls: &opensearchv1.TlsConfig{
@@ -246,6 +289,92 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			Expect(warnings).To(BeEmpty())
 		})
 
+		It("should reject scaling all masters to zero", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 3),
+						{Component: "data", Replicas: 2, Roles: []string{"data"}},
+					},
+				},
+			}
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 0),
+						{Component: "data", Replicas: 2, Roles: []string{"data"}},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("at least one master-eligible node"))
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should reject removing the last master pool", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 3),
+						{Component: "data", Replicas: 2, Roles: []string{"data"}},
+					},
+				},
+			}
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					NodePools: []opensearchv1.NodePool{
+						{Component: "data", Replicas: 2, Roles: []string{"data"}},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("at least one master-eligible node"))
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should allow scaling masters down while keeping at least one", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 3),
+					},
+				},
+			}
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "test-cluster",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					NodePools: []opensearchv1.NodePool{
+						masterNodePool("masters", 1),
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
 		It("should reject storage class changes", func() {
 			oldStorageClass := "old-storage-class"
 			newStorageClass := "new-storage-class"
@@ -257,6 +386,8 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"cluster_manager"},
 							Persistence: &opensearchv1.PersistenceConfig{
 								PersistenceSource: opensearchv1.PersistenceSource{
 									PVC: &opensearchv1.PVCSource{
@@ -276,6 +407,8 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"cluster_manager"},
 							Persistence: &opensearchv1.PersistenceConfig{
 								PersistenceSource: opensearchv1.PersistenceSource{
 									PVC: &opensearchv1.PVCSource{
@@ -304,6 +437,8 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"cluster_manager"},
 							Persistence: &opensearchv1.PersistenceConfig{
 								PersistenceSource: opensearchv1.PersistenceSource{
 									PVC: &opensearchv1.PVCSource{
@@ -323,6 +458,8 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 					NodePools: []opensearchv1.NodePool{
 						{
 							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"cluster_manager"},
 							Persistence: &opensearchv1.PersistenceConfig{
 								PersistenceSource: opensearchv1.PersistenceSource{
 									PVC: &opensearchv1.PVCSource{
@@ -347,9 +484,7 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					NodePools: []opensearchv1.NodePool{
-						{
-							Component: "masters",
-						},
+						masterNodePool("masters", 3),
 					},
 				},
 			}
@@ -359,12 +494,8 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					NodePools: []opensearchv1.NodePool{
-						{
-							Component: "masters",
-						},
-						{
-							Component: "data",
-						},
+						masterNodePool("masters", 3),
+						{Component: "data", Replicas: 2, Roles: []string{"data"}},
 					},
 				},
 			}
@@ -381,8 +512,8 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					NodePools: []opensearchv1.NodePool{
-						{Component: "masters"},
-						{Component: "data"},
+						masterNodePool("masters", 3),
+						{Component: "data", Replicas: 2, Roles: []string{"data"}},
 					},
 				},
 			}
@@ -392,8 +523,8 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 				},
 				Spec: opensearchv1.ClusterSpec{
 					NodePools: []opensearchv1.NodePool{
-						{Component: "masters"},
-						{Component: "masters"},
+						masterNodePool("masters", 3),
+						masterNodePool("masters", 3),
 					},
 				},
 			}
