@@ -3208,9 +3208,13 @@ func (in *State) DeepCopyInto(out *State) {
 	}
 	if in.Transitions != nil {
 		in, out := &in.Transitions, &out.Transitions
-		*out = make([]Transition, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
+		*out = new([]Transition)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]Transition, len(*in))
+			for i := range *in {
+				(*in)[i].DeepCopyInto(&(*out)[i])
+			}
 		}
 	}
 }
