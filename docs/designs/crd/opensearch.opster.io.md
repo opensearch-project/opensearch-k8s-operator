@@ -196,7 +196,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `general` _[GeneralConfig](#generalconfig)_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file |  |  |
-| `confMgmt` _[ConfMgmt](#confmgmt)_ |  |  |  |
+| `confMgmt` _[ConfMgmt](#confmgmt)_ |  | \{ smartScaler:true \} |  |
 | `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ |  |  |  |
 | `dashboards` _[DashboardsConfig](#dashboardsconfig)_ |  |  |  |
 | `security` _[Security](#security)_ |  |  |  |

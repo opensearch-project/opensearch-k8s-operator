@@ -1271,6 +1271,8 @@ spec:
                     type: array
                 type: object
               confMgmt:
+                default:
+                  smartScaler: true
                 description: ConfMgmt defines which additional services will be deployed
                 properties:
                   VerUpdate:
