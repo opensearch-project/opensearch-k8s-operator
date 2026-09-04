@@ -23,3 +23,6 @@ render:
     - name: SecurityContext
       package: k8s.io/api/core/v1
       link: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core
+    - name: NetworkPolicyPeer
+      package: k8s.io/api/networking/v1
+      link: https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#networkpolicypeer-v1-networking-k8s-io

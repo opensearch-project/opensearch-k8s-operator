@@ -14,6 +14,18 @@ import (
 	"k8s.io/utils/ptr"
 )
 
+var _ = Describe("OperatorNamespace", func() {
+	It("should prefer POD_NAMESPACE when set", func() {
+		GinkgoT().Setenv(PodNamespaceEnvVariable, "operator-system")
+		Expect(OperatorNamespace()).To(Equal("operator-system"))
+	})
+
+	It("should return empty when POD_NAMESPACE is unset and the serviceaccount file is missing", func() {
+		GinkgoT().Setenv(PodNamespaceEnvVariable, "")
+		Expect(OperatorNamespace()).To(BeEmpty())
+	})
+})
+
 var _ = Describe("ClusterURL", func() {
 	It("should use operatorClusterURL when provided", func() {
 		customHost := "opensearch.example.com"

@@ -1261,6 +1261,44 @@ spec:
         maxUnavailable: 2
 ```
 
+### NetworkPolicy
+
+The operator can manage an ingress-only [NetworkPolicy](https://kubernetes.io/docs/concepts/services-networking/network-policies/) for cluster pods. The feature is **opt-in and default off**; existing clusters are unchanged until you set `spec.general.networkPolicy.enable: true`.
+
+When enabled the operator creates a single policy named `<cluster>-network-policy` that selects pods with `opensearch.org/opensearch-cluster: <name>` (node-pool StatefulSet pods and the bootstrap pod). Policy type is Ingress only; egress is not restricted, so DNS, the Kubernetes API, and plugins keep working.
+
+Built-in ingress rules:
+
+1. **Intra-cluster** — pods with the same cluster label may reach HTTP (`spec.general.httpPort`, default 9200), transport (9300), metrics (9600), RCA (9650), and gRPC when `spec.general.grpc.enable` is set.
+2. **Dashboards → HTTP** — pods labeled `opensearch.cluster.dashboards: <name>` may reach the HTTP port.
+3. **Operator → HTTP** — all pods in the operator namespace may reach the HTTP port. The namespace is taken from `POD_NAMESPACE` (set by the Helm chart) or the in-cluster serviceaccount namespace file. If neither is available the operator rule is skipped.
+4. **ExtraIngress** — additional [NetworkPolicy peers](https://kubernetes.io/docs/concepts/services-networking/network-policies/#behavior-of-to-and-from-selectors) (`namespaceSelector` / `podSelector` / `ipBlock`) allowed on the cluster ports. Use this for Prometheus in another namespace, named client apps, or to allow the operator when its namespace cannot be auto-detected.
+
+A NetworkPolicy for Dashboards pods (port 5601) is not created; allow that traffic yourself if your CNI is default-deny.
+
+```yaml
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-first-cluster
+spec:
+  general:
+    networkPolicy:
+      enable: true
+      extraIngress:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app: prometheus
+        - podSelector:
+            matchLabels:
+              app: my-client
+```
+
+Setting `enable: false` (or omitting the field) deletes the managed policy.
+
 ### Exposing OpenSearch Dashboards
 
 If you want to expose the Dashboards instance of your cluster for users/services outside of your Kubernetes cluster, the recommended way is to do this via ingress.

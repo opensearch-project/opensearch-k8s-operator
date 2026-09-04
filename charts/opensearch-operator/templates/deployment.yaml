@@ -56,6 +56,10 @@ spec:
           value: {{ .Values.manager.dnsBase }}
         - name: PPROF_ENDPOINTS_ENABLED
           value: "{{ .Values.manager.pprofEndpointsEnabled }}"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         {{- if .Values.manager.extraEnv }}
         {{- toYaml .Values.manager.extraEnv | nindent 8 }}
         {{- end }}
