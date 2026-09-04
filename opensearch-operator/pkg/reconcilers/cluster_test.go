@@ -254,6 +254,66 @@ var _ = Describe("ServiceMonitor reconciliation", func() {
 	})
 })
 
+var _ = Describe("Additional node pool service reconciliation", func() {
+	newInstance := func() *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "additional-service-test",
+				Namespace: "test-namespace",
+			},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
+					ServiceName: "additional-service-test",
+				},
+			},
+		}
+	}
+
+	It("should create the additional service when enabled for a node pool", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance()
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: instance,
+		}
+		nodePool := &opensearchv1.NodePool{
+			Component: "coordinators",
+			Service:   &opensearchv1.AdditionalServiceConfig{Create: true},
+		}
+
+		mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+		mockClient.EXPECT().
+			ReconcileResource(mock.MatchedBy(func(svc *corev1.Service) bool {
+				return svc.Name == "additional-service-test-coordinators-lb"
+			}), reconciler.StatePresent).
+			Return(nil, nil)
+
+		_, err := underTest.handleAdditionalService(nodePool)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should remove the additional service when not enabled for a node pool", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance()
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: instance,
+		}
+		nodePool := &opensearchv1.NodePool{
+			Component: "coordinators",
+		}
+
+		mockClient.EXPECT().
+			ReconcileResource(mock.MatchedBy(func(svc *corev1.Service) bool {
+				return svc.Name == "additional-service-test-coordinators-lb"
+			}), reconciler.StateAbsent).
+			Return(nil, nil)
+
+		_, err := underTest.handleAdditionalService(nodePool)
+		Expect(err).NotTo(HaveOccurred())
+	})
+})
+
 var _ = Describe("Node attributes RBAC reconciliation", func() {
 	It("should not delete cluster role bindings when cluster-scoped RBAC management is disabled", func() {
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
