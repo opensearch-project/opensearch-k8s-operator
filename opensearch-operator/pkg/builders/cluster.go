@@ -1673,28 +1673,46 @@ func NewSecurityconfigUpdateJob(
 
 func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearchv1.OpenSearchCluster) bool {
 	wrappedClient := k8s.NewK8sClient(k8sClient, ctx)
+	checkedMasterPool := false
 	for _, nodePool := range cr.Spec.NodePools {
 		masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
-		if helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
-			sts := &appsv1.StatefulSet{}
-			if err := k8sClient.Get(ctx, types.NamespacedName{
-				Name:      StsName(cr, &nodePool),
-				Namespace: cr.Namespace,
-			}, sts); err != nil {
-				return false
-			}
-			readyReplicas, err := helpers.ReadyReplicasForNodePool(wrappedClient, cr, &nodePool)
-			if err != nil {
-				return false
-			}
-			sts.Status.ReadyReplicas = readyReplicas
-			if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
-				return false
-			}
-
+		if !helpers.ContainsString(helpers.MapClusterRoles(nodePool.Roles, cr.Spec.General.Version), masterRole) {
+			continue
+		}
+		checkedMasterPool = true
+		sts := &appsv1.StatefulSet{}
+		if err := k8sClient.Get(ctx, types.NamespacedName{
+			Name:      StsName(cr, &nodePool),
+			Namespace: cr.Namespace,
+		}, sts); err != nil {
+			return false
+		}
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(wrappedClient, cr, &nodePool)
+		if err != nil {
+			return false
+		}
+		if readyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
+			return false
 		}
 	}
-	return true
+	// If there is no cluster-manager node pool defined in the spec, return false.
+	return checkedMasterPool
+}
+
+// ExpectedMasterNodeNames returns the pod names of all cluster-manager-eligible replicas.
+// Node names default to the pod hostname, so these match the names reported by _cat/nodes.
+func ExpectedMasterNodeNames(cr *opensearchv1.OpenSearchCluster) []string {
+	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
+	var names []string
+	for _, pool := range cr.Spec.NodePools {
+		if !helpers.ContainsString(helpers.MapClusterRoles(pool.Roles, cr.Spec.General.Version), masterRole) {
+			continue
+		}
+		for i := int32(0); i < pool.Replicas; i++ {
+			names = append(names, fmt.Sprintf("%s-%d", StsName(cr, &pool), i))
+		}
+	}
+	return names
 }
 
 func NewServiceMonitor(cr *opensearchv1.OpenSearchCluster) *monitoring.ServiceMonitor {

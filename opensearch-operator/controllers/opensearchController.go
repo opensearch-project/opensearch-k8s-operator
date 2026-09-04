@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -54,6 +55,8 @@ type OpenSearchClusterReconciler struct {
 	Recorder                         record.EventRecorder
 	SkipClusterRoleBindingManagement bool
 	NodeAttributesClusterRoleName    string
+	// osClientTransport overrides the OpenSearch HTTP transport; only set by tests.
+	osClientTransport http.RoundTripper
 }
 
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
@@ -273,11 +276,18 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 			if err := r.Get(ctx, client.ObjectKeyFromObject(instance), instance); err != nil {
 				return err
 			}
-			allMastersReady := builders.AllMastersReady(ctx, r.Client, instance)
-			k8sClient := k8s.NewK8sClient(r.Client, ctx)
-			health, _ := util.GetClusterHealth(k8sClient, ctx, instance, logger)
-			clusterReachable := health != opensearchv1.OpenSearchUnknownHealth
-			instance.Status.Initialized = allMastersReady && clusterReachable
+			// Check if all master pods are ready and have actually joined the OpenSearch cluster
+			initialized := builders.AllMastersReady(ctx, r.Client, instance)
+			if initialized {
+				initialized = util.ClusterHasAllMasters(
+					k8s.NewK8sClient(r.Client, ctx),
+					ctx,
+					instance,
+					r.osClientTransport,
+					logger,
+				)
+			}
+			instance.Status.Initialized = initialized
 			return r.Status().Update(ctx, instance)
 		}); err != nil {
 			return ctrl.Result{}, err

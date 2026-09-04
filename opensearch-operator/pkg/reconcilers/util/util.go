@@ -403,6 +403,37 @@ func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *ope
 	return opensearchv1.OpenSearchHealth(healthResponse.Status), healthResponse
 }
 
+// ClusterHasAllMasters reports whether every expected cluster-manager pod has joined the OpenSearch cluster according to _cat/nodes.
+func ClusterHasAllMasters(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, transport http.RoundTripper, lg logr.Logger) bool {
+	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, transport)
+	if err != nil {
+		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster membership: %v", err))
+		return false
+	}
+
+	nodes, err := osClient.CatNodes()
+	if err != nil {
+		lg.V(1).Info(fmt.Sprintf("Failed to list OpenSearch nodes while checking cluster membership: %v", err))
+		return false
+	}
+
+	return AllMastersJoinedCluster(nodes, builders.ExpectedMasterNodeNames(cluster))
+}
+
+// AllMastersJoinedCluster reports whether every expected node name is present in the listed OpenSearch nodes.
+func AllMastersJoinedCluster(nodes []responses.CatNodesResponse, expected []string) bool {
+	joined := map[string]bool{}
+	for _, n := range nodes {
+		joined[n.Name] = true
+	}
+	for _, name := range expected {
+		if !joined[name] {
+			return false
+		}
+	}
+	return len(expected) > 0
+}
+
 // GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
 func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, lg logr.Logger) int32 {
 	clusterName := cluster.Name

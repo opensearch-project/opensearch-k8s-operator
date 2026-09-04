@@ -894,3 +894,32 @@ var _ = Describe("IsSecurityPluginEnabled and CanRunSecurityAdmin", func() {
 		Expect(CanRunSecurityAdmin(cluster)).To(BeTrue())
 	})
 })
+
+var _ = Describe("CountRunningPodsForNodePool", func() {
+	readyPod := func(name string) corev1.Pod {
+		return corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns"},
+			Status: corev1.PodStatus{
+				Conditions: []corev1.PodCondition{{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				}},
+			},
+		}
+	}
+
+	It("counts ready node-pool pods", func() {
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().ListPods(mock.Anything).Return(corev1.PodList{
+			Items: []corev1.Pod{readyPod("cluster-master-0")},
+		}, nil)
+
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		}
+		count, err := CountRunningPodsForNodePool(mockClient, cr, &opensearchv1.NodePool{Component: "master"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(Equal(1))
+	})
+
+})

@@ -10,6 +10,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	opsterTLS "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
@@ -818,5 +819,32 @@ var _ = Describe("loadOperatorClientTLSConfig", func() {
 			Expect(cfg).NotTo(BeNil())
 			Expect(cfg.ServerName).To(BeEmpty())
 		})
+	})
+})
+
+var _ = Describe("AllMastersJoinedCluster", func() {
+	expected := []string{"opensearch-masters-0", "opensearch-masters-1"}
+
+	It("returns false when the cluster has no nodes", func() {
+		Expect(AllMastersJoinedCluster(nil, expected)).To(BeFalse())
+	})
+
+	It("returns false when no masters are expected", func() {
+		Expect(AllMastersJoinedCluster([]responses.CatNodesResponse{{Name: "opensearch-bootstrap-0"}}, nil)).To(BeFalse())
+	})
+
+	It("returns false when only some masters have joined", func() {
+		Expect(AllMastersJoinedCluster([]responses.CatNodesResponse{
+			{Name: "opensearch-bootstrap-0"},
+			{Name: "opensearch-masters-0"},
+		}, expected)).To(BeFalse())
+	})
+
+	It("returns true when every expected master has joined", func() {
+		Expect(AllMastersJoinedCluster([]responses.CatNodesResponse{
+			{Name: "opensearch-bootstrap-0"},
+			{Name: "opensearch-masters-0"},
+			{Name: "opensearch-masters-1"},
+		}, expected)).To(BeTrue())
 	})
 })
