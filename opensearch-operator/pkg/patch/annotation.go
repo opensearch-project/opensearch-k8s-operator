@@ -19,6 +19,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"io"
+	"maps"
 	"net/http"
 
 	json "github.com/json-iterator/go"
@@ -83,11 +84,14 @@ func (a *Annotator) SetOriginalConfiguration(obj runtime.Object, original []byte
 		return nil
 	}
 
-	annots, err := a.metadataAccessor.Annotations(obj)
+	existing, err := a.metadataAccessor.Annotations(obj)
 	if err != nil {
 		return err
 	}
 
+	// Never mutate the object's map in place: builders may share it with the pod
+	// template, and the annotation must not leak into the latter.
+	annots := maps.Clone(existing)
 	if annots == nil {
 		annots = map[string]string{}
 	}
@@ -117,27 +121,26 @@ func (a *Annotator) GetModifiedConfiguration(obj runtime.Object, annotate bool) 
 	var modified []byte
 
 	// Otherwise, use the server side version of the object.
-	// Get the current annotations from the object.
-	annots, err := a.metadataAccessor.Annotations(obj)
+	// Get the current annotations from the object. Work on a copy so the
+	// object's own map (possibly shared with a pod template) is never mutated.
+	originalAnnots, err := a.metadataAccessor.Annotations(obj)
 	if err != nil {
 		return nil, err
 	}
 
+	annots := maps.Clone(originalAnnots)
 	if annots == nil {
 		annots = map[string]string{}
 	}
-
-	original := annots[a.key]
 	delete(annots, a.key)
-	if err := a.metadataAccessor.SetAnnotations(obj, annots); err != nil {
-		return nil, err
-	}
 
 	// Do not include an empty annotation map
 	if len(annots) == 0 {
 		if err := a.metadataAccessor.SetAnnotations(obj, nil); err != nil {
 			return nil, err
 		}
+	} else if err := a.metadataAccessor.SetAnnotations(obj, annots); err != nil {
+		return nil, err
 	}
 
 	modified, err = json.ConfigCompatibleWithStandardLibrary.Marshal(obj)
@@ -161,8 +164,7 @@ func (a *Annotator) GetModifiedConfiguration(obj runtime.Object, annotate bool) 
 	}
 
 	// Restore the object to its original condition.
-	annots[a.key] = original
-	if err := a.metadataAccessor.SetAnnotations(obj, annots); err != nil {
+	if err := a.metadataAccessor.SetAnnotations(obj, originalAnnots); err != nil {
 		return nil, err
 	}
 
