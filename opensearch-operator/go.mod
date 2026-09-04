@@ -1,6 +1,6 @@
 module github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator
 
-go 1.25.13
+go 1.26.0
 
 require (
 	emperror.dev/errors v0.8.1
@@ -22,7 +22,7 @@ require (
 	github.com/samber/lo v1.38.1
 	github.com/stretchr/testify v1.11.1
 	go.uber.org/zap v1.27.0
-	golang.org/x/crypto v0.55.0
+	golang.org/x/crypto v0.56.0
 	golang.org/x/sync v0.22.0
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.33.1
