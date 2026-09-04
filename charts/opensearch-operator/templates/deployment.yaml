@@ -32,6 +32,14 @@ spec:
         - --enable-legacy-api={{ include "opensearch-operator.legacyAPIEnabled" . }}
         - --webhook-port={{ .Values.webhook.port }}
         - --manage-cluster-role-bindings={{ not .Values.useRoleBindings }}
+        - --max-concurrent-reconciles={{ .Values.manager.maxConcurrentReconciles | default 1 }}
+        {{- $perControllerPairs := list }}
+        {{- range $controller, $count := .Values.manager.maxConcurrentReconcilesPerController }}
+        {{- $perControllerPairs = append $perControllerPairs (printf "%s=%v" $controller $count) }}
+        {{- end }}
+        {{- if $perControllerPairs }}
+        - --max-concurrent-reconciles-per-controller={{ $perControllerPairs | join "," }}
+        {{- end }}
         {{- if .Values.manager.watchNamespace }}
         {{- if kindIs "slice" .Values.manager.watchNamespace }}
         - --watch-namespace={{ .Values.manager.watchNamespace | join "," }}

@@ -102,6 +102,15 @@ manager:
   # watchNamespace: [ns1, ns2]
   watchNamespace:
 
+  # Global default max concurrent reconciles for all controllers.
+  maxConcurrentReconciles: 1
+
+  # Per-controller overrides (controller name -> max concurrent reconciles).
+  # Example:
+  # maxConcurrentReconcilesPerController:
+  #   opensearchcluster: 4
+  maxConcurrentReconcilesPerController: {}
+
   # Configure extra environment variables for the operator. You can also pull them from secrets or configmaps
   extraEnv: []
   #  - name: MY_ENV

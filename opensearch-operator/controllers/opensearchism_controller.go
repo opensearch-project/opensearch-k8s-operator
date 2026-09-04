@@ -3,24 +3,22 @@ package controllers
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
-// OpensearchISMReconciler reconciles a ISMPolicy object
+// OpensearchISMPolicyReconciler reconciles a ISMPolicy object.
 type OpensearchISMPolicyReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpenSearchISMPolicy
-	logr.Logger
 }
 
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchismpolicies,verbs=get;list;watch;create;update;patch;delete
@@ -32,10 +30,11 @@ type OpensearchISMPolicyReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("tenant", req.NamespacedName)
-	r.Info("Reconciling OpensearchISMPolicy")
-	r.Instance = &opensearchv1.OpenSearchISMPolicy{}
-	err := r.Get(ctx, req.NamespacedName, r.Instance)
+	logger := log.FromContext(ctx).WithValues("tenant", req.NamespacedName)
+	logger.Info("Reconciling OpensearchISMPolicy")
+
+	instance := &opensearchv1.OpenSearchISMPolicy{}
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -44,32 +43,33 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 		ctx,
 		r.Client,
 		r.Recorder,
-		r.Instance,
+		instance,
 	)
-	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Update(ctx, r.Instance)
+	if instance.DeletionTimestamp.IsZero() {
+		controllerutil.AddFinalizer(instance, OpensearchFinalizer)
+		err = r.Update(ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return ismReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(instance, OpensearchFinalizer) {
 			err = ismReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
-			return ctrl.Result{}, r.Update(ctx, r.Instance)
+			controllerutil.RemoveFinalizer(instance, OpensearchFinalizer)
+			return ctrl.Result{}, r.Update(ctx, instance)
 		}
 	}
 	return ctrl.Result{}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchISMPolicyReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpensearchISMPolicyReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrentReconciles int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpenSearchISMPolicy{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		Complete(r)
 }
