@@ -561,29 +561,29 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 	return nil
 }
 
-// handleUnreadyPods tries to unblock upgrades stalled by CrashLoopBackOff pods and emits Warning events.
+// handleUnreadyPods tries to unblock upgrades stalled by stuck (CrashLoopBackOff/ImagePullBackOff/...) pods and emits Warning events.
 func (r *UpgradeReconciler) handleUnreadyPods(pool opensearchv1.NodePool, sts *appsv1.StatefulSet, annotations map[string]string) {
 	deletedPod, err := helpers.DeleteStuckPodWithOlderRevision(r.client, sts)
 	if err != nil {
 		r.logger.Error(err, "Could not delete stuck pod with older revision", "pool", pool.Component)
 	} else if deletedPod != "" {
-		r.logger.Info("Deleted stuck CrashLoopBackOff pod with older revision", "pod", deletedPod, "pool", pool.Component)
+		r.logger.Info("Deleted stuck pod with older revision", "pod", deletedPod, "pool", pool.Component)
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade",
-			"Deleted stuck CrashLoopBackOff pod '%s' in node pool '%s' to allow the upgrade to proceed", deletedPod, pool.Component)
+			"Deleted stuck pod '%s' in node pool '%s' to allow the upgrade to proceed", deletedPod, pool.Component)
 	}
 
-	crashPods, err := helpers.CrashLoopBackOffPods(r.client, sts)
+	stuckPods, err := helpers.StuckPods(r.client, sts)
 	if err != nil {
-		r.logger.Error(err, "Could not list CrashLoopBackOff pods", "pool", pool.Component)
+		r.logger.Error(err, "Could not list stuck pods", "pool", pool.Component)
 		return
 	}
-	for _, podName := range crashPods {
+	for podName, reason := range stuckPods {
 		if podName == deletedPod {
 			continue
 		}
-		r.logger.Info("Upgrade stalled by CrashLoopBackOff pod", "pod", podName, "pool", pool.Component)
+		r.logger.Info("Upgrade stalled by stuck pod", "pod", podName, "reason", reason, "pool", pool.Component)
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade",
-			"Pod '%s' in node pool '%s' is in CrashLoopBackOff; upgrade is stalled until the pod becomes ready", podName, pool.Component)
+			"Pod '%s' in node pool '%s' is in %s; upgrade is stalled until the pod becomes ready", podName, pool.Component, reason)
 	}
 }
 
