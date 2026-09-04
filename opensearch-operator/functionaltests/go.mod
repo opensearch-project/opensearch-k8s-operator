@@ -1,6 +1,6 @@
 module github.com/opensearch-project/opensearch-k8s-operator/functionaltests
 
-go 1.25.13
+go 1.26.0
 
 require (
 	github.com/go-logr/logr v1.4.3
@@ -55,7 +55,7 @@ require (
 	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.55.0 // indirect
+	golang.org/x/crypto v0.56.0 // indirect
 	golang.org/x/exp v0.0.0-20240719175910-8a7402abbf56 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
