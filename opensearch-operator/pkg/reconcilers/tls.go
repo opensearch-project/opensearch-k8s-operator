@@ -116,7 +116,9 @@ func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.ssl.certificates_hot_reload.enabled", "true")
 	}
 
-	if helpers.IsSecurityPluginEnabled(r.instance) {
+	// The admin certificate is only used by securityadmin, which requires TLS
+	// on the port it connects to (see CanRunSecurityAdmin).
+	if helpers.CanRunSecurityAdmin(r.instance) {
 		res, err := r.handleAdminCertificate()
 		return lo.FromPtrOr(res, ctrl.Result{}), err
 	}

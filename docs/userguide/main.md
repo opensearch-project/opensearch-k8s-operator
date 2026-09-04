@@ -1542,6 +1542,32 @@ If you provided your own certificate for SSL/TLS HTTP, then you must also provid
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
+#### Applying the securityconfig without HTTP TLS
+
+Clusters that enable transport TLS but disable HTTP TLS (`security.tls.http.enabled: false`) are supported, for example when TLS is terminated by a service mesh:
+
+```yaml
+# ...
+spec:
+  general:
+    version: 2.19.4
+  security:
+    tls:
+      transport:
+        generate: true
+        perNode: true
+      http:
+        enabled: false
+# ...
+```
+
+On OpenSearch 2.0 and later `securityadmin.sh` needs TLS on the HTTP port, so in this mode the Operator cannot run the `<cluster-name>-securityconfig-update` job. Instead it sets `plugins.security.allow_default_init_securityindex: true` and mounts the generated securityconfig into the nodes, and the security plugin loads it into the security index itself when the cluster first forms. The admin and `kibanaserver` credentials are generated and hashed into the securityconfig as usual, no admin certificate is required, and the Operator talks to the cluster over plain HTTP.
+
+Limitations of this mode:
+
+- **Changes to the securityconfig secret after the cluster is created are not applied automatically.** The securityconfig is only read once, when the security index is first initialized. To manage users, roles, tenants and action groups on a running cluster use the [Kubernetes resources](#managing-security-configurations-with-kubernetes-resources) or the security plugin REST API. `config.yml` (authentication backends) has no CRD equivalent, so plan for a cluster recreation or keep HTTP TLS enabled if you expect to change it later.
+- There is no `<cluster-name>-securityconfig-update` job to inspect. The `Securityconfig` entry in the cluster's `status.componentsStatus` reports `securityconfig applied via default init`.
+
 ### Authenticating the operator to OpenSearch with mTLS (client certificate)
 
 By default the operator uses HTTP basic auth (`adminCredentialsSecret`) when calling the OpenSearch REST API for tasks like health checks, ISM policy / role / user reconciliation, snapshot management, and node-draining during scale operations. You can instead authenticate the operator's runtime client using a TLS client certificate (mTLS) by setting `security.config.operatorClientCert`.
