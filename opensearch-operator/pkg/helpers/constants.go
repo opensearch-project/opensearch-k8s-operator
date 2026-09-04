@@ -12,6 +12,7 @@ const (
 	OldClusterLabel              = "opster.io/opensearch-cluster"
 	JobLabel                     = "opensearch.org/opensearch-job"
 	NodePoolLabel                = "opensearch.org/opensearch-nodepool"
+	OldNodePoolLabel             = "opster.io/opensearch-nodepool"
 	OsUserNameAnnotation         = "opensearchuser/name"
 	OsUserNamespaceAnnotation    = "opensearchuser/namespace"
 	DnsBaseEnvVariable           = "DNS_BASE"

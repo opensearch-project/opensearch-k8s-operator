@@ -37,6 +37,7 @@ import (
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	k8s "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 )
 
@@ -69,6 +70,7 @@ type ClusterMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;update;patch
 
 func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -292,6 +294,16 @@ func (r *ClusterMigrationReconciler) syncOldToNew(ctx context.Context, oldCluste
 	if err := r.transferCertificateSecretOwnership(ctx, oldCluster, newCluster); err != nil {
 		logger.Error(err, "Failed to transfer certificate secret ownership during sync, will retry")
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+	}
+	// Only backfill PVC labels once the new cluster is initialized. Doing this earlier
+	// can make legacy PVCs visible to parallel recovery while the migrated CR is still
+	// settling (e.g. Status.Initialized not yet true), which recreates STS in Parallel
+	// mode and can break a healthy cluster mid-migration.
+	if newCluster.Status.Initialized {
+		if err := r.backfillPVCLegacyLabels(ctx, oldCluster); err != nil {
+			logger.Error(err, "Failed to backfill PVC labels during sync, will retry")
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
 	}
 	// Only sync status from new back to old
 	// Spec sync is intentionally disabled - the new CR is the source of truth after migration
@@ -1051,6 +1063,45 @@ func clearManagedClusterField(obj client.Object) {
 		// Set ManagedCluster to nil
 		managedClusterField.Set(reflect.Zero(managedClusterField.Type()))
 	}
+}
+
+// backfillPVCLegacyLabels migrates legacy PVC labels from opster.io/* to opensearch.org/*.
+func (r *ClusterMigrationReconciler) backfillPVCLegacyLabels(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster) error {
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	if err := r.List(ctx, pvcList, &client.ListOptions{
+		Namespace: oldCluster.Namespace,
+	}, client.MatchingLabels{
+		helpers.OldClusterLabel: oldCluster.Name,
+	}); err != nil {
+		return fmt.Errorf("failed to list PVCs for label migration: %w", err)
+	}
+
+	for i := range pvcList.Items {
+		pvc := &pvcList.Items[i]
+		original := pvc.DeepCopy()
+		if pvc.Labels == nil {
+			pvc.Labels = map[string]string{}
+		}
+
+		updated := false
+		if pvc.Labels[helpers.ClusterLabel] == "" {
+			pvc.Labels[helpers.ClusterLabel] = oldCluster.Name
+			updated = true
+		}
+		if pvc.Labels[helpers.NodePoolLabel] == "" {
+			if oldNodePool, ok := pvc.Labels[helpers.OldNodePoolLabel]; ok && oldNodePool != "" {
+				pvc.Labels[helpers.NodePoolLabel] = oldNodePool
+				updated = true
+			}
+		}
+
+		if updated {
+			if err := r.Patch(ctx, pvc, client.MergeFrom(original)); err != nil {
+				return fmt.Errorf("failed to patch PVC %s/%s labels: %w", pvc.Namespace, pvc.Name, err)
+			}
+		}
+	}
+	return nil
 }
 
 // transferCertificateSecretOwnership transfers owner references on certificate secrets
