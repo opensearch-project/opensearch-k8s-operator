@@ -16,6 +16,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func ClusterDescWithVersion(version string) opensearchv1.OpenSearchCluster {
@@ -1007,6 +1009,29 @@ var _ = Describe("Builders", func() {
 				MountPath: "/tmp/keystoreSecrets/" + mockSecretName + "/" + newKey,
 				SubPath:   oldKey,
 			}))
+		})
+	})
+
+	When("Creating a cluster without a confMgmt block", func() {
+		It("should default smartScaler to true", func() {
+			namespaceName := "confmgmt-default"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			// A typed client always serializes confMgmt (smartScaler has no omitempty),
+			// so mimic a user manifest that omits the block entirely.
+			obj := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "opensearch.org/v1",
+				"kind":       "OpenSearchCluster",
+				"metadata":   map[string]interface{}{"name": "no-confmgmt", "namespace": namespaceName},
+				"spec": map[string]interface{}{
+					"general":   map[string]interface{}{"version": "2.2.1", "serviceName": "no-confmgmt"},
+					"nodePools": []interface{}{map[string]interface{}{"component": "masters", "replicas": int64(1), "roles": []interface{}{"cluster_manager", "data"}}},
+				},
+			}}
+			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed())
+
+			cluster := opensearchv1.OpenSearchCluster{}
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: "no-confmgmt", Namespace: namespaceName}, &cluster)).To(Succeed())
+			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeTrue())
 		})
 	})
 
