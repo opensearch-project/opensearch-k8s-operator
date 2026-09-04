@@ -184,7 +184,21 @@ func IsTransportTlsEnabled(cluster *opensearchv1.OpenSearchCluster) bool {
 	return true
 }
 
+// IsSecurityPluginEnabled determines if the security plugin is active in the cluster.
+// The plugin handles both transport and HTTP TLS, so it is active if either is enabled.
+// Note that this does not imply securityadmin can run; see CanRunSecurityAdmin.
 func IsSecurityPluginEnabled(cr *opensearchv1.OpenSearchCluster) bool {
+	return IsHttpTlsEnabled(cr) || IsTransportTlsEnabled(cr)
+}
+
+// CanRunSecurityAdmin determines if securityadmin.sh can be used to manage the
+// securityconfig. securityadmin authenticates with the admin client certificate,
+// which requires TLS on the port it connects to: the HTTP port for OpenSearch >= 2.0,
+// the transport port for earlier versions. When the security plugin is enabled but
+// securityadmin cannot run (HTTP TLS disabled on >= 2.0), the securityconfig is
+// applied through the security plugin's default init instead (see the
+// securityconfig reconciler).
+func CanRunSecurityAdmin(cr *opensearchv1.OpenSearchCluster) bool {
 	if SecurityChangeVersion(cr) {
 		return IsHttpTlsEnabled(cr)
 	}

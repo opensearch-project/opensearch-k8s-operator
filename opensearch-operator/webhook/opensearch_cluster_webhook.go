@@ -186,7 +186,9 @@ func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opensearchv1.Ope
 	}
 
 	// Validate admin secret name: if AdminSecret is empty, tls generate should be true.
-	if helpers.IsSecurityPluginEnabled(cluster) {
+	// The admin certificate is only needed when securityadmin is used; with default init
+	// (security plugin enabled but securityadmin unavailable) no admin cert is required.
+	if helpers.CanRunSecurityAdmin(cluster) {
 		if cluster.Spec.Security.Config != nil && cluster.Spec.Security.Config.AdminSecret.Name != "" {
 			return nil, nil
 		} else {
