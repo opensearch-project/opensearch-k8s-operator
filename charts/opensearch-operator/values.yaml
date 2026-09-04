@@ -67,6 +67,12 @@ manager:
   # watchNamespace: [ns1, ns2]
   watchNamespace:
 
+  # -- Global default max concurrent reconciles for all controllers.
+  maxConcurrentReconciles: 1
+
+  # -- Per-controller overrides (controller name -> max concurrent reconciles). Example: `{opensearchcluster: 4}`.
+  maxConcurrentReconcilesPerController: {}
+
   metricsBindAddress: 127.0.0.1:8080
 
 # Install the Custom Resource Definitions with Helm

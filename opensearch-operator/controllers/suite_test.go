@@ -114,7 +114,9 @@ var _ = BeforeSuite(func() {
 		Scheme: scheme.Scheme,
 		//	Instance: &OpensearchCluster,
 		Recorder: record.NewFakeRecorder(20),
-	}).SetupWithManager(k8sManager)
+		// Run the suite with several workers so that any per-request state that
+		// leaks between concurrently reconciled clusters surfaces in these tests.
+	}).SetupWithManager(k8sManager, 4)
 	Expect(err).ToNot(HaveOccurred())
 
 	go func() {

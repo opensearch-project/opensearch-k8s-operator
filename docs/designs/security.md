@@ -63,7 +63,29 @@ plugins.security.ssl.http.pemtrustedcas_filepath: tls-http/ca.crt
 plugins.security.allow_unsafe_democertificates: false
 plugins.security.nodes_dn: ["CN=my-cluster"]
 plugins.security.admin_dn: ["CN=my-cluster-admin"]
+plugins.security.allow_default_init_securityindex: true # Only when the securityconfig is applied via default init, see below
 ```
+
+## Applying the securityconfig
+
+The security plugin is considered enabled when TLS is enabled for either the transport or the HTTP endpoint (`IsSecurityPluginEnabled`). Whether the operator can use `securityadmin.sh` to apply the securityconfig is a separate question (`CanRunSecurityAdmin`), because `securityadmin.sh` authenticates with the admin client certificate and therefore needs TLS on the port it connects to:
+
+* OpenSearch >= 2.0: the HTTP port, so HTTP TLS must be enabled
+* OpenSearch < 2.0: the transport port, so transport TLS is sufficient
+
+This yields two paths for getting the securityconfig into the cluster:
+
+| Situation                                                                               | How the securityconfig is applied                                                                                                                                                                                                                                                              |
+|-----------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `securityadmin.sh` can run                                                              | The operator runs the `<cluster-name>-securityconfig-update` job, which invokes `securityadmin.sh` with the admin client certificate. The job is rerun whenever the securityconfig changes.                                                                                                    |
+| Security plugin enabled but `securityadmin.sh` cannot run (HTTP TLS disabled on >= 2.0) | The operator sets `plugins.security.allow_default_init_securityindex: true`, mounts the generated securityconfig secret into the nodes, and lets the security plugin load it into the security index itself when the cluster first forms. No admin certificate and no update job are involved. |
+| Security plugin disabled (no TLS at all)                                                | Securityconfig reconciliation is skipped entirely.                                                                                                                                                                                                                                             |
+
+Consequences of the default-init path:
+
+* The admin certificate is not generated or required, and the webhook does not demand an `adminSecret` or `http.tls.generate: true`.
+* The securityconfig is only read at initial cluster formation. Later changes to the securityconfig secret are not applied automatically, because there is no update job to rerun.
+* The `plugins.security.allow_default_init_securityindex` flag is added before any early return in the securityconfig reconciler, so the node configuration is deterministic from the first reconciliation and does not cause a rolling restart later.
 
 ## Features for Phase 1
 

@@ -7,6 +7,7 @@ import (
 	k8smocks "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v2"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -784,6 +785,113 @@ var _ = Describe("Upgrade status helpers", func() {
 			}
 			Expect(IsUpgradeInProgress(status)).To(BeFalse())
 		})
+	})
+})
+
+var _ = Describe("Stuck pod handling (issue #1531)", func() {
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "c-nodes", Namespace: "ns"},
+		Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To[int32](2)},
+		Status:     appsv1.StatefulSetStatus{UpdateRevision: "rev-new"},
+	}
+	pod := func(name, revision, waitingReason string) corev1.Pod {
+		p := corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name: name, Namespace: "ns", Labels: map[string]string{stsRevisionLabel: revision},
+		}}
+		if waitingReason != "" {
+			p.Status.ContainerStatuses = []corev1.ContainerStatus{{
+				Ready: false,
+				State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: waitingReason}},
+			}}
+		} else {
+			p.Status.ContainerStatuses = []corev1.ContainerStatus{{Ready: true}}
+		}
+		return p
+	}
+
+	It("deletes an older-revision pod stuck in ImagePullBackOff", func() {
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetPod("c-nodes-0", "ns").Return(pod("c-nodes-0", "rev-old", "ImagePullBackOff"), nil)
+		mockClient.EXPECT().DeletePod(mock.MatchedBy(func(p *corev1.Pod) bool { return p.Name == "c-nodes-0" })).Return(nil)
+
+		deleted, err := DeleteStuckPodWithOlderRevision(mockClient, sts)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(deleted).To(Equal("c-nodes-0"))
+	})
+
+	It("does not delete an older-revision pod that is merely starting", func() {
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetPod("c-nodes-0", "ns").Return(pod("c-nodes-0", "rev-old", "ContainerCreating"), nil)
+
+		deleted, err := DeleteStuckPodWithOlderRevision(mockClient, sts)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(deleted).To(BeEmpty())
+	})
+
+	It("reports every stuck pod with its waiting reason", func() {
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetPod("c-nodes-0", "ns").Return(pod("c-nodes-0", "rev-new", "ErrImagePull"), nil)
+		mockClient.EXPECT().GetPod("c-nodes-1", "ns").Return(pod("c-nodes-1", "rev-new", ""), nil)
+
+		stuck, err := StuckPods(mockClient, sts)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stuck).To(Equal(map[string]string{"c-nodes-0": "ErrImagePull"}))
+	})
+})
+
+var _ = Describe("IsSecurityPluginEnabled and CanRunSecurityAdmin", func() {
+	makeCluster := func(version string, transport *opensearchv1.TlsConfigTransport, http *opensearchv1.TlsConfigHttp) *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{Version: version},
+				Security: &opensearchv1.Security{
+					Tls: &opensearchv1.TlsConfig{
+						Transport: transport,
+						Http:      http,
+					},
+				},
+			},
+		}
+	}
+
+	It("should report both disabled without any TLS", func() {
+		cluster := &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{Version: "2.19.4"}},
+		}
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeFalse())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report the plugin enabled but securityadmin unavailable with transport TLS only on >= 2.0", func() {
+		cluster := makeCluster("2.19.4", &opensearchv1.TlsConfigTransport{Generate: true}, nil)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report the plugin enabled but securityadmin unavailable with HTTP TLS explicitly disabled on >= 2.0", func() {
+		cluster := makeCluster(
+			"2.19.4",
+			&opensearchv1.TlsConfigTransport{Generate: true},
+			&opensearchv1.TlsConfigHttp{Enabled: ptr.To(false)},
+		)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report both enabled with transport and HTTP TLS on >= 2.0", func() {
+		cluster := makeCluster(
+			"2.19.4",
+			&opensearchv1.TlsConfigTransport{Generate: true},
+			&opensearchv1.TlsConfigHttp{Generate: true},
+		)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeTrue())
+	})
+
+	It("should report both enabled with transport TLS only on < 2.0 (securityadmin uses the transport port)", func() {
+		cluster := makeCluster("1.3.0", &opensearchv1.TlsConfigTransport{Generate: true}, nil)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeTrue())
 	})
 })
 

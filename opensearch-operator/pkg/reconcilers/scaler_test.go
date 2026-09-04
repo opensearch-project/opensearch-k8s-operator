@@ -534,6 +534,39 @@ var _ = Describe("Scaler Controller", func() {
 		})
 	})
 
+	Context("When a node pool is not fully available", func() {
+		It("Should skip cleanup without short-circuiting the reconciler chain (issue #1531)", func() {
+			// Requeue=true here would stop the main chain before the upgrade and
+			// rolling-restart reconcilers run, so a stuck pod could never be recovered.
+			clusterName := "test-cluster"
+			clusterNamespace := "test-namespace"
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterNamespace},
+				Spec: opensearchv1.ClusterSpec{
+					General:   opensearchv1.GeneralConfig{Version: "2.12.0"},
+					NodePools: []opensearchv1.NodePool{{Component: "masters", Replicas: 3}},
+				},
+				Status: opensearchv1.ClusterStatus{Version: "2.11.0"},
+			}
+			mastersSts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-masters", Namespace: clusterNamespace},
+				Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To[int32](3)},
+				Status:     appsv1.StatefulSetStatus{AvailableReplicas: 2},
+			}
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.On("GetStatefulSet", clusterName+"-masters", clusterNamespace).Return(mastersSts, nil)
+			// No ListStatefulSets expectation: cleanup must be skipped.
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			result, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(Equal(15 * time.Second))
+			mockClient.AssertExpectations(GinkgoT())
+		})
+	})
+
 	Context("When accumulating requeue across node pools", func() {
 		It("Should keep Requeue when an earlier pool requested it (regression #1454)", func() {
 			// Previously only the last pool's requeue was combined on the success
