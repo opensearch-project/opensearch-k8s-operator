@@ -224,6 +224,71 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(warnings).To(BeEmpty())
 		})
+
+		It("should allow transport TLS with HTTP TLS explicitly disabled and no admin secret", func() {
+			transportEnabled := true
+			httpEnabled := false
+			cluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{
+								Enabled:  &transportEnabled,
+								Generate: true,
+							},
+							Http: &opensearchv1.TlsConfigHttp{
+								Enabled: &httpEnabled,
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, cluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should require an admin secret source when securityadmin can run", func() {
+			enabled := true
+			cluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{
+								Enabled:  &enabled,
+								Generate: true,
+							},
+							Http: &opensearchv1.TlsConfigHttp{
+								Enabled: &enabled,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret: corev1.LocalObjectReference{Name: "my-http-tls-secret"},
+								},
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("admin secret name is not provided but http.tls generate is not true"))
+			Expect(warnings).To(BeEmpty())
+		})
 	})
 
 	Describe("ValidateUpdate", func() {

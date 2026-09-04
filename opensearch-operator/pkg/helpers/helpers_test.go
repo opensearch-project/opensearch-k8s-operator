@@ -838,3 +838,59 @@ var _ = Describe("Stuck pod handling (issue #1531)", func() {
 		Expect(stuck).To(Equal(map[string]string{"c-nodes-0": "ErrImagePull"}))
 	})
 })
+
+var _ = Describe("IsSecurityPluginEnabled and CanRunSecurityAdmin", func() {
+	makeCluster := func(version string, transport *opensearchv1.TlsConfigTransport, http *opensearchv1.TlsConfigHttp) *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{Version: version},
+				Security: &opensearchv1.Security{
+					Tls: &opensearchv1.TlsConfig{
+						Transport: transport,
+						Http:      http,
+					},
+				},
+			},
+		}
+	}
+
+	It("should report both disabled without any TLS", func() {
+		cluster := &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{Version: "2.19.4"}},
+		}
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeFalse())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report the plugin enabled but securityadmin unavailable with transport TLS only on >= 2.0", func() {
+		cluster := makeCluster("2.19.4", &opensearchv1.TlsConfigTransport{Generate: true}, nil)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report the plugin enabled but securityadmin unavailable with HTTP TLS explicitly disabled on >= 2.0", func() {
+		cluster := makeCluster(
+			"2.19.4",
+			&opensearchv1.TlsConfigTransport{Generate: true},
+			&opensearchv1.TlsConfigHttp{Enabled: ptr.To(false)},
+		)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report both enabled with transport and HTTP TLS on >= 2.0", func() {
+		cluster := makeCluster(
+			"2.19.4",
+			&opensearchv1.TlsConfigTransport{Generate: true},
+			&opensearchv1.TlsConfigHttp{Generate: true},
+		)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeTrue())
+	})
+
+	It("should report both enabled with transport TLS only on < 2.0 (securityadmin uses the transport port)", func() {
+		cluster := makeCluster("1.3.0", &opensearchv1.TlsConfigTransport{Generate: true}, nil)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeTrue())
+	})
+})

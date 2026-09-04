@@ -124,25 +124,28 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.logger.Info("Security plugin is disabled, skipping securityconfig reconciliation")
 		return ctrl.Result{}, nil
 	}
+
+	// When securityadmin cannot run (see CanRunSecurityAdmin), the securityconfig is applied
+	// by the security plugin itself when the cluster first forms: the generated securityconfig
+	// secret is mounted into the nodes below, and default init loads it into the security index.
+	// The flag is added before any early return so the node config is deterministic from the
+	// first reconciliation.
+	applyViaDefaultInit := !helpers.CanRunSecurityAdmin(r.instance)
+	if applyViaDefaultInit {
+		r.reconcilerContext.AddConfig("plugins.security.allow_default_init_securityindex", "true")
+	}
+
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
 	var configSecretName string
 	var checksumval string
 	var cmdArg string
 
-	adminCertName := r.determineAdminSecret()
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
 	jobName := clusterName + "-securityconfig-update"
 
 	configSecretName = helpers.GeneratedSecurityConfigSecretName(r.instance)
-
-	// TODO(joseb): Check if admin certificate is provided or generated in webhook
-	if adminCertName == "" {
-		err := errors.New("admin certificate neither provided nor generation is enabled")
-		r.logger.Error(err, "Skipping securityconfig reconciliation")
-		return ctrl.Result{}, err
-	}
 
 	adminCredentialsSecret, managedByOperator, err := helpers.EnsureAdminCredentialsSecret(r.client, r.instance)
 	if err != nil {
@@ -201,6 +204,23 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if err := r.securityconfigSubpaths(r.instance, &configSecret); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	if applyViaDefaultInit {
+		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusReady, "securityconfig applied via default init", nil); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	adminCertName := r.determineAdminSecret()
+
+	// TODO(joseb): Check if admin certificate is provided or generated in webhook
+	if adminCertName == "" {
+		err := errors.New("admin certificate neither provided nor generation is enabled")
+		r.logger.Error(err, "Skipping securityconfig reconciliation")
+		return ctrl.Result{}, err
+	}
+
 	cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
 
 	job, err := r.client.GetJob(jobName, namespace)
@@ -339,12 +359,12 @@ func (r *SecurityconfigReconciler) determineAdminSecret() string {
 			return r.instance.Spec.Security.Config.AdminSecret.Name
 		}
 	}
-	// Webhook validation ensures that if security plugin is enabled and no AdminSecret is provided,
+	// Webhook validation ensures that if securityadmin can run and no AdminSecret is provided,
 	// then TLS Generate must be true. So we can safely return the default admin cert name.
-	if helpers.IsSecurityPluginEnabled(r.instance) {
+	if helpers.CanRunSecurityAdmin(r.instance) {
 		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
 	}
-	// Security plugin is not enabled, no admin cert needed
+	// securityadmin is not used, no admin cert needed
 	return ""
 }
 
