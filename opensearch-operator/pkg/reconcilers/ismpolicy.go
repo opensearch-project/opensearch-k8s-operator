@@ -526,8 +526,12 @@ func (r *IsmPolicyReconciler) CreateISMPolicy() (*requests.ISMPolicySpec, error)
 					Alias:         alias,
 				})
 			}
-			transitions := make([]requests.Transition, 0, len(state.Transitions))
-			for _, transition := range state.Transitions {
+			var stateTransitions []opensearchv1.Transition
+			if state.Transitions != nil {
+				stateTransitions = *state.Transitions
+			}
+			transitions := make([]requests.Transition, 0, len(stateTransitions))
+			for _, transition := range stateTransitions {
 				conditions := requests.Condition{}
 				if transition.Conditions.MinDocCount != nil {
 					conditions.MinDocCount = transition.Conditions.MinDocCount

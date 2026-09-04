@@ -365,9 +365,9 @@ spec:
                       description: The name of the state.
                       type: string
                     transitions:
-                      description: The next states and the conditions required to
-                        transition to those states. If no transitions exist, the policy
-                        assumes that it’s complete and can now stop managing the index
+                      description: |-
+                        The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that it’s complete and can now stop managing the index.
+                        An explicitly declared empty list marks a terminal state and is preserved as such; omitting the field leaves it unset.
                       items:
                         properties:
                           conditions:

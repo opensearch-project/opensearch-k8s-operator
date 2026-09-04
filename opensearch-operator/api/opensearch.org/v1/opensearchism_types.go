@@ -89,8 +89,14 @@ type State struct {
 	Actions []Action `json:"actions"`
 	// The name of the state.
 	Name string `json:"name"`
-	// The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that it's complete and can now stop managing the index
-	Transitions []Transition `json:"transitions,omitempty"`
+	// Pointer rather than a plain slice: with `omitempty` a plain slice cannot distinguish an
+	// explicitly declared empty list from an unset field, so the operator's own writes (it adds a
+	// finalizer and calls Update on the whole object) silently dropped `transitions: []`.
+
+	// The next states and the conditions required to transition to those states. If no transitions exist, the policy assumes that it's complete and can now stop managing the index.
+	// An explicitly declared empty list marks a terminal state and is preserved as such; omitting the field leaves it unset.
+	// +optional
+	Transitions *[]Transition `json:"transitions,omitempty"`
 }
 
 // Actions are the steps that the policy sequentially executes on entering a specific state.
