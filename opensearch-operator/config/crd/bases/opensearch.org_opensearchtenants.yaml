@@ -16,7 +16,10 @@ spec:
     singular: opensearchtenant
   scope: Namespaced
   versions:
-  - name: v1
+  - deprecated: true
+    deprecationWarning: OpensearchTenant is deprecated and will be removed in v4 of
+      the OpenSearch Kubernetes Operator.
+    name: v1
     schema:
       openAPIV3Schema:
         description: OpensearchTenant is the Schema for the opensearchtenants API

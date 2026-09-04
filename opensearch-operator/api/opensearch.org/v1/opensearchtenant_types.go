@@ -34,6 +34,7 @@ type OpensearchTenantStatus struct {
 //+kubebuilder:subresource:status
 
 // OpensearchTenant is the Schema for the opensearchtenants API
+// +kubebuilder:deprecatedversion:warning="OpensearchTenant is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpensearchTenant struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
