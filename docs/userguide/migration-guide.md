@@ -227,6 +227,8 @@ All CRDs have equivalent types in the new API group:
 | OpensearchIndexTemplate | OpensearchIndexTemplate |
 | OpensearchComponentTemplate | OpensearchComponentTemplate |
 
+ISM `allocation` actions are converted during this copy. The legacy API stored `exclude`, `include`, `require`, and `waitFor` as strings (from the old CRD types). The `opensearch.org` CRD matches the OpenSearch API: `exclude`/`include`/`require` are maps, and `waitFor` is a boolean. Existing `opensearch.org` policies are not rewritten; use the map/boolean form on the new API.
+
 ## Deletion Behavior
 
 Understanding how deletion works during migration:

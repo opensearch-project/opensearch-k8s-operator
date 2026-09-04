@@ -116,13 +116,13 @@ type AliasDetails struct {
 
 type Allocation struct {
 	// Allocate the index to a node with a specified attribute.
-	Exclude string `json:"exclude"`
+	Exclude map[string]string `json:"exclude,omitempty"`
 	// Allocate the index to a node with any of the specified attributes.
-	Include string `json:"include"`
+	Include map[string]string `json:"include,omitempty"`
 	// Don’t allocate the index to a node with any of the specified attributes.
-	Require string `json:"require"`
+	Require map[string]string `json:"require,omitempty"`
 	// Wait for the policy to execute before allocating the index to a node with a specified attribute.
-	WaitFor string `json:"wait_for"`
+	WaitFor *bool `json:"wait_for,omitempty"`
 }
 
 type Close struct{}

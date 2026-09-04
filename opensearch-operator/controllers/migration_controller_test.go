@@ -524,6 +524,66 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 		})
 	})
 
+	Describe("ISMPolicyMigrationReconciler allocation conversion", func() {
+		var ismClient client.Client
+
+		BeforeEach(func() {
+			ismClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&opensearchv1.OpenSearchISMPolicy{}, &opsterv1.OpenSearchISMPolicy{}).
+				Build()
+		})
+
+		It("should convert string allocation fields when creating the new API resource", func() {
+			oldPolicy := &opsterv1.OpenSearchISMPolicy{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-ism",
+					Namespace: "default",
+				},
+				Spec: opsterv1.OpenSearchISMPolicySpec{
+					DefaultState: "hot",
+					Description:  "test",
+					States: []opsterv1.State{
+						{
+							Name: "hot",
+							Actions: []opsterv1.Action{
+								{
+									Allocation: &opsterv1.Allocation{
+										Exclude: "box_type:cold",
+										Include: "",
+										Require: "box_type:hot",
+										WaitFor: "true",
+									},
+								},
+							},
+						},
+					},
+				},
+				Status: opsterv1.OpensearchISMPolicyStatus{
+					State: opsterv1.OpensearchISMPolicyCreated,
+				},
+			}
+			Expect(ismClient.Create(ctx, oldPolicy)).To(Succeed())
+			Expect(ismClient.Status().Update(ctx, oldPolicy)).To(Succeed())
+
+			ismReq := ctrl.Request{NamespacedName: types.NamespacedName{Name: "test-ism", Namespace: "default"}}
+			reconciler := &ISMPolicyMigrationReconciler{Client: ismClient, Scheme: scheme}
+			_, err := reconciler.Reconcile(ctx, ismReq)
+			Expect(err).NotTo(HaveOccurred())
+
+			newPolicy := &opensearchv1.OpenSearchISMPolicy{}
+			Expect(ismClient.Get(ctx, ismReq.NamespacedName, newPolicy)).To(Succeed())
+			Expect(newPolicy.Spec.States).To(HaveLen(1))
+			Expect(newPolicy.Spec.States[0].Actions).To(HaveLen(1))
+			Expect(newPolicy.Spec.States[0].Actions[0].Allocation).ToNot(BeNil())
+			Expect(newPolicy.Spec.States[0].Actions[0].Allocation.Require).To(Equal(map[string]string{"box_type": "hot"}))
+			Expect(newPolicy.Spec.States[0].Actions[0].Allocation.Exclude).To(Equal(map[string]string{"box_type": "cold"}))
+			Expect(newPolicy.Spec.States[0].Actions[0].Allocation.Include).To(BeEmpty())
+			Expect(newPolicy.Spec.States[0].Actions[0].Allocation.WaitFor).ToNot(BeNil())
+			Expect(*newPolicy.Spec.States[0].Actions[0].Allocation.WaitFor).To(BeTrue())
+		})
+	})
+
 	Describe("containsString and removeString helpers", func() {
 		It("should correctly identify string in slice", func() {
 			slice := []string{"a", "b", "c"}
