@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
@@ -22,6 +23,20 @@ const (
 	ControllerNameComponentTemplate = "opensearchcomponenttemplate"
 	ControllerNameSnapshotPolicy    = "opensearchsnapshotpolicy"
 )
+
+// knownControllers is the set of controller names accepted by --max-concurrent-reconciles-per-controller.
+var knownControllers = map[string]struct{}{
+	ControllerNameCluster:           {},
+	ControllerNameUser:              {},
+	ControllerNameRole:              {},
+	ControllerNameTenant:            {},
+	ControllerNameUserRoleBinding:   {},
+	ControllerNameActionGroup:       {},
+	ControllerNameISMPolicy:         {},
+	ControllerNameIndexTemplate:     {},
+	ControllerNameComponentTemplate: {},
+	ControllerNameSnapshotPolicy:    {},
+}
 
 // ControllerConcurrencyConfig holds concurrency settings for controllers.
 type ControllerConcurrencyConfig struct {
@@ -48,11 +63,12 @@ func (c *ControllerConcurrencyConfig) GetMaxConcurrentReconciles(controllerName 
 }
 
 // ParsePerControllerConcurrency parses a comma-separated list of controller=N pairs.
-// Invalid entries are skipped.
-func ParsePerControllerConcurrency(spec string) map[string]int {
+// Empty entries (e.g. trailing commas) are ignored. Unknown controller names,
+// malformed pairs, and non-positive or unparsable values return an error.
+func ParsePerControllerConcurrency(spec string) (map[string]int, error) {
 	perController := make(map[string]int)
 	if spec == "" {
-		return perController
+		return perController, nil
 	}
 	for _, pair := range strings.Split(spec, ",") {
 		pair = strings.TrimSpace(pair)
@@ -61,18 +77,24 @@ func ParsePerControllerConcurrency(spec string) map[string]int {
 		}
 		parts := strings.SplitN(pair, "=", 2)
 		if len(parts) != 2 {
-			continue
+			return nil, fmt.Errorf("invalid per-controller concurrency entry %q: expected controller=N", pair)
 		}
 		key := strings.ToLower(strings.TrimSpace(parts[0]))
 		val := strings.TrimSpace(parts[1])
 		if key == "" || val == "" {
-			continue
+			return nil, fmt.Errorf("invalid per-controller concurrency entry %q: expected controller=N", pair)
+		}
+		if _, ok := knownControllers[key]; !ok {
+			return nil, fmt.Errorf("unknown controller %q in per-controller concurrency config", key)
 		}
 		count, err := strconv.Atoi(val)
-		if err != nil || count < 1 {
-			continue
+		if err != nil {
+			return nil, fmt.Errorf("invalid concurrency value %q for controller %q: %w", val, key, err)
+		}
+		if count < 1 {
+			return nil, fmt.Errorf("concurrency for controller %q must be >= 1, got %d", key, count)
 		}
 		perController[key] = count
 	}
-	return perController
+	return perController, nil
 }

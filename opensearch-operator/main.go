@@ -115,7 +115,7 @@ func main() {
 		"The shared ClusterRole name that grants OpenSearch node-attribute init containers get access to nodes.")
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 1, "Global default max concurrent reconciles for all controllers")
 	flag.StringVar(&maxConcurrentReconcilesPerController, "max-concurrent-reconciles-per-controller", "",
-		"Per-controller max concurrent reconciles overrides (format: controller1=N,controller2=M). Only raise above 1 for controllers that do not store per-request state on the reconciler.")
+		"Per-controller max concurrent reconciles overrides (format: controller1=N,controller2=M)")
 
 	opts := zap.Options{
 		Development: false,
@@ -189,9 +189,14 @@ func main() {
 
 	helpers.RegisterMetrics()
 
+	perController, err := controllers.ParsePerControllerConcurrency(maxConcurrentReconcilesPerController)
+	if err != nil {
+		setupLog.Error(err, "invalid --max-concurrent-reconciles-per-controller")
+		os.Exit(1)
+	}
 	concurrencyConfig := &controllers.ControllerConcurrencyConfig{
 		MaxConcurrentReconciles: maxConcurrentReconciles,
-		PerController:           controllers.ParsePerControllerConcurrency(maxConcurrentReconcilesPerController),
+		PerController:           perController,
 	}
 
 	// Controllers now watch opensearch.org/v1 (new API group)

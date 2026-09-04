@@ -67,10 +67,10 @@ manager:
   # watchNamespace: [ns1, ns2]
   watchNamespace:
 
-  # -- Global default max concurrent reconciles for all controllers. Keep at 1 unless a controller is known to be concurrency-safe. Only the cluster controller currently stores no per-request state on the reconciler.
+  # -- Global default max concurrent reconciles for all controllers.
   maxConcurrentReconciles: 1
 
-  # -- Per-controller overrides (controller name -> max concurrent reconciles). Only raise above 1 for controllers that do not store per-request state on the reconciler. The cluster controller (`opensearchcluster`) is safe; other controllers currently are not.
+  # -- Per-controller overrides (controller name -> max concurrent reconciles). Example: `{opensearchcluster: 4}`.
   maxConcurrentReconcilesPerController: {}
 
   metricsBindAddress: 127.0.0.1:8080

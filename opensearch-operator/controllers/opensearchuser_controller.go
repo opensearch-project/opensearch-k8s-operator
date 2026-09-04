@@ -19,7 +19,6 @@ package controllers
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -37,13 +36,11 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
-// OpensearchUserReconciler reconciles a OpensearchUser object
+// OpensearchUserReconciler reconciles a OpensearchUser object.
 type OpensearchUserReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchUser
-	logr.Logger
 }
 
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchusers,verbs=get;list;watch;create;update;patch;delete
@@ -56,11 +53,11 @@ type OpensearchUserReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("user", req.NamespacedName)
-	r.Logger.V(4).Info("Reconciling OpensearchUser")
+	logger := log.FromContext(ctx).WithValues("user", req.NamespacedName)
+	logger.V(4).Info("Reconciling OpensearchUser")
 
-	r.Instance = &opensearchv1.OpensearchUser{}
-	err := r.Get(ctx, req.NamespacedName, r.Instance)
+	instance := &opensearchv1.OpensearchUser{}
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -69,24 +66,24 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 		r.Client,
 		ctx,
 		r.Recorder,
-		r.Instance,
+		instance,
 	)
 
-	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Update(ctx, r.Instance)
+	if instance.DeletionTimestamp.IsZero() {
+		controllerutil.AddFinalizer(instance, OpensearchFinalizer)
+		err = r.Update(ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return userReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(instance, OpensearchFinalizer) {
 			err = userReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
-			return ctrl.Result{}, r.Update(ctx, r.Instance)
+			controllerutil.RemoveFinalizer(instance, OpensearchFinalizer)
+			return ctrl.Result{}, r.Update(ctx, instance)
 		}
 	}
 
