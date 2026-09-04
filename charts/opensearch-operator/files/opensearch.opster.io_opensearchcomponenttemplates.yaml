@@ -16,7 +16,10 @@ spec:
     singular: opensearchcomponenttemplate
   scope: Namespaced
   versions:
-  - name: v1
+  - deprecated: true
+    deprecationWarning: OpensearchComponentTemplate is deprecated and will be removed
+      in v4 of the OpenSearch Kubernetes Operator.
+    name: v1
     schema:
       openAPIV3Schema:
         description: OpensearchComponentTemplate is the schema for the OpenSearch

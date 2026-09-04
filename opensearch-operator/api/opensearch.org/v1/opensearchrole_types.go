@@ -65,6 +65,7 @@ type OpensearchRoleStatus struct {
 //+kubebuilder:subresource:status
 
 // OpensearchRole is the Schema for the opensearchroles API
+// +kubebuilder:deprecatedversion:warning="OpensearchRole is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpensearchRole struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

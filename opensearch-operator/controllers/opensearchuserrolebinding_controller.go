@@ -57,6 +57,7 @@ func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	r.Info("OpensearchUserRoleBinding is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
 
 	userRoleBindingReconciler := reconcilers.NewUserRoleBindingReconciler(
 		r.Client,

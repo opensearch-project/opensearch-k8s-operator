@@ -36,6 +36,7 @@ type OpensearchActionGroupStatus struct {
 //+kubebuilder:subresource:status
 
 // OpensearchActionGroup is the Schema for the opensearchactiongroups API
+// +kubebuilder:deprecatedversion:warning="OpensearchActionGroup is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpensearchActionGroup struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

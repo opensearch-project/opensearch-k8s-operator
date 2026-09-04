@@ -65,6 +65,7 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	r.Info("OpensearchSnapshotPolicy is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
 
 	snapshotPolicyReconciler := reconcilers.NewSnapshotPolicyReconciler(
 		ctx,
