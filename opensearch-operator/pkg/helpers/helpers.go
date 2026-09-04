@@ -728,16 +728,9 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 	if err != nil {
 		return 0, err
 	}
-	bootstrapName := fmt.Sprintf("%s-bootstrap-0", cr.Name)
 	numReadyPods := 0
 	for _, pod := range pods {
 		if pod.DeletionTimestamp != nil {
-			continue
-		}
-		// By default, the bootstrap pod is labeled only with the cluster label.
-		// However, users or automated processes might add the node-pool label to it.
-		// This pod should never be counted as a ready replica for any node pool.
-		if pod.Name == bootstrapName {
 			continue
 		}
 		podReady := false

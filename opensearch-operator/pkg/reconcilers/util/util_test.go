@@ -822,23 +822,29 @@ var _ = Describe("loadOperatorClientTLSConfig", func() {
 	})
 })
 
-var _ = Describe("HasNonBootstrapClusterNode", func() {
-	bootstrap := "opensearch-bootstrap-0"
+var _ = Describe("AllMastersJoinedCluster", func() {
+	expected := []string{"opensearch-masters-0", "opensearch-masters-1"}
 
 	It("returns false when the cluster has no nodes", func() {
-		Expect(HasNonBootstrapClusterNode(nil, bootstrap)).To(BeFalse())
+		Expect(AllMastersJoinedCluster(nil, expected)).To(BeFalse())
 	})
 
-	It("returns false when only the bootstrap pod has joined", func() {
-		Expect(HasNonBootstrapClusterNode([]responses.CatNodesResponse{
-			{Name: bootstrap},
-		}, bootstrap)).To(BeFalse())
+	It("returns false when no masters are expected", func() {
+		Expect(AllMastersJoinedCluster([]responses.CatNodesResponse{{Name: "opensearch-bootstrap-0"}}, nil)).To(BeFalse())
 	})
 
-	It("returns true when a real node has joined alongside bootstrap", func() {
-		Expect(HasNonBootstrapClusterNode([]responses.CatNodesResponse{
-			{Name: bootstrap},
-			{Name: "opensearch-master-0"},
-		}, bootstrap)).To(BeTrue())
+	It("returns false when only some masters have joined", func() {
+		Expect(AllMastersJoinedCluster([]responses.CatNodesResponse{
+			{Name: "opensearch-bootstrap-0"},
+			{Name: "opensearch-masters-0"},
+		}, expected)).To(BeFalse())
+	})
+
+	It("returns true when every expected master has joined", func() {
+		Expect(AllMastersJoinedCluster([]responses.CatNodesResponse{
+			{Name: "opensearch-bootstrap-0"},
+			{Name: "opensearch-masters-0"},
+			{Name: "opensearch-masters-1"},
+		}, expected)).To(BeTrue())
 	})
 })

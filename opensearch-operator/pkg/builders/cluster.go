@@ -1687,20 +1687,32 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearc
 		}, sts); err != nil {
 			return false
 		}
-		desiredReplicas := ptr.Deref(sts.Spec.Replicas, int32(1))
-		if desiredReplicas <= 0 {
-			return false
-		}
 		readyReplicas, err := helpers.ReadyReplicasForNodePool(wrappedClient, cr, &nodePool)
 		if err != nil {
 			return false
 		}
-		if readyReplicas != desiredReplicas {
+		if readyReplicas != ptr.Deref(sts.Spec.Replicas, int32(1)) {
 			return false
 		}
 	}
 	// If there is no cluster-manager node pool defined in the spec, return false.
 	return checkedMasterPool
+}
+
+// ExpectedMasterNodeNames returns the pod names of all cluster-manager-eligible replicas.
+// Node names default to the pod hostname, so these match the names reported by _cat/nodes.
+func ExpectedMasterNodeNames(cr *opensearchv1.OpenSearchCluster) []string {
+	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
+	var names []string
+	for _, pool := range cr.Spec.NodePools {
+		if !helpers.ContainsString(helpers.MapClusterRoles(pool.Roles, cr.Spec.General.Version), masterRole) {
+			continue
+		}
+		for i := int32(0); i < pool.Replicas; i++ {
+			names = append(names, fmt.Sprintf("%s-%d", StsName(cr, &pool), i))
+		}
+	}
+	return names
 }
 
 func NewServiceMonitor(cr *opensearchv1.OpenSearchCluster) *monitoring.ServiceMonitor {

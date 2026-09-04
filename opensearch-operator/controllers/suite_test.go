@@ -31,6 +31,7 @@ import (
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 
+	"github.com/jarcoal/httpmock"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/phayes/freeport"
 
@@ -62,6 +63,8 @@ var (
 	k8sClient client.Client
 	testEnv   *envtest.Environment
 	cancel    context.CancelFunc
+	// osTransport serves the OpenSearch API calls the cluster controller makes; tests register responders on it.
+	osTransport = httpmock.NewMockTransport()
 )
 
 func TestAPIs(t *testing.T) {
@@ -113,7 +116,8 @@ var _ = BeforeSuite(func() {
 		Client: k8sManager.GetClient(),
 		Scheme: scheme.Scheme,
 		//	Instance: &OpensearchCluster,
-		Recorder: record.NewFakeRecorder(20),
+		Recorder:          record.NewFakeRecorder(20),
+		osClientTransport: osTransport,
 		// Run the suite with several workers so that any per-request state that
 		// leaks between concurrently reconciled clusters surfaces in these tests.
 	}).SetupWithManager(k8sManager, 4)

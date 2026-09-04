@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -54,6 +55,8 @@ type OpenSearchClusterReconciler struct {
 	Recorder                         record.EventRecorder
 	SkipClusterRoleBindingManagement bool
 	NodeAttributesClusterRoleName    string
+	// osClientTransport overrides the OpenSearch HTTP transport; only set by tests.
+	osClientTransport http.RoundTripper
 }
 
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
@@ -273,13 +276,14 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 			if err := r.Get(ctx, client.ObjectKeyFromObject(instance), instance); err != nil {
 				return err
 			}
-			// Check if all master pods are ready and the OpenSearch cluster has at least one real node
+			// Check if all master pods are ready and have actually joined the OpenSearch cluster
 			initialized := builders.AllMastersReady(ctx, r.Client, instance)
 			if initialized {
-				initialized = util.ClusterHasNonBootstrapNode(
+				initialized = util.ClusterHasAllMasters(
 					k8s.NewK8sClient(r.Client, ctx),
 					ctx,
 					instance,
+					r.osClientTransport,
 					logger,
 				)
 			}

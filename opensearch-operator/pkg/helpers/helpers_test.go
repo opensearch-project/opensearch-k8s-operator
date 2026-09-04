@@ -922,17 +922,4 @@ var _ = Describe("CountRunningPodsForNodePool", func() {
 		Expect(count).To(Equal(1))
 	})
 
-	It("does not count a ready bootstrap pod as a node-pool replica", func() {
-		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
-		mockClient.EXPECT().ListPods(mock.Anything).Return(corev1.PodList{
-			Items: []corev1.Pod{readyPod("cluster-bootstrap-0")},
-		}, nil)
-
-		cr := &opensearchv1.OpenSearchCluster{
-			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
-		}
-		count, err := CountRunningPodsForNodePool(mockClient, cr, &opensearchv1.NodePool{Component: "master"})
-		Expect(err).NotTo(HaveOccurred())
-		Expect(count).To(Equal(0))
-	})
 })

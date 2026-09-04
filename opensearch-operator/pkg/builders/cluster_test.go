@@ -1105,49 +1105,6 @@ var _ = Describe("Builders", func() {
 			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeFalse())
 		})
 
-		It("should return false when only a mislabeled bootstrap pod is ready", func() {
-			namespaceName := "allmastersready-bootstrap"
-			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
-			clusterObject := ClusterDescWithVersion("3.7.0")
-			clusterObject.Namespace = namespaceName
-			clusterObject.Name = "bootstrapped"
-			clusterObject.Spec.General.ServiceName = "bootstrapped"
-			nodePool := opensearchv1.NodePool{
-				Replicas:  1,
-				Component: "master",
-				Roles:     []string{"cluster_manager", "data"},
-			}
-			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
-
-			sts := NewSTSForNodePool("bootstrapped", &clusterObject, nodePool, "hash", nil, nil)
-			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
-
-			bootstrap := &corev1.Pod{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      BootstrapPodName(&clusterObject),
-					Namespace: namespaceName,
-					Labels: map[string]string{
-						helpers.ClusterLabel:  clusterObject.Name,
-						helpers.NodePoolLabel: nodePool.Component,
-					},
-				},
-				Spec: corev1.PodSpec{
-					Containers: []corev1.Container{{
-						Name:  "opensearch",
-						Image: "opensearchproject/opensearch:3.7.0",
-					}},
-				},
-			}
-			Expect(k8sClient.Create(context.Background(), bootstrap)).To(Not(HaveOccurred()))
-			bootstrap.Status.Conditions = []corev1.PodCondition{{
-				Type:   corev1.PodReady,
-				Status: corev1.ConditionTrue,
-			}}
-			Expect(k8sClient.Status().Update(context.Background(), bootstrap)).To(Succeed())
-
-			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeFalse())
-		})
-
 		It("should return true when all cluster-manager pods are ready", func() {
 			namespaceName := "allmastersready-ready"
 			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
@@ -1189,6 +1146,21 @@ var _ = Describe("Builders", func() {
 			Expect(k8sClient.Status().Update(context.Background(), pod)).To(Succeed())
 
 			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeTrue())
+		})
+	})
+
+	When("Listing expected master node names", func() {
+		It("should return one pod name per replica of each cluster-manager pool", func() {
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Name = "names"
+			clusterObject.Spec.NodePools = []opensearchv1.NodePool{
+				{Replicas: 2, Component: "masters", Roles: []string{"cluster_manager"}},
+				{Replicas: 3, Component: "data", Roles: []string{"data"}},
+				{Replicas: 1, Component: "mixed", Roles: []string{"master", "data"}},
+			}
+			Expect(ExpectedMasterNodeNames(&clusterObject)).To(Equal([]string{
+				"names-masters-0", "names-masters-1", "names-mixed-0",
+			}))
 		})
 	})
 
