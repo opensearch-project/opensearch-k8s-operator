@@ -18,6 +18,9 @@ import (
 	"crypto/rand"
 	"testing"
 
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
@@ -102,5 +105,27 @@ func TestSetOriginalConfigurationSetsNormalSizedAnnotation(t *testing.T) {
 	}
 	if string(retrieved) != string(normalData) {
 		t.Fatalf("Expected retrieved data to match original, got: %s", string(retrieved))
+	}
+}
+
+func TestSetLastAppliedAnnotationDoesNotLeakIntoPodTemplate(t *testing.T) {
+	shared := map[string]string{"foo": "bar"}
+	d := &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{Name: "test", Annotations: shared},
+		Spec: appsv1.DeploymentSpec{
+			Template: corev1.PodTemplateSpec{ObjectMeta: metav1.ObjectMeta{Annotations: shared}},
+		},
+	}
+	if err := DefaultAnnotator.SetLastAppliedAnnotation(d); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := d.Annotations[LastAppliedConfig]; !ok {
+		t.Fatal("expected annotation on object metadata")
+	}
+	if _, ok := d.Spec.Template.Annotations[LastAppliedConfig]; ok {
+		t.Fatal("annotation leaked into pod template")
+	}
+	if _, ok := shared[LastAppliedConfig]; ok {
+		t.Fatal("caller's annotations map was mutated")
 	}
 }
