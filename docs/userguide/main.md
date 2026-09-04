@@ -437,6 +437,8 @@ SmartScaler is a mechanism built into the Operator that enables nodes to be safe
 
 During the safe drain process, the node being removed is marked as "draining", which means that it will no longer receive any new requests. Instead, it will only process outstanding requests until its workload has been completed. Once all requests have been processed, the node will begin transferring its data to other nodes in the cluster. The safe drain process will continue until all data has been transferred and the node is no longer part of the cluster. Only after that, the OMC will turn down the node.
 
+SmartScaler is enabled by default (`spec.confMgmt.smartScaler: true`), whether or not the `confMgmt` block is present in the manifest. Setting it to `false` removes nodes without draining, and the operator emits a `Warning` event each time it does so.
+
 ### Set Java heap size
 
 To configure the amount of memory allocated to the OpenSearch nodes, configure the heap size using the JVM args. This operation is expected to have no downtime and the cluster should be operational.

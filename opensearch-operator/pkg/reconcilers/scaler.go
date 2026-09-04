@@ -179,7 +179,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 			if !r.instance.Spec.ConfMgmt.SmartScaler {
 				lg.Info(fmt.Sprintf("SmartScaler is disabled, removing nodes from nodegroup %s without draining", nodePool.Component))
 				requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
-				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Notice - your SmartScaler is not enabled")
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "SmartScaler is disabled: removing node from %s without draining", nodePool.Component)
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to decrease node")
 				return requeue, err
 			}
@@ -493,12 +493,13 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	lg := log.FromContext(r.ctx)
 	lg.Info(fmt.Sprintf("Removing statefulset: %s", sts.Name))
 
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	if !r.instance.Spec.ConfMgmt.SmartScaler {
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "SmartScaler is disabled: removing statefulset %s without draining", sts.Name)
 		return r.client.ReconcileResource(&sts, reconciler.StateAbsent)
 	}
 
 	// Gracefully remove nodes
-	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 	if err != nil {
 		lg.Error(err, "failed to create os client")
