@@ -104,8 +104,10 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	if err != nil {
 		results.Combine(&ctrl.Result{}, err)
 	} else if !ready {
-		// Not all node pools are ready yet, requeue and skip cleanup
-		results.Combine(&ctrl.Result{Requeue: true, RequeueAfter: 15 * time.Second}, nil)
+		// Not all node pools are ready yet: skip cleanup and retry later. Deliberately
+		// RequeueAfter-only (no Requeue=true) so the main chain still runs the upgrade
+		// and rolling-restart reconcilers, which own recovery of stuck pods (issue #1531).
+		results.Combine(&ctrl.Result{RequeueAfter: 15 * time.Second}, nil)
 	} else {
 		// Clean up old node pools (all current nodePools are ready)
 		r.cleanupStatefulSets(results)

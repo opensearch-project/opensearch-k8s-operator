@@ -926,47 +926,61 @@ func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSe
 	return "", errors.New("unable to calculate the working pod for rolling restart")
 }
 
-// DeleteStuckPodWithOlderRevision deletes a CrashLoopBackOff pod that is still on an older
-// StatefulSet revision so the update can proceed. Returns the deleted pod name when a delete occurs.
+// stuckWaitingReasons are container waiting reasons a pod does not recover from on its own.
+// A pod on a stale StatefulSet revision in one of these states is safe to delete because
+// the StatefulSet recreates it from the current template (issue #1531).
+var stuckWaitingReasons = map[string]bool{
+	"CrashLoopBackOff": true,
+	"ImagePullBackOff": true,
+	"ErrImagePull":     true,
+	"InvalidImageName": true,
+}
+
+// StuckContainerReason returns the waiting reason of the first non-ready container that is
+// stuck in a non-recoverable state, or "" if the pod is not stuck.
+func StuckContainerReason(pod *corev1.Pod) string {
+	for _, container := range pod.Status.ContainerStatuses {
+		if !container.Ready && container.State.Waiting != nil && stuckWaitingReasons[container.State.Waiting.Reason] {
+			return container.State.Waiting.Reason
+		}
+	}
+	return ""
+}
+
+// DeleteStuckPodWithOlderRevision deletes a stuck pod (see StuckContainerReason) that is still on an
+// older StatefulSet revision so the update can proceed. Returns the deleted pod name when a delete occurs.
 func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
 	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
 	if err != nil {
 		return "", err
 	}
-	if podWithOlderRevision != nil {
-		for _, container := range podWithOlderRevision.Status.ContainerStatuses {
-			// If any container is getting crashed, restart it by deleting the pod so that new update in sts can take place.
-			if !container.Ready && container.State.Waiting != nil && container.State.Waiting.Reason == "CrashLoopBackOff" {
-				err := k8sClient.DeletePod(&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      podWithOlderRevision.Name,
-						Namespace: sts.Namespace,
-					},
-				})
-				if err != nil {
-					return "", err
-				}
-				return podWithOlderRevision.Name, nil
-			}
-		}
+	if podWithOlderRevision == nil || StuckContainerReason(podWithOlderRevision) == "" {
+		return "", nil
 	}
-	return "", nil
+	err = k8sClient.DeletePod(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podWithOlderRevision.Name,
+			Namespace: sts.Namespace,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return podWithOlderRevision.Name, nil
 }
 
-// CrashLoopBackOffPods returns names of pods in the StatefulSet that have a container in CrashLoopBackOff.
-func CrashLoopBackOffPods(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) ([]string, error) {
-	var pods []string
+// StuckPods returns the pods in the StatefulSet that have a stuck container (see
+// StuckContainerReason), keyed by pod name with the waiting reason as value.
+func StuckPods(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (map[string]string, error) {
+	pods := map[string]string{}
 	for i := int32(0); i < lo.FromPtrOr(sts.Spec.Replicas, 1); i++ {
 		podName := ReplicaHostName(*sts, i)
 		pod, err := k8sClient.GetPod(podName, sts.Namespace)
 		if err != nil {
 			return nil, err
 		}
-		for _, container := range pod.Status.ContainerStatuses {
-			if !container.Ready && container.State.Waiting != nil && container.State.Waiting.Reason == "CrashLoopBackOff" {
-				pods = append(pods, pod.Name)
-				break
-			}
+		if reason := StuckContainerReason(&pod); reason != "" {
+			pods[pod.Name] = reason
 		}
 	}
 	return pods, nil
