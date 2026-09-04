@@ -21,6 +21,7 @@ const (
 //+kubebuilder:subresource:status
 
 // OpensearchIndexTemplate is the schema for the OpenSearch index templates API
+// +kubebuilder:deprecatedversion:warning="OpensearchIndexTemplate is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpensearchIndexTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

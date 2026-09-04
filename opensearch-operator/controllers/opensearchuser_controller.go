@@ -63,6 +63,7 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	r.Info("OpensearchUser is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
 
 	userReconciler := reconcilers.NewUserReconciler(
 		r.Client,
