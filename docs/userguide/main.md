@@ -21,6 +21,16 @@ A few notes on operator releases:
 - The userguide in the repository corresponds to the current development state of the code. To view the documentation for a specific released version switch to that tag in the Github menu.
 - We track feature requests as Github Issues. If you are missing a feature and find an issue for it, please be aware that an issue ticket closed as completed only means that feature has been implemented in the development version. After that it might still take some for the feature to be contained in a release. If you are unsure, please check the list of releases in our Github project if your feature is mentioned in the release notes.
 
+### Uninstalling
+
+Running `helm uninstall opensearch-operator` removes the operator, but by default it **keeps** the `opensearch.org`/`opensearch.opster.io` CRDs (they are annotated with `helm.sh/resource-policy: keep`). This is deliberate: Kubernetes cascade-deletes every `OpenSearchCluster` (and other custom resource) in the cluster when its CRD is removed, so keeping the CRDs on uninstall protects any clusters still managed by the operator.
+
+If you are sure no custom resources under these CRDs still exist and you want a full teardown (e.g. in CI or a throwaway dev environment), either install/upgrade with `--set crds.keep=false` so the `keep` annotation is never applied, or remove the CRDs manually after uninstalling:
+
+```console
+kubectl delete crd $(kubectl get crd -o name | grep -E 'opensearch\.(org|opster\.io)')
+```
+
 ## Quickstart
 
 After you have successfully installed the Operator, you can deploy your first OpenSearch cluster. This is done by creating an `OpenSearchCluster` custom object in Kubernetes or using Helm.
@@ -129,11 +139,13 @@ legacyAPI:
 ```
 
 > **Warning:** Do not disable legacy API support while
-> `opensearch.opster.io` resources still exist. The legacy CRDs are managed as
-> regular Helm release resources, so disabling the legacy API during an upgrade
-> removes those CRDs and deletes all remaining custom resources stored under
-> them. Follow the [migration guide](./migration-guide.md) to migrate, verify,
-> and delete every legacy resource before changing this setting.
+> `opensearch.opster.io` resources still exist. Disabling the legacy API
+> during an upgrade removes the legacy CRDs from the release. By default they
+> are kept (`crds.keep=true`, see [Uninstalling](#uninstalling)), but if you
+> have set `crds.keep=false`, Kubernetes deletes all remaining custom
+> resources stored under those CRDs as soon as they are removed. Follow the
+> [migration guide](./migration-guide.md) to migrate, verify, and delete
+> every legacy resource before changing this setting.
 
 ### Pprof endpoints
 

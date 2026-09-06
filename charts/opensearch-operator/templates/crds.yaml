@@ -12,6 +12,11 @@
 				{{- $labels := include "opensearch-operator.labels" $ | fromYaml }}
 				{{- $md := default (dict) $obj.metadata }}
 				{{- $_ := set $md "labels" (merge (default (dict) $obj.metadata.labels) $labels) }}
+				{{- if $.Values.crds.keep }}
+				{{- $ann := default (dict) $md.annotations }}
+				{{- $_ := set $ann "helm.sh/resource-policy" "keep" }}
+				{{- $_ := set $md "annotations" $ann }}
+				{{- end }}
 				{{- $_ := set $obj "metadata" $md }}
 {{ $obj | toYaml }}
 ---
