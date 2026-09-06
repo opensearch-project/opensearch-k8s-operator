@@ -119,15 +119,23 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 
-		// Add migration finalizer to new cluster if not present
-		// This ensures we can handle deletion even after main reconciler removes its finalizer
+		// Add migration finalizer to new cluster, but only if there is actually a
+		// legacy twin to migrate/clean up. Otherwise every cluster on a fresh
+		// install (no opensearch.opster.io twin at all) would pick up a
+		// finalizer that nothing will ever remove.
 		if !containsString(newCluster.Finalizers, MigrationFinalizer) {
-			newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
-			if err := r.Update(ctx, newCluster); err != nil {
+			hasTwin, err := genericHasLegacyTwin[opsterv1.OpenSearchCluster, *opsterv1.OpenSearchCluster](ctx, r.Client, req.NamespacedName, newCluster)
+			if err != nil {
 				return ctrl.Result{}, err
 			}
-			// Requeue to process deletion if needed
-			return ctrl.Result{Requeue: true}, nil
+			if hasTwin {
+				newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
+				if err := r.Update(ctx, newCluster); err != nil {
+					return ctrl.Result{}, err
+				}
+				// Requeue to process deletion if needed
+				return ctrl.Result{Requeue: true}, nil
+			}
 		}
 		// If new cluster exists and is not being deleted, continue to check old cluster
 	}
@@ -654,6 +662,29 @@ func (r *ComponentTemplateMigrationReconciler) SetupWithManager(mgr ctrl.Manager
 		Complete(r)
 }
 
+// genericHasLegacyTwin reports whether the new-group object has a legacy
+// (opensearch.opster.io) twin that the migration finalizer would need to
+// clean up: either the twin still exists, or the object's annotations record
+// that it was created by migrating one (covers the window after the legacy
+// twin has already been deleted).
+func genericHasLegacyTwin[OldType any, OldPtr interface {
+	*OldType
+	client.Object
+}](ctx context.Context, c client.Client, key types.NamespacedName, newResource client.Object) (bool, error) {
+	if annotations := newResource.GetAnnotations(); annotations != nil && annotations[MigratedFromAnnotation] != "" {
+		return true, nil
+	}
+	oldResource := OldPtr(new(OldType))
+	err := c.Get(ctx, key, oldResource)
+	if err == nil {
+		return true, nil
+	}
+	if errors.IsNotFound(err) {
+		return false, nil
+	}
+	return false, err
+}
+
 // Generic migration reconciler using generics
 func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 	*OldType
@@ -708,15 +739,23 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 			return ctrl.Result{}, nil
 		}
 
-		// Add migration finalizer to new resource if not present
-		// This ensures we can handle deletion even after main reconciler removes its finalizer
+		// Add migration finalizer to new resource, but only if there is actually a
+		// legacy twin to migrate/clean up. Otherwise every object on a fresh
+		// install (no opensearch.opster.io twins at all) would pick up a
+		// finalizer that nothing will ever remove.
 		if !containsString(newResource.GetFinalizers(), MigrationFinalizer) {
-			newResource.SetFinalizers(append(newResource.GetFinalizers(), MigrationFinalizer))
-			if err := c.Update(ctx, newResource); err != nil {
+			hasTwin, err := genericHasLegacyTwin[OldType, OldPtr](ctx, c, req.NamespacedName, newResource)
+			if err != nil {
 				return ctrl.Result{}, err
 			}
-			// Requeue to process deletion if needed
-			return ctrl.Result{Requeue: true}, nil
+			if hasTwin {
+				newResource.SetFinalizers(append(newResource.GetFinalizers(), MigrationFinalizer))
+				if err := c.Update(ctx, newResource); err != nil {
+					return ctrl.Result{}, err
+				}
+				// Requeue to process deletion if needed
+				return ctrl.Result{Requeue: true}, nil
+			}
 		}
 		// If new resource exists and is not being deleted, continue to check old resource
 	}
