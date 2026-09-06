@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	"strings"
 
@@ -77,6 +78,19 @@ func registerLegacyAPIComponents(enabled bool, register func()) {
 	}
 }
 
+// registerLeaderElectionFlags registers the leader election tuning flags on fs and returns
+// pointers to the parsed values, suitable for use as ctrl.Options.LeaseDuration/RenewDeadline/RetryPeriod.
+func registerLeaderElectionFlags(fs *flag.FlagSet) (leaseDuration, renewDeadline, retryPeriod *time.Duration) {
+	leaseDuration = fs.Duration("leader-elect-lease-duration", 60*time.Second,
+		"The duration that non-leader candidates will wait after observing a leadership renewal until attempting to acquire leadership.")
+	renewDeadline = fs.Duration("leader-elect-renew-deadline", 30*time.Second,
+		"The interval between attempts by the acting leader to renew its leadership before it stops leading. "+
+			"Must be less than the lease duration.")
+	retryPeriod = fs.Duration("leader-elect-retry-period", 5*time.Second,
+		"The duration the leader election clients should wait between tries of actions.")
+	return
+}
+
 func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 	utilruntime.Must(opsterv1.AddToScheme(scheme))
@@ -116,6 +130,7 @@ func main() {
 	flag.IntVar(&maxConcurrentReconciles, "max-concurrent-reconciles", 1, "Global default max concurrent reconciles for all controllers")
 	flag.StringVar(&maxConcurrentReconcilesPerController, "max-concurrent-reconciles-per-controller", "",
 		"Per-controller max concurrent reconciles overrides (format: controller1=N,controller2=M)")
+	leaseDuration, renewDeadline, retryPeriod := registerLeaderElectionFlags(flag.CommandLine)
 
 	opts := zap.Options{
 		Development: false,
@@ -179,6 +194,9 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "a867c7dc.opensearch.org",
+		LeaseDuration:          leaseDuration,
+		RenewDeadline:          renewDeadline,
+		RetryPeriod:            retryPeriod,
 		Cache:                  cacheOpts,
 		WebhookServer:          webhookServer,
 	})
