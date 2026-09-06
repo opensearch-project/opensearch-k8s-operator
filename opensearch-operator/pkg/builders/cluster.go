@@ -34,6 +34,13 @@ const (
 	ConfigurationChecksumAnnotation  = "opensearch.org/config"
 	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
+	// securityconfigUserChecksumAnnotation stores a checksum of only the user-provided
+	// securityConfigSecret (pre-merge with the operator's embedded defaults and managed user
+	// hashes). It is what operator <=2.8.0 wrote as securityconfigChecksumAnnotation, so it lets
+	// a job created by that job comparison logic recognize a job left behind by an older operator
+	// during CR adoption/migration without treating the hashing-scheme change itself as a config
+	// change that must be re-applied.
+	securityconfigUserChecksumAnnotation = "securityconfig/user-checksum"
 
 	nodeAttributesVolumeName = "node-attributes"
 	nodeAttributesFileName   = "attributes.env"
@@ -1544,6 +1551,7 @@ func NewSecurityconfigUpdateJob(
 	jobName string,
 	namespace string,
 	checksum string,
+	userChecksum string,
 	adminCertName string,
 	adminCASecretName string,
 	cmdArg string,
@@ -1596,7 +1604,8 @@ func NewSecurityconfigUpdateJob(
 	})
 
 	annotations := map[string]string{
-		securityconfigChecksumAnnotation: checksum,
+		securityconfigChecksumAnnotation:     checksum,
+		securityconfigUserChecksumAnnotation: userChecksum,
 	}
 	terminationGracePeriodSeconds := int64(5)
 	backoffLimit := int32(1)
