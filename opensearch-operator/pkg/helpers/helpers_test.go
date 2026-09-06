@@ -382,6 +382,7 @@ snapshotrestore:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			"",
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			"",
 		)
@@ -439,6 +440,7 @@ customuser:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			adminHashOverride,
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			dashboardsHashOverride,
 		)
@@ -499,6 +501,7 @@ kibanaro:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			"$2a$12$newhash",
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			"$2a$12$newkibanahash",
 		)
@@ -546,6 +549,7 @@ customuser:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			"$2a$12$adminhash",
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			"$2a$12$dashhash",
 		)
@@ -588,6 +592,7 @@ kibanaserver:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			"$2a$12$newhash",
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			"$2a$12$newkibanahash",
 		)
@@ -610,6 +615,78 @@ kibanaserver:
 		}
 		Expect(roleStrings).To(ContainElement("other_role"))
 		Expect(roleStrings).To(ContainElement("admin"))
+	})
+
+	It("should inject the hash under a custom Dashboards username, not kibanaserver", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "adminhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			"$2a$12$adminhash",
+			"mydashboardsuser",
+			[]byte("dashboardspass"),
+			"$2a$12$customuserhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The custom username must carry the hash, and "kibanaserver" must not be created.
+		Expect(output).ToNot(HaveKey("kibanaserver"))
+		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).To(Equal("$2a$12$customuserhash"))
+	})
+})
+
+var _ = Describe("RolesMappingHasUser", func() {
+	It("returns true when the username is listed under a role's users", func() {
+		rolesMapping := `
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+kibana_server:
+  reserved: true
+  users:
+    - "kibanaserver"
+`
+		mapped, err := RolesMappingHasUser([]byte(rolesMapping), "kibanaserver")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeTrue())
+	})
+
+	It("returns false when the username is not listed under any role", func() {
+		rolesMapping := `
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+all_access:
+  reserved: true
+  backend_roles:
+    - "admin"
+  users:
+    - "someoneelse"
+`
+		mapped, err := RolesMappingHasUser([]byte(rolesMapping), "kibanaserver")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeFalse())
+	})
+
+	It("returns false on an empty document without error", func() {
+		mapped, err := RolesMappingHasUser([]byte(""), "kibanaserver")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeFalse())
 	})
 })
 

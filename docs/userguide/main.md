@@ -1519,6 +1519,8 @@ Provide the name of the secret that contains your securityconfig yaml files as `
 
 **Important:** You no longer need to provide password hashes for the `admin` or `kibanaserver` users in your security config secret. The operator will automatically generate password hashes from the credentials secrets and override any hash values you provide in the security config secret for these users. This means you only need to manage passwords in one place (the credentials secrets), not in both the credentials secrets and the security config secret.
 
+**Important:** password hashes are the only thing the operator manages for you. If your security config secret includes its own `roles_mapping.yml`, it replaces the image's default file entirely, and you are responsible for keeping the Dashboards user mapped to a role that has cluster monitoring permissions (`kibana_server` by default). See [Custom Dashboards user](#custom-dashboards-user) below.
+
 Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
 
 If you don't want to use the default files, you must provide at least a minimum configuration for the file. Example:
@@ -1831,7 +1833,18 @@ spec:
 **Important:** Similar to the admin user, you do **not** need to include the password hash for the `kibanaserver` user in your security config secret. The operator will automatically:
 1. Read the password from your `opensearchCredentialsSecret` (or use the generated random password if not provided)
 2. Generate the bcrypt hash
-3. Override the `kibanaserver` user's hash in the generated security config secret
+3. Override the Dashboards user's hash in the generated security config secret (using the `username` from `opensearchCredentialsSecret` if you provided one, `kibanaserver` otherwise)
+
+**Important:** the operator only manages the password hash. If you supply your own `roles_mapping.yml`, it replaces the image's default file, and the default `kibana_server -> kibanaserver` mapping is gone with it. You must keep the Dashboards user mapped to a role with cluster monitoring permissions yourself, for example:
+
+```yaml
+roles_mapping.yml: |-
+  kibana_server:
+    users:
+      - "kibanaserver" # or the username from opensearchCredentialsSecret
+```
+
+If you also supply your own `roles.yml`, keep the `kibana_server` role (or an equivalent role with the same permissions) in it. Without this mapping, the Dashboards user authenticates successfully but has no permissions, and the Dashboards deployment crash-loops with authorization errors in its logs (e.g. `no permissions for [cluster:monitor/nodes/info]`) with no other signal from the operator besides a `DashboardsUserUnmapped` warning event on the `OpenSearchCluster`.
 
 ### Security Plugin Disabled
 
