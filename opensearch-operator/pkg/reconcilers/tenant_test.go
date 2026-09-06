@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -256,6 +257,60 @@ var _ = Describe("tenant reconciler", func() {
 				Expect(len(events)).To(Equal(2))
 				Expect(events[0]).To(Equal("Normal UnitTest exists is true"))
 				Expect(events[1]).To(Equal("Normal UnitTest exists is false"))
+			})
+		})
+
+		When("existing status is nil but a concurrent status write already set it", func() {
+			// Regression test for the migration race: the migration controller
+			// creates the twin with an empty status and restores the real status
+			// afterwards via UdateObjectStatus. If this reconciler's own "does it
+			// already exist in Opensearch" probe races that restore, it must not
+			// clobber the concurrently-written value.
+			JustBeforeEach(func() {
+				reconciler.updateStatus = ptr.To(true)
+			})
+
+			BeforeEach(func() {
+				instance.Status.ManagedCluster = &cluster.UID
+				tenantRequest := requests.Tenant{
+					Description: "test-description",
+				}
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"%s_plugins/_security/api/tenants/%s",
+						clusterUrl,
+						instance.Name,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetTenantResponse{
+						instance.Name: tenantRequest,
+					}),
+				)
+				// The first UdateObjectStatus call is the reconciler's "does it
+				// already exist in Opensearch" probe; simulate the migration
+				// controller's status restore landing right before it runs.
+				mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).RunAndReturn(
+					func(obj client.Object, f func(client.Object)) error {
+						obj.(*opensearchv1.OpensearchTenant).Status.ExistingTenant = ptr.To(false)
+						f(obj)
+						return nil
+					},
+				).Once()
+				// Later UdateObjectStatus calls (e.g. the deferred reason/state
+				// write) behave normally.
+				mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).RunAndReturn(
+					func(obj client.Object, f func(client.Object)) error {
+						f(obj)
+						return nil
+					},
+				)
+			})
+
+			It("keeps the concurrently-written value instead of marking it existing", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(instance.Status.ExistingTenant).ToNot(BeNil())
+				Expect(*instance.Status.ExistingTenant).To(BeFalse())
 			})
 		})
 

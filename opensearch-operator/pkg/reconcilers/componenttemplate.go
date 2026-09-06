@@ -172,7 +172,11 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 		if ptr.Deref(r.updateStatus, true) {
 			err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 				instance := object.(*opensearchv1.OpensearchComponentTemplate)
-				instance.Status.ExistingComponentTemplate = &exists
+				// A concurrent writer (e.g. the migration controller restoring
+				// the migrated status) may have set this already; don't clobber it.
+				if instance.Status.ExistingComponentTemplate == nil {
+					instance.Status.ExistingComponentTemplate = &exists
+				}
 			})
 			if err != nil {
 				reason = fmt.Sprintf("failed to update status: %s", err)
