@@ -205,6 +205,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	r.warnIfDashboardsUserUnmapped(&configSecret, annotations)
+
 	if applyViaDefaultInit {
 		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusReady, "securityconfig applied via default init", nil); err != nil {
 			return ctrl.Result{}, err
@@ -408,6 +410,42 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opensearchv1
 	}
 
 	return nil
+}
+
+// warnIfDashboardsUserUnmapped emits a Warning event when Dashboards is enabled and the
+// generated securityconfig secret carries a non-empty custom roles_mapping.yml that does not
+// list the Dashboards user under any role's "users". This is a heuristic (backend-role based
+// mappings are still valid and not checked) meant only to surface an otherwise silent failure
+// mode (crash-looping Dashboards with no cluster-level signal); it never blocks reconciliation.
+func (r *SecurityconfigReconciler) warnIfDashboardsUserUnmapped(configSecret *corev1.Secret, annotations map[string]string) {
+	if !r.instance.Spec.Dashboards.Enable {
+		return
+	}
+	rolesMapping := configSecret.Data["roles_mapping.yml"]
+	if len(rolesMapping) == 0 {
+		return
+	}
+	dashboardsUsername, err := helpers.DashboardsUsername(r.client, r.instance)
+	if err != nil {
+		r.logger.Error(err, "Unable to determine Dashboards username for roles mapping check")
+		return
+	}
+	mapped, err := helpers.RolesMappingHasUser(rolesMapping, dashboardsUsername)
+	if err != nil {
+		r.logger.Error(err, "Unable to parse roles_mapping.yml for Dashboards user mapping check")
+		return
+	}
+	if mapped {
+		return
+	}
+	r.recorder.AnnotatedEventf(
+		r.instance,
+		annotations,
+		"Warning",
+		"DashboardsUserUnmapped",
+		"Dashboards user %q is not listed under any role's \"users\" in the custom roles_mapping.yml; Dashboards may fail to authorize unless it is mapped via backend_roles instead",
+		dashboardsUsername,
+	)
 }
 
 // BuildClusterSvcHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}

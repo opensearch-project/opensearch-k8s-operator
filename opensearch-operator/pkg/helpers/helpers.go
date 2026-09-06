@@ -394,9 +394,13 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 		return nil, err
 	}
 	var dashboardsPassword []byte
+	dashboardsUsername := "kibanaserver"
 	if dashboardsSecret != nil {
 		if pwd, exists := dashboardsSecret.Data["password"]; exists {
 			dashboardsPassword = pwd
+		}
+		if username, exists := dashboardsSecret.Data["username"]; exists && len(username) > 0 {
+			dashboardsUsername = string(username)
 		}
 	}
 	if len(dashboardsPassword) == 0 {
@@ -420,21 +424,22 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 	var adminHashOverride, dashboardsHashOverride string
 	if existingGenerated != nil {
 		if existingInternal, exists := existingGenerated.Data["internal_users.yml"]; exists {
-			var existingConfig InternalUserConfig
+			// Generic map lookup rather than InternalUserConfig, since the Dashboards
+			// user entry can live under any username (dashboardsUsername), not just
+			// the hardcoded "kibanaserver" key.
+			var existingConfig map[string]interface{}
 			if err := yaml.Unmarshal(existingInternal, &existingConfig); err == nil {
-				if existingConfig.Admin.Hash != "" && bcrypt.CompareHashAndPassword([]byte(existingConfig.Admin.Hash), adminPassword) == nil {
-					adminHashOverride = existingConfig.Admin.Hash
+				if hash := existingUserHash(existingConfig, "admin"); hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), adminPassword) == nil {
+					adminHashOverride = hash
 				}
-				if existingConfig.Kibanaserver != nil && existingConfig.Kibanaserver.Hash != "" {
-					if bcrypt.CompareHashAndPassword([]byte(existingConfig.Kibanaserver.Hash), dashboardsPassword) == nil {
-						dashboardsHashOverride = existingConfig.Kibanaserver.Hash
-					}
+				if hash := existingUserHash(existingConfig, dashboardsUsername); hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), dashboardsPassword) == nil {
+					dashboardsHashOverride = hash
 				}
 			}
 		}
 	}
 
-	internalUsers, err = applyUserHashes(internalUsers, adminPassword, adminHashOverride, dashboardsPassword, dashboardsHashOverride)
+	internalUsers, err = applyUserHashes(internalUsers, adminPassword, adminHashOverride, dashboardsUsername, dashboardsPassword, dashboardsHashOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -452,10 +457,23 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 	return secret, nil
 }
 
-func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
+// existingUserHash returns the "hash" field of a user entry in an
+// internal_users.yml document already unmarshalled into a generic map, or ""
+// if the user or its hash field is not present.
+func existingUserHash(data map[string]interface{}, username string) string {
+	user, ok := data[username].(map[interface{}]interface{})
+	if !ok {
+		return ""
+	}
+	hash, _ := user["hash"].(string)
+	return hash
+}
+
+func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsUsername string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
 	// Use a generic map to preserve all users (including custom ones).
-	// Only "admin" and "kibanaserver" are modified; all other entries
-	// (including _meta and any custom users) pass through unchanged.
+	// Only "admin" and the Dashboards user (dashboardsUsername) are modified;
+	// all other entries (including _meta and any custom users) pass through
+	// unchanged.
 	var data map[string]interface{}
 	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
@@ -510,12 +528,12 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 	}
 	adminUser["backend_roles"] = backendRoles
 
-	// Update kibanaserver user (same yaml.v2 map type as above)
-	kibanaUser, ok := data["kibanaserver"].(map[interface{}]interface{})
+	// Update the Dashboards user (same yaml.v2 map type as above)
+	kibanaUser, ok := data[dashboardsUsername].(map[interface{}]interface{})
 	if !ok {
-		// Create kibanaserver if it doesn't exist
+		// Create the Dashboards user if it doesn't exist
 		kibanaUser = make(map[interface{}]interface{})
-		data["kibanaserver"] = kibanaUser
+		data[dashboardsUsername] = kibanaUser
 	}
 
 	var dashboardsHash string
@@ -1176,4 +1194,48 @@ func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1
 		return nil, true, err
 	}
 	return &createdSecret, true, nil
+}
+
+// DashboardsUsername returns the username Dashboards authenticates to
+// OpenSearch with, i.e. the "username" field of its credentials secret
+// (custom or operator-generated), defaulting to "kibanaserver" if absent.
+func DashboardsUsername(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (string, error) {
+	secret, _, err := EnsureDashboardsCredentialsSecret(k8sClient, cr)
+	if err != nil {
+		return "", err
+	}
+	if username := secret.Data["username"]; len(username) > 0 {
+		return string(username), nil
+	}
+	return "kibanaserver", nil
+}
+
+// RolesMappingHasUser reports whether the given username is listed under the
+// "users" list of any role defined in a roles_mapping.yml document. This is a
+// heuristic used only to flag a likely misconfiguration: a user can also be
+// authorized via backend_roles or hosts, which this does not check.
+func RolesMappingHasUser(rolesMappingData []byte, username string) (bool, error) {
+	var data map[string]interface{}
+	if err := yaml.Unmarshal(rolesMappingData, &data); err != nil {
+		return false, err
+	}
+	for key, value := range data {
+		if key == "_meta" {
+			continue
+		}
+		role, ok := value.(map[interface{}]interface{})
+		if !ok {
+			continue
+		}
+		users, ok := role["users"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, u := range users {
+			if s, ok := u.(string); ok && s == username {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }
