@@ -749,7 +749,8 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 	return diff
 }
 
-func listPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) ([]corev1.Pod, error) {
+// ListPodsForNodePool returns all pods belonging to the given cluster and nodePool.
+func ListPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) ([]corev1.Pod, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
 		return nil, err
@@ -767,10 +768,20 @@ func listPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchClu
 	return list.Items, nil
 }
 
+// IsPodReady reports whether the pod's Ready condition is currently true.
+func IsPodReady(pod corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
 // CountExistingPodsForNodePool returns the number of non-terminating pods for a node pool,
 // regardless of readiness. emptyDir data survives in-place pod restarts while the pod exists.
 func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
+	pods, err := ListPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
 	}
@@ -790,7 +801,7 @@ func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 // spec.replicas (e.g. right after the scaler lowered the StatefulSet). Otherwise a
 // rolling restart or upgrade could delete a second pod while the first is still leaving.
 func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
+	pods, err := ListPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
 	}
@@ -800,14 +811,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 			numReadyPods--
 			continue
 		}
-		podReady := false
-		for _, condition := range pod.Status.Conditions {
-			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
-				podReady = true
-				break
-			}
-		}
-		if podReady {
+		if IsPodReady(pod) {
 			numReadyPods++
 		}
 	}

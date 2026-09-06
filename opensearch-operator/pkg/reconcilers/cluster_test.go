@@ -22,6 +22,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
 )
 
@@ -75,6 +76,104 @@ var _ = Describe("emptyDir recovery", func() {
 		parsed, ok := emptyDirRecoveryFirstObserved(components)
 		Expect(ok).To(BeTrue())
 		Expect(parsed).To(Equal(firstObserved))
+	})
+
+	newPod := func(name string, uid types.UID, ready bool) corev1.Pod {
+		status := corev1.PodStatus{}
+		if ready {
+			status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
+		}
+		return corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: name, UID: uid},
+			Status:     status,
+		}
+	}
+
+	It("counts a not-ready pod as existing when its UID matches the last recorded Ready UID (#1455)", func() {
+		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-1", false)}
+		recorded := []opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
+		}
+
+		existing, updates := classifyEmptyDirPods(pods, recorded)
+		Expect(existing).To(Equal(1))
+		Expect(updates).To(BeEmpty())
+	})
+
+	It("does not count a not-ready pod with a fresh UID as existing (#1526: force-delete recreation)", func() {
+		// Simulates a StatefulSet-recreated pod: same name, new UID, not yet ready.
+		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-2", false)}
+		recorded := []opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
+		}
+
+		existing, updates := classifyEmptyDirPods(pods, recorded)
+		Expect(existing).To(Equal(0))
+		Expect(updates).To(BeEmpty())
+	})
+
+	It("records the UID of a Ready pod that has no prior record", func() {
+		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-1", true)}
+
+		existing, updates := classifyEmptyDirPods(pods, nil)
+		Expect(existing).To(Equal(1))
+		Expect(updates).To(Equal([]opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
+		}))
+	})
+
+	It("ignores terminating pods regardless of readiness or UID", func() {
+		pod := newPod("cluster-nodes-0", "uid-1", true)
+		now := metav1.Now()
+		pod.DeletionTimestamp = &now
+
+		existing, updates := classifyEmptyDirPods([]corev1.Pod{pod}, nil)
+		Expect(existing).To(Equal(0))
+		Expect(updates).To(BeEmpty())
+	})
+
+	It("reproduces #1526: all pods force-deleted and recreated trips data loss detection", func() {
+		recorded := []opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "old-uid-0"},
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-1", Status: "old-uid-1"},
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-2", Status: "old-uid-2"},
+		}
+		// The StatefulSet has already recreated all three pods with fresh UIDs; none
+		// have become Ready yet (they are still waiting to join the cluster).
+		pods := []corev1.Pod{
+			newPod("cluster-nodes-0", "new-uid-0", false),
+			newPod("cluster-nodes-1", "new-uid-1", false),
+			newPod("cluster-nodes-2", "new-uid-2", false),
+		}
+
+		existing, updates := classifyEmptyDirPods(pods, recorded)
+		Expect(existing).To(Equal(0))
+		Expect(updates).To(BeEmpty())
+
+		stats := emptyDirPodStats{
+			existingDataPods:   int32(existing),
+			totalDataPods:      3,
+			existingMasterPods: int32(existing),
+			totalMasterPods:    3,
+		}
+		Expect(emptyDirDataLossSuspected(stats)).To(BeTrue())
+	})
+
+	It("upsertComponentStatus replaces an existing entry in place and appends otherwise", func() {
+		components := []opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "old-uid"},
+		}
+
+		components = upsertComponentStatus(components, opensearchv1.ComponentStatus{
+			Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "new-uid",
+		})
+		Expect(components).To(HaveLen(1))
+		Expect(components[0].Status).To(Equal("new-uid"))
+
+		components = upsertComponentStatus(components, opensearchv1.ComponentStatus{
+			Component: emptyDirPodUIDComponent, Description: "cluster-nodes-1", Status: "uid-1",
+		})
+		Expect(components).To(HaveLen(2))
 	})
 })
 
