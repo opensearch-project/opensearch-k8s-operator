@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Masterminds/semver"
 	"github.com/go-logr/logr"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
@@ -26,8 +25,10 @@ import (
 )
 
 var (
-	ErrVersionDowngrade = errors.New("version requested is downgrade")
-	ErrMajorVersionJump = errors.New("version request is more than 1 major version ahead")
+	// Aliased from helpers so callers in this package (and existing tests) keep referring to
+	// these as reconcilers.ErrVersionDowngrade / reconcilers.ErrMajorVersionJump.
+	ErrVersionDowngrade = helpers.ErrVersionDowngrade
+	ErrMajorVersionJump = helpers.ErrMajorVersionJump
 	ErrUnexpectedStatus = errors.New("unexpected upgrade status")
 )
 
@@ -295,37 +296,19 @@ func (r *UpgradeReconciler) cleanOrphanedUpgraderStatuses() error {
 // Currently provides basic validation on versions.
 // TODO Improve the validation (maybe allow patch version downgrades)
 func (r *UpgradeReconciler) validateUpgrade() error {
-	// Parse versions
-	existing, err := semver.NewVersion(r.instance.Status.Version)
-	if err != nil {
-		return err
+	err := helpers.ValidateVersionTransition(r.instance.Status.Version, r.instance.Spec.General.Version)
+	if err == nil {
+		return nil
 	}
 
-	new, err := semver.NewVersion(r.instance.Spec.General.Version)
-	if err != nil {
-		return err
-	}
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-
-	// Don't allow version downgrades as they might cause unexpected issues
-	if new.LessThan(existing) {
+	switch {
+	case errors.Is(err, ErrVersionDowngrade):
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Invalid version: specified version is a downgrade")
-		return ErrVersionDowngrade
-	}
-
-	// Don't allow more than one major version upgrade
-	nextMajor := existing.IncMajor().IncMajor()
-	upgradeConstraint, err := semver.NewConstraint(fmt.Sprintf("< %s", nextMajor.String()))
-	if err != nil {
-		return err
-	}
-
-	if !upgradeConstraint.Check(new) {
+	case errors.Is(err, ErrMajorVersionJump):
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Invalid version: specified version is more than 1 major version greater than existing")
-		return ErrMajorVersionJump
 	}
-
-	return nil
+	return err
 }
 
 // Find which nodepool to work on

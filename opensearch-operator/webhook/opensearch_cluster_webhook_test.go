@@ -534,6 +534,117 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(warnings).To(BeEmpty())
 		})
+
+		It("should reject a version downgrade once the cluster has initialized", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General:   opensearchv1.GeneralConfig{Version: "3.0.0"},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+				Status: opensearchv1.ClusterStatus{Initialized: true, Version: "3.0.0"},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "1.3.0"
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid spec.general.version change"))
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should reject a version jump of more than one major version", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General:   opensearchv1.GeneralConfig{Version: "3.0.0"},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+				Status: opensearchv1.ClusterStatus{Initialized: true, Version: "3.0.0"},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "5.0.0"
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid spec.general.version change"))
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should reject an unparsable version", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General:   opensearchv1.GeneralConfig{Version: "3.0.0"},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+				Status: opensearchv1.ClusterStatus{Initialized: true, Version: "3.0.0"},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "not-a-version"
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid spec.general.version change"))
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should reject an invalid version transition even when a custom image changes at the same time", func() {
+			oldImage := "example.com/opensearch:custom-1"
+			newImage := "example.com/opensearch:custom-2"
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version:   "3.0.0",
+						ImageSpec: &opensearchv1.ImageSpec{Image: &oldImage},
+					},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+				Status: opensearchv1.ClusterStatus{Initialized: true, Version: "3.0.0"},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "1.0.0"
+			newCluster.Spec.General.Image = &newImage
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("invalid spec.general.version change"))
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should allow a valid single major version jump once the cluster has initialized", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General:   opensearchv1.GeneralConfig{Version: "2.11.0"},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+				Status: opensearchv1.ClusterStatus{Initialized: true, Version: "2.11.0"},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "3.0.0"
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should not validate version transitions before the cluster has initialized", func() {
+			oldCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster"},
+				Spec: opensearchv1.ClusterSpec{
+					General:   opensearchv1.GeneralConfig{Version: "3.0.0"},
+					NodePools: []opensearchv1.NodePool{{Component: "masters"}},
+				},
+			}
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "1.0.0"
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
 	})
 
 	Describe("ValidateDelete", func() {

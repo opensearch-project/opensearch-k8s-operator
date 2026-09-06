@@ -75,7 +75,33 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 		return nil, err
 	}
 
+	// Reject invalid spec.general.version transitions (bad semver, downgrade, more than one
+	// major version jump) before they can be admitted and rendered into the StatefulSet pod
+	// template. This runs regardless of whether a custom image is pinned: the version field
+	// also drives role mapping, security config paths, and settings cleanup elsewhere even when
+	// the image itself is fixed, so it needs to stay valid on its own.
+	if err := validateVersionTransition(oldCluster, newCluster); err != nil {
+		return nil, err
+	}
+
 	return v.validateTlsConfig(newCluster)
+}
+
+// validateVersionTransition rejects a spec.general.version change that the upgrade reconciler
+// would refuse (downgrade, more than one major version jump, or invalid semver), so a bad
+// version never lands in the spec in the first place. Before the cluster has finished its
+// initial bring-up, status.Version is not yet a meaningful baseline, so nothing is checked then.
+func validateVersionTransition(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
+	if !oldCluster.Status.Initialized || oldCluster.Status.Version == "" {
+		return nil
+	}
+	if oldCluster.Status.Version == newCluster.Spec.General.Version {
+		return nil
+	}
+	if err := helpers.ValidateVersionTransition(oldCluster.Status.Version, newCluster.Spec.General.Version); err != nil {
+		return fmt.Errorf("invalid spec.general.version change from %s to %s: %w", oldCluster.Status.Version, newCluster.Spec.General.Version, err)
+	}
+	return nil
 }
 
 // validateCustomImageVersionChange rejects bumping spec.general.version while a custom image remains
