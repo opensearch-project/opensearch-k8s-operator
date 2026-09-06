@@ -91,7 +91,18 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 		// the main reconcile chain before upgrade/restart.
 		for _, nodePool := range r.instance.Spec.NodePools {
 			requeue, poolErr := r.reconcileNodePool(&nodePool)
-			results.Combine(&ctrl.Result{Requeue: requeue}, poolErr)
+			res := ctrl.Result{Requeue: requeue}
+			if requeue {
+				// Same cadence as removeStatefulSet's drain wait. A bare Requeue
+				// (no RequeueAfter) is treated by controller-runtime as a
+				// rate-limited re-add using the default exponential backoff
+				// (5ms doubling, capped at 1000s), which can delay noticing a
+				// completed or stalled drain by many minutes. RequeueAfter is
+				// dropped by controller-runtime whenever poolErr != nil, so
+				// actual error retries still back off as before.
+				res.RequeueAfter = 15 * time.Second
+			}
+			results.Combine(&res, poolErr)
 		}
 	} else {
 		lg.V(1).Info("Upgrade in progress, skipping replica scaling")
