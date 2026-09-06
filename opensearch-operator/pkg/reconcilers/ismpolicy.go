@@ -242,7 +242,13 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 	// If the ISM policy exists in OpenSearch cluster and was not created by the operator, update the status and return
 	if r.instance.Status.ExistingISMPolicy == nil || *r.instance.Status.ExistingISMPolicy {
 		retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opensearchv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(true)
+			instance := object.(*opensearchv1.OpenSearchISMPolicy)
+			// A concurrent writer (e.g. the migration controller restoring the
+			// migrated status) may have already marked this as managed by the
+			// operator; don't clobber it.
+			if instance.Status.ExistingISMPolicy == nil {
+				instance.Status.ExistingISMPolicy = ptr.To(true)
+			}
 		})
 		if retErr != nil {
 			reason = "failed to update custom resource object"
@@ -252,13 +258,15 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 				RequeueAfter: defaultRequeueAfter,
 			}, retErr
 		}
-		reason = "the ISM policy already exists in the OpenSearch cluster"
-		r.logger.Error(errors.New(opensearchIsmPolicyExists), reason)
-		r.recorder.Event(r.instance, "Warning", opensearchIsmPolicyExists, reason)
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: defaultRequeueAfter,
-		}, nil
+		if r.instance.Status.ExistingISMPolicy == nil || *r.instance.Status.ExistingISMPolicy {
+			reason = "the ISM policy already exists in the OpenSearch cluster"
+			r.logger.Error(errors.New(opensearchIsmPolicyExists), reason)
+			r.recorder.Event(r.instance, "Warning", opensearchIsmPolicyExists, reason)
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: defaultRequeueAfter,
+			}, nil
+		}
 	}
 
 	// Return if there are no changes

@@ -228,7 +228,13 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 	// If the Snapshot policy exists in OpenSearch cluster and was not created by the operator, update the status and return
 	if r.instance.Status.ExistingSnapshotPolicy == nil || *r.instance.Status.ExistingSnapshotPolicy {
 		err = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
-			object.(*opensearchv1.OpensearchSnapshotPolicy).Status.ExistingSnapshotPolicy = ptr.To(true)
+			instance := object.(*opensearchv1.OpensearchSnapshotPolicy)
+			// A concurrent writer (e.g. the migration controller restoring the
+			// migrated status) may have already marked this as managed by the
+			// operator; don't clobber it.
+			if instance.Status.ExistingSnapshotPolicy == nil {
+				instance.Status.ExistingSnapshotPolicy = ptr.To(true)
+			}
 		})
 		if err != nil {
 			reason = "failed to update custom resource object"
@@ -238,13 +244,15 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 				RequeueAfter: defaultRequeueAfter,
 			}, err
 		}
-		reason = "the Snapshot policy already exists in the OpenSearch cluster"
-		r.logger.Error(errors.New(opensearchSnapshotPolicyExists), reason)
-		r.recorder.Event(r.instance, "Warning", opensearchSnapshotPolicyExists, reason)
-		return ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: defaultRequeueAfter,
-		}, nil
+		if r.instance.Status.ExistingSnapshotPolicy == nil || *r.instance.Status.ExistingSnapshotPolicy {
+			reason = "the Snapshot policy already exists in the OpenSearch cluster"
+			r.logger.Error(errors.New(opensearchSnapshotPolicyExists), reason)
+			r.recorder.Event(r.instance, "Warning", opensearchSnapshotPolicyExists, reason)
+			return ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: defaultRequeueAfter,
+			}, nil
+		}
 	}
 
 	// Return if there are no changes
