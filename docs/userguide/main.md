@@ -297,6 +297,19 @@ Alternatively, you can provide the certificates yourself (e.g. if your organizat
 
 If you provide just one certificate, it must be placed in a Kubernetes TLS secret (with the fields `ca.crt`, `tls.key` and `tls.crt`, must all be PEM-encoded), and you must provide the name of the secret as `secret.name`. If you want to keep the CA certificate separate, you can place it in a separate secret and supply that as `caSecret.name`. If you provide one certificate per node, you must place all certificates into one secret (including the `ca.crt`) with a `<hostname>.key` and `<hostname>.crt` for each node. The hostname is defined as `<cluster-name>-<nodepool-component>-<index>` (e.g. `my-first-cluster-masters-0`).
 
+**The private key (`tls.key` / `<hostname>.key`) must be an unencrypted PKCS#8 PEM key (`-----BEGIN PRIVATE KEY-----`).** The OpenSearch security plugin cannot load PKCS#1 (`-----BEGIN RSA PRIVATE KEY-----`) or SEC1 (`-----BEGIN EC PRIVATE KEY-----`) keys; loading one crashes every node with `java.io.IOException: algid parse error, not a sequence` while the operator has no way to detect this, so `kubectl get opensearchcluster` keeps reporting `RUNNING`. cert-manager issues PKCS#1 by default — set `encoding: PKCS8` under `privateKey` on the `Certificate`:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+spec:
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS8   # required: the OpenSearch security plugin cannot read PKCS#1 keys
+```
+
+To convert an existing PKCS#1 key: `openssl pkcs8 -topk8 -nocrypt -in tls-pkcs1.key -out tls.key`.
+
 If you provide the certificates yourself, you must also provide the list of certificate DNs in `nodesDn`, wildcards can be used (e.g. `"CN=my-first-cluster-*,OU=my-org"`).
 
 #### Node HTTP/REST API
@@ -660,7 +673,7 @@ spec:
 ```
 
 To let the Operator generate the certificate, just set `tls.enable: true` and `tls.generate: true` (the other fields under `tls` can be ommitted). Again, as with the node certificates, you can supply your own CA via `caSecret.name` for the Operator to use.
-If you want to use your own certificate, you need to provide it as a Kubernetes TLS secret (with fields `tls.key` and `tls.crt`) and provide the name as `secret.name`.
+If you want to use your own certificate, you need to provide it as a Kubernetes TLS secret (with fields `tls.key` and `tls.crt`) and provide the name as `secret.name`. As with node certificates, `tls.key` must be an unencrypted PKCS#8 PEM key (`-----BEGIN PRIVATE KEY-----`) — see the note above.
 
 If you want to expose Dashboards outside of the cluster, it is recommended to use Operator-generated certificates internally and let an Ingress present a valid certificate from an accredited CA (e.g. LetsEncrypt).
 
@@ -1544,7 +1557,7 @@ Similarly, for OpenSearch Dashboards, if you don't provide `dashboards.opensearc
 
 You must also configure SSL/TLS HTTP. You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
 
-If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
+If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. As with node certificates, `tls.key` must be an unencrypted PKCS#8 PEM key (`-----BEGIN PRIVATE KEY-----`) — `securityadmin.sh` uses the same PEM key reader as the security plugin and cannot load PKCS#1 or SEC1 keys. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 

@@ -3599,9 +3599,14 @@ spec:
                           provided
                         type: boolean
                       secret:
-                        description: Optional, name of a TLS secret that contains
+                        description: 'Optional, name of a TLS secret that contains
                           ca.crt, tls.key and tls.crt data. If ca.crt is in a different
-                          secret provide it via the caSecret field
+                          secret provide it via the caSecret field. tls.key must be
+                          an unencrypted PKCS#8 PEM private key ("BEGIN PRIVATE KEY");
+                          the OpenSearch security plugin cannot load PKCS#1 ("BEGIN
+                          RSA PRIVATE KEY") or SEC1 ("BEGIN EC PRIVATE KEY") keys,
+                          which is what cert-manager issues by default unless privateKey.encoding:
+                          PKCS8 is set on the Certificate.'
                         properties:
                           name:
                             default: ""
@@ -7168,7 +7173,10 @@ spec:
                         description: TLS Secret that contains a client certificate
                           (tls.key, tls.crt, ca.crt) with admin rights in the opensearch
                           cluster. Must be set if http certificates are provided by
-                          user and not generated
+                          user and not generated. tls.key must be an unencrypted PKCS#8
+                          PEM private key ("BEGIN PRIVATE KEY"); the OpenSearch security
+                          plugin (and securityadmin.sh) cannot load PKCS#1 or SEC1
+                          keys.
                         properties:
                           name:
                             default: ""
@@ -8332,9 +8340,15 @@ spec:
                               always regenerated regardless of this setting.
                             type: integer
                           secret:
-                            description: Optional, name of a TLS secret that contains
+                            description: 'Optional, name of a TLS secret that contains
                               ca.crt, tls.key and tls.crt data. If ca.crt is in a
-                              different secret provide it via the caSecret field
+                              different secret provide it via the caSecret field.
+                              tls.key must be an unencrypted PKCS#8 PEM private key
+                              ("BEGIN PRIVATE KEY"); the OpenSearch security plugin
+                              cannot load PKCS#1 ("BEGIN RSA PRIVATE KEY") or SEC1
+                              ("BEGIN EC PRIVATE KEY") keys, which is what cert-manager
+                              issues by default unless privateKey.encoding: PKCS8
+                              is set on the Certificate.'
                             properties:
                               name:
                                 default: ""
@@ -8418,9 +8432,15 @@ spec:
                               always regenerated regardless of this setting.
                             type: integer
                           secret:
-                            description: Optional, name of a TLS secret that contains
+                            description: 'Optional, name of a TLS secret that contains
                               ca.crt, tls.key and tls.crt data. If ca.crt is in a
-                              different secret provide it via the caSecret field
+                              different secret provide it via the caSecret field.
+                              tls.key must be an unencrypted PKCS#8 PEM private key
+                              ("BEGIN PRIVATE KEY"); the OpenSearch security plugin
+                              cannot load PKCS#1 ("BEGIN RSA PRIVATE KEY") or SEC1
+                              ("BEGIN EC PRIVATE KEY") keys, which is what cert-manager
+                              issues by default unless privateKey.encoding: PKCS8
+                              is set on the Certificate.'
                             properties:
                               name:
                                 default: ""
