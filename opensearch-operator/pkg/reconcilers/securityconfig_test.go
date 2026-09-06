@@ -6,6 +6,7 @@ import (
 	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -504,6 +505,152 @@ done;`
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(createdJob).ToNot(BeNil())
+		})
+
+		It("should persist the retry count it just computed instead of clobbering it later in the same reconcile", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			// Mirrors the real client: each call mutates a persisted snapshot,
+			// registered before buildReconcileFixture's catch-all stub so it wins.
+			var lastPersisted *opensearchv1.ClusterStatus
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Return(func(_ client.ObjectKey, f func(*opensearchv1.OpenSearchCluster)) error {
+					tmp := opensearchv1.OpenSearchCluster{}
+					f(&tmp)
+					lastPersisted = &tmp.Status
+					return nil
+				})
+
+			spec, generatedConfigSecret := buildReconcileFixture(mockClient)
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				RunAndReturn(func(string, string) (batchv1.Job, error) {
+					return jobWithStatus(generatedConfigSecret, batchv1.JobStatus{Failed: 1}), nil
+				})
+			mockClient.EXPECT().DeleteJob(mock.AnythingOfType("*v1.Job")).Return(nil)
+			mockClient.On("CreateJob", mock.Anything).Return(&ctrl.Result{}, nil)
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(lastPersisted).ToNot(BeNil())
+			var found bool
+			var conditions []string
+			for _, c := range lastPersisted.ComponentsStatus {
+				if c.Component == securityConfigComponentName {
+					found = true
+					conditions = c.Conditions
+				}
+			}
+			Expect(found).To(BeTrue())
+			Expect(conditions).To(ContainElement("retry:1"))
+		})
+	})
+
+	Describe("handleExistingSecurityConfigJob", func() {
+		newHandlerReconciler := func(mockClient *k8s.MockK8sClient, instance *opensearchv1.OpenSearchCluster) *SecurityconfigReconciler {
+			return &SecurityconfigReconciler{
+				client:   mockClient,
+				recorder: &helpers.MockEventRecorder{},
+				instance: instance,
+				logger:   log.FromContext(context.Background()),
+			}
+		}
+
+		captureStatusWrite := func(mockClient *k8s.MockK8sClient) func() *opensearchv1.ComponentStatus {
+			var captured *opensearchv1.ComponentStatus
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Return(func(_ client.ObjectKey, f func(*opensearchv1.OpenSearchCluster)) error {
+					tmp := opensearchv1.OpenSearchCluster{}
+					f(&tmp)
+					if len(tmp.Status.ComponentsStatus) > 0 {
+						captured = &tmp.Status.ComponentsStatus[0]
+					}
+					return nil
+				})
+			return func() *opensearchv1.ComponentStatus { return captured }
+		}
+
+		It("acts on a failed pod even while a backoffLimit replacement pod is active", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			getCaptured := captureStatusWrite(mockClient)
+
+			instance := &opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{Name: "n", Namespace: "n"}}
+			underTest := newHandlerReconciler(mockClient, instance)
+
+			job := batchv1.Job{Status: batchv1.JobStatus{Active: 1, Failed: 1}}
+			result, done, err := underTest.handleExistingSecurityConfigJob(job, nil)
+			Expect(err).ToNot(HaveOccurred())
+			// done=false signals the caller to delete/recreate the job now,
+			// which only happens once the failure was actually processed.
+			Expect(done).To(BeFalse())
+			Expect(result).To(Equal(ctrl.Result{}))
+
+			captured := getCaptured()
+			Expect(captured).ToNot(BeNil())
+			Expect(captured.Status).To(Equal(securityConfigStatusFailed))
+			Expect(captured.Conditions).To(ContainElement("retry:1"))
+		})
+
+		It("preserves the retry/backoff conditions while a fresh attempt is still running", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			getCaptured := captureStatusWrite(mockClient)
+
+			instance := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "n", Namespace: "n"},
+				Status: opensearchv1.ClusterStatus{
+					ComponentsStatus: []opensearchv1.ComponentStatus{
+						{
+							Component:  securityConfigComponentName,
+							Status:     securityConfigStatusFailed,
+							Conditions: []string{"retry:2", "lastRetry:" + time.Now().UTC().Format(time.RFC3339)},
+						},
+					},
+				},
+			}
+			underTest := newHandlerReconciler(mockClient, instance)
+
+			job := batchv1.Job{Status: batchv1.JobStatus{Active: 1}}
+			_, done, err := underTest.handleExistingSecurityConfigJob(job, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(done).To(BeTrue())
+
+			captured := getCaptured()
+			Expect(captured).ToNot(BeNil())
+			Expect(captured.Conditions).To(ContainElement("retry:2"))
+		})
+
+		It("honors the backoff window instead of retrying immediately", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			getCaptured := captureStatusWrite(mockClient)
+
+			instance := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "n", Namespace: "n"},
+				Status: opensearchv1.ClusterStatus{
+					ComponentsStatus: []opensearchv1.ComponentStatus{
+						{
+							Component:  securityConfigComponentName,
+							Status:     securityConfigStatusFailed,
+							Conditions: []string{"retry:1", "lastRetry:" + time.Now().UTC().Format(time.RFC3339)},
+						},
+					},
+				},
+			}
+			underTest := newHandlerReconciler(mockClient, instance)
+
+			job := batchv1.Job{Status: batchv1.JobStatus{Failed: 1}}
+			result, done, err := underTest.handleExistingSecurityConfigJob(job, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(done).To(BeTrue())
+			Expect(result.Requeue).To(BeTrue())
+			// securityConfigRetryDelay(1) == 60s, just retried, so remaining should be close to 60s.
+			Expect(result.RequeueAfter).To(BeNumerically(">", 55*time.Second))
+			Expect(result.RequeueAfter).To(BeNumerically("<=", 60*time.Second))
+
+			captured := getCaptured()
+			Expect(captured).ToNot(BeNil())
+			Expect(captured.Conditions).To(ContainElement("retry:1"))
 		})
 	})
 
