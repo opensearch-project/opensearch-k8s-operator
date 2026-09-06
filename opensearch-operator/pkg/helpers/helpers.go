@@ -936,12 +936,25 @@ var stuckWaitingReasons = map[string]bool{
 	"InvalidImageName": true,
 }
 
-// StuckContainerReason returns the waiting reason of the first non-ready container that is
+// stuckRestartThreshold is the number of restarts a non-ready container must accumulate,
+// with a recorded last-terminated state, before it is treated as stuck even though it never
+// sits in one of stuckWaitingReasons. This catches a container that is repeatedly killed while
+// Running-but-not-ready (e.g. by a failing startup probe) and immediately restarted, so kubelet
+// only reports it as Waiting/CrashLoopBackOff for brief moments between attempts.
+const stuckRestartThreshold = 3
+
+// StuckContainerReason returns the reason the first non-ready container of the pod is
 // stuck in a non-recoverable state, or "" if the pod is not stuck.
 func StuckContainerReason(pod *corev1.Pod) string {
 	for _, container := range pod.Status.ContainerStatuses {
-		if !container.Ready && container.State.Waiting != nil && stuckWaitingReasons[container.State.Waiting.Reason] {
+		if container.Ready {
+			continue
+		}
+		if container.State.Waiting != nil && stuckWaitingReasons[container.State.Waiting.Reason] {
 			return container.State.Waiting.Reason
+		}
+		if container.RestartCount >= stuckRestartThreshold && container.LastTerminationState.Terminated != nil {
+			return "RepeatedlyFailing"
 		}
 	}
 	return ""

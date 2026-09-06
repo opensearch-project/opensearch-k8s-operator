@@ -837,6 +837,49 @@ var _ = Describe("Stuck pod handling (issue #1531)", func() {
 		Expect(err).ToNot(HaveOccurred())
 		Expect(stuck).To(Equal(map[string]string{"c-nodes-0": "ErrImagePull"}))
 	})
+
+	// A container whose startup probe kills it (e.g. exit code 143) spends most of its time
+	// Running/not-ready and only briefly passes through a Waiting state, so it never matches
+	// stuckWaitingReasons. See issue #1537.
+	runningNotReady := func(name, revision string, restartCount int32, withLastTerminated bool) corev1.Pod {
+		status := corev1.ContainerStatus{
+			Ready:        false,
+			RestartCount: restartCount,
+			State:        corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+		}
+		if withLastTerminated {
+			status.LastTerminationState = corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{ExitCode: 143, Reason: "Error"},
+			}
+		}
+		return corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "ns", Labels: map[string]string{stsRevisionLabel: revision},
+			},
+			Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{status}},
+		}
+	}
+
+	It("flags a Running-but-not-ready container repeatedly killed by its startup probe", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold, true)
+		Expect(StuckContainerReason(&p)).To(Equal("RepeatedlyFailing"))
+	})
+
+	It("does not flag a Running-but-not-ready container below the restart threshold", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold-1, true)
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+
+	It("does not flag a Running-but-not-ready container with no recorded last-terminated state", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, false)
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+
+	It("does not flag a ready container regardless of restart count", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, true)
+		p.Status.ContainerStatuses[0].Ready = true
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
 })
 
 var _ = Describe("IsSecurityPluginEnabled and CanRunSecurityAdmin", func() {
