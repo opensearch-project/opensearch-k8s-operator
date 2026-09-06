@@ -673,6 +673,40 @@ var _ = Describe("Scaler Controller", func() {
 			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
 		})
 
+		It("Should requeue with a short fixed interval instead of exponential backoff while still draining (issue #1533)", func() {
+			// A bare Requeue=true with no RequeueAfter is treated by controller-runtime
+			// as a rate-limited re-add on the default exponential backoff limiter (5ms
+			// doubling, capped at 1000s), which can delay noticing a stalled or completed
+			// drain by many minutes. The still-draining case must set RequeueAfter instead.
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			started := time.Now().UTC().Add(-time.Minute)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Excluded", targetNodeName, []string{
+				drainStartedConditionPrefix + started.Format(time.RFC3339),
+			})
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, fmt.Sprintf(
+				`[{"index":"idx","shard":"0","prirep":"p","state":"STARTED","node":"%s"}]`, targetNodeName,
+			))
+			registerClusterSettingsResponders(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("GetStatefulSet", clusterName+"-"+nodePoolComponent, clusterNamespace).Return(currentSts, nil)
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{}, nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			result, err := underTest.Reconcile()
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(Equal(15 * time.Second))
+		})
+
 		It("Should mark the node drained only when it has no shards", func() {
 			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
 			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Excluded", targetNodeName, nil)
