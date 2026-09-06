@@ -507,6 +507,97 @@ done;`
 		})
 	})
 
+	When("Adopting a cluster previously managed by operator <=2.8.0", func() {
+		It("should treat the legacy job as current instead of destructively re-applying the config", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			adminCredSecret := newAdminCredentialsSecret(clusterName)
+			// The user's own secret, unchanged since operator <=2.8.0 applied it.
+			securityConfigSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data: map[string][]byte{
+					"config.yml":         []byte(configYAML),
+					"internal_users.yml": internalUsersYAML("", ""),
+				},
+			}
+			// What operator <=2.8.0 wrote under checksumAnnotation: a checksum of the raw user
+			// secret, computed before the generated/merged secret existed (see #1193).
+			legacyChecksum, err := checksum(securityConfigSecret.Data)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					// Copied verbatim from the legacy CR by the migration controller.
+					Initialized:          true,
+					ContextSecretCreated: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			// The job left behind by operator <=2.8.0: it only ever set the (now-reused)
+			// checksumAnnotation, and did so over the raw user secret rather than the
+			// generated one, so its value never matches a checksum of the generated secret.
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				Return(batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        "securityconfig-securityconfig-update",
+						Namespace:   clusterName,
+						Annotations: map[string]string{checksumAnnotation: legacyChecksum},
+					},
+					Status: batchv1.JobStatus{Succeeded: 1},
+				}, nil)
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, &spec)
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			// Adoption must not delete the legacy job or start a new (destructive) one: the
+			// mock has no expectations set up for DeleteJob/CreateJob, so calling either would
+			// fail the test.
+		})
+	})
+
 	Describe("securityConfigRetryDelay", func() {
 		It("should use exponential backoff capped at the maximum delay", func() {
 			Expect(securityConfigRetryDelay(0)).To(Equal(30 * time.Second))
