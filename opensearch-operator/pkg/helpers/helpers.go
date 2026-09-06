@@ -627,6 +627,26 @@ func SortedJsonKeys(obj *apiextensionsv1.JSON) (*apiextensionsv1.JSON, error) {
 	return &apiextensionsv1.JSON{Raw: rawBytes}, err
 }
 
+// ValidNodeRoles is the set of node pool roles the operator understands and renders into
+// node.roles. Shared by the StatefulSet builder (which silently drops anything not on this
+// list) and the validating webhook (which rejects it instead).
+var ValidNodeRoles = []string{
+	"master",
+	"data",
+	"data_content",
+	"data_hot",
+	"data_warm",
+	"data_cold",
+	"data_frozen",
+	"ingest",
+	"ml",
+	"remote_cluster_client",
+	"transform",
+	"cluster_manager",
+	"search",
+	"warm",
+}
+
 func ResolveClusterManagerRole(ver string) string {
 	masterRole := "master"
 	osVer, err := version.NewVersion(ver)

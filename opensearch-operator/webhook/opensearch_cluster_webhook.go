@@ -19,6 +19,7 @@ package webhook
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -49,6 +50,9 @@ func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj run
 	if err := validateNodePoolComponentUniqueness(cluster); err != nil {
 		return nil, err
 	}
+	if err := validateNodePools(cluster); err != nil {
+		return nil, err
+	}
 	return v.validateTlsConfig(cluster)
 }
 
@@ -62,6 +66,10 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 
 	// Validate no duplicate node pool component names (component is used for K8s resource names)
 	if err := validateNodePoolComponentUniqueness(newCluster); err != nil {
+		return nil, err
+	}
+
+	if err := validateNodePools(newCluster); err != nil {
 		return nil, err
 	}
 
@@ -109,6 +117,29 @@ func validateNodePoolComponentUniqueness(cluster *opensearchv1.OpenSearchCluster
 			return fmt.Errorf("duplicate node pool component name '%s': each node pool must have a unique component name (used for K8s resource naming)", component)
 		}
 		seen[component] = struct{}{}
+	}
+	return nil
+}
+
+// validateNodePools rejects unknown node pool roles (the StatefulSet builder silently drops
+// anything not on helpers.ValidNodeRoles) and clusters with no cluster-manager-eligible node
+// pool that has replicas >= 1 (such a cluster can never form a quorum).
+func validateNodePools(cluster *opensearchv1.OpenSearchCluster) error {
+	managerRole := helpers.ResolveClusterManagerRole(cluster.Spec.General.Version)
+	hasManager := false
+	for i := range cluster.Spec.NodePools {
+		pool := &cluster.Spec.NodePools[i]
+		for _, role := range pool.Roles {
+			if !helpers.ContainsString(helpers.ValidNodeRoles, role) {
+				return fmt.Errorf("node pool '%s' has unknown role '%s' (valid roles: %s)", pool.Component, role, strings.Join(helpers.ValidNodeRoles, ", "))
+			}
+		}
+		if pool.Replicas >= 1 && helpers.ContainsString(helpers.MapClusterRoles(pool.Roles, cluster.Spec.General.Version), managerRole) {
+			hasManager = true
+		}
+	}
+	if !hasManager {
+		return fmt.Errorf("at least one node pool must have the %s role and replicas >= 1", managerRole)
 	}
 	return nil
 }

@@ -267,25 +267,9 @@ func NewSTSForNodePool(
 		disksize = node.DiskSize
 	}
 
-	availableRoles := []string{
-		"master",
-		"data",
-		"data_content",
-		"data_hot",
-		"data_warm",
-		"data_cold",
-		"data_frozen",
-		"ingest",
-		"ml",
-		"remote_cluster_client",
-		"transform",
-		"cluster_manager",
-		"search",
-		"warm",
-	}
 	var selectedRoles []string
 	for _, role := range node.Roles {
-		if helpers.ContainsString(availableRoles, role) {
+		if helpers.ContainsString(helpers.ValidNodeRoles, role) {
 			role = helpers.MapClusterRole(role, cr.Spec.General.Version)
 			selectedRoles = append(selectedRoles, role)
 		}
