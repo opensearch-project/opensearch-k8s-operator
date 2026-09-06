@@ -64,7 +64,15 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 	})
 
 	Describe("Reconcile - New Cluster Deletion", func() {
-		It("should add migration finalizer to new cluster", func() {
+		It("should add migration finalizer to new cluster that has a legacy twin", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
 			newCluster := &opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -86,6 +94,31 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			updatedCluster := &opensearchv1.OpenSearchCluster{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
+		})
+
+		It("should not add migration finalizer to a new cluster with no legacy twin", func() {
+			// Fresh installs never had an opensearch.opster.io twin, so there is
+			// nothing for the migration finalizer to clean up (#1544).
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+				},
+			}
+			Expect(fakeClient.Create(ctx, newCluster)).To(Succeed())
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedCluster := &opensearchv1.OpenSearchCluster{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
+			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
 		})
 
 		It("should not add migration finalizer to a new cluster that is being deleted", func() {
@@ -611,7 +644,15 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeFalse())
 		})
 
-		It("should add migration finalizer to a new resource that is not being deleted", func() {
+		It("should add migration finalizer to a new resource that has a legacy twin", func() {
+			oldUser := &opsterv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldUser)).To(Succeed())
+
 			newUser := &opensearchv1.OpensearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -626,6 +667,65 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(result.Requeue).To(BeTrue())
 
 			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeTrue())
+		})
+
+		It("should not add migration finalizer to a new resource with no legacy twin", func() {
+			// Fresh installs never had an opensearch.opster.io twin, so there is
+			// nothing for the migration finalizer to clean up (#1544).
+			newUser := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
+
+			userMigration := &UserMigrationReconciler{Client: fakeClient, Scheme: scheme}
+			result, err := userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeFalse())
+		})
+
+		It("should add migration finalizer once a legacy twin appears after the new resource already existed", func() {
+			// Edge case: the new-group resource was created first (or existed with
+			// no twin), and a legacy opensearch.opster.io twin with the same
+			// name/namespace shows up afterwards.
+			newUser := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
+
+			userMigration := &UserMigrationReconciler{Client: fakeClient, Scheme: scheme}
+			result, err := userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeFalse())
+
+			// Now the legacy twin appears.
+			oldUser := &opsterv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldUser)).To(Succeed())
+
+			result, err = userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
 			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeTrue())
 		})
