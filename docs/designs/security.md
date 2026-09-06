@@ -9,6 +9,8 @@ The controller is configured via the `security` object in the cluster spec. If n
 
 All generated keys and certificates by the operator are stored in Kubernetes secrets to be securely used by the cluster pods. The operator has two modes for generating/using the certificates: By default it will generate one certificate that is used by all nodes, if the operator is switched to a per-node mode it will generate a certificate for each node.
 
+User-supplied private keys (`tls.key` / `<hostname>.key`) must be unencrypted **PKCS#8** PEM (`-----BEGIN PRIVATE KEY-----`). The OpenSearch security plugin's `PemKeyReader` cannot load PKCS#1 (`-----BEGIN RSA PRIVATE KEY-----`) or SEC1 (`-----BEGIN EC PRIVATE KEY-----`) keys, which is what cert-manager issues by default — set `privateKey.encoding: PKCS8` on the `Certificate`, or convert with `openssl pkcs8 -topk8 -nocrypt -in tls-pkcs1.key -out tls.key`. The operator's own generated certificates already use PKCS#8; this only affects certificates you supply yourself.
+
 ## CRD
 
 ```yaml
