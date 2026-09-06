@@ -651,7 +651,7 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 		return nil
 	}
 
-	r.logger.Info("Disk sizes differ for nodePool %s, Current: %s, Desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
+	r.logger.Info("Disk sizes differ for nodePool", "nodePool", nodePool.Component, "current", existingDisk.String(), "desired", nodePoolDiskSize.String())
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
 	// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
