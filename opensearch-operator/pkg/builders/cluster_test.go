@@ -1033,6 +1033,74 @@ var _ = Describe("Builders", func() {
 			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: "no-confmgmt", Namespace: namespaceName}, &cluster)).To(Succeed())
 			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeTrue())
 		})
+
+		It("should keep smartScaler true after a typed Update (finalizer write path)", func() {
+			namespaceName := "confmgmt-finalizer"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			obj := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "opensearch.org/v1",
+				"kind":       "OpenSearchCluster",
+				"metadata":   map[string]interface{}{"name": "confmgmt-update", "namespace": namespaceName},
+				"spec": map[string]interface{}{
+					"general":   map[string]interface{}{"version": "2.2.1", "serviceName": "confmgmt-update"},
+					"nodePools": []interface{}{map[string]interface{}{"component": "masters", "replicas": int64(1), "roles": []interface{}{"cluster_manager", "data"}}},
+				},
+			}}
+			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed())
+
+			cluster := opensearchv1.OpenSearchCluster{}
+			key := types.NamespacedName{Name: "confmgmt-update", Namespace: namespaceName}
+			Expect(k8sClient.Get(context.Background(), key, &cluster)).To(Succeed())
+			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeTrue())
+
+			// Mimic the cluster controller adding a finalizer and rewriting the object.
+			cluster.Finalizers = append(cluster.Finalizers, "Opensearch")
+			Expect(k8sClient.Update(context.Background(), &cluster)).To(Succeed())
+
+			updated := opensearchv1.OpenSearchCluster{}
+			Expect(k8sClient.Get(context.Background(), key, &updated)).To(Succeed())
+			Expect(updated.Spec.ConfMgmt.SmartScaler).To(BeTrue())
+		})
+
+		It("should keep an explicit smartScaler false", func() {
+			namespaceName := "confmgmt-explicit-false"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			obj := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "opensearch.org/v1",
+				"kind":       "OpenSearchCluster",
+				"metadata":   map[string]interface{}{"name": "confmgmt-false", "namespace": namespaceName},
+				"spec": map[string]interface{}{
+					"general":   map[string]interface{}{"version": "2.2.1", "serviceName": "confmgmt-false"},
+					"confMgmt":  map[string]interface{}{"smartScaler": false},
+					"nodePools": []interface{}{map[string]interface{}{"component": "masters", "replicas": int64(1), "roles": []interface{}{"cluster_manager", "data"}}},
+				},
+			}}
+			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed())
+
+			cluster := opensearchv1.OpenSearchCluster{}
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: "confmgmt-false", Namespace: namespaceName}, &cluster)).To(Succeed())
+			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeFalse())
+		})
+
+		It("should default smartScaler when confMgmt is an empty object", func() {
+			namespaceName := "confmgmt-empty-object"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			obj := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "opensearch.org/v1",
+				"kind":       "OpenSearchCluster",
+				"metadata":   map[string]interface{}{"name": "confmgmt-empty", "namespace": namespaceName},
+				"spec": map[string]interface{}{
+					"general":   map[string]interface{}{"version": "2.2.1", "serviceName": "confmgmt-empty"},
+					"confMgmt":  map[string]interface{}{},
+					"nodePools": []interface{}{map[string]interface{}{"component": "masters", "replicas": int64(1), "roles": []interface{}{"cluster_manager", "data"}}},
+				},
+			}}
+			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed())
+
+			cluster := opensearchv1.OpenSearchCluster{}
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: "confmgmt-empty", Namespace: namespaceName}, &cluster)).To(Succeed())
+			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeTrue())
+		})
 	})
 
 	When("Checking for AllMastersReady", func() {
