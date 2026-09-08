@@ -997,7 +997,7 @@ func isGenericResourceReady(resource client.Object, resourceKind string) bool {
 // getStatusFieldValue uses reflection to get the Status field value from a resource
 func getStatusFieldValue(obj client.Object) interface{} {
 	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -1015,14 +1015,14 @@ func getStatusFieldValue(obj client.Object) interface{} {
 // setStatusFieldValue uses reflection to set the Status field value on a resource
 func setStatusFieldValue(obj client.Object, statusValue interface{}) {
 	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
 	statusField := val.FieldByName("Status")
 	if statusField.IsValid() && statusField.CanSet() && statusValue != nil {
 		statusVal := reflect.ValueOf(statusValue)
-		if statusVal.Kind() == reflect.Ptr {
+		if statusVal.Kind() == reflect.Pointer {
 			statusVal = statusVal.Elem()
 		}
 		statusField.Set(statusVal)
@@ -1033,7 +1033,7 @@ func setStatusFieldValue(obj client.Object, statusValue interface{}) {
 // This is needed during migration to reset ManagedCluster so the reconciler can set it to the correct new cluster UID
 func clearStatusField(obj client.Object) {
 	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -1048,7 +1048,7 @@ func clearStatusField(obj client.Object) {
 // This allows other status fields to be preserved while resetting the cluster reference
 func clearManagedClusterField(obj client.Object) {
 	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 

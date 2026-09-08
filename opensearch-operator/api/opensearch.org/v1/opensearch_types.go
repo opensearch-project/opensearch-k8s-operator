@@ -182,7 +182,7 @@ type NodePool struct {
 
 // PersistenceConfig defines options for data persistence
 type PersistenceConfig struct {
-	PersistenceSource `json:","`
+	PersistenceSource `json:",inline"`
 }
 
 type PersistenceSource struct {
