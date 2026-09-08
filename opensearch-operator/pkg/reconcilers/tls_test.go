@@ -1013,7 +1013,7 @@ var _ = Describe("TLS Controller", func() {
 									CaSecret: corev1.LocalObjectReference{Name: "casecret-transport"},
 								},
 								NodesDn: []string{"CN=mycn"},
-								AdminDn: transportAdminDn,
+								AdminDn: transportAdminDn, //nolint:staticcheck // intentionally testing deprecated transport.adminDn fallback
 							},
 							Http: &opensearchv1.TlsConfigHttp{
 								Generate: false,
