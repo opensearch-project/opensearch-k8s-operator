@@ -95,7 +95,7 @@ fmt: ## Run go fmt against code.
 
 .PHONY: lint
 lint:
-	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v2.7-alpine golangci-lint run
+	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v2.13-alpine golangci-lint run
 
 .PHONY: vet
 vet: ## Run go vet against code.
