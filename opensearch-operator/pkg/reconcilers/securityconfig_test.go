@@ -536,15 +536,16 @@ done;`
 
 			Expect(lastPersisted).ToNot(BeNil())
 			var found bool
-			var conditions []string
+			var component opensearchv1.ComponentStatus
 			for _, c := range lastPersisted.ComponentsStatus {
 				if c.Component == securityConfigComponentName {
 					found = true
-					conditions = c.Conditions
+					component = c
 				}
 			}
 			Expect(found).To(BeTrue())
-			Expect(conditions).To(ContainElement("retry:1"))
+			Expect(component.Status).To(Equal(securityConfigStatusRunning))
+			Expect(component.Conditions).To(ContainElement("retry:1"))
 		})
 	})
 
@@ -621,7 +622,7 @@ done;`
 			Expect(captured.Conditions).To(ContainElement("retry:2"))
 		})
 
-		It("honors the backoff window instead of retrying immediately", func() {
+		It("honors the backoff window without short-circuiting the parent reconcile chain", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			getCaptured := captureStatusWrite(mockClient)
 
@@ -643,7 +644,7 @@ done;`
 			result, done, err := underTest.handleExistingSecurityConfigJob(job, nil)
 			Expect(err).ToNot(HaveOccurred())
 			Expect(done).To(BeTrue())
-			Expect(result.Requeue).To(BeTrue())
+			Expect(result.Requeue).To(BeFalse())
 			// securityConfigRetryDelay(1) == 60s, just retried, so remaining should be close to 60s.
 			Expect(result.RequeueAfter).To(BeNumerically(">", 55*time.Second))
 			Expect(result.RequeueAfter).To(BeNumerically("<=", 60*time.Second))

@@ -225,7 +225,6 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	job, err := r.client.GetJob(jobName, namespace)
 	resetRetryCount := false
-	skipRunningStatusReset := false
 	if err == nil {
 		value, exists := job.Annotations[checksumAnnotation]
 		if exists && value == checksumval {
@@ -237,11 +236,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 				return result, nil
 			}
 			// Failed job past backoff window: delete and recreate below.
-			// handleExistingSecurityConfigJob already persisted the incremented
-			// retry/lastRetry conditions for this attempt; the in-memory r.instance
-			// used below still reflects the pre-failure status, so skip re-deriving
-			// conditions from it or we'd clobber what was just written.
-			skipRunningStatusReset = true
+			// UpdateComponentStatus keeps r.instance in sync, so the Running
+			// write below preserves the retry/lastRetry conditions just set.
 		} else {
 			resetRetryCount = true
 		}
@@ -257,11 +253,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			r.logger.Error(err, "Unable to reset securityconfig retry status")
 			return ctrl.Result{}, err
 		}
-	} else if !skipRunningStatusReset {
-		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", r.currentSecurityConfigRetryConditions()); err != nil {
-			r.logger.Error(err, "Unable to update securityconfig status")
-			return ctrl.Result{}, err
-		}
+	} else if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", r.currentSecurityConfigRetryConditions()); err != nil {
+		r.logger.Error(err, "Unable to update securityconfig status")
+		return ctrl.Result{}, err
 	}
 
 	// If the cluster has not yet initialized or
@@ -452,7 +446,8 @@ func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
 			); err != nil {
 				return ctrl.Result{}, true, err
 			}
-			return ctrl.Result{Requeue: true, RequeueAfter: remaining}, true, nil
+			// RequeueAfter-only so the parent controller keeps running other reconcilers
+			return ctrl.Result{RequeueAfter: remaining}, true, nil
 		}
 
 		retryCount++
