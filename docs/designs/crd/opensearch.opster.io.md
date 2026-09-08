@@ -1250,6 +1250,7 @@ _Appears in:_
 
 
 _Appears in:_
+- [PersistenceConfig](#persistenceconfig)
 - [PersistenceSource](#persistencesource)
 
 | Field | Description | Default | Validation |
@@ -1291,7 +1292,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `PersistenceSource` _[PersistenceSource](#persistencesource)_ |  |  |  |
+| `pvc` _[PVCSource](#pvcsource)_ |  |  |  |
+| `emptyDir` _[EmptyDirVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#emptydirvolumesource-v1-core)_ |  |  |  |
+| `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ |  |  |  |
 
 
 #### PersistenceSource
