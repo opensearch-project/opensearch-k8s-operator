@@ -122,6 +122,38 @@ var _ = Describe("emptyDir recovery", func() {
 		}))
 	})
 
+	It("counts a Ready pod with a new UID as existing and records the updated UID", func() {
+		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-2", true)}
+		recorded := []opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
+		}
+
+		existing, updates := classifyEmptyDirPods(pods, recorded)
+		Expect(existing).To(Equal(1))
+		Expect(updates).To(Equal([]opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-2"},
+		}))
+	})
+
+	It("does not count a not-ready pod with no prior UID record as existing (bootstrap window)", func() {
+		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-1", false)}
+
+		existing, updates := classifyEmptyDirPods(pods, nil)
+		Expect(existing).To(Equal(0))
+		Expect(updates).To(BeEmpty())
+	})
+
+	It("does not emit a UID update when a Ready pod already matches the recorded UID", func() {
+		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-1", true)}
+		recorded := []opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
+		}
+
+		existing, updates := classifyEmptyDirPods(pods, recorded)
+		Expect(existing).To(Equal(1))
+		Expect(updates).To(BeEmpty())
+	})
+
 	It("ignores terminating pods regardless of readiness or UID", func() {
 		pod := newPod("cluster-nodes-0", "uid-1", true)
 		now := metav1.Now()
