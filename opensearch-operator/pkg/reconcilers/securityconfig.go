@@ -239,13 +239,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	resetRetryCount := false
 	if err == nil {
 		value, exists := job.Annotations[checksumAnnotation]
-		userValue, userExists := job.Annotations[userChecksumAnnotation]
+		_, userExists := job.Annotations[userChecksumAnnotation]
 		current := (exists && value == checksumval) ||
-			(userExists && userValue == userChecksumVal) ||
-			// Job written by operator <=2.8.0: it only ever set checksumAnnotation, and did so
-			// over the user's own securityConfigSecret rather than the generated one. Recognize
-			// it as current on adoption so the hashing-scheme change alone does not trigger a
-			// destructive re-apply of an unchanged user config.
 			(exists && !userExists && value == userChecksumVal)
 		if current {
 			result, done, handleErr := r.handleExistingSecurityConfigJob(job, annotations)
