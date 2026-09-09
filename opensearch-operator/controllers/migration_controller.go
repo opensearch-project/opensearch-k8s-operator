@@ -401,10 +401,11 @@ func (r *ClusterMigrationReconciler) handleOldClusterDeletion(ctx context.Contex
 				if oldCluster.Annotations != nil && oldCluster.Annotations[DeletedByNewResourceAnnotation] == "true" {
 					// Old cluster deletion was triggered by new cluster deletion - safe to allow
 					logger.Info("Old cluster deletion triggered by new cluster deletion, allowing deletion", "name", oldCluster.Name)
-					// Remove all finalizers (migration finalizer and old finalizers)
+					// Patch only metadata.finalizers
+					patch := client.MergeFrom(oldCluster.DeepCopy())
 					oldCluster.Finalizers = removeString(oldCluster.Finalizers, MigrationFinalizer)
 					oldCluster.Finalizers = removeString(oldCluster.Finalizers, OldClusterFinalizer)
-					if err := r.Update(ctx, oldCluster); err != nil {
+					if err := r.Patch(ctx, oldCluster, patch); err != nil {
 						return ctrl.Result{}, err
 					}
 					return ctrl.Result{}, nil
@@ -419,10 +420,11 @@ func (r *ClusterMigrationReconciler) handleOldClusterDeletion(ctx context.Contex
 
 		// New cluster exists, safe to remove finalizers and allow deletion
 		logger.Info("Removing finalizers from old cluster", "name", oldCluster.Name)
-		// Remove all finalizers (migration finalizer and old finalizers)
+		// Patch only metadata.finalizers
+		patch := client.MergeFrom(oldCluster.DeepCopy())
 		oldCluster.Finalizers = removeString(oldCluster.Finalizers, MigrationFinalizer)
 		oldCluster.Finalizers = removeString(oldCluster.Finalizers, OldClusterFinalizer)
-		if err := r.Update(ctx, oldCluster); err != nil {
+		if err := r.Patch(ctx, oldCluster, patch); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -945,11 +947,12 @@ func handleGenericDeletion[OldType, NewType any, OldPtr interface {
 				if annotations != nil && annotations[DeletedByNewResourceAnnotation] == "true" {
 					// Old resource deletion was triggered by new resource deletion - safe to allow
 					logger.Info("Old resource deletion triggered by new resource deletion, allowing deletion", "kind", resourceKind, "name", req.Name)
-					// Remove all finalizers (migration finalizer and old finalizers)
+					// Patch only metadata.finalizers
+					patch := client.MergeFrom(oldResource.DeepCopyObject().(OldPtr))
 					finalizers := removeString(oldResource.GetFinalizers(), MigrationFinalizer)
 					finalizers = removeString(finalizers, OldResourceFinalizer)
 					oldResource.SetFinalizers(finalizers)
-					if err := c.Update(ctx, oldResource); err != nil {
+					if err := c.Patch(ctx, oldResource, patch); err != nil {
 						return ctrl.Result{}, err
 					}
 					return ctrl.Result{}, nil
@@ -964,11 +967,13 @@ func handleGenericDeletion[OldType, NewType any, OldPtr interface {
 
 		// New resource exists, safe to remove finalizers and allow deletion
 		logger.Info("Removing finalizers from old resource", "kind", resourceKind, "name", req.Name)
-		// Remove all finalizers (migration finalizer and old finalizers)
+		// Patch only metadata.finalizers - see the equivalent OpenSearchCluster
+		// finalizer-add comment above (#1540).
+		patch := client.MergeFrom(oldResource.DeepCopyObject().(OldPtr))
 		finalizers := removeString(oldResource.GetFinalizers(), MigrationFinalizer)
 		finalizers = removeString(finalizers, OldResourceFinalizer)
 		oldResource.SetFinalizers(finalizers)
-		if err := c.Update(ctx, oldResource); err != nil {
+		if err := c.Patch(ctx, oldResource, patch); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
