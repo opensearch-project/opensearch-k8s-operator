@@ -323,7 +323,10 @@ $(CONTROLLER_GEN): $(LOCALBIN)
 .PHONY: mockery
 mockery: $(MOCKERY) ## Download mockery locally if necessary.
 $(MOCKERY): $(LOCALBIN)
-	test -s $(LOCALBIN)/mockery || GOBIN=$(LOCALBIN) go install github.com/vektra/mockery/v2@$(MOCKERY_VERSION)
+	# Always install so the binary is built with the current Go toolchain.
+	# A mockery compiled with an older Go cannot load packages from this
+	# module (go/packages: "package requires newer Go version").
+	GOBIN=$(LOCALBIN) go install github.com/vektra/mockery/v2@$(MOCKERY_VERSION)
 
 .PHONY: envtest
 envtest: $(ENVTEST) ## Download envtest-setup locally if necessary.

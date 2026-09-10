@@ -372,12 +372,19 @@ func (client *OsClusterClient) GetIndices(ctx context.Context, pattern string) (
 	return doHTTPGet(ctx, client.client, path)
 }
 
+// votingConfigExclusionTimeout is passed as the OpenSearch `timeout` query
+// parameter on voting-config exclusion requests. The operator HTTP transport
+// uses ResponseHeaderTimeout=30s, which matches OpenSearch's default server
+// timeout; a shorter server timeout lets the request fail first so the
+// reconciler can requeue instead of racing the client deadline.
+const votingConfigExclusionTimeout = "10s"
+
 // AddVotingConfigExclusion excludes the given node name from the cluster voting
 // configuration. The request waits until the node has left the voting config or
-// the timeout expires (OpenSearch default 30s).
-// See: POST /_cluster/voting_config_exclusions?node_names=<name>
+// the timeout expires.
+// See: POST /_cluster/voting_config_exclusions?node_names=<name>&timeout=<timeout>
 func (client *OsClusterClient) AddVotingConfigExclusion(ctx context.Context, nodeName string) error {
-	path := generateVotingConfigExclusionsPath("node_names=" + url.QueryEscape(nodeName))
+	path := generateVotingConfigExclusionsPath("node_names=" + url.QueryEscape(nodeName) + "&timeout=" + votingConfigExclusionTimeout)
 	resp, err := doHTTPPost(ctx, client.client, path, nil)
 	if err != nil {
 		return err
@@ -392,9 +399,9 @@ func (client *OsClusterClient) AddVotingConfigExclusion(ctx context.Context, nod
 // ClearVotingConfigExclusions clears the voting configuration exclusions list.
 // When waitForRemoval is true, OpenSearch waits until excluded nodes have left
 // the cluster before clearing the list.
-// See: DELETE /_cluster/voting_config_exclusions?wait_for_removal=<bool>
+// See: DELETE /_cluster/voting_config_exclusions?wait_for_removal=<bool>&timeout=<timeout>
 func (client *OsClusterClient) ClearVotingConfigExclusions(ctx context.Context, waitForRemoval bool) error {
-	path := generateVotingConfigExclusionsPath("wait_for_removal=" + strconv.FormatBool(waitForRemoval))
+	path := generateVotingConfigExclusionsPath("wait_for_removal=" + strconv.FormatBool(waitForRemoval) + "&timeout=" + votingConfigExclusionTimeout)
 	resp, err := doHTTPDelete(ctx, client.client, path)
 	if err != nil {
 		return err

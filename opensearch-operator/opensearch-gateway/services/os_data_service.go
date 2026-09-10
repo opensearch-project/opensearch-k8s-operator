@@ -200,11 +200,12 @@ func AddVotingConfigExclusion(service *OsClusterClient, lg logr.Logger, nodeName
 }
 
 // ClearVotingConfigExclusions clears voting configuration exclusions after a
-// master-eligible node has been removed. waitForRemoval controls whether
-// OpenSearch waits for excluded nodes to leave the cluster first.
-func ClearVotingConfigExclusions(service *OsClusterClient, lg logr.Logger, waitForRemoval bool) error {
-	lg.Info("Clearing voting config exclusions", "waitForRemoval", waitForRemoval)
-	err := service.ClearVotingConfigExclusions(context.Background(), waitForRemoval)
+// master-eligible node has been removed. Always waits for excluded nodes to
+// leave the cluster first; clearing without wait can put a still-alive node
+// back into the voting configuration.
+func ClearVotingConfigExclusions(service *OsClusterClient, lg logr.Logger) error {
+	lg.Info("Clearing voting config exclusions", "waitForRemoval", true)
+	err := service.ClearVotingConfigExclusions(context.Background(), true)
 	if err != nil {
 		lg.Error(err, "Could not clear voting config exclusions")
 	}

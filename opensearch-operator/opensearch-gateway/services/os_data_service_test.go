@@ -257,6 +257,16 @@ func TestGenerateVotingConfigExclusionsPath(t *testing.T) {
 			query:    "wait_for_removal=true",
 			expected: "/_cluster/voting_config_exclusions?wait_for_removal=true",
 		},
+		{
+			name:     "wait_for_removal with timeout",
+			query:    "wait_for_removal=true&timeout=10s",
+			expected: "/_cluster/voting_config_exclusions?wait_for_removal=true&timeout=10s",
+		},
+		{
+			name:     "node_names with timeout",
+			query:    "node_names=masters-2&timeout=10s",
+			expected: "/_cluster/voting_config_exclusions?node_names=masters-2&timeout=10s",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

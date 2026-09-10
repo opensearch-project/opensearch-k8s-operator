@@ -221,6 +221,7 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 		cluster.DisableClusterRoleBindingManagement()
 	}
 	cluster.SetNodeAttributesClusterRoleName(r.NodeAttributesClusterRoleName)
+	cluster.SetOSClientTransport(r.osClientTransport)
 	dashboards := reconcilers.NewDashboardsReconciler(
 		r.Client,
 		ctx,
@@ -328,12 +329,14 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 		cluster.DisableClusterRoleBindingManagement()
 	}
 	cluster.SetNodeAttributesClusterRoleName(r.NodeAttributesClusterRoleName)
+	cluster.SetOSClientTransport(r.osClientTransport)
 	scaler := reconcilers.NewScalerReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
 		instance,
+		reconcilers.WithOSClientTransport(r.osClientTransport),
 	)
 	dashboards := reconcilers.NewDashboardsReconciler(
 		r.Client,

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 	"time"
@@ -43,6 +44,7 @@ type ClusterReconciler struct {
 	logger                           logr.Logger
 	nodeAttributesClusterRoleName    string
 	skipClusterRoleBindingManagement bool
+	osClientTransport                http.RoundTripper
 }
 
 func NewClusterReconciler(
@@ -81,6 +83,12 @@ func (r *ClusterReconciler) SetNodeAttributesClusterRoleName(name string) {
 	if name != "" {
 		r.nodeAttributesClusterRoleName = name
 	}
+}
+
+// SetOSClientTransport overrides the OpenSearch HTTP transport. Tests use this
+// so voting-config calls in removeBootstrapPod hit httpmock instead of the network.
+func (r *ClusterReconciler) SetOSClientTransport(transport http.RoundTripper) {
+	r.osClientTransport = transport
 }
 
 func (r *ClusterReconciler) getNodeAttributesClusterRoleName() string {
@@ -784,6 +792,10 @@ func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl
 // removeBootstrapPod excludes the bootstrap node from the voting configuration before
 // deleting it, so that a 1-master (or even-count) pool does not lose quorum when the
 // bootstrap voter that formed the cluster is removed.
+//
+// Client/POST failures return RequeueAfter without an error so ClusterReconciler
+// does not fail the whole reconcile chain (scaler/upgrade/restart still run). The
+// bootstrap pod is left in place until the exclusion succeeds.
 func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.Result, error) {
 	_, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
 	if k8serrors.IsNotFound(err) {
@@ -793,16 +805,16 @@ func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.
 		return &ctrl.Result{}, err
 	}
 
-	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, nil)
+	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 	if err != nil {
-		r.logger.Error(err, "Failed to create OpenSearch client before bootstrap removal")
-		return &ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, err
+		r.logger.Error(err, "Failed to create OpenSearch client before bootstrap removal; will retry")
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	nodeName := builders.BootstrapPodName(r.instance)
 	if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
-		r.logger.Error(err, "Failed to add voting config exclusion for bootstrap pod", "pod", nodeName)
-		return &ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, err
+		r.logger.Error(err, "Failed to add voting config exclusion for bootstrap pod; will retry", "pod", nodeName)
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	result, err := r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent)
@@ -810,11 +822,11 @@ func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.
 		return result, err
 	}
 
-	if clearErr := services.ClearVotingConfigExclusions(clusterClient, r.logger, true); clearErr != nil {
-		r.logger.Error(clearErr, "Failed to clear voting config exclusions after bootstrap removal, retrying without wait", "pod", nodeName)
-		if clearErr = services.ClearVotingConfigExclusions(clusterClient, r.logger, false); clearErr != nil {
-			r.logger.Error(clearErr, "Failed to clear voting config exclusions after bootstrap removal", "pod", nodeName)
-		}
+	if clearErr := services.ClearVotingConfigExclusions(clusterClient, r.logger); clearErr != nil {
+		// The pod is already gone. Lingering exclusions are harmless; do not
+		// clear without wait (that can re-admit a still-alive voter) and do
+		// not fail the reconciler chain.
+		r.logger.Error(clearErr, "Failed to clear voting config exclusions after bootstrap removal", "pod", nodeName)
 	}
 
 	r.logger.Info("Removed bootstrap pod after voting config exclusion", "pod", nodeName)

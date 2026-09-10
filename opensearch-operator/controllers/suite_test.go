@@ -24,6 +24,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"path/filepath"
 	"testing"
 
@@ -66,6 +67,18 @@ var (
 	// osTransport serves the OpenSearch API calls the cluster controller makes; tests register responders on it.
 	osTransport = httpmock.NewMockTransport()
 )
+
+func registerDefaultOsTransportResponders() {
+	// envtest has no real OpenSearch. These defaults let reconcilers that talk to
+	// the cluster API (bootstrap teardown, master scale-down) complete.
+	osTransport.RegisterResponder(http.MethodHead, `=~^https?://[^/]+/?$`, httpmock.NewStringResponder(200, "OK"))
+	osTransport.RegisterResponder(http.MethodGet, `=~^https?://[^/]+/?$`, httpmock.NewStringResponder(200, `{"name":"test","cluster_name":"test","version":{"number":"2.0.0"}}`))
+	osTransport.RegisterResponder(http.MethodGet, `=~.*/_cluster/settings.*`, httpmock.NewStringResponder(200, `{"transient":{},"persistent":{}}`))
+	osTransport.RegisterResponder(http.MethodPut, `=~.*/_cluster/settings.*`, httpmock.NewStringResponder(200, `{"transient":{},"persistent":{}}`))
+	osTransport.RegisterResponder(http.MethodGet, `=~.*/_cat/shards.*`, httpmock.NewStringResponder(200, `[]`))
+	osTransport.RegisterResponder(http.MethodPost, `=~.*/_cluster/voting_config_exclusions.*`, httpmock.NewStringResponder(200, `{}`))
+	osTransport.RegisterResponder(http.MethodDelete, `=~.*/_cluster/voting_config_exclusions.*`, httpmock.NewStringResponder(200, `{}`))
+}
 
 func TestAPIs(t *testing.T) {
 	RegisterFailHandler(Fail)
@@ -111,6 +124,7 @@ var _ = BeforeSuite(func() {
 		HealthProbeBindAddress: fmt.Sprintf(":%d", ports[1]),
 	})
 	Expect(err).ToNot(HaveOccurred())
+	registerDefaultOsTransportResponders()
 	// scheme.AddToScheme()
 	err = (&OpenSearchClusterReconciler{
 		Client: k8sManager.GetClient(),

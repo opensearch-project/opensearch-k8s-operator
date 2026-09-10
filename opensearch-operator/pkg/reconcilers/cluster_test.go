@@ -1,9 +1,13 @@
 package reconcilers
 
 import (
+	"context"
 	"errors"
+	"net/http"
 	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/jarcoal/httpmock"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/stretchr/testify/mock"
@@ -366,5 +370,82 @@ var _ = Describe("Node attributes RBAC reconciliation", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Requeue).To(BeFalse())
+	})
+})
+
+var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
+	const (
+		clusterName      = "test-cluster"
+		clusterNamespace = "test-namespace"
+	)
+
+	newCluster := func() *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterNamespace, UID: "dummyuid"},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{ServiceName: clusterName, HttpPort: 9200},
+			},
+			Status: opensearchv1.ClusterStatus{Initialized: true},
+		}
+	}
+
+	It("Should POST a voting exclusion, delete the pod, then waiting-DELETE exclusions", func() {
+		instance := newCluster()
+		bootstrapPod := builders.NewBootstrapPod(instance, nil, nil)
+		transport := httpmock.NewMockTransport()
+		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+		registerOsPingResponders(transport, instance)
+		calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+		mockClient.On("ReconcileResource", mock.Anything, reconciler.StateAbsent).Return(&ctrl.Result{}, nil)
+
+		underTest := &ClusterReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			instance:          instance,
+			logger:            logr.Discard(),
+			osClientTransport: transport,
+		}
+		result, err := underTest.removeBootstrapPod(bootstrapPod)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(&ctrl.Result{}))
+		Expect(*calls).To(Equal([]string{
+			"POST node_names=" + builders.BootstrapPodName(instance) + "&timeout=10s",
+			"DELETE wait_for_removal=true&timeout=10s",
+		}))
+	})
+
+	It("Should leave the bootstrap pod and not fail the reconciler if the voting-config POST fails", func() {
+		instance := newCluster()
+		bootstrapPod := builders.NewBootstrapPod(instance, nil, nil)
+		transport := httpmock.NewMockTransport()
+		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+		registerOsPingResponders(transport, instance)
+		calls := recordVotingConfigCalls(transport, http.StatusInternalServerError, http.StatusOK)
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+
+		underTest := &ClusterReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			instance:          instance,
+			logger:            logr.Discard(),
+			osClientTransport: transport,
+		}
+		result, err := underTest.removeBootstrapPod(bootstrapPod)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(10 * time.Second))
+		Expect(result.Requeue).To(BeFalse())
+		Expect(*calls).To(HaveLen(1))
+		Expect((*calls)[0]).To(HavePrefix("POST "))
+		Expect(*calls).NotTo(ContainElement(ContainSubstring("wait_for_removal=false")))
+		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
 	})
 })
