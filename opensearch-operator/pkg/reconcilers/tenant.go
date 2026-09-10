@@ -78,7 +78,7 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
 				instance.Status.State = opensearchv1.OpensearchTenantCreated
 			}
-			if reason == opensearchTenantExists {
+			if reason == opensearchTenantExists && ptr.Deref(instance.Status.ExistingTenant, false) {
 				instance.Status.State = opensearchv1.OpensearchTenantIgnored
 			}
 		})

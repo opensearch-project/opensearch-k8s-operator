@@ -76,7 +76,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			if retErr == nil && retResult.Requeue {
 				instance.Status.State = opensearchv1.OpensearchRoleStateCreated
 			}
-			if reason == opensearchRoleExists {
+			if reason == opensearchRoleExists && ptr.Deref(instance.Status.ExistingRole, false) {
 				instance.Status.State = opensearchv1.OpensearchRoleIgnored
 			}
 		})

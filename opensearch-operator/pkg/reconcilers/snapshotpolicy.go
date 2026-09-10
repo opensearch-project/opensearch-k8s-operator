@@ -81,7 +81,7 @@ func (r *SnapshotPolicyReconciler) Reconcile() (result ctrl.Result, err error) {
 				instance.Status.State = opensearchv1.OpensearchSnapshotPolicyCreated
 				instance.Status.SnapshotPolicyName = policyName
 			}
-			if reason == opensearchSnapshotPolicyExists {
+			if reason == opensearchSnapshotPolicyExists && ptr.Deref(instance.Status.ExistingSnapshotPolicy, false) {
 				instance.Status.State = opensearchv1.OpensearchSnapshotPolicyIgnored
 			}
 		})

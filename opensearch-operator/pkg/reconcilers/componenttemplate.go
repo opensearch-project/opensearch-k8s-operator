@@ -77,7 +77,7 @@ func (r *ComponentTemplateReconciler) Reconcile() (result ctrl.Result, err error
 			if err == nil && result.RequeueAfter == 30*time.Second {
 				instance.Status.State = opensearchv1.OpensearchComponentTemplateCreated
 			}
-			if reason == opensearchComponentTemplateExists {
+			if reason == opensearchComponentTemplateExists && ptr.Deref(instance.Status.ExistingComponentTemplate, false) {
 				instance.Status.State = opensearchv1.OpensearchComponentTemplateIgnored
 			}
 		})
