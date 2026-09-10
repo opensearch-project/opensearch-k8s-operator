@@ -6920,6 +6920,18 @@ spec:
                       items:
                         type: string
                       type: array
+                    service:
+                      description: |-
+                        Additional Service for this node pool. A headless Service is always created for a node pool;
+                        this configures an extra, regular ClusterIP Service that load-balances traffic across the
+                        node pool's pods, useful for e.g. dedicated coordinating or ingest nodes that clients want to
+                        talk to directly without resolving individual pod endpoints.
+                      properties:
+                        create:
+                          description: Create the additional ClusterIP Service for
+                            this node pool.
+                          type: boolean
+                      type: object
                     sidecarContainers:
                       x-kubernetes-preserve-unknown-fields: true
                     tolerations:

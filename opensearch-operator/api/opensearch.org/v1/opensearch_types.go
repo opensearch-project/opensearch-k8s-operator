@@ -178,6 +178,17 @@ type NodePool struct {
 	// +kubebuilder:pruning:PreserveUnknownFields
 	// +kubebuilder:validation:Schemaless
 	InitContainers []corev1.Container `json:"initContainers,omitempty"`
+	// Additional Service for this node pool. A headless Service is always created for a node pool;
+	// this configures an extra, regular ClusterIP Service that load-balances traffic across the
+	// node pool's pods, useful for e.g. dedicated coordinating or ingest nodes that clients want to
+	// talk to directly without resolving individual pod endpoints.
+	Service *AdditionalServiceConfig `json:"service,omitempty"`
+}
+
+// AdditionalServiceConfig configures an extra, load-balanced ClusterIP Service for a node pool.
+type AdditionalServiceConfig struct {
+	// Create the additional ClusterIP Service for this node pool.
+	Create bool `json:"create,omitempty"`
 }
 
 // PersistenceConfig defines options for data persistence
