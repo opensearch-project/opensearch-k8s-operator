@@ -85,7 +85,7 @@ func (r *IsmPolicyReconciler) Reconcile() (retResult ctrl.Result, retErr error) 
 				instance.Status.State = opensearchv1.OpensearchISMPolicyCreated
 				instance.Status.PolicyId = policyId
 			}
-			if reason == opensearchIsmPolicyExists {
+			if reason == opensearchIsmPolicyExists && ptr.Deref(instance.Status.ExistingISMPolicy, false) {
 				instance.Status.State = opensearchv1.OpensearchISMPolicyIgnored
 			}
 		})

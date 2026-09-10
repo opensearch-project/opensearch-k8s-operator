@@ -79,7 +79,7 @@ func (r *IndexTemplateReconciler) Reconcile() (result ctrl.Result, err error) {
 				instance.Status.State = opensearchv1.OpensearchIndexTemplateCreated
 				instance.Status.IndexTemplateName = templateName
 			}
-			if reason == opensearchIndexTemplateExists {
+			if reason == opensearchIndexTemplateExists && ptr.Deref(instance.Status.ExistingIndexTemplate, false) {
 				instance.Status.State = opensearchv1.OpensearchIndexTemplateIgnored
 			}
 		})

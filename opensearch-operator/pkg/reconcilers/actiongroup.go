@@ -76,7 +76,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
 				instance.Status.State = opensearchv1.OpensearchActionGroupCreated
 			}
-			if reason == opensearchActionGroupExists {
+			if reason == opensearchActionGroupExists && ptr.Deref(instance.Status.ExistingActionGroup, false) {
 				instance.Status.State = opensearchv1.OpensearchActionGroupIgnored
 			}
 		})

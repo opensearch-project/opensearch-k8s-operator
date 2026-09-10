@@ -311,6 +311,53 @@ var _ = Describe("tenant reconciler", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(instance.Status.ExistingTenant).ToNot(BeNil())
 				Expect(*instance.Status.ExistingTenant).To(BeFalse())
+				Expect(instance.Status.State).ToNot(Equal(opensearchv1.OpensearchTenantIgnored))
+			})
+		})
+
+		When("probe marks existing but a concurrent write marks it managed before deferred status", func() {
+			// Residual race: this reconcile already decided the object was
+			// pre-existing (reason=exists) before the migration restore landed.
+			// The deferred status write must not stamp IGNORED over the
+			// concurrently-restored ExistingTenant=false.
+			JustBeforeEach(func() {
+				reconciler.updateStatus = ptr.To(true)
+			})
+
+			BeforeEach(func() {
+				instance.Status.ManagedCluster = &cluster.UID
+				transport.RegisterResponder(
+					http.MethodGet,
+					fmt.Sprintf(
+						"%s_plugins/_security/api/tenants/%s",
+						clusterUrl,
+						instance.Name,
+					),
+					httpmock.NewJsonResponderOrPanic(200, responses.GetTenantResponse{
+						instance.Name: requests.Tenant{Description: "test-description"},
+					}),
+				)
+				mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).RunAndReturn(
+					func(obj client.Object, f func(client.Object)) error {
+						f(obj)
+						return nil
+					},
+				).Once()
+				mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).RunAndReturn(
+					func(obj client.Object, f func(client.Object)) error {
+						obj.(*opensearchv1.OpensearchTenant).Status.ExistingTenant = ptr.To(false)
+						f(obj)
+						return nil
+					},
+				)
+			})
+
+			It("does not stamp IGNORED over the concurrently-written managed status", func() {
+				_, err := reconciler.Reconcile()
+				Expect(err).ToNot(HaveOccurred())
+				Expect(instance.Status.ExistingTenant).ToNot(BeNil())
+				Expect(*instance.Status.ExistingTenant).To(BeFalse())
+				Expect(instance.Status.State).ToNot(Equal(opensearchv1.OpensearchTenantIgnored))
 			})
 		})
 
