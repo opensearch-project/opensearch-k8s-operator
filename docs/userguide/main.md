@@ -1466,6 +1466,7 @@ spec:
 ```
 
 The Operator will then perform a rolling upgrade and restart the nodes one-by-one, waiting after each node for the cluster to stabilize and have a green cluster status. Depending on the number of nodes and the size of the data stored this can take some time.
+If the cluster stays yellow because some replicas can never be assigned (e.g. `number_of_replicas` is higher than the number of other data nodes), rolling restarts and upgrades still continue once no shards are initializing, relocating or waiting for delayed allocation. Without `drainDataNodes`, the operator will not restart a node that holds the only active copy of a shard that should have replicas. A cluster with a single data node is restarted anyway, as there is nowhere else to keep a copy.
 Downgrades and upgrades that span more than one major version are not supported, as this will put the OpenSearch cluster in an unsupported state. If you are using emptyDir storage for data nodes, it is recommended to set `general.drainDataNodes` to `true`, otherwise you might lose data.
 
 ### Configuration changes

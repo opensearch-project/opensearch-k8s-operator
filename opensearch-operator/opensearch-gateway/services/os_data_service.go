@@ -235,18 +235,27 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 	}
 
 	if health.Status == "yellow" {
-		// During an upgrade, if the primary of a shard end on an upgraded node,
-		// its replicas cannot be allocated to non-upgraded nodes,
-		// which will cause the cluster to remain yellow until the number of upgraded nodes
-		// is enough to allocate all replicas.
-		// If the cluster is locked in yellow state just for this reason, it's safe to restart.
-		safeToRestart, err := CheckClusterRestartOnYellow(service, health)
+		// Yellow means every primary is active. Lift our own allocation throttle
+		// (PreparePodForDelete sets "primaries") so it can't masquerade as a
+		// permanently unassignable replica.
+		flatSettings, err := service.GetFlatClusterSettings()
 		if err != nil {
-			return false, "", err
+			return false, "could not fetch cluster settings", err
 		}
-		if safeToRestart {
-			return true, "", nil
+		if flatSettings.Transient.ClusterRoutingAllocationEnable != string(ClusterSettingsAllocationAll) {
+			if err := SetClusterShardAllocation(service, ClusterSettingsAllocationAll); err != nil {
+				return false, "failed to set shard allocation", err
+			}
+			return false, "enabled shard allocation", nil
 		}
+		// With allocation enabled and no shard activity, the allocator has already
+		// decided the remaining replicas cannot be placed (same_shard, awareness,
+		// filters, disk watermarks, node_version mid-upgrade): waiting never turns
+		// it green. The candidate itself is vetted in PreparePodForDelete.
+		if hasShardActivity(health) {
+			return false, "waiting for shard recovery to finish", nil
+		}
+		return true, "", nil
 	}
 
 	if drainNodes {
@@ -318,6 +327,20 @@ func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName strin
 		// If the node isn't empty requeue to wait for shards to drain
 		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
 		return safeToDelete, nil
+	}
+	// Without a drain the node's copies go offline with it. Never take down the
+	// only active copy of a shard that is supposed to have others (red window,
+	// permanent loss on emptyDir). A lone data node is exempt: there is nowhere
+	// else a copy could live, same as a green cluster with number_of_replicas: 0.
+	if nodeCount > 1 {
+		shards, err := service.CatShards([]string{"index", "shard", "prirep", "state", "node"})
+		if err != nil {
+			return false, err
+		}
+		if shard, ok := soleActiveCopyOnNode(shards, podName); ok {
+			lg.Info(fmt.Sprintf("Not restarting %s: it holds the only active copy of %s[%s]", podName, shard.Index, shard.Shard))
+			return false, nil
+		}
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
 	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationPrimaries); err != nil {
@@ -597,48 +620,33 @@ func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, comp
 	return nil
 }
 
-func CheckClusterRestartOnYellow(service *OsClusterClient, health responses.ClusterHealthResponse) (bool, error) {
-	if health.Status != "yellow" {
-		return false, nil
-	}
+// hasShardActivity reports whether the allocator is still making progress:
+// shards moving, initializing, waiting on delayed allocation or on shard fetches.
+func hasShardActivity(h responses.ClusterHealthResponse) bool {
+	return h.RelocatingShards > 0 || h.InitializingShards > 0 || h.DelayedUnassigned > 0 || h.InFlightFetch > 0
+}
 
-	// Make sure that there are no moving shards,
-	// i.e. the yellow status is caused by unassigned replicas
-	if health.RelocatingShards > 0 || health.InitializingShards > 0 {
-		return false, nil
-	}
-
-	// Check each yellow index
-	stuckReplicasCount := 0
-	for index, indexHealth := range health.Indices {
-		if indexHealth.Status == "yellow" {
-			// Get all shards for this index
-			headers := []string{}
-			indices := []string{index}
-			shards, err := service.CatNamedIndicesShards(headers, indices)
-			if err != nil {
-				return false, err
-			}
-
-			// Check each unassigned replica
-			for _, shard := range shards {
-				if shard.State == "UNASSIGNED" && shard.PrimaryOrReplica == "r" {
-					isStuck, err := DetectShardStuckVersionMismatch(service, shard)
-					if err != nil {
-						return false, err
-					}
-					if isStuck {
-						stuckReplicasCount += 1
-					}
-				}
-			}
+// soleActiveCopyOnNode returns a shard whose only active copy is on nodeName
+// while other copies of it exist but are not active. Shards with no other
+// copies (number_of_replicas: 0) are ignored, as they are on a green cluster.
+func soleActiveCopyOnNode(shards []responses.CatShardsResponse, nodeName string) (responses.CatShardsResponse, bool) {
+	type key struct{ index, shard string }
+	copies := map[key]int{}
+	activeElsewhere := map[key]int{}
+	for _, s := range shards {
+		k := key{s.Index, s.Shard}
+		copies[k]++
+		if extractNodeName(s.NodeName) != nodeName && (s.State == "STARTED" || s.State == "RELOCATING") {
+			activeElsewhere[k]++
 		}
 	}
-
-	// Make sure that all unassigned shards are stuck due to node version mismatch
-	isDeadlocked := health.UnassignedShards == stuckReplicasCount
-
-	return isDeadlocked, nil
+	for _, s := range shardsOnNodeFromResponse(shards, nodeName) {
+		k := key{s.Index, s.Shard}
+		if copies[k] > 1 && activeElsewhere[k] == 0 {
+			return s, true
+		}
+	}
+	return responses.CatShardsResponse{}, false
 }
 
 func CheckPodSafeToDelete(service *OsClusterClient, nodeName string) (bool, error) {
