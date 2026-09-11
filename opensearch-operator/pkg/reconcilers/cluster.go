@@ -485,7 +485,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			annotations,
 			"Warning",
 			"EmptyDirRecovery",
-			"Detected missing pods for emptyDir cluster %s/%s; waiting %s before recreating cluster to avoid acting on transient failures",
+			"Detected emptyDir data loss for cluster %s/%s (pods missing or recreated with a fresh emptyDir); waiting %s before recreating cluster to avoid acting on transient failures",
 			clusterNamespace,
 			clusterName,
 			emptyDirRecoveryGracePeriod,
@@ -505,7 +505,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 		annotations,
 		"Warning",
 		"EmptyDirRecovery",
-		"Recreating emptyDir cluster %s/%s after pods were missing for %s",
+		"Recreating emptyDir cluster %s/%s after data loss remained for %s",
 		clusterNamespace,
 		clusterName,
 		emptyDirRecoveryGracePeriod,
@@ -552,6 +552,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) {
 	var stats emptyDirPodStats
+	var uidUpdates []opensearchv1.ComponentStatus
 	clusterName := r.instance.Name
 	clusterNamespace := r.instance.Namespace
 
@@ -565,10 +566,13 @@ func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) 
 			return emptyDirPodStats{}, err
 		}
 
-		existingPods, err := helpers.CountExistingPodsForNodePool(r.client, r.instance, &nodePool)
+		pods, err := helpers.ListPodsForNodePool(r.client, r.instance, &nodePool)
 		if err != nil {
 			return emptyDirPodStats{}, err
 		}
+
+		existingPods, poolUIDUpdates := classifyEmptyDirPods(pods, r.instance.Status.ComponentsStatus)
+		uidUpdates = append(uidUpdates, poolUIDUpdates...)
 
 		if helpers.HasDataRole(&nodePool) {
 			stats.totalDataPods += *sts.Spec.Replicas
@@ -581,7 +585,24 @@ func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) 
 		}
 	}
 
+	if len(uidUpdates) > 0 {
+		if err := r.persistEmptyDirPodUIDs(uidUpdates); err != nil {
+			return emptyDirPodStats{}, err
+		}
+	}
+
 	return stats, nil
+}
+
+// persistEmptyDirPodUIDs records the last known-good UID for pods that are currently
+// Ready, so a later reconcile can tell a recreated pod (new UID, fresh emptyDir) apart
+// from the same pod merely flapping ready/not-ready.
+func (r *ClusterReconciler) persistEmptyDirPodUIDs(updates []opensearchv1.ComponentStatus) error {
+	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		for _, update := range updates {
+			instance.Status.ComponentsStatus = upsertComponentStatus(instance.Status.ComponentsStatus, update)
+		}
+	})
 }
 
 func (r *ClusterReconciler) clearEmptyDirRecoveryStatus() error {
