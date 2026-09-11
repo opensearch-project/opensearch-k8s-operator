@@ -556,6 +556,18 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		kibanaUser["description"] = "Demo user for the OpenSearch Dashboards server"
 	}
 
+	// The bundled default ships a kibanaserver entry with hash: "". We used to
+	// always overwrite that hash; with a custom Dashboards username it would
+	// otherwise be applied as an empty hash, which OpenSearch can reject.
+	if dashboardsUsername != "kibanaserver" {
+		if leftover, ok := data["kibanaserver"].(map[interface{}]interface{}); ok {
+			hash, _ := leftover["hash"].(string)
+			if strings.TrimSpace(hash) == "" {
+				delete(data, "kibanaserver")
+			}
+		}
+	}
+
 	// Marshal back to YAML, preserving all users (base + custom)
 	modifiedYaml, err := yaml.Marshal(data)
 	if err != nil {
@@ -1196,11 +1208,19 @@ func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1
 	return &createdSecret, true, nil
 }
 
+func dashboardsCredentialsSecretName(cr *opensearchv1.OpenSearchCluster) string {
+	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
+		return cr.Spec.Dashboards.OpensearchCredentialsSecret.Name
+	}
+	return GeneratedDashboardsCredentialsSecretName(cr)
+}
+
 // DashboardsUsername returns the username Dashboards authenticates to
 // OpenSearch with, i.e. the "username" field of its credentials secret
 // (custom or operator-generated), defaulting to "kibanaserver" if absent.
+// This only reads an existing secret; it never creates one.
 func DashboardsUsername(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (string, error) {
-	secret, _, err := EnsureDashboardsCredentialsSecret(k8sClient, cr)
+	secret, err := k8sClient.GetSecret(dashboardsCredentialsSecretName(cr), cr.Namespace)
 	if err != nil {
 		return "", err
 	}
@@ -1211,13 +1231,31 @@ func DashboardsUsername(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchClus
 }
 
 // RolesMappingHasUser reports whether the given username is listed under the
-// "users" list of any role defined in a roles_mapping.yml document. This is a
-// heuristic used only to flag a likely misconfiguration: a user can also be
-// authorized via backend_roles or hosts, which this does not check.
+// "users" list of any role defined in a roles_mapping.yml document.
 func RolesMappingHasUser(rolesMappingData []byte, username string) (bool, error) {
+	return RolesMappingAuthorizes(rolesMappingData, username, nil)
+}
+
+// DashboardsUserMapped reports whether the Dashboards user is authorized by a
+// roles_mapping.yml document: listed under any role's "users", or any of the
+// user's backend_roles (from internal_users.yml) is listed under a role's
+// backend_roles. Hosts-based mappings are not checked.
+func DashboardsUserMapped(rolesMappingData, internalUsersData []byte, username string) (bool, error) {
+	return RolesMappingAuthorizes(rolesMappingData, username, userBackendRoles(internalUsersData, username))
+}
+
+// RolesMappingAuthorizes reports whether username is listed under any role's
+// "users", or any of backendRoles is listed under any role's "backend_roles".
+func RolesMappingAuthorizes(rolesMappingData []byte, username string, backendRoles []string) (bool, error) {
 	var data map[string]interface{}
 	if err := yaml.Unmarshal(rolesMappingData, &data); err != nil {
 		return false, err
+	}
+	backendWant := make(map[string]struct{}, len(backendRoles))
+	for _, role := range backendRoles {
+		if role != "" {
+			backendWant[role] = struct{}{}
+		}
 	}
 	for key, value := range data {
 		if key == "_meta" {
@@ -1227,15 +1265,52 @@ func RolesMappingHasUser(rolesMappingData []byte, username string) (bool, error)
 		if !ok {
 			continue
 		}
-		users, ok := role["users"].([]interface{})
+		if users, ok := role["users"].([]interface{}); ok {
+			for _, u := range users {
+				if s, ok := u.(string); ok && s == username {
+					return true, nil
+				}
+			}
+		}
+		if len(backendWant) == 0 {
+			continue
+		}
+		mappedRoles, ok := role["backend_roles"].([]interface{})
 		if !ok {
 			continue
 		}
-		for _, u := range users {
-			if s, ok := u.(string); ok && s == username {
-				return true, nil
+		for _, br := range mappedRoles {
+			if s, ok := br.(string); ok {
+				if _, found := backendWant[s]; found {
+					return true, nil
+				}
 			}
 		}
 	}
 	return false, nil
+}
+
+func userBackendRoles(internalUsersData []byte, username string) []string {
+	if len(internalUsersData) == 0 || username == "" {
+		return nil
+	}
+	var data map[string]interface{}
+	if err := yaml.Unmarshal(internalUsersData, &data); err != nil {
+		return nil
+	}
+	user, ok := data[username].(map[interface{}]interface{})
+	if !ok {
+		return nil
+	}
+	roles, ok := user["backend_roles"].([]interface{})
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, role := range roles {
+		if s, ok := role.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
