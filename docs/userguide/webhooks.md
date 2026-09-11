@@ -23,7 +23,7 @@ The operator provides validation webhooks for the following OpenSearch CRDs:
 
 ### OpenSearchCluster
 
-Create and update of `OpenSearchCluster` are rejected when the spec has no node pool with the `master` or `cluster_manager` role, or when every such pool is scaled to 0 replicas. That guard is user-visible: the Helm chart enables the webhook with `failurePolicy: Fail` by default, so a cluster with no master-eligible nodes cannot be created or saved.
+Create and update of `OpenSearchCluster` are rejected when no node pool has the cluster-manager role (`cluster_manager`, or `master` on OpenSearch 1.x) with at least 1 replica. This covers scaling the last manager pool to 0 and removing it from `spec.nodePools`, both of which would leave the cluster without a quorum. The guard is user-visible: the Helm chart enables the webhook with `failurePolicy: Fail` by default, so such a cluster cannot be created or saved.
 
 ## Webhook Naming Convention
 

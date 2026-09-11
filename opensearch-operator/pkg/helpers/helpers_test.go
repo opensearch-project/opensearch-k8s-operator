@@ -943,24 +943,6 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 })
 
 var _ = Describe("Master role helpers", func() {
-	Describe("CountMasterEligibleReplicas", func() {
-		It("should sum master and cluster_manager replicas", func() {
-			pools := []opensearchv1.NodePool{
-				{Component: "masters", Replicas: 3, Roles: []string{"cluster_manager"}},
-				{Component: "data", Replicas: 5, Roles: []string{"data"}},
-				{Component: "mixed", Replicas: 2, Roles: []string{"master", "data"}},
-			}
-			Expect(CountMasterEligibleReplicas(pools)).To(Equal(int32(5)))
-		})
-
-		It("should return zero when no master-eligible pools exist", func() {
-			pools := []opensearchv1.NodePool{
-				{Component: "data", Replicas: 5, Roles: []string{"data"}},
-			}
-			Expect(CountMasterEligibleReplicas(pools)).To(Equal(int32(0)))
-		})
-	})
-
 	Describe("IsMasterStatefulSet", func() {
 		It("should detect master role label", func() {
 			sts := appsv1.StatefulSet{

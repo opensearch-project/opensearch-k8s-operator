@@ -882,18 +882,6 @@ func IsMasterStatefulSet(sts appsv1.StatefulSet) bool {
 	return role == "master" || role == "cluster_manager"
 }
 
-// CountMasterEligibleReplicas returns the total number of master-eligible replicas
-// across all node pools (roles master or cluster_manager).
-func CountMasterEligibleReplicas(nodePools []opensearchv1.NodePool) int32 {
-	var total int32
-	for i := range nodePools {
-		if HasManagerRole(&nodePools[i]) {
-			total += nodePools[i].Replicas
-		}
-	}
-	return total
-}
-
 func RemoveDuplicateStrings(strSlice []string) []string {
 	allKeys := make(map[string]bool)
 	list := []string{}

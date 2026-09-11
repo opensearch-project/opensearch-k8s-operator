@@ -931,7 +931,7 @@ var _ = Describe("Scaler Controller", func() {
 		}
 
 		It("Should create an OpenSearch client and clear voting exclusions with wait when SmartScaler is off", func() {
-			spec, currentSts, _ := masterDecreaseCluster(3)
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
 			transport := httpmock.NewMockTransport()
 			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 			registerOsPingResponders(transport, &spec)
@@ -956,15 +956,15 @@ var _ = Describe("Scaler Controller", func() {
 			Expect(requeue).To(BeFalse())
 			Expect(statusRemoved).To(BeTrue())
 			Expect(*currentSts.Spec.Replicas).To(Equal(int32(2)))
-			Expect(*calls).To(HaveLen(1))
-			Expect((*calls)[0]).To(HavePrefix("DELETE "))
-			Expect((*calls)[0]).To(ContainSubstring("wait_for_removal=true"))
-			Expect((*calls)[0]).To(ContainSubstring("timeout=10s"))
-			Expect(*calls).NotTo(ContainElement(ContainSubstring("wait_for_removal=false")))
+			// The exclusion is re-applied right before shrinking, then cleared with wait.
+			Expect(*calls).To(Equal([]string{
+				"POST node_names=" + targetNodeName + "&timeout=10s",
+				"DELETE wait_for_removal=true&timeout=10s",
+			}))
 		})
 
 		It("Should keep scaler status and not clear without wait if the waiting DELETE fails", func() {
-			spec, currentSts, _ := masterDecreaseCluster(3)
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
 			transport := httpmock.NewMockTransport()
 			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 			registerOsPingResponders(transport, &spec)
@@ -984,10 +984,58 @@ var _ = Describe("Scaler Controller", func() {
 			Expect(requeue).To(BeTrue())
 			Expect(spec.Status.ComponentsStatus).To(HaveLen(1))
 			Expect(spec.Status.ComponentsStatus[0].Status).To(Equal("Drained"))
-			Expect(*calls).To(HaveLen(1))
-			Expect((*calls)[0]).To(ContainSubstring("wait_for_removal=true"))
-			Expect(*calls).NotTo(ContainElement(ContainSubstring("wait_for_removal=false")))
+			Expect(*calls).To(Equal([]string{
+				"POST node_names=" + targetNodeName + "&timeout=10s",
+				"DELETE wait_for_removal=true&timeout=10s",
+			}))
 			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+		})
+
+		reconcileMasterPool := func(spec *opensearchv1.OpenSearchCluster, currentSts appsv1.StatefulSet) (bool, error, *[]string) {
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, spec)
+			registerClusterSettingsResponders(transport)
+			calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("GetStatefulSet", currentSts.Name, clusterNamespace).Return(currentSts, nil)
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{}, nil)
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				args.Get(1).(func(*opensearchv1.OpenSearchCluster))(spec)
+			}).Return(nil)
+
+			underTest := newScalerReconciler(mockClient, spec)
+			underTest.osClientTransport = transport
+			requeue, err := underTest.reconcileNodePool(&spec.Spec.NodePools[0])
+			mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
+			return requeue, err, calls
+		}
+
+		It("Should clear voting exclusions without wait when a master scale-down is reverted before removal", func() {
+			spec, currentSts, _ := masterDecreaseCluster(3)
+			spec.Spec.NodePools[0].Replicas = 3 // reverted: target is still a live member of the pool
+
+			requeue, err, calls := reconcileMasterPool(&spec, currentSts)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeFalse())
+			Expect(spec.Status.ComponentsStatus).To(BeEmpty())
+			// A waiting clear would never finish, since the node is not leaving.
+			Expect(*calls).To(Equal([]string{"DELETE wait_for_removal=false&timeout=10s"}))
+		})
+
+		It("Should finish pending cleanup with a waiting clear once the StatefulSet was already shrunk", func() {
+			spec, currentSts, _ := masterDecreaseCluster(3)
+			currentSts.Spec.Replicas = ptr.To[int32](2) // decreaseOneNode shrank it, then the clear failed
+
+			requeue, err, calls := reconcileMasterPool(&spec, currentSts)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeFalse())
+			Expect(spec.Status.ComponentsStatus).To(BeEmpty())
+			Expect(*calls).To(Equal([]string{"DELETE wait_for_removal=true&timeout=10s"}))
 		})
 
 		It("Should POST a voting-config exclusion before allocation exclude on master scale-down", func() {
