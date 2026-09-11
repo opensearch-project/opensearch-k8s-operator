@@ -714,7 +714,7 @@ kibanaserver:
 	})
 })
 
-var _ = Describe("RolesMappingHasUser", func() {
+var _ = Describe("RolesMappingAuthorizes", func() {
 	It("returns true when the username is listed under a role's users", func() {
 		rolesMapping := `
 _meta:
@@ -725,7 +725,7 @@ kibana_server:
   users:
     - "kibanaserver"
 `
-		mapped, err := RolesMappingHasUser([]byte(rolesMapping), "kibanaserver")
+		mapped, err := RolesMappingAuthorizes([]byte(rolesMapping), "kibanaserver", nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(mapped).To(BeTrue())
 	})
@@ -742,13 +742,13 @@ all_access:
   users:
     - "someoneelse"
 `
-		mapped, err := RolesMappingHasUser([]byte(rolesMapping), "kibanaserver")
+		mapped, err := RolesMappingAuthorizes([]byte(rolesMapping), "kibanaserver", nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(mapped).To(BeFalse())
 	})
 
 	It("returns false on an empty document without error", func() {
-		mapped, err := RolesMappingHasUser([]byte(""), "kibanaserver")
+		mapped, err := RolesMappingAuthorizes([]byte(""), "kibanaserver", nil)
 		Expect(err).NotTo(HaveOccurred())
 		Expect(mapped).To(BeFalse())
 	})
