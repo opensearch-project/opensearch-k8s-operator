@@ -293,6 +293,77 @@ func CreateClientForCluster(
 	)
 }
 
+// CreateAdminCertClientForCluster creates an OpenSearch client that authenticates with the admin
+// certificate, the same one securityadmin uses. The security plugin treats it as super admin, which
+// is required to change reserved users such as admin and kibanaserver through the REST API.
+func CreateAdminCertClientForCluster(
+	k8sClient k8s.K8sClient,
+	cluster *opensearchv1.OpenSearchCluster,
+	adminCertSecretName string,
+	caSecretName string,
+	transport http.RoundTripper,
+) (*services.OsClusterClient, error) {
+	if transport != nil {
+		return services.NewOsClusterClient(OpensearchClusterURL(cluster), "", "", services.WithTransport(transport))
+	}
+
+	tlsCfg, err := loadAdminCertTLSConfig(k8sClient, cluster.Namespace, adminCertSecretName, caSecretName)
+	if err != nil {
+		return nil, err
+	}
+	return services.NewOsClusterClient(OpensearchClusterURL(cluster), "", "", services.WithTLSConfig(tlsCfg))
+}
+
+// loadAdminCertTLSConfig returns a TLS config that presents the admin certificate. The server
+// certificate is verified against the CA but, like securityadmin -nhnv, not against the host name,
+// because user-provided HTTP certificates need not include the cluster service name.
+func loadAdminCertTLSConfig(k8sClient k8s.K8sClient, namespace, adminCertSecretName, caSecretName string) (*cryptotls.Config, error) {
+	secret, err := k8sClient.GetSecret(adminCertSecretName, namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get admin cert secret %s/%s: %w", namespace, adminCertSecretName, err)
+	}
+	cert, err := cryptotls.X509KeyPair(secret.Data[corev1.TLSCertKey], secret.Data[corev1.TLSPrivateKeyKey])
+	if err != nil {
+		return nil, fmt.Errorf("invalid admin cert in secret %s/%s: %w", namespace, adminCertSecretName, err)
+	}
+
+	caPEM := secret.Data[corev1.ServiceAccountRootCAKey]
+	caSource := adminCertSecretName
+	if caSecretName != "" {
+		caSecret, err := k8sClient.GetSecret(caSecretName, namespace)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CA secret %s/%s: %w", namespace, caSecretName, err)
+		}
+		caPEM = caSecret.Data[corev1.ServiceAccountRootCAKey]
+		caSource = caSecretName
+	}
+	roots := x509.NewCertPool()
+	if !roots.AppendCertsFromPEM(caPEM) {
+		return nil, fmt.Errorf("secret %s/%s contains no valid %q", namespace, caSource, corev1.ServiceAccountRootCAKey)
+	}
+
+	return &cryptotls.Config{
+		Certificates: []cryptotls.Certificate{cert},
+		// The default verification also checks the host name; VerifyConnection checks the chain only.
+		InsecureSkipVerify: true,
+		VerifyConnection: func(state cryptotls.ConnectionState) error {
+			if len(state.PeerCertificates) == 0 {
+				return fmt.Errorf("server presented no certificate")
+			}
+			opts := x509.VerifyOptions{
+				Roots:         roots,
+				Intermediates: x509.NewCertPool(),
+				KeyUsages:     []x509.ExtKeyUsage{x509.ExtKeyUsageAny},
+			}
+			for _, intermediate := range state.PeerCertificates[1:] {
+				opts.Intermediates.AddCert(intermediate)
+			}
+			_, err := state.PeerCertificates[0].Verify(opts)
+			return err
+		},
+	}, nil
+}
+
 // loadOperatorClientTLSConfig returns a TLS config configured with a client
 // certificate (and optional CA bundle) loaded from the secret referenced by
 // cluster.Spec.Security.Config.OperatorClientCert. Returns nil, nil when no

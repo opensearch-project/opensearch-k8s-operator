@@ -383,6 +383,12 @@ func (client *OsClusterClient) PutSecurityResource(ctx context.Context, resource
 	return doHTTPPut(ctx, client.client, path, body)
 }
 
+// PatchSecurityResource performs an HTTP PATCH request (JSON patch) to OS to update the security resource specified by name
+func (client *OsClusterClient) PatchSecurityResource(ctx context.Context, resource, name string, body io.Reader) (*opensearchapi.Response, error) {
+	path := generateAPIPath(resource, name)
+	return doHTTPPatch(ctx, client.client, path, body)
+}
+
 // DeleteSecurityResource performs an HTTP DELETE request to OS to delete the security resource specified by name
 func (client *OsClusterClient) DeleteSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)

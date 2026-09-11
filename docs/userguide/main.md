@@ -1530,7 +1530,7 @@ tenants.yml: |-
     config_version: 2
 ```
 
-These minimum configuration files can later be removed from the secret so that you don't overwrite the resources created via the CRDs or the REST APIs when modifying other configuration files.
+A file you provide in the secret stays the source of truth for its type: whenever you change it, it is re-applied and replaces the corresponding security objects in the cluster (see below). If you manage, for example, internal users through the REST API or OpenSearch Dashboards, do not provide `internal_users.yml`, or do not change it after the cluster is set up.
 
 In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). When you omit this field the operator automatically creates `<cluster-name>-admin-password`, seeds it with the default `admin` username and a **random password**, and automatically generates the password hash and adds it to the generated securityconfig. If you bring your own secret, the operator reads the password from your secret and automatically generates the hash and adds it to the generated securityconfig without modifying your source secret.
 
@@ -1540,7 +1540,15 @@ You must also configure SSL/TLS HTTP. You can either let the operator generate a
 
 If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
-To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
+To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster and applies all files. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
+
+Applying a file replaces the whole corresponding document in the security index: applying `internal_users.yml`, for example, removes every internal user that is not in the file. So that security objects created later through the REST API, OpenSearch Dashboards or other tools survive, the operator only re-applies what changed once the cluster is initialized:
+
+- Only the files from your `securityConfigSecret` whose content changed are re-applied. Changing `config.yml` re-applies `config.yml` only.
+- The bundled default `internal_users.yml`, used when you do not provide one, is only applied when the cluster is set up. It is not re-applied later, not even when an operator upgrade changes it.
+- When the admin or dashboards (`kibanaserver`) password changes, the operator updates just their password hashes through the security REST API, authenticated with the admin certificate, instead of re-applying `internal_users.yml`.
+
+The checksums of the applied files are recorded in the `status.securityConfig` field of the cluster. To make the operator re-apply all files, delete the `<cluster-name>-securityconfig-update` job and remove `status.securityConfig`, for example with `kubectl edit opensearchcluster <cluster-name> --subresource=status`.
 
 #### Applying the securityconfig without HTTP TLS
 

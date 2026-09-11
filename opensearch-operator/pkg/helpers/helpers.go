@@ -368,20 +368,40 @@ func EnsureAdminCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 	return &createdSecret, true, nil
 }
 
-func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, adminSecret *corev1.Secret) (*corev1.Secret, error) {
-	baseData, err := defaultSecurityconfigData()
+// SecurityConfigSource is the securityconfig as supplied by the user, layered over the bundled
+// defaults, before the operator injects the admin and kibanaserver password hashes.
+type SecurityConfigSource struct {
+	Data map[string][]byte
+	// UserKeys holds the files supplied by the user, as opposed to bundled defaults.
+	UserKeys map[string]bool
+}
+
+// LoadSecurityConfigSource reads the user's securityconfig secret, if any, and layers it over the bundled defaults.
+func LoadSecurityConfigSource(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (*SecurityConfigSource, error) {
+	data, err := defaultSecurityconfigData()
 	if err != nil {
 		return nil, err
 	}
 
+	userKeys := map[string]bool{}
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.SecurityconfigSecret.Name != "" {
 		userSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.SecurityconfigSecret.Name, cr.Namespace)
 		if err != nil {
 			return nil, err
 		}
 		for key, value := range userSecret.Data {
-			baseData[key] = append([]byte(nil), value...)
+			data[key] = append([]byte(nil), value...)
+			userKeys[key] = true
 		}
+	}
+
+	return &SecurityConfigSource{Data: data, UserKeys: userKeys}, nil
+}
+
+func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, adminSecret *corev1.Secret, source *SecurityConfigSource) (*corev1.Secret, error) {
+	baseData := make(map[string][]byte, len(source.Data))
+	for key, value := range source.Data {
+		baseData[key] = value
 	}
 
 	adminPassword, passwordExists := adminSecret.Data["password"]

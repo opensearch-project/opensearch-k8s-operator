@@ -8474,6 +8474,27 @@ spec:
                   INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
                   Important: Run "make" to regenerate code after modifying this file
                 type: string
+              securityConfig:
+                description: |-
+                  SecurityConfig records the securityconfig last applied to the cluster successfully, so that
+                  later changes only re-apply the files that changed.
+                properties:
+                  appliedChecksums:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Checksums of the securityconfig files last applied, keyed by file name. For internal_users.yml
+                      the checksum covers the file as supplied (or bundled), without the operator-managed password hashes.
+                    type: object
+                  managedUsersChecksum:
+                    description: Checksum of the operator-managed admin and kibanaserver
+                      password hashes last applied.
+                    type: string
+                  updateJobChecksum:
+                    description: Checksum of the last successful securityconfig update
+                      job recorded here.
+                    type: string
+                type: object
               version:
                 type: string
             required:
