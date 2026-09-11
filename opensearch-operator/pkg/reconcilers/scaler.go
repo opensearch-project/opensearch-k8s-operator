@@ -30,6 +30,8 @@ const (
 	// observed emptiness before a Warning event and DrainStalled condition are
 	// recorded. The drain itself is not aborted.
 	drainStallWarningAfter = 15 * time.Minute
+	// drainPollInterval is the fixed cadence for waiting on a scale-down drain
+	drainPollInterval = 15 * time.Second
 )
 
 type ScalerReconciler struct {
@@ -93,14 +95,10 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 			requeue, poolErr := r.reconcileNodePool(&nodePool)
 			res := ctrl.Result{Requeue: requeue}
 			if requeue {
-				// Same cadence as removeStatefulSet's drain wait. A bare Requeue
-				// (no RequeueAfter) is treated by controller-runtime as a
-				// rate-limited re-add using the default exponential backoff
-				// (5ms doubling, capped at 1000s), which can delay noticing a
-				// completed or stalled drain by many minutes. RequeueAfter is
+				// Same cadence as removeStatefulSet's drain wait. RequeueAfter is
 				// dropped by controller-runtime whenever poolErr != nil, so
 				// actual error retries still back off as before.
-				res.RequeueAfter = 15 * time.Second
+				res.RequeueAfter = drainPollInterval
 			}
 			results.Combine(&res, poolErr)
 		}
@@ -118,7 +116,7 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 		// Not all node pools are ready yet: skip cleanup and retry later. Deliberately
 		// RequeueAfter-only (no Requeue=true) so the main chain still runs the upgrade
 		// and rolling-restart reconcilers, which own recovery of stuck pods (issue #1531).
-		results.Combine(&ctrl.Result{RequeueAfter: 15 * time.Second}, nil)
+		results.Combine(&ctrl.Result{RequeueAfter: drainPollInterval}, nil)
 	} else {
 		// Clean up old node pools (all current nodePools are ready)
 		r.cleanupStatefulSets(results)
@@ -552,7 +550,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 		lg.Info(fmt.Sprintf("Waiting for shards to drain from node %s", lastReplicaNodeName))
 		return &ctrl.Result{
 			Requeue:      true,
-			RequeueAfter: 15 * time.Second,
+			RequeueAfter: drainPollInterval,
 		}, nil
 	}
 

@@ -158,7 +158,8 @@ func scalerDrainTestSts(clusterName, namespace, nodePoolComponent string, replic
 			Replicas: ptr.To(replicas),
 		},
 		Status: appsv1.StatefulSetStatus{
-			ReadyReplicas: replicas,
+			ReadyReplicas:     replicas,
+			AvailableReplicas: replicas,
 		},
 	}
 }
@@ -562,7 +563,7 @@ var _ = Describe("Scaler Controller", func() {
 			result, err := underTest.Reconcile()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
-			Expect(result.RequeueAfter).To(Equal(15 * time.Second))
+			Expect(result.RequeueAfter).To(Equal(drainPollInterval))
 			mockClient.AssertExpectations(GinkgoT())
 		})
 	})
@@ -684,6 +685,10 @@ var _ = Describe("Scaler Controller", func() {
 				drainStartedConditionPrefix + started.Format(time.RFC3339),
 			})
 			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+			currentSts.Labels = map[string]string{
+				helpers.ClusterLabel:  clusterName,
+				helpers.NodePoolLabel: nodePoolComponent,
+			}
 
 			transport := httpmock.NewMockTransport()
 			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
@@ -697,6 +702,11 @@ var _ = Describe("Scaler Controller", func() {
 			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
 			mockClient.On("GetStatefulSet", clusterName+"-"+nodePoolComponent, clusterNamespace).Return(currentSts, nil)
 			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{}, nil)
+			mockClient.On("ListStatefulSets",
+				client.InNamespace(clusterNamespace),
+				client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{
+				Items: []appsv1.StatefulSet{currentSts},
+			}, nil)
 
 			underTest := newScalerReconciler(mockClient, &spec)
 			underTest.osClientTransport = transport
@@ -704,7 +714,8 @@ var _ = Describe("Scaler Controller", func() {
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeTrue())
-			Expect(result.RequeueAfter).To(Equal(15 * time.Second))
+			Expect(result.RequeueAfter).To(Equal(drainPollInterval))
+			mockClient.AssertExpectations(GinkgoT())
 		})
 
 		It("Should mark the node drained only when it has no shards", func() {
