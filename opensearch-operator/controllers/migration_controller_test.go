@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -33,6 +34,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 var _ = Describe("ClusterMigrationReconciler", func() {
@@ -296,6 +298,66 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
 		})
+
+		// Regression test for #1540: a legacy CR with dashboards.replicas explicitly
+		// stored as 0 is rejected by the legacy validating webhook if the finalizer
+		// is added via a full-object Update, because the zero value is dropped by
+		// `omitempty` on the typed round-trip and the CRD re-defaults it to 1, making
+		// the webhook see a (fake) spec change. The reconciler must add the finalizer
+		// via a metadata-only Patch instead, which never touches spec and so can
+		// never trigger this false positive.
+		It("should add the migration finalizer via a metadata-only patch, not a full-object update", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable:   true,
+						Replicas: 0, // explicit zero; the value that trips CRD re-defaulting on a full Update
+					},
+				},
+				Status: opsterv1.ClusterStatus{
+					Phase: opsterv1.PhaseRunning,
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			// Simulate the legacy validating webhook: any full-object Update is
+			// denied (as it would be in a real cluster once the round-tripped spec
+			// no longer matches byte-for-byte), while a Patch is only allowed if it
+			// never touches spec.
+			watchClient, ok := fakeClient.(client.WithWatch)
+			Expect(ok).To(BeTrue())
+			reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					// Only the legacy (opensearch.opster.io) CR is guarded by the
+					// legacy validating webhook; leave opensearch.org writes alone.
+					if _, ok := obj.(*opsterv1.OpenSearchCluster); ok {
+						return fmt.Errorf("admission webhook \"vopensearchcluster.opensearch.opster.io\" denied the request: Direct updates to old API group OpenSearchCluster resources are not allowed")
+					}
+					return c.Update(ctx, obj, opts...)
+				},
+				Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					data, err := patch.Data(obj)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(data)).NotTo(ContainSubstring(`"spec"`), "finalizer patch must not touch spec: %s", string(data))
+					return c.Patch(ctx, obj, patch, opts...)
+				},
+			})
+
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedCluster := &opsterv1.OpenSearchCluster{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
+			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
+			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(int32(0)))
+		})
 	})
 
 	Describe("handleOldClusterDeletion", func() {
@@ -328,6 +390,69 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			updatedCluster := &opsterv1.OpenSearchCluster{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
+		})
+
+		// Regression for #1540: finalizer removal must also be a metadata-only Patch.
+		// DeletionTimestamp would let a full Update past the webhook, but Update still
+		// re-defaults omitempty zeros on the dying object.
+		It("should remove finalizers via a metadata-only patch when new cluster exists", func() {
+			now := metav1.Now()
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-cluster",
+					Namespace:         "default",
+					DeletionTimestamp: &now,
+					Finalizers:        []string{MigrationFinalizer, OldClusterFinalizer},
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable:   true,
+						Replicas: 0,
+					},
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, newCluster)).To(Succeed())
+
+			watchClient, ok := fakeClient.(client.WithWatch)
+			Expect(ok).To(BeTrue())
+			reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					if _, ok := obj.(*opsterv1.OpenSearchCluster); ok {
+						return fmt.Errorf("admission webhook \"vopensearchcluster.opensearch.opster.io\" denied the request: Direct updates to old API group OpenSearchCluster resources are not allowed")
+					}
+					return c.Update(ctx, obj, opts...)
+				},
+				Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					data, err := patch.Data(obj)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(data)).NotTo(ContainSubstring(`"spec"`), "finalizer removal patch must not touch spec: %s", string(data))
+					return c.Patch(ctx, obj, patch, opts...)
+				},
+			})
+
+			// Re-fetch so the in-memory object matches what the interceptor-backed client sees
+			Expect(reconciler.Get(ctx, req.NamespacedName, oldCluster)).To(Succeed())
+
+			result, err := reconciler.handleOldClusterDeletion(ctx, oldCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedCluster := &opsterv1.OpenSearchCluster{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
+			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
+			Expect(containsString(updatedCluster.Finalizers, OldClusterFinalizer)).To(BeFalse())
+			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(int32(0)))
 		})
 
 		It("should allow deletion when annotation indicates new cluster deletion", func() {
