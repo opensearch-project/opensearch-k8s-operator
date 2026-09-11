@@ -1,0 +1,128 @@
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- $svcPort := .Values.cluster.general.httpPort -}}
+{{- $svcName := .Values.cluster.general.serviceName | default $clusterName }}
+
+{{- range $pool := .Values.cluster.nodePools }}
+{{- if and $pool.httproute $pool.httproute.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $clusterName }}-{{ $pool.component }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "opensearch-cluster.labels" $ | nindent 4 }}
+    {{- with $pool.httproute.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $pool.httproute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with $pool.httproute.parentRefs }}
+  parentRefs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with $pool.httproute.hostnames }}
+  hostnames:
+    {{- range . }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - matches:
+        {{- if $pool.httproute.matches }}
+        {{- toYaml $pool.httproute.matches | nindent 8 }}
+        {{- else }}
+        - path:
+            type: PathPrefix
+            value: /
+        {{- end }}
+      backendRefs:
+        - name: {{ $svcName }}-{{ $pool.component }}
+          port: {{ $svcPort }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.cluster.httproute.opensearch.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $clusterName }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "opensearch-cluster.labels" . | nindent 4 }}
+    {{- with .Values.cluster.httproute.opensearch.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.cluster.httproute.opensearch.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.cluster.httproute.opensearch.parentRefs }}
+  parentRefs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.cluster.httproute.opensearch.hostnames }}
+  hostnames:
+    {{- range . }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - matches:
+        {{- if .Values.cluster.httproute.opensearch.matches }}
+        {{- toYaml .Values.cluster.httproute.opensearch.matches | nindent 8 }}
+        {{- else }}
+        - path:
+            type: PathPrefix
+            value: /
+        {{- end }}
+      backendRefs:
+        - name: {{ $svcName }}
+          port: {{ $svcPort }}
+{{- end }}
+
+{{- if .Values.cluster.httproute.dashboards.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $clusterName }}-dashboards
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "opensearch-cluster.labels" . | nindent 4 }}
+    {{- with .Values.cluster.httproute.dashboards.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.cluster.httproute.dashboards.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.cluster.httproute.dashboards.parentRefs }}
+  parentRefs:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  {{- with .Values.cluster.httproute.dashboards.hostnames }}
+  hostnames:
+    {{- range . }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - matches:
+        {{- if .Values.cluster.httproute.dashboards.matches }}
+        {{- toYaml .Values.cluster.httproute.dashboards.matches | nindent 8 }}
+        {{- else }}
+        - path:
+            type: PathPrefix
+            value: /
+        {{- end }}
+      backendRefs:
+        - name: {{ $svcName }}-dashboards
+          port: 5601
+{{- end }}

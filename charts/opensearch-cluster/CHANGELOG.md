@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 ## [Unreleased]
 ### Added
+- Opt-in Gateway API `HTTPRoute` support for the Opensearch, Dashboards, and per-nodePool services as an alternative to the existing Ingress resources
 ### Changed
 ### Deprecated
 ### Removed
