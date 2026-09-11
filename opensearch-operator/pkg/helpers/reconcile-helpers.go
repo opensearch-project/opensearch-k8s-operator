@@ -18,6 +18,10 @@ import (
 var (
 	ErrVersionDowngrade = errors.New("version requested is downgrade")
 	ErrMajorVersionJump = errors.New("version request is more than 1 major version ahead")
+	// ErrInvalidExistingVersion marks the baseline (currently running) version as unparsable,
+	// which is not something the user can fix by picking a different target version. Callers
+	// that validate a requested transition should skip the check rather than block on it.
+	ErrInvalidExistingVersion = errors.New("existing version is not valid semver")
 )
 
 // ValidateVersionTransition checks that newVersion is valid semver, is not a downgrade from
@@ -26,7 +30,7 @@ var (
 func ValidateVersionTransition(existingVersion, newVersion string) error {
 	existing, err := semver.NewVersion(existingVersion)
 	if err != nil {
-		return fmt.Errorf("existing version %q is not valid semver: %w", existingVersion, err)
+		return fmt.Errorf("%w: %q: %w", ErrInvalidExistingVersion, existingVersion, err)
 	}
 
 	requested, err := semver.NewVersion(newVersion)
@@ -39,13 +43,10 @@ func ValidateVersionTransition(existingVersion, newVersion string) error {
 		return ErrVersionDowngrade
 	}
 
-	// Don't allow more than one major version upgrade
-	nextMajor := existing.IncMajor().IncMajor()
-	upgradeConstraint, err := semver.NewConstraint(fmt.Sprintf("< %s", nextMajor.String()))
-	if err != nil {
-		return err
-	}
-	if !upgradeConstraint.Check(requested) {
+	// Don't allow more than one major version upgrade. Compare majors directly instead of using a
+	// "< nextMajor" constraint: semver constraints treat any prerelease as non-matching when the
+	// constraint itself has none, which would misclassify 2.11.0 -> 3.0.0-alpha1 as a major jump.
+	if requested.Major() > existing.Major()+1 {
 		return ErrMajorVersionJump
 	}
 

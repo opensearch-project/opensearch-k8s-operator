@@ -18,6 +18,7 @@ package webhook
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -69,6 +70,17 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 		return nil, err
 	}
 
+	// Reject invalid spec.general.version transitions (bad semver, downgrade, more than one
+	// major version jump) before they can be admitted and rendered into the StatefulSet pod
+	// template. This runs regardless of whether a custom image is pinned: the version field
+	// also drives role mapping, security config paths, and settings cleanup elsewhere even when
+	// the image itself is fixed, so it needs to stay valid on its own. It runs before the node
+	// pool checks because those map roles based on the version, so an unparsable version
+	// would otherwise surface as a misleading node pool error.
+	if err := validateVersionTransition(oldCluster, newCluster); err != nil {
+		return nil, err
+	}
+
 	if err := validateNodePools(newCluster); err != nil {
 		return nil, err
 	}
@@ -83,15 +95,6 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 		return nil, err
 	}
 
-	// Reject invalid spec.general.version transitions (bad semver, downgrade, more than one
-	// major version jump) before they can be admitted and rendered into the StatefulSet pod
-	// template. This runs regardless of whether a custom image is pinned: the version field
-	// also drives role mapping, security config paths, and settings cleanup elsewhere even when
-	// the image itself is fixed, so it needs to stay valid on its own.
-	if err := validateVersionTransition(oldCluster, newCluster); err != nil {
-		return nil, err
-	}
-
 	return v.validateTlsConfig(newCluster)
 }
 
@@ -100,16 +103,28 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 // version never lands in the spec in the first place. Before the cluster has finished its
 // initial bring-up, status.Version is not yet a meaningful baseline, so nothing is checked then.
 func validateVersionTransition(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
+	// Only guard actual transitions. A cluster whose spec already holds a rejected version
+	// (created before this webhook existed, or while it was disabled) must stay editable for
+	// everything else, otherwise unrelated changes - replica counts, a full manifest re-apply
+	// from GitOps - are blocked too.
+	if oldCluster.Spec.General.Version == newCluster.Spec.General.Version {
+		return nil
+	}
 	if !oldCluster.Status.Initialized || oldCluster.Status.Version == "" {
 		return nil
 	}
+	// Returning to the version that is actually running is always allowed, so a pending bad
+	// change can be rolled back.
 	if oldCluster.Status.Version == newCluster.Spec.General.Version {
 		return nil
 	}
-	if err := helpers.ValidateVersionTransition(oldCluster.Status.Version, newCluster.Spec.General.Version); err != nil {
-		return fmt.Errorf("invalid spec.general.version change from %s to %s: %w", oldCluster.Status.Version, newCluster.Spec.General.Version, err)
+	err := helpers.ValidateVersionTransition(oldCluster.Status.Version, newCluster.Spec.General.Version)
+	// An unparsable baseline is not something the user can fix by picking a different target, and
+	// blocking on it would wedge the object; leave that case to the reconciler.
+	if err == nil || errors.Is(err, helpers.ErrInvalidExistingVersion) {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("invalid spec.general.version change from %s to %s: %w", oldCluster.Status.Version, newCluster.Spec.General.Version, err)
 }
 
 // validateCustomImageVersionChange rejects bumping spec.general.version while a custom image remains
