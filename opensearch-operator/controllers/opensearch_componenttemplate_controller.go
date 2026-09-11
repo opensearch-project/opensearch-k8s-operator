@@ -38,6 +38,7 @@ func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, r
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	logger.V(4).Info("OpensearchComponentTemplate is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
 
 	componentTemplateReconciler := reconcilers.NewComponentTemplateReconciler(
 		ctx,

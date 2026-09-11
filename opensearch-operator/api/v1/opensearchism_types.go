@@ -30,6 +30,7 @@ type OpensearchISMPolicyStatus struct {
 // +kubebuilder:object:root=true
 // +kubebuilder:resource:shortName=ismp;ismpolicy
 // +kubebuilder:subresource:status
+// +kubebuilder:deprecatedversion:warning="OpenSearchISMPolicy is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpenSearchISMPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

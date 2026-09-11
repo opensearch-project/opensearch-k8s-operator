@@ -1495,7 +1495,7 @@ An important part of any OpenSearch cluster is the user and role management to g
 There are two ways to do that with the operator:
 
 - Defining your own securityconfig
-- Managing users and roles via kubernetes resources
+- Managing users and roles via kubernetes resources (deprecated, see below)
 
 Note that currently a combination of both approaches is not possible. Once you use the CRDs you cannot provide your own securityconfig as those would overwrite each other. We are working on a feature to merge these options.
 
@@ -1641,6 +1641,8 @@ spec:
 - The operator only re-reads the secret on its next reconcile, so a cert rotation triggers a normal reconcile loop.
 
 ### Managing security configurations with kubernetes resources
+
+> **Deprecated:** `OpensearchUser`, `OpensearchRole`, `OpensearchUserRoleBinding`, `OpensearchActionGroup` and `OpensearchTenant` are deprecated and will be removed in v4. See [Migrating away from the deprecated auxiliary CRDs](deprecated-crds-migration.md).
 
 The operator provides custom kubernetes resources that allow you to create/update/manage security configuration resources such as users, roles, action groups etc. as kubernetes objects.
 
@@ -1919,6 +1921,8 @@ You can customize the generated Prometheus `ServiceMonitor` endpoint with relabe
 
 ### Managing ISM policies with Kubernetes resources
 
+> **Deprecated:** `OpenSearchISMPolicy` is deprecated and will be removed in v4. See [Migrating away from the deprecated auxiliary CRDs](deprecated-crds-migration.md).
+
 The operator provides a custom Kubernetes resource that allow you to create/update/manage ISM policies using Kubernetes objects.
 
 It is possible to manage OpenSearch ISM policies in Kubernetes with the operator. Fields in the CRD directly maps to the OpenSearch ISM Policy structure. The operator will not modify policies that already exist. You can create an example policy as follows:
@@ -1959,6 +1963,8 @@ spec:
 The namespace of the `OpenSearchISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in. `policyId` is an optional field, and if not provided `metadata.name` is used as the default.
 
 ## Managing index and component templates
+
+> **Deprecated:** `OpensearchIndexTemplate` and `OpensearchComponentTemplate` are deprecated and will be removed in v4. See [Migrating away from the deprecated auxiliary CRDs](deprecated-crds-migration.md).
 
 The operator provides the OpensearchIndexTemplate and OpensearchComponentTemplate CRDs, which is used for managing index and component templates respectively.
 
@@ -2059,6 +2065,8 @@ Note that the default setting of `applyToExistingIndices` is false and it will b
 When the flag is true, any existing indices in the opensearch cluster with the specified index pattern will have this ism policy applied to it. If multiple ism policies use this with the same index pattern, the priority has to be different between the ism policies.
 
 ## Managing Snapshot Policies with Kubernetes Resources
+
+> **Deprecated:** `OpensearchSnapshotPolicy` is deprecated and will be removed in v4. See [Migrating away from the deprecated auxiliary CRDs](deprecated-crds-migration.md).
 
 The OpenSearch Operator provides a custom Kubernetes resource to create, update, and manage Snapshot Lifecycle Management (SLM) policies using Kubernetes manifests. This makes it possible to declaratively define and control snapshot policies alongside your cluster resources.
 

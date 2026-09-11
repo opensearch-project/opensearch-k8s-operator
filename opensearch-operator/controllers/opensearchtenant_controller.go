@@ -38,6 +38,7 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	logger.V(4).Info("OpensearchTenant is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
 
 	tenantReconciler := reconcilers.NewTenantReconciler(
 		r.Client,
