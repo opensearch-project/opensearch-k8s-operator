@@ -155,25 +155,6 @@ stringData:
         _meta:
           type: "roles"
           config_version: 2
-        kibana_server:
-          reserved: true
-          cluster_permissions:
-            - "cluster:monitor/main"
-            - "cluster:monitor/health"
-            - "cluster:monitor/state"
-            - "cluster:monitor/nodes/info"
-            - "cluster:monitor/nodes/stats"
-            - "cluster:monitor/nodes/hot_threads"
-          index_permissions:
-            - index_patterns:
-                - ".kibana"
-                - ".kibana-6"
-                - ".kibana_*"
-                - ".opensearch_dashboards"
-                - ".opensearch_dashboards-6"
-                - ".opensearch_dashboards_*"
-              allowed_actions:
-                - "indices_all"
         dashboard_read_only:
           reserved: true
         security_rest_api_access:

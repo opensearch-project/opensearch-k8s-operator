@@ -1210,12 +1210,6 @@ func DashboardsUsername(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchClus
 	return "kibanaserver", nil
 }
 
-// RolesMappingHasUser reports whether the given username is listed under the
-// "users" list of any role defined in a roles_mapping.yml document.
-func RolesMappingHasUser(rolesMappingData []byte, username string) (bool, error) {
-	return RolesMappingAuthorizes(rolesMappingData, username, nil)
-}
-
 // DashboardsUserMapped reports whether the Dashboards user is authorized by a
 // roles_mapping.yml document: listed under any role's "users", or any of the
 // user's backend_roles (from internal_users.yml) is listed under a role's
