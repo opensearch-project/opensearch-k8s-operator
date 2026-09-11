@@ -986,6 +986,71 @@ var _ = Describe("Upgrade status helpers", func() {
 		})
 	})
 
+	Describe("Replace", func() {
+		It("does not duplicate an entry when the fresh list already reflects the transition (issue #1534)", func() {
+			// remove is the status snapshot taken at the start of the reconcile (informer-cache read);
+			// list is what UpdateOpenSearchClusterStatus's fresh Get returned, which already has the
+			// new status because a previous run of this same transition already applied it (either a
+			// concurrent reconcile that started from a stale cache, or a RetryOnConflict re-run).
+			remove := opensearchv1.ComponentStatus{Component: "Upgrader", Description: "data", Status: "Upgrading"}
+			add := opensearchv1.ComponentStatus{Component: "Upgrader", Description: "data", Status: "Upgraded"}
+			list := []opensearchv1.ComponentStatus{add}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(add))
+		})
+
+		It("self-heals a list that already carries a duplicate for the same identity", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded"}
+			add := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:new"}}
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:old-1"}},
+				{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:old-2"}},
+			}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(add))
+		})
+
+		It("only touches entries with the same identity, leaving other components/pools untouched", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Running"}
+			add := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded"}
+			other := opensearchv1.ComponentStatus{Component: "Scaler", Description: "masters", Status: "Running"}
+			list := []opensearchv1.ComponentStatus{other, {Component: "Scaler", Description: "data", Status: "Running"}}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(other, add))
+		})
+	})
+
+	Describe("RemoveIt", func() {
+		It("removes by identity even if the caller's remembered Status is stale", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Running"}
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Waiting"},
+			}
+
+			result := RemoveIt(remove, list)
+
+			Expect(result).To(BeEmpty())
+		})
+
+		It("does not mutate the input slice", func() {
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Running"},
+				{Component: "Scaler", Description: "masters", Status: "Running"},
+			}
+			listCopy := append([]opensearchv1.ComponentStatus(nil), list...)
+
+			_ = RemoveIt(opensearchv1.ComponentStatus{Component: "Scaler", Description: "data"}, list)
+
+			Expect(list).To(Equal(listCopy))
+		})
+	})
+
 	Describe("HasPinnedCustomImage", func() {
 		It("should return true when a custom image is set", func() {
 			image := "example.com/opensearch:1"
