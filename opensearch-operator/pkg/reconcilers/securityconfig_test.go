@@ -242,6 +242,85 @@ config:
 			// Verify that files not present in the secret are not included
 			Expect(actualCmdArg).ToNot(ContainSubstring("audit.yml"))
 		})
+
+		It("should apply the files of the securityconfig configmap, with the secret taking precedence", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			const rolesYAML = `_meta:
+  type: "roles"
+  config_version: 2
+`
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:    corev1.LocalObjectReference{Name: "securityconfig-secret"},
+							SecurityconfigConfigMap: corev1.LocalObjectReference{Name: "securityconfig-configmap"},
+							AdminCredentialsSecret:  corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Initialized: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(newAdminCredentialsSecret(clusterName), nil)
+			mockClient.EXPECT().GetConfigMap("securityconfig-configmap", clusterName).Return(corev1.ConfigMap{
+				Data: map[string]string{
+					"config.yml": "overridden by the secret",
+					"roles.yml":  rolesYAML,
+				},
+			}, nil)
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(corev1.Secret{
+				Data: map[string][]byte{"config.yml": []byte(configYAML)},
+			}, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(generatedConfigSecret).ToNot(BeNil())
+			Expect(string(generatedConfigSecret.Data["config.yml"])).To(Equal(configYAML))
+			Expect(string(generatedConfigSecret.Data["roles.yml"])).To(Equal(rolesYAML))
+			Expect(createdJob).ToNot(BeNil())
+			Expect(createdJob.Spec.Template.Spec.Containers[0].Args[0]).To(ContainSubstring("roles.yml -t roles"))
+		})
 	})
 
 	When("When Reconciling the securityconfig reconciler with securityconfig secret but no TLS configured", func() {

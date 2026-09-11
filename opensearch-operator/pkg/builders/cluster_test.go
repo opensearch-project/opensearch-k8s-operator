@@ -178,6 +178,38 @@ var _ = Describe("Builders", func() {
 				Value: "[]",
 			}))
 		})
+		It("should add the security config env vars, with node pool env vars taking precedence", func() {
+			clusterObject := ClusterDescWithVersion("3.0.0")
+			ldapPassword := corev1.EnvVar{
+				Name: "LDAP_BIND_PASSWORD",
+				ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{
+					LocalObjectReference: corev1.LocalObjectReference{Name: "ldap-credentials"},
+					Key:                  "password",
+				}},
+			}
+			clusterObject.Spec.Security = &opensearchv1.Security{Config: &opensearchv1.SecurityConfig{Env: []corev1.EnvVar{
+				ldapPassword,
+				{Name: "SHARED", Value: "from-security-config"},
+			}}}
+			nodePool := opensearchv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager"},
+				Env:       []corev1.EnvVar{{Name: "SHARED", Value: "from-node-pool"}},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			env := result.Spec.Template.Spec.Containers[0].Env
+			Expect(env).To(ContainElement(ldapPassword))
+			Expect(env).To(ContainElement(corev1.EnvVar{Name: "SHARED", Value: "from-node-pool"}))
+			Expect(env).ToNot(ContainElement(corev1.EnvVar{Name: "SHARED", Value: "from-security-config"}))
+		})
+		It("should add the security config env vars to the bootstrap pod", func() {
+			clusterObject := ClusterDescWithVersion("3.0.0")
+			clusterObject.Spec.Security = &opensearchv1.Security{Config: &opensearchv1.SecurityConfig{Env: []corev1.EnvVar{
+				{Name: "LDAP_BIND_PASSWORD", Value: "secret"},
+			}}}
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(result.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{Name: "LDAP_BIND_PASSWORD", Value: "secret"}))
+		})
 		It("should have annotations added to node", func() {
 			clusterObject := ClusterDescWithVersion("1.3.0")
 			nodePool := opensearchv1.NodePool{

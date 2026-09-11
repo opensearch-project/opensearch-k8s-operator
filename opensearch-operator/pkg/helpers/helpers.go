@@ -374,6 +374,19 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 		return nil, err
 	}
 
+	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.SecurityconfigConfigMap.Name != "" {
+		configMap, err := k8sClient.GetConfigMap(cr.Spec.Security.Config.SecurityconfigConfigMap.Name, cr.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range configMap.Data {
+			baseData[key] = []byte(value)
+		}
+		for key, value := range configMap.BinaryData {
+			baseData[key] = append([]byte(nil), value...)
+		}
+	}
+
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.SecurityconfigSecret.Name != "" {
 		userSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.SecurityconfigSecret.Name, cr.Namespace)
 		if err != nil {

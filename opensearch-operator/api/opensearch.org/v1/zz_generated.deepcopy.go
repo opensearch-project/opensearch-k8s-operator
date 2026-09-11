@@ -2922,6 +2922,14 @@ func (in *Security) DeepCopy() *Security {
 func (in *SecurityConfig) DeepCopyInto(out *SecurityConfig) {
 	*out = *in
 	out.SecurityconfigSecret = in.SecurityconfigSecret
+	out.SecurityconfigConfigMap = in.SecurityconfigConfigMap
+	if in.Env != nil {
+		in, out := &in.Env, &out.Env
+		*out = make([]corev1.EnvVar, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
 	out.AdminSecret = in.AdminSecret
 	out.AdminCredentialsSecret = in.AdminCredentialsSecret
 	out.OperatorClientCert = in.OperatorClientCert
