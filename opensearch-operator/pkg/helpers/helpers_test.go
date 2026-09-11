@@ -942,6 +942,37 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 	})
 })
 
+var _ = Describe("Master role helpers", func() {
+	Describe("IsMasterStatefulSet", func() {
+		It("should detect master role label", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "master"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeTrue())
+		})
+
+		It("should detect cluster_manager role label", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "cluster_manager"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeTrue())
+		})
+
+		It("should return false for data pools", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "data"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
+		})
+	})
+})
+
 var _ = Describe("HotReloadEnabled", func() {
 	cluster := func(version string) *opensearchv1.OpenSearchCluster {
 		return &opensearchv1.OpenSearchCluster{
