@@ -6,6 +6,8 @@ type ClusterHealthResponse struct {
 	RelocatingShards   int                    `json:"relocating_shards,omitempty"`
 	InitializingShards int                    `json:"initializing_shards,omitempty"`
 	UnassignedShards   int                    `json:"unassigned_shards,omitempty"`
+	DelayedUnassigned  int                    `json:"delayed_unassigned_shards,omitempty"`
+	InFlightFetch      int                    `json:"number_of_in_flight_fetch,omitempty"`
 	PercentActive      float32                `json:"active_shards_percent_as_number,omitempty"`
 	Indices            map[string]IndexHealth `json:"indices,omitempty"`
 }
