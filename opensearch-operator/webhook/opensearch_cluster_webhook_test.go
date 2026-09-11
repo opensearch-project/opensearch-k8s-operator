@@ -157,6 +157,13 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 					General: opensearchv1.GeneralConfig{
 						Version: "2.19.4",
 					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"cluster_manager"},
+						},
+					},
 					Security: &opensearchv1.Security{
 						Tls: &opensearchv1.TlsConfig{
 							Transport: &opensearchv1.TlsConfigTransport{
@@ -182,6 +189,13 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
 						Version: "2.19.4",
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"cluster_manager"},
+						},
 					},
 					Security: &opensearchv1.Security{
 						Tls: &opensearchv1.TlsConfig{
@@ -224,6 +238,39 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
 									Secret: corev1.LocalObjectReference{Name: ""}, // Empty secret name
 								},
+							},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("HTTP TLS is enabled but neither generate nor secret is provided"))
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should reject HTTP TLS with generate false and no secret when enabled is unset", func() {
+			cluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"cluster_manager"},
+						},
+					},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
+								Generate: false,
 							},
 						},
 					},

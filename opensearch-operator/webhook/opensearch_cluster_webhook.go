@@ -200,7 +200,7 @@ func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opensearchv1.Ope
 
 	// Validate transport TLS: enabled defaults to true when the transport block is present
 	// (see helpers.IsTransportTlsEnabled), so use the shared helper rather than the raw pointer.
-	if helpers.IsTransportTlsEnabled(cluster) {
+	if helpers.IsTransportTlsEnabled(cluster) && tlsConfig.Transport != nil {
 		// Validation: if enabled, we need either Generate=true or existing certs via Secret
 		if !tlsConfig.Transport.Generate && tlsConfig.Transport.Secret.Name == "" {
 			return nil, fmt.Errorf("transport TLS is enabled but neither generate nor secret is provided")
@@ -209,7 +209,7 @@ func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opensearchv1.Ope
 
 	// Validate HTTP TLS: enabled defaults to true when the http block is present
 	// (see helpers.IsHttpTlsEnabled), so use the shared helper rather than the raw pointer.
-	if helpers.IsHttpTlsEnabled(cluster) {
+	if helpers.IsHttpTlsEnabled(cluster) && tlsConfig.Http != nil {
 		// Validation: if enabled, we need either Generate=true or existing certs via Secret
 		if !tlsConfig.Http.Generate && tlsConfig.Http.Secret.Name == "" {
 			return nil, fmt.Errorf("HTTP TLS is enabled but neither generate nor secret is provided")
