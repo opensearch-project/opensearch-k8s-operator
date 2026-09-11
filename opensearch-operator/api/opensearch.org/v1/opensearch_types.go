@@ -487,7 +487,8 @@ type GrpcConfig struct {
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	General    GeneralConfig    `json:"general,omitempty"`
+	General GeneralConfig `json:"general,omitempty"`
+	// +kubebuilder:default={smartScaler:true}
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
 	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
