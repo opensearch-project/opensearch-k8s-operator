@@ -1979,6 +1979,14 @@ If you provided your own certificate for SSL/TLS HTTP, then you must also provid
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the securityconfig and credentials secrets for changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. A failed job is retried with a backoff from 30 seconds up to 15 minutes. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
+Applying a file replaces the whole corresponding document in the security index: applying `internal_users.yml`, for example, removes every internal user that is not in the file. So that security objects created later through the REST API, OpenSearch Dashboards or other tools survive, the operator only re-applies what changed once the cluster is initialized:
+
+- Only the files from your `securityConfigSecret` whose content changed are re-applied. Changing `config.yml` re-applies `config.yml` only.
+- The bundled default `internal_users.yml`, used when you do not provide one, is only applied when the cluster is set up. It is not re-applied later, not even when an operator upgrade changes it.
+- When the admin or dashboards (`kibanaserver`) password changes, the operator updates just their password hashes through the security REST API, authenticated with the admin certificate, instead of re-applying `internal_users.yml`.
+
+The checksums of the applied files are recorded in the `status.securityConfig` field of the cluster. To make the operator re-apply all files, delete the `<cluster-name>-securityconfig-update` job and remove `status.securityConfig`, for example with `kubectl edit opensearchcluster <cluster-name> --subresource=status`.
+
 #### Applying the securityconfig without HTTP TLS
 
 Clusters that enable transport TLS but disable HTTP TLS (`security.tls.http.enabled: false`) are supported, for example when TLS is terminated by a service mesh:
