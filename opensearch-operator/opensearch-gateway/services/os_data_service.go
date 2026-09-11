@@ -234,8 +234,25 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 		return true, "", nil
 	}
 
-	if health.Status == "yellow" {
-		// During an upgrade, if the primary of a shard end on an upgraded node,
+	if health.Status == "yellow" && !drainNodes {
+		// Before inspecting individual indices, check whether replica allocation
+		// is still restricted (e.g. set to "primaries" by PreparePodForDelete).
+		// When allocation is restricted ALL replicas are unassigned, making every
+		// index yellow.  Re-enable allocation first so replicas can recover;
+		// per-index analysis is only meaningful once allocation is back to "all".
+		flatSettings, err := service.GetFlatClusterSettings()
+		if err != nil {
+			return false, "could not fetch cluster settings", err
+		}
+		if flatSettings.Transient.ClusterRoutingAllocationEnable != string(ClusterSettingsAllocationAll) {
+			if err := SetClusterShardAllocation(service, ClusterSettingsAllocationAll); err != nil {
+				return false, "failed to set shard allocation", err
+			}
+			return false, "re-enabled shard allocation, waiting for replicas to recover", nil
+		}
+
+		// Allocation is already "all" but cluster is still yellow.
+		// During an upgrade, if the primary of a shard ends on an upgraded node,
 		// its replicas cannot be allocated to non-upgraded nodes,
 		// which will cause the cluster to remain yellow until the number of upgraded nodes
 		// is enough to allocate all replicas.
@@ -247,12 +264,14 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 		if safeToRestart {
 			return true, "", nil
 		}
+		return false, "waiting for health to be green", nil
 	}
 
 	if drainNodes {
 		return false, "cluster is not green and drain nodes is enabled", nil
 	}
 
+	// Cluster is red (not green and not yellow)
 	flatSettings, err := service.GetFlatClusterSettings()
 	if err != nil {
 		return false, "could not fetch cluster settings", err
@@ -608,8 +627,11 @@ func CheckClusterRestartOnYellow(service *OsClusterClient, health responses.Clus
 		return false, nil
 	}
 
+	lg := log.Log.WithName("CheckClusterRestartOnYellow")
+
 	// Check each yellow index
 	stuckReplicasCount := 0
+	skippedIndices := 0
 	for index, indexHealth := range health.Indices {
 		if indexHealth.Status == "yellow" {
 			// Get all shards for this index
@@ -617,6 +639,14 @@ func CheckClusterRestartOnYellow(service *OsClusterClient, health responses.Clus
 			indices := []string{index}
 			shards, err := service.CatNamedIndicesShards(headers, indices)
 			if err != nil {
+				// System indices (e.g. .opendistro_security) may return 403
+				// when plugins.security.system_indices.permission.enabled is true.
+				// Skip these indices rather than failing the entire check.
+				if strings.Contains(err.Error(), "403") {
+					lg.V(1).Info("Skipping index due to permission error", "index", index, "error", err)
+					skippedIndices++
+					continue
+				}
 				return false, err
 			}
 
@@ -633,6 +663,10 @@ func CheckClusterRestartOnYellow(service *OsClusterClient, health responses.Clus
 				}
 			}
 		}
+	}
+
+	if skippedIndices > 0 {
+		lg.Info("Skipped indices due to permission errors during yellow check", "skippedCount", skippedIndices)
 	}
 
 	// Make sure that all unassigned shards are stuck due to node version mismatch

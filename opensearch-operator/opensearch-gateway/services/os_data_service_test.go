@@ -90,6 +90,10 @@ var _ = Describe("OpensearchCLuster data service tests", func() {
 })*/
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
@@ -278,5 +282,425 @@ func TestDetermineUnsupportedClusterSettings(t *testing.T) {
 				t.Fatalf("len(Persistent) = %d, want %d", len(got.Persistent), tt.wantPersistentCount)
 			}
 		})
+	}
+}
+
+// newTestClient creates an OsClusterClient backed by the given httptest.Server.
+// The server must handle GET / (ping) and return a valid main page response.
+func newTestClient(t *testing.T, server *httptest.Server) *OsClusterClient {
+	t.Helper()
+	client, err := NewOsClusterClient(server.URL, "", "", WithTransport(server.Client().Transport))
+	if err != nil {
+		t.Fatalf("failed to create test client: %v", err)
+	}
+	return client
+}
+
+// jsonResponse writes a JSON body with the given status code.
+func jsonResponse(w http.ResponseWriter, status int, body interface{}) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	json.NewEncoder(w).Encode(body)
+}
+
+// TestCheckClusterStatusForRestart_YellowAllocationPrimaries verifies that when
+// the cluster is yellow and allocation is set to "primaries", the function
+// re-enables allocation to "all" BEFORE attempting any per-index shard analysis.
+// This is the fix for the deadlock where CatNamedIndicesShards on a system index
+// returned 403, blocking the allocation reset code.
+func TestCheckClusterStatusForRestart_YellowAllocationPrimaries(t *testing.T) {
+	allocationResetCalled := false
+	catShardsCalled := false
+
+	mux := http.NewServeMux()
+
+	// GET / — ping / main page
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		jsonResponse(w, 200, map[string]interface{}{
+			"name":         "test",
+			"cluster_name": "test",
+			"version":      map[string]interface{}{"number": "2.11.0", "distribution": "opensearch"},
+		})
+	})
+
+	// GET /_cluster/health — yellow with system index
+	mux.HandleFunc("/_cluster/health", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, responses.ClusterHealthResponse{
+			Status:           "yellow",
+			UnassignedShards: 5,
+			Indices: map[string]responses.IndexHealth{
+				".opendistro_security": {Status: "yellow", UnassignedShards: 1},
+				"my-index":             {Status: "yellow", UnassignedShards: 4},
+			},
+		})
+	})
+
+	// GET /_cluster/settings — allocation is "primaries"
+	mux.HandleFunc("/_cluster/settings", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			jsonResponse(w, 200, responses.FlatClusterSettingsResponse{
+				Transient: responses.Settings{
+					ClusterRoutingAllocationEnable: "primaries",
+				},
+			})
+		} else if r.Method == http.MethodPut {
+			allocationResetCalled = true
+			jsonResponse(w, 200, map[string]interface{}{})
+		}
+	})
+
+	// GET /_cat/shards — should NOT be called in this scenario
+	mux.HandleFunc("/_cat/shards/", func(w http.ResponseWriter, r *http.Request) {
+		catShardsCalled = true
+		// Return 403 to simulate system index permission error
+		http.Error(w, `[403 Forbidden] {"error":"no permissions for [] and User [name=admin]"}`, 403)
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	ready, msg, err := CheckClusterStatusForRestart(client, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ready {
+		t.Fatal("expected ready=false, got true")
+	}
+	if !strings.Contains(msg, "re-enabled shard allocation") {
+		t.Fatalf("expected message about re-enabling allocation, got: %q", msg)
+	}
+	if !allocationResetCalled {
+		t.Fatal("expected allocation to be reset to 'all', but PUT was not called")
+	}
+	if catShardsCalled {
+		t.Fatal("CatShards should NOT be called when allocation is still restricted")
+	}
+}
+
+// TestCheckClusterStatusForRestart_YellowAllocationAll verifies that when
+// allocation is already "all" and the cluster is yellow, the function proceeds
+// to CheckClusterRestartOnYellow (per-index analysis).
+func TestCheckClusterStatusForRestart_YellowAllocationAll(t *testing.T) {
+	catShardsCalled := false
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		jsonResponse(w, 200, map[string]interface{}{
+			"name":         "test",
+			"cluster_name": "test",
+			"version":      map[string]interface{}{"number": "2.11.0", "distribution": "opensearch"},
+		})
+	})
+
+	mux.HandleFunc("/_cluster/health", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, responses.ClusterHealthResponse{
+			Status:           "yellow",
+			UnassignedShards: 2,
+			Indices: map[string]responses.IndexHealth{
+				"my-index": {Status: "yellow", UnassignedShards: 2},
+			},
+		})
+	})
+
+	mux.HandleFunc("/_cluster/settings", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, responses.FlatClusterSettingsResponse{
+			Transient: responses.Settings{
+				ClusterRoutingAllocationEnable: "all",
+			},
+		})
+	})
+
+	// CatNamedIndicesShards — returns empty shards (no version mismatch)
+	mux.HandleFunc("/_cat/shards/", func(w http.ResponseWriter, r *http.Request) {
+		catShardsCalled = true
+		jsonResponse(w, 200, []responses.CatShardsResponse{})
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	ready, msg, err := CheckClusterStatusForRestart(client, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Not safe to restart (unassigned shards != stuck count), should wait
+	if ready {
+		t.Fatal("expected ready=false when cluster yellow with non-stuck replicas")
+	}
+	if !strings.Contains(msg, "waiting for health to be green") {
+		t.Fatalf("unexpected message: %q", msg)
+	}
+	if !catShardsCalled {
+		t.Fatal("expected CatShards to be called when allocation is already 'all'")
+	}
+}
+
+// TestCheckClusterStatusForRestart_Green verifies the green path returns ready.
+func TestCheckClusterStatusForRestart_Green(t *testing.T) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		jsonResponse(w, 200, map[string]interface{}{
+			"name":         "test",
+			"cluster_name": "test",
+			"version":      map[string]interface{}{"number": "2.11.0", "distribution": "opensearch"},
+		})
+	})
+
+	mux.HandleFunc("/_cluster/health", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, responses.ClusterHealthResponse{Status: "green"})
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	ready, _, err := CheckClusterStatusForRestart(client, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ready {
+		t.Fatal("expected ready=true for green cluster")
+	}
+}
+
+// TestCheckClusterRestartOnYellow_403Skipped verifies that when
+// CatNamedIndicesShards returns 403 for a system index, that index is
+// skipped and the function does not return an error.
+func TestCheckClusterRestartOnYellow_403Skipped(t *testing.T) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		jsonResponse(w, 200, map[string]interface{}{
+			"name":         "test",
+			"cluster_name": "test",
+			"version":      map[string]interface{}{"number": "2.11.0", "distribution": "opensearch"},
+		})
+	})
+
+	mux.HandleFunc("/_cat/shards/", func(w http.ResponseWriter, r *http.Request) {
+		// Check which index is being queried
+		indexParam := r.URL.Path
+		if strings.Contains(indexParam, ".opendistro_security") {
+			http.Error(w, `[403 Forbidden] {"error":"no permissions"}`, 403)
+			return
+		}
+		// Return normal shards for other indices
+		jsonResponse(w, 200, []responses.CatShardsResponse{
+			{Index: "my-index", Shard: "0", PrimaryOrReplica: "r", State: "UNASSIGNED"},
+		})
+	})
+
+	// _cluster/allocation/explain — needed by DetectShardStuckVersionMismatch
+	mux.HandleFunc("/_cluster/allocation/explain", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, responses.AllocationExplainResponse{
+			Index:        "my-index",
+			Shard:        0,
+			CurrentState: "unassigned",
+			CanAllocate:  "no",
+			NodeAllocationDecisions: []responses.AllocationExplainNodeDecision{
+				{
+					Decision: "no",
+					Deciders: []responses.AllocationDecision{
+						{Decider: "node_version", Decision: "NO", Explanation: "node version mismatch"},
+					},
+				},
+			},
+		})
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	health := responses.ClusterHealthResponse{
+		Status:           "yellow",
+		UnassignedShards: 2,
+		Indices: map[string]responses.IndexHealth{
+			".opendistro_security": {Status: "yellow", UnassignedShards: 1},
+			"my-index":             {Status: "yellow", UnassignedShards: 1},
+		},
+	}
+
+	// Should NOT return error despite 403 on system index
+	safeToRestart, err := CheckClusterRestartOnYellow(client, health)
+	if err != nil {
+		t.Fatalf("expected no error but got: %v", err)
+	}
+	// Cannot be safe because skipped index has unassigned shards not counted as stuck
+	if safeToRestart {
+		t.Fatal("expected safeToRestart=false because skipped index shards are not counted")
+	}
+}
+
+// TestCheckClusterRestartOnYellow_NonPermissionError verifies that non-403
+// errors from CatNamedIndicesShards are still propagated.
+func TestCheckClusterRestartOnYellow_NonPermissionError(t *testing.T) {
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		jsonResponse(w, 200, map[string]interface{}{
+			"name":         "test",
+			"cluster_name": "test",
+			"version":      map[string]interface{}{"number": "2.11.0", "distribution": "opensearch"},
+		})
+	})
+
+	mux.HandleFunc("/_cat/shards/", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `[500 Internal Server Error]`, 500)
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	health := responses.ClusterHealthResponse{
+		Status:           "yellow",
+		UnassignedShards: 1,
+		Indices: map[string]responses.IndexHealth{
+			"my-index": {Status: "yellow", UnassignedShards: 1},
+		},
+	}
+
+	_, err := CheckClusterRestartOnYellow(client, health)
+	if err == nil {
+		t.Fatal("expected error for 500 response, got nil")
+	}
+}
+
+// TestCheckClusterStatusForRestart_YellowDrainNodes verifies that when
+// drainNodes=true and cluster is yellow, the function returns without
+// attempting to reset allocation (original behavior preserved).
+func TestCheckClusterStatusForRestart_YellowDrainNodes(t *testing.T) {
+	settingsFetched := false
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		jsonResponse(w, 200, map[string]interface{}{
+			"name":         "test",
+			"cluster_name": "test",
+			"version":      map[string]interface{}{"number": "2.11.0", "distribution": "opensearch"},
+		})
+	})
+
+	mux.HandleFunc("/_cluster/health", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, responses.ClusterHealthResponse{
+			Status:           "yellow",
+			UnassignedShards: 2,
+			Indices: map[string]responses.IndexHealth{
+				"my-index": {Status: "yellow", UnassignedShards: 2},
+			},
+		})
+	})
+
+	mux.HandleFunc("/_cluster/settings", func(w http.ResponseWriter, r *http.Request) {
+		settingsFetched = true
+		jsonResponse(w, 200, responses.FlatClusterSettingsResponse{})
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	ready, msg, err := CheckClusterStatusForRestart(client, true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ready {
+		t.Fatal("expected ready=false")
+	}
+	if !strings.Contains(msg, "drain nodes is enabled") {
+		t.Fatalf("unexpected message: %q", msg)
+	}
+	if settingsFetched {
+		t.Fatal("should not fetch cluster settings when drainNodes=true and cluster is yellow")
+	}
+}
+
+// TestCheckClusterStatusForRestart_RedAllocationRestricted verifies the red
+// cluster path still resets allocation.
+func TestCheckClusterStatusForRestart_RedAllocationRestricted(t *testing.T) {
+	allocationResetCalled := false
+
+	mux := http.NewServeMux()
+
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/" {
+			http.NotFound(w, r)
+			return
+		}
+		jsonResponse(w, 200, map[string]interface{}{
+			"name":         "test",
+			"cluster_name": "test",
+			"version":      map[string]interface{}{"number": "2.11.0", "distribution": "opensearch"},
+		})
+	})
+
+	mux.HandleFunc("/_cluster/health", func(w http.ResponseWriter, r *http.Request) {
+		jsonResponse(w, 200, responses.ClusterHealthResponse{Status: "red"})
+	})
+
+	mux.HandleFunc("/_cluster/settings", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			jsonResponse(w, 200, responses.FlatClusterSettingsResponse{
+				Transient: responses.Settings{
+					ClusterRoutingAllocationEnable: "primaries",
+				},
+			})
+		} else if r.Method == http.MethodPut {
+			allocationResetCalled = true
+			jsonResponse(w, 200, map[string]interface{}{})
+		}
+	})
+
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	client := newTestClient(t, server)
+
+	ready, msg, err := CheckClusterStatusForRestart(client, false)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if ready {
+		t.Fatal("expected ready=false for red cluster")
+	}
+	_ = msg
+	if !allocationResetCalled {
+		t.Fatal("expected allocation to be reset for red cluster with restricted allocation")
 	}
 }
