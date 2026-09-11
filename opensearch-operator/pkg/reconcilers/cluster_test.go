@@ -5,10 +5,12 @@ import (
 	"time"
 
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/stretchr/testify/mock"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -21,6 +23,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 )
@@ -193,8 +196,168 @@ var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
 			)
 			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
 		})
+
+		It("should ignore admission controller drift when last-applied spec is unchanged", func() {
+			instance := bootstrapTestCluster("admission-drift-test")
+			desired := builders.NewBootstrapPod(instance, nil, nil)
+
+			existing := desired.DeepCopy()
+			Expect(patch.DefaultAnnotator.SetLastAppliedAnnotation(existing)).To(Succeed())
+			simulateAdmissionControllerDrift(existing)
+
+			Expect(util.BootstrapPodNeedsRecreation(existing, desired)).To(BeFalse())
+		})
+
+		It("should recreate when the operator desired spec has changed", func() {
+			instance := bootstrapTestCluster("spec-change-test")
+			original := builders.NewBootstrapPod(instance, nil, nil)
+
+			existing := original.DeepCopy()
+			Expect(patch.DefaultAnnotator.SetLastAppliedAnnotation(existing)).To(Succeed())
+
+			desired := original.DeepCopy()
+			desired.Spec.ServiceAccountName = "updated-sa"
+			Expect(util.BootstrapPodNeedsRecreation(existing, desired)).To(BeTrue())
+		})
+
+		It("should not recreate when last-applied annotation is missing", func() {
+			instance := bootstrapTestCluster("missing-annotation-test")
+			desired := builders.NewBootstrapPod(instance, nil, nil)
+			existing := desired.DeepCopy()
+			simulateAdmissionControllerDrift(existing)
+
+			Expect(util.BootstrapPodNeedsRecreation(existing, desired)).To(BeFalse())
+		})
+	})
+
+	Context("reconcileBootstrapPod", func() {
+		It("should create the pod when it does not exist", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			instance := bootstrapTestCluster("create-test")
+			desired := builders.NewBootstrapPod(instance, nil, nil)
+			underTest := &ClusterReconciler{client: mockClient, instance: instance}
+
+			mockClient.EXPECT().
+				GetPod(desired.Name, desired.Namespace).
+				Return(corev1.Pod{}, k8serrors.NewNotFound(schema.GroupResource{Resource: "pods"}, desired.Name))
+			mockClient.EXPECT().
+				ReconcileResource(desired, reconciler.StateCreated).
+				Return(&ctrl.Result{}, nil)
+
+			result, err := underTest.reconcileBootstrapPod(desired)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(&ctrl.Result{}))
+		})
+
+		It("should not patch or recreate when admission controllers mutated the live spec", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			instance := bootstrapTestCluster("drift-reconcile-test")
+			desired := builders.NewBootstrapPod(instance, nil, nil)
+			existing := desired.DeepCopy()
+			Expect(patch.DefaultAnnotator.SetLastAppliedAnnotation(existing)).To(Succeed())
+			simulateAdmissionControllerDrift(existing)
+
+			underTest := &ClusterReconciler{client: mockClient, instance: instance}
+			mockClient.EXPECT().
+				GetPod(desired.Name, desired.Namespace).
+				Return(*existing, nil)
+
+			result, err := underTest.reconcileBootstrapPod(desired)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(&ctrl.Result{}))
+		})
+
+		It("should recreate the pod when the operator desired spec has changed", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			instance := bootstrapTestCluster("recreate-test")
+			original := builders.NewBootstrapPod(instance, nil, nil)
+			existing := original.DeepCopy()
+			Expect(patch.DefaultAnnotator.SetLastAppliedAnnotation(existing)).To(Succeed())
+
+			desired := original.DeepCopy()
+			desired.Spec.ServiceAccountName = "updated-sa"
+
+			underTest := &ClusterReconciler{client: mockClient, instance: instance}
+			mockClient.EXPECT().
+				GetPod(desired.Name, desired.Namespace).
+				Return(*existing, nil)
+			mockClient.EXPECT().DeletePod(mock.Anything).Return(nil)
+			mockClient.EXPECT().WaitForPodDeletion(desired.Name, desired.Namespace).Return(nil)
+			mockClient.EXPECT().
+				ReconcileResource(desired, reconciler.StateCreated).
+				Return(&ctrl.Result{}, nil)
+
+			result, err := underTest.reconcileBootstrapPod(desired)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(&ctrl.Result{}))
+		})
+
+		It("should requeue when the existing bootstrap pod is terminating", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			instance := bootstrapTestCluster("terminating-test")
+			desired := builders.NewBootstrapPod(instance, nil, nil)
+			existing := desired.DeepCopy()
+			now := metav1.Now()
+			existing.DeletionTimestamp = &now
+
+			underTest := &ClusterReconciler{client: mockClient, instance: instance}
+			mockClient.EXPECT().
+				GetPod(desired.Name, desired.Namespace).
+				Return(*existing, nil)
+
+			result, err := underTest.reconcileBootstrapPod(desired)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(&ctrl.Result{Requeue: true, RequeueAfter: 2 * time.Second}))
+		})
 	})
 })
+
+func bootstrapTestCluster(name string) *opensearchv1.OpenSearchCluster {
+	return &opensearchv1.OpenSearchCluster{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      name,
+			Namespace: "test-namespace",
+		},
+		Spec: opensearchv1.ClusterSpec{
+			General: opensearchv1.GeneralConfig{
+				HttpPort:       9200,
+				ServiceName:    name,
+				Version:        "2.8.0",
+				ServiceAccount: "default-sa",
+			},
+			Bootstrap: opensearchv1.BootstrapConfig{
+				Tolerations: []corev1.Toleration{
+					{
+						Key:      "purpose",
+						Operator: "Equal",
+						Value:    "logging",
+						Effect:   "NoSchedule",
+					},
+				},
+			},
+		},
+		Status: opensearchv1.ClusterStatus{
+			Initialized: false,
+		},
+	}
+}
+
+func simulateAdmissionControllerDrift(pod *corev1.Pod) {
+	pod.Spec.SchedulerName = "gke-custom-scheduler"
+	injected := corev1.ResourceRequirements{
+		Requests: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("100m"),
+			corev1.ResourceMemory: resource.MustParse("256Mi"),
+		},
+		Limits: corev1.ResourceList{
+			corev1.ResourceCPU:    resource.MustParse("2"),
+			corev1.ResourceMemory: resource.MustParse("2Gi"),
+		},
+	}
+	for i := range pod.Spec.InitContainers {
+		pod.Spec.InitContainers[i].Resources = injected
+	}
+}
 
 var _ = Describe("ServiceMonitor reconciliation", func() {
 	newMonitoringInstance := func() *opensearchv1.OpenSearchCluster {
