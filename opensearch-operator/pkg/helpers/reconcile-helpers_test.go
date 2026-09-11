@@ -1,6 +1,7 @@
 package helpers
 
 import (
+	"github.com/Masterminds/semver"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -71,4 +72,29 @@ var _ = DescribeTable("NodeAttributeEnvVar",
 	Entry("encodes dashes distinctly", "rack-id", "NODE_ATTR_7261636B2D6964"),
 	Entry("encodes underscores distinctly", "rack_id", "NODE_ATTR_7261636B5F6964"),
 	Entry("preserves case distinctly", "Zone", "NODE_ATTR_5A6F6E65"),
+)
+
+var _ = DescribeTable("ValidateVersionTransition",
+	func(existingVersion, newVersion string, expectedErr error) {
+		err := ValidateVersionTransition(existingVersion, newVersion)
+		if expectedErr == nil {
+			Expect(err).NotTo(HaveOccurred())
+			return
+		}
+		Expect(err).To(MatchError(expectedErr))
+	},
+	Entry("allows a patch upgrade", "2.11.0", "2.11.1", nil),
+	Entry("allows a minor upgrade", "2.11.0", "2.12.0", nil),
+	Entry("allows a single major upgrade", "2.11.0", "3.0.0", nil),
+	Entry("allows the same version", "2.11.0", "2.11.0", nil),
+	Entry("allows a prerelease of the next major", "2.11.0", "3.0.0-alpha1", nil),
+	Entry("allows a prerelease of the next minor", "2.11.0", "2.12.0-rc.1", nil),
+	Entry("allows leaving a prerelease for its release", "3.0.0-alpha1", "3.0.0", nil),
+	Entry("rejects a two major version jump", "2.11.0", "4.0.0", ErrMajorVersionJump),
+	Entry("rejects a two major version jump to a prerelease", "2.11.0", "4.0.0-alpha1", ErrMajorVersionJump),
+	Entry("rejects a major downgrade", "3.0.0", "1.3.0", ErrVersionDowngrade),
+	Entry("rejects a patch downgrade", "2.11.1", "2.11.0", ErrVersionDowngrade),
+	Entry("rejects going back to a prerelease of the running version", "3.0.0", "3.0.0-alpha1", ErrVersionDowngrade),
+	Entry("rejects an unparsable requested version", "3.0.0", "not-a-version", semver.ErrInvalidSemVer),
+	Entry("reports an unparsable existing version distinctly", "latest", "3.0.0", ErrInvalidExistingVersion),
 )

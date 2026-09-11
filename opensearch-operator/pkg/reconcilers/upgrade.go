@@ -96,6 +96,18 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		}, nil
 	}
 
+	// Validate before the pinned-custom-image branch below: that branch copies spec.general.version
+	// into status.Version and returns, so validating after it would let a downgrade or a multi-major
+	// jump through whenever the webhook is disabled and both image and version change together.
+	// If validation fails log a warning and do nothing, returning a terminal error so the main
+	// chain can continue (restart, snapshots, etc.) instead of freezing all maintenance on a
+	// permanent spec mistake.
+	if err := r.validateUpgrade(); err != nil {
+		r.logger.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Failed to validate version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
+		return ctrl.Result{}, AsTerminal(err)
+	}
+
 	// A pinned custom image ignores spec.general.version for the pod template. Bumping version
 	// alone would otherwise look like an instant successful upgrade with no pods restarted.
 	if helpers.HasPinnedCustomImage(r.instance) {
@@ -112,15 +124,6 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			instance.Status.ComponentsStatus = helpers.ClearUpgraderComponentStatuses(instance.Status.ComponentsStatus)
 		})
 		return ctrl.Result{}, err
-	}
-
-	// If version validation fails log a warning and do nothing. Return a
-	// terminal error so the main chain can continue (restart, snapshots, etc.)
-	// instead of freezing all maintenance on a permanent spec mistake.
-	if err := r.validateUpgrade(); err != nil {
-		r.logger.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Failed to validate version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
-		return ctrl.Result{}, AsTerminal(err)
 	}
 
 	// Reset per-pool progress when the upgrade target changes mid-flight (or after an abort that
