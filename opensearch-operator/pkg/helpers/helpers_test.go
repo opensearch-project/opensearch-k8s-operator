@@ -648,6 +648,70 @@ admin:
 		Expect(ok).To(BeTrue())
 		Expect(custom["hash"]).To(Equal("$2a$12$customuserhash"))
 	})
+
+	It("should drop a leftover empty-hash kibanaserver when using a custom Dashboards username", func() {
+		defaults, err := defaultSecurityconfigData()
+		Expect(err).NotTo(HaveOccurred())
+		inputYaml := defaults["internal_users.yml"]
+		Expect(inputYaml).NotTo(BeEmpty())
+
+		result, err := applyUserHashes(
+			inputYaml,
+			[]byte("adminpass"),
+			"$2a$12$adminhash",
+			"mydashboardsuser",
+			[]byte("dashboardspass"),
+			"$2a$12$customuserhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(output).ToNot(HaveKey("kibanaserver"))
+		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).To(Equal("$2a$12$customuserhash"))
+	})
+
+	It("should keep a leftover kibanaserver entry that already has a hash", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "adminhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+kibanaserver:
+  hash: "$2a$12$existingkibanahash"
+  reserved: true
+  description: "kept"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			"$2a$12$adminhash",
+			"mydashboardsuser",
+			[]byte("dashboardspass"),
+			"$2a$12$customuserhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(output).To(HaveKey("kibanaserver"))
+		kibana, ok := output["kibanaserver"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(kibana["hash"]).To(Equal("$2a$12$existingkibanahash"))
+		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).To(Equal("$2a$12$customuserhash"))
+	})
 })
 
 var _ = Describe("RolesMappingHasUser", func() {
@@ -687,6 +751,40 @@ all_access:
 		mapped, err := RolesMappingHasUser([]byte(""), "kibanaserver")
 		Expect(err).NotTo(HaveOccurred())
 		Expect(mapped).To(BeFalse())
+	})
+
+	It("returns true when a backend_role of the user is mapped", func() {
+		rolesMapping := `
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+all_access:
+  reserved: true
+  backend_roles:
+    - "admin"
+`
+		mapped, err := RolesMappingAuthorizes([]byte(rolesMapping), "admin", []string{"admin"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeTrue())
+	})
+})
+
+var _ = Describe("DashboardsUserMapped", func() {
+	It("treats the user as mapped when internal_users backend_roles match roles_mapping", func() {
+		rolesMapping := []byte(`
+all_access:
+  backend_roles:
+    - "admin"
+`)
+		internalUsers := []byte(`
+admin:
+  hash: "x"
+  backend_roles:
+    - "admin"
+`)
+		mapped, err := DashboardsUserMapped(rolesMapping, internalUsers, "admin")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeTrue())
 	})
 })
 
@@ -771,6 +869,76 @@ var _ = Describe("EnsureDashboardsCredentialsSecret", func() {
 		Expect(created).ToNot(BeNil())
 		Expect(created.StringData["username"]).To(Equal("kibanaserver"))
 		expectPolicyCompliant(created.StringData["password"])
+	})
+})
+
+var _ = Describe("DashboardsUsername", func() {
+	It("reads the username from the credentials secret without creating one", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+			Spec: opensearchv1.ClusterSpec{
+				Dashboards: opensearchv1.DashboardsConfig{
+					OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: "dash-creds"},
+				},
+			},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret("dash-creds", "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{"username": []byte("mydashboardsuser")},
+		}, nil).Once()
+
+		username, err := DashboardsUsername(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(username).To(Equal("mydashboardsuser"))
+	})
+
+	It("defaults to kibanaserver when the username field is absent", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret(GeneratedDashboardsCredentialsSecretName(cr), "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{"password": []byte("secret")},
+		}, nil).Once()
+
+		username, err := DashboardsUsername(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(username).To(Equal("kibanaserver"))
+	})
+})
+
+var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
+	It("injects the hash under a custom Dashboards username from the credentials secret", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+			Spec: opensearchv1.ClusterSpec{
+				Dashboards: opensearchv1.DashboardsConfig{
+					OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: "dash-creds"},
+				},
+			},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret("dash-creds", "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{
+				"username": []byte("mydashboardsuser"),
+				"password": []byte("dashboardspass"),
+			},
+		}, nil).Once()
+		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+		mockClient.EXPECT().GetSecret(GeneratedSecurityConfigSecretName(cr), "pwtest").Return(corev1.Secret{}, notFound).Once()
+
+		secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
+			Data: map[string][]byte{"password": []byte("adminpass")},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(secret.Data["internal_users.yml"], &output)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(output).ToNot(HaveKey("kibanaserver"))
+		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).NotTo(BeEmpty())
 	})
 })
 

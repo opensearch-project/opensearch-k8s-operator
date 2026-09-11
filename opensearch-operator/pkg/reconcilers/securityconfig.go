@@ -413,16 +413,13 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opensearchv1
 }
 
 // warnIfDashboardsUserUnmapped emits a Warning event when Dashboards is enabled and the
-// generated securityconfig secret carries a non-empty custom roles_mapping.yml that does not
-// list the Dashboards user under any role's "users". This is a heuristic (backend-role based
-// mappings are still valid and not checked) meant only to surface an otherwise silent failure
-// mode (crash-looping Dashboards with no cluster-level signal); it never blocks reconciliation.
+// Dashboards user is not authorized by roles_mapping.yml. That includes a custom
+// roles_mapping.yml that lists neither the user nor its backend_roles, and a custom
+// Dashboards username with no roles_mapping.yml in the generated secret (the image
+// default only maps kibanaserver). Hosts-based mappings are not checked. This never
+// blocks reconciliation.
 func (r *SecurityconfigReconciler) warnIfDashboardsUserUnmapped(configSecret *corev1.Secret, annotations map[string]string) {
 	if !r.instance.Spec.Dashboards.Enable {
-		return
-	}
-	rolesMapping := configSecret.Data["roles_mapping.yml"]
-	if len(rolesMapping) == 0 {
 		return
 	}
 	dashboardsUsername, err := helpers.DashboardsUsername(r.client, r.instance)
@@ -430,7 +427,22 @@ func (r *SecurityconfigReconciler) warnIfDashboardsUserUnmapped(configSecret *co
 		r.logger.Error(err, "Unable to determine Dashboards username for roles mapping check")
 		return
 	}
-	mapped, err := helpers.RolesMappingHasUser(rolesMapping, dashboardsUsername)
+	rolesMapping := configSecret.Data["roles_mapping.yml"]
+	if len(rolesMapping) == 0 {
+		if dashboardsUsername == "kibanaserver" {
+			return
+		}
+		r.recorder.AnnotatedEventf(
+			r.instance,
+			annotations,
+			"Warning",
+			"DashboardsUserUnmapped",
+			"Dashboards user %q is not kibanaserver and no custom roles_mapping.yml is present; the image default mapping only includes kibanaserver, so Dashboards may fail to authorize",
+			dashboardsUsername,
+		)
+		return
+	}
+	mapped, err := helpers.DashboardsUserMapped(rolesMapping, configSecret.Data["internal_users.yml"], dashboardsUsername)
 	if err != nil {
 		r.logger.Error(err, "Unable to parse roles_mapping.yml for Dashboards user mapping check")
 		return
@@ -443,7 +455,7 @@ func (r *SecurityconfigReconciler) warnIfDashboardsUserUnmapped(configSecret *co
 		annotations,
 		"Warning",
 		"DashboardsUserUnmapped",
-		"Dashboards user %q is not listed under any role's \"users\" in the custom roles_mapping.yml; Dashboards may fail to authorize unless it is mapped via backend_roles instead",
+		"Dashboards user %q is not listed under any role's users in the custom roles_mapping.yml, and none of its backend_roles are mapped; Dashboards may fail to authorize",
 		dashboardsUsername,
 	)
 }

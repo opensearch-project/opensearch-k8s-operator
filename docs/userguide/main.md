@@ -1844,7 +1844,7 @@ roles_mapping.yml: |-
       - "kibanaserver" # or the username from opensearchCredentialsSecret
 ```
 
-If you also supply your own `roles.yml`, keep the `kibana_server` role (or an equivalent role with the same permissions) in it. Without this mapping, the Dashboards user authenticates successfully but has no permissions, and the Dashboards deployment crash-loops with authorization errors in its logs (e.g. `no permissions for [cluster:monitor/nodes/info]`) with no other signal from the operator besides a `DashboardsUserUnmapped` warning event on the `OpenSearchCluster`.
+If you also supply your own `roles.yml`, keep the `kibana_server` role (or an equivalent role with the same permissions) in it. If you use a custom Dashboards username via `opensearchCredentialsSecret`, you must map that username even when you do not supply `roles_mapping.yml` — the image default only maps `kibanaserver`. Without this mapping, the Dashboards user authenticates successfully but has no permissions, and the Dashboards deployment crash-loops with authorization errors in its logs (e.g. `no permissions for [cluster:monitor/nodes/info]`) with no other signal from the operator besides a `DashboardsUserUnmapped` warning event on the `OpenSearchCluster`.
 
 ### Security Plugin Disabled
 

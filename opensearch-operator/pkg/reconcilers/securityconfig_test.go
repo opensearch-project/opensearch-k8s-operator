@@ -794,6 +794,14 @@ done;`
 			}
 		}
 
+		setupDashboardsUsernameGet := func(mockClient *k8s.MockK8sClient, clusterName, username string) {
+			dashboardsSecretName := clusterName + "-dashboards-password"
+			mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: dashboardsSecretName, Namespace: clusterName},
+				Data:        map[string][]byte{"username": []byte(username)},
+			}, nil)
+		}
+
 		It("emits a Warning event when a custom roles_mapping.yml does not map the Dashboards user", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			spec := opensearchv1.OpenSearchCluster{
@@ -802,7 +810,7 @@ done;`
 					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
 				},
 			}
-			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupDashboardsUsernameGet(mockClient, clusterName, "kibanaserver")
 
 			recorder := record.NewFakeRecorder(1)
 			underTest := newReconciler(mockClient, recorder, &spec)
@@ -833,7 +841,7 @@ all_access:
 					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
 				},
 			}
-			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupDashboardsUsernameGet(mockClient, clusterName, "kibanaserver")
 
 			recorder := record.NewFakeRecorder(1)
 			underTest := newReconciler(mockClient, recorder, &spec)
@@ -848,6 +856,40 @@ kibana_server:
   reserved: true
   users:
     - "kibanaserver"
+`),
+				},
+			}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Consistently(recorder.Events).ShouldNot(Receive())
+		})
+
+		It("does not emit an event when the Dashboards user is mapped via backend_roles", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
+				},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "admin")
+
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{
+				Data: map[string][]byte{
+					"internal_users.yml": []byte(`
+admin:
+  hash: "x"
+  backend_roles:
+    - "admin"
+`),
+					"roles_mapping.yml": []byte(`
+all_access:
+  reserved: true
+  backend_roles:
+    - "admin"
 `),
 				},
 			}
@@ -878,16 +920,57 @@ kibana_server:
 			Consistently(recorder.Events).ShouldNot(Receive())
 		})
 
-		It("does nothing when roles_mapping.yml is not present in the secret", func() {
+		It("does nothing when roles_mapping.yml is not present and the username is kibanaserver", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
 				Spec:       opensearchv1.ClusterSpec{Dashboards: opensearchv1.DashboardsConfig{Enable: true}},
 			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "kibanaserver")
 			recorder := record.NewFakeRecorder(1)
 			underTest := newReconciler(mockClient, recorder, &spec)
 
 			configSecret := &corev1.Secret{Data: map[string][]byte{}}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Consistently(recorder.Events).ShouldNot(Receive())
+		})
+
+		It("emits a Warning event when a custom Dashboards username has no roles_mapping.yml", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec:       opensearchv1.ClusterSpec{Dashboards: opensearchv1.DashboardsConfig{Enable: true}},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "mydashboardsuser")
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{Data: map[string][]byte{}}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Eventually(recorder.Events).Should(Receive(ContainSubstring("DashboardsUserUnmapped")))
+		})
+
+		It("does not emit an event when a custom Dashboards username is listed under users", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec:       opensearchv1.ClusterSpec{Dashboards: opensearchv1.DashboardsConfig{Enable: true}},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "mydashboardsuser")
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{
+				Data: map[string][]byte{
+					"roles_mapping.yml": []byte(`
+kibana_server:
+  users:
+    - "mydashboardsuser"
+`),
+				},
+			}
 			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
 
 			Consistently(recorder.Events).ShouldNot(Receive())
