@@ -845,8 +845,8 @@ func NewSTSForNodePool(
 		Value: nodeRolesValue,
 	})
 
-	// Append additional env vars from cr.Spec.NodePool.env
-	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
+	// Append additional env vars from cr.Spec.Security.Config.Env and cr.Spec.NodePool.env
+	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, withSecurityConfigEnv(cr, node.Env)...)
 
 	if cr.Spec.General.SetVMMaxMapCount != nil && *cr.Spec.General.SetVMMaxMapCount {
 		initHelperImage := helpers.ResolveInitHelperImage(cr)
@@ -1183,10 +1183,8 @@ func NewBootstrapPod(
 		},
 	})
 
-	// Add Bootstrap.Env
-	if cr.Spec.Bootstrap.Env != nil {
-		env = append(env, cr.Spec.Bootstrap.Env...)
-	}
+	// Add Security.Config.Env and Bootstrap.Env
+	env = append(env, withSecurityConfigEnv(cr, cr.Spec.Bootstrap.Env)...)
 
 	var initContainers []corev1.Container
 	if len(cr.Spec.Bootstrap.InitContainers) > 0 {

@@ -382,6 +382,14 @@ type SecurityConfig struct {
 	// Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
 	// When omitted the operator seeds the cluster with its bundled defaults.
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
+	// Optional configmap that contains yml files of the opensearch-security config, for files without
+	// sensitive values. Secrets can be referenced from these files as ${env.VAR} placeholders (see env).
+	// A file in securityConfigSecret takes precedence over a file with the same name in this configmap.
+	SecurityconfigConfigMap corev1.LocalObjectReference `json:"securityConfigMap,omitempty"`
+	// Environment variables added to every OpenSearch node (all node pools and the bootstrap pod), for
+	// example from secrets, so that the security plugin can resolve ${env.VAR} placeholders in the
+	// securityconfig. A variable with the same name in the env of a node pool or the bootstrap pod takes precedence.
+	Env []corev1.EnvVar `json:"env,omitempty"`
 	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
@@ -600,4 +608,11 @@ func (sc *SecurityConfig) GetUpdateJob() SecurityUpdateJobConfig {
 		return SecurityUpdateJobConfig{}
 	}
 	return sc.UpdateJob
+}
+
+func (sc *SecurityConfig) GetEnv() []corev1.EnvVar {
+	if sc == nil {
+		return nil
+	}
+	return sc.Env
 }
