@@ -2,6 +2,7 @@ package responses
 
 type ClusterHealthResponse struct {
 	Status             string                 `json:"status,omitempty"`
+	NumberOfDataNodes  int                    `json:"number_of_data_nodes,omitempty"`
 	ActiveShards       int                    `json:"active_shards,omitempty"`
 	RelocatingShards   int                    `json:"relocating_shards,omitempty"`
 	InitializingShards int                    `json:"initializing_shards,omitempty"`
