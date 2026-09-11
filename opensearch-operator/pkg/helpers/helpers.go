@@ -397,6 +397,21 @@ func LoadSecurityConfigSource(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSear
 	}
 
 	userKeys := map[string]bool{}
+	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.SecurityconfigConfigMap.Name != "" {
+		configMap, err := k8sClient.GetConfigMap(cr.Spec.Security.Config.SecurityconfigConfigMap.Name, cr.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		for key, value := range configMap.Data {
+			data[key] = []byte(value)
+			userKeys[key] = true
+		}
+		for key, value := range configMap.BinaryData {
+			data[key] = append([]byte(nil), value...)
+			userKeys[key] = true
+		}
+	}
+
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.SecurityconfigSecret.Name != "" {
 		userSecret, err := k8sClient.GetSecret(cr.Spec.Security.Config.SecurityconfigSecret.Name, cr.Namespace)
 		if err != nil {
