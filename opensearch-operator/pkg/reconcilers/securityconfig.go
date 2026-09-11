@@ -31,6 +31,14 @@ const (
 	securityConfigComponentName  = "Securityconfig"
 
 	checksumAnnotation = "securityconfig/checksum"
+	// userChecksumAnnotation stores a checksum of only the user-provided securityConfigSecret,
+	// before it is merged with the operator's embedded defaults and managed admin/kibanaserver
+	// hashes. Operator <=2.8.0 wrote exactly this value under checksumAnnotation (it never merged
+	// in defaults). Comparing against it lets a cluster adopted from an old operator recognize its
+	// pre-existing job as current when the user's own secret hasn't changed, instead of treating
+	// the 2.8.1 hashing-scheme change (#1193) as a config change that must be destructively
+	// re-applied via securityadmin.sh.
+	userChecksumAnnotation = "securityconfig/user-checksum"
 
 	securityConfigStatusReady   = "Ready"
 	securityConfigStatusRunning = "Running"
@@ -201,6 +209,10 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if checksumerr != nil {
 		return ctrl.Result{}, checksumerr
 	}
+	userChecksumVal, err := r.userSecurityConfigChecksum()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.securityconfigSubpaths(r.instance, &configSecret); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -229,7 +241,10 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	resetRetryCount := false
 	if err == nil {
 		value, exists := job.Annotations[checksumAnnotation]
-		if exists && value == checksumval {
+		_, userExists := job.Annotations[userChecksumAnnotation]
+		current := (exists && value == checksumval) ||
+			(exists && !userExists && value == userChecksumVal)
+		if current {
 			result, done, handleErr := r.handleExistingSecurityConfigJob(job, annotations)
 			if handleErr != nil {
 				return ctrl.Result{}, handleErr
@@ -268,6 +283,12 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
 	}
 
+	if r.instance.Status.Initialized {
+		// securityadmin.sh replaces (not merges) the internalusers/roles/rolesmapping/tenants/
+		// actiongroups documents in the security index with the contents being applied here, so
+		// any object created afterwards via the REST API or Dashboards is about to be wiped.
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Re-applying securityconfig on an already-initialized cluster; this replaces internal users, roles, role mappings, tenants and action groups with the contents of the generated securityconfig secret, discarding anything created since via the REST API or Dashboards")
+	}
 	r.logger.Info("Starting securityconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting securityconfig update job")
 
@@ -276,6 +297,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		jobName,
 		namespace,
 		checksumval,
+		userChecksumVal,
 		adminCertName,
 		r.determineAdminCASecret(adminCertName),
 		cmdArg,
@@ -353,6 +375,24 @@ func checksum(data map[string][]byte) (string, error) {
 		}
 	}
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
+}
+
+// userSecurityConfigChecksum computes a checksum of the user's own securityConfigSecret,
+// i.e. exactly what operator <=2.8.0 used to hash into checksumAnnotation before the
+// generated/merged secret existed. Returns "" (also what <=2.8.0 wrote when no secret was
+// configured) when no SecurityconfigSecret is configured or it does not exist yet.
+func (r *SecurityconfigReconciler) userSecurityConfigChecksum() (string, error) {
+	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Config == nil || r.instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
+		return "", nil
+	}
+	userSecret, err := r.client.GetSecret(r.instance.Spec.Security.Config.SecurityconfigSecret.Name, r.instance.Namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return checksum(userSecret.Data)
 }
 
 func (r *SecurityconfigReconciler) determineAdminSecret() string {
