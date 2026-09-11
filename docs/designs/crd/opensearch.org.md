@@ -514,6 +514,7 @@ _Appears in:_
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
 | `grpc` _[GrpcConfig](#grpcconfig)_ | gRPC API configuration for OpenSearch |  |  |
 | `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
+| `persistentVolumeClaimRetentionPolicy` _[StatefulSetPersistentVolumeClaimRetentionPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#statefulsetpersistentvolumeclaimretentionpolicy-v1-apps)_ | Set the retention policy for the cluster PVCs |  |  |
 | `opensearchHome` _string_ | OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set. |  |  |
 | `nodeAttributes` _[NodeAttribute](#nodeattribute) array_ | NodeAttributes derives OpenSearch node attributes (node.attr.*) from<br />Kubernetes node labels at runtime. For each entry the operator injects an<br />init container that reads the label off the node hosting the pod and<br />exposes its value to OpenSearch, enabling shard allocation awareness<br />(e.g. zone or rack awareness) without splitting topology into separate<br />node pools. The pods' ServiceAccount must be allowed to "get" nodes. |  |  |
 
