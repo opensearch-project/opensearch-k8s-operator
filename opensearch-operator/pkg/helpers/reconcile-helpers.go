@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path"
 	"strings"
@@ -9,9 +10,48 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 
+	"github.com/Masterminds/semver"
 	"github.com/hashicorp/go-version"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 )
+
+var (
+	ErrVersionDowngrade = errors.New("version requested is downgrade")
+	ErrMajorVersionJump = errors.New("version request is more than 1 major version ahead")
+	// ErrInvalidExistingVersion marks the baseline (currently running) version as unparsable,
+	// which is not something the user can fix by picking a different target version. Callers
+	// that validate a requested transition should skip the check rather than block on it.
+	ErrInvalidExistingVersion = errors.New("existing version is not valid semver")
+)
+
+// ValidateVersionTransition checks that newVersion is valid semver, is not a downgrade from
+// existingVersion, and is at most one major version ahead of it. Shared by the upgrade
+// reconciler and the cluster validating webhook so both agree on what transitions are legal.
+func ValidateVersionTransition(existingVersion, newVersion string) error {
+	existing, err := semver.NewVersion(existingVersion)
+	if err != nil {
+		return fmt.Errorf("%w: %q: %w", ErrInvalidExistingVersion, existingVersion, err)
+	}
+
+	requested, err := semver.NewVersion(newVersion)
+	if err != nil {
+		return fmt.Errorf("requested version %q is not valid semver: %w", newVersion, err)
+	}
+
+	// Don't allow version downgrades as they might cause unexpected issues
+	if requested.LessThan(existing) {
+		return ErrVersionDowngrade
+	}
+
+	// Don't allow more than one major version upgrade. Compare majors directly instead of using a
+	// "< nextMajor" constraint: semver constraints treat any prerelease as non-matching when the
+	// constraint itself has none, which would misclassify 2.11.0 -> 3.0.0-alpha1 as a major jump.
+	if requested.Major() > existing.Major()+1 {
+		return ErrMajorVersionJump
+	}
+
+	return nil
+}
 
 func ResolveInitHelperImage(cr *opensearchv1.OpenSearchCluster) (result opensearchv1.ImageSpec) {
 	defaultRepo := "docker.io"

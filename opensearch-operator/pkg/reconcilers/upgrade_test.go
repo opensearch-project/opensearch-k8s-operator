@@ -197,6 +197,19 @@ var _ = Describe("Upgrade Reconciler", func() {
 			Expect(cluster.Status.Phase).To(Equal(opensearchv1.PhaseRunning))
 			Expect(cluster.Status.ComponentsStatus).To(BeEmpty())
 		})
+
+		It("should reject an invalid version transition instead of syncing status.version", func() {
+			image := "example.com/opensearch:custom"
+			cluster.Spec.General.Version = "1.0.0"
+			cluster.Spec.General.ImageSpec = &opensearchv1.ImageSpec{Image: &image}
+			cluster.Status.Version = "3.0.0"
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).To(MatchError(ErrVersionDowngrade))
+			Expect(IsTerminal(err)).To(BeTrue())
+			Expect(cluster.Status.Version).To(Equal("3.0.0"))
+		})
 	})
 
 	Describe("findNextNodePoolForUpgrade", func() {
