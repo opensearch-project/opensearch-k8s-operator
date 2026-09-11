@@ -238,6 +238,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 				return result, nil
 			}
 			// Failed job past backoff window: delete and recreate below.
+			// UpdateComponentStatus keeps r.instance in sync, so the Running
+			// write below preserves the retry/lastRetry conditions just set.
 		} else {
 			resetRetryCount = true
 		}
@@ -476,13 +478,11 @@ func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
 		return ctrl.Result{}, true, nil
 	}
 
-	if job.Status.Active > 0 {
-		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", nil); err != nil {
-			return ctrl.Result{}, true, err
-		}
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, true, nil
-	}
-
+	// Checked before Active: with backoffLimit:1 a failed pod's replacement can
+	// already be starting (Active>0) while Failed>0 also holds. Waiting for
+	// Active to drop to 0 before acting on the failure doubles detection time
+	// for a deterministic failure (e.g. a malformed yml) that the replacement
+	// pod is guaranteed to hit as well.
 	if job.Status.Failed > 0 {
 		retryCount := r.securityConfigRetryCount()
 		delay := securityConfigRetryDelay(retryCount)
@@ -496,7 +496,8 @@ func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
 			); err != nil {
 				return ctrl.Result{}, true, err
 			}
-			return ctrl.Result{Requeue: true, RequeueAfter: remaining}, true, nil
+			// RequeueAfter-only so the parent controller keeps running other reconcilers
+			return ctrl.Result{RequeueAfter: remaining}, true, nil
 		}
 
 		retryCount++
@@ -519,7 +520,14 @@ func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
 		return ctrl.Result{}, false, nil
 	}
 
-	if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", nil); err != nil {
+	if job.Status.Active > 0 {
+		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", r.currentSecurityConfigRetryConditions()); err != nil {
+			return ctrl.Result{}, true, err
+		}
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, true, nil
+	}
+
+	if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", r.currentSecurityConfigRetryConditions()); err != nil {
 		return ctrl.Result{}, true, err
 	}
 	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, true, nil
