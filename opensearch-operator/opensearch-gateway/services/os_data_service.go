@@ -224,7 +224,7 @@ func createClusterSettingsAllocationEnable(enable ClusterSettingsAllocation) res
 	}}
 }
 
-func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bool, string, error) {
+func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool, dataNodes int32) (bool, string, error) {
 	health, err := service.GetHealth()
 	if err != nil {
 		return false, "failed to fetch health", err
@@ -248,10 +248,17 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 			}
 			return false, "enabled shard allocation", nil
 		}
-		// With allocation enabled and no shard activity, the allocator has already
-		// decided the remaining replicas cannot be placed (same_shard, awareness,
-		// filters, disk watermarks, node_version mid-upgrade): waiting never turns
-		// it green. The candidate itself is vetted in PreparePodForDelete.
+		// A data node that hasn't (re)joined yet leaves no trace in the shard
+		// activity counters once its delayed allocation expires, and a pod can be
+		// Ready before it joins. Wait until every data node is part of the cluster.
+		if health.NumberOfDataNodes < int(dataNodes) {
+			return false, "waiting for all data nodes to join the cluster", nil
+		}
+		// With all data nodes present, allocation enabled and no shard activity,
+		// the allocator has already decided the remaining replicas cannot be placed
+		// (same_shard, awareness, filters, disk watermarks, node_version
+		// mid-upgrade): waiting never turns it green. The candidate itself is
+		// vetted in PreparePodForDelete.
 		if hasShardActivity(health) {
 			return false, "waiting for shard recovery to finish", nil
 		}
@@ -313,22 +320,26 @@ func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName strin
 			if err != nil {
 				return false, err
 			}
-			lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
-			return !systemPrimaries, nil
+			if systemPrimaries {
+				lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
+				return false, nil
+			}
+		} else {
+			// Checks if the pod is safe to delete because either:
+			// - there are no shards allocated on the node
+			// - all allocated shards are replicas stuck due to version mismatch (during upgrade)
+			safeToDelete, err := CheckPodSafeToDelete(service, podName)
+			if err != nil {
+				return false, err
+			}
+			if !safeToDelete {
+				// If the node isn't empty requeue to wait for shards to drain
+				lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
+				return false, nil
+			}
 		}
-
-		// Checks if the pod is safe to delete because either:
-		// - there are no shards allocated on the node
-		// - all allocated shards are replicas stuck due to version mismatch (during upgrade)
-		safeToDelete, err := CheckPodSafeToDelete(service, podName)
-		if err != nil {
-			return false, err
-		}
-		// If the node isn't empty requeue to wait for shards to drain
-		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
-		return safeToDelete, nil
 	}
-	// Without a drain the node's copies go offline with it. Never take down the
+	// Whatever is still on the node goes offline with it. Never take down the
 	// only active copy of a shard that is supposed to have others (red window,
 	// permanent loss on emptyDir). A lone data node is exempt: there is nowhere
 	// else a copy could live, same as a green cluster with number_of_replicas: 0.
@@ -341,6 +352,9 @@ func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName strin
 			lg.Info(fmt.Sprintf("Not restarting %s: it holds the only active copy of %s[%s]", podName, shard.Index, shard.Shard))
 			return false, nil
 		}
+	}
+	if drainNode {
+		return true, nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
 	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationPrimaries); err != nil {
@@ -629,11 +643,15 @@ func hasShardActivity(h responses.ClusterHealthResponse) bool {
 // soleActiveCopyOnNode returns a shard whose only active copy is on nodeName
 // while other copies of it exist but are not active. Shards with no other
 // copies (number_of_replicas: 0) are ignored, as they are on a green cluster.
+// Search replicas can't be promoted to primary, so they are not counted.
 func soleActiveCopyOnNode(shards []responses.CatShardsResponse, nodeName string) (responses.CatShardsResponse, bool) {
 	type key struct{ index, shard string }
 	copies := map[key]int{}
 	activeElsewhere := map[key]int{}
 	for _, s := range shards {
+		if s.PrimaryOrReplica == "s" {
+			continue
+		}
 		k := key{s.Index, s.Shard}
 		copies[k]++
 		if extractNodeName(s.NodeName) != nodeName && (s.State == "STARTED" || s.State == "RELOCATING") {

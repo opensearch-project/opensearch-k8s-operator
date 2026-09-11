@@ -475,7 +475,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 		return err
 	}
 
-	ready, condition, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
+	ready, condition, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		r.logger.Error(err, "Could not check opensearch cluster status")
 		conditions = append(conditions, "Could not check opensearch cluster status")

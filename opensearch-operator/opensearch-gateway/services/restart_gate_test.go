@@ -27,6 +27,8 @@ func TestSoleActiveCopyOnNode(t *testing.T) {
 		{"relocating source elsewhere counts as active", []responses.CatShardsResponse{sh("a", "0", "p", "RELOCATING", "n1 -> 10.0.0.2 id n2"), sh("a", "0", "r", "STARTED", "n0")}, "n0", false},
 		{"candidate is relocating source of a sole copy", []responses.CatShardsResponse{sh("a", "0", "p", "RELOCATING", "n0 -> 10.0.0.2 id n2"), sh("a", "0", "r", "UNASSIGNED", "")}, "n0", true},
 		{"master-only candidate holds nothing", []responses.CatShardsResponse{sh("a", "0", "p", "STARTED", "n0"), sh("a", "0", "r", "UNASSIGNED", "")}, "master-0", false},
+		{"search replica elsewhere is not a copy", []responses.CatShardsResponse{sh("a", "0", "p", "STARTED", "n0"), sh("a", "0", "s", "STARTED", "n1"), sh("a", "0", "r", "UNASSIGNED", "")}, "n0", true},
+		{"search replica with zero replicas behaves like green", []responses.CatShardsResponse{sh("a", "0", "p", "STARTED", "n0"), sh("a", "0", "s", "STARTED", "n1")}, "n0", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -58,7 +60,7 @@ func mockClient(t *testing.T, health, transientEnable, catShards string) (*OsClu
 }
 
 func TestCheckClusterStatusForRestartYellow(t *testing.T) {
-	quiet := `{"status":"yellow","unassigned_shards":3}`
+	quiet := `{"status":"yellow","unassigned_shards":3,"number_of_data_nodes":3}`
 	tests := []struct {
 		name, health, enable string
 		drain, want          bool
@@ -68,15 +70,16 @@ func TestCheckClusterStatusForRestartYellow(t *testing.T) {
 		{"quiet yellow proceeds with drain", quiet, "all", true, true, false},
 		{"own primaries throttle is lifted first", quiet, "primaries", false, false, true},
 		{"throttle lifted with drain too", quiet, "none", true, false, true},
-		{"initializing waits", `{"status":"yellow","initializing_shards":1}`, "all", false, false, false},
-		{"delayed allocation waits", `{"status":"yellow","delayed_unassigned_shards":2}`, "all", false, false, false},
-		{"in-flight fetch waits", `{"status":"yellow","number_of_in_flight_fetch":1}`, "all", false, false, false},
+		{"missing data node waits", `{"status":"yellow","number_of_data_nodes":2}`, "all", false, false, false},
+		{"initializing waits", `{"status":"yellow","number_of_data_nodes":3,"initializing_shards":1}`, "all", false, false, false},
+		{"delayed allocation waits", `{"status":"yellow","number_of_data_nodes":3,"delayed_unassigned_shards":2}`, "all", false, false, false},
+		{"in-flight fetch waits", `{"status":"yellow","number_of_data_nodes":3,"number_of_in_flight_fetch":1}`, "all", false, false, false},
 		{"red never proceeds", `{"status":"red"}`, "all", true, false, false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, tr, put := mockClient(t, tt.health, tt.enable, `[]`)
-			got, msg, err := CheckClusterStatusForRestart(c, tt.drain)
+			got, msg, err := CheckClusterStatusForRestart(c, tt.drain, 3)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -109,6 +112,34 @@ func TestPreparePodForDeleteSoleCopy(t *testing.T) {
 			}
 			if got != tt.want || (*put != "") != tt.want {
 				t.Errorf("got %v put=%q, want %v", got, *put, tt.want)
+			}
+		})
+	}
+}
+
+// With drain and 2 data nodes only system-index primaries are drained, so the
+// sole-copy check must still guard the rest.
+func TestPreparePodForDeleteDrainTwoNodes(t *testing.T) {
+	system := `[{"index":".opendistro_security","shard":"0","prirep":"p","state":"STARTED","node":"n1"}]`
+	tests := []struct {
+		name, shards string
+		want         bool
+	}{
+		{"sole copy blocks", `[{"index":"a","shard":"0","prirep":"p","state":"STARTED","node":"n0"},{"index":"a","shard":"0","prirep":"r","state":"UNASSIGNED","node":null}]`, false},
+		{"replica elsewhere proceeds", `[{"index":"a","shard":"0","prirep":"p","state":"STARTED","node":"n0"},{"index":"a","shard":"0","prirep":"r","state":"STARTED","node":"n1"}]`, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, tr, _ := mockClient(t, `{}`, "all", tt.shards)
+			tr.RegisterResponder(http.MethodGet, `=~/_cat/indices/`, httpmock.NewStringResponder(404, `{}`))
+			tr.RegisterResponder(http.MethodGet, `http://os.test:9200/_cat/indices/.opendistro_security`, httpmock.NewStringResponder(200, `[{"index":".opendistro_security"}]`))
+			tr.RegisterResponder(http.MethodGet, `http://os.test:9200/_cat/shards/.opendistro_security`, httpmock.NewStringResponder(200, system))
+			got, err := PreparePodForDelete(c, logr.Discard(), "n0", true, 2)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tt.want {
+				t.Errorf("got %v, want %v", got, tt.want)
 			}
 		})
 	}
