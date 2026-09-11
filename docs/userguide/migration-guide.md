@@ -181,10 +181,12 @@ Complete this step only after every legacy resource has migrated, its
 `opensearch.org` replacement has been verified, and the legacy resource has
 been deleted.
 
-> **Warning:** Helm manages the legacy CRDs as regular Helm resources.
-> Setting `legacyAPI.enabled=false` during an upgrade removes the
-> `opensearch.opster.io` CRDs. Kubernetes then deletes every remaining custom
-> resource stored under those CRDs across the cluster.
+> **Warning:** Setting `legacyAPI.enabled=false` during an upgrade removes
+> the `opensearch.opster.io` CRDs from the rendered release. By default the
+> CRDs are annotated with `helm.sh/resource-policy: keep` (`crds.keep=true`),
+> so Helm leaves them in place; if you have set `crds.keep=false`, Kubernetes
+> deletes every remaining custom resource stored under those CRDs across the
+> cluster as soon as they are removed.
 
 Check every legacy resource type and namespace before disabling support:
 
