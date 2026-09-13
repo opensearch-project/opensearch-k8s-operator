@@ -239,6 +239,24 @@ var _ = Describe("Upgrade Reconciler", func() {
 			Expect(cluster.Status.ComponentsStatus).To(BeEmpty())
 		})
 
+		It("should still sync status.version when the current status.version is not semver", func() {
+			image := "example.com/opensearch:custom"
+			cluster.Spec.General.Version = "3.0.0"
+			cluster.Spec.General.ImageSpec = &opensearchv1.ImageSpec{Image: &image}
+			cluster.Status.Version = "latest"
+
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cluster.Status.Version).To(Equal("3.0.0"))
+		})
+
 		It("should reject an invalid version transition instead of syncing status.version", func() {
 			image := "example.com/opensearch:custom"
 			cluster.Spec.General.Version = "1.0.0"
