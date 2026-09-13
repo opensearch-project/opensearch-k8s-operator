@@ -321,11 +321,14 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 	})
 	if err != nil {
 		lg.Error(err, "failed to update status")
-		return false, err
+		return true, err
 	}
 
+	// Requeue so this pass does not continue into the upgrade/restart reconcilers:
+	// the removed pod is still terminating and the cached StatefulSet may still show
+	// the old replica count, so their readiness gates cannot see the removal yet.
 	if !smartDecrease {
-		return false, err
+		return true, err
 	}
 
 	success, err := services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
@@ -334,7 +337,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to remove node exclude - Group-%s , node  %s", nodePoolGroupName, lastReplicaNodeName)
 	}
 
-	return false, err
+	return true, err
 }
 
 func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
