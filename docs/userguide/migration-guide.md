@@ -41,6 +41,8 @@ metadata:
     opensearch.org/migration-sync: "2024-01-15T10:35:00Z"  # Updated on each sync
 ```
 
+While the legacy status is being copied onto a freshly created new resource it also carries `opensearch.org/migration-status-pending: "true"`. The annotation is removed as soon as the status has been written; if it stays, the migration controller retries the status copy on every reconcile.
+
 ### Migration Controller Behavior
 
 The migration controller watches both old and new API groups and handles:
