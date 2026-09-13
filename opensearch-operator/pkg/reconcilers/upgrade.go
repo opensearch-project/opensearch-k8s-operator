@@ -49,6 +49,7 @@ type UpgradeReconciler struct {
 	reconcilerContext *ReconcilerContext
 	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
+	ReconcilerOptions
 }
 
 func NewUpgradeReconciler(
@@ -78,7 +79,19 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	// aborted/reverted upgrade cannot skip pools on the next upgrade (issue #1453).
 	if r.instance.Spec.General.Version == r.instance.Status.Version {
 		if r.instance.Status.Phase == opensearchv1.PhaseUpgrading || r.hasUpgraderStatuses() {
-			err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+			// PreparePodForDelete left allocation.enable=primaries and only a completed pool
+			// upgrade restores it; an aborted/reverted upgrade skips that, so restore it here
+			// before the Upgrader bookkeeping (our only trigger) is cleared (issue #1571).
+			osClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+			if err != nil {
+				r.logger.Error(err, "Could not create client for cluster to reactivate shard allocation")
+				return ctrl.Result{}, err
+			}
+			if err := services.ReactivateShardAllocation(osClient); err != nil {
+				r.logger.Error(err, "Could not reactivate shard allocation")
+				return ctrl.Result{}, err
+			}
+			err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 				instance.Status.Phase = opensearchv1.PhaseRunning
 				instance.Status.ComponentsStatus = helpers.ClearUpgraderComponentStatuses(instance.Status.ComponentsStatus)
 			})
@@ -190,6 +203,12 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			RequeueAfter: 30 * time.Second,
 		}, err
 	case upgradeStatusFinished:
+		// A pool removed from the spec mid-upgrade (cleanOrphanedUpgraderStatuses) never
+		// reaches its own ReactivateShardAllocation in doNodePoolUpgrade.
+		if err := services.ReactivateShardAllocation(r.osClient); err != nil {
+			r.logger.Error(err, "Could not reactivate shard allocation")
+			return ctrl.Result{}, err
+		}
 		// Cleanup status after successful upgrade
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.Version = instance.Spec.General.Version
