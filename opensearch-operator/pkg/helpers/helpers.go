@@ -772,7 +772,11 @@ func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 	return numExistingPods, nil
 }
 
-// Count the number of pods running and ready and not terminating for a given nodePool
+// Count the number of pods running and ready and not terminating for a given nodePool.
+// A terminating pod counts against the result: it is still a cluster member on its way
+// out, so a pool with one is not settled even when the ready count already matches
+// spec.replicas (e.g. right after the scaler lowered the StatefulSet). Otherwise a
+// rolling restart or upgrade could delete a second pod while the first is still leaving.
 func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
 	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
@@ -781,6 +785,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 	numReadyPods := 0
 	for _, pod := range pods {
 		if pod.DeletionTimestamp != nil {
+			numReadyPods--
 			continue
 		}
 		podReady := false
@@ -794,7 +799,7 @@ func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenS
 			numReadyPods++
 		}
 	}
-	return numReadyPods, nil
+	return max(numReadyPods, 0), nil
 }
 
 // ReadyReplicasForNodePool returns the number of ready replicas derived from the actual running pods.
