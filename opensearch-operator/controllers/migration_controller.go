@@ -38,16 +38,20 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	k8s "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 )
 
 const (
 	// Migration annotations
-	MigratedFromAnnotation             = "opensearch.org/migrated-from"
-	MigrationTimestampAnnotation       = "opensearch.org/migration-timestamp"
-	SourceUIDAnnotation                = "opensearch.org/source-uid"
-	MigrationSyncAnnotation            = "opensearch.org/migration-sync"
-	DeletedByNewResourceAnnotation     = "opensearch.org/deleted-by-new-resource"
+	MigratedFromAnnotation         = "opensearch.org/migrated-from"
+	MigrationTimestampAnnotation   = "opensearch.org/migration-timestamp"
+	SourceUIDAnnotation            = "opensearch.org/source-uid"
+	MigrationSyncAnnotation        = "opensearch.org/migration-sync"
+	DeletedByNewResourceAnnotation = "opensearch.org/deleted-by-new-resource"
+	// MigrationStatusPendingAnnotation marks a migrated twin whose legacy status
+	// has not been written yet (Create ignores the status subresource). It is
+	// removed once the restore lands, so a failed restore is retried on the next
+	// reconcile instead of being lost.
+	MigrationStatusPendingAnnotation   = "opensearch.org/migration-status-pending"
 	CertOwnershipTransferredAnnotation = "opensearch.org/cert-ownership-transferred"
 
 	// Finalizer for migration
@@ -805,6 +809,12 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 			return ctrl.Result{}, err
 		}
 
+		// A previous createGenericNewFromOld got the twin created but its status
+		// restore failed (e.g. cached Get lagging behind Create): finish it now.
+		if newResource.GetAnnotations()[MigrationStatusPendingAnnotation] == "true" {
+			return restoreGenericStatus[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, newResource)
+		}
+
 		// Sync old to new
 		return syncGenericOldToNew[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, newResource)
 	}
@@ -853,17 +863,14 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 	annotations[MigratedFromAnnotation] = "opensearch.opster.io/v1"
 	annotations[MigrationTimestampAnnotation] = time.Now().UTC().Format(time.RFC3339)
 	annotations[SourceUIDAnnotation] = string(oldResource.GetUID())
+	annotations[MigrationStatusPendingAnnotation] = "true"
 	newResource.SetAnnotations(annotations)
 
 	// Clear finalizers on new resource
 	newResource.SetFinalizers(nil)
 
-	// Save the old status before clearing it (we'll set it after creation)
-	// The status was already copied during JSON unmarshal, so get it from newResource
-	// Use reflection to get and save the status value
-	oldStatusValue := getStatusFieldValue(newResource)
-
-	// Clear status temporarily for creation (status can only be set after creation)
+	// Clear status for creation (the status subresource is ignored on Create);
+	// restoreGenericStatus writes it afterwards.
 	clearStatusField(newResource)
 
 	if err := c.Create(ctx, newResource); err != nil {
@@ -874,22 +881,46 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 		return ctrl.Result{}, err
 	}
 
-	// Copy status from old to new, but clear ManagedCluster so reconciler can set it to new cluster UID
-	if oldStatusValue != nil {
-		// Use UdateObjectStatus helper method for conflict handling
-		k8sClient := k8s.NewK8sClient(c, ctx)
-		statusToSet := oldStatusValue // Capture for closure
-		if err := k8sClient.UdateObjectStatus(newResource, func(instance client.Object) {
-			// Set the status back
-			setStatusFieldValue(instance, statusToSet)
-			// Clear ManagedCluster so reconciler can set it to new cluster UID
-			clearManagedClusterField(instance)
-		}); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update new resource status: %w", err)
-		}
+	return restoreGenericStatus[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, newResource)
+}
+
+// restoreGenericStatus copies the legacy status onto the migrated twin (with
+// ManagedCluster cleared so the reconciler re-binds it to the new cluster UID)
+// and then drops MigrationStatusPendingAnnotation. newResource must carry a
+// current resourceVersion (from Create or Get); no cached re-Get is done, so a
+// cache that lags behind Create cannot turn the restore into a NotFound. Any
+// failure leaves the annotation in place and the next reconcile retries.
+func restoreGenericStatus[OldType, NewType any, OldPtr interface {
+	*OldType
+	client.Object
+}, NewPtr interface {
+	*NewType
+	client.Object
+}](ctx context.Context, c client.Client, oldResource OldPtr, newResource NewPtr) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	converted := NewPtr(new(NewType))
+	oldBytes, err := json.Marshal(oldResource)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to marshal old resource: %w", err)
+	}
+	if err := json.Unmarshal(oldBytes, converted); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to unmarshal to new resource: %w", err)
+	}
+	setStatusFieldValue(newResource, getStatusFieldValue(converted))
+	clearManagedClusterField(newResource)
+	if err := c.Status().Update(ctx, newResource); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update new resource status: %w", err)
 	}
 
-	logger.Info("Created new API group resource with status", "name", req.Name, "namespace", req.Namespace)
+	annotations := newResource.GetAnnotations()
+	delete(annotations, MigrationStatusPendingAnnotation)
+	newResource.SetAnnotations(annotations)
+	if err := c.Update(ctx, newResource); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to clear status-pending annotation: %w", err)
+	}
+
+	logger.Info("Created new API group resource with status", "name", newResource.GetName(), "namespace", newResource.GetNamespace())
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
