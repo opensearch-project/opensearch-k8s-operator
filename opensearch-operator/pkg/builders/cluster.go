@@ -1685,6 +1685,30 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearc
 
 // ExpectedMasterNodeNames returns the pod names of all cluster-manager-eligible replicas.
 // Node names default to the pod hostname, so these match the names reported by _cat/nodes.
+// HasRetainedMasterPVC reports whether ordinal 0 of any cluster-manager pool already has a
+// data PVC (left behind by a previous incarnation of the same cluster, since the operator
+// never deletes node pool PVCs). Such a cluster re-forms from disk and ignores
+// cluster.initial_master_nodes, so a bootstrap pod would only start a second, unrelated
+// cluster that no node ever joins.
+// An existing-but-empty PVC (pre-provisioned, or a cluster that never formed) is
+// indistinguishable here; delete the pool PVCs to force a fresh bootstrap.
+func HasRetainedMasterPVC(ctx context.Context, k8sClient client.Client, cr *opensearchv1.OpenSearchCluster) bool {
+	for i := range cr.Spec.NodePools {
+		pool := &cr.Spec.NodePools[i]
+		if !helpers.HasManagerRole(pool) || (pool.Persistence != nil && pool.Persistence.PVC == nil) {
+			continue
+		}
+		pvc := &corev1.PersistentVolumeClaim{}
+		if err := k8sClient.Get(ctx, types.NamespacedName{
+			Name:      "data-" + StsName(cr, pool) + "-0",
+			Namespace: cr.Namespace,
+		}, pvc); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
 func ExpectedMasterNodeNames(cr *opensearchv1.OpenSearchCluster) []string {
 	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
 	var names []string

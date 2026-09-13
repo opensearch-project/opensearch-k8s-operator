@@ -258,6 +258,14 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context,
 		}
 		instance.Status.Phase = opensearchv1.PhaseRunning
 		instance.Status.ComponentsStatus = make([]opensearchv1.ComponentStatus, 0)
+		// A CR re-applied over the retained data PVCs of a previous incarnation re-forms that
+		// cluster from disk and must not get a bootstrap pod (#1573). Decide this once, before
+		// anything is created: once the StatefulSets exist their PVCs exist too, so the check
+		// cannot tell a retained cluster from a first bootstrap in progress.
+		if !instance.Status.Initialized && builders.HasRetainedMasterPVC(ctx, r.Client, instance) {
+			logger.Info("Existing node pool PVCs found, cluster will re-form from disk without a bootstrap pod")
+			instance.Status.Initialized = true
+		}
 		return r.Status().Update(ctx, instance)
 	})
 	if err != nil {
