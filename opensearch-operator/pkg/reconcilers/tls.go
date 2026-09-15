@@ -197,7 +197,7 @@ func (r *TLSReconciler) handleTransport() error {
 }
 
 func (r *TLSReconciler) handleAdminCertificate() (*ctrl.Result, error) {
-	clusterName := r.instance.Name
+	clusterName := builders.ClusterName(r.instance)
 
 	var res *ctrl.Result
 	var certDN string
@@ -335,8 +335,8 @@ func (r *TLSReconciler) adminSecretName() string {
 
 func (r *TLSReconciler) handleTransportGenerate() error {
 	namespace := r.instance.Namespace
-	clusterName := r.instance.Name
-	nodeSecretName := clusterName + "-transport-cert"
+	clusterName := builders.ClusterName(r.instance)
+	nodeSecretName := r.instance.Name + "-transport-cert"
 	config := r.instance.Spec.Security.Tls.Transport
 	generatePerNode := config.PerNode
 
@@ -526,7 +526,8 @@ func (r *TLSReconciler) generateBootstrapCertIfNeeded(
 	nodeSecret *corev1.Secret,
 ) error {
 	namespace := r.instance.Namespace
-	clusterName := r.instance.Name
+	crName := r.instance.Name
+	clusterName := builders.ClusterName(r.instance)
 
 	// Generate bootstrap pod cert
 	bootstrapPodName := builders.BootstrapPodName(r.instance)
@@ -536,15 +537,15 @@ func (r *TLSReconciler) generateBootstrapCertIfNeeded(
 	if !r.instance.Status.Initialized && (!bootstrapCertExists || !bootstrapKeyExists) {
 		dnsNames := []string{
 			bootstrapPodName,
-			clusterName,
+			crName,
 			builders.DiscoveryServiceName(r.instance),
-			fmt.Sprintf("%s.%s", bootstrapPodName, clusterName),
-			fmt.Sprintf("%s.%s", clusterName, namespace),
-			fmt.Sprintf("%s.%s.%s", bootstrapPodName, clusterName, namespace),
-			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-			fmt.Sprintf("%s.%s.%s.svc", bootstrapPodName, clusterName, namespace),
-			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
-			fmt.Sprintf("%s.%s.%s.svc.%s", bootstrapPodName, clusterName, namespace, helpers.ClusterDnsBase()),
+			fmt.Sprintf("%s.%s", bootstrapPodName, crName),
+			fmt.Sprintf("%s.%s", crName, namespace),
+			fmt.Sprintf("%s.%s.%s", bootstrapPodName, crName, namespace),
+			fmt.Sprintf("%s.%s.svc", crName, namespace),
+			fmt.Sprintf("%s.%s.%s.svc", bootstrapPodName, crName, namespace),
+			fmt.Sprintf("%s.%s.svc.%s", crName, namespace, helpers.ClusterDnsBase()),
+			fmt.Sprintf("%s.%s.%s.svc.%s", bootstrapPodName, crName, namespace, helpers.ClusterDnsBase()),
 		}
 		nodeCert, err := ca.CreateAndSignCertificate(bootstrapPodName, clusterName, dnsNames, r.resolveTransportCertDuration())
 		if err != nil {
@@ -564,7 +565,7 @@ func (r *TLSReconciler) generateNewCertIfNeeded(
 	cd certDescription,
 	existingCertData []byte,
 ) (tls.Cert, error) {
-	clusterName := r.instance.Name
+	clusterName := builders.ClusterName(r.instance)
 
 	if existingCertData != nil && !r.certShouldBeRenewed(ca, cd, existingCertData) {
 		return nil, nil
