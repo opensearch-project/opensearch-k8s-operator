@@ -17,6 +17,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.name` | string | `""` | cluster name, by default release name is used |
 | `cluster.annotations` | object | `{}` | cluster annotations |
 | `cluster.labels` | object | `{}` | cluster labels |
+| `cluster.general.clusterName` | string | `""` | OpenSearch cluster.name setting. Defaults to the CR name (which defaults to the Helm release name) if not set. WARNING: Do not change on a running cluster — this will form a new, empty cluster. |
 | `cluster.general.additionalConfig` | object | `{}` | Extra items to add to the opensearch.yml |
 | `cluster.general.additionalVolumes` | list | `[]` | Additional volumes to mount to all pods in the cluster. Supported volume types configMap, emptyDir, secret (with default Kubernetes configuration schema) |
 | `cluster.general.drainDataNodes` | bool | `true` | Controls whether to drain data notes on rolling restart operations |

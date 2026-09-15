@@ -55,6 +55,8 @@ type GeneralConfig struct {
 	Version        string `json:"version,omitempty"`
 	ServiceAccount string `json:"serviceAccount,omitempty"`
 	ServiceName    string `json:"serviceName"`
+	// ClusterName sets the OpenSearch cluster.name setting. Defaults to the CR name if not set.
+	ClusterName string `json:"clusterName,omitempty"`
 	//+kubebuilder:default=true
 	SetVMMaxMapCount *bool   `json:"setVMMaxMapCount,omitempty"`
 	DefaultRepo      *string `json:"defaultRepo,omitempty"`

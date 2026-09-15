@@ -740,18 +740,18 @@ func NewSTSForNodePool(
 									Name:  "discovery.seed_hosts",
 									Value: DiscoveryServiceName(cr),
 								},
-								{
-									Name:  "cluster.name",
-									Value: cr.Name,
-								},
-								{
-									Name:  "network.bind_host",
-									Value: "0.0.0.0",
-								},
-								{
-									// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-									Name:      "network.publish_host",
-									ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
+							{
+								Name:  "cluster.name",
+								Value: ClusterName(cr),
+							},
+							{
+								Name:  "network.bind_host",
+								Value: "0.0.0.0",
+							},
+							{
+								// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
+								Name:      "network.publish_host",
+								ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
 								},
 								{
 									Name:  "OPENSEARCH_JAVA_OPTS",
@@ -1143,18 +1143,18 @@ func NewBootstrapPod(
 			Name:  "discovery.seed_hosts",
 			Value: DiscoveryServiceName(cr),
 		},
-		{
-			Name:  "cluster.name",
-			Value: cr.Name,
-		},
-		{
-			Name:  "network.bind_host",
-			Value: "0.0.0.0",
-		},
-		{
-			// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-			Name:      "network.publish_host",
-			ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
+	{
+		Name:  "cluster.name",
+		Value: ClusterName(cr),
+	},
+	{
+		Name:  "network.bind_host",
+		Value: "0.0.0.0",
+	},
+	{
+		// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
+		Name:      "network.publish_host",
+		ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
 		},
 		{
 			Name:  "OPENSEARCH_JAVA_OPTS",
@@ -1472,6 +1472,15 @@ func DnsOfService(cr *opensearchv1.OpenSearchCluster) string {
 
 func StsName(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) string {
 	return cr.Name + "-" + nodePool.Component
+}
+
+// ClusterName returns the OpenSearch cluster.name setting.
+// If spec.general.clusterName is set, it is used; otherwise it falls back to cr.Name.
+func ClusterName(cr *opensearchv1.OpenSearchCluster) string {
+	if cr.Spec.General.ClusterName != "" {
+		return cr.Spec.General.ClusterName
+	}
+	return cr.Name
 }
 
 func DiscoveryServiceName(cr *opensearchv1.OpenSearchCluster) string {

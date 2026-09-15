@@ -225,9 +225,41 @@ nodePools:
 
 Using `spec.general.additionalConfig` you can add settings that will be applied to all nodes in the cluster. The settings are added to a shared configmap that is mounted to all node pools. If you need nodepool-specific configuration, you can use `nodePools[].additionalConfig` which will be merged with `spec.general.additionalConfig` for that specific nodepool (nodepool settings override general settings). When a nodepool has `additionalConfig` specified, it will get its own configmap with the merged configuration.
 
-The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`.
+The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`. To customize `cluster.name`, use the dedicated `spec.general.clusterName` field instead (see [Custom cluster name](#custom-cluster-name) below).
 
 Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If want to avoid that please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
+
+### Custom cluster name
+
+By default the Operator sets the OpenSearch `cluster.name` to the CR's `.metadata.name`. This means that two clusters in different namespaces with the same CR name (e.g. `opensearch`) will share the same internal cluster name. In most single-cluster setups this is perfectly fine and no action is needed.
+
+If you need a distinct `cluster.name` — for example when running multiple clusters that must be distinguishable by name, or when federating metrics across namespaces — you can set `spec.general.clusterName`:
+
+```yaml
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: opensearch          # Kubernetes object prefix stays "opensearch-*"
+  namespace: team-a
+spec:
+  general:
+    clusterName: team-a-logs # OpenSearch cluster.name becomes "team-a-logs"
+    serviceName: opensearch
+    version: "3"
+```
+
+When `clusterName` is omitted or empty the Operator falls back to the CR name, preserving backward compatibility.
+
+Using Helm:
+
+```yaml
+cluster:
+  general:
+    clusterName: "team-a-logs"
+```
+
+> **Warning — do not change `clusterName` on a running cluster.**
+> Changing `cluster.name` on an existing cluster causes OpenSearch to treat the nodes as members of a **new, empty cluster**. Existing data and cluster state will be inaccessible. Only set this field during initial cluster creation, or be prepared to perform a full data migration. This setting is intended for special use-cases; most users do not need to set it.
 
 ### Per-node pool image override
 
