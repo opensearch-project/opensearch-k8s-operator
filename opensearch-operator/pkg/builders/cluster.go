@@ -740,18 +740,18 @@ func NewSTSForNodePool(
 									Name:  "discovery.seed_hosts",
 									Value: DiscoveryServiceName(cr),
 								},
-							{
-								Name:  "cluster.name",
-								Value: ClusterName(cr),
-							},
-							{
-								Name:  "network.bind_host",
-								Value: "0.0.0.0",
-							},
-							{
-								// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-								Name:      "network.publish_host",
-								ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
+								{
+									Name:  "cluster.name",
+									Value: ClusterName(cr),
+								},
+								{
+									Name:  "network.bind_host",
+									Value: "0.0.0.0",
+								},
+								{
+									// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
+									Name:      "network.publish_host",
+									ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
 								},
 								{
 									Name:  "OPENSEARCH_JAVA_OPTS",
@@ -1143,18 +1143,18 @@ func NewBootstrapPod(
 			Name:  "discovery.seed_hosts",
 			Value: DiscoveryServiceName(cr),
 		},
-	{
-		Name:  "cluster.name",
-		Value: ClusterName(cr),
-	},
-	{
-		Name:  "network.bind_host",
-		Value: "0.0.0.0",
-	},
-	{
-		// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-		Name:      "network.publish_host",
-		ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
+		{
+			Name:  "cluster.name",
+			Value: ClusterName(cr),
+		},
+		{
+			Name:  "network.bind_host",
+			Value: "0.0.0.0",
+		},
+		{
+			// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
+			Name:      "network.publish_host",
+			ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
 		},
 		{
 			Name:  "OPENSEARCH_JAVA_OPTS",
