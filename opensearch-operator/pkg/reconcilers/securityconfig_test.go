@@ -798,7 +798,7 @@ done;`
 			dashboardsSecretName := clusterName + "-dashboards-password"
 			mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: dashboardsSecretName, Namespace: clusterName},
-				Data:        map[string][]byte{"username": []byte(username)},
+				Data:       map[string][]byte{"username": []byte(username)},
 			}, nil)
 		}
 
