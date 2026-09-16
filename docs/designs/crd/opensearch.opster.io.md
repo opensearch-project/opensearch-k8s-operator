@@ -500,6 +500,7 @@ _Appears in:_
 | `version` _string_ |  |  |  |
 | `serviceAccount` _string_ |  |  |  |
 | `serviceName` _string_ |  |  |  |
+| `clusterName` _string_ | ClusterName sets the OpenSearch cluster.name setting. Defaults to the CR name if not set. |  |  |
 | `setVMMaxMapCount` _boolean_ |  | true |  |
 | `defaultRepo` _string_ |  |  |  |
 | `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
