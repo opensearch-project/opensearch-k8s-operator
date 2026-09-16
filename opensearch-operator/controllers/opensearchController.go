@@ -262,9 +262,15 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context,
 		// cluster from disk and must not get a bootstrap pod (#1573). Decide this once, before
 		// anything is created: once the StatefulSets exist their PVCs exist too, so the check
 		// cannot tell a retained cluster from a first bootstrap in progress.
-		if !instance.Status.Initialized && builders.HasRetainedMasterPVC(ctx, r.Client, instance) {
-			logger.Info("Existing node pool PVCs found, cluster will re-form from disk without a bootstrap pod")
-			instance.Status.Initialized = true
+		if !instance.Status.Initialized {
+			hasRetained, err := builders.HasRetainedMasterPVC(ctx, r.Client, instance)
+			if err != nil {
+				return err
+			}
+			if hasRetained {
+				logger.Info("Existing node pool PVCs found, cluster will re-form from disk without a bootstrap pod")
+				instance.Status.Initialized = true
+			}
 		}
 		return r.Status().Update(ctx, instance)
 	})
