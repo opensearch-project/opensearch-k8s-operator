@@ -442,11 +442,19 @@ done;`
 			Expect(*generatedConfigSecret).ToNot(BeNil())
 			checksumval, err := checksum((*generatedConfigSecret).Data)
 			Expect(err).ToNot(HaveOccurred())
+			userChecksumVal, err := checksum(map[string][]byte{
+				"config.yml":         []byte(configYAML),
+				"internal_users.yml": internalUsersYAML("", ""),
+			})
+			Expect(err).ToNot(HaveOccurred())
 			return batchv1.Job{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        "securityconfig-securityconfig-update",
-					Namespace:   clusterName,
-					Annotations: map[string]string{checksumAnnotation: checksumval},
+					Name:      "securityconfig-securityconfig-update",
+					Namespace: clusterName,
+					Annotations: map[string]string{
+						checksumAnnotation:     checksumval,
+						userChecksumAnnotation: userChecksumVal,
+					},
 				},
 				Status: status,
 			}
@@ -508,7 +516,7 @@ done;`
 	})
 
 	When("Adopting a cluster previously managed by operator <=2.8.0", func() {
-		It("should treat the legacy job as current instead of destructively re-applying the config", func() {
+		It("should treat the legacy job as current and migrate checksum annotations without re-applying", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
 			adminCredSecret := newAdminCredentialsSecret(clusterName)
@@ -556,7 +564,7 @@ done;`
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).
 				Return(corev1.Secret{}, NotFoundError()).Once()
-			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme).Maybe()
 			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
 
 			var generatedConfigSecret *corev1.Secret
@@ -586,14 +594,122 @@ done;`
 					Status: batchv1.JobStatus{Succeeded: 1},
 				}, nil)
 
+			var updatedJob *batchv1.Job
+			mockClient.EXPECT().UpdateJob(mock.AnythingOfType("*v1.Job")).
+				RunAndReturn(func(job *batchv1.Job) error {
+					updatedJob = job.DeepCopy()
+					return nil
+				})
+
 			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, &spec)
 			result, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result.IsZero()).To(BeTrue())
 
+			Expect(generatedConfigSecret).ToNot(BeNil())
+			generatedChecksum, err := checksum(generatedConfigSecret.Data)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedJob).ToNot(BeNil())
+			Expect(updatedJob.Annotations[checksumAnnotation]).To(Equal(generatedChecksum))
+			Expect(updatedJob.Annotations[userChecksumAnnotation]).To(Equal(legacyChecksum))
+
 			mockClient.AssertNotCalled(GinkgoT(), "DeleteJob", mock.Anything)
 			mockClient.AssertNotCalled(GinkgoT(), "CreateJob", mock.Anything)
+		})
+
+		It("should recreate after annotation migration when only the generated checksum later changes", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			adminCredSecret := newAdminCredentialsSecret(clusterName)
+			securityConfigSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data: map[string][]byte{
+					"config.yml":         []byte(configYAML),
+					"internal_users.yml": internalUsersYAML("", ""),
+				},
+			}
+			userChecksumVal, err := checksum(securityConfigSecret.Data)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Initialized:          true,
+					ContextSecretCreated: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			// Job after the adoption migration step: both annotations present, but the generated
+			// checksum is now stale (e.g. admin password rotated after adoption).
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				Return(batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "securityconfig-securityconfig-update",
+						Namespace: clusterName,
+						Annotations: map[string]string{
+							checksumAnnotation:     "stale-generated-checksum-after-adoption",
+							userChecksumAnnotation: userChecksumVal,
+						},
+					},
+					Status: batchv1.JobStatus{Succeeded: 1},
+				}, nil)
+			mockClient.EXPECT().DeleteJob(mock.AnythingOfType("*v1.Job")).Return(nil)
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, &spec)
+			_, err = underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(createdJob).ToNot(BeNil())
+			Expect(createdJob.Annotations[userChecksumAnnotation]).To(Equal(userChecksumVal))
+			Expect(createdJob.Annotations[checksumAnnotation]).ToNot(Equal("stale-generated-checksum-after-adoption"))
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateJob", mock.Anything)
 		})
 	})
 

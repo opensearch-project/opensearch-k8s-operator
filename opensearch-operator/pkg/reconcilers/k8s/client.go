@@ -29,6 +29,7 @@ type K8sClient interface {
 	UpdateSecret(secret *corev1.Secret) error
 	GetJob(name, namespace string) (batchv1.Job, error)
 	CreateJob(job *batchv1.Job) (*ctrl.Result, error)
+	UpdateJob(job *batchv1.Job) error
 	DeleteJob(job *batchv1.Job) error
 	GetConfigMap(name, namespace string) (corev1.ConfigMap, error)
 	CreateConfigMap(cm *corev1.ConfigMap) (*ctrl.Result, error)
@@ -115,6 +116,10 @@ func (c K8sClientImpl) DeleteJob(job *batchv1.Job) error {
 
 func (c K8sClientImpl) CreateJob(job *batchv1.Job) (*ctrl.Result, error) {
 	return c.ReconcileResource(job, reconciler.StatePresent)
+}
+
+func (c K8sClientImpl) UpdateJob(job *batchv1.Job) error {
+	return c.Update(c.ctx, job)
 }
 
 func (c K8sClientImpl) GetConfigMap(name, namespace string) (corev1.ConfigMap, error) {

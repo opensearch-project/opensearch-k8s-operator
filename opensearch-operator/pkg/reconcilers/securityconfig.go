@@ -250,6 +250,12 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 				return ctrl.Result{}, handleErr
 			}
 			if done {
+				// Legacy (<=2.8.0) and 2.8.1 jobs only carry securityconfig/checksum. Stamp both
+				// annotations onto the existing job without re-running securityadmin.sh so later
+				// generated-only changes (e.g. admin password rotation) are detected correctly.
+				if migrateErr := r.ensureSecurityConfigJobChecksumAnnotations(&job, checksumval, userChecksumVal); migrateErr != nil {
+					return ctrl.Result{}, migrateErr
+				}
 				return result, nil
 			}
 			// Failed job past backoff window: delete and recreate below.
@@ -393,6 +399,27 @@ func (r *SecurityconfigReconciler) userSecurityConfigChecksum() (string, error) 
 		return "", err
 	}
 	return checksum(userSecret.Data)
+}
+
+// ensureSecurityConfigJobChecksumAnnotations updates a current job's checksum annotations in
+// place when they are missing or still use the <=2.8.0 single-annotation scheme. This avoids a
+// destructive securityadmin re-apply while ensuring future reconciles compare against the
+// generated checksum rather than the legacy user-secret value stored in checksumAnnotation.
+func (r *SecurityconfigReconciler) ensureSecurityConfigJobChecksumAnnotations(job *batchv1.Job, checksumval, userChecksumVal string) error {
+	if job.Annotations == nil {
+		job.Annotations = map[string]string{}
+	}
+	_, userExists := job.Annotations[userChecksumAnnotation]
+	if userExists &&
+		job.Annotations[checksumAnnotation] == checksumval &&
+		job.Annotations[userChecksumAnnotation] == userChecksumVal {
+		return nil
+	}
+
+	r.logger.Info("Migrating securityconfig job checksum annotations to the dual-checksum scheme")
+	job.Annotations[checksumAnnotation] = checksumval
+	job.Annotations[userChecksumAnnotation] = userChecksumVal
+	return r.client.UpdateJob(job)
 }
 
 func (r *SecurityconfigReconciler) determineAdminSecret() string {
