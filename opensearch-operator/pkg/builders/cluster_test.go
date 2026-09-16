@@ -2015,4 +2015,90 @@ var _ = Describe("Builders", func() {
 			Expect(crb.Subjects[0].Namespace).To(Equal("myns"))
 		})
 	})
+
+	When("configuring a custom clusterName", func() {
+		findEnv := func(envs []corev1.EnvVar, name string) *corev1.EnvVar {
+			for i := range envs {
+				if envs[i].Name == name {
+					return &envs[i]
+				}
+			}
+			return nil
+		}
+
+		It("should default ClusterName to metadata.name when clusterName is unset", func() {
+			cr := ClusterDescWithVersion("2.2.1")
+			cr.Name = "my-cluster"
+			Expect(ClusterName(&cr)).To(Equal("my-cluster"))
+		})
+
+		It("should return spec.general.clusterName when set", func() {
+			cr := ClusterDescWithVersion("2.2.1")
+			cr.Name = "my-cluster"
+			cr.Spec.General.ClusterName = "custom-name"
+			Expect(ClusterName(&cr)).To(Equal("custom-name"))
+		})
+
+		It("should set cluster.name env var to metadata.name in STS when clusterName is unset", func() {
+			cr := ClusterDescWithVersion("2.2.1")
+			cr.Name = "my-cluster"
+			cr.Namespace = "default"
+			cr.Spec.NodePools = []opensearchv1.NodePool{{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}}
+			sts := NewSTSForNodePool("foobar", &cr, cr.Spec.NodePools[0], "foobar", nil, nil)
+			env := findEnv(sts.Spec.Template.Spec.Containers[0].Env, "cluster.name")
+			Expect(env).NotTo(BeNil())
+			Expect(env.Value).To(Equal("my-cluster"))
+		})
+
+		It("should set cluster.name env var to clusterName in STS when set", func() {
+			cr := ClusterDescWithVersion("2.2.1")
+			cr.Name = "my-cluster"
+			cr.Namespace = "default"
+			cr.Spec.General.ClusterName = "custom-name"
+			cr.Spec.NodePools = []opensearchv1.NodePool{{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}}
+			sts := NewSTSForNodePool("foobar", &cr, cr.Spec.NodePools[0], "foobar", nil, nil)
+			env := findEnv(sts.Spec.Template.Spec.Containers[0].Env, "cluster.name")
+			Expect(env).NotTo(BeNil())
+			Expect(env.Value).To(Equal("custom-name"))
+		})
+
+		It("should set cluster.name env var to metadata.name in bootstrap pod when clusterName is unset", func() {
+			cr := ClusterDescWithVersion("2.2.1")
+			cr.Name = "my-cluster"
+			cr.Namespace = "default"
+			cr.Spec.NodePools = []opensearchv1.NodePool{{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}}
+			pod := NewBootstrapPod(&cr, nil, nil)
+			env := findEnv(pod.Spec.Containers[0].Env, "cluster.name")
+			Expect(env).NotTo(BeNil())
+			Expect(env.Value).To(Equal("my-cluster"))
+		})
+
+		It("should set cluster.name env var to clusterName in bootstrap pod when set", func() {
+			cr := ClusterDescWithVersion("2.2.1")
+			cr.Name = "my-cluster"
+			cr.Namespace = "default"
+			cr.Spec.General.ClusterName = "custom-name"
+			cr.Spec.NodePools = []opensearchv1.NodePool{{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}}
+			pod := NewBootstrapPod(&cr, nil, nil)
+			env := findEnv(pod.Spec.Containers[0].Env, "cluster.name")
+			Expect(env).NotTo(BeNil())
+			Expect(env.Value).To(Equal("custom-name"))
+		})
+	})
 })
