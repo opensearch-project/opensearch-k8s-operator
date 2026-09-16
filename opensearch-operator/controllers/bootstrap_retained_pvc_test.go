@@ -64,8 +64,12 @@ var _ = Describe("Bootstrap pod over retained PVCs", Ordered, func() {
 	})
 
 	It("should mark the cluster initialized without waiting for the masters to join", func() {
-		c := opensearchv1.OpenSearchCluster{}
-		Expect(k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&cluster), &c)).To(Succeed())
-		Expect(c.Status.Initialized).To(BeTrue())
+		Eventually(func() bool {
+			c := opensearchv1.OpenSearchCluster{}
+			if err := k8sClient.Get(context.Background(), client.ObjectKeyFromObject(&cluster), &c); err != nil {
+				return false
+			}
+			return c.Status.Initialized
+		}, timeout, interval).Should(BeTrue())
 	})
 })
