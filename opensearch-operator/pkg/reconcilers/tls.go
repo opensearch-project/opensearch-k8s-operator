@@ -303,7 +303,7 @@ func (r *TLSReconciler) createAdminSecret(ca tls.Cert) (*ctrl.Result, error) {
 		return nil, nil
 	}
 
-	adminCert, err := ca.CreateAndSignCertificate("admin", r.instance.Name, nil, r.resolveTransportCertDuration())
+	adminCert, err := ca.CreateAndSignCertificate("admin", builders.ClusterName(r.instance), nil, r.resolveTransportCertDuration())
 	if err != nil {
 		r.logger.Error(err, "Failed to create admin certificate", "interface", "transport")
 		r.recorder.AnnotatedEventf(
@@ -335,8 +335,9 @@ func (r *TLSReconciler) adminSecretName() string {
 
 func (r *TLSReconciler) handleTransportGenerate() error {
 	namespace := r.instance.Namespace
+	crName := r.instance.Name
 	clusterName := builders.ClusterName(r.instance)
-	nodeSecretName := r.instance.Name + "-transport-cert"
+	nodeSecretName := crName + "-transport-cert"
 	config := r.instance.Spec.Security.Tls.Transport
 	generatePerNode := config.PerNode
 
@@ -373,12 +374,12 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 			certDescription{
 				loggingName: "global",
 				certContext: CertContextTransport,
-				commonName:  clusterName,
+				commonName:  crName,
 				dnsNames: []string{
-					clusterName,
-					fmt.Sprintf("%s.%s", clusterName, namespace),
-					fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-					fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
+					crName,
+					fmt.Sprintf("%s.%s", crName, namespace),
+					fmt.Sprintf("%s.%s.svc", crName, namespace),
+					fmt.Sprintf("%s.%s.svc.%s", crName, namespace, helpers.ClusterDnsBase()),
 				},
 			},
 			nodeSecret.Data[corev1.TLSCertKey],
@@ -415,7 +416,7 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 		// Generate node cert and put it into secret
 		for _, nodePool := range r.instance.Spec.NodePools {
 			for i := 0; i < int(nodePool.Replicas); i++ {
-				podName := fmt.Sprintf("%s-%s-%d", clusterName, nodePool.Component, i)
+				podName := fmt.Sprintf("%s-%s-%d", crName, nodePool.Component, i)
 				certName := fmt.Sprintf("%s.crt", podName)
 				keyName := fmt.Sprintf("%s.key", podName)
 				secretMutex.Lock()
@@ -429,15 +430,15 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 				}
 				dnsNames := []string{
 					podName,
-					clusterName,
+					crName,
 					builders.DiscoveryServiceName(r.instance),
-					fmt.Sprintf("%s.%s", podName, clusterName),
-					fmt.Sprintf("%s.%s", clusterName, namespace),
-					fmt.Sprintf("%s.%s.%s", podName, clusterName, namespace),
-					fmt.Sprintf("%s.%s.svc", clusterName, namespace),
-					fmt.Sprintf("%s.%s.%s.svc", podName, clusterName, namespace),
-					fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
-					fmt.Sprintf("%s.%s.%s.svc.%s", podName, clusterName, namespace,
+					fmt.Sprintf("%s.%s", podName, crName),
+					fmt.Sprintf("%s.%s", crName, namespace),
+					fmt.Sprintf("%s.%s.%s", podName, crName, namespace),
+					fmt.Sprintf("%s.%s.svc", crName, namespace),
+					fmt.Sprintf("%s.%s.%s.svc", podName, crName, namespace),
+					fmt.Sprintf("%s.%s.svc.%s", crName, namespace, helpers.ClusterDnsBase()),
+					fmt.Sprintf("%s.%s.%s.svc.%s", podName, crName, namespace,
 						helpers.ClusterDnsBase()),
 				}
 
@@ -505,12 +506,12 @@ func (r *TLSReconciler) handleTransportGenerate() error {
 
 	// Extend opensearch.yml
 	if generatePerNode {
-		r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"CN=%s-*,OU=%s\"]", clusterName, clusterName))
+		r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"CN=%s-*,OU=%s\"]", crName, clusterName))
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", "tls-transport/${HOSTNAME}.crt")
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", "tls-transport/${HOSTNAME}.key")
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "true")
 	} else {
-		r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"CN=%s,OU=%s\"]", clusterName, clusterName))
+		r.reconcilerContext.AddConfig("plugins.security.nodes_dn", fmt.Sprintf("[\"CN=%s,OU=%s\"]", crName, clusterName))
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemcert_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSCertKey))
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.pemkey_filepath", fmt.Sprintf("tls-transport/%s", corev1.TLSPrivateKeyKey))
 		r.reconcilerContext.AddConfig("plugins.security.ssl.transport.enforce_hostname_verification", "false")
