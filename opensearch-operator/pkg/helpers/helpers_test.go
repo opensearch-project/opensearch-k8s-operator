@@ -1,6 +1,8 @@
 package helpers
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -1167,4 +1169,22 @@ var _ = Describe("CountRunningPodsForNodePool", func() {
 		Expect(count).To(Equal(1))
 	})
 
+	It("counts a terminating pod against the ready pods", func() {
+		// After a scale-down the removed pod is still a cluster member while it
+		// terminates, so two ready pods plus one terminating pod must not look like
+		// a settled pool of two (issue #1572).
+		terminating := readyPod("cluster-master-2")
+		terminating.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().ListPods(mock.Anything).Return(corev1.PodList{
+			Items: []corev1.Pod{readyPod("cluster-master-0"), readyPod("cluster-master-1"), terminating},
+		}, nil)
+
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		}
+		count, err := CountRunningPodsForNodePool(mockClient, cr, &opensearchv1.NodePool{Component: "master"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(Equal(1))
+	})
 })

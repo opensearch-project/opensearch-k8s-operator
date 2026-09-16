@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -91,6 +92,8 @@ var _ = Describe("Upgrade Reconciler", func() {
 
 	Describe("stale Upgrader status cleanup", func() {
 		It("should clear Upgrader entries when versions are in sync", func() {
+			cluster.Spec.General.ServiceName = "test-cluster"
+			cluster.Spec.General.HttpPort = 9200
 			cluster.Status.Phase = opensearchv1.PhaseUpgrading
 			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
 				{Component: "Upgrader", Description: "data", Status: "Upgraded"},
@@ -98,6 +101,11 @@ var _ = Describe("Upgrade Reconciler", func() {
 				{Component: "RollingRestart", Status: "Finished"},
 			}
 
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, cluster)
+			registerClusterSettingsResponders(transport)
+			mockScalerAdminSecret(mockClient, cluster.Name, cluster.Namespace)
 			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
 				Run(func(args mock.Arguments) {
 					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
@@ -105,6 +113,7 @@ var _ = Describe("Upgrade Reconciler", func() {
 				}).Return(nil).Once()
 
 			underTest := newUpgradeReconciler(mockClient, cluster)
+			underTest.osClientTransport = transport
 			result, err := underTest.Reconcile()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
@@ -112,6 +121,38 @@ var _ = Describe("Upgrade Reconciler", func() {
 			Expect(cluster.Status.ComponentsStatus).To(ConsistOf(
 				opensearchv1.ComponentStatus{Component: "RollingRestart", Status: "Finished"},
 			))
+		})
+
+		It("should re-enable shard allocation when cleaning up after a reverted upgrade", func() {
+			// PreparePodForDelete sets allocation.enable=primaries before each pod delete.
+			// Reverting spec.general.version mid-upgrade lands here with that setting still
+			// in place; nothing else restores it, so replicas stay UNASSIGNED forever.
+			cluster.Spec.General.ServiceName = "test-cluster"
+			cluster.Spec.General.HttpPort = 9200
+			cluster.Status.Phase = opensearchv1.PhaseUpgrading
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+				{Component: "Upgrader", Description: "data", Status: "Upgrading"},
+			}
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, cluster)
+			reactivatedTo := registerAllocationEnableSpy(transport)
+
+			mockScalerAdminSecret(mockClient, cluster.Name, cluster.Namespace)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			underTest.osClientTransport = transport
+			_, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cluster.Status.ComponentsStatus).To(BeEmpty())
+			Expect(*reactivatedTo).To(Equal("all"), "allocation.enable must be restored to all after an aborted upgrade")
 		})
 
 		It("should reset pool progress when the upgrade target changes", func() {
