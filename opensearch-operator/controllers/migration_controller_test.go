@@ -992,7 +992,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			twin := &opensearchv1.OpensearchComponentTemplate{}
 			Expect(base.Get(ctx, req.NamespacedName, twin)).To(Succeed())
 			Expect(twin.Annotations).To(HaveKeyWithValue(MigratedFromAnnotation, "opensearch.opster.io/v1"))
-			// TMP 			Expect(twin.Annotations).NotTo(HaveKey(MigrationStatusPendingAnnotation))
+			Expect(twin.Annotations).NotTo(HaveKey(MigrationStatusPendingAnnotation))
 			Expect(twin.Status.State).To(Equal(opensearchv1.OpensearchComponentTemplateCreated))
 			Expect(twin.Status.ExistingComponentTemplate).To(Equal(ptr.To(false)))
 			Expect(twin.Status.ManagedCluster).To(BeNil())

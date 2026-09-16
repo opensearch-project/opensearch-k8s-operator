@@ -754,6 +754,23 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 			return ctrl.Result{}, nil
 		}
 
+		// Finish a pending legacy status restore before adding the migration
+		// finalizer. Returning early for the finalizer while status is still
+		// empty widens the window where the twin's reconciler probes OpenSearch
+		// and parks the object in IGNORED.
+		if newResource.GetAnnotations()[MigrationStatusPendingAnnotation] == "true" {
+			oldForRestore := OldPtr(new(OldType))
+			if getErr := c.Get(ctx, req.NamespacedName, oldForRestore); getErr != nil {
+				if !errors.IsNotFound(getErr) {
+					return ctrl.Result{}, getErr
+				}
+				// Legacy twin is gone; cannot restore. Fall through so finalizer
+				// / cleanup logic can still run.
+			} else {
+				return restoreGenericStatus[OldType, NewType, OldPtr, NewPtr](ctx, c, oldForRestore, newResource)
+			}
+		}
+
 		// Add migration finalizer to new resource, but only if there is actually a
 		// legacy twin to migrate/clean up. Otherwise every object on a fresh
 		// install (no opensearch.opster.io twins at all) would pick up a
