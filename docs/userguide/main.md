@@ -6,6 +6,23 @@ This guide is intended for users of the Opensearch Operator. If you want to cont
 
 ## Installation
 
+### Prerequisites
+
+The chart installs a validation webhook by default (`webhook.enabled=true`) and issues its serving certificate with [cert-manager](https://cert-manager.io/) (`webhook.certManager.enabled=true`), so cert-manager 1.0 or later has to be present in the cluster before the Operator is installed. See the [cert-manager installation docs](https://cert-manager.io/docs/installation/helm/) for the current options:
+
+```bash
+helm repo add jetstack https://charts.jetstack.io
+helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --set crds.enabled=true
+```
+
+Without it, `helm install` fails while rendering the `Issuer` and `Certificate` resources of the webhook:
+
+```
+Error: INSTALLATION FAILED: unable to build kubernetes objects from release manifest: ... no matches for kind "Certificate" in version "cert-manager.io/v1" ... ensure CRDs are installed first
+```
+
+If you would rather not run cert-manager, the [Webhooks guide](./webhooks.md) describes the two alternatives: set `webhook.certManager.enabled=false` and provide the serving certificate yourself through `webhook.secretName`, or turn the webhook off entirely with `webhook.enabled=false`.
+
 The Operator can be easily installed using Helm:
 
 1. Add the helm repo: `helm repo add opensearch-operator https://opensearch-project.github.io/opensearch-k8s-operator/`
