@@ -111,6 +111,13 @@ manager:
   #   opensearchcluster: 4
   maxConcurrentReconcilesPerController: {}
 
+  # Leader election tuning. Increase these if reconciles (rolling restarts, upgrades) are
+  # being interrupted by "leader election lost" caused by transient API server latency.
+  # leaderElectionRenewDeadline must be less than leaderElectionLeaseDuration.
+  leaderElectionLeaseDuration: 60s
+  leaderElectionRenewDeadline: 30s
+  leaderElectionRetryPeriod: 5s
+
   # Configure extra environment variables for the operator. You can also pull them from secrets or configmaps
   extraEnv: []
   #  - name: MY_ENV
