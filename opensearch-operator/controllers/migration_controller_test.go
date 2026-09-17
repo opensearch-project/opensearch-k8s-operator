@@ -30,7 +30,9 @@ import (
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
@@ -913,6 +915,87 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			updatedOld := &opsterv1.OpensearchUser{}
 			err = fakeClient.Get(ctx, req.NamespacedName, updatedOld)
 			Expect(errors.IsNotFound(err)).To(BeTrue())
+		})
+	})
+
+	Describe("Generic Migration Reconciler - status restore", func() {
+		It("should restore the legacy status even when the cached Get lags behind Create", func() {
+			// The twin is created with an empty status and the legacy status is
+			// written afterwards through a Get + Status().Update. The Get goes
+			// through the informer cache, which may not contain the object yet
+			// right after Create (seen in the field as "failed to update new
+			// resource status: ... not found"). That restore must be retried on
+			// the next reconcile instead of being lost forever, otherwise the
+			// twin's own reconciler probes OpenSearch, finds the object the
+			// legacy CR created and parks the twin in IGNORED (#1543 residual).
+			oldTemplate := &opsterv1.OpensearchComponentTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Status: opsterv1.OpensearchComponentTemplateStatus{
+					State:                     opsterv1.OpensearchComponentTemplateCreated,
+					ExistingComponentTemplate: ptr.To(false),
+					ManagedCluster:            ptr.To(types.UID("old-cluster-uid")),
+				},
+			}
+			base := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&opensearchv1.OpensearchComponentTemplate{}, &opsterv1.OpensearchComponentTemplate{}).
+				WithObjects(oldTemplate).
+				Build()
+
+			created, lagged, conflicted := false, false, false
+			twinGR := schema.GroupResource{Group: "opensearch.org", Resource: "opensearchcomponenttemplates"}
+			lagClient := interceptor.NewClient(base, interceptor.Funcs{
+				Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+					err := c.Create(ctx, obj, opts...)
+					if _, ok := obj.(*opensearchv1.OpensearchComponentTemplate); ok && err == nil {
+						created = true
+					}
+					return err
+				},
+				// First status write on the twin loses to a concurrent writer (the
+				// twin's own reconciler setting ManagedCluster on the Create event).
+				SubResourceUpdate: func(ctx context.Context, c client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+					if _, ok := obj.(*opensearchv1.OpensearchComponentTemplate); ok && sub == "status" && !conflicted {
+						conflicted = true
+						return errors.NewConflict(twinGR, obj.GetName(), fmt.Errorf("simulated concurrent status write"))
+					}
+					return c.SubResource(sub).Update(ctx, obj, opts...)
+				},
+				// First Get of the twin after its Create: informer cache not populated yet.
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if _, ok := obj.(*opensearchv1.OpensearchComponentTemplate); ok && created && !lagged {
+						lagged = true
+						return errors.NewNotFound(twinGR, key.Name)
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
+			})
+
+			migration := &ComponentTemplateMigrationReconciler{Client: lagClient, Scheme: scheme}
+
+			// First pass creates the twin; the status restore fails.
+			_, err := migration.Reconcile(ctx, req)
+			Expect(err).To(HaveOccurred())
+
+			// Controller-runtime requeues on error; give the reconciler a few more
+			// passes (finalizer add on the twin, then the old-resource path).
+			for i := 0; i < 3; i++ {
+				_, err = migration.Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			Expect(lagged).To(BeTrue())
+			Expect(conflicted).To(BeTrue())
+
+			twin := &opensearchv1.OpensearchComponentTemplate{}
+			Expect(base.Get(ctx, req.NamespacedName, twin)).To(Succeed())
+			Expect(twin.Annotations).To(HaveKeyWithValue(MigratedFromAnnotation, "opensearch.opster.io/v1"))
+			Expect(twin.Annotations).NotTo(HaveKey(MigrationStatusPendingAnnotation))
+			Expect(twin.Status.State).To(Equal(opensearchv1.OpensearchComponentTemplateCreated))
+			Expect(twin.Status.ExistingComponentTemplate).To(Equal(ptr.To(false)))
+			Expect(twin.Status.ManagedCluster).To(BeNil())
 		})
 	})
 

@@ -797,7 +797,7 @@ The Opensearch pods by default launch an init container to configure the volume.
 
 Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods, and the same `initHelper.securityContext` for its init containers.
 
-The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod.
+The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod. No bootstrap pod is started for an `OpenSearchCluster` that is re-created over the data PVCs of a previous cluster with the same name (the operator never deletes node pool PVCs): the nodes re-form the existing cluster from disk. Delete those PVCs first if you want a fresh cluster.
 
 ### Host Aliases for pods and containers
 
