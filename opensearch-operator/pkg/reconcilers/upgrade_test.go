@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"github.com/stretchr/testify/mock"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -237,6 +238,59 @@ var _ = Describe("Upgrade Reconciler", func() {
 			Expect(cluster.Status.Version).To(Equal("2.12.0"))
 			Expect(cluster.Status.Phase).To(Equal(opensearchv1.PhaseRunning))
 			Expect(cluster.Status.ComponentsStatus).To(BeEmpty())
+		})
+
+		It("should still sync status.version when the current status.version is not semver", func() {
+			image := "example.com/opensearch:custom"
+			cluster.Spec.General.Version = "3.0.0"
+			cluster.Spec.General.ImageSpec = &opensearchv1.ImageSpec{Image: &image}
+			cluster.Status.Version = "latest"
+
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cluster.Status.Version).To(Equal("3.0.0"))
+		})
+
+		It("should reject an invalid version transition instead of syncing status.version", func() {
+			image := "example.com/opensearch:custom"
+			cluster.Spec.General.Version = "1.0.0"
+			cluster.Spec.General.ImageSpec = &opensearchv1.ImageSpec{Image: &image}
+			cluster.Status.Version = "3.0.0"
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).To(MatchError(ErrVersionDowngrade))
+			Expect(IsTerminal(err)).To(BeTrue())
+			Expect(cluster.Status.Version).To(Equal("3.0.0"))
+		})
+	})
+
+	Describe("unparsable status.version without pinned image", func() {
+		It("should not terminal-reject so a normal upgrade can proceed", func() {
+			cluster.Spec.General.Version = "3.0.0"
+			cluster.Status.Version = "latest"
+			cluster.Status.Phase = opensearchv1.PhaseUpgrading
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: componentNameUpgrader, Description: upgradeTargetDescription, Status: "3.0.0"},
+			}
+
+			// Past validation the reconciler needs cluster credentials; return an empty secret so
+			// client creation fails for an unrelated reason. The assertion is that we did not stop
+			// at a terminal ErrInvalidExistingVersion.
+			mockClient.On("GetSecret", mock.Anything, mock.Anything).Return(corev1.Secret{}, nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(MatchError(helpers.ErrInvalidExistingVersion))
+			Expect(IsTerminal(err)).To(BeFalse())
 		})
 	})
 
