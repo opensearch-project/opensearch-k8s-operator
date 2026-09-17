@@ -889,8 +889,29 @@ func DeleteSecurityUpdateJob(k8sClient k8s.K8sClient, clusterName, clusterNamesp
 	return k8sClient.DeleteJob(&job)
 }
 
+// dataRoles is the subset of ValidNodeRoles that makes a node hold shards, i.e. the
+// roles OpenSearch counts in cluster health's number_of_data_nodes (every role whose
+// DiscoveryNodeRole can contain data). Matching that set matters wherever the operator
+// compares its own node count against the cluster's, and wherever "this pool holds
+// data" decides whether a pod can be restarted or its storage lost.
+var dataRoles = []string{
+	"data",
+	"data_content",
+	"data_hot",
+	"data_warm",
+	"data_cold",
+	"data_frozen",
+	"search",
+	"warm",
+}
+
 func HasDataRole(nodePool *opensearchv1.NodePool) bool {
-	return ContainsString(nodePool.Roles, "data")
+	for _, role := range dataRoles {
+		if ContainsString(nodePool.Roles, role) {
+			return true
+		}
+	}
+	return false
 }
 
 func HasManagerRole(nodePool *opensearchv1.NodePool) bool {
