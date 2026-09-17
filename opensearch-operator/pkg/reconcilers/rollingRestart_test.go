@@ -188,6 +188,28 @@ var _ = Describe("RollingRestart Reconciler", func() {
 				Expect(helpers.HasDataRole(&nodePool)).To(BeFalse())
 			})
 		})
+
+		Context("with a tiered data role and no literal data role", func() {
+			It("should return true, matching number_of_data_nodes", func() {
+				for _, role := range []string{"data_content", "data_hot", "data_warm", "data_cold", "data_frozen", "search", "warm"} {
+					nodePool := opensearchv1.NodePool{
+						Component: "tiered",
+						Roles:     []string{role},
+					}
+					Expect(helpers.HasDataRole(&nodePool)).To(BeTrue(), "role %s should count as a data role", role)
+				}
+			})
+		})
+
+		Context("with non-data roles that merely look similar", func() {
+			It("should return false", func() {
+				nodePool := opensearchv1.NodePool{
+					Component: "other",
+					Roles:     []string{"ingest", "ml", "transform", "remote_cluster_client", "master"},
+				}
+				Expect(helpers.HasDataRole(&nodePool)).To(BeFalse())
+			})
+		})
 	})
 
 	Describe("findStatus", func() {
