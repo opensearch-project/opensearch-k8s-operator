@@ -472,9 +472,11 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			Status:      emptyDirRecoveryStatusPending,
 			Description: now.Format(time.RFC3339),
 		}
-		currentStatus := opensearchv1.ComponentStatus{Component: emptyDirRecoveryComponent}
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
-			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+			instance.Status.ComponentsStatus = append(
+				removeComponentStatusesByComponent(instance.Status.ComponentsStatus, emptyDirRecoveryComponent),
+				componentStatus,
+			)
 		})
 		if err != nil {
 			lg.Error(err, "Failed to update emptyDir recovery status")
@@ -531,8 +533,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.Initialized = false
-		currentStatus := opensearchv1.ComponentStatus{Component: emptyDirRecoveryComponent}
-		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+		instance.Status.ComponentsStatus = removeComponentStatusesByComponent(instance.Status.ComponentsStatus, emptyDirRecoveryComponent)
 	})
 	if err != nil {
 		lg.Error(err, "Failed to update cluster status")
@@ -553,6 +554,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) {
 	var stats emptyDirPodStats
 	var uidUpdates []opensearchv1.ComponentStatus
+	now := time.Now().UTC()
 	clusterName := r.instance.Name
 	clusterNamespace := r.instance.Namespace
 
@@ -571,7 +573,7 @@ func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) 
 			return emptyDirPodStats{}, err
 		}
 
-		existingPods, poolUIDUpdates := classifyEmptyDirPods(pods, r.instance.Status.ComponentsStatus)
+		existingPods, poolUIDUpdates := classifyEmptyDirPods(pods, r.instance.Status.ComponentsStatus, now)
 		uidUpdates = append(uidUpdates, poolUIDUpdates...)
 
 		if helpers.HasDataRole(&nodePool) {
@@ -613,7 +615,7 @@ func (r *ClusterReconciler) clearEmptyDirRecoveryStatus() error {
 	}
 
 	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
-		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+		instance.Status.ComponentsStatus = removeComponentStatusesByComponent(instance.Status.ComponentsStatus, emptyDirRecoveryComponent)
 	})
 }
 

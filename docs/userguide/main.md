@@ -1457,7 +1457,7 @@ If the cluster is using emptyDir i.e. every node pool is using emptyDir, the ope
 
 Recovery waits for a 5 minute grace period after the condition is first observed, then deletes and recreates the StatefulSets (and related resources), sets `status.initialized` to `false`, and re-bootstraps the cluster. Because the cluster is using emptyDir, the previous data is not recoverable.
 
-Until each pod has been observed Ready at least once after this tracking is enabled (for example right after an operator upgrade), a NotReady pod with no recorded UID is also treated as missing. On a healthy cluster the first reconcile records UIDs while pods are Ready, so the window is brief.
+Until each pod has been observed Ready at least once after this tracking is enabled (for example right after an operator upgrade), a NotReady pod with no recorded UID is treated as missing only when its `creationTimestamp` is newer than the 5 minute grace period (a freshly recreated pod). A longer-lived NotReady pod with no record is still counted as existing, so upgrading the operator while nodes are crash-looping does not wipe an intact emptyDir cluster.
 
 ### Rolling Upgrades
 

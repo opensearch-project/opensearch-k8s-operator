@@ -28,8 +28,8 @@ type emptyDirPodStats struct {
 	totalMasterPods    int32
 }
 
-// emptyDirDataLossSuspected reports whether pods are actually missing, not merely not-ready.
-// emptyDir volumes survive in-place pod restarts while the pod object still exists.
+// emptyDirDataLossSuspected reports whether emptyDir data loss is suspected based on pods that still hold their
+// original volume (see classifyEmptyDirPods), not merely NotReady pods.
 func emptyDirDataLossSuspected(stats emptyDirPodStats) bool {
 	dataNodesMissing := stats.totalDataPods > 0 && stats.existingDataPods == 0
 	mastersLostQuorum := stats.totalMasterPods > 0 && stats.existingMasterPods < (stats.totalMasterPods+1)/2
@@ -63,13 +63,20 @@ func recordedEmptyDirPodUID(components []opensearchv1.ComponentStatus, podName s
 // classifyEmptyDirPods reports how many of the given pods still hold their original
 // emptyDir data, plus any pod UID records that need to be (re)persisted.
 //
-// A pod counts as existing if it is Ready (its emptyDir is known-good; its UID is
-// (re)recorded), or if it is not Ready but its UID matches the last recorded
-// known-good UID for its name (a readiness blip or crash loop on the same pod that
-// never lost its emptyDir, see #1455). A pod that is not Ready and whose UID was
-// never recorded as Ready (recreated after a force-delete, eviction, or node loss,
-// see #1526) does not count as existing.
-func classifyEmptyDirPods(pods []corev1.Pod, recorded []opensearchv1.ComponentStatus) (existing int, updates []opensearchv1.ComponentStatus) {
+// A pod counts as existing if:
+//   - it is Ready (its emptyDir is known-good; its UID is (re)recorded), or
+//   - it is not Ready but its UID matches the last recorded known-good UID for its
+//     name (readiness blip / crash loop on the same pod, data intact — see #1455), or
+//   - it is not Ready, has no UID record yet (operator upgrade / bootstrap), and its
+//     CreationTimestamp is at least emptyDirRecoveryGracePeriod old (long-lived pod
+//     whose emptyDir is presumed intact; avoids wiping a crash-looping cluster on
+//     upgrade). A NotReady pod with no record and a recent CreationTimestamp is
+//     treated as missing (fresh StatefulSet recreation before the first Ready UID
+//     was persisted — see #1526).
+//
+// A NotReady pod whose UID differs from the recorded Ready UID does not count as
+// existing (recreated after force-delete, eviction, or node loss — see #1526).
+func classifyEmptyDirPods(pods []corev1.Pod, recorded []opensearchv1.ComponentStatus, now time.Time) (existing int, updates []opensearchv1.ComponentStatus) {
 	for _, pod := range pods {
 		if pod.DeletionTimestamp != nil {
 			continue
@@ -90,7 +97,17 @@ func classifyEmptyDirPods(pods []corev1.Pod, recorded []opensearchv1.ComponentSt
 			continue
 		}
 
-		if hasRecord && recordedUID == uid {
+		if hasRecord {
+			if recordedUID == uid {
+				existing++
+			}
+			continue
+		}
+
+		// No UID record yet (bootstrap after enabling tracking). Prefer age over
+		// treating every NotReady pod as missing so an upgrade during a crash loop
+		// does not recreate the cluster.
+		if !pod.CreationTimestamp.IsZero() && now.Sub(pod.CreationTimestamp.Time) >= emptyDirRecoveryGracePeriod {
 			existing++
 		}
 	}
@@ -107,4 +124,18 @@ func upsertComponentStatus(components []opensearchv1.ComponentStatus, update ope
 		}
 	}
 	return append(components, update)
+}
+
+// removeComponentStatusesByComponent drops every ComponentStatus whose Component
+// field equals component. Used for EmptyDirRecovery, which is keyed only by
+// Component (Description holds a timestamp that must not participate in equality).
+func removeComponentStatusesByComponent(components []opensearchv1.ComponentStatus, component string) []opensearchv1.ComponentStatus {
+	filtered := make([]opensearchv1.ComponentStatus, 0, len(components))
+	for _, status := range components {
+		if status.Component == component {
+			continue
+		}
+		filtered = append(filtered, status)
+	}
+	return filtered
 }
