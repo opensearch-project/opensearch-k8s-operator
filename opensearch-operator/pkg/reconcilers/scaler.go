@@ -157,10 +157,10 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 				if currentSts.Status.ReadyReplicas != nodePool.Replicas {
 					// Change the status to waiting while the pods are coming up or getting deleted
 					componentStatus.Status = "Waiting"
-					instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+					instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 				} else {
 					// Scaling operation is completed, remove the status
-					instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
+					instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 				}
 			})
 			if err != nil {

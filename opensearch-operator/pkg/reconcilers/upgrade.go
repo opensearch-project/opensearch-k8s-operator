@@ -189,7 +189,8 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		// Set it to upgrading and requeue
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			componentStatus.Status = upgradeStatusInProgress
-			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, componentStatus)
+			// Identity-keyed Replace avoids duplicating an already-written Upgrading entry (#1534).
+			instance.Status.ComponentsStatus = helpers.Replace(componentStatus, componentStatus, instance.Status.ComponentsStatus)
 		})
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", componentStatus.Description)
 		return ctrl.Result{
