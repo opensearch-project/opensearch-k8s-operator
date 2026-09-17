@@ -114,13 +114,12 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	// jump through whenever the webhook is disabled and both image and version change together.
 	// If validation fails log a warning and do nothing, returning a terminal error so the main
 	// chain can continue (restart, snapshots, etc.) instead of freezing all maintenance on a
-	// permanent spec mistake. The one exception is a pinned custom image whose status.Version is
-	// not valid semver (e.g. "latest" set before the webhook existed): no target the user picks can
-	// clear that error, and the pinned branch below is the only thing that resyncs status.Version,
-	// so blocking it would leave the cluster wedged with scaling and rolling restarts disabled.
+	// permanent spec mistake. The one exception is when status.Version is not valid semver (e.g.
+	// "latest" set before the webhook existed): no target the user picks can clear that error by
+	// changing the requested version alone. Skip it so a pinned image can resync status.Version
+	// below, or a normal upgrade can proceed and eventually rewrite status after pods roll.
 	validationErr := r.validateUpgrade()
-	pinnedWithUnparsableBaseline := validationErr != nil && helpers.HasPinnedCustomImage(r.instance) && errors.Is(validationErr, helpers.ErrInvalidExistingVersion)
-	if validationErr != nil && !pinnedWithUnparsableBaseline {
+	if validationErr != nil && !errors.Is(validationErr, helpers.ErrInvalidExistingVersion) {
 		r.logger.V(1).Error(validationErr, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Failed to validate version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
 		return ctrl.Result{}, AsTerminal(validationErr)

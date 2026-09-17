@@ -14,6 +14,7 @@ import (
 	"k8s.io/client-go/tools/record"
 
 	"github.com/stretchr/testify/mock"
+	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
@@ -268,6 +269,28 @@ var _ = Describe("Upgrade Reconciler", func() {
 			Expect(err).To(MatchError(ErrVersionDowngrade))
 			Expect(IsTerminal(err)).To(BeTrue())
 			Expect(cluster.Status.Version).To(Equal("3.0.0"))
+		})
+	})
+
+	Describe("unparsable status.version without pinned image", func() {
+		It("should not terminal-reject so a normal upgrade can proceed", func() {
+			cluster.Spec.General.Version = "3.0.0"
+			cluster.Status.Version = "latest"
+			cluster.Status.Phase = opensearchv1.PhaseUpgrading
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: componentNameUpgrader, Description: upgradeTargetDescription, Status: "3.0.0"},
+			}
+
+			// Past validation the reconciler needs cluster credentials; return an empty secret so
+			// client creation fails for an unrelated reason. The assertion is that we did not stop
+			// at a terminal ErrInvalidExistingVersion.
+			mockClient.On("GetSecret", mock.Anything, mock.Anything).Return(corev1.Secret{}, nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(MatchError(helpers.ErrInvalidExistingVersion))
+			Expect(IsTerminal(err)).To(BeFalse())
 		})
 	})
 
