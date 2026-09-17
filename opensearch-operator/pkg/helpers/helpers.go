@@ -1007,11 +1007,12 @@ var stuckWaitingReasons = map[string]bool{
 	"InvalidImageName": true,
 }
 
-// stuckRestartThreshold is the number of restarts a non-ready container must accumulate,
-// with a recorded last-terminated state, before it is treated as stuck even though it never
-// sits in one of stuckWaitingReasons. This catches a container that is repeatedly killed while
-// Running-but-not-ready (e.g. by a failing startup probe) and immediately restarted, so kubelet
-// only reports it as Waiting/CrashLoopBackOff for brief moments between attempts.
+// stuckRestartThreshold is the number of restarts a container that has not passed its startup
+// probe must accumulate, with a recorded last-terminated state, before it is treated as stuck
+// even though it never sits in one of stuckWaitingReasons. This catches a container that is
+// repeatedly killed while Running-but-not-ready (e.g. by a failing startup probe) and immediately
+// restarted, so kubelet only reports it as Waiting/CrashLoopBackOff for brief moments between
+// attempts.
 const stuckRestartThreshold = 3
 
 // StuckContainerReason returns the reason the first non-ready container of the pod is
@@ -1024,7 +1025,12 @@ func StuckContainerReason(pod *corev1.Pod) string {
 		if container.State.Waiting != nil && stuckWaitingReasons[container.State.Waiting.Reason] {
 			return container.State.Waiting.Reason
 		}
-		if container.RestartCount >= stuckRestartThreshold && container.LastTerminationState.Terminated != nil {
+		// Started is false while the current attempt has not passed its startup probe, and is reset
+		// on every restart. Gating on it keeps the restart count from firing on a container that
+		// did start up and only later went not-ready: restart count and last-terminated state stick
+		// around from earlier restarts and would otherwise look identical to a kill loop.
+		if container.Started != nil && !*container.Started &&
+			container.RestartCount >= stuckRestartThreshold && container.LastTerminationState.Terminated != nil {
 			return "RepeatedlyFailing"
 		}
 	}

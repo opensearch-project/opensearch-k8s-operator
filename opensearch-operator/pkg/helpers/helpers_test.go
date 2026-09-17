@@ -1156,6 +1156,7 @@ var _ = Describe("Stuck pod handling (issue #1531)", func() {
 	runningNotReady := func(name, revision string, restartCount int32, withLastTerminated bool) corev1.Pod {
 		status := corev1.ContainerStatus{
 			Ready:        false,
+			Started:      ptr.To(false),
 			RestartCount: restartCount,
 			State:        corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
 		}
@@ -1190,6 +1191,20 @@ var _ = Describe("Stuck pod handling (issue #1531)", func() {
 	It("does not flag a ready container regardless of restart count", func() {
 		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, true)
 		p.Status.ContainerStatuses[0].Ready = true
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+
+	// Restart count and last-terminated state stick around after a container has started up, so a
+	// container that went not-ready without restarting must not be flagged.
+	It("does not flag a started container that later went not-ready", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, true)
+		p.Status.ContainerStatuses[0].Started = ptr.To(true)
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+
+	It("does not flag a container whose started state is not reported", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, true)
+		p.Status.ContainerStatuses[0].Started = nil
 		Expect(StuckContainerReason(&p)).To(BeEmpty())
 	})
 })
