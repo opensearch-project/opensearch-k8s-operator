@@ -1,6 +1,8 @@
 package helpers
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -1017,6 +1019,71 @@ var _ = Describe("Upgrade status helpers", func() {
 		})
 	})
 
+	Describe("Replace", func() {
+		It("does not duplicate an entry when the fresh list already reflects the transition (issue #1534)", func() {
+			// remove is the status snapshot taken at the start of the reconcile (informer-cache read);
+			// list is what UpdateOpenSearchClusterStatus's fresh Get returned, which already has the
+			// new status because a previous run of this same transition already applied it (either a
+			// concurrent reconcile that started from a stale cache, or a RetryOnConflict re-run).
+			remove := opensearchv1.ComponentStatus{Component: "Upgrader", Description: "data", Status: "Upgrading"}
+			add := opensearchv1.ComponentStatus{Component: "Upgrader", Description: "data", Status: "Upgraded"}
+			list := []opensearchv1.ComponentStatus{add}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(add))
+		})
+
+		It("self-heals a list that already carries a duplicate for the same identity", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded"}
+			add := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:new"}}
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:old-1"}},
+				{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:old-2"}},
+			}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(add))
+		})
+
+		It("only touches entries with the same identity, leaving other components/pools untouched", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Running"}
+			add := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded"}
+			other := opensearchv1.ComponentStatus{Component: "Scaler", Description: "masters", Status: "Running"}
+			list := []opensearchv1.ComponentStatus{other, {Component: "Scaler", Description: "data", Status: "Running"}}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(other, add))
+		})
+	})
+
+	Describe("RemoveIt", func() {
+		It("removes by identity even if the caller's remembered Status is stale", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Running"}
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Waiting"},
+			}
+
+			result := RemoveIt(remove, list)
+
+			Expect(result).To(BeEmpty())
+		})
+
+		It("does not mutate the input slice", func() {
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Running"},
+				{Component: "Scaler", Description: "masters", Status: "Running"},
+			}
+			listCopy := append([]opensearchv1.ComponentStatus(nil), list...)
+
+			_ = RemoveIt(opensearchv1.ComponentStatus{Component: "Scaler", Description: "data"}, list)
+
+			Expect(list).To(Equal(listCopy))
+		})
+	})
+
 	Describe("HasPinnedCustomImage", func() {
 		It("should return true when a custom image is set", func() {
 			image := "example.com/opensearch:1"
@@ -1198,4 +1265,22 @@ var _ = Describe("CountRunningPodsForNodePool", func() {
 		Expect(count).To(Equal(1))
 	})
 
+	It("counts a terminating pod against the ready pods", func() {
+		// After a scale-down the removed pod is still a cluster member while it
+		// terminates, so two ready pods plus one terminating pod must not look like
+		// a settled pool of two (issue #1572).
+		terminating := readyPod("cluster-master-2")
+		terminating.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().ListPods(mock.Anything).Return(corev1.PodList{
+			Items: []corev1.Pod{readyPod("cluster-master-0"), readyPod("cluster-master-1"), terminating},
+		}, nil)
+
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		}
+		count, err := CountRunningPodsForNodePool(mockClient, cr, &opensearchv1.NodePool{Component: "master"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(Equal(1))
+	})
 })

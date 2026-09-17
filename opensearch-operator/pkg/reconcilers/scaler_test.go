@@ -171,7 +171,8 @@ func scalerDrainTestSts(clusterName, namespace, nodePoolComponent string, replic
 			Replicas: ptr.To(replicas),
 		},
 		Status: appsv1.StatefulSetStatus{
-			ReadyReplicas: replicas,
+			ReadyReplicas:     replicas,
+			AvailableReplicas: replicas,
 		},
 	}
 }
@@ -575,7 +576,7 @@ var _ = Describe("Scaler Controller", func() {
 			result, err := underTest.Reconcile()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
-			Expect(result.RequeueAfter).To(Equal(15 * time.Second))
+			Expect(result.RequeueAfter).To(Equal(drainPollInterval))
 			mockClient.AssertExpectations(GinkgoT())
 		})
 	})
@@ -684,6 +685,50 @@ var _ = Describe("Scaler Controller", func() {
 				Expect(status.Status).ToNot(Equal("Drained"))
 			}
 			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+		})
+
+		It("Should requeue with a short fixed interval instead of exponential backoff while still draining (issue #1533)", func() {
+			// A bare Requeue=true with no RequeueAfter is treated by controller-runtime
+			// as a rate-limited re-add on the default exponential backoff limiter (5ms
+			// doubling, capped at 1000s), which can delay noticing a stalled or completed
+			// drain by many minutes. The still-draining case must set RequeueAfter instead.
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			started := time.Now().UTC().Add(-time.Minute)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Excluded", targetNodeName, []string{
+				drainStartedConditionPrefix + started.Format(time.RFC3339),
+			})
+			currentSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+			currentSts.Labels = map[string]string{
+				helpers.ClusterLabel:  clusterName,
+				helpers.NodePoolLabel: nodePoolComponent,
+			}
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, fmt.Sprintf(
+				`[{"index":"idx","shard":"0","prirep":"p","state":"STARTED","node":"%s"}]`, targetNodeName,
+			))
+			registerClusterSettingsResponders(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("GetStatefulSet", clusterName+"-"+nodePoolComponent, clusterNamespace).Return(currentSts, nil)
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{}, nil)
+			mockClient.On("ListStatefulSets",
+				client.InNamespace(clusterNamespace),
+				client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{
+				Items: []appsv1.StatefulSet{currentSts},
+			}, nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			result, err := underTest.Reconcile()
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(Equal(drainPollInterval))
+			mockClient.AssertExpectations(GinkgoT())
 		})
 
 		It("Should mark the node drained only when it has no shards", func() {
@@ -953,7 +998,8 @@ var _ = Describe("Scaler Controller", func() {
 			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, false, true)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(requeue).To(BeFalse())
+			// The shrunk pod is still terminating, so the reconciler chain must short-circuit.
+			Expect(requeue).To(BeTrue())
 			Expect(statusRemoved).To(BeTrue())
 			Expect(*currentSts.Spec.Replicas).To(Equal(int32(2)))
 			// The exclusion is re-applied right before shrinking, then cleared with wait.
@@ -1033,7 +1079,7 @@ var _ = Describe("Scaler Controller", func() {
 			requeue, err, calls := reconcileMasterPool(&spec, currentSts)
 
 			Expect(err).NotTo(HaveOccurred())
-			Expect(requeue).To(BeFalse())
+			Expect(requeue).To(BeTrue())
 			Expect(spec.Status.ComponentsStatus).To(BeEmpty())
 			Expect(*calls).To(Equal([]string{"DELETE wait_for_removal=true&timeout=10s"}))
 		})

@@ -248,13 +248,23 @@ func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 	return f
 }
 
+// RemoveIt drops every entry identified by ss.Component+ss.Description from ssSlice.
+// Status is deliberately not part of the match: the caller's "remove" value is usually
+// a status snapshot taken at the start of the reconcile, which can be stale by the time
+// this runs against a freshly-read object (informer cache lag, or a RetryOnConflict
+// re-run). Matching on Status as well as identity would then miss the (already-updated)
+// entry and leave the write to append a duplicate. Since callers key one status entry per
+// component+description, keying removal on that identity alone also self-heals any
+// duplicates already present.
 func RemoveIt(ss opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
-	for idx, v := range ssSlice {
-		if ComponentStatusEqual(v, ss) {
-			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
+	out := ssSlice[:0:0]
+	for _, v := range ssSlice {
+		if ComponentIdentityEqual(v, ss) {
+			continue
 		}
+		out = append(out, v)
 	}
-	return ssSlice
+	return out
 }
 
 func Replace(remove opensearchv1.ComponentStatus, add opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
@@ -263,8 +273,10 @@ func Replace(remove opensearchv1.ComponentStatus, add opensearchv1.ComponentStat
 	return fullSliced
 }
 
-func ComponentStatusEqual(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) bool {
-	return left.Component == right.Component && left.Description == right.Description && left.Status == right.Status
+// ComponentIdentityEqual reports whether left and right refer to the same componentsStatus
+// entry (Component+Description), regardless of Status.
+func ComponentIdentityEqual(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) bool {
+	return left.Component == right.Component && left.Description == right.Description
 }
 
 func FindFirstPartial(
@@ -737,7 +749,8 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 	return diff
 }
 
-func listPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) ([]corev1.Pod, error) {
+// ListPodsForNodePool returns all pods belonging to the given cluster and nodePool.
+func ListPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) ([]corev1.Pod, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
 		return nil, err
@@ -755,10 +768,20 @@ func listPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchClu
 	return list.Items, nil
 }
 
+// IsPodReady reports whether the pod's Ready condition is currently true.
+func IsPodReady(pod corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
 // CountExistingPodsForNodePool returns the number of non-terminating pods for a node pool,
 // regardless of readiness. emptyDir data survives in-place pod restarts while the pod exists.
 func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
+	pods, err := ListPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
 	}
@@ -772,29 +795,27 @@ func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 	return numExistingPods, nil
 }
 
-// Count the number of pods running and ready and not terminating for a given nodePool
+// Count the number of pods running and ready and not terminating for a given nodePool.
+// A terminating pod counts against the result: it is still a cluster member on its way
+// out, so a pool with one is not settled even when the ready count already matches
+// spec.replicas (e.g. right after the scaler lowered the StatefulSet). Otherwise a
+// rolling restart or upgrade could delete a second pod while the first is still leaving.
 func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
+	pods, err := ListPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
 	}
 	numReadyPods := 0
 	for _, pod := range pods {
 		if pod.DeletionTimestamp != nil {
+			numReadyPods--
 			continue
 		}
-		podReady := false
-		for _, condition := range pod.Status.Conditions {
-			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
-				podReady = true
-				break
-			}
-		}
-		if podReady {
+		if IsPodReady(pod) {
 			numReadyPods++
 		}
 	}
-	return numReadyPods, nil
+	return max(numReadyPods, 0), nil
 }
 
 // ReadyReplicasForNodePool returns the number of ready replicas derived from the actual running pods.

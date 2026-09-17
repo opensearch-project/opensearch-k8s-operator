@@ -30,6 +30,8 @@ const (
 	// observed emptiness before a Warning event and DrainStalled condition are
 	// recorded. The drain itself is not aborted.
 	drainStallWarningAfter = 15 * time.Minute
+	// drainPollInterval is the fixed cadence for waiting on a scale-down drain
+	drainPollInterval = 15 * time.Second
 )
 
 type ScalerReconciler struct {
@@ -91,7 +93,14 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 		// the main reconcile chain before upgrade/restart.
 		for _, nodePool := range r.instance.Spec.NodePools {
 			requeue, poolErr := r.reconcileNodePool(&nodePool)
-			results.Combine(&ctrl.Result{Requeue: requeue}, poolErr)
+			res := ctrl.Result{Requeue: requeue}
+			if requeue {
+				// Same cadence as removeStatefulSet's drain wait. RequeueAfter is
+				// dropped by controller-runtime whenever poolErr != nil, so
+				// actual error retries still back off as before.
+				res.RequeueAfter = drainPollInterval
+			}
+			results.Combine(&res, poolErr)
 		}
 	} else {
 		lg.V(1).Info("Upgrade in progress, skipping replica scaling")
@@ -107,7 +116,7 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 		// Not all node pools are ready yet: skip cleanup and retry later. Deliberately
 		// RequeueAfter-only (no Requeue=true) so the main chain still runs the upgrade
 		// and rolling-restart reconcilers, which own recovery of stuck pods (issue #1531).
-		results.Combine(&ctrl.Result{RequeueAfter: 15 * time.Second}, nil)
+		results.Combine(&ctrl.Result{RequeueAfter: drainPollInterval}, nil)
 	} else {
 		// Clean up old node pools (all current nodePools are ready)
 		r.cleanupStatefulSets(results)
@@ -160,10 +169,10 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 				if currentSts.Status.ReadyReplicas != nodePool.Replicas {
 					// Change the status to waiting while the pods are coming up or getting deleted
 					componentStatus.Status = "Waiting"
-					instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, r.instance.Status.ComponentsStatus)
+					instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 				} else {
 					// Scaling operation is completed, remove the status
-					instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, r.instance.Status.ComponentsStatus)
+					instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 				}
 			})
 			if err != nil {
@@ -340,15 +349,19 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 	}
 	lg.Info(fmt.Sprintf("Group: %s, Removed node %s", nodePoolGroupName, lastReplicaNodeName))
 
+	// Every path below returns requeue=true: the removed pod is still terminating and
+	// the cached StatefulSet may still show the old replica count, so the upgrade and
+	// rolling-restart reconcilers must not run in this same pass.
+
 	if !smartDecrease && !isMaster {
 		err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 		})
 		if err != nil {
 			lg.Error(err, "failed to update status")
-			return false, err
+			return true, err
 		}
-		return false, nil
+		return true, nil
 	}
 
 	return r.finishDecreaseCleanup(currentStatus, currentSts, nodePoolGroupName, clusterClient, smartDecrease, isMaster, lastReplicaNodeName)
@@ -399,9 +412,9 @@ func (r *ScalerReconciler) finishDecreaseCleanup(currentStatus opensearchv1.Comp
 	})
 	if err != nil {
 		lg.Error(err, "failed to update status")
-		return false, err
+		return true, err
 	}
-	return false, nil
+	return true, nil
 }
 
 // cancelDecrease undoes a scale-down that was reverted before its target node was
@@ -667,7 +680,7 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 			lg.Info(fmt.Sprintf("Waiting for shards to drain from node %s", lastReplicaNodeName))
 			return &ctrl.Result{
 				Requeue:      true,
-				RequeueAfter: 15 * time.Second,
+				RequeueAfter: drainPollInterval,
 			}, nil
 		}
 	}

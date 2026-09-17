@@ -1494,6 +1494,52 @@ func (_c *MockK8sClient_UdateObjectStatus_Call) RunAndReturn(run func(client.Obj
 	return _c
 }
 
+// UpdateJob provides a mock function with given fields: job
+func (_m *MockK8sClient) UpdateJob(job *batchv1.Job) error {
+	ret := _m.Called(job)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateJob")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(*batchv1.Job) error); ok {
+		r0 = rf(job)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_UpdateJob_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'UpdateJob'
+type MockK8sClient_UpdateJob_Call struct {
+	*mock.Call
+}
+
+// UpdateJob is a helper method to define mock.On call
+//   - job *batchv1.Job
+func (_e *MockK8sClient_Expecter) UpdateJob(job interface{}) *MockK8sClient_UpdateJob_Call {
+	return &MockK8sClient_UpdateJob_Call{Call: _e.mock.On("UpdateJob", job)}
+}
+
+func (_c *MockK8sClient_UpdateJob_Call) Run(run func(job *batchv1.Job)) *MockK8sClient_UpdateJob_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(*batchv1.Job))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_UpdateJob_Call) Return(_a0 error) *MockK8sClient_UpdateJob_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_UpdateJob_Call) RunAndReturn(run func(*batchv1.Job) error) *MockK8sClient_UpdateJob_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // UpdateOpenSearchClusterStatus provides a mock function with given fields: key, f
 func (_m *MockK8sClient) UpdateOpenSearchClusterStatus(key types.NamespacedName, f func(*opensearch_orgv1.OpenSearchCluster)) error {
 	ret := _m.Called(key, f)

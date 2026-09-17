@@ -763,7 +763,7 @@ The Opensearch pods by default launch an init container to configure the volume.
 
 Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods, and the same `initHelper.securityContext` for its init containers.
 
-The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod.
+The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod. No bootstrap pod is started for an `OpenSearchCluster` that is re-created over the data PVCs of a previous cluster with the same name (the operator never deletes node pool PVCs): the nodes re-form the existing cluster from disk. Delete those PVCs first if you want a fresh cluster.
 
 ### Host Aliases for pods and containers
 
@@ -1450,10 +1450,14 @@ Scaling, rolling restarts, and version upgrades remain sequenced by the operator
 
 If the cluster is using emptyDir i.e. every node pool is using emptyDir, the operator starts recovery in case of these failure scenarios:
 
-1. More than half the master nodes are missing or crashed and thus, the quorum is broken.
-2. All data nodes are missing or crashed and thus, no data node is available.
+1. More than half the master nodes have lost their original emptyDir data and thus, the quorum is broken.
+2. All data nodes have lost their original emptyDir data and thus, no data node is available.
 
-But since the cluster is using emptyDir, data is lost and not recoverable. So, it is impossible to restore the cluster to its old state. Therefore, the operator deletes and recreates the entire OpenSearch cluster.
+"Lost emptyDir data" means the pod that held the volume is gone — not merely NotReady. An emptyDir lives exactly as long as its pod UID: container restarts and readiness blips keep the same UID and the volume, while force-delete, eviction, or node loss causes the StatefulSet to recreate the pod with the same name, a new UID, and a fresh empty directory. The operator records the UID of each Ready pod and treats a NotReady pod with a different UID as missing for this check.
+
+Recovery waits for a 5 minute grace period after the condition is first observed, then deletes and recreates the StatefulSets (and related resources), sets `status.initialized` to `false`, and re-bootstraps the cluster. Because the cluster is using emptyDir, the previous data is not recoverable.
+
+Until each pod has been observed Ready at least once after this tracking is enabled (for example right after an operator upgrade), a NotReady pod with no recorded UID is treated as missing only when its `creationTimestamp` is newer than the 5 minute grace period (a freshly recreated pod). A longer-lived NotReady pod with no record is still counted as existing, so upgrading the operator while nodes are crash-looping does not wipe an intact emptyDir cluster.
 
 ### Rolling Upgrades
 

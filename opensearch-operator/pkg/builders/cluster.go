@@ -17,6 +17,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -34,6 +35,13 @@ const (
 	ConfigurationChecksumAnnotation  = "opensearch.org/config"
 	defaultMonitoringPlugin          = "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/%s.0/prometheus-exporter-%s.0.zip"
 	securityconfigChecksumAnnotation = "securityconfig/checksum"
+	// securityconfigUserChecksumAnnotation stores a checksum of only the user-provided
+	// securityConfigSecret (pre-merge with the operator's embedded defaults and managed user
+	// hashes). It is what operator <=2.8.0 wrote as securityconfigChecksumAnnotation, so it lets
+	// a job created by that job comparison logic recognize a job left behind by an older operator
+	// during CR adoption/migration without treating the hashing-scheme change itself as a config
+	// change that must be re-applied.
+	securityconfigUserChecksumAnnotation = "securityconfig/user-checksum"
 
 	nodeAttributesVolumeName = "node-attributes"
 	nodeAttributesFileName   = "attributes.env"
@@ -1528,6 +1536,7 @@ func NewSecurityconfigUpdateJob(
 	jobName string,
 	namespace string,
 	checksum string,
+	userChecksum string,
 	adminCertName string,
 	adminCASecretName string,
 	cmdArg string,
@@ -1580,7 +1589,8 @@ func NewSecurityconfigUpdateJob(
 	})
 
 	annotations := map[string]string{
-		securityconfigChecksumAnnotation: checksum,
+		securityconfigChecksumAnnotation:     checksum,
+		securityconfigUserChecksumAnnotation: userChecksum,
 	}
 	terminationGracePeriodSeconds := int64(5)
 	backoffLimit := int32(1)
@@ -1681,6 +1691,36 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearc
 	}
 	// If there is no cluster-manager node pool defined in the spec, return false.
 	return checkedMasterPool
+}
+
+// HasRetainedMasterPVC reports whether ordinal 0 of any cluster-manager pool already has a
+// data PVC (left behind by a previous incarnation of the same cluster, since the operator
+// never deletes node pool PVCs). Such a cluster re-forms from disk and ignores
+// cluster.initial_master_nodes, so a bootstrap pod would only start a second, unrelated
+// cluster that no node ever joins.
+// An existing-but-empty PVC (pre-provisioned, or a cluster that never formed) is
+// indistinguishable here; delete the pool PVCs to force a fresh bootstrap.
+// Non-NotFound API errors are returned so the caller can fail closed and retry rather than
+// treating a transient failure as "no retained PVC".
+func HasRetainedMasterPVC(ctx context.Context, k8sClient client.Client, cr *opensearchv1.OpenSearchCluster) (bool, error) {
+	for i := range cr.Spec.NodePools {
+		pool := &cr.Spec.NodePools[i]
+		if !helpers.HasManagerRole(pool) || (pool.Persistence != nil && pool.Persistence.PVC == nil) {
+			continue
+		}
+		pvc := &corev1.PersistentVolumeClaim{}
+		err := k8sClient.Get(ctx, types.NamespacedName{
+			Name:      "data-" + StsName(cr, pool) + "-0",
+			Namespace: cr.Namespace,
+		}, pvc)
+		if err == nil {
+			return true, nil
+		}
+		if !apierrors.IsNotFound(err) {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 // ExpectedMasterNodeNames returns the pod names of all cluster-manager-eligible replicas.
