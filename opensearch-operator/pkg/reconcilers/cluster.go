@@ -120,6 +120,18 @@ func (r *ClusterReconciler) reconcileServiceMonitor(result *reconciler.CombinedR
 	}
 }
 
+// reconcileNetworkPolicy creates or removes the ingress-only NetworkPolicy.
+// The feature is opt-in; when disabled the policy is deleted if it exists.
+func (r *ClusterReconciler) reconcileNetworkPolicy(result *reconciler.CombinedResult) {
+	networkPolicy := builders.NewNetworkPolicyForCR(r.instance)
+	if r.instance.Spec.General.NetworkPolicy.Enable {
+		result.CombineErr(ctrl.SetControllerReference(r.instance, networkPolicy, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(networkPolicy, reconciler.StatePresent))
+		return
+	}
+	result.Combine(r.client.ReconcileResource(networkPolicy, reconciler.StateAbsent))
+}
+
 // isServiceMonitorCRDMissing reports whether err indicates that the
 // prometheus-operator ServiceMonitor CRD is not installed in the cluster.
 func isServiceMonitorCRDMissing(err error) bool {
@@ -143,6 +155,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	r.reconcileServiceMonitor(&result)
+	r.reconcileNetworkPolicy(&result)
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(clusterService, reconciler.StatePresent))

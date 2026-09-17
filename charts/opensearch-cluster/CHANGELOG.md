@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ---
 ## [Unreleased]
 ### Added
+- `cluster.general.networkPolicy` to opt in to an operator-managed, ingress-only NetworkPolicy (`enable: false` by default).
 ### Changed
 ### Deprecated
 ### Removed

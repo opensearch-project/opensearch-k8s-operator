@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/intstr"
@@ -70,6 +71,8 @@ type GeneralConfig struct {
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 	Monitoring        MonitoringConfig   `json:"monitoring,omitempty"`
+	// Opt-in, ingress-only NetworkPolicy for cluster pods. Default off.
+	NetworkPolicy NetworkPolicyConfig `json:"networkPolicy,omitempty"`
 	// Populate opensearch keystore before startup
 	Keystore             []KeystoreValue      `json:"keystore,omitempty"`
 	SnapshotRepositories []SnapshotRepoConfig `json:"snapshotRepositories,omitempty"`
@@ -193,6 +196,15 @@ type MonitoringConfig struct {
 type MonitoringConfigTLS struct {
 	ServerName         string `json:"serverName,omitempty"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
+}
+
+// NetworkPolicyConfig controls an operator-managed, ingress-only NetworkPolicy
+// for OpenSearch cluster pods. Egress is left unrestricted.
+type NetworkPolicyConfig struct {
+	// Enable operator-managed NetworkPolicy for this cluster. Default false.
+	Enable bool `json:"enable,omitempty"`
+	// Extra ingress peers in addition to the built-in intra-cluster / Dashboards / operator rules.
+	ExtraIngress []networkingv1.NetworkPolicyPeer `json:"extraIngress,omitempty"`
 }
 
 type BootstrapConfig struct {
