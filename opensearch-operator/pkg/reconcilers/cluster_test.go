@@ -89,13 +89,21 @@ var _ = Describe("emptyDir recovery", func() {
 		}
 	}
 
+	newPodAged := func(name string, uid types.UID, ready bool, created time.Time) corev1.Pod {
+		pod := newPod(name, uid, ready)
+		pod.CreationTimestamp = metav1.NewTime(created)
+		return pod
+	}
+
+	classifyNow := time.Date(2026, 9, 17, 12, 0, 0, 0, time.UTC)
+
 	It("counts a not-ready pod as existing when its UID matches the last recorded Ready UID (#1455)", func() {
 		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-1", false)}
 		recorded := []opensearchv1.ComponentStatus{
 			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
 		}
 
-		existing, updates := classifyEmptyDirPods(pods, recorded)
+		existing, updates := classifyEmptyDirPods(pods, recorded, classifyNow)
 		Expect(existing).To(Equal(1))
 		Expect(updates).To(BeEmpty())
 	})
@@ -107,7 +115,7 @@ var _ = Describe("emptyDir recovery", func() {
 			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
 		}
 
-		existing, updates := classifyEmptyDirPods(pods, recorded)
+		existing, updates := classifyEmptyDirPods(pods, recorded, classifyNow)
 		Expect(existing).To(Equal(0))
 		Expect(updates).To(BeEmpty())
 	})
@@ -115,7 +123,7 @@ var _ = Describe("emptyDir recovery", func() {
 	It("records the UID of a Ready pod that has no prior record", func() {
 		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-1", true)}
 
-		existing, updates := classifyEmptyDirPods(pods, nil)
+		existing, updates := classifyEmptyDirPods(pods, nil, classifyNow)
 		Expect(existing).To(Equal(1))
 		Expect(updates).To(Equal([]opensearchv1.ComponentStatus{
 			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
@@ -128,18 +136,26 @@ var _ = Describe("emptyDir recovery", func() {
 			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
 		}
 
-		existing, updates := classifyEmptyDirPods(pods, recorded)
+		existing, updates := classifyEmptyDirPods(pods, recorded, classifyNow)
 		Expect(existing).To(Equal(1))
 		Expect(updates).To(Equal([]opensearchv1.ComponentStatus{
 			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-2"},
 		}))
 	})
 
-	It("does not count a not-ready pod with no prior UID record as existing (bootstrap window)", func() {
-		pods := []corev1.Pod{newPod("cluster-nodes-0", "uid-1", false)}
+	It("does not count a recently created not-ready pod with no prior UID record as existing", func() {
+		pods := []corev1.Pod{newPodAged("cluster-nodes-0", "uid-1", false, classifyNow.Add(-time.Minute))}
 
-		existing, updates := classifyEmptyDirPods(pods, nil)
+		existing, updates := classifyEmptyDirPods(pods, nil, classifyNow)
 		Expect(existing).To(Equal(0))
+		Expect(updates).To(BeEmpty())
+	})
+
+	It("counts a long-lived not-ready pod with no prior UID record as existing (upgrade bootstrap)", func() {
+		pods := []corev1.Pod{newPodAged("cluster-nodes-0", "uid-1", false, classifyNow.Add(-emptyDirRecoveryGracePeriod))}
+
+		existing, updates := classifyEmptyDirPods(pods, nil, classifyNow)
+		Expect(existing).To(Equal(1))
 		Expect(updates).To(BeEmpty())
 	})
 
@@ -149,7 +165,7 @@ var _ = Describe("emptyDir recovery", func() {
 			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-1"},
 		}
 
-		existing, updates := classifyEmptyDirPods(pods, recorded)
+		existing, updates := classifyEmptyDirPods(pods, recorded, classifyNow)
 		Expect(existing).To(Equal(1))
 		Expect(updates).To(BeEmpty())
 	})
@@ -159,7 +175,7 @@ var _ = Describe("emptyDir recovery", func() {
 		now := metav1.Now()
 		pod.DeletionTimestamp = &now
 
-		existing, updates := classifyEmptyDirPods([]corev1.Pod{pod}, nil)
+		existing, updates := classifyEmptyDirPods([]corev1.Pod{pod}, nil, classifyNow)
 		Expect(existing).To(Equal(0))
 		Expect(updates).To(BeEmpty())
 	})
@@ -178,7 +194,7 @@ var _ = Describe("emptyDir recovery", func() {
 			newPod("cluster-nodes-2", "new-uid-2", false),
 		}
 
-		existing, updates := classifyEmptyDirPods(pods, recorded)
+		existing, updates := classifyEmptyDirPods(pods, recorded, classifyNow)
 		Expect(existing).To(Equal(0))
 		Expect(updates).To(BeEmpty())
 
@@ -189,6 +205,27 @@ var _ = Describe("emptyDir recovery", func() {
 			totalMasterPods:    3,
 		}
 		Expect(emptyDirDataLossSuspected(stats)).To(BeTrue())
+	})
+
+	It("does not wipe on operator upgrade while long-lived masters are NotReady (no UID records yet)", func() {
+		// Simulates adopting this tracking while a majority of masters are crash-looping with intact emptyDirs (same pod objects for hours).
+		pods := []corev1.Pod{
+			newPodAged("cluster-nodes-0", "uid-0", true, classifyNow.Add(-time.Hour)),
+			newPodAged("cluster-nodes-1", "uid-1", false, classifyNow.Add(-time.Hour)),
+			newPodAged("cluster-nodes-2", "uid-2", false, classifyNow.Add(-time.Hour)),
+		}
+
+		existing, updates := classifyEmptyDirPods(pods, nil, classifyNow)
+		Expect(existing).To(Equal(3))
+		Expect(updates).To(Equal([]opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-0"},
+		}))
+		Expect(emptyDirDataLossSuspected(emptyDirPodStats{
+			existingDataPods:   int32(existing),
+			totalDataPods:      3,
+			existingMasterPods: int32(existing),
+			totalMasterPods:    3,
+		})).To(BeFalse())
 	})
 
 	It("upsertComponentStatus replaces an existing entry in place and appends otherwise", func() {
@@ -206,6 +243,18 @@ var _ = Describe("emptyDir recovery", func() {
 			Component: emptyDirPodUIDComponent, Description: "cluster-nodes-1", Status: "uid-1",
 		})
 		Expect(components).To(HaveLen(2))
+	})
+
+	It("removeComponentStatusesByComponent clears EmptyDirRecovery regardless of timestamp", func() {
+		components := []opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-0"},
+			{Component: emptyDirRecoveryComponent, Status: emptyDirRecoveryStatusPending, Description: classifyNow.Format(time.RFC3339)},
+		}
+
+		components = removeComponentStatusesByComponent(components, emptyDirRecoveryComponent)
+		Expect(components).To(Equal([]opensearchv1.ComponentStatus{
+			{Component: emptyDirPodUIDComponent, Description: "cluster-nodes-0", Status: "uid-0"},
+		}))
 	})
 })
 
