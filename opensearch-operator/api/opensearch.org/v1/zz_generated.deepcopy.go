@@ -22,6 +22,7 @@ package v1
 
 import (
 	monitoringv1 "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apiextensionsv1 "k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -944,6 +945,11 @@ func (in *GeneralConfig) DeepCopyInto(out *GeneralConfig) {
 		in, out := &in.Grpc, &out.Grpc
 		*out = new(GrpcConfig)
 		(*in).DeepCopyInto(*out)
+	}
+	if in.PersistentVolumeClaimRetentionPolicy != nil {
+		in, out := &in.PersistentVolumeClaimRetentionPolicy, &out.PersistentVolumeClaimRetentionPolicy
+		*out = new(appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy)
+		**out = **in
 	}
 	if in.NodeAttributes != nil {
 		in, out := &in.NodeAttributes, &out.NodeAttributes
