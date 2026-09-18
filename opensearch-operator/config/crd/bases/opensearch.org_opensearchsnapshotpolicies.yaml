@@ -29,6 +29,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: age
       type: date
+    deprecated: true
+    deprecationWarning: OpensearchSnapshotPolicy is deprecated and will be removed
+      in v4 of the OpenSearch Kubernetes Operator.
     name: v1
     schema:
       openAPIV3Schema:

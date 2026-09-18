@@ -16,7 +16,10 @@ spec:
     singular: opensearchindextemplate
   scope: Namespaced
   versions:
-  - name: v1
+  - deprecated: true
+    deprecationWarning: OpensearchIndexTemplate is deprecated and will be removed
+      in v4 of the OpenSearch Kubernetes Operator.
+    name: v1
     schema:
       openAPIV3Schema:
         description: OpensearchIndexTemplate is the schema for the OpenSearch index
