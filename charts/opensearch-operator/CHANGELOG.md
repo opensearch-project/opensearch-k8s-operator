@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `enableHotReload` is now a tri-state pointer. Omitting it enables TLS certificate hot reload on OpenSearch 3.x+ (and leaves it off on older versions). Existing 3.x clusters that never set the field take one rolling restart on operator upgrade because `plugins.security.ssl.certificates_hot_reload.enabled` is added to `opensearch.yml`.
 - StatefulSets now use `Parallel` `podManagementPolicy` (was `OrderedReady`). On operator upgrade, existing STS objects are recreated once with orphan propagation; pods are retained and re-adopted. Scaling and rolling operations remain sequenced by the operator.
 ### Deprecated
+- `OpenSearchISMPolicy`, `OpensearchIndexTemplate`, `OpensearchComponentTemplate`, `OpensearchActionGroup`, `OpensearchSnapshotPolicy`, `OpensearchUserRoleBinding`, `OpensearchTenant`, `OpensearchRole`, and `OpensearchUser` CRDs are deprecated and will be removed in v4. The operator is narrowing its scope to core OpenSearch cluster lifecycle management; manage these auxiliary resources with a tool built for declarative OpenSearch config management (e.g. Terraform) instead.
 ### Removed
 - Experimental parallel recovery mode and related Helm/env config (`manager.parallelRecoveryEnabled` / `PARALLEL_RECOVERY_ENABLED`).
 ### Fixed

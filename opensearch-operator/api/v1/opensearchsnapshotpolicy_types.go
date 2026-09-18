@@ -117,6 +117,7 @@ type OpensearchSnapshotPolicyStatus struct {
 // +kubebuilder:printcolumn:name="policyName",type="string",JSONPath=".status.snapshotPolicyName",description="Snapshot policy name"
 // +kubebuilder:printcolumn:name="state",type="string",JSONPath=".status.state"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:deprecatedversion:warning="OpensearchSnapshotPolicy is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpensearchSnapshotPolicy struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
