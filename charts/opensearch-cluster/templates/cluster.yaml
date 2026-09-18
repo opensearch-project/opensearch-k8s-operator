@@ -25,7 +25,10 @@ spec:
   {{- end }}
   {{- with .Values.cluster.general }}
   general:
-    {{- omit . "image" "serviceName" "version" | toYaml | nindent 4 }}
+    {{- omit . "image" "serviceName" "clusterName" "version" | toYaml | nindent 4 }}
+    {{- if .clusterName }}
+    clusterName: {{ .clusterName }}
+    {{- end }}
     image: {{ .image }}:{{ default $.Chart.AppVersion .version }}
     serviceName: {{ .serviceName | default $clusterName }}
     version: {{ default $.Chart.AppVersion .version }}

@@ -31,6 +31,10 @@ cluster:
 
   # cluster general configuration
   general:
+    # -- OpenSearch cluster.name setting. Defaults to the CR name (which defaults to the Helm release name) if not set.
+    # WARNING: Do not change on a running cluster — this will form a new, empty cluster.
+    clusterName: ""
+
     # -- Extra items to add to the opensearch.yml
     additionalConfig: {}
 

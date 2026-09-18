@@ -751,7 +751,7 @@ func NewSTSForNodePool(
 								},
 								{
 									Name:  "cluster.name",
-									Value: cr.Name,
+									Value: ClusterName(cr),
 								},
 								{
 									Name:  "network.bind_host",
@@ -1154,7 +1154,7 @@ func NewBootstrapPod(
 		},
 		{
 			Name:  "cluster.name",
-			Value: cr.Name,
+			Value: ClusterName(cr),
 		},
 		{
 			Name:  "network.bind_host",
@@ -1481,6 +1481,15 @@ func DnsOfService(cr *opensearchv1.OpenSearchCluster) string {
 
 func StsName(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) string {
 	return cr.Name + "-" + nodePool.Component
+}
+
+// ClusterName returns the OpenSearch cluster.name setting.
+// If spec.general.clusterName is set, it is used; otherwise it falls back to cr.Name.
+func ClusterName(cr *opensearchv1.OpenSearchCluster) string {
+	if cr.Spec.General.ClusterName != "" {
+		return cr.Spec.General.ClusterName
+	}
+	return cr.Name
 }
 
 func DiscoveryServiceName(cr *opensearchv1.OpenSearchCluster) string {
