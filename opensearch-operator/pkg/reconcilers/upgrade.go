@@ -533,6 +533,25 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 		return err
 	}
 
+	// A drain already declared stalled has had its exclusion released; going
+	// through PreparePodForDelete again would only re-apply it.
+	if r.instance.Spec.General.DrainDataNodes {
+		standStill, updated, err := standStillOnStalledDrain(r.osClient, workingPod, drainStateFor(r.instance, workingPod), time.Now().UTC())
+		if err != nil {
+			return err
+		}
+		if updated != nil {
+			if err := recordDrainState(r.client, r.instance, workingPod, updated); err != nil {
+				return err
+			}
+		}
+		if standStill {
+			conditions = append(conditions, fmt.Sprintf("Drain of %s is not progressing; waiting for its shards to become movable", workingPod))
+			r.setComponentConditions(conditions, pool.Component)
+			return nil
+		}
+	}
+
 	ready, err = services.PreparePodForDelete(r.osClient, r.logger, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		r.logger.Error(err, "Could not prepare pod for delete")
@@ -541,7 +560,22 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 		return err
 	}
 	if !ready {
-		conditions = append(conditions, "Waiting for node to drain")
+		// The node is not emptying. Keep the stall clock, and once it is clear the
+		// drain will never finish, stop holding a data node out of allocation for it.
+		message := "Waiting for node to drain"
+		if r.instance.Spec.General.DrainDataNodes {
+			drainConditions, err := recordUnfinishedDrain(r.instance, r.osClient, r.recorder, r.logger, workingPod, drainStateFor(r.instance, workingPod), time.Now().UTC())
+			if err != nil {
+				return err
+			}
+			if err := recordDrainState(r.client, r.instance, workingPod, drainConditions); err != nil {
+				return err
+			}
+			if hasDrainStalledCondition(drainConditions) {
+				message = fmt.Sprintf("Drain of %s is not progressing; waiting for its shards to become movable", workingPod)
+			}
+		}
+		conditions = append(conditions, message)
 		r.setComponentConditions(conditions, pool.Component)
 		return nil
 	}
