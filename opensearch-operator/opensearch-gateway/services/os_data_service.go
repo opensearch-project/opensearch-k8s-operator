@@ -188,6 +188,30 @@ func RemoveExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToE
 	return err == nil, err
 }
 
+// AddVotingConfigExclusion excludes a master-eligible node from the voting
+// configuration before it is permanently removed from the cluster.
+func AddVotingConfigExclusion(service *OsClusterClient, lg logr.Logger, nodeName string) error {
+	lg.Info(fmt.Sprintf("Adding voting config exclusion for node: %s", nodeName))
+	err := service.AddVotingConfigExclusion(context.Background(), nodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not add voting config exclusion for node %s", nodeName))
+	}
+	return err
+}
+
+// ClearVotingConfigExclusions clears voting configuration exclusions after a
+// master-eligible node has been removed. Always waits for excluded nodes to
+// leave the cluster first; clearing without wait can put a still-alive node
+// back into the voting configuration.
+func ClearVotingConfigExclusions(service *OsClusterClient, lg logr.Logger) error {
+	lg.Info("Clearing voting config exclusions", "waitForRemoval", true)
+	err := service.ClearVotingConfigExclusions(context.Background(), true)
+	if err != nil {
+		lg.Error(err, "Could not clear voting config exclusions")
+	}
+	return err
+}
+
 func SetClusterShardAllocation(service *OsClusterClient, enableType ClusterSettingsAllocation) error {
 	settings := createClusterSettingsAllocationEnable(enableType)
 	_, err := service.PutClusterSettings(settings)

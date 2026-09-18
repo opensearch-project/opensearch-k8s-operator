@@ -68,6 +68,8 @@ var _ = Describe("Bootstrap pod removal", Ordered, func() {
 			osTransport.RegisterResponder(http.MethodGet, u, httpmock.NewStringResponder(200, `{"name":"test","cluster_name":"test","version":{"number":"2.0.0"}}`))
 		}
 		registerCatNodes(bootstrapName, expectedMasters[0])
+		osTransport.RegisterResponder(http.MethodPost, `=~.*/_cluster/voting_config_exclusions.*`, httpmock.NewStringResponder(200, `{}`))
+		osTransport.RegisterResponder(http.MethodDelete, `=~.*/_cluster/voting_config_exclusions.*`, httpmock.NewStringResponder(200, `{}`))
 
 		Expect(CreateNamespace(k8sClient, &cluster)).Should(Succeed())
 		Expect(k8sClient.Create(context.Background(), &cluster)).Should(Succeed())
