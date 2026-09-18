@@ -615,3 +615,25 @@ func isPodStale(k8sClient k8s.K8sClient, instance *opensearchv1.OpenSearchCluste
 	}
 	return true, nil
 }
+
+// ReleaseDrainExclusion withdraws nodeName from the allocation exclude list.
+//
+// It is for a drain that has stopped making progress: the exclusion was applied
+// so the node could empty, the node is not emptying, and holding it keeps a data
+// node out of allocation for nothing. The scaler owns the exclude list while its
+// own drain runs, so this defers to it for the same reason CleanStaleExclusionList
+// does.
+func ReleaseDrainExclusion(instance *opensearchv1.OpenSearchCluster, osClient *services.OsClusterClient, logger logr.Logger, nodeName string) (bool, error) {
+	if scalerHasExcludeOrDrainInProgress(instance) {
+		logger.V(1).Info("Not releasing the drain exclusion; a scaler drain owns the exclude list", "node", nodeName)
+		return false, nil
+	}
+	excluded, err := services.GetExcludedNodeNames(osClient)
+	if err != nil {
+		return false, err
+	}
+	if !helpers.ContainsString(excluded, nodeName) {
+		return false, nil
+	}
+	return services.RemoveExcludeNodeHost(osClient, logger, nodeName)
+}
