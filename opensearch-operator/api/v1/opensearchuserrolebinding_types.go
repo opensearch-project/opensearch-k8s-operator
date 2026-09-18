@@ -53,6 +53,7 @@ type OpensearchUserRoleBindingStatus struct {
 //+kubebuilder:subresource:status
 
 // OpensearchUserRoleBinding is the Schema for the opensearchuserrolebindings API
+// +kubebuilder:deprecatedversion:warning="OpensearchUserRoleBinding is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpensearchUserRoleBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
