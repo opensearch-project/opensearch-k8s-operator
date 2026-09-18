@@ -21,6 +21,7 @@ const (
 //+kubebuilder:subresource:status
 
 // OpensearchComponentTemplate is the schema for the OpenSearch component templates API
+// +kubebuilder:deprecatedversion:warning="OpensearchComponentTemplate is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpensearchComponentTemplate struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

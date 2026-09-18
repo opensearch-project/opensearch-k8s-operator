@@ -16,7 +16,10 @@ spec:
     singular: opensearchuser
   scope: Namespaced
   versions:
-  - name: v1
+  - deprecated: true
+    deprecationWarning: OpensearchUser is deprecated and will be removed in v4 of
+      the OpenSearch Kubernetes Operator.
+    name: v1
     schema:
       openAPIV3Schema:
         description: OpensearchUser is the Schema for the opensearchusers API
