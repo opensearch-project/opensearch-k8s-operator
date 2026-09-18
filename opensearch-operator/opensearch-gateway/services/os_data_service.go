@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/Masterminds/semver"
@@ -301,8 +302,74 @@ func ReactivateShardAllocation(service *OsClusterClient) error {
 	return nil
 }
 
+// drainCanProceed reports whether the allocator still has somewhere to put what
+// is left on nodeName. A drain waits for the node to empty, so one shard that
+// can be placed nowhere else is what turns that wait into a permanent one; the
+// reason for the first such shard is returned for the caller's log line.
+//
+// Only STARTED copies are asked about: a relocating one is already on its way
+// out, and an unassigned one is not on this node to begin with.
+func drainCanProceed(service *OsClusterClient, nodeName string) (bool, string, error) {
+	shards, err := service.CatShards([]string{"index", "shard", "prirep", "state", "node"})
+	if err != nil {
+		return false, "", err
+	}
+	for _, shard := range shardsOnNodeFromResponse(shards, nodeName) {
+		if shard.State != "STARTED" {
+			continue
+		}
+		shardNum, err := strconv.Atoi(shard.Shard)
+		if err != nil {
+			continue
+		}
+		explain, err := service.GetAllocationExplain(shard.Index, shardNum, shard.PrimaryOrReplica == "p")
+		if err != nil {
+			return false, "", err
+		}
+		if strings.EqualFold(explain.CanMoveToOtherNode, "no") {
+			return false, fmt.Sprintf("%s[%s] has no other node to move to", shard.Index, shard.Shard), nil
+		}
+	}
+	return true, "", nil
+}
+
 func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, error) {
 	if drainNode {
+		// Excluding a node is only worth anything while the allocator can move its
+		// shards elsewhere. When it cannot, the node never empties, the restart
+		// waits for something that will not happen, and the exclusion keeps a data
+		// node out of allocation for the whole of it. Two data nodes are exempt:
+		// that path never waits for a full drain, only for system-index primaries.
+		//
+		// Asked only while nothing is moving, so a drain in progress pays nothing:
+		// the cost is one allocation explanation per started shard on the node, and
+		// it stops at the first shard that cannot move.
+		if nodeCount != 2 {
+			health, err := service.GetHealth()
+			if err != nil {
+				return false, err
+			}
+			if !hasShardActivity(health) {
+				canDrain, reason, err := drainCanProceed(service, podName)
+				if err != nil {
+					return false, err
+				}
+				if !canDrain {
+					excluded, err := GetExcludedNodeNames(service)
+					if err != nil {
+						return false, err
+					}
+					if helpers.ContainsString(excluded, podName) {
+						if _, err := RemoveExcludeNodeHost(service, lg, podName); err != nil {
+							return false, err
+						}
+					}
+					lg.Info(fmt.Sprintf("Not draining %s: %s. Leaving allocation as it is until that changes", podName, reason))
+					return false, nil
+				}
+			}
+		}
+
 		// If we are draining nodes then drain the working node
 		_, err := AppendExcludeNodeHost(service, lg, podName)
 		if err != nil {
