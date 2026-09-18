@@ -60,6 +60,9 @@ metadata:
   namespace: default
 spec:
   secretName: opensearch-tls
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS8   # required: the OpenSearch security plugin cannot read the PKCS1 keys cert-manager issues by default
   issuerRef:
     name: letsencrypt-prod  # Your cert-manager issuer
     kind: ClusterIssuer
