@@ -285,6 +285,14 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	// securityconfig secret was not passed, build the command to apply all yml files
 	if !r.instance.Status.Initialized || len(cmdArg) == 0 {
 		clusterHostName := BuildClusterSvcHostName(r.instance)
+		if !r.instance.Status.Initialized {
+			// Nodes only pass their readiness probe once the security index exists, which is
+			// what this job creates, so before the cluster is initialized the cluster Service
+			// has no endpoints to talk to. Use the headless discovery Service, which publishes
+			// not-ready addresses, instead of relying on the bootstrap pod being an endpoint of
+			// the cluster Service (#965).
+			clusterHostName = BuildDiscoverySvcHostName(r.instance)
+		}
 		opensearchHome := r.instance.Spec.General.GetOpenSearchHome()
 		httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(r.instance)
 		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort, securityConfigConnectWaitAttempts, securityConfigConnectWaitAttempts) +
@@ -532,6 +540,12 @@ func (r *SecurityconfigReconciler) warnIfDashboardsUserUnmapped(configSecret *co
 // BuildClusterSvcHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}
 func BuildClusterSvcHostName(instance *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s.svc.%s", builders.DnsOfService(instance), helpers.ClusterDnsBase())
+}
+
+// BuildDiscoverySvcHostName builds the headless discovery service host name as
+// {cluster-name}-discovery.{namespace}.svc.{dns-base}
+func BuildDiscoverySvcHostName(instance *opensearchv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s.%s.svc.%s", builders.DiscoveryServiceName(instance), instance.Namespace, helpers.ClusterDnsBase())
 }
 
 func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(

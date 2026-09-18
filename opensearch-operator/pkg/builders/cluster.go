@@ -1123,6 +1123,20 @@ func NewBootstrapPod(
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
+	// The bootstrap pod carries only the cluster label, which is also the selector of the
+	// cluster Service and of the "-exposed" NodePort Service, so without a readiness probe it
+	// becomes a load balanced endpoint for client traffic while the cluster is still forming
+	// (#965). It is a temporary seed node and has no business serving clients: a readiness
+	// probe that never succeeds keeps it out of those Services, while the headless discovery
+	// Service still resolves it because it publishes not-ready addresses.
+	neverReadyProbe := corev1.Probe{
+		PeriodSeconds:    3600,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		TimeoutSeconds:   1,
+		ProbeHandler:     corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/bin/false"}}},
+	}
+
 	// Use persistent storage for bootstrap pod to maintain cluster state across restarts
 	// This prevents cluster formation failures when the bootstrap pod restarts during initialization
 	volumes = append(volumes, corev1.Volume{
@@ -1382,6 +1396,7 @@ func NewBootstrapPod(
 					}(),
 					StartupProbe:    &probe,
 					LivenessProbe:   &probe,
+					ReadinessProbe:  &neverReadyProbe,
 					VolumeMounts:    volumeMounts,
 					SecurityContext: securityContext,
 				},
