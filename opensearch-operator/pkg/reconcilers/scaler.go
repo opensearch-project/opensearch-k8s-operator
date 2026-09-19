@@ -171,6 +171,34 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 		return false, nil
 	}
 
+	// A scale-down must not take a member out while any node pool already has a
+	// pod down, whatever took it down: a rolling restart or upgrade mid-cycle, a
+	// node failure, or a pod the scaler itself just removed that is still
+	// terminating. This is the reverse direction of #1572, which stops the
+	// rolling restart from deleting a pod while a scaled-down one is leaving; the
+	// scaler runs before the restart in the chain and had no gate of its own.
+	// The gate covers starting a scale-down, continuing a drain and shrinking a
+	// drained pool. The drain is held too: drainNode reactivates shard allocation,
+	// which undoes the primaries-only freeze a restart in flight relies on, and its
+	// Requeue=true would starve the restart reconciler that has to bring the pod
+	// back. Scale-up stays unguarded because adding capacity never removes a
+	// member and is a way to recover a degraded cluster.
+	// Deliberately return without Requeue: the upgrade and rolling-restart
+	// reconcilers run after the scaler and own the recovery of stuck pods (issue
+	// #1531), so Requeue=true would wait forever on a pool only they can make
+	// ready again. Reconcile() still polls via the nodePoolsReady() check.
+	scalingDown := desireReplicaDiff > 0 || currentStatus.Status == "Excluded" || currentStatus.Status == "Drained"
+	if scalingDown {
+		unreadyPool, err := r.unreadyNodePool()
+		if err != nil {
+			return false, err
+		}
+		if unreadyPool != "" {
+			lg.Info(fmt.Sprintf("Group: %s, holding scale-down while node pool %s has a pod that is not ready", nodePool.Component, unreadyPool))
+			return false, nil
+		}
+	}
+
 	// Check for 'Running' or 'Waiting' status so we process scaling when replicas change.
 	// 'Running' indicates a scaling operation has begun; 'Waiting' means we were waiting for
 	// pods to become ready—if the user changed replicas in that state, we must handle it.
@@ -469,6 +497,28 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		return err
 	}
 	return err
+}
+
+// unreadyNodePool returns the first node pool that has fewer ready pods than its
+// StatefulSet asks for, or "" when every pool is whole. Readiness comes from the
+// pods rather than the StatefulSet status so that a terminating pod still counts
+// as a member on its way out (see helpers.CountRunningPodsForNodePool).
+func (r *ScalerReconciler) unreadyNodePool() (string, error) {
+	for i := range r.instance.Spec.NodePools {
+		nodePool := &r.instance.Spec.NodePools[i]
+		currentSts, err := r.client.GetStatefulSet(builders.StsName(r.instance, nodePool), r.instance.Namespace)
+		if err != nil {
+			return "", err
+		}
+		readyReplicas, err := helpers.ReadyReplicasForNodePool(r.client, r.instance, nodePool)
+		if err != nil {
+			return "", err
+		}
+		if readyReplicas != ptr.Deref(currentSts.Spec.Replicas, 1) {
+			return nodePool.Component, nil
+		}
+	}
+	return "", nil
 }
 
 // nodePoolsReady checks that all StatefulSets for current NodePools are fully available.

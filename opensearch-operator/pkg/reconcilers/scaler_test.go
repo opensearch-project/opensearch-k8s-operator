@@ -19,6 +19,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -162,6 +163,38 @@ func scalerDrainTestSts(clusterName, namespace, nodePoolComponent string, replic
 			AvailableReplicas: replicas,
 		},
 	}
+}
+
+// scalerTestPod builds a running pod of a node pool that reports the given readiness.
+func scalerTestPod(clusterName, namespace, nodePoolComponent string, ordinal int, ready bool) corev1.Pod {
+	status := corev1.ConditionFalse
+	if ready {
+		status = corev1.ConditionTrue
+	}
+	return corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      fmt.Sprintf("%s-%s-%d", clusterName, nodePoolComponent, ordinal),
+			Namespace: namespace,
+			Labels: map[string]string{
+				helpers.ClusterLabel:  clusterName,
+				helpers.NodePoolLabel: nodePoolComponent,
+			},
+		},
+		Status: corev1.PodStatus{
+			Phase:      corev1.PodRunning,
+			Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: status}},
+		},
+	}
+}
+
+// listPodsOfNodePool matches the ListPods call helpers.ListPodsForNodePool makes for one node pool.
+func listPodsOfNodePool(clusterName, nodePoolComponent string) interface{} {
+	return mock.MatchedBy(func(opts *client.ListOptions) bool {
+		return opts.LabelSelector != nil && opts.LabelSelector.Matches(labels.Set{
+			helpers.ClusterLabel:  clusterName,
+			helpers.NodePoolLabel: nodePoolComponent,
+		})
+	})
 }
 
 var _ = Describe("Scaler Controller", func() {
@@ -701,7 +734,12 @@ var _ = Describe("Scaler Controller", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
 			mockClient.On("GetStatefulSet", clusterName+"-"+nodePoolComponent, clusterNamespace).Return(currentSts, nil)
-			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{}, nil)
+			// All pods are up: the drain only progresses while no pod of any pool is down (issue #1590).
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{Items: []corev1.Pod{
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 0, true),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 1, true),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 2, true),
+			}}, nil)
 			mockClient.On("ListStatefulSets",
 				client.InNamespace(clusterNamespace),
 				client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{
@@ -922,6 +960,238 @@ var _ = Describe("Scaler Controller", func() {
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(&ctrl.Result{}))
 			Expect(*reactivatedTo).To(Equal("all"))
+		})
+	})
+
+	Context("When a pod is down during a scale-down (issue #1590)", func() {
+		const (
+			clusterName       = "test-cluster"
+			clusterNamespace  = "test-namespace"
+			nodePoolComponent = "data"
+		)
+		stsName := fmt.Sprintf("%s-%s", clusterName, nodePoolComponent)
+
+		// stsWithOnePodDown is a StatefulSet whose status reports one of its pods missing.
+		stsWithOnePodDown := func(name string, replicas int32) appsv1.StatefulSet {
+			return appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: clusterNamespace},
+				Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To(replicas)},
+				Status:     appsv1.StatefulSetStatus{ReadyReplicas: replicas - 1, AvailableReplicas: replicas - 1},
+			}
+		}
+		// spyOnStsWrite records the replica count of any StatefulSet the scaler writes.
+		spyOnStsWrite := func(mockClient *k8s.MockK8sClient) *int32 {
+			written := ptr.To[int32](-1)
+			mockClient.On("ReconcileResource", mock.Anything, reconciler.StatePresent).Run(func(args mock.Arguments) {
+				if sts, ok := args.Get(0).(*appsv1.StatefulSet); ok {
+					*written = ptr.Deref(sts.Spec.Replicas, -1)
+				}
+			}).Return(&ctrl.Result{}, nil).Maybe()
+			return written
+		}
+		// spyOnExclusions counts PUT _cluster/settings calls, which is how excludeNode starts a drain.
+		spyOnExclusions := func(transport *httpmock.MockTransport) *int {
+			puts := new(int)
+			transport.RegisterResponder(http.MethodPut, `=~.*/_cluster/settings.*`, func(*http.Request) (*http.Response, error) {
+				*puts++
+				return httpmock.NewStringResponse(200, `{"transient":{},"persistent":{}}`), nil
+			})
+			return puts
+		}
+		// allowStatusUpdates lets the scaler write its component status so a failure
+		// shows up on the behavioural assertion rather than as an unexpected mock call.
+		allowStatusUpdates := func(mockClient *k8s.MockK8sClient, spec *opensearchv1.OpenSearchCluster) {
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				args.Get(1).(func(*opensearchv1.OpenSearchCluster))(spec)
+			}).Return(nil).Maybe()
+		}
+
+		It("Should not remove a drained node while another pod of the pool is down", func() {
+			// Reverse direction of #1572: the rolling restart deleted data-0 and it is
+			// not back yet, then the user lowered replicas. The scaler runs before the
+			// restart in the chain, so without a gate of its own it finishes the drain
+			// and shrinks the StatefulSet - two members are out of the cluster at once.
+			targetNodeName := fmt.Sprintf("%s-%s-2", clusterName, nodePoolComponent)
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "Drained", targetNodeName, nil)
+			spec.Spec.General.Version = "2.11.0"
+			spec.Status.Version = "2.11.0"
+			spec.Status.ComponentsStatus = append(spec.Status.ComponentsStatus, opensearchv1.ComponentStatus{
+				Component: componentName,
+				Status:    statusInProgress,
+			})
+			// data-0 was deleted by the rolling restart and has not come back
+			currentSts := stsWithOnePodDown(stsName, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerCatShardsResponder(transport, http.StatusOK, `[]`) // target node already empty
+			registerClusterSettingsResponders(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("GetStatefulSet", stsName, clusterNamespace).Return(currentSts, nil)
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{Items: []corev1.Pod{
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 0, false),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 1, true),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 2, true),
+			}}, nil)
+			// Only reached once the pool looks settled again; nothing to clean up.
+			mockClient.On("ListStatefulSets",
+				client.InNamespace(clusterNamespace),
+				client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{}, nil).Maybe()
+			allowStatusUpdates(mockClient, &spec)
+			shrunkTo := spyOnStsWrite(mockClient)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			result, err := underTest.Reconcile()
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*shrunkTo).To(Equal(int32(-1)), "scaler shrank the StatefulSet while another pod of the pool was down")
+			// Must not short-circuit the chain either: the rolling restart runs after the
+			// scaler and is the only thing that can finish the restart and make the pool
+			// ready again, so Requeue=true here would deadlock the two reconcilers.
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+		})
+
+		It("Should not start a drain while a pod of the pool is not ready", func() {
+			// replicas lowered 3 -> 2, no scaling in progress yet, smartScaler on
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "", "", nil)
+			spec.Status.ComponentsStatus = nil
+			currentSts := stsWithOnePodDown(stsName, 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerClusterSettingsResponders(transport)
+			exclusionPuts := spyOnExclusions(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("GetStatefulSet", stsName, clusterNamespace).Return(currentSts, nil)
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{Items: []corev1.Pod{
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 0, false),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 1, true),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 2, true),
+			}}, nil)
+			allowStatusUpdates(mockClient, &spec)
+			shrunkTo := spyOnStsWrite(mockClient)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			result, err := underTest.Reconcile()
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*exclusionPuts).To(Equal(0), "scaler excluded a node while a pod of the pool was down")
+			Expect(*shrunkTo).To(Equal(int32(-1)))
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(Equal(drainPollInterval))
+		})
+
+		It("Should not remove a node without draining while a pod of the pool is not ready", func() {
+			// Same as above with smartScaler off, where the removal would be immediate.
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "", "", nil)
+			spec.Status.ComponentsStatus = nil
+			spec.Spec.ConfMgmt.SmartScaler = false
+			currentSts := stsWithOnePodDown(stsName, 3)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.On("GetStatefulSet", stsName, clusterNamespace).Return(currentSts, nil)
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{Items: []corev1.Pod{
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 0, false),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 1, true),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 2, true),
+			}}, nil)
+			// Only reached once the pool looks settled again; nothing to clean up.
+			mockClient.On("ListStatefulSets",
+				client.InNamespace(clusterNamespace),
+				client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{}, nil).Maybe()
+			allowStatusUpdates(mockClient, &spec)
+			shrunkTo := spyOnStsWrite(mockClient)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			result, err := underTest.Reconcile()
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*shrunkTo).To(Equal(int32(-1)), "scaler removed a node while a pod of the pool was down")
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(Equal(drainPollInterval))
+		})
+
+		It("Should hold a scale-down while a pod of another node pool is not ready", func() {
+			// The gate is cluster-wide: a member down anywhere is one member down.
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "", "", nil)
+			spec.Status.ComponentsStatus = nil
+			spec.Spec.NodePools = append(spec.Spec.NodePools, opensearchv1.NodePool{Component: "masters", Replicas: 3})
+			dataSts := scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 3)
+			mastersSts := stsWithOnePodDown(clusterName+"-masters", 3)
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, &spec)
+			registerClusterSettingsResponders(transport)
+			exclusionPuts := spyOnExclusions(transport)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("GetStatefulSet", stsName, clusterNamespace).Return(dataSts, nil)
+			mockClient.On("GetStatefulSet", clusterName+"-masters", clusterNamespace).Return(mastersSts, nil)
+			mockClient.On("ListPods", listPodsOfNodePool(clusterName, nodePoolComponent)).Return(corev1.PodList{Items: []corev1.Pod{
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 0, true),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 1, true),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 2, true),
+			}}, nil)
+			mockClient.On("ListPods", listPodsOfNodePool(clusterName, "masters")).Return(corev1.PodList{Items: []corev1.Pod{
+				scalerTestPod(clusterName, clusterNamespace, "masters", 0, true),
+				scalerTestPod(clusterName, clusterNamespace, "masters", 1, false),
+				scalerTestPod(clusterName, clusterNamespace, "masters", 2, true),
+			}}, nil)
+			allowStatusUpdates(mockClient, &spec)
+			shrunkTo := spyOnStsWrite(mockClient)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			result, err := underTest.Reconcile()
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*exclusionPuts).To(Equal(0), "scaler excluded a data node while a master pod was down")
+			Expect(*shrunkTo).To(Equal(int32(-1)))
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+			Expect(result.Requeue).To(BeFalse())
+			Expect(result.RequeueAfter).To(Equal(drainPollInterval))
+		})
+
+		It("Should still scale up while a pod of the pool is not ready", func() {
+			// Adding capacity never takes a member out and is a way to recover a
+			// degraded cluster, so it must not wait on readiness.
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, "", "", nil)
+			spec.Status.ComponentsStatus = nil
+			spec.Spec.ConfMgmt.SmartScaler = false
+			spec.Spec.NodePools[0].Replicas = 3
+			currentSts := stsWithOnePodDown(stsName, 2)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.On("GetStatefulSet", stsName, clusterNamespace).Return(currentSts, nil)
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{Items: []corev1.Pod{
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 0, false),
+				scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 1, true),
+			}}, nil)
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(&spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				args.Get(1).(func(*opensearchv1.OpenSearchCluster))(&spec)
+			}).Return(nil)
+			grownTo := spyOnStsWrite(mockClient)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			result, err := underTest.Reconcile()
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(*grownTo).To(Equal(int32(3)), "scale-up did not proceed while a pod was down")
+			Expect(result.Requeue).To(BeFalse())
+			mockClient.AssertExpectations(GinkgoT())
 		})
 	})
 })
