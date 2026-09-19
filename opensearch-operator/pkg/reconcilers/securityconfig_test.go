@@ -3,6 +3,8 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -24,6 +26,28 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v2"
 )
+
+// applyRetryLoopPattern matches one `until $ADMIN ...; do ... sleep N; done` retry
+// loop of the generated securityconfig-update command.
+var applyRetryLoopPattern = regexp.MustCompile(`(?s)until \$ADMIN\b.*?count\+\+ >= (\d+).*?sleep (\d+);`)
+
+// connectWaitLoopPattern matches the `until curl ...; do ... sleep N; done` loop
+// that waits for the cluster's HTTP endpoint before securityadmin.sh is run.
+var connectWaitLoopPattern = regexp.MustCompile(`(?s)until curl\b.*?wait_count\+\+ >= (\d+).*?sleep (\d+);`)
+
+// applyRetryBudget returns the total time the generated command spends sleeping
+// between retries of securityadmin.sh invocations that never succeed.
+func applyRetryBudget(cmdArg string) time.Duration {
+	var total time.Duration
+	for _, match := range applyRetryLoopPattern.FindAllStringSubmatch(cmdArg, -1) {
+		attempts, err := strconv.Atoi(match[1])
+		Expect(err).ToNot(HaveOccurred())
+		interval, err := strconv.Atoi(match[2])
+		Expect(err).ToNot(HaveOccurred())
+		total += time.Duration(attempts) * time.Duration(interval) * time.Second
+	}
+	return total
+}
 
 func newSecurityconfigReconciler(
 	client *k8s.MockK8sClient,
@@ -367,8 +391,8 @@ do
   echo 'Waiting to connect to the cluster'; sleep 20;
 done;count=0;
 until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd /usr/share/opensearch/config/opensearch-security -icl -nhnv -h no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local -p 9200; do
-  if (( count++ >= 20 )); then
-    echo "Failed to apply securityconfig after 20 attempts";
+  if (( count++ >= 5 )); then
+    echo "Failed to apply securityconfig after 5 attempts";
     exit 1;
   fi;
   sleep 20;
@@ -1035,6 +1059,68 @@ done;`
 			Expect(createdJob.Annotations).To(HaveKey(userChecksumAnnotation))
 			Expect(createdJob.Annotations[userChecksumAnnotation]).To(Equal(""))
 			Expect(createdJob.Annotations[checksumAnnotation]).ToNot(Equal("stale-generated-checksum"))
+		})
+	})
+
+	Describe("securityadmin in-container retry budget", func() {
+		newInstance := func() *opensearchv1.OpenSearchCluster {
+			return &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+				},
+				Status: opensearchv1.ClusterStatus{Initialized: true},
+			}
+		}
+
+		// A securityadmin.sh invocation that fails deterministically (an unparseable
+		// or legacy-format yml) fails identically on every retry. The generated
+		// command must not keep re-running it for minutes: the job has to reach
+		// Failed quickly so the operator can surface it and apply its own backoff.
+		It("bounds the wall-clock a deterministically failing securityadmin invocation can burn", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data:       map[string][]byte{"roles.yml": []byte("not-security-7-format")},
+			}
+
+			cmdArg := BuildCmdArg(newInstance(), secret, log.FromContext(context.Background()))
+			budget := applyRetryBudget(cmdArg)
+
+			Expect(budget).To(BeNumerically(">", 0), "expected the apply command to contain a retry loop")
+			Expect(budget).To(BeNumerically("<=", 2*time.Minute),
+				"a permanently failing securityadmin invocation may stall the job for %s of sleeps before it exits", budget)
+		})
+
+		It("applies the same retry budget to the initial apply-all command", func() {
+			cmdArg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, "/usr/share/opensearch", "host", 9200, securityConfigConnectWaitAttempts, securityConfigConnectWaitAttempts) +
+				fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, "/cfg", "host", 9200,
+					securityConfigApplyRetryAttempts, securityConfigApplyRetryAttempts, securityConfigApplyRetryIntervalSeconds)
+
+			matches := applyRetryLoopPattern.FindAllStringSubmatch(cmdArg, -1)
+			Expect(matches).To(HaveLen(1))
+			Expect(matches[0][1]).To(Equal(strconv.Itoa(securityConfigApplyRetryAttempts)))
+			Expect(matches[0][2]).To(Equal(strconv.Itoa(securityConfigApplyRetryIntervalSeconds)))
+			Expect(applyRetryBudget(cmdArg)).To(BeNumerically("<=", 2*time.Minute))
+		})
+
+		// The connect-wait loop is the one that has to absorb a slow first boot of
+		// the cluster, so shrinking the apply retry budget must not touch it.
+		It("keeps the connect-wait loop at 60 attempts of 20 seconds", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data:       map[string][]byte{"roles.yml": []byte("roles")},
+			}
+
+			cmdArg := BuildCmdArg(newInstance(), secret, log.FromContext(context.Background()))
+
+			match := connectWaitLoopPattern.FindStringSubmatch(cmdArg)
+			Expect(match).To(HaveLen(3), "expected the command to start with a connect-wait loop")
+			Expect(match[1]).To(Equal("60"))
+			Expect(match[2]).To(Equal("20"))
+			Expect(securityConfigConnectWaitAttempts).To(Equal(60))
 		})
 	})
 

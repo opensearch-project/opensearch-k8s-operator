@@ -1768,12 +1768,16 @@ var _ = Describe("Builders", func() {
 			Expect(job.Spec.Template.Spec.HostNetwork).To(BeTrue())
 		})
 
-		It("should retry failed securityconfig update jobs and enforce a deadline", func() {
+		It("should leave retries of failed securityconfig update jobs to the operator and enforce a deadline", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 
 			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "", "admin-cert", "", "cmd", nil, nil)
-			Expect(*job.Spec.BackoffLimit).To(Equal(int32(1)))
+			// The securityconfig reconciler re-creates a failed job with its own
+			// exponential backoff; a Job-level second pod would only re-run
+			// securityadmin.sh with the same input.
+			Expect(*job.Spec.BackoffLimit).To(Equal(int32(0)))
 			Expect(*job.Spec.ActiveDeadlineSeconds).To(Equal(int64(2400)))
+			Expect(job.Spec.Template.Spec.RestartPolicy).To(Equal(corev1.RestartPolicyNever))
 		})
 	})
 
