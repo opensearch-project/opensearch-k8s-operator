@@ -1594,7 +1594,13 @@ func NewSecurityconfigUpdateJob(
 		securityconfigUserChecksumAnnotation: userChecksum,
 	}
 	terminationGracePeriodSeconds := int64(5)
-	backoffLimit := int32(1)
+	// No Job-level pod retry: the securityconfig reconciler owns retries and
+	// re-creates a failed job with exponential backoff. A second pod attempt
+	// started by the Job controller would re-run securityadmin.sh, which
+	// replaces whole security documents, with the same input, and since the
+	// reconciler acts on Failed as soon as it is observed it would delete the
+	// job (and kill that second pod mid-apply) anyway.
+	backoffLimit := int32(0)
 	activeDeadlineSeconds := int64(2400)
 
 	image := helpers.ResolveImage(instance, &node)

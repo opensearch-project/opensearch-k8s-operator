@@ -50,7 +50,28 @@ const (
 	securityConfigInitialRetryDelay = 30 * time.Second
 	securityConfigMaxRetryDelay     = 15 * time.Minute
 
+	// securityConfigConnectWaitAttempts bounds the connect-wait loop in
+	// SecurityAdminBaseCmdTmpl: 60 probes 20s apart, i.e. up to 20 minutes for
+	// the HTTP endpoint of a freshly created cluster to start answering.
 	securityConfigConnectWaitAttempts = 60
+
+	// securityConfigApplyRetryAttempts and securityConfigApplyRetryIntervalSeconds
+	// bound the retry loop around each securityadmin.sh invocation in
+	// ApplyAllYmlCmdTmpl and ApplySingleYmlCmdTmpl. The loop only has to cover
+	// the short transient window after the HTTP endpoint answers but before the
+	// cluster is ready to accept the security index (cluster manager not yet
+	// elected, cluster not yet yellow on first boot); the connect-wait loop
+	// above already covers the long "cluster is still coming up" phase, and
+	// securityadmin.sh itself waits up to 5 minutes for a yellow cluster on
+	// every invocation. count is post-incremented, so the loop runs attempts+1
+	// invocations with attempts sleeps in between: 6 invocations and 100s of
+	// sleeps per file. A securityadmin.sh run that fails deterministically (an
+	// unparseable or legacy-format yml) therefore fails the job in roughly
+	// 2.5 minutes per file instead of ~10, and the operator's own retry with
+	// exponential backoff (handleExistingSecurityConfigJob) takes over from
+	// there.
+	securityConfigApplyRetryAttempts        = 5
+	securityConfigApplyRetryIntervalSeconds = 20
 
 	adminCert = "/certs/tls.crt"
 	adminKey  = "/certs/tls.key"
@@ -68,22 +89,25 @@ do
   echo 'Waiting to connect to the cluster'; sleep 20;
 done;`
 
+	// ApplyAllYmlCmdTmpl and ApplySingleYmlCmdTmpl take, after the securityadmin
+	// arguments, securityConfigApplyRetryAttempts twice (loop bound and
+	// message) and securityConfigApplyRetryIntervalSeconds.
 	ApplyAllYmlCmdTmpl = `count=0;
 until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s -p %v; do
-  if (( count++ >= 20 )); then
-    echo "Failed to apply securityconfig after 20 attempts";
+  if (( count++ >= %d )); then
+    echo "Failed to apply securityconfig after %d attempts";
     exit 1;
   fi;
-  sleep 20;
+  sleep %d;
 done;`
 
 	ApplySingleYmlCmdTmpl = `count=0;
 until $ADMIN -cacert %s -cert %s -key %s -f %s -t %s -icl -nhnv -h %s -p %v; do
-  if (( count++ >= 20 )); then
-    echo "Failed to apply securityconfig after 20 attempts";
+  if (( count++ >= %d )); then
+    echo "Failed to apply securityconfig after %d attempts";
     exit 1;
   fi;
-  sleep 20;
+  sleep %d;
 done;`
 )
 
@@ -288,7 +312,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		opensearchHome := r.instance.Spec.General.GetOpenSearchHome()
 		httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(r.instance)
 		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort, securityConfigConnectWaitAttempts, securityConfigConnectWaitAttempts) +
-			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
+			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort,
+				securityConfigApplyRetryAttempts, securityConfigApplyRetryAttempts, securityConfigApplyRetryIntervalSeconds)
 	}
 
 	if r.instance.Status.Initialized {
@@ -357,7 +382,8 @@ func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret
 		// Even if the field was removed from the yaml file it was applied from
 		// Instead it sets it to an empty value
 		if string(secret.Data[k]) != "" {
-			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, securityConfigPort)
+			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, securityConfigPort,
+				securityConfigApplyRetryAttempts, securityConfigApplyRetryAttempts, securityConfigApplyRetryIntervalSeconds)
 		}
 	}
 
@@ -545,11 +571,12 @@ func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
 		return ctrl.Result{}, true, nil
 	}
 
-	// Checked before Active: with backoffLimit:1 a failed pod's replacement can
-	// already be starting (Active>0) while Failed>0 also holds. Waiting for
-	// Active to drop to 0 before acting on the failure doubles detection time
-	// for a deterministic failure (e.g. a malformed yml) that the replacement
-	// pod is guaranteed to hit as well.
+	// Checked before Active so a failure is acted on as soon as it is observed.
+	// With a Job-level pod retry (backoffLimit > 0) a failed pod's replacement
+	// could otherwise be starting (Active>0) while Failed>0 also holds, and
+	// waiting for Active to drop to 0 would double detection time for a
+	// deterministic failure (e.g. a malformed yml) that the replacement pod is
+	// guaranteed to hit as well.
 	if job.Status.Failed > 0 {
 		retryCount := r.securityConfigRetryCount()
 		delay := securityConfigRetryDelay(retryCount)
