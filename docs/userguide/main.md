@@ -242,9 +242,43 @@ nodePools:
 
 Using `spec.general.additionalConfig` you can add settings that will be applied to all nodes in the cluster. The settings are added to a shared configmap that is mounted to all node pools. If you need nodepool-specific configuration, you can use `nodePools[].additionalConfig` which will be merged with `spec.general.additionalConfig` for that specific nodepool (nodepool settings override general settings). When a nodepool has `additionalConfig` specified, it will get its own configmap with the merged configuration.
 
-The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`.
+The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`. To customize `cluster.name`, use the dedicated `spec.general.clusterName` field instead (see [Custom cluster name](#custom-cluster-name) below).
 
 Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If want to avoid that please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
+
+### Custom cluster name
+
+By default the Operator sets the OpenSearch `cluster.name` to the CR's `.metadata.name`. This means that two clusters in different namespaces with the same CR name (e.g. `opensearch`) will share the same internal cluster name. In most single-cluster setups this is perfectly fine and no action is needed.
+
+If you need a distinct `cluster.name` — for example when running multiple clusters that must be distinguishable by name, or when federating metrics across namespaces — you can set `spec.general.clusterName`:
+
+```yaml
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: opensearch          # Kubernetes object prefix stays "opensearch-*"
+  namespace: team-a
+spec:
+  general:
+    clusterName: team-a-logs # OpenSearch cluster.name becomes "team-a-logs"
+    serviceName: opensearch
+    version: "3"
+```
+
+When `clusterName` is omitted or empty the Operator falls back to the CR name, preserving backward compatibility.
+
+Using Helm:
+
+```yaml
+cluster:
+  general:
+    clusterName: "team-a-logs"
+```
+
+> **Warning — do not change `clusterName` on a running cluster.**
+> Changing `cluster.name` on an existing cluster causes OpenSearch to treat the nodes as members of a **new, empty cluster**. Existing data and cluster state will be inaccessible. Only set this field during initial cluster creation, or be prepared to perform a full data migration. This setting is intended for special use-cases; most users do not need to set it.
+>
+> **Certificate impact:** The Operator uses `clusterName` (defaulting to `.metadata.name`) as the **OrganizationalUnit (OU)** in all generated TLS certificates and in `plugins.security.nodes_dn`. For example, with `metadata.name: opensearch` and `clusterName: team-a-logs`, a generated transport node DN becomes `CN=opensearch-masters-0,OU=team-a-logs`. Changing `clusterName` on a running cluster causes newly issued certificates to carry a different OU, which breaks `nodes_dn` trust and **prevents nodes from rejoining the cluster**. If you use `clusterName`, set it once when creating the cluster and do not change it afterwards.
 
 ### Per-node pool image override
 
@@ -314,7 +348,7 @@ Alternatively, you can provide the certificates yourself (e.g. if your organizat
 
 If you provide just one certificate, it must be placed in a Kubernetes TLS secret (with the fields `ca.crt`, `tls.key` and `tls.crt`, must all be PEM-encoded), and you must provide the name of the secret as `secret.name`. If you want to keep the CA certificate separate, you can place it in a separate secret and supply that as `caSecret.name`. If you provide one certificate per node, you must place all certificates into one secret (including the `ca.crt`) with a `<hostname>.key` and `<hostname>.crt` for each node. The hostname is defined as `<cluster-name>-<nodepool-component>-<index>` (e.g. `my-first-cluster-masters-0`).
 
-If you provide the certificates yourself, you must also provide the list of certificate DNs in `nodesDn`, wildcards can be used (e.g. `"CN=my-first-cluster-*,OU=my-org"`).
+If you provide the certificates yourself, you must also provide the list of certificate DNs in `nodesDn`, wildcards can be used (e.g. `"CN=my-first-cluster-*,OU=my-org"`). Note that the Operator uses `clusterName` (defaulting to `.metadata.name`) as the OU in its generated certificates. If you provide your own certificates, make sure the OU in your certificate DNs matches accordingly.
 
 #### Node HTTP/REST API
 
@@ -1617,7 +1651,7 @@ spec:
       http:
         generate: true
         adminDn:
-          - "CN=admin,OU=dev-cluster"
+          - "CN=admin,OU=dev-cluster"  # OU matches clusterName (or .metadata.name if clusterName is unset)
 ```
 
 #### Option B: bring your own client certificate

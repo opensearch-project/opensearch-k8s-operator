@@ -4438,6 +4438,10 @@ spec:
                       type: string
                     description: Adds support for annotations in services
                     type: object
+                  clusterName:
+                    description: ClusterName sets the OpenSearch cluster.name setting.
+                      Defaults to the CR name if not set.
+                    type: string
                   command:
                     type: string
                   defaultRepo:
