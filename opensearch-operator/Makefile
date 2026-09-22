@@ -8,7 +8,7 @@ ENVTEST_K8S_VERSION = 1.27
 PROJECT_PATH=$(CURDIR)
 
 # OLM Bundle Configuration
-VERSION ?= 3.0.0
+VERSION ?= 3.0.0-beta
 BUNDLE_IMG ?= opensearchproject/opensearch-operator-bundle:v$(VERSION)
 CATALOG_IMG ?= opensearchproject/opensearch-operator-catalog:v$(VERSION)
 BUNDLE_CHANNELS ?= stable,alpha
