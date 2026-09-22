@@ -16,7 +16,7 @@ jobs:
     if: github.repository == 'opensearch-project/opensearch-k8s-operator'
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -57,7 +57,6 @@ jobs:
       - name: Create GitHub pre-release with chart asset
         uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
         with:
-          token: ${{ secrets.OPENSEARCH_CI_BOT_TOKEN }}
           tag: ${{ github.ref_name }}
           name: ${{ github.ref_name }}
           artifacts: .cr-release-packages/${{ github.ref_name }}.tgz
