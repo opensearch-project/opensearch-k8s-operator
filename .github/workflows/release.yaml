@@ -99,5 +99,4 @@ jobs:
             --base gh-pages \
             --head "opensearch-ci-bot:${BRANCH}" \
             --title "[AUTO] Update index.yaml for ${TAG}" \
-            --body "Update index.yaml on gh-pages for ${TAG}." \
-            --label enhancement
+            --body "Update index.yaml on gh-pages for ${TAG}."
