@@ -1,72 +1,104 @@
 name: "Publish Release from tag"
+
 on:
   push:
     tags:
-      - 'v*'
+      - 'opensearch-operator-*'
+      - 'opensearch-cluster-*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref_name }}
+  cancel-in-progress: false
+
 jobs:
   release:
-    permissions:
-      contents: write
+    name: Release ${{ github.ref_name }}
+    if: github.repository == 'opensearch-project/opensearch-k8s-operator'
     runs-on: ubuntu-latest
-    environment:
-      name: k8s-operator
-    name: Release
+    permissions:
+      contents: read
     steps:
       - name: Checkout
-        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          fetch-depth: 0
- 
-      - name: Setup go
-        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
-        with:
-          go-version-file: 'go.work'
-          cache: false
- 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
-
-      - name: set Env
-        id: github-ver
-        run: |
-          echo "RELEASE_VERSION=${GITHUB_REF#refs/*/v}" >> $GITHUB_ENV
-  
-      - name: Make sure helm chart has correct versions
-        run: |
-          sed -i -e 's/^appVersion:.*/appVersion: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
-          sed -i -e 's/^version:.*/version: '$RELEASE_VERSION'/' charts/opensearch-operator/Chart.yaml
-
-      - name: Configure Git
-        run: |
-          git config user.name "$GITHUB_ACTOR"
-          git config user.email "$GITHUB_ACTOR@users.noreply.github.com"
+          persist-credentials: false
 
       - name: Install Helm
-        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4
-        env:
-          GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
+        uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
 
-      - name: Run chart-releaser for opensearch-operator
-        uses: helm/chart-releaser-action@a917fd15b20e8b64b94d9158ad54cd6345335584 # v1.6.0
-        with:
-          skip_existing: true
-          mark_as_latest: false
+      - name: Resolve chart from tag
+        id: meta
         env:
-          CR_TOKEN: "${{ secrets.GITHUB_TOKEN }}"
-
-      - name: Create Release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_name }}
         run: |
-          # Generate notes against the previous operator (v*) tag explicitly:
-          # GitHub's default baseline is the latest published release, which is
-          # usually an interleaved helm chart release with an unrelated diff range.
-          PREV_TAG=$(git tag -l 'v*' --sort=-v:refname | grep -vx "$GITHUB_REF_NAME" | head -1)
-          EXTRA_ARGS=""
-          [ -n "$PREV_TAG" ] && EXTRA_ARGS="--notes-start-tag $PREV_TAG"
-          case "$GITHUB_REF_NAME" in *-*) EXTRA_ARGS="$EXTRA_ARGS --prerelease";; esac
-          gh release create "$GITHUB_REF_NAME" \
-            --draft $EXTRA_ARGS \
-            --title "$GITHUB_REF_NAME" \
-            --generate-notes
+          case "$TAG" in
+            opensearch-operator-*) CHART="opensearch-operator" ;;
+            opensearch-cluster-*) CHART="opensearch-cluster" ;;
+            *)
+              echo "::error::Tag '$TAG' does not match a known chart prefix"
+              exit 1
+              ;;
+          esac
+          TAG_VERSION="${TAG#${CHART}-}"
+          CHART_VERSION="$(helm show chart "charts/${CHART}" | awk '/^version:/ {print $2}')"
+          if [ "$TAG_VERSION" != "$CHART_VERSION" ]; then
+            echo "::error::Tag version '$TAG_VERSION' does not match ${CHART} Chart.yaml version '$CHART_VERSION'"
+            exit 1
+          fi
+          DESCRIPTION="$(helm show chart "charts/${CHART}" | awk -F': ' '/^description:/ {print $2}')"
+          echo "chart=$CHART" >> "$GITHUB_OUTPUT"
+          echo "description=$DESCRIPTION" >> "$GITHUB_OUTPUT"
 
+      - name: Package chart
+        run: |
+          mkdir -p .cr-release-packages
+          helm package "charts/${{ steps.meta.outputs.chart }}" -d .cr-release-packages/
+
+      - name: Create GitHub pre-release with chart asset
+        uses: ncipollo/release-action@339a81892b84b4eeb0f6e744e4574d79d0d9b8dd # v1.21.0
+        with:
+          token: ${{ secrets.OPENSEARCH_CI_BOT_TOKEN }}
+          tag: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          artifacts: .cr-release-packages/${{ github.ref_name }}.tgz
+          body: ${{ steps.meta.outputs.description }}
+          prerelease: true
+          immutableCreate: true
+
+      - name: Update index.yaml and open PR to gh-pages
+        env:
+          GH_TOKEN: ${{ secrets.OPENSEARCH_CI_BOT_TOKEN }}
+          TZ: UTC
+          TAG: ${{ github.ref_name }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          BRANCH="update-index-${TAG}"
+
+          git config user.name "opensearch-ci-bot"
+          git config user.email "opensearch-infra@amazon.com"
+
+          git fetch origin gh-pages
+          git checkout -b "$BRANCH" origin/gh-pages
+
+          mkdir -p .tmp-index
+          cp ".cr-release-packages/${TAG}.tgz" .tmp-index/
+          helm repo index .tmp-index \
+            --url "https://github.com/${{ github.repository }}/releases/download/${TAG}" \
+            --merge index.yaml
+          cp .tmp-index/index.yaml index.yaml
+          rm -rf .tmp-index
+
+          git add index.yaml
+          git commit --signoff -m "Update index.yaml for ${TAG}"
+
+          git remote add fork "https://github.com/opensearch-ci-bot/${REPO_NAME}.git"
+          gh auth setup-git
+          git push --force fork "$BRANCH"
+
+          gh pr create \
+            --repo "${{ github.repository }}" \
+            --base gh-pages \
+            --head "opensearch-ci-bot:${BRANCH}" \
+            --title "[AUTO] Update index.yaml for ${TAG}" \
+            --body "Update index.yaml on gh-pages for ${TAG}." \
+            --label enhancement
