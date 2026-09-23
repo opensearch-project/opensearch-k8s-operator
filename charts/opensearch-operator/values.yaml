@@ -78,8 +78,12 @@ manager:
 # Install the Custom Resource Definitions with Helm
 installCRDs: true
 
+crds:
+  # -- Keep CRDs (and thus all custom resources stored under them) when the release is uninstalled or upgraded with installCRDs=false, by annotating them with helm.sh/resource-policy: keep. Set to false to let Helm delete the CRDs on uninstall, e.g. for CI/dev environments that want full teardown. Existing CRDs must be deleted manually with `kubectl delete crd`.
+  keep: true
+
 legacyAPI:
-  # -- Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped.
+  # -- Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped. WARNING: disabling this while opensearch.opster.io resources still exist deletes those CRDs and all remaining custom resources stored under them, unless crds.keep is true.
   enabled: true
 
 serviceAccount:
