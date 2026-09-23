@@ -75,6 +75,16 @@ manager:
 
   metricsBindAddress: 127.0.0.1:8080
 
+  # -- Leader election lease duration. Increase alongside renewDeadline/retryPeriod if reconciles
+  # (rolling restarts, upgrades) are being interrupted by transient API server latency.
+  leaderElectionLeaseDuration: 60s
+
+  # -- Leader election renew deadline. Must be less than leaderElectionLeaseDuration.
+  leaderElectionRenewDeadline: 30s
+
+  # -- Leader election retry period.
+  leaderElectionRetryPeriod: 5s
+
 # Install the Custom Resource Definitions with Helm
 installCRDs: true
 
