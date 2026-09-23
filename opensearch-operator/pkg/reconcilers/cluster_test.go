@@ -7,6 +7,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/stretchr/testify/mock"
+	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -19,6 +20,7 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -546,5 +548,108 @@ var _ = Describe("Node attributes RBAC reconciliation", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.Requeue).To(BeFalse())
+	})
+})
+
+var _ = Describe("StatefulSet recreation on immutable field change", func() {
+	newInstance := func() *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "os", Namespace: "test-namespace"},
+		}
+	}
+	newSTS := func(selector map[string]string, policy appsv1.PodManagementPolicyType) *appsv1.StatefulSet {
+		return &appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "os-nodes", Namespace: "test-namespace"},
+			Spec: appsv1.StatefulSetSpec{
+				Replicas:            ptr.To(int32(3)),
+				Selector:            &metav1.LabelSelector{MatchLabels: selector},
+				PodManagementPolicy: policy,
+			},
+		}
+	}
+	legacySelector := map[string]string{
+		helpers.OldClusterLabel:  "os",
+		helpers.OldNodePoolLabel: "nodes",
+	}
+	newSelector := map[string]string{
+		helpers.ClusterLabel:  "os",
+		helpers.NodePoolLabel: "nodes",
+	}
+
+	It("explains the one-time rolling restart when adopting a 2.x StatefulSet (#1580)", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		recorder := record.NewFakeRecorder(1)
+		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: recorder}
+
+		existing := newSTS(legacySelector, appsv1.OrderedReadyPodManagement)
+		desired := newSTS(newSelector, appsv1.ParallelPodManagement)
+
+		mockClient.EXPECT().DeleteStatefulSet(existing, true).Return(nil)
+		mockClient.EXPECT().ReconcileResource(desired, reconciler.StatePresent).Return(nil, nil)
+
+		_, err := underTest.recreateSTSForImmutableFieldChange(existing, desired)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(recorder.Events).To(HaveLen(1))
+		event := <-recorder.Events
+		Expect(event).To(HavePrefix("Warning StatefulSetRecreated"))
+		Expect(event).To(ContainSubstring("test-namespace/os-nodes"))
+		Expect(event).To(ContainSubstring("selector changed"))
+		Expect(event).To(ContainSubstring("rolling-restarted once"))
+	})
+
+	It("emits a generic reason when the selector is unchanged", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		recorder := record.NewFakeRecorder(1)
+		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: recorder}
+
+		existing := newSTS(newSelector, appsv1.OrderedReadyPodManagement)
+		desired := newSTS(newSelector, appsv1.ParallelPodManagement)
+
+		mockClient.EXPECT().DeleteStatefulSet(existing, true).Return(nil)
+		mockClient.EXPECT().ReconcileResource(desired, reconciler.StatePresent).Return(nil, nil)
+
+		_, err := underTest.recreateSTSForImmutableFieldChange(existing, desired)
+		Expect(err).NotTo(HaveOccurred())
+
+		event := <-recorder.Events
+		Expect(event).To(ContainSubstring("an immutable field changed"))
+		Expect(event).NotTo(ContainSubstring("selector changed"))
+	})
+
+	It("does not recreate the StatefulSet when the orphaning delete fails", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: record.NewFakeRecorder(1)}
+
+		existing := newSTS(legacySelector, appsv1.OrderedReadyPodManagement)
+		desired := newSTS(newSelector, appsv1.ParallelPodManagement)
+
+		mockClient.EXPECT().DeleteStatefulSet(existing, true).Return(errors.New("conflict"))
+
+		_, err := underTest.recreateSTSForImmutableFieldChange(existing, desired)
+		Expect(err).To(MatchError("conflict"))
+	})
+
+	It("treats adopted pods with a 2.x revision hash as outdated, so the pool is rolled once", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		recreated := newSTS(newSelector, appsv1.ParallelPodManagement)
+		recreated.Status.UpdateRevision = "os-nodes-new-rev"
+
+		mockClient.EXPECT().GetPod("os-nodes-0", "test-namespace").Return(corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "os-nodes-0",
+				Namespace: "test-namespace",
+				Labels: map[string]string{
+					helpers.ClusterLabel:       "os",
+					helpers.NodePoolLabel:      "nodes",
+					"controller-revision-hash": "os-nodes-old-rev",
+				},
+			},
+		}, nil)
+
+		pod, err := helpers.GetPodWithOlderRevision(mockClient, recreated)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(pod).NotTo(BeNil())
+		Expect(pod.Name).To(Equal("os-nodes-0"))
 	})
 })

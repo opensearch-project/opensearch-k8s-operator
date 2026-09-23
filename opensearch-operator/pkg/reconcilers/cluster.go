@@ -343,13 +343,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 	if err != nil {
 		// Check if this is an immutable field change error that requires recreation
 		if r.isImmutableFieldChangeError(err) {
-			r.logger.Info(fmt.Sprintf("Detected immutable field change error, recreating StatefulSet %s/%s", sts.Namespace, sts.Name))
-			// Delete StatefulSet with orphan (pods remain) - following maybeUpdateVolumes pattern
-			if err := r.deleteSTSWithOrphan(&existing); err != nil {
-				return &ctrl.Result{}, err
-			}
-			// Reconcile resource again to create the new StatefulSet
-			return r.client.ReconcileResource(sts, reconciler.StatePresent)
+			return r.recreateSTSForImmutableFieldChange(&existing, sts)
 		}
 		// Return other errors as-is
 		return result, err
@@ -701,6 +695,30 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 		}
 	}
 	return nil
+}
+
+// recreateSTSForImmutableFieldChange deletes the existing StatefulSet while orphaning its pods and
+// creates the desired one in its place. The adopted pods keep their old controller-revision-hash, so
+// the rolling restart reconciler restarts each of them once to pick up the new pod template. A
+// Warning event is emitted so that restart has a visible cause.
+func (r *ClusterReconciler) recreateSTSForImmutableFieldChange(existing *appsv1.StatefulSet, sts *appsv1.StatefulSet) (*ctrl.Result, error) {
+	r.logger.Info(fmt.Sprintf("Detected immutable field change error, recreating StatefulSet %s/%s", sts.Namespace, sts.Name))
+	if r.recorder != nil {
+		annotations := map[string]string{"cluster-name": r.instance.GetName()}
+		reason := "an immutable field changed"
+		if !reflect.DeepEqual(existing.Spec.Selector.MatchLabels, sts.Spec.Selector.MatchLabels) {
+			reason = "its selector changed (e.g. when adopting a StatefulSet created by operator 2.x under the opensearch.org API group)"
+		}
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "StatefulSetRecreated",
+			"StatefulSet %s/%s recreated because %s; its pods will be rolling-restarted once to pick up the new pod template",
+			sts.Namespace, sts.Name, reason)
+	}
+	// Delete StatefulSet with orphan (pods remain) - following maybeUpdateVolumes pattern
+	if err := r.deleteSTSWithOrphan(existing); err != nil {
+		return &ctrl.Result{}, err
+	}
+	// Reconcile resource again to create the new StatefulSet
+	return r.client.ReconcileResource(sts, reconciler.StatePresent)
 }
 
 func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) error {
