@@ -749,6 +749,7 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		registerOsPingResponders(transport, instance)
 		registerCatNodesSequence(transport, []string{builders.BootstrapPodName(instance)}, []string{})
+		registerVotingExclusionsState(transport, builders.BootstrapPodName(instance))
 		calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
 
 		mockClient := k8s.NewMockK8sClient(GinkgoT())

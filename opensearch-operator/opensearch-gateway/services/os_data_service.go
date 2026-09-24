@@ -241,20 +241,38 @@ func ClearVotingConfigExclusions(service *OsClusterClient, lg logr.Logger) error
 	return err
 }
 
-// ClearVotingConfigExclusionsIfNodeGone issues the waiting clear only once the
-// removed node is no longer a cluster member, so the request returns promptly
-// instead of sitting on OpenSearch's 30s wait_for_removal deadline (which is also
-// the operator's client deadline). Returns false when the node is still present
-// and the clear was not attempted.
+// ClearVotingConfigExclusionsIfNodeGone issues the waiting clear only once no
+// excluded node is still a cluster member. The DELETE is cluster-wide and, with
+// wait_for_removal=true, waits for every excluded node; OpenSearch's 30s default
+// is also the operator's client deadline. Returns false when the clear was not
+// attempted. An empty exclusion list is already clear and returns true.
 func ClearVotingConfigExclusionsIfNodeGone(service *OsClusterClient, lg logr.Logger, nodeName string) (bool, error) {
-	present, err := NodeInCluster(service, nodeName)
+	nodes, err := service.CatNodes()
 	if err != nil {
 		lg.Error(err, fmt.Sprintf("Could not list cluster nodes before clearing voting config exclusions for %s", nodeName))
 		return false, err
 	}
-	if present {
+	members := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		members[n.Name] = true
+	}
+	if members[nodeName] {
 		lg.Info(fmt.Sprintf("Node %s is still a cluster member, deferring voting config exclusion clear", nodeName))
 		return false, nil
+	}
+	excluded, err := GetVotingConfigExclusions(service)
+	if err != nil {
+		lg.Error(err, "Could not read voting config exclusions before clearing them")
+		return false, err
+	}
+	if len(excluded) == 0 {
+		return true, nil
+	}
+	for _, name := range excluded {
+		if members[name] {
+			lg.Info(fmt.Sprintf("Excluded node %s is still a cluster member, deferring voting config exclusion clear", name))
+			return false, nil
+		}
 	}
 	if err := ClearVotingConfigExclusions(service, lg); err != nil {
 		return false, err

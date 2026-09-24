@@ -994,6 +994,34 @@ var _ = Describe("Master role helpers", func() {
 			sts.Spec.Template.Spec.Containers[0].Env[0].Value = "data,ingest"
 			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
 		})
+
+		It("should use the last node.roles value and ignore other containers", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "custom"},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name: "sidecar",
+									Env:  []corev1.EnvVar{{Name: "node.roles", Value: "cluster_manager"}},
+								},
+								{
+									Name: "opensearch",
+									Env: []corev1.EnvVar{
+										{Name: "node.roles", Value: "cluster_manager"},
+										{Name: "node.roles", Value: "data"},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
+		})
 	})
 })
 

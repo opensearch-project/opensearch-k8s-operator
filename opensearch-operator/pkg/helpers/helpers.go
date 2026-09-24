@@ -919,24 +919,34 @@ func HasManagerRole(nodePool *opensearchv1.NodePool) bool {
 }
 
 // IsMasterStatefulSet returns true if the StatefulSet belongs to a master-eligible node pool.
-// The opensearch.role label is checked first; since user-supplied nodePool labels are
-// merged after it and older StatefulSets may predate it, the node.roles environment
-// variable of the OpenSearch container is used as a fallback.
+// The opensearch.role label is checked first. User-supplied nodePool labels are merged
+// after it and older StatefulSets may predate it, so the OpenSearch container's node.roles
+// env is the fallback. When that container sets node.roles more than once, the last value
+// wins, matching the kubelet. Other containers are ignored.
 func IsMasterStatefulSet(sts appsv1.StatefulSet) bool {
 	role := sts.Labels["opensearch.role"]
 	if role == "master" || role == "cluster_manager" {
 		return true
 	}
 	for _, container := range sts.Spec.Template.Spec.Containers {
+		if container.Name != "opensearch" {
+			continue
+		}
+		var roles string
+		found := false
 		for _, env := range container.Env {
-			if env.Name != "node.roles" {
-				continue
+			if env.Name == "node.roles" {
+				roles = env.Value
+				found = true
 			}
-			for _, r := range strings.Split(env.Value, ",") {
-				r = strings.TrimSpace(r)
-				if r == "master" || r == "cluster_manager" {
-					return true
-				}
+		}
+		if !found {
+			continue
+		}
+		for _, r := range strings.Split(roles, ",") {
+			r = strings.TrimSpace(r)
+			if r == "master" || r == "cluster_manager" {
+				return true
 			}
 		}
 	}

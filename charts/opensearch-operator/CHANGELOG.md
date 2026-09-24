@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Experimental parallel recovery mode and related Helm/env config (`manager.parallelRecoveryEnabled` / `PARALLEL_RECOVERY_ENABLED`).
 ### Fixed
+- Removing a master-eligible node now excludes it from the voting configuration first, so a master scale-down, deleting a master pool, or tearing down the bootstrap pod cannot lose quorum. A reverted scale-down clears that exclusion without waiting and re-applies exclusions for nodes that are still being removed.
 - Generated TLS certificates are now rotated 30 days before expiry by default, and expired or unparseable certificates are always regenerated. TLS certificate hot reload is enabled by default on OpenSearch 3.x and above so nodes load renewed certificates without a restart; when hot reload is off (`enableHotReload: false` or OpenSearch < 2.19.1) renewals trigger a rolling restart instead.
   Existing CRs keep a stored `rotateDaysBeforeExpiry: -1` until the spec is re-applied — set `30` (or re-apply) to rotate before expiry rather than recovering after it. Replacing the generated CA secret in place is not a supported rotation procedure; leaf reissue cannot keep dual-CA trust during the swap.
 ### Security

@@ -17,6 +17,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	appsv1 "k8s.io/api/apps/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -164,10 +165,23 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 				// The target is the first ordinal past the StatefulSet: decreaseOneNode already
 				// shrank it, only the OpenSearch cleanup (allocation / voting-config exclusions)
 				// failed and is still pending.
-				// A Drained status without a target (written by an older operator) cannot
-				// tell the two apart; cancelDecrease is safe either way, since it clears
-				// without wait and the node is either staying or already gone.
-				if currentStatus.Status == "Drained" && target != "" && target == helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas) {
+				removedName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
+				pendingCleanup := currentStatus.Status == "Drained" && target == removedName
+				// A Drained status written by an older operator has no target. The removed
+				// node is that same past-the-end ordinal. If it is still excluded, the shrink
+				// already happened and a no-wait clear would put a leaving voter back into
+				// the voting configuration. Otherwise the scale-down was reverted.
+				if !pendingCleanup && currentStatus.Status == "Drained" && target == "" && isMaster {
+					var excludeErr error
+					pendingCleanup, excludeErr = r.votingConfigExcludes(removedName)
+					if excludeErr != nil {
+						return true, excludeErr
+					}
+					if pendingCleanup {
+						target = removedName
+					}
+				}
+				if pendingCleanup {
 					return r.finishDecreaseCleanup(currentStatus, currentSts, nodePool.Component, nil, r.instance.Spec.ConfMgmt.SmartScaler, isMaster, target)
 				}
 				// Otherwise the scale-down was reverted before the target was removed.
@@ -435,7 +449,7 @@ func (r *ScalerReconciler) finishDecreaseCleanup(currentStatus opensearchv1.Comp
 			return true, clearErr
 		}
 		if !cleared {
-			lg.Info(fmt.Sprintf("Group: %s, waiting for removed node %s to leave the cluster before clearing voting config exclusions", nodePoolGroupName, lastReplicaNodeName))
+			lg.Info(fmt.Sprintf("Group: %s, deferring voting config exclusion clear for %s until every excluded node has left the cluster", nodePoolGroupName, lastReplicaNodeName))
 			return true, nil
 		}
 	}
@@ -474,10 +488,24 @@ func (r *ScalerReconciler) cancelDecrease(currentStatus opensearchv1.ComponentSt
 	}
 	if isMaster {
 		// wait_for_removal=false: the node is staying, so a waiting clear would never
-		// finish. This also drops exclusions of any other pool mid-scale-down;
-		// decreaseOneNode re-applies its own exclusion right before shrinking.
+		// finish. The DELETE drops every exclusion, including voters that are already
+		// past their StatefulSet shrink and will not be posted again by decreaseOneNode.
+		// Read those names first and re-add them after the clear.
+		excluded, err := services.GetVotingConfigExclusions(clusterClient)
+		if err != nil {
+			lg.Error(err, "failed to read voting config exclusions before cancelled scale-down clear")
+			return true, err
+		}
+		keep, err := r.votingExclusionsToKeep(targetNodeName, excluded)
+		if err != nil {
+			return true, err
+		}
 		if err := clusterClient.ClearVotingConfigExclusions(r.ctx, false); err != nil {
 			lg.Error(err, fmt.Sprintf("failed to clear voting config exclusions after cancelled scale-down of %s", targetNodeName))
+			return true, err
+		}
+		if err := r.reapplyLeavingVotingExclusions(clusterClient, keep); err != nil {
+			lg.Error(err, "failed to re-apply voting config exclusions for nodes still being removed")
 			return true, err
 		}
 	}
@@ -486,6 +514,85 @@ func (r *ScalerReconciler) cancelDecrease(currentStatus opensearchv1.ComponentSt
 		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 	})
 	return false, err
+}
+
+// votingConfigExcludes reports whether nodeName is on the voting-config exclusion list.
+func (r *ScalerReconciler) votingConfigExcludes(nodeName string) (bool, error) {
+	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+	if err != nil {
+		return false, err
+	}
+	excluded, err := services.GetVotingConfigExclusions(clusterClient)
+	if err != nil {
+		return false, err
+	}
+	for _, name := range excluded {
+		if name == nodeName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// votingExclusionsToKeep is the set of exclusion names a cluster-wide no-wait clear
+// must restore: names already on the list, scaler targets still marked Excluded or
+// Drained, and terminating master or bootstrap pods. stayingNode is omitted because
+// that scale-down was reverted and the node has to vote again.
+func (r *ScalerReconciler) votingExclusionsToKeep(stayingNode string, alreadyExcluded []string) ([]string, error) {
+	seen := make(map[string]bool, len(alreadyExcluded))
+	var names []string
+	add := func(name string) {
+		if name == "" || name == stayingNode || seen[name] {
+			return
+		}
+		seen[name] = true
+		names = append(names, name)
+	}
+	for _, name := range alreadyExcluded {
+		add(name)
+	}
+	for _, cs := range r.instance.Status.ComponentsStatus {
+		if cs.Component == "Scaler" && (cs.Status == "Excluded" || cs.Status == "Drained") {
+			add(scalerTargetNodeName(cs.Conditions))
+		}
+	}
+	pods, err := r.client.ListPods(&client.ListOptions{
+		Namespace:     r.instance.Namespace,
+		LabelSelector: labels.SelectorFromSet(map[string]string{helpers.ClusterLabel: r.instance.Name}),
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, pod := range pods.Items {
+		if pod.DeletionTimestamp == nil {
+			continue
+		}
+		role := pod.Labels["opensearch.role"]
+		if role == "master" || role == "cluster_manager" || pod.Name == builders.BootstrapPodName(r.instance) {
+			add(pod.Name)
+		}
+	}
+	return names, nil
+}
+
+// reapplyLeavingVotingExclusions posts exclusions again for nodes that are still
+// being removed. A live member that nothing is removing is left off the list so
+// the no-wait clear can put it back into the voting configuration.
+func (r *ScalerReconciler) reapplyLeavingVotingExclusions(clusterClient *services.OsClusterClient, names []string) error {
+	lg := log.FromContext(r.ctx)
+	for _, name := range names {
+		dangling, err := r.isDanglingVotingExclusion(name)
+		if err != nil {
+			return err
+		}
+		if dangling {
+			continue
+		}
+		if err := services.AddVotingConfigExclusion(clusterClient, lg, name); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, isMaster bool) error {

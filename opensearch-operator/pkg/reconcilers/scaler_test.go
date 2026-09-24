@@ -1092,6 +1092,7 @@ var _ = Describe("Scaler Controller", func() {
 			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
 			transport := newTransport(&spec)
 			registerCatNodesSequence(transport, []string{targetNodeName}, []string{})
+			registerVotingExclusionsState(transport, targetNodeName)
 			calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -1120,6 +1121,7 @@ var _ = Describe("Scaler Controller", func() {
 			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
 			transport := newTransport(&spec)
 			registerCatNodesSequence(transport, []string{targetNodeName}, []string{})
+			registerVotingExclusionsState(transport, targetNodeName)
 			calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusInternalServerError)
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -1143,9 +1145,10 @@ var _ = Describe("Scaler Controller", func() {
 		})
 
 		It("Should skip the POST for a node that is not a cluster member instead of recording an _absent_ tombstone", func() {
-			spec, currentSts, _ := masterDecreaseCluster(3)
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
 			transport := newTransport(&spec)
 			registerCatNodesResponder(transport) // target already gone
+			registerVotingExclusionsState(transport, targetNodeName)
 			calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -1165,9 +1168,33 @@ var _ = Describe("Scaler Controller", func() {
 			Expect(*calls).To(Equal([]string{"DELETE wait_for_removal=true"}))
 		})
 
-		reconcileMasterPool := func(spec *opensearchv1.OpenSearchCluster, currentSts appsv1.StatefulSet, members ...string) (bool, *[]string, error) {
+		It("Should defer the clear while another excluded node is still a cluster member", func() {
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
+			other := "test-cluster-masters-9"
+			transport := newTransport(&spec)
+			registerCatNodesSequence(transport, []string{targetNodeName}, []string{other})
+			registerVotingExclusionsState(transport, targetNodeName, other)
+			calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("ReconcileResource", mock.Anything, reconciler.StatePresent).Return(&ctrl.Result{}, nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			requeue, err := underTest.decreaseOneNode(spec.Status.ComponentsStatus[0], currentSts, nodePoolComponent, false, true)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeTrue())
+			Expect(spec.Status.ComponentsStatus).To(HaveLen(1))
+			Expect(*calls).To(Equal([]string{"POST node_names=" + targetNodeName + "&timeout=10s"}))
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+		})
+
+		reconcileMasterPool := func(spec *opensearchv1.OpenSearchCluster, currentSts appsv1.StatefulSet, excluded []string, members ...string) (bool, *[]string, error) {
 			transport := newTransport(spec)
 			registerCatNodesResponder(transport, members...)
+			registerVotingExclusionsState(transport, excluded...)
 			calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -1189,7 +1216,7 @@ var _ = Describe("Scaler Controller", func() {
 			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
 			spec.Spec.NodePools[0].Replicas = 3 // reverted: target is still a live member of the pool
 
-			requeue, calls, err := reconcileMasterPool(&spec, currentSts, targetNodeName)
+			requeue, calls, err := reconcileMasterPool(&spec, currentSts, []string{targetNodeName}, targetNodeName)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requeue).To(BeFalse())
@@ -1203,7 +1230,7 @@ var _ = Describe("Scaler Controller", func() {
 			spec.Spec.NodePools[0].Replicas = 3
 			spec.Status.ComponentsStatus[0].Conditions = nil
 
-			requeue, calls, err := reconcileMasterPool(&spec, currentSts)
+			requeue, calls, err := reconcileMasterPool(&spec, currentSts, nil)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requeue).To(BeFalse())
@@ -1215,7 +1242,7 @@ var _ = Describe("Scaler Controller", func() {
 			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
 			currentSts.Spec.Replicas = ptr.To[int32](2) // decreaseOneNode shrank it, the node is still terminating
 
-			requeue, calls, err := reconcileMasterPool(&spec, currentSts, targetNodeName)
+			requeue, calls, err := reconcileMasterPool(&spec, currentSts, []string{targetNodeName}, targetNodeName)
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requeue).To(BeTrue())
@@ -1224,10 +1251,103 @@ var _ = Describe("Scaler Controller", func() {
 		})
 
 		It("Should finish pending cleanup with a waiting clear once the removed node has left", func() {
-			spec, currentSts, _ := masterDecreaseCluster(3)
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
 			currentSts.Spec.Replicas = ptr.To[int32](2)
 
-			requeue, calls, err := reconcileMasterPool(&spec, currentSts)
+			requeue, calls, err := reconcileMasterPool(&spec, currentSts, []string{targetNodeName})
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeFalse())
+			Expect(spec.Status.ComponentsStatus).To(BeEmpty())
+			Expect(*calls).To(Equal([]string{"DELETE wait_for_removal=true"}))
+		})
+
+		It("Should re-add a voting exclusion for a node another removal is still draining", func() {
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
+			spec.Spec.NodePools[0].Replicas = 3
+			other := "test-cluster-managers-1"
+			spec.Status.ComponentsStatus = append(spec.Status.ComponentsStatus, opensearchv1.ComponentStatus{
+				Component:   "Scaler",
+				Status:      "Drained",
+				Description: "managers",
+				Conditions:  []string{other},
+			})
+
+			requeue, calls, err := reconcileMasterPool(&spec, currentSts, []string{targetNodeName, other}, targetNodeName, other)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeFalse())
+			Expect(spec.Status.ComponentsStatus).To(HaveLen(1))
+			Expect(spec.Status.ComponentsStatus[0].Description).To(Equal("managers"))
+			Expect(*calls).To(Equal([]string{
+				"DELETE wait_for_removal=false",
+				"POST node_names=" + other + "&timeout=10s",
+			}))
+		})
+
+		It("Should re-add an exclusion for a terminating master and not for a live member", func() {
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
+			spec.Spec.NodePools[0].Replicas = 3
+			leaving := "test-cluster-old-0"
+			live := currentSts.Name + "-0"
+			now := metav1.Now()
+
+			transport := newTransport(&spec)
+			registerCatNodesResponder(transport, targetNodeName, leaving, live)
+			registerVotingExclusionsState(transport, targetNodeName, leaving, live)
+			calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
+
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("GetStatefulSet", currentSts.Name, clusterNamespace).Return(currentSts, nil)
+			mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{Items: []corev1.Pod{{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              leaving,
+					Labels:            map[string]string{"opensearch.role": "cluster_manager"},
+					DeletionTimestamp: &now,
+				},
+			}}}, nil)
+			mockClient.On("GetPod", leaving, clusterNamespace).Return(corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: leaving, DeletionTimestamp: &now},
+			}, nil)
+			mockClient.On("GetPod", live, clusterNamespace).Return(corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{Name: live},
+			}, nil)
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(&spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				args.Get(1).(func(*opensearchv1.OpenSearchCluster))(&spec)
+			}).Return(nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.osClientTransport = transport
+			requeue, err := underTest.reconcileNodePool(&spec.Spec.NodePools[0])
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeFalse())
+			Expect(*calls).To(Equal([]string{
+				"DELETE wait_for_removal=false",
+				"POST node_names=" + leaving + "&timeout=10s",
+			}))
+		})
+
+		It("Should keep a legacy Drained status while the removed node is still excluded", func() {
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
+			currentSts.Spec.Replicas = ptr.To[int32](2)
+			spec.Status.ComponentsStatus[0].Conditions = nil
+
+			requeue, calls, err := reconcileMasterPool(&spec, currentSts, []string{targetNodeName}, targetNodeName)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeTrue())
+			Expect(spec.Status.ComponentsStatus).To(HaveLen(1))
+			Expect(*calls).To(BeEmpty())
+		})
+
+		It("Should waiting-clear a legacy Drained status once the removed node has left", func() {
+			spec, currentSts, targetNodeName := masterDecreaseCluster(3)
+			currentSts.Spec.Replicas = ptr.To[int32](2)
+			spec.Status.ComponentsStatus[0].Conditions = nil
+
+			requeue, calls, err := reconcileMasterPool(&spec, currentSts, []string{targetNodeName})
 
 			Expect(err).NotTo(HaveOccurred())
 			Expect(requeue).To(BeFalse())
@@ -1306,6 +1426,7 @@ var _ = Describe("Scaler Controller", func() {
 			currentSts.Spec.Replicas = ptr.To[int32](1)
 			transport := newTransport(&spec)
 			registerCatNodesSequence(transport, []string{targetNodeName}, []string{})
+			registerVotingExclusionsState(transport, targetNodeName)
 			calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
 
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
