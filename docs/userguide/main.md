@@ -2,7 +2,7 @@
 
 This guide is intended for users of the Opensearch Operator. If you want to contribute to the development of the Operator, please see the [Design documents](../designs/high-level.md) and the [Developer guide](../developing.md) instead.
 
-> **API Group Migration Notice**: The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Upgrading the operator from 2.x rolling-restarts every node of existing clusters once. Please see the [Migration Guide](./migration-guide.md) for details.
+> **API Group Migration Notice**: The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Upgrading the operator from 2.x to 3.x rolling-restarts every node of existing clusters once. Please see the [Migration Guide](./migration-guide.md) for details.
 
 ## Installation
 

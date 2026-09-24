@@ -698,27 +698,53 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 }
 
 // recreateSTSForImmutableFieldChange deletes the existing StatefulSet while orphaning its pods and
-// creates the desired one in its place. The adopted pods keep their old controller-revision-hash, so
-// the rolling restart reconciler restarts each of them once to pick up the new pod template. A
-// Warning event is emitted so that restart has a visible cause.
+// creates the desired one in its place. A Warning event is emitted only after both steps succeed.
+// When the pod template changed, adopted pods keep their old controller-revision-hash. The rolling
+// restart reconciler then restarts each of them once, unless an OpenSearch version upgrade is
+// already in progress, in which case the upgrade reconciler restarts them.
 func (r *ClusterReconciler) recreateSTSForImmutableFieldChange(existing *appsv1.StatefulSet, sts *appsv1.StatefulSet) (*ctrl.Result, error) {
 	r.logger.Info(fmt.Sprintf("Detected immutable field change error, recreating StatefulSet %s/%s", sts.Namespace, sts.Name))
-	if r.recorder != nil {
-		annotations := map[string]string{"cluster-name": r.instance.GetName()}
-		reason := "an immutable field changed"
-		if !reflect.DeepEqual(existing.Spec.Selector.MatchLabels, sts.Spec.Selector.MatchLabels) {
-			reason = "its selector changed (e.g. when adopting a StatefulSet created by operator 2.x under the opensearch.org API group)"
-		}
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "StatefulSetRecreated",
-			"StatefulSet %s/%s recreated because %s; its pods will be rolling-restarted once to pick up the new pod template",
-			sts.Namespace, sts.Name, reason)
-	}
 	// Delete StatefulSet with orphan (pods remain) - following maybeUpdateVolumes pattern
 	if err := r.deleteSTSWithOrphan(existing); err != nil {
 		return &ctrl.Result{}, err
 	}
 	// Reconcile resource again to create the new StatefulSet
-	return r.client.ReconcileResource(sts, reconciler.StatePresent)
+	result, err := r.client.ReconcileResource(sts, reconciler.StatePresent)
+	if err != nil {
+		return result, err
+	}
+	if r.recorder != nil {
+		annotations := map[string]string{"cluster-name": r.instance.GetName()}
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "StatefulSetRecreated",
+			"%s", r.statefulSetRecreatedMessage(existing, sts))
+	}
+	return result, nil
+}
+
+func (r *ClusterReconciler) statefulSetRecreatedMessage(existing, sts *appsv1.StatefulSet) string {
+	reason := "an immutable field changed"
+	if !reflect.DeepEqual(statefulSetSelectorLabels(existing), statefulSetSelectorLabels(sts)) {
+		reason = "its selector changed (a StatefulSet created by operator 2.x is being adopted after the API group migration)"
+	}
+	message := fmt.Sprintf("StatefulSet %s/%s recreated because %s", sts.Namespace, sts.Name, reason)
+	if reflect.DeepEqual(existing.Spec.Template, sts.Spec.Template) {
+		return message
+	}
+	if r.openSearchUpgradeInProgress() {
+		return message + "; its pods will be restarted by the in-progress OpenSearch version upgrade"
+	}
+	return message + "; its pods will be rolling-restarted once to pick up the new pod template"
+}
+
+func statefulSetSelectorLabels(sts *appsv1.StatefulSet) map[string]string {
+	if sts == nil || sts.Spec.Selector == nil {
+		return nil
+	}
+	return sts.Spec.Selector.MatchLabels
+}
+
+func (r *ClusterReconciler) openSearchUpgradeInProgress() bool {
+	return r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version
 }
 
 func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) error {
