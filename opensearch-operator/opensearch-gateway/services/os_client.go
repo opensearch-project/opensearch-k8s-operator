@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -371,6 +372,78 @@ func (client *OsClusterClient) GetIndices(ctx context.Context, pattern string) (
 	return doHTTPGet(ctx, client.client, path)
 }
 
+// votingConfigExclusionTimeout is passed as the OpenSearch `timeout` query
+// parameter when adding a voting-config exclusion. The operator HTTP transport
+// uses ResponseHeaderTimeout=30s, which matches OpenSearch's default server
+// timeout; a shorter server timeout lets the request fail first so the
+// reconciler can requeue instead of racing the client deadline.
+//
+// The clear (DELETE) endpoint does not accept `timeout`: its REST handler only
+// consumes `wait_for_removal`, and any other parameter is rejected with a 400.
+const votingConfigExclusionTimeout = "10s"
+
+// AddVotingConfigExclusion excludes the given node name from the cluster voting
+// configuration. The request waits until the node has left the voting config or
+// the timeout expires.
+// See: POST /_cluster/voting_config_exclusions?node_names=<name>&timeout=<timeout>
+func (client *OsClusterClient) AddVotingConfigExclusion(ctx context.Context, nodeName string) error {
+	path := generateVotingConfigExclusionsPath("node_names=" + url.QueryEscape(nodeName) + "&timeout=" + votingConfigExclusionTimeout)
+	resp, err := doHTTPPost(ctx, client.client, path, nil)
+	if err != nil {
+		return err
+	}
+	defer helpers.SafeClose(resp.Body)
+	if resp.IsError() {
+		return ErrVotingConfigExclusionsFailed(resp.String())
+	}
+	return nil
+}
+
+// ClearVotingConfigExclusions clears the voting configuration exclusions list.
+// When waitForRemoval is true, OpenSearch waits (up to its 30s default) until
+// excluded nodes have left the cluster before clearing the list. Callers should
+// only issue a waiting clear once the excluded nodes are already gone.
+// See: DELETE /_cluster/voting_config_exclusions?wait_for_removal=<bool>
+func (client *OsClusterClient) ClearVotingConfigExclusions(ctx context.Context, waitForRemoval bool) error {
+	path := generateVotingConfigExclusionsPath("wait_for_removal=" + strconv.FormatBool(waitForRemoval))
+	resp, err := doHTTPDelete(ctx, client.client, path)
+	if err != nil {
+		return err
+	}
+	defer helpers.SafeClose(resp.Body)
+	if resp.IsError() {
+		return ErrVotingConfigExclusionsFailed(resp.String())
+	}
+	return nil
+}
+
+// GetVotingConfigExclusions returns the node names currently on the voting
+// configuration exclusions list, read from the cluster state metadata.
+// See: GET /_cluster/state/metadata?filter_path=metadata.cluster_coordination.voting_config_exclusions
+func (client *OsClusterClient) GetVotingConfigExclusions(ctx context.Context) ([]string, error) {
+	var path strings.Builder
+	path.WriteString("/_cluster/state/metadata?filter_path=metadata.cluster_coordination.voting_config_exclusions")
+	resp, err := doHTTPGet(ctx, client.client, path)
+	if err != nil {
+		return nil, err
+	}
+	defer helpers.SafeClose(resp.Body)
+	if resp.IsError() {
+		return nil, ErrVotingConfigExclusionsFailed(resp.String())
+	}
+	var state responses.ClusterStateVotingExclusionsResponse
+	if err := json.NewDecoder(resp.Body).Decode(&state); err != nil {
+		return nil, err
+	}
+	names := make([]string, 0, len(state.Metadata.ClusterCoordination.VotingConfigExclusions))
+	for _, e := range state.Metadata.ClusterCoordination.VotingConfigExclusions {
+		if e.NodeName != "" {
+			names = append(names, e.NodeName)
+		}
+	}
+	return names, nil
+}
+
 // GetSecurityResource performs an HTTP GET request to OS to fetch the security resource specified by name
 func (client *OsClusterClient) GetSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
@@ -465,6 +538,21 @@ func (client *OsClusterClient) DeleteSnapshotPolicyConfig(ctx context.Context, n
 func (client *OsClusterClient) UpdateSnapshotPolicyConfig(ctx context.Context, name string, seqnumber, primterm int, body io.Reader) (*opensearchapi.Response, error) {
 	path := generateAPIPathSnapshotUpdatePolicies(snapshotpolicyResource, name, seqnumber, primterm)
 	return doHTTPPut(ctx, client.client, path, body)
+}
+
+// generateVotingConfigExclusionsPath builds /_cluster/voting_config_exclusions[?query]
+func generateVotingConfigExclusionsPath(query string) strings.Builder {
+	var path strings.Builder
+	base := "/_cluster/voting_config_exclusions"
+	if query == "" {
+		path.WriteString(base)
+		return path
+	}
+	path.Grow(len(base) + 1 + len(query))
+	path.WriteString(base)
+	path.WriteString("?")
+	path.WriteString(query)
+	return path
 }
 
 // generateGetIndicesPath generates a URI PATH for a specific resource endpoint and name

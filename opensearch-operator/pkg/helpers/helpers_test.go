@@ -944,6 +944,87 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 	})
 })
 
+var _ = Describe("Master role helpers", func() {
+	Describe("IsMasterStatefulSet", func() {
+		It("should detect master role label", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "master"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeTrue())
+		})
+
+		It("should detect cluster_manager role label", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "cluster_manager"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeTrue())
+		})
+
+		It("should return false for data pools", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "data"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
+		})
+
+		It("should fall back to the node.roles env when the role label was overridden or is missing", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "custom"},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name: "opensearch",
+								Env:  []corev1.EnvVar{{Name: "node.roles", Value: "cluster_manager, data"}},
+							}},
+						},
+					},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeTrue())
+
+			sts.Spec.Template.Spec.Containers[0].Env[0].Value = "data,ingest"
+			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
+		})
+
+		It("should use the last node.roles value and ignore other containers", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "custom"},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name: "sidecar",
+									Env:  []corev1.EnvVar{{Name: "node.roles", Value: "cluster_manager"}},
+								},
+								{
+									Name: "opensearch",
+									Env: []corev1.EnvVar{
+										{Name: "node.roles", Value: "cluster_manager"},
+										{Name: "node.roles", Value: "data"},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
+		})
+	})
+})
+
 var _ = Describe("HotReloadEnabled", func() {
 	cluster := func(version string) *opensearchv1.OpenSearchCluster {
 		return &opensearchv1.OpenSearchCluster{

@@ -467,6 +467,12 @@ SmartScaler is enabled by default (`spec.confMgmt.smartScaler: true`) for newly 
 
 **Upgrade note:** Clusters that were created before this default was applied to the parent `confMgmt` object may already have `smartScaler: false` stored in etcd (for example after the operator added a finalizer and rewrote the spec). CRD defaulting does not override a present value. After upgrading the operator/CRDs, check `spec.confMgmt.smartScaler` on existing clusters and set it to `true` if safe draining was intended.
 
+#### Removing master-eligible nodes
+
+Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time regardless of the SmartScaler setting, following the sequence OpenSearch documents for shrinking the voting configuration: the node is first added to the cluster's voting configuration exclusions (`POST /_cluster/voting_config_exclusions`), which blocks until it has left the voting configuration, then its pod is removed, and once every excluded node has left the cluster the exclusions list is cleared (`DELETE /_cluster/voting_config_exclusions?wait_for_removal=true`). With SmartScaler off only this voting step is performed; the shard drain remains opt-in. The same steps apply when a whole master-eligible node pool is removed from `spec.nodePools` and when the bootstrap pod is torn down after initialization.
+
+The exclusions list is cluster-wide and can only be cleared as a whole. The waiting clear is held until no excluded node is still a member, because OpenSearch waits for all of them and that wait shares the operator's 30s client deadline. If a master scale-down is reverted while its target node is still excluded, the operator clears the list without waiting so that node can vote again, then immediately re-adds an exclusion for every other node that is still being removed, including one whose StatefulSet has already shrunk. On every reconcile the operator also clears exclusions that no removal owns any more, for example after an operator restart mid-removal, and emits a `Warning` event when it finds a live node that was left excluded. The admission webhook rejects clusters whose master-eligible pools would have fewer than one replica in total (see [webhooks](webhooks.md)).
+
 ### Set Java heap size
 
 To configure the amount of memory allocated to the OpenSearch nodes, configure the heap size using the JVM args. This operation is expected to have no downtime and the cluster should be operational.

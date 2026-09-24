@@ -188,6 +188,104 @@ func RemoveExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToE
 	return err == nil, err
 }
 
+// NodeInCluster reports whether a node with the given name is currently a
+// member of the cluster.
+func NodeInCluster(service *OsClusterClient, nodeName string) (bool, error) {
+	nodes, err := service.CatNodes()
+	if err != nil {
+		return false, err
+	}
+	for _, n := range nodes {
+		if n.Name == nodeName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// AddVotingConfigExclusion excludes a master-eligible node from the voting
+// configuration before it is permanently removed from the cluster. The call
+// blocks until the node has left the voting configuration.
+//
+// A node that is not a cluster member is skipped: OpenSearch accepts a POST for
+// an unknown node name and records an `_absent_` tombstone that only counts
+// toward cluster.max_voting_config_exclusions without excluding anything.
+func AddVotingConfigExclusion(service *OsClusterClient, lg logr.Logger, nodeName string) error {
+	present, err := NodeInCluster(service, nodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not list cluster nodes before excluding %s from voting", nodeName))
+		return err
+	}
+	if !present {
+		lg.Info(fmt.Sprintf("Node %s is not a cluster member, skipping voting config exclusion", nodeName))
+		return nil
+	}
+	lg.Info(fmt.Sprintf("Adding voting config exclusion for node: %s", nodeName))
+	err = service.AddVotingConfigExclusion(context.Background(), nodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not add voting config exclusion for node %s", nodeName))
+	}
+	return err
+}
+
+// ClearVotingConfigExclusions clears voting configuration exclusions after a
+// master-eligible node has been removed. Always waits for excluded nodes to
+// leave the cluster first; clearing without wait can put a still-alive node
+// back into the voting configuration.
+func ClearVotingConfigExclusions(service *OsClusterClient, lg logr.Logger) error {
+	lg.Info("Clearing voting config exclusions", "waitForRemoval", true)
+	err := service.ClearVotingConfigExclusions(context.Background(), true)
+	if err != nil {
+		lg.Error(err, "Could not clear voting config exclusions")
+	}
+	return err
+}
+
+// ClearVotingConfigExclusionsIfNodeGone issues the waiting clear only once no
+// excluded node is still a cluster member. The DELETE is cluster-wide and, with
+// wait_for_removal=true, waits for every excluded node; OpenSearch's 30s default
+// is also the operator's client deadline. Returns false when the clear was not
+// attempted. An empty exclusion list is already clear and returns true.
+func ClearVotingConfigExclusionsIfNodeGone(service *OsClusterClient, lg logr.Logger, nodeName string) (bool, error) {
+	nodes, err := service.CatNodes()
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not list cluster nodes before clearing voting config exclusions for %s", nodeName))
+		return false, err
+	}
+	members := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		members[n.Name] = true
+	}
+	if members[nodeName] {
+		lg.Info(fmt.Sprintf("Node %s is still a cluster member, deferring voting config exclusion clear", nodeName))
+		return false, nil
+	}
+	excluded, err := GetVotingConfigExclusions(service)
+	if err != nil {
+		lg.Error(err, "Could not read voting config exclusions before clearing them")
+		return false, err
+	}
+	if len(excluded) == 0 {
+		return true, nil
+	}
+	for _, name := range excluded {
+		if members[name] {
+			lg.Info(fmt.Sprintf("Excluded node %s is still a cluster member, deferring voting config exclusion clear", name))
+			return false, nil
+		}
+	}
+	if err := ClearVotingConfigExclusions(service, lg); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// GetVotingConfigExclusions returns the node names currently excluded from the
+// voting configuration.
+func GetVotingConfigExclusions(service *OsClusterClient) ([]string, error) {
+	return service.GetVotingConfigExclusions(context.Background())
+}
+
 func SetClusterShardAllocation(service *OsClusterClient, enableType ClusterSettingsAllocation) error {
 	settings := createClusterSettingsAllocationEnable(enableType)
 	_, err := service.PutClusterSettings(settings)
