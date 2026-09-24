@@ -16,6 +16,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	appsv1 "k8s.io/api/apps/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,6 +71,10 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	lg := log.FromContext(r.ctx)
 
 	upgradeInProgress := r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version
+
+	// Voting-config exclusions are cluster-wide and survive a failed reconcile;
+	// clear the ones no in-flight master removal owns any more.
+	r.sweepVotingConfigExclusions()
 
 	// Skip replica scaling while an upgrade is changing versions — mirrors the
 	// rolling-restart guard so scaler and upgrader do not delete pods at once.
@@ -153,6 +158,21 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 	if desireReplicaDiff == 0 {
 		// If a scaling operation was started before for this nodePool
 		if found {
+			if currentStatus.Status == "Excluded" || currentStatus.Status == "Drained" {
+				target := scalerTargetNodeName(currentStatus.Conditions)
+				isMaster := helpers.HasManagerRole(nodePool)
+				// The target is the first ordinal past the StatefulSet: decreaseOneNode already
+				// shrank it, only the OpenSearch cleanup (allocation / voting-config exclusions)
+				// failed and is still pending.
+				// A Drained status without a target (written by an older operator) cannot
+				// tell the two apart; cancelDecrease is safe either way, since it clears
+				// without wait and the node is either staying or already gone.
+				if currentStatus.Status == "Drained" && target != "" && target == helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas) {
+					return r.finishDecreaseCleanup(currentStatus, currentSts, nodePool.Component, nil, r.instance.Spec.ConfMgmt.SmartScaler, isMaster, target)
+				}
+				// Otherwise the scale-down was reverted before the target was removed.
+				return r.cancelDecrease(currentStatus, nodePool.Component, target, isMaster)
+			}
 			err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 				if currentSts.Status.ReadyReplicas != nodePool.Replicas {
 					// Change the status to waiting while the pods are coming up or getting deleted
@@ -215,14 +235,21 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 
 		if desireReplicaDiff > 0 {
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to scaling")
-			if !r.instance.Spec.ConfMgmt.SmartScaler {
+			isMaster := helpers.HasManagerRole(nodePool)
+			// Master-eligible nodes always go through the exclude/drain path so we can
+			// apply voting-config exclusions before permanently removing a voter.
+			// Data-only nodes without SmartScaler are removed immediately.
+			if !r.instance.Spec.ConfMgmt.SmartScaler && !isMaster {
 				lg.Info(fmt.Sprintf("SmartScaler is disabled, removing nodes from nodegroup %s without draining", nodePool.Component))
-				requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
+				requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, false, false)
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "SmartScaler is disabled: removing node from %s without draining", nodePool.Component)
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Starting to decrease node")
 				return requeue, err
 			}
-			err := r.excludeNode(currentStatus, currentSts, nodePool.Component)
+			if !r.instance.Spec.ConfMgmt.SmartScaler && isMaster {
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "SmartScaler disabled but master node requires voting exclusion before removal")
+			}
+			err := r.excludeNode(currentStatus, currentSts, nodePool.Component, isMaster)
 			return true, err
 
 		}
@@ -239,7 +266,7 @@ func (r *ScalerReconciler) reconcileNodePool(nodePool *opensearchv1.NodePool) (b
 	if currentStatus.Status == "Drained" {
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Start to Drain %s/%s", r.instance.Namespace, r.instance.Name)
 
-		requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler)
+		requeue, err := r.decreaseOneNode(currentStatus, currentSts, nodePool.Component, r.instance.Spec.ConfMgmt.SmartScaler, helpers.HasManagerRole(nodePool))
 		return requeue, err
 	}
 	return false, nil
@@ -261,7 +288,7 @@ func (r *ScalerReconciler) increaseOneNode(currentSts appsv1.StatefulSet, nodePo
 	return false, nil
 }
 
-func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool) (bool, error) {
+func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, smartDecrease bool, isMaster bool) (bool, error) {
 	lg := log.FromContext(r.ctx)
 	*currentSts.Spec.Replicas--
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
@@ -288,7 +315,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 	}
 
 	var clusterClient *services.OsClusterClient
-	if smartDecrease {
+	if smartDecrease || isMaster {
 		var err error
 		clusterClient, err = util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 		if err != nil {
@@ -297,7 +324,20 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client before removing node %s", lastReplicaNodeName)
 			return true, err
 		}
+	}
 
+	if isMaster {
+		// Voting exclusions are cluster-wide and can be cleared underneath us (e.g. by
+		// cancelDecrease on another pool); re-apply right before shrinking so a voter is
+		// never removed. Idempotent for an already-excluded node.
+		if err := services.AddVotingConfigExclusion(clusterClient, lg, lastReplicaNodeName); err != nil {
+			*currentSts.Spec.Replicas++
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to add voting config exclusion for %s", lastReplicaNodeName)
+			return true, err
+		}
+	}
+
+	if smartDecrease {
 		// Drained is persisted on the CR; allocation exclusions are only transient
 		// cluster settings. Re-check emptiness before shrinking so a lost exclusion
 		// cannot delete a node that still holds data.
@@ -344,31 +384,111 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 		return true, err
 	}
 	lg.Info(fmt.Sprintf("Group: %s, Removed node %s", nodePoolGroupName, lastReplicaNodeName))
-	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+
+	if !smartDecrease && !isMaster {
+		err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+			instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+		})
+		if err != nil {
+			lg.Error(err, "failed to update status")
+			return false, err
+		}
+		return false, nil
+	}
+
+	return r.finishDecreaseCleanup(currentStatus, currentSts, nodePoolGroupName, clusterClient, smartDecrease, isMaster, lastReplicaNodeName)
+}
+
+// finishDecreaseCleanup removes allocation and voting-config exclusions after the
+// StatefulSet has already been shrunk. The scaler component status is dropped
+// only after a successful voting-config clear (for masters) so a failed clear
+// is retried on the next reconcile instead of accumulating exclusions.
+func (r *ScalerReconciler) finishDecreaseCleanup(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, clusterClient *services.OsClusterClient, smartDecrease bool, isMaster bool, lastReplicaNodeName string) (bool, error) {
+	lg := log.FromContext(r.ctx)
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+
+	if lastReplicaNodeName == "" {
+		lastReplicaNodeName = helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas)
+	}
+
+	if clusterClient == nil && (smartDecrease || isMaster) {
+		var err error
+		clusterClient, err = util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+		if err != nil {
+			lg.Error(err, "failed to create os client")
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to create os client after removing node %s", lastReplicaNodeName)
+			if isMaster {
+				return true, err
+			}
+		}
+	}
+
+	if isMaster && clusterClient != nil {
+		// The StatefulSet was just shrunk, so the pod is normally still terminating.
+		// A waiting clear issued now would sit on OpenSearch's 30s wait_for_removal
+		// deadline (the client deadline as well) and fail; keep the Drained status
+		// and come back once the node has left the cluster.
+		cleared, clearErr := services.ClearVotingConfigExclusionsIfNodeGone(clusterClient, lg, lastReplicaNodeName)
+		if clearErr != nil {
+			lg.Error(clearErr, fmt.Sprintf("failed to clear voting config exclusions after removing %s", lastReplicaNodeName))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to clear voting config exclusions - Group-%s , node  %s", nodePoolGroupName, lastReplicaNodeName)
+			return true, clearErr
+		}
+		if !cleared {
+			lg.Info(fmt.Sprintf("Group: %s, waiting for removed node %s to leave the cluster before clearing voting config exclusions", nodePoolGroupName, lastReplicaNodeName))
+			return true, nil
+		}
+	}
+
+	if clusterClient != nil && smartDecrease {
+		success, removeErr := services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
+		if !success || removeErr != nil {
+			lg.Error(removeErr, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to remove node exclude - Group-%s , node  %s", nodePoolGroupName, lastReplicaNodeName)
+		}
+	}
+
+	err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 	})
 	if err != nil {
 		lg.Error(err, "failed to update status")
 		return true, err
 	}
-
-	// Requeue so this pass does not continue into the upgrade/restart reconcilers:
-	// the removed pod is still terminating and the cached StatefulSet may still show
-	// the old replica count, so their readiness gates cannot see the removal yet.
-	if !smartDecrease {
-		return true, err
-	}
-
-	success, err := services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
-	if !success || err != nil {
-		lg.Error(err, fmt.Sprintf("failed to remove exclude node %s", lastReplicaNodeName))
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to remove node exclude - Group-%s , node  %s", nodePoolGroupName, lastReplicaNodeName)
-	}
-
-	return true, err
+	return false, nil
 }
 
-func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string) error {
+// cancelDecrease undoes a scale-down that was reverted before its target node was
+// removed: the node stays, so it must hold shards and vote again.
+func (r *ScalerReconciler) cancelDecrease(currentStatus opensearchv1.ComponentStatus, nodePoolGroupName, targetNodeName string, isMaster bool) (bool, error) {
+	lg := log.FromContext(r.ctx)
+	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+	if err != nil {
+		lg.Error(err, "failed to create os client")
+		return true, err
+	}
+	if targetNodeName != "" {
+		if _, err := services.RemoveExcludeNodeHost(clusterClient, lg, targetNodeName); err != nil {
+			return true, err
+		}
+	}
+	if isMaster {
+		// wait_for_removal=false: the node is staying, so a waiting clear would never
+		// finish. This also drops exclusions of any other pool mid-scale-down;
+		// decreaseOneNode re-applies its own exclusion right before shrinking.
+		if err := clusterClient.ClearVotingConfigExclusions(r.ctx, false); err != nil {
+			lg.Error(err, fmt.Sprintf("failed to clear voting config exclusions after cancelled scale-down of %s", targetNodeName))
+			return true, err
+		}
+	}
+	lg.Info(fmt.Sprintf("Group: %s, scale-down reverted, keeping node %s", nodePoolGroupName, targetNodeName))
+	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+	})
+	return false, err
+}
+
+func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatus, currentSts appsv1.StatefulSet, nodePoolGroupName string, isMaster bool) error {
 	lg := log.FromContext(r.ctx)
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
@@ -381,10 +501,24 @@ func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatu
 	// -----  Now start remove node ------
 	lastReplicaNodeName := helpers.ReplicaHostName(currentSts, *currentSts.Spec.Replicas-1)
 
-	excluded, err := services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
-	if err != nil {
-		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
-		return err
+	// Master-eligible nodes must leave the voting configuration before they are stopped.
+	if isMaster {
+		if err := services.AddVotingConfigExclusion(clusterClient, lg, lastReplicaNodeName); err != nil {
+			lg.Error(err, fmt.Sprintf("failed to add voting config exclusion for node %s", lastReplicaNodeName))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to add voting config exclusion for %s", lastReplicaNodeName)
+			return err
+		}
+	}
+
+	// With SmartScaler off a master-eligible node is only removed from the voting
+	// configuration; the user opted out of moving its shards first.
+	excluded := true
+	if r.instance.Spec.ConfMgmt.SmartScaler {
+		excluded, err = services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
+		if err != nil {
+			lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
+			return err
+		}
 	}
 	if excluded {
 		componentStatus := opensearchv1.ComponentStatus{
@@ -457,6 +591,14 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		return fmt.Errorf("target node mismatch during drain: excluded %s but last replica is %s, reset to Running", lastReplicaNodeName, expectedNodeName)
 	}
 
+	if !r.instance.Spec.ConfMgmt.SmartScaler {
+		// Only master-eligible pools reach the drain with SmartScaler off, and
+		// they are here for the voting-config exclusion alone: mark them Drained
+		// without waiting for shards to move.
+		lg.Info(fmt.Sprintf("Group: %s, SmartScaler is disabled, skipping shard drain for node %s", nodePoolGroupName, lastReplicaNodeName))
+		return r.markDrained(currentStatus, lastReplicaNodeName, nodePoolGroupName, annotations)
+	}
+
 	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 	if err != nil {
 		return err
@@ -481,6 +623,12 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		return r.recordDrainWait(currentStatus, lastReplicaNodeName, nodePoolGroupName, annotations)
 	}
 
+	return r.markDrained(currentStatus, lastReplicaNodeName, nodePoolGroupName, annotations)
+}
+
+// markDrained records that the target node may now be removed.
+func (r *ScalerReconciler) markDrained(currentStatus opensearchv1.ComponentStatus, lastReplicaNodeName, nodePoolGroupName string, annotations map[string]string) error {
+	lg := log.FromContext(r.ctx)
 	componentStatus := opensearchv1.ComponentStatus{
 		Component:   "Scaler",
 		Status:      "Drained",
@@ -488,7 +636,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		Conditions:  []string{lastReplicaNodeName},
 	}
 	lg.Info(fmt.Sprintf("Group: %s, Node %s is drained", nodePoolGroupName, lastReplicaNodeName))
-	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+	err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
 	})
 	if err != nil {
@@ -496,7 +644,7 @@ func (r *ScalerReconciler) drainNode(currentStatus opensearchv1.ComponentStatus,
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to update operator status")
 		return err
 	}
-	return err
+	return nil
 }
 
 // unreadyNodePool returns the first node pool that has fewer ready pods than its
@@ -558,7 +706,8 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	lg.Info(fmt.Sprintf("Removing statefulset: %s", sts.Name))
 
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-	if !r.instance.Spec.ConfMgmt.SmartScaler {
+	isMaster := helpers.IsMasterStatefulSet(sts)
+	if !r.instance.Spec.ConfMgmt.SmartScaler && !isMaster {
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "SmartScaler is disabled: removing statefulset %s without draining", sts.Name)
 		return r.client.ReconcileResource(&sts, reconciler.StateAbsent)
 	}
@@ -574,10 +723,13 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 
 	workingOrdinal := ptr.Deref(sts.Spec.Replicas, 1) - 1
 	lastReplicaNodeName := helpers.ReplicaHostName(sts, workingOrdinal)
-	_, err = services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
-	if err != nil {
-		lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
-		return nil, err
+
+	if isMaster {
+		if err := services.AddVotingConfigExclusion(clusterClient, lg, lastReplicaNodeName); err != nil {
+			lg.Error(err, fmt.Sprintf("failed to add voting config exclusion for node %s", lastReplicaNodeName))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to add voting config exclusion for %s", lastReplicaNodeName)
+			return nil, err
+		}
 	}
 
 	// This drain only finishes once replicas move off the excluded node, which
@@ -587,24 +739,32 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 	// short-circuits the reconciler chain (see opensearchController.go), so
 	// neither of them runs again to clear it. Reactivating here is idempotent -
 	// it no-ops when allocation is already unrestricted.
-	if err := services.ReactivateShardAllocation(clusterClient); err != nil {
-		lg.Error(err, "failed to reactivate shard allocation before draining")
-		return nil, err
-	}
+	if r.instance.Spec.ConfMgmt.SmartScaler {
+		if err := services.ReactivateShardAllocation(clusterClient); err != nil {
+			lg.Error(err, "failed to reactivate shard allocation before draining")
+			return nil, err
+		}
 
-	nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
-	if err != nil {
-		lg.Error(err, "failed to check shards on node")
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to check shards on node")
-		return nil, err
-	}
+		_, err = services.AppendExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
+		if err != nil {
+			lg.Error(err, fmt.Sprintf("failed to exclude node %s", lastReplicaNodeName))
+			return nil, err
+		}
 
-	if nodeNotEmpty {
-		lg.Info(fmt.Sprintf("Waiting for shards to drain from node %s", lastReplicaNodeName))
-		return &ctrl.Result{
-			Requeue:      true,
-			RequeueAfter: drainPollInterval,
-		}, nil
+		nodeNotEmpty, err := services.HasShardsOnNode(clusterClient, lastReplicaNodeName)
+		if err != nil {
+			lg.Error(err, "failed to check shards on node")
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Failed to check shards on node")
+			return nil, err
+		}
+
+		if nodeNotEmpty {
+			lg.Info(fmt.Sprintf("Waiting for shards to drain from node %s", lastReplicaNodeName))
+			return &ctrl.Result{
+				Requeue:      true,
+				RequeueAfter: drainPollInterval,
+			}, nil
+		}
 	}
 
 	if workingOrdinal == 0 {
@@ -612,9 +772,14 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 		if err != nil {
 			return result, err
 		}
-		_, err = services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
-		if err != nil {
-			lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
+		if r.instance.Spec.ConfMgmt.SmartScaler {
+			_, err = services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
+			if err != nil {
+				lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
+			}
+		}
+		if isMaster {
+			r.clearVotingExclusionsAfterRemoval(clusterClient, lastReplicaNodeName)
 		}
 		return result, err
 	}
@@ -625,9 +790,14 @@ func (r *ScalerReconciler) removeStatefulSet(sts appsv1.StatefulSet) (*ctrl.Resu
 		return result, err
 	}
 
-	_, err = services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
-	if err != nil {
-		lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
+	if r.instance.Spec.ConfMgmt.SmartScaler {
+		_, err = services.RemoveExcludeNodeHost(clusterClient, lg, lastReplicaNodeName)
+		if err != nil {
+			lg.Error(err, fmt.Sprintf("failed to remove node exclusion for %s", lastReplicaNodeName))
+		}
+	}
+	if isMaster {
+		r.clearVotingExclusionsAfterRemoval(clusterClient, lastReplicaNodeName)
 	}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished scaling")
 	return result, err
@@ -722,4 +892,145 @@ func drainConditionsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// clearVotingExclusionsAfterRemoval is the best-effort clear used where no
+// component status tracks the removal (removeStatefulSet): it only succeeds
+// once the node has left the cluster, and otherwise leaves the exclusion to
+// sweepVotingConfigExclusions on a later pass.
+func (r *ScalerReconciler) clearVotingExclusionsAfterRemoval(clusterClient *services.OsClusterClient, nodeName string) {
+	lg := log.FromContext(r.ctx)
+	cleared, err := services.ClearVotingConfigExclusionsIfNodeGone(clusterClient, lg, nodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("failed to clear voting config exclusions after removing %s; will retry", nodeName))
+		return
+	}
+	if !cleared {
+		lg.Info(fmt.Sprintf("Voting config exclusion for %s is cleared once the node has left the cluster", nodeName))
+	}
+}
+
+// sweepVotingConfigExclusions clears voting-config exclusions that no in-flight
+// master removal owns any more. Two cases are distinguished:
+//
+//   - every excluded node has left the cluster: the removal completed but its
+//     clear was never issued or failed (removeStatefulSet, the bootstrap pod, an
+//     operator restart). Clear with wait_for_removal=true, which returns at once.
+//   - every excluded node is a live member of a pool in the spec that nothing is
+//     removing (a failure after the POST, a pool re-added mid-removal). Such a
+//     node is silently out of the voting configuration and a later restart of any
+//     other master can lose quorum. Clear with wait_for_removal=false so it votes
+//     again, and record a Warning.
+//
+// Anything in between (some excluded node still leaving) is left alone: clearing
+// without wait while a voter is terminating can put it back into the voting
+// configuration right before it dies. Errors are logged, never returned, so a
+// failed sweep cannot block the reconcile chain.
+func (r *ScalerReconciler) sweepVotingConfigExclusions() {
+	if !r.instance.Status.Initialized {
+		return
+	}
+	lg := log.FromContext(r.ctx)
+	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+	if err != nil {
+		lg.V(1).Info("skipping voting config exclusion sweep: cannot create OpenSearch client", "error", err.Error())
+		return
+	}
+	excluded, err := services.GetVotingConfigExclusions(clusterClient)
+	if err != nil {
+		lg.Error(err, "failed to read voting config exclusions")
+		return
+	}
+	if len(excluded) == 0 {
+		return
+	}
+	nodes, err := clusterClient.CatNodes()
+	if err != nil {
+		lg.Error(err, "failed to list cluster nodes for voting config exclusion sweep")
+		return
+	}
+	members := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		members[n.Name] = true
+	}
+
+	var present, dangling []string
+	for _, name := range excluded {
+		if !members[name] {
+			continue
+		}
+		present = append(present, name)
+		isDangling, err := r.isDanglingVotingExclusion(name)
+		if err != nil {
+			lg.Error(err, "failed to inspect excluded node for voting config exclusion sweep", "node", name)
+			return
+		}
+		if isDangling {
+			dangling = append(dangling, name)
+		}
+	}
+
+	if len(present) == 0 {
+		lg.Info("Clearing voting config exclusions left by a completed master removal", "nodes", strings.Join(excluded, ","))
+		if err := services.ClearVotingConfigExclusions(clusterClient, lg); err != nil {
+			lg.Error(err, "failed to clear leftover voting config exclusions; will retry")
+		}
+		return
+	}
+	if len(dangling) != len(present) {
+		// A removal is still in flight; its own path (or a later sweep) clears.
+		return
+	}
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler",
+		"Clearing stale voting config exclusion for live node(s) %s so they can vote again", strings.Join(dangling, ","))
+	lg.Info("Clearing stale voting config exclusions on live master-eligible nodes", "nodes", strings.Join(dangling, ","))
+	if err := clusterClient.ClearVotingConfigExclusions(r.ctx, false); err != nil {
+		lg.Error(err, "failed to clear stale voting config exclusions; will retry")
+	}
+}
+
+// isDanglingVotingExclusion reports whether an excluded node that is still a
+// cluster member is one nothing is removing: its pod exists, is not
+// terminating, belongs to a node pool in the spec within that pool's current
+// replica count, and no Scaler status targets it. The bootstrap pod is owned by
+// the cluster reconciler while it exists.
+func (r *ScalerReconciler) isDanglingVotingExclusion(nodeName string) (bool, error) {
+	if nodeName == builders.BootstrapPodName(r.instance) {
+		return false, nil
+	}
+	for _, cs := range r.instance.Status.ComponentsStatus {
+		if cs.Component == "Scaler" && (cs.Status == "Excluded" || cs.Status == "Drained") && scalerTargetNodeName(cs.Conditions) == nodeName {
+			return false, nil
+		}
+	}
+	pod, err := r.client.GetPod(nodeName, r.instance.Namespace)
+	if err != nil {
+		if k8serrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if pod.DeletionTimestamp != nil {
+		return false, nil
+	}
+	for i := range r.instance.Spec.NodePools {
+		nodePool := r.instance.Spec.NodePools[i]
+		if !helpers.HasManagerRole(&nodePool) {
+			continue
+		}
+		sts, err := r.client.GetStatefulSet(builders.StsName(r.instance, &nodePool), r.instance.Namespace)
+		if err != nil {
+			if k8serrors.IsNotFound(err) {
+				continue
+			}
+			return false, err
+		}
+		for ord := int32(0); ord < ptr.Deref(sts.Spec.Replicas, 1); ord++ {
+			if helpers.ReplicaHostName(sts, ord) == nodeName {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
 }

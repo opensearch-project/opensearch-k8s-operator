@@ -21,6 +21,10 @@ The operator provides validation webhooks for the following OpenSearch CRDs:
 - **OpenSearchUser** - Validates user specifications
 - **OpenSearchUserRoleBinding** - Validates user-role binding configurations
 
+### OpenSearchCluster
+
+Create and update of `OpenSearchCluster` are rejected when no node pool has the cluster-manager role (`cluster_manager`, or `master` on OpenSearch 1.x) with at least 1 replica. This covers scaling the last manager pool to 0 and removing it from `spec.nodePools`, both of which would leave the cluster without a quorum. The guard is user-visible: the Helm chart enables the webhook with `failurePolicy: Fail` by default, so such a cluster cannot be created or saved.
+
 ## Webhook Naming Convention
 
 The webhook names follow a specific naming convention:

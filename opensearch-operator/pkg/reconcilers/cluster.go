@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/go-logr/logr"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -42,6 +44,7 @@ type ClusterReconciler struct {
 	logger                           logr.Logger
 	nodeAttributesClusterRoleName    string
 	skipClusterRoleBindingManagement bool
+	osClientTransport                http.RoundTripper
 }
 
 func NewClusterReconciler(
@@ -80,6 +83,12 @@ func (r *ClusterReconciler) SetNodeAttributesClusterRoleName(name string) {
 	if name != "" {
 		r.nodeAttributesClusterRoleName = name
 	}
+}
+
+// SetOSClientTransport overrides the OpenSearch HTTP transport. Tests use this
+// so voting-config calls in removeBootstrapPod hit httpmock instead of the network.
+func (r *ClusterReconciler) SetOSClientTransport(transport http.RoundTripper) {
+	r.osClientTransport = transport
 }
 
 func (r *ClusterReconciler) getNodeAttributesClusterRoleName() string {
@@ -174,17 +183,15 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Create bootstrap PVC for persistent storage
 	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPVC, r.client.Scheme()))
-	if r.instance.Status.Initialized {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
-	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
-	}
 
 	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
 	if r.instance.Status.Initialized {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
+		// Exclude bootstrap from voting before deletion so small master pools do not lose quorum.
+		result.Combine(r.removeBootstrapPod(bootstrapPod))
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
 	} else {
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
 		result.Combine(r.reconcileBootstrapPod(bootstrapPod))
 	}
 
@@ -668,7 +675,7 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 		return nil
 	}
 
-	r.logger.Info("Disk sizes differ for nodePool", "nodePool", nodePool.Component, "current", existingDisk.String(), "desired", nodePoolDiskSize.String())
+	r.logger.Info("Disk sizes differ for nodePool %s, Current: %s, Desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
 	// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
@@ -847,6 +854,55 @@ func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl
 	}
 
 	return &ctrl.Result{}, nil
+}
+
+// removeBootstrapPod excludes the bootstrap node from the voting configuration before
+// deleting it, so that a 1-master (or even-count) pool does not lose quorum when the
+// bootstrap voter that formed the cluster is removed.
+//
+// Client/POST failures return RequeueAfter without an error so ClusterReconciler
+// does not fail the whole reconcile chain (scaler/upgrade/restart still run). The
+// bootstrap pod is left in place until the exclusion succeeds.
+func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.Result, error) {
+	_, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
+	if k8serrors.IsNotFound(err) {
+		return &ctrl.Result{}, nil
+	}
+	if err != nil {
+		return &ctrl.Result{}, err
+	}
+
+	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+	if err != nil {
+		r.logger.Error(err, "Failed to create OpenSearch client before bootstrap removal; will retry")
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	nodeName := builders.BootstrapPodName(r.instance)
+	if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
+		r.logger.Error(err, "Failed to add voting config exclusion for bootstrap pod; will retry", "pod", nodeName)
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	result, err := r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent)
+	if err != nil {
+		return result, err
+	}
+
+	// The pod is normally still terminating here, so a waiting clear would sit on
+	// OpenSearch's 30s wait_for_removal deadline. Clear only once the node has
+	// left; otherwise the scaler's voting-config exclusion sweep clears it on a
+	// later pass. Never clear without wait here: that can re-admit a still-alive
+	// voter. Failures do not fail the reconciler chain.
+	cleared, clearErr := services.ClearVotingConfigExclusionsIfNodeGone(clusterClient, r.logger, nodeName)
+	if clearErr != nil {
+		r.logger.Error(clearErr, "Failed to clear voting config exclusions after bootstrap removal; the scaler sweep retries", "pod", nodeName)
+	} else if !cleared {
+		r.logger.Info("Bootstrap node still leaving; its voting config exclusion is cleared by the scaler sweep", "pod", nodeName)
+	}
+
+	r.logger.Info("Removed bootstrap pod after voting config exclusion", "pod", nodeName)
+	return result, nil
 }
 
 func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {

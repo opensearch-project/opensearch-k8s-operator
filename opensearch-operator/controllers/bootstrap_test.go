@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"regexp"
 	"time"
 
 	"github.com/jarcoal/httpmock"
@@ -34,7 +33,6 @@ var _ = Describe("Bootstrap pod removal", Ordered, func() {
 	var (
 		cluster          = ComposeOpensearchCrd(clusterName, namespace)
 		bootstrapName    = builders.BootstrapPodName(&cluster)
-		catNodesRoute    = "=~^" + regexp.QuoteMeta(helpers.ClusterURL(&cluster)+"/_cat/nodes")
 		registerCatNodes = func(names ...string) {
 			body := "["
 			for i, n := range names {
@@ -68,6 +66,8 @@ var _ = Describe("Bootstrap pod removal", Ordered, func() {
 			osTransport.RegisterResponder(http.MethodGet, u, httpmock.NewStringResponder(200, `{"name":"test","cluster_name":"test","version":{"number":"2.0.0"}}`))
 		}
 		registerCatNodes(bootstrapName, expectedMasters[0])
+		osTransport.RegisterResponder(http.MethodPost, `=~.*/_cluster/voting_config_exclusions.*`, httpmock.NewStringResponder(200, `{}`))
+		osTransport.RegisterResponder(http.MethodDelete, `=~.*/_cluster/voting_config_exclusions.*`, httpmock.NewStringResponder(200, `{}`))
 
 		Expect(CreateNamespace(k8sClient, &cluster)).Should(Succeed())
 		Expect(k8sClient.Create(context.Background(), &cluster)).Should(Succeed())
@@ -93,6 +93,10 @@ var _ = Describe("Bootstrap pod removal", Ordered, func() {
 			pod.Status.Conditions = []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}
 			Expect(k8sClient.Status().Update(context.Background(), pod)).To(Succeed())
 		}
+	})
+
+	AfterAll(func() {
+		registerDefaultCatNodesResponder()
 	})
 
 	It("should keep the bootstrap pod while only some masters have joined the cluster", func() {

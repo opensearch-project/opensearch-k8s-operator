@@ -918,6 +918,31 @@ func HasManagerRole(nodePool *opensearchv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
 }
 
+// IsMasterStatefulSet returns true if the StatefulSet belongs to a master-eligible node pool.
+// The opensearch.role label is checked first; since user-supplied nodePool labels are
+// merged after it and older StatefulSets may predate it, the node.roles environment
+// variable of the OpenSearch container is used as a fallback.
+func IsMasterStatefulSet(sts appsv1.StatefulSet) bool {
+	role := sts.Labels["opensearch.role"]
+	if role == "master" || role == "cluster_manager" {
+		return true
+	}
+	for _, container := range sts.Spec.Template.Spec.Containers {
+		for _, env := range container.Env {
+			if env.Name != "node.roles" {
+				continue
+			}
+			for _, r := range strings.Split(env.Value, ",") {
+				r = strings.TrimSpace(r)
+				if r == "master" || r == "cluster_manager" {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}
+
 func RemoveDuplicateStrings(strSlice []string) []string {
 	allKeys := make(map[string]bool)
 	list := []string{}
