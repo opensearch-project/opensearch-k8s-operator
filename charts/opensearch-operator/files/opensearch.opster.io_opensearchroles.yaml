@@ -16,7 +16,10 @@ spec:
     singular: opensearchrole
   scope: Namespaced
   versions:
-  - name: v1
+  - deprecated: true
+    deprecationWarning: OpensearchRole is deprecated and will be removed in v4 of
+      the OpenSearch Kubernetes Operator.
+    name: v1
     schema:
       openAPIV3Schema:
         description: OpensearchRole is the Schema for the opensearchroles API
