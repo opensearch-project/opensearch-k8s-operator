@@ -582,7 +582,9 @@ var _ = Describe("StatefulSet recreation on immutable field change", func() {
 		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: recorder}
 
 		existing := newSTS(legacySelector, appsv1.OrderedReadyPodManagement)
+		existing.Spec.Template.Labels = legacySelector
 		desired := newSTS(newSelector, appsv1.ParallelPodManagement)
+		desired.Spec.Template.Labels = newSelector
 
 		mockClient.EXPECT().DeleteStatefulSet(existing, true).Return(nil)
 		mockClient.EXPECT().ReconcileResource(desired, reconciler.StatePresent).Return(nil, nil)
@@ -595,10 +597,12 @@ var _ = Describe("StatefulSet recreation on immutable field change", func() {
 		Expect(event).To(HavePrefix("Warning StatefulSetRecreated"))
 		Expect(event).To(ContainSubstring("test-namespace/os-nodes"))
 		Expect(event).To(ContainSubstring("selector changed"))
+		Expect(event).To(ContainSubstring("API group migration"))
 		Expect(event).To(ContainSubstring("rolling-restarted once"))
+		Expect(event).NotTo(ContainSubstring("under the opensearch.org API group"))
 	})
 
-	It("emits a generic reason when the selector is unchanged", func() {
+	It("emits a generic reason and does not promise a restart when the pod template is unchanged", func() {
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
 		recorder := record.NewFakeRecorder(1)
 		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: recorder}
@@ -615,11 +619,58 @@ var _ = Describe("StatefulSet recreation on immutable field change", func() {
 		event := <-recorder.Events
 		Expect(event).To(ContainSubstring("an immutable field changed"))
 		Expect(event).NotTo(ContainSubstring("selector changed"))
+		Expect(event).NotTo(ContainSubstring("rolling-restarted"))
+		Expect(event).NotTo(ContainSubstring("version upgrade"))
+	})
+
+	It("promises a rolling restart when the pod template changed and the selector did not", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		recorder := record.NewFakeRecorder(1)
+		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: recorder}
+
+		existing := newSTS(newSelector, appsv1.ParallelPodManagement)
+		desired := newSTS(newSelector, appsv1.ParallelPodManagement)
+		desired.Spec.Template.Annotations = map[string]string{"restarted": "true"}
+
+		mockClient.EXPECT().DeleteStatefulSet(existing, true).Return(nil)
+		mockClient.EXPECT().ReconcileResource(desired, reconciler.StatePresent).Return(nil, nil)
+
+		_, err := underTest.recreateSTSForImmutableFieldChange(existing, desired)
+		Expect(err).NotTo(HaveOccurred())
+
+		event := <-recorder.Events
+		Expect(event).To(ContainSubstring("an immutable field changed"))
+		Expect(event).To(ContainSubstring("rolling-restarted once"))
+	})
+
+	It("attributes the restart to the version upgrade when one is in progress", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		recorder := record.NewFakeRecorder(1)
+		instance := newInstance()
+		instance.Status.Version = "2.19.0"
+		instance.Spec.General.Version = "3.0.0"
+		underTest := &ClusterReconciler{client: mockClient, instance: instance, recorder: recorder}
+
+		existing := newSTS(legacySelector, appsv1.OrderedReadyPodManagement)
+		existing.Spec.Template.Labels = legacySelector
+		desired := newSTS(newSelector, appsv1.ParallelPodManagement)
+		desired.Spec.Template.Labels = newSelector
+
+		mockClient.EXPECT().DeleteStatefulSet(existing, true).Return(nil)
+		mockClient.EXPECT().ReconcileResource(desired, reconciler.StatePresent).Return(nil, nil)
+
+		_, err := underTest.recreateSTSForImmutableFieldChange(existing, desired)
+		Expect(err).NotTo(HaveOccurred())
+
+		event := <-recorder.Events
+		Expect(event).To(ContainSubstring("in-progress OpenSearch version upgrade"))
+		Expect(event).NotTo(ContainSubstring("rolling-restarted"))
 	})
 
 	It("does not recreate the StatefulSet when the orphaning delete fails", func() {
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
-		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: record.NewFakeRecorder(1)}
+		recorder := record.NewFakeRecorder(1)
+		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: recorder}
 
 		existing := newSTS(legacySelector, appsv1.OrderedReadyPodManagement)
 		desired := newSTS(newSelector, appsv1.ParallelPodManagement)
@@ -628,9 +679,26 @@ var _ = Describe("StatefulSet recreation on immutable field change", func() {
 
 		_, err := underTest.recreateSTSForImmutableFieldChange(existing, desired)
 		Expect(err).To(MatchError("conflict"))
+		Expect(recorder.Events).To(HaveLen(0))
 	})
 
-	It("treats adopted pods with a 2.x revision hash as outdated, so the pool is rolled once", func() {
+	It("does not emit StatefulSetRecreated when creating the replacement fails", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		recorder := record.NewFakeRecorder(1)
+		underTest := &ClusterReconciler{client: mockClient, instance: newInstance(), recorder: recorder}
+
+		existing := newSTS(legacySelector, appsv1.OrderedReadyPodManagement)
+		desired := newSTS(newSelector, appsv1.ParallelPodManagement)
+
+		mockClient.EXPECT().DeleteStatefulSet(existing, true).Return(nil)
+		mockClient.EXPECT().ReconcileResource(desired, reconciler.StatePresent).Return(nil, errors.New("create failed"))
+
+		_, err := underTest.recreateSTSForImmutableFieldChange(existing, desired)
+		Expect(err).To(MatchError("create failed"))
+		Expect(recorder.Events).To(HaveLen(0))
+	})
+
+	It("selects an adopted pod whose controller-revision-hash differs from the recreated StatefulSet", func() {
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
 		recreated := newSTS(newSelector, appsv1.ParallelPodManagement)
 		recreated.Status.UpdateRevision = "os-nodes-new-rev"

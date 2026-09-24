@@ -61,13 +61,14 @@ Why this happens:
 - The StatefulSet selector is immutable, and 3.x selects pods by `opensearch.org/opensearch-cluster` / `opensearch.org/opensearch-nodepool` instead of the 2.x `opster.io/...` labels (`podManagementPolicy`, also immutable, changed as well). The operator relabels the running pods, deletes each node pool's StatefulSet while orphaning its pods, and recreates it with the 3.x spec.
 - The 3.x pod template also differs from the 2.x one (annotations, environment, init containers). The adopted pods still carry the 2.x revision hash, so the operator restarts them one at a time to pick up the new template.
 
-The restart follows the regular rolling restart path: one pod at a time, waiting for the cluster to recover before moving on. Plan it like any other rolling restart:
+The restart follows the regular rolling restart path: one pod at a time, continuing once shard recovery has settled. The cluster is often still `yellow` at that point. Plan it like any other rolling restart:
 
 - Expect the cluster health to go `yellow` while each node restarts.
 - Make sure every index has at least one replica, otherwise its shards are unavailable while their node restarts.
+- Persistent volume data is kept. A node using emptyDir loses the data on that node when its pod restarts.
 - Allow time in proportion to the cluster size; a pool with many nodes or a lot of data can take hours.
 
-For each recreated StatefulSet the operator emits a `Warning` event with reason `StatefulSetRecreated` on the cluster, followed by the usual `RollingRestart` events. Watch them with `kubectl get events --field-selector involvedObject.name=<cluster-name>`.
+For each recreated StatefulSet the operator emits a `Warning` event with reason `StatefulSetRecreated` on the cluster, followed by the usual `RollingRestart` events. If an OpenSearch version upgrade is also in progress, the upgrade reconciler restarts the pods instead, and those show up as upgrade events rather than `RollingRestart` events. Watch them with `kubectl get events -n <namespace> --field-selector involvedObject.name=<cluster-name>`.
 
 ### Resource Readiness Requirements
 
@@ -410,7 +411,7 @@ If you need to rollback to the old API group:
 
 ### Q: Do I need to recreate my OpenSearch clusters?
 
-**A**: No. The migration is handled at the Kubernetes resource level, and your data (PVCs) is kept. However, upgrading the operator from 2.x to 3.x rolling-restarts every OpenSearch pod once, because each node pool's StatefulSet is recreated with the new `opensearch.org` selector and pod template. See [One-Time Rolling Restart of Existing Clusters](#one-time-rolling-restart-of-existing-clusters).
+**A**: No. The migration is handled at the Kubernetes resource level, and persistent volume data is kept. A node using emptyDir loses the data on that node when its pod restarts. Upgrading the operator from 2.x to 3.x rolling-restarts every OpenSearch pod once, because each node pool's StatefulSet is recreated with the new `opensearch.org` selector and pod template. See [One-Time Rolling Restart of Existing Clusters](#one-time-rolling-restart-of-existing-clusters).
 
 ### Q: When will the old API group be removed?
 
