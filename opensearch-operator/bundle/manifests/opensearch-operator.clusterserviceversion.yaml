@@ -218,7 +218,7 @@ metadata:
       ]
     capabilities: Deep Insights
     categories: Database,Big Data
-    containerImage: opensearchproject/opensearch-operator:3.0.0-beta
+    containerImage: opensearchproject/opensearch-operator:3.0.0
     createdAt: "2024-01-01T00:00:00Z"
     description: Kubernetes operator for managing OpenSearch clusters
     operators.operatorframework.io/builder: operator-sdk-v1.42.0
@@ -236,7 +236,7 @@ metadata:
     features.operators.openshift.io/cnf: "false"
     features.operators.openshift.io/cni: "false"
     features.operators.openshift.io/csi: "false"
-  name: opensearch-operator.v3.0.0-beta
+  name: opensearch-operator.v3.0.0
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -539,7 +539,7 @@ spec:
                       - --leader-elect
                     command:
                       - /manager
-                    image: opensearchproject/opensearch-operator:3.0.0-beta
+                    image: opensearchproject/opensearch-operator:3.0.0
                     imagePullPolicy: IfNotPresent
                     livenessProbe:
                       httpGet:
@@ -607,10 +607,10 @@ spec:
     name: OpenSearch Project
     url: https://opensearch.org
   relatedImages:
-    - image: opensearchproject/opensearch-operator:3.0.0-beta
+    - image: opensearchproject/opensearch-operator:3.0.0
       name: manager
     - image: opensearchproject/opensearch:2.12.0
       name: opensearch
     - image: opensearchproject/opensearch-dashboards:2.12.0
       name: opensearch-dashboards
-  version: 3.0.0-beta
+  version: 3.0.0
