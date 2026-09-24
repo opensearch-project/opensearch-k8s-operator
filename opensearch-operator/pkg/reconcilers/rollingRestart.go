@@ -377,12 +377,41 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 		return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 	}
 
+	// A drain already declared stalled has had its exclusion released; going
+	// through PreparePodForDelete again would only re-apply it.
+	if r.instance.Spec.General.DrainDataNodes {
+		conditions := drainStateFor(r.instance, c.podName)
+		standStill, updated, err := standStillOnStalledDrain(r.osClient, c.podName, conditions, time.Now().UTC())
+		if err != nil {
+			return ctrl.Result{}, err
+		}
+		if updated != nil {
+			if err := recordDrainState(r.client, r.instance, c.podName, updated); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+		if standStill {
+			return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
+		}
+	}
+
 	r.logger.Info(fmt.Sprintf("Preparing to restart pod %s", c.podName))
 	ready, err = services.PreparePodForDelete(r.osClient, r.logger, c.podName, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !ready {
+		// The node is not emptying. Keep the stall clock, and once it is clear the
+		// drain will never finish, stop holding a data node out of allocation for it.
+		if r.instance.Spec.General.DrainDataNodes {
+			conditions, err := recordUnfinishedDrain(r.instance, r.osClient, r.recorder, r.logger, c.podName, drainStateFor(r.instance, c.podName), time.Now().UTC())
+			if err != nil {
+				return ctrl.Result{}, err
+			}
+			if err := recordDrainState(r.client, r.instance, c.podName, conditions); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
 		return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 	}
 

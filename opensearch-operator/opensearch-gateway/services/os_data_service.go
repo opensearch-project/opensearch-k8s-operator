@@ -123,9 +123,12 @@ func AppendExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToE
 				break
 			}
 		}
-		if !found {
-			valArr = append(valArr, nodeNameToExclude)
+		if found {
+			// Already excluded. Writing the same value back republishes cluster
+			// state for nothing, once per pass for as long as the drain runs.
+			return true, nil
 		}
+		valArr = append(valArr, nodeNameToExclude)
 
 		valAsString = strings.Join(valArr, ",")
 	}
@@ -730,6 +733,14 @@ func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, comp
 		return fmt.Errorf("response from API is %s", resp.Status())
 	}
 	return nil
+}
+
+// HasShardActivity reports whether the allocator is still making progress:
+// shards moving, initializing, waiting on delayed allocation or on shard fetches.
+// Exported because the restart and upgrade reconcilers ask the same question when
+// they decide whether a drain that is not finishing is merely slow.
+func HasShardActivity(h responses.ClusterHealthResponse) bool {
+	return hasShardActivity(h)
 }
 
 // hasShardActivity reports whether the allocator is still making progress:
