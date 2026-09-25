@@ -35,6 +35,8 @@ type OpenSearchISMPolicy struct {
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	Spec              OpenSearchISMPolicySpec   `json:"spec,omitempty"`
 	Status            OpensearchISMPolicyStatus `json:"status,omitempty"`
+// OpenSearchISMPolicy maps to a gateway request via struct conversion; PolicyId links to the managed cluster.
+// Status reflects reconciliation of the policy against the cluster state.
 }
 
 // ISMPolicySpec is the specification for the ISM policy for OS.
