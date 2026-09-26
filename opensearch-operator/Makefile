@@ -115,7 +115,7 @@ build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go --loglevel debug
+	go run ./main.go --loglevel debug --enable-webhooks=false
 
 docker-build: generate fmt vet ## Build docker image with the manager.
 	@cp -f ../LICENSE LICENSE 2>/dev/null || true
