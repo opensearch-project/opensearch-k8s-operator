@@ -9,7 +9,7 @@ The OpenSearch Kubernetes Operator is transitioning from `opensearch.opster.io/v
 ### Timeline
 
 - **Current Release**: Both API groups are supported
-- **Deprecation Period**: 2-3 releases (old API group logs warnings)
+- **Deprecation Period**: 2-3 releases (the operator logs a `DEPRECATION WARNING` line when it reconciles legacy resources other than `OpenSearchCluster`; no Kubernetes event or `kubectl` warning is emitted)
 - **Future Release**: `opensearch.opster.io` will be removed
 
 ## Automatic Migration
@@ -18,19 +18,19 @@ The operator includes a migration controller that automatically handles the tran
 
 ### How Migration Works
 
-1. **Automatic Resource Creation**: When you have resources using `opensearch.opster.io/v1`, the migration controller automatically creates corresponding `opensearch.org/v1` resources
+1. **Automatic Resource Creation**: When you have resources using `opensearch.opster.io/v1`, the migration controller automatically creates corresponding `opensearch.org/v1` resources with the same name and namespace. It copies the spec, labels, annotations and status once, at creation time
 2. **Readiness Check**: Migration only occurs when the old resource is in a ready status:
    - **Clusters**: Must be in `RUNNING` phase
    - **Other Resources**: Must be in `CREATED` state (not `PENDING`, `ERROR`, or `IGNORED`)
-3. **Spec Change**: Spec changes to old API resources are not allowed by webhooks
-4. **Status Sync**: Status is synchronized from new resources back to old resources (new → old direction)
+3. **No Spec Sync**: After the new resource exists, the spec is never synced from old to new. The `opensearch.org` resource is the source of truth; make all changes there. The legacy webhooks deny spec changes to old resources
+4. **Status Sync**: For `OpenSearchCluster` only, status is synced from the new resource back to the old one (new → old) every 30 seconds. For the other kinds, the old resource's status is copied to the new resource once and is not updated afterwards
 5. **Deletion Behavior**:
-   - **Deleting new resource** → Automatically deletes the corresponding old resource
-   - **Deleting old resource** → Only allowed if the corresponding new resource exists (ensures migration completed)
+   - **Deleting new resource** → Automatically deletes the corresponding old resource, once the new resource's own cleanup has finished
+   - **Deleting old resource** → Completes only if the corresponding new resource exists. Otherwise the old resource stays `Terminating` (see [Deletion Behavior](#deletion-behavior))
 
-### Migration Annotations
+### Migration Annotations and Finalizer
 
-Migrated resources include these annotations to track the migration:
+Migrated resources carry every annotation of the old resource plus these annotations to track the migration:
 
 ```yaml
 metadata:
@@ -38,19 +38,28 @@ metadata:
     opensearch.org/migrated-from: "opensearch.opster.io/v1"
     opensearch.org/migration-timestamp: "2024-01-15T10:30:00Z"
     opensearch.org/source-uid: "original-resource-uid"
-    opensearch.org/migration-sync: "2024-01-15T10:35:00Z"  # Updated on each sync
 ```
 
-While the legacy status is being copied onto a freshly created new resource it also carries `opensearch.org/migration-status-pending: "true"`. The annotation is removed as soon as the status has been written; if it stays, the migration controller retries the status copy on every reconcile.
+The migration controller also uses these annotations:
+
+| Annotation | Set on | Meaning |
+|------------|--------|---------|
+| `opensearch.org/migration-status-pending: "true"` | New resource (all kinds except `OpenSearchCluster`) | The legacy status has not been copied yet. It is removed once the status is written; while it is present the controller retries the copy on every reconcile |
+| `opensearch.org/cert-ownership-transferred: "true"` | New `OpenSearchCluster` | The owner references of the generated certificate Secrets (`<cluster>-ca`, `-transport-cert`, `-http-cert`, `-admin-cert`) have been moved to the new cluster, so deleting the old cluster does not garbage-collect them |
+| `opensearch.org/deleted-by-new-resource: "true"` | Old resource | The old resource is being deleted because its new twin was deleted; the controller does not recreate the new resource from it |
+
+Both the old resource and its new twin get the `opensearch.org/migration` finalizer, which lets the controller coordinate deletion between the two. A new resource gets it only if a legacy twin exists, so resources created directly in `opensearch.org` are not affected.
 
 ### Migration Controller Behavior
 
 The migration controller watches both old and new API groups and handles:
 
-- **Old Resource Events**: Creates/updates new resources, syncs status back
-- **New Resource Events**: Handles deletion of old resources when new ones are deleted
-- **Status Synchronization**: Periodically syncs status from new to old (every 30 seconds)
-- **Finalizer Management**: Adds migration finalizers to old resources to ensure proper cleanup
+- **Old Resource Events**: Creates the new resource once the old one is ready. It never updates the new resource's spec afterwards
+- **New Resource Events**: Deletes the old resource when the new one is deleted
+- **Status Synchronization**: Copies `OpenSearchCluster` status from new to old every 30 seconds
+- **Finalizer Management**: Adds the `opensearch.org/migration` finalizer to old and new resources to coordinate deletion
+- **PVC Label Backfill**: Once the new `OpenSearchCluster` is initialized, adds the `opensearch.org/opensearch-cluster` and `opensearch.org/opensearch-nodepool` labels to PVCs that only carry the 2.x `opster.io/...` labels
+- **Certificate Secret Ownership**: Moves the owner references of the generated certificate Secrets from the old cluster to the new one
 
 ### One-Time Rolling Restart of Existing Clusters
 
@@ -69,6 +78,19 @@ The restart follows the regular rolling restart path: one pod at a time, continu
 - Allow time in proportion to the cluster size; a pool with many nodes or a lot of data can take hours.
 
 For each recreated StatefulSet the operator emits a `Warning` event with reason `StatefulSetRecreated` on the cluster, followed by the usual `RollingRestart` events. If an OpenSearch version upgrade is also in progress, the upgrade reconciler restarts the pods instead, and those show up as upgrade events rather than `RollingRestart` events. Watch them with `kubectl get events -n <namespace> --field-selector involvedObject.name=<cluster-name>`.
+
+### Other Changes When Upgrading from 2.x
+
+Check these settings on existing clusters after upgrading the operator and CRDs. CRD defaults only apply to fields that are missing; a value already stored in the object is kept.
+
+- **Certificate rotation**: `security.tls.transport.rotateDaysBeforeExpiry` and `security.tls.http.rotateDaysBeforeExpiry` now default to `30`, but existing clusters keep their stored value (typically `-1`, rotation disabled). Set it to `30` so generated certificates are rotated before they expire. Do not delete and regenerate the CA Secret in place; that is not a supported rotation procedure.
+- **TLS hot reload**: OpenSearch 3.x clusters that omit `enableHotReload` take one extra rolling restart, because the hot-reload setting is added to `opensearch.yml`.
+- **SmartScaler**: clusters may have `spec.confMgmt.smartScaler: false` stored even though the default is now `true`. Set it to `true` if you want data nodes drained safely before scale-down.
+- **`setVMMaxMapCount: false`**: before 3.0.0 an explicit `false` could be dropped from the stored object. If the field is now missing from a cluster that should not set `vm.max_map_count`, set it again:
+
+  ```bash
+  kubectl patch opensearchcluster <name> -n <namespace> --type merge -p '{"spec":{"general":{"setVMMaxMapCount":false}}}'
+  ```
 
 ### Resource Readiness Requirements
 
@@ -96,7 +118,7 @@ Resources using the old API group (`opensearch.opster.io/v1`) have restricted we
 - ❌ **Denied**: Creation (use new API group instead)
 - ❌ **Denied**: Spec changes (use new API group instead)
 
-This ensures that once migration starts, users are guided to use the new API group for any modifications.
+This ensures that once migration starts, users are guided to use the new API group for any modifications. The legacy webhooks are only registered while legacy API support is enabled; see [Webhooks](webhooks.md#legacy-opensearchopsterio-resources).
 
 ## Manual Migration Steps
 
@@ -186,13 +208,13 @@ Once you've verified the new resources are working correctly and status is synce
 
 ```bash
 # Remove old API resources
-# Note: This will only succeed if the new resource exists
+# Note: The deletion only completes if the new resource exists
 kubectl delete opensearchclusters.opensearch.opster.io <cluster-name>
 ```
 
 **Important**: 
-- The old resource can only be deleted if the corresponding new resource exists. This ensures migration has completed successfully.
-- Deleting the old resource will not affect the new resource - they operate independently after migration.
+- The old resource is only removed if the corresponding new resource exists. This ensures migration has completed successfully.
+- Deleting the old resource does not affect the new resource. The operator removes the old resource's finalizers without any cleanup in OpenSearch.
 - The migration controller automatically handles the deletion of old resources when new resources are deleted.
 
 ### Step 8: Disable Legacy API Support
@@ -257,7 +279,7 @@ Understanding how deletion works during migration:
 kubectl delete opensearchclusters.opensearch.org my-cluster
 ```
 
-**Result**: The corresponding old resource is automatically deleted as well.
+**Result**: The operator first finishes the new resource's cleanup (for example removing the user from OpenSearch), then deletes the corresponding old resource as well.
 
 ### Scenario 2: Delete Old Resource (Before Migration)
 
@@ -265,7 +287,10 @@ kubectl delete opensearchclusters.opensearch.org my-cluster
 kubectl delete opensearchclusters.opensearch.opster.io my-cluster
 ```
 
-**Result**: Deletion is **blocked** if the new resource doesn't exist. The migration controller will prevent deletion until the new resource is created.
+**Result**: The delete request is accepted, but the `opensearch.org/migration` finalizer keeps the old resource in `Terminating` because the new resource doesn't exist. The migration controller does not create the new resource from an old resource that is being deleted, so the old resource stays `Terminating` until you either:
+
+- create the `opensearch.org/v1` resource yourself (same name and namespace); the controller then removes the old resource's finalizers, or
+- remove the old resource's finalizers manually (`kubectl patch ... --type merge -p '{"metadata":{"finalizers":null}}'`). Only do this if you really want the old resource gone: Kubernetes then garbage-collects the objects it owns, which for an unmigrated `OpenSearchCluster` includes its StatefulSets.
 
 ### Scenario 3: Delete Old Resource (After Migration)
 
@@ -273,7 +298,7 @@ kubectl delete opensearchclusters.opensearch.opster.io my-cluster
 kubectl delete opensearchclusters.opensearch.opster.io my-cluster
 ```
 
-**Result**: Deletion is **allowed** because the new resource exists. The new resource continues to function independently.
+**Result**: The deletion completes because the new resource exists. The new resource continues to function independently.
 
 ## Troubleshooting
 
@@ -294,7 +319,7 @@ If automatic migration isn't working:
 
 2. **Check the operator logs for migration controller**:
    ```bash
-   kubectl logs -n opensearch-operator-system deployment/opensearch-operator | grep -i migration
+   kubectl logs -n <operator-namespace> deployment/<fullname> | grep -i migration
    ```
 
 3. **Look for readiness messages**:
@@ -309,22 +334,24 @@ If automatic migration isn't working:
 
 ### Status Not Syncing
 
-If status isn't syncing between old and new resources:
+Only `OpenSearchCluster` status is synced (new → old). If it isn't syncing:
 
-1. Check that the migration controller is running:
+1. Check that the operator is running:
    ```bash
-   kubectl get pods -n opensearch-operator-system | grep opensearch-operator
+   kubectl get pods -n <operator-namespace> | grep <fullname>
    ```
 
-2. Verify RBAC permissions for both API groups:
+2. Verify RBAC permissions for both API groups (with `useRoleBindings: true`, check the Role in the operator namespace instead):
    ```bash
-   kubectl get clusterrole opensearch-operator-manager-role -o yaml | grep -A 5 opensearch
+   kubectl get clusterrole <fullname> -o yaml | grep -A 5 opensearch
    ```
 
 3. Look for errors in the controller logs:
    ```bash
-   kubectl logs -n opensearch-operator-system deployment/opensearch-operator | grep -i "status\|sync"
+   kubectl logs -n <operator-namespace> deployment/<fullname> | grep -i "status\|sync"
    ```
+
+Here `<operator-namespace>` is the namespace of the operator's Helm release, and `<fullname>` is the release's full name (`opensearch-operator` for `helm install opensearch-operator ...`; see [Webhooks](webhooks.md#webhook-naming-convention)).
 
 ### Webhook Errors
 
@@ -339,7 +366,7 @@ If you encounter webhook validation errors:
 
 3. **Ensure webhook certificates are valid**:
    ```bash
-   kubectl get certificates -n opensearch-operator-system
+   kubectl get certificates -n <operator-namespace>
    ```
 
 ### Migration Stuck in Pending
@@ -367,27 +394,20 @@ If deletion of old resource is blocked:
    kubectl get opensearchclusters.opensearch.org <name>
    ```
 
-2. **If new resource doesn't exist**: Wait for migration to complete, or manually create the new resource
+2. **If new resource doesn't exist**: Migration does not start for a resource that is already being deleted. Create the new resource manually, or remove the old resource's finalizers (see [Scenario 2](#scenario-2-delete-old-resource-before-migration))
 
 3. **Check migration controller logs** for details:
    ```bash
-   kubectl logs -n opensearch-operator-system deployment/opensearch-operator | grep -i "cannot delete"
+   kubectl logs -n <operator-namespace> deployment/<fullname> | grep -i "cannot delete"
    ```
 
 ## Rollback
 
-If you need to rollback to the old API group:
+Rolling back from operator 3.x to 2.x is **not supported and has not been tested**. There is no documented rollback procedure.
 
-1. Uninstall operator 3.x and install the operator 2.x
+> **Warning:** With `installCRDs: true` (the default), the operator chart manages the CRDs as regular Helm resources. `helm uninstall` of the 3.x operator therefore deletes the `opensearch.org` and `opensearch.opster.io` CRDs, and Kubernetes then deletes **every** custom resource of those kinds in the cluster, including your `OpenSearchCluster` objects and, through garbage collection, the StatefulSets and other objects they own. Do not uninstall the 3.x operator chart while it manages clusters you want to keep.
 
-2. Set Helm value to use legacy API:
-   ```yaml
-   apiGroup: opensearch.opster.io
-   ```
-
-3. Or manually change manifests back to `opensearch.opster.io/v1`
-
-**Note**: Once you've migrated to the new API group, we recommend staying on it. The old API group will be removed in a future release.
+Keep in mind as well that after migration the `opensearch.org` resources are the source of truth: changes made there are never written back to the `opensearch.opster.io` resources, and operator 2.x does not know the `opensearch.org` API group. If you must return to 2.x, take snapshots of your data first and rehearse the procedure in a non-production environment.
 
 ## Best Practices
 
@@ -407,7 +427,7 @@ If you need to rollback to the old API group:
 
 ### Q: Will my existing clusters continue to work?
 
-**A**: Yes. The migration controller ensures that existing `opensearch.opster.io` resources continue to function. Changes are automatically synced to `opensearch.org` resources, and status is synced back.
+**A**: Yes. The migration controller creates an `opensearch.org` resource for each ready `opensearch.opster.io` resource, and the operator manages the cluster through it from then on. The spec is copied once; make later changes to the `opensearch.org` resource (the old one rejects spec changes). `OpenSearchCluster` status is synced back to the old resource.
 
 ### Q: Do I need to recreate my OpenSearch clusters?
 
@@ -422,7 +442,7 @@ If you need to rollback to the old API group:
 **A**: Yes, during the deprecation period. However, we recommend migrating to `opensearch.org` to avoid future disruption. Note that:
 - Old API group resources can only be updated for status changes
 - New API group resources should be used for all spec changes
-- Deletion of old resources requires the new resource to exist
+- Deletion of old resources only completes once the new resource exists
 
 ### Q: What happens if I delete a new resource?
 
@@ -430,7 +450,7 @@ If you need to rollback to the old API group:
 
 ### Q: What happens if I try to delete an old resource before migration?
 
-**A**: The deletion will be blocked by the migration controller until the corresponding new resource exists. This prevents accidental data loss.
+**A**: The old resource stays `Terminating` until the corresponding new resource exists or you remove its finalizers. The migration controller does not migrate a resource that is being deleted, so create the new resource yourself. See [Scenario 2](#scenario-2-delete-old-resource-before-migration).
 
 ### Q: How do I update my CI/CD pipelines?
 
@@ -449,11 +469,11 @@ If you need to rollback to the old API group:
 
 ### Q: Can I manually create resources in the new API group?
 
-**A**: Yes! You can create resources directly in the new API group. The migration controller only handles syncing from old to new, not the reverse.
+**A**: Yes! You can create resources directly in the new API group. The migration controller only creates new resources from old ones; it never creates or changes old resources from new ones.
 
 ## Additional Resources
 
 - [Operator User Guide](main.md)
 - [Cluster Chart Documentation](cluster-chart.md)
 - [Webhook Configuration](webhooks.md)
-- [Operator Development Guide](../../developing.md)
+- [Operator Development Guide](../developing.md)
