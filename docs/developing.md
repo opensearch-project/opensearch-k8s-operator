@@ -83,7 +83,7 @@ To test your changes you can launch the operator locally. You need a running kub
 * Navigate into the `opensearch-operator` directory
 * Run `make build manifests` to build the controller binary and the manifests
 * Run `make install` to create the CRD in the kubernetes cluster
-* Start the Operator by running `make run`
+* Start the Operator by running `make run` (validating webhooks are disabled for local runs, since they need TLS serving certificates that only exist in-cluster)
 * In a separate terminal apply a `OpenSearchCluster` YAML (you can use one of the examples as a starting point, for example `kubectl apply -f examples/opensearch-cluster.yaml`)
 * In the end you can delete your cluster again by running `kubectl delete -f examples/opensearch-cluster.yaml`
 
