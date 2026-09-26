@@ -79,6 +79,15 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 
 var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool", func() {
+		It("should accept every vendor value allowed by the CRD enum", func() {
+			for _, vendor := range []string{"", "Opensearch", "Op", "OP", "os", "opensearch"} {
+				clusterObject := ClusterDescWithVersion("2.2.1")
+				clusterObject.Spec.General.Vendor = vendor
+				Expect(func() {
+					NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+				}).NotTo(Panic(), "vendor %q", vendor)
+			}
+		})
 		It("should use Parallel podManagementPolicy", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)

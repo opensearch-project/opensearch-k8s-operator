@@ -383,6 +383,7 @@ func NewSTSForNodePool(
 	if cr.Spec.General.Vendor == "Op" || cr.Spec.General.Vendor == "OP" ||
 		cr.Spec.General.Vendor == "Opensearch" ||
 		cr.Spec.General.Vendor == "opensearch" ||
+		cr.Spec.General.Vendor == "os" ||
 		cr.Spec.General.Vendor == "" {
 		//	vendor = "opensearchproject/opensearch"
 	} else {
