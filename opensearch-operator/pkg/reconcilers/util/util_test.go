@@ -244,6 +244,19 @@ var _ = Describe("Additional volumes", func() {
 			Expect(volumeMount[0].SubPath).To(BeEmpty())
 
 		})
+
+		It("Should mount read-write when NFS readOnly is false", func() {
+			volumeConfigs[0].NFS = &v1.NFSVolumeSource{
+				Server:   "10.0.0.1",
+				Path:     "/export/path",
+				ReadOnly: false,
+			}
+
+			volume, volumeMount, _, _ := CreateAdditionalVolumes(mockClient, namespace, volumeConfigs)
+			Expect(volume[0].NFS.ReadOnly).To(BeFalse())
+			Expect(volumeMount[0].MountPath).To(Equal("myPath/a/b"))
+			Expect(volumeMount[0].ReadOnly).To(BeFalse())
+		})
 	})
 
 	When("HostPath volume is added", func() {

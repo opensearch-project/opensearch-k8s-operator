@@ -163,6 +163,7 @@ func CreateAdditionalVolumes(
 			})
 		}
 		if volumeConfig.NFS != nil {
+			readOnly = volumeConfig.NFS.ReadOnly
 			retVolumes = append(retVolumes, corev1.Volume{
 				Name: volumeConfig.Name,
 				VolumeSource: corev1.VolumeSource{
