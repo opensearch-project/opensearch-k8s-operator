@@ -17,7 +17,7 @@ helm install cert-manager jetstack/cert-manager --namespace cert-manager --creat
 
 Without it, `helm install` fails while rendering the `Issuer` and `Certificate` resources of the webhook:
 
-```
+```text
 Error: INSTALLATION FAILED: unable to build kubernetes objects from release manifest: ... no matches for kind "Certificate" in version "cert-manager.io/v1" ... ensure CRDs are installed first
 ```
 
@@ -36,7 +36,7 @@ A few notes on operator releases:
 
 - Please see the project README for a compatibility matrix which operator release is compatible with which OpenSearch release.
 - The userguide in the repository corresponds to the current development state of the code. To view the documentation for a specific released version switch to that tag in the Github menu.
-- We track feature requests as Github Issues. If you are missing a feature and find an issue for it, please be aware that an issue ticket closed as completed only means that feature has been implemented in the development version. After that it might still take some for the feature to be contained in a release. If you are unsure, please check the list of releases in our Github project if your feature is mentioned in the release notes.
+- A feature issue closed as completed means the feature is in the development version. Check the release notes to see whether it has been released.
 
 ## Quickstart
 
@@ -75,7 +75,6 @@ spec:
     - component: nodes
       replicas: 3
       diskSize: "5Gi"
-      nodeSelector:
       resources:
         requests:
           memory: "2Gi"
@@ -86,24 +85,36 @@ spec:
       roles:
         - "cluster_manager"
         - "data"
+  security:
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true
 ```
 
-Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. First, a bootstrap pod will be created (`my-first-cluster-bootstrap-0`) that helps with initial master discovery. Then three pods for the OpenSearch cluster will be created (`my-first-cluster-masters-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
+Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. First, a bootstrap pod will be created (`my-first-cluster-bootstrap-0`) that helps with initial master discovery. Then three pods for the OpenSearch cluster will be created (`my-first-cluster-nodes-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
 
-Run `kubectl port-forward svc/my-first-cluster-dashboards 5601`, then open [http://localhost:5601](http://localhost:5601) in your browser and log in with the default demo credentials `admin / admin`.
-Alternatively, if you want to access the OpenSearch REST API, run: `kubectl port-forward svc/my-first-cluster 9200`. Then open a second terminal and run: `curl -k -u admin:admin https://localhost:9200/_cat/nodes?v`. You should see the three deployed pods listed.
+The operator generates a random password for the `admin` user and stores it in the `my-first-cluster-admin-password` Secret. Read it with:
 
-If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The Operator will then clean up and delete any Kubernetes resources created for the cluster. Note that this will not delete the persistent volumes for the cluster, in most cases. For a complete cleanup, run: `kubectl delete pvc -l opensearch.org/opensearch-cluster=my-first-cluster` to also delete the PVCs.
+```bash
+kubectl get secret my-first-cluster-admin-password -o jsonpath='{.data.password}' | base64 -d
+```
+
+Run `kubectl port-forward svc/my-first-cluster-dashboards 5601`, then open [http://localhost:5601](http://localhost:5601) in your browser and log in as `admin` with that password. Dashboards itself connects to OpenSearch with its own generated credentials (the `my-first-cluster-dashboards-password` Secret), so it needs no extra configuration.
+Alternatively, if you want to access the OpenSearch REST API, run: `kubectl port-forward svc/my-first-cluster 9200`. Then open a second terminal and run: `curl -k -u "admin:$(kubectl get secret my-first-cluster-admin-password -o jsonpath='{.data.password}' | base64 -d)" https://localhost:9200/_cat/nodes?v`. You should see the three deployed pods listed.
+
+If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The Operator will then clean up and delete any Kubernetes resources created for the cluster. The PVCs of the node pools are kept unless `general.persistentVolumeClaimRetentionPolicy` says `Delete` (see [Data Persistence](#data-persistence)). For a complete cleanup, run: `kubectl delete pvc -l opensearch.org/opensearch-cluster=my-first-cluster` to also delete the PVCs.
 
 The minimal cluster you deployed in this section is only intended for demo purposes. Please see the next sections on how to configure and manage the different aspects of your cluster.
 
-**Single-Node clusters are currently not supported**. Your cluster must have at least 3 nodes with the `master/cluster_manager` role configured.
+At least one node pool must have the `cluster_manager` (or `master`) role and `replicas` of at least 1; the webhook rejects clusters without one. Use 3 cluster-manager-eligible nodes for production so the cluster keeps a quorum when one node is down.
 
 ## Configuring the operator
 
-The majority of this guide deals with configuring and managing OpenSearch clusters. But there are some general options that can be configured for the operator itself. All of this is done using helm values your provide during installation: `helm install opensearch-operator opensearch-operator/opensearch-operator -f values.yaml`.
+The majority of this guide deals with configuring and managing OpenSearch clusters. But there are some general options that can be configured for the operator itself. All of this is done using helm values you provide during installation: `helm install opensearch-operator opensearch-operator/opensearch-operator -f values.yaml`.
 
-For a list of all possible values see the [chart default values.yaml](../../charts/opensearch-operator/values.yaml). Some important ones:
+For a list of all possible values see the [chart README](../../charts/opensearch-operator/README.md) and the [chart default values.yaml](../../charts/opensearch-operator/values.yaml). Some important ones:
 
 > **Note:** The operator includes admission controller webhooks for validating OpenSearch CRDs. See the [Webhooks Documentation](./webhooks.md) for detailed information about webhook configuration, certificate management, and troubleshooting.
 
@@ -115,7 +126,7 @@ manager:
   # If specified, the operator will be restricted to watch objects only in the desired namespace. Defaults is to watch all namespaces.
   # To watch multiple namespaces, either separate their name via commas or define it as a list.
   # Examples:
-  # watchNamespaces: 'ns1,ns2'
+  # watchNamespace: 'ns1,ns2'
   # watchNamespace: [ns1, ns2]
   watchNamespace:
 
@@ -133,6 +144,23 @@ manager:
   #  - name: MY_ENV
   #    value: somevalue
 ```
+
+Other commonly used values:
+
+| Value | Default | Description |
+| --- | --- | --- |
+| `installCRDs` | `true` | Install the CRDs with the chart. |
+| `useRoleBindings` | `false` | Use namespace-scoped Roles/RoleBindings instead of ClusterRoles. Set `manager.watchNamespace` too. |
+| `serviceAccount.create` / `serviceAccount.name` | `true` / `""` | Create the operator's ServiceAccount, or use an existing one. |
+| `webhook.enabled` / `webhook.failurePolicy` | `true` / `Fail` | Validation webhooks and their failure policy (`Fail` or `Ignore`). |
+| `manager.metricsBindAddress` | `127.0.0.1:8080` | Bind address of the operator's metrics endpoint. |
+| `manager.dnsBase` | `cluster.local` | Kubernetes cluster domain (see [Custom cluster domain name](#custom-cluster-domain-name)). |
+| `nodeSelector`, `tolerations`, `priorityClassName`, `podAnnotations`, `podLabels` | empty | Scheduling and metadata of the operator pod. |
+| `securityContext` / `manager.securityContext` | `runAsNonRoot: true` / `allowPrivilegeEscalation: false` | Pod and container security context of the operator. |
+
+Valid controller names for `maxConcurrentReconcilesPerController` are `opensearchcluster`, `opensearchuser`, `opensearchrole`, `opensearchtenant`, `opensearchuserrolebinding`, `opensearchactiongroup`, `opensearchismpolicy`, `opensearchindextemplate`, `opensearchcomponenttemplate` and `opensearchsnapshotpolicy`.
+
+Logging can be tuned with environment variables set through `manager.extraEnv`: `OPERATOR_DEV_LOGGING=true` switches to human-readable development logging, and `OPERATOR_LOGGING_MESSAGE_KEY` renames the JSON key of the log message (default `msg`).
 
 ### Legacy API support
 
@@ -154,14 +182,14 @@ legacyAPI:
 
 ### Pprof endpoints
 
-There have been situations reported where the operator is leaking memory. To help diagnose these situations the standard go [pprof](https://pkg.go.dev/net/http/pprof) endpoints can be enabled by adding the following to your `values.yaml`:
+To help diagnose memory or CPU problems in the operator, the standard go [pprof](https://pkg.go.dev/net/http/pprof) endpoints can be enabled by adding the following to your `values.yaml`:
 
 ```yaml
 manager:
   pprofEndpointsEnabled: true
 ```
 
-The access the endpoints you will need to use a port-forward as for security reasons the endpoints are only exposed on localhost inside the pod: `kubectl port-forward deployment/opensearch-operator-controller-manager 6060`. Then from another terminal you can use the [go pprof tool](https://pkg.go.dev/net/http/pprof#hdr-Usage_examples), e.g.: `go tool pprof http://localhost:6060/debug/pprof/heap`.
+To access the endpoints you will need to use a port-forward as for security reasons the endpoints are only exposed on localhost inside the pod: `kubectl port-forward deployment/opensearch-operator 6060` (the Deployment is named after the Helm release fullname, `opensearch-operator` for a release of that name). Then from another terminal you can use the [go pprof tool](https://pkg.go.dev/net/http/pprof#hdr-Usage_examples), e.g.: `go tool pprof http://localhost:6060/debug/pprof/heap`.
 
 ### Custom Operator Communication URL
 
@@ -179,7 +207,7 @@ spec:
 
 This is useful when using external certificates (e.g., from cert-manager) that are valid for a specific FQDN. The operator will use this URL instead of the default internal Kubernetes DNS name, allowing you to use a single certificate for both external access and operator communication.
 
-For a complete example with cert-manager, see `examples/2.x/opensearch-cluster-certmanager-example.yaml`.
+For example, with a cert-manager `Certificate` for `opensearch.example.com` whose secret is set as `security.tls.http.secret.name`, set `operatorClusterURL: opensearch.example.com` so the operator's hostname matches the certificate. With provided HTTP certificates you also need an admin certificate in `security.config.adminSecret` (see [Node HTTP/REST API](#node-httprest-api)).
 
 ## Configuring OpenSearch
 
@@ -187,7 +215,7 @@ The main job of the operator is to deploy and manage OpenSearch clusters. As suc
 
 ### Nodepools and Scaling
 
-OpenSearch clusters are composed of one or more node pools, with each representing a logical group of nodes that have the same [role](https://opensearch.org/docs/latest/opensearch/cluster/). Each node pool can have its own resources. For each configured nodepool the operator will create a Kubernetes StatefulSet. It also creates a Kubernetes service object for each nodepool so you can communicate with a specfic nodepool if you want.
+OpenSearch clusters are composed of one or more node pools, with each representing a logical group of nodes that have the same [role](https://opensearch.org/docs/latest/opensearch/cluster/). Each node pool can have its own resources. For each configured nodepool the operator will create a Kubernetes StatefulSet. It also creates a Kubernetes service object for each nodepool so you can communicate with a specific nodepool if you want.
 
 ```yaml
 spec:
@@ -208,7 +236,6 @@ spec:
     - component: nodes
       replicas: 3
       diskSize: "10Gi"
-      nodeSelector:
       resources:
         requests:
           memory: "2Gi"
@@ -218,9 +245,21 @@ spec:
           cpu: "500m"
       roles:
         - "data"
+      nodeSelector: # Optional, schedule the pool's pods on matching Kubernetes nodes
+        disktype: ssd
+      tolerations: # Optional
+        - key: "dedicated"
+          operator: "Equal"
+          value: "opensearch"
+          effect: "NoSchedule"
 ```
 
-Additional configuration options are available for node pools and are documented in this guide in later sections.
+- `diskSize` defaults to `30Gi` when omitted.
+- Valid roles are `cluster_manager`, `master`, `data`, `data_content`, `data_hot`, `data_warm`, `data_cold`, `data_frozen`, `ingest`, `ml`, `remote_cluster_client`, `transform`, `search` and `warm`. The webhook rejects any other value.
+- `master` is rendered as `cluster_manager` on OpenSearch 2.x and later (and `cluster_manager` as `master` on 1.x).
+- `roles: []` creates coordinating-only nodes.
+
+Additional configuration options are available for node pools and are documented in this guide in later sections. See the [CRD reference](../designs/crd/opensearch.org.md) for the full list of fields.
 
 ### Configuring opensearch.yml
 
@@ -233,18 +272,39 @@ spec:
     additionalConfig:
       some.config.option: somevalue
   # ...
-nodePools:
-  - component: masters
-    # ...
-    additionalConfig:
-      some.other.config: foobar
+  nodePools:
+    - component: masters
+      # ...
+      additionalConfig:
+        some.other.config: foobar
 ```
 
 Using `spec.general.additionalConfig` you can add settings that will be applied to all nodes in the cluster. The settings are added to a shared configmap that is mounted to all node pools. If you need nodepool-specific configuration, you can use `nodePools[].additionalConfig` which will be merged with `spec.general.additionalConfig` for that specific nodepool (nodepool settings override general settings). When a nodepool has `additionalConfig` specified, it will get its own configmap with the merged configuration.
 
 The settings must be provided as a map of strings, so use the flat form of any setting. If the value you want to provide is not a string, put it in quotes (for example `"true"` or `"1234"`). The Operator merges its own generated settings with whatever extra settings you provide. Note that basic settings like `node.name`, `node.roles`, `cluster.name` and settings related to network and discovery are set by the Operator and cannot be overwritten using `additionalConfig`.
 
-Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If want to avoid that please use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
+Note that changing any of the `additionalConfig` will trigger a rolling restart of the cluster. If you want to avoid that, use the [Cluster Settings API](https://opensearch.org/docs/latest/opensearch/configuration/#update-cluster-settings-using-the-api) to change them at runtime.
+
+### Images and other general options
+
+By default the operator runs `docker.io/opensearchproject/opensearch:<general.version>`. The following `spec.general` fields change that and a few other pod-level settings:
+
+```yaml
+spec:
+  general:
+    version: "3.2.0"
+    image: "myregistry.example.com/opensearch:3.2.0" # Optional, full image reference; version is then not used to pick the image
+    defaultRepo: "myregistry.example.com/mirror" # Optional, registry/prefix for the opensearch, opensearch-dashboards and busybox images
+    imagePullPolicy: IfNotPresent
+    imagePullSecrets:
+      - name: docker-pull-secret
+    hostNetwork: false # Optional, run all cluster pods with host networking
+    command: "./opensearch-docker-entrypoint.sh" # Optional, replaces the container's start command (plugins are still installed first)
+```
+
+With `defaultRepo` set and no `image`, the images become `<defaultRepo>/opensearch:<version>`, `<defaultRepo>/opensearch-dashboards:<version>` and `<defaultRepo>/busybox:latest` (the [init helper](#custom-init-helper) image).
+
+`general.grpc` enables the gRPC API of OpenSearch 3.x (`grpc.enable: true`, plus port and tuning options). See the [gRPC example](../../opensearch-operator/examples/3.x/opensearch-cluster-grpc-example.yaml).
 
 ### Per-node pool image override
 
@@ -255,7 +315,7 @@ Node pool image settings override `spec.general` for that pool only. You can als
 ```yaml
 spec:
   general:
-    version: "2.17.1"
+    version: "3.2.0"
   nodePools:
     - component: masters
       replicas: 3
@@ -265,7 +325,7 @@ spec:
       replicas: 2
       roles:
         - ml
-      image: "myregistry.example.com/opensearch-cuda:2.17.1"
+      image: "myregistry.example.com/opensearch-cuda:3.2.0"
       imagePullPolicy: IfNotPresent
       imagePullSecrets:
         - name: docker-pull-secret
@@ -273,11 +333,11 @@ spec:
 
 ### TLS
 
-For security reasons, encryption is required for communication with the OpenSearch cluster and between cluster nodes. If you do not configure any encryption, OpenSearch will use the included demo TLS certificates, which are not ideal for most active deployments.
+The OpenSearch security plugin requires TLS. If you configure neither `security.tls.transport` nor `security.tls.http`, the operator disables the security plugin (`plugins.security.disabled: true`) and the cluster runs without TLS and without authentication (see [Security Plugin Disabled](#security-plugin-disabled)).
 
 Depending on your requirements, the Operator offers two ways of managing TLS certificates. You can either supply your own certificates, or the Operator will generate its own CA and sign certificates for all nodes using that CA. The second option is recommended, unless you want to directly expose your OpenSearch cluster outside your Kubernetes cluster, or your organization has rules about using self-signed certificates for internal communication.
 
-Note: When the operator generates certificates, you can now control certificate validity using the `duration` field (e.g. `"720h"`, `"17520h"`). If omitted, it defaults to one year (`"8760h"`).
+When the operator generates certificates, you can control certificate validity using the `duration` field (e.g. `"720h"`, `"17520h"`). If omitted, it defaults to one year (`"8760h"`).
 
 TLS certificates are used in three places, and each can be configured independently.
 
@@ -308,7 +368,7 @@ spec:
 
 To have the Operator generate the certificates, set `generate` and `perNode` to `true` (other fields can be omitted). The Operator will generate a CA certificate, issue one certificate per node, and sign them. Certificates default to one year validity, configurable via `duration`. The Operator reissues certificates `rotateDaysBeforeExpiry` days before they expire (default 30, set to -1 to disable). On OpenSearch 3.x and above TLS certificate hot reload is enabled by default (configurable via `enableHotReload`), so nodes load renewed certificates without a restart; when hot reload is disabled or unsupported (OpenSearch < 2.19.1) the Operator performs a rolling restart of the cluster instead. Expired or unreadable generated certificates are always reissued, regardless of `rotateDaysBeforeExpiry`.
 
-Existing clusters created before this default keep their stored `rotateDaysBeforeExpiry` (typically `-1`). Set it to `30`, or re-apply the spec so the CRD default is written, to rotate before expiry rather than recovering after an outage. OpenSearch 3.x clusters that omit `enableHotReload` take one rolling restart when this operator version is installed, because the hot-reload setting is added to `opensearch.yml`. Do not delete and regenerate the CA secret in place: that is not a supported rotation procedure and can leave the cluster in split trust while nodes pick up the new CA.
+Do not delete and regenerate the CA secret in place: that is not a supported rotation procedure and can leave the cluster in split trust while nodes pick up the new CA. Clusters created with operator 2.x may still have `rotateDaysBeforeExpiry: -1` stored; see [Other Changes When Upgrading from 2.x](./migration-guide.md#other-changes-when-upgrading-from-2x).
 
 Alternatively, you can provide the certificates yourself (e.g. if your organization has an internal CA). You can either provide one certificate to be used by all nodes or provide a certificate for each node (recommended). In this mode, set `generate: false` and `perNode` to `true` or `false` depending on whether you're providing per-node certificates.
 
@@ -346,7 +406,7 @@ Again, you have the option of either letting the Operator generate and sign the 
 
 When using generated certificates, you can optionally specify a `customFQDN` field to include a custom domain in the certificate's Subject Alternative Names (SAN) alongside the default cluster DNS names.
 
-If you provide your own certificates, please make sure the following names are added as SubjectAltNames (SAN): `<cluster-name>`, `<cluster-name>.<namespace>`, `<cluster-name>.<namespace>.svc`,`<cluster-name>.<namespace>.svc.cluster.local`.
+If you provide your own certificates, please make sure the following names are added as SubjectAltNames (SAN): `<cluster-name>`, `<cluster-name>.<namespace>`, `<cluster-name>.<namespace>.svc`, `<cluster-name>.<namespace>.svc.<dnsBase>` (`dnsBase` is the operator's `manager.dnsBase` Helm value, `cluster.local` by default).
 
 Directly exposing the node HTTP port outside the Kubernetes cluster is not recommended. Rather than doing so, you should configure an ingress. The ingress can then also present a certificate from an accredited CA (for example LetsEncrypt) and hide self-signed certificates that are being used internally. In this way, the nodes should be supplied internally with properly signed certificates.
 
@@ -369,39 +429,40 @@ You can extend the functionality of OpenSearch via [plugins](https://opensearch.
 To install a plugin for opensearch add it to the list under `general.pluginsList`:
 
 ```yaml
-general:
-  version: 2.3.0
-  httpPort: 9200
-  vendor: opensearch
-  serviceName: my-cluster
-  pluginsList:
-    [
-      "repository-s3",
-      "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/1.3.0.0/prometheus-exporter-1.3.0.0.zip",
-    ]
+spec:
+  general:
+    version: "3.2.0"
+    httpPort: 9200
+    vendor: opensearch
+    serviceName: my-cluster
+    pluginsList:
+      - "repository-s3"
+      # A plugin zip URL must match the OpenSearch version exactly
+      - "https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/3.2.0.0/prometheus-exporter-3.2.0.0.zip"
 ```
 
 To install a plugin for opensearch dashboards add it to the list under `dashboards.pluginsList`:
 
 ```yaml
-dashboards:
-  enable: true
-  version: 2.4.1
-  pluginsList:
-    - sample-plugin-name
+spec:
+  dashboards:
+    enable: true
+    pluginsList:
+      - sample-plugin-name
 ```
 
 To install a plugin for the bootstrap pod add it to the list under `bootstrap.pluginsList`:
 
 ```yaml
-bootstrap:
-  pluginsList: ["repository-s3"]
+spec:
+  bootstrap:
+    pluginsList: ["repository-s3"]
 ```
 
 Please note:
 
 - [Bundled plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#bundled-plugins) do not have to be added to the list, they are installed automatically
-- You can provide either a plugin name or a complete to the plugin zip. The items you provide are passed to the `bin/opensearch-plugin install <plugin-name>` command.
+- You can provide either a plugin name or a complete URL to the plugin zip. The items you provide are passed to the `bin/opensearch-plugin install <plugin-name>` command.
 - Updating the list for an already installed cluster will lead to a rolling restart of all opensearch nodes to install the new plugin.
 - If your plugin requires additional configuration you must provide that either through `additionalConfig` (see section [Configuring opensearch.yml](#configuring-opensearchyml)) or as secrets in the opensearch keystore (see section [Add secrets to keystore](#add-secrets-to-keystore)).
 
@@ -443,7 +504,7 @@ general:
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
 
-To populate the keystore of the boostrap pod add the secrets under the `bootstrap.keystore` section:
+To populate the keystore of the bootstrap pod add the secrets under the `bootstrap.keystore` section:
 
 ```yaml
 bootstrap:
@@ -457,21 +518,17 @@ bootstrap:
 
 ### SmartScaler
 
-What is SmartScaler?
+SmartScaler lets the operator remove data nodes safely when you lower `replicas` of a node pool or remove a pool. Before a node is removed, the operator adds it to `cluster.routing.allocation.exclude._name`, so OpenSearch moves its shards to the remaining nodes. Only after the node holds no more shards does the operator delete the pod, and it then removes the node from the exclusion list again.
 
-SmartScaler is a mechanism built into the Operator that enables nodes to be safely removed from the cluster. When a node is being removed from a cluster, the safe drain process ensures that all of its data is transferred to other nodes in the cluster before the node is taken offline. This prevents any data loss or corruption that could occur if the node were simply shut down or disconnected without first transferring its data to other nodes.
+SmartScaler is enabled by default (`spec.confMgmt.smartScaler: true`) for newly created clusters, whether or not the `confMgmt` block is present in the manifest. Setting it to `false` removes nodes without draining, and the operator emits a `Warning` event each time it does so. Clusters created with operator 2.x may have `smartScaler: false` stored; see [Other Changes When Upgrading from 2.x](./migration-guide.md#other-changes-when-upgrading-from-2x).
 
-During the safe drain process, the node being removed is marked as "draining", which means that it will no longer receive any new requests. Instead, it will only process outstanding requests until its workload has been completed. Once all requests have been processed, the node will begin transferring its data to other nodes in the cluster. The safe drain process will continue until all data has been transferred and the node is no longer part of the cluster. Only after that, the OMC will turn down the node.
-
-SmartScaler is enabled by default (`spec.confMgmt.smartScaler: true`) for newly created clusters, whether or not the `confMgmt` block is present in the manifest. Setting it to `false` removes nodes without draining, and the operator emits a `Warning` event each time it does so.
-
-**Upgrade note:** Clusters that were created before this default was applied to the parent `confMgmt` object may already have `smartScaler: false` stored in etcd (for example after the operator added a finalizer and rewrote the spec). CRD defaulting does not override a present value. After upgrading the operator/CRDs, check `spec.confMgmt.smartScaler` on existing clusters and set it to `true` if safe draining was intended.
+The other `confMgmt` fields, `autoScaler` and `VerUpdate`, are not used by the operator.
 
 #### Removing master-eligible nodes
 
-Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time regardless of the SmartScaler setting, following the sequence OpenSearch documents for shrinking the voting configuration: the node is first added to the cluster's voting configuration exclusions (`POST /_cluster/voting_config_exclusions`), which blocks until it has left the voting configuration, then its pod is removed, and once every excluded node has left the cluster the exclusions list is cleared (`DELETE /_cluster/voting_config_exclusions?wait_for_removal=true`). With SmartScaler off only this voting step is performed; the shard drain remains opt-in. The same steps apply when a whole master-eligible node pool is removed from `spec.nodePools` and when the bootstrap pod is torn down after initialization.
+Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time, regardless of the SmartScaler setting. The operator follows the procedure OpenSearch documents for shrinking the voting configuration (`/_cluster/voting_config_exclusions`): it adds the node to the voting configuration exclusions, removes the pod once the node has left the voting configuration, and clears the exclusions when the node has left the cluster. The same applies when a whole master-eligible node pool is removed from `spec.nodePools`, and when the bootstrap pod is removed after initialization. With SmartScaler off only this voting step is performed; shards are not drained.
 
-The exclusions list is cluster-wide and can only be cleared as a whole. The waiting clear is held until no excluded node is still a member, because OpenSearch waits for all of them and that wait shares the operator's 30s client deadline. If a master scale-down is reverted while its target node is still excluded, the operator clears the list without waiting so that node can vote again, then immediately re-adds an exclusion for every other node that is still being removed, including one whose StatefulSet has already shrunk. On every reconcile the operator also clears exclusions that no removal owns any more, for example after an operator restart mid-removal, and emits a `Warning` event when it finds a live node that was left excluded. The admission webhook rejects clusters whose master-eligible pools would have fewer than one replica in total (see [webhooks](webhooks.md)).
+The operator also clears exclusions that are left over (for example after an operator restart during a removal), and emits a `Warning` event if it finds a live node that was left excluded. The webhook rejects clusters without at least one master-eligible replica (see [webhooks](webhooks.md)).
 
 ### Set Java heap size
 
@@ -497,17 +554,13 @@ spec:
         - "data"
 ```
 
-If `jvm` is not provided then the java heap size will be set to half of
-`resources.requests.memory` which is the recommend value for data nodes
-
-If `jvm` is not provided and `resources.requests.memory` does not exist
-then value will be `-Xmx512M -Xms512M`.
-
-We don't support dynamic values depending on the node type for now.
+If `jvm` does not contain `-Xms` or `-Xmx`, the operator appends a heap setting of half of
+`resources.requests.memory` (the recommended value for data nodes) to whatever `jvm` contains, or
+`-Xms512M -Xmx512M` when no memory request is set. For example `jvm: "-XX:+UseG1GC"` still gets the automatic heap size.
 
 ### Deal with `max virtual memory areas vm.max_map_count` errors
 
-OpenSearch requires the Linux kernel `vm.max_map_count` option [to be set to at least 262144](https://opensearch.org/docs/1.0/opensearch/install/important-settings/). The operator sets this option as 262144 in default using an init container for each opensearch pod. If you already set this option yourself on the Kubernetes hosts using sysctl and don't want to change it by the operator again, you can disable by adding the following option to your cluster spec:
+OpenSearch requires the Linux kernel `vm.max_map_count` option [to be set to at least 262144](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/index/#important-settings). The operator sets this option as 262144 in default using an init container for each opensearch pod. If you already set this option yourself on the Kubernetes hosts using sysctl and don't want to change it by the operator again, you can disable by adding the following option to your cluster spec:
 
 ```yaml
 spec:
@@ -517,15 +570,11 @@ spec:
 
 By default the init container uses a busybox image. If you want to change that (for example to use an image from a private registry), see [Custom init helper](#custom-init-helper).
 
-> **Upgrade note:** In operator versions before `3.0.0-alpha`, `setVMMaxMapCount` was a non-pointer boolean and explicit `false` could be dropped from stored objects (because of `omitempty`). This is fixed in operator versions `3.0.0-alpha` and later, which use a pointer boolean so explicit `false` is preserved. If you upgrade from an older version and your existing `OpenSearchCluster` was created with `setVMMaxMapCount: false` but the field is now missing in `spec`, patch it explicitly:
->
-> ```bash
-> kubectl patch opensearchcluster <name> -n <namespace> --type merge -p '{"spec":{"general":{"setVMMaxMapCount":false}}}'
-> ```
+Clusters created with operator 2.x may have lost an explicit `setVMMaxMapCount: false`; see [Other Changes When Upgrading from 2.x](./migration-guide.md#other-changes-when-upgrading-from-2x).
 
 ### Configuring Snapshot Repositories
 
-You can configure the snapshot repositories for the OpenSearch cluster through the operator. Using `general.snapshotRepositories` settings you can configure multiple snapshot repositories. Once the snapshot repository is configured a user can create custom `_ism` policies through dashboard to backup indexes.
+You can configure the snapshot repositories for the OpenSearch cluster through the operator. Using `general.snapshotRepositories` settings you can configure multiple snapshot repositories. The operator registers them once the cluster is `RUNNING`, and updates them when their settings change. Removing a repository from the spec does not unregister it from OpenSearch. Once a repository exists you can take snapshots with an [OpensearchSnapshotPolicy](#managing-snapshot-policies-with-kubernetes-resources).
 
 ```yaml
 spec:
@@ -597,9 +646,19 @@ The operator can automatically deploy and manage a OpenSearch Dashboards instanc
 spec:
   dashboards:
     enable: true # Set this to true to enable the Dashboards deployment
-    version: 2.3.0 # The Dashboards version to deploy. This should match the configured opensearch version
+    version: "3.2.0" # Optional, defaults to general.version. Should match the OpenSearch version
     replicas: 1 # The number of replicas to deploy
+    # Optional scheduling settings, same format as for node pools
+    nodeSelector: {}
+    tolerations: []
+    topologySpreadConstraints: []
+    priorityClassName: ""
+    service:
+      labels: # Optional, extra labels for the Dashboards Service
+        team: search
 ```
+
+See the [CRD reference](../designs/crd/opensearch.org.md) for all Dashboards fields.
 
 ### Configuring opensearch_dashboards.yml
 
@@ -647,12 +706,12 @@ Note that changing the value in the secret has no direct influence on the dashbo
 
 ### Configuring a basePath
 
-When using OpenSearch behind a reverse proxy on a subpath (e.g. `/logs`) you have to configure a base path. This can be achieved by setting the base path field in the configuraiton of OpenSearch Dashboards. Behind the scenes the correct configuration options are automatically added to the dashboards configuration.
+When using OpenSearch behind a reverse proxy on a subpath (e.g. `/logs`) you have to configure a base path. This can be achieved by setting the base path field in the configuration of OpenSearch Dashboards. Behind the scenes the correct configuration options are automatically added to the dashboards configuration.
 
 ```yaml
 apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
----
+# ...
 spec:
   dashboards:
     enable: true
@@ -682,7 +741,7 @@ spec:
 # ...
 ```
 
-To let the Operator generate the certificate, just set `tls.enable: true` and `tls.generate: true` (the other fields under `tls` can be ommitted). Again, as with the node certificates, you can supply your own CA via `caSecret.name` for the Operator to use.
+To let the Operator generate the certificate, just set `tls.enable: true` and `tls.generate: true` (the other fields under `tls` can be omitted). Again, as with the node certificates, you can supply your own CA via `caSecret.name` for the Operator to use.
 If you want to use your own certificate, you need to provide it as a Kubernetes TLS secret (with fields `tls.key` and `tls.crt`) and provide the name as `secret.name`.
 
 If you want to expose Dashboards outside of the cluster, it is recommended to use Operator-generated certificates internally and let an Ingress present a valid certificate from an accredited CA (e.g. LetsEncrypt).
@@ -695,29 +754,44 @@ Besides configuring OpenSearch itself, the operator also allows you to customize
 
 By default, the Operator will create OpenSearch node pools with persistent storage from the default [Storage Class](https://kubernetes.io/docs/concepts/storage/storage-classes/). This behaviour can be changed per node pool. You may supply an alternative storage class and access mode, or configure hostPath or emptyDir storage.
 
+PVCs of the node pools are kept when a pool is scaled down or the cluster is deleted, unless you set a [StatefulSet PVC retention policy](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#persistentvolumeclaim-retention) for all pools:
+
+```yaml
+spec:
+  general:
+    persistentVolumeClaimRetentionPolicy:
+      whenDeleted: Delete # Delete the PVCs when the cluster is deleted (default: Retain)
+      whenScaled: Retain # Keep the PVCs of removed replicas (default: Retain)
+```
+
+- If you re-create a cluster with the same name over retained PVCs, the operator skips the bootstrap: the nodes re-form the old cluster from disk. Delete the PVCs first if you want a fresh cluster.
+- The webhook rejects changes to a pool's `storageClass`, because StatefulSet volume claim templates are immutable.
+- `diskSize` can be increased (see [Volume Expansion](#volume-expansion)) but not decreased.
+
 The available storage options are:
 
 #### PVC
 
-The default option is persistent storage via PVCs. You can explicity define the `storageClass`, the `annotations` and the `labels` if needed:
+The default option is persistent storage via PVCs. You can explicitly define the `storageClass`, the `annotations` and the `labels` if needed. When you set `persistence.pvc`, `accessModes` is required:
 
 ```yaml
-nodePools:
-  - component: masters
-    replicas: 3
-    diskSize: "30Gi"
-    roles:
-      - "data"
-      - "master"
-    persistence:
-      pvc:
-        storageClass: mystorageclass # Set the name of the storage class to be used
-        accessModes: # You can change the accessMode
-          - ReadWriteOnce
-        annotations: # You can add annotations
-          test.io/crypt-key-id: "your-kms-key-id"
-        labels: # You can add labels
-          team: "backend-data"
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      roles:
+        - "data"
+        - "master"
+      persistence:
+        pvc:
+          storageClass: mystorageclass # Set the name of the storage class to be used
+          accessModes: # Required when persistence.pvc is set
+            - ReadWriteOnce
+          annotations: # You can add annotations
+            test.io/crypt-key-id: "your-kms-key-id"
+          labels: # You can add labels
+            team: "backend-data"
 ```
 
 #### EmptyDir
@@ -725,15 +799,16 @@ nodePools:
 If you do not want to use persistent storage you can use the `emptyDir` option. Beware that this can lead to data loss, so you should only use this option for testing, or for data that is otherwise persisted.
 
 ```yaml
-nodePools:
-  - component: masters
-    replicas: 3
-    diskSize: "30Gi"
-    roles:
-      - "data"
-      - "master"
-    persistence:
-      emptyDir: {} # This configures emptyDir
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      roles:
+        - "data"
+        - "master"
+      persistence:
+        emptyDir: {} # This configures emptyDir
 ```
 
 If you are using emptyDir, it is recommended that you set `spec.general.drainDataNodes` to be `true`. This will ensure that shards are drained from the pods before rolling upgrades or restart operations are performed.
@@ -743,16 +818,17 @@ If you are using emptyDir, it is recommended that you set `spec.general.drainDat
 As a last option you can use a `hostPath`. Please note that hostPath is strongly discouraged. By default, the operator applies pod anti-affinity to prevent multiple pods from scheduling on the same node, which helps when using hostPath. However, if you need stricter control, you can configure explicit affinity rules for the node pool to ensure that multiple pods do not schedule to the same Kubernetes host.
 
 ```yaml
-nodePools:
-  - component: masters
-    replicas: 3
-    diskSize: "30Gi"
-    roles:
-      - "data"
-      - "master"
-    persistence:
-      hostPath:
-        path: "/var/opensearch" # Define the path on the host here
+spec:
+  nodePools:
+    - component: masters
+      replicas: 3
+      diskSize: "30Gi"
+      roles:
+        - "data"
+        - "master"
+      persistence:
+        hostPath:
+          path: "/var/opensearch" # Define the path on the host here
 ```
 
 ### Security Context for pods and containers
@@ -786,7 +862,27 @@ The Opensearch pods by default launch an init container to configure the volume.
 
 Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods, and the same `initHelper.securityContext` for its init containers.
 
-The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod. No bootstrap pod is started for an `OpenSearchCluster` that is re-created over the data PVCs of a previous cluster with the same name (the operator never deletes node pool PVCs): the nodes re-form the existing cluster from disk. Delete those PVCs first if you want a fresh cluster.
+### Bootstrap pod
+
+During initial cluster formation the operator runs a single bootstrap pod (`<cluster-name>-bootstrap-0`) and removes it once the cluster is initialized. It uses a PVC to keep cluster state across restarts during initialization; the PVC is created and deleted along with the pod. No bootstrap pod is started for an `OpenSearchCluster` that is re-created over retained data PVCs of a previous cluster with the same name (see [Data Persistence](#data-persistence)).
+
+The bootstrap pod is configured in `spec.bootstrap`:
+
+```yaml
+spec:
+  bootstrap:
+    resources: # Also used to compute the heap size when jvm has no -Xms/-Xmx
+      requests:
+        memory: "2Gi"
+        cpu: "500m"
+    jvm: "-Xms1g -Xmx1g"
+    diskSize: "1Gi" # Default 1Gi
+    storageClass: mystorageclass # Optional, defaults to the cluster default storage class
+    nodeSelector:
+      disktype: ssd
+```
+
+`spec.bootstrap` also accepts `tolerations`, `affinity` (see [Pod Affinity](#pod-affinity)), `priorityClassName`, `labels`, `annotations`, `env`, `hostAliases`, `pluginsList`, `keystore` and `initContainers`. It uses the same image and (pod) security context as the node pools.
 
 ### Host Aliases for pods and containers
 
@@ -819,7 +915,7 @@ By default, the bootstrap pods will have the same hostAliases set as the Opensea
 
 You can add additional labels or annotations on the nodepool configuration. This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint:
 
-In addition, annotations can also be configured globally using the `spec.general.annotations` field in the Kubernetes specification. These annotations are not only limited to the node pool but also extend to Kubernetes services, providing flexibility and additional information to enhance the Kubernetes environment.
+Annotations set in `spec.general.annotations` are added to the cluster's Services only (the main cluster Service and each node pool's headless Service), not to pods.
 
 ```yaml
 spec:
@@ -831,7 +927,6 @@ spec:
         someLabelKey: someLabelValue
       annotations: # Add any extra annotations as key-value pairs here
         someAnnotationKey: someAnnotationValue
-      nodeSelector:
       resources:
         requests:
           memory: "2Gi"
@@ -844,7 +939,7 @@ spec:
         - "master"
 ```
 
-Any annotations and labels defined will be added directly to the pods of the nodepools.
+Node pool labels and annotations are added to the pool's StatefulSet and pods. Node pool annotations are also added to the pool's headless Service.
 
 ### Add Labels or Annotations to the Dashboard Deployment
 
@@ -854,7 +949,6 @@ You can add labels or annotations to the dashboard pod specification. This is he
 spec:
   dashboards:
     enable: true
-    version: 1.3.1
     replicas: 1
     labels: # Add any extra labels as key-value pairs here
       someLabelKey: someLabelValue
@@ -862,7 +956,7 @@ spec:
       someAnnotationKey: someAnnotationValue
 ```
 
-Any annotations and labels defined will be added directly to the dashboards pods.
+Labels and annotations are added to the Dashboards Deployment and pods. The annotations are also added to the Dashboards Service; use `dashboards.service.labels` for Service labels.
 
 ### Priority class on OpenSearch nodes
 
@@ -1024,7 +1118,7 @@ Sidecar containers share the same network namespace and storage volumes as the O
 
 ### Additional Volumes
 
-Sometimes it is neccessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, CSI volumes, NFS volumes, or hostPath volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
+Sometimes it is necessary to mount ConfigMaps, Secrets, emptyDir, projected volumes, CSI volumes, NFS volumes, or hostPath volumes into the Opensearch pods as volumes to provide additional configuration (e.g. plugin config files). This can be achieved by providing an array of additional volumes to mount to the custom resource. This option is located in either `spec.general.additionalVolumes` or `spec.dashboards.additionalVolumes`. The format is as follows:
 
 ```yaml
 spec:
@@ -1035,7 +1129,7 @@ spec:
         #subPath: mykey # Add this to mount only a specific key of the configmap/secret
         configMap:
           name: config-map-name
-        restartPods: true #set this to true to restart the pods when the content of the configMap changes
+        restartPods: true # Restart the OpenSearch pods when the content of the configMap changes
       - name: temp
         path: /tmp
         emptyDir: {}
@@ -1057,17 +1151,6 @@ spec:
         path: /path/to/mount/volume
         persistentVolumeClaim:
           claimName: claim-name
-      - name: nfs-volume
-        path: /mnt/backups/opensearch
-        nfs:
-          server: 192.168.1.233
-          path: /export/backups/opensearch
-          readOnly: false # Optional, defaults to false
-      - name: hostpath-volume
-        path: /host/data
-        hostPath:
-          path: /var/lib/opensearch
-          type: DirectoryOrCreate # Optional, can be Directory, DirectoryOrCreate, File, FileOrCreate, Socket, CharDevice, or BlockDevice
   dashboards:
     additionalVolumes:
       - name: example-secret
@@ -1075,6 +1158,11 @@ spec:
         secret:
           secretName: secret-name
 ```
+
+- Exactly one volume source must be set per entry.
+- `subPath` is supported for configMap, secret, CSI and projected volumes.
+- ConfigMap, secret and projected volumes are mounted read-only. CSI, PVC and NFS volumes follow their `readOnly` field (CSI defaults to read-only); emptyDir and hostPath volumes are writable.
+- `restartPods` only works for configMap and secret volumes on the OpenSearch pods: the operator restarts the pods when the content changes. It has no effect in `spec.dashboards.additionalVolumes`.
 
 #### NFS Volume Support
 
@@ -1089,8 +1177,10 @@ spec:
         nfs:
           server: 192.168.1.233
           path: /export/backups/opensearch
-          readOnly: false # Optional, defaults to false
+          readOnly: false # false gives a writable mount
 ```
+
+Operator 3.0.0 and earlier mount NFS volumes read-only regardless of this field.
 
 This can be combined with snapshot repository configuration:
 
@@ -1103,6 +1193,7 @@ spec:
         nfs:
           server: 192.168.1.233
           path: /export/backups/opensearch
+          readOnly: false
     snapshotRepositories:
       - name: nfs-repository
         type: fs
@@ -1191,7 +1282,7 @@ manager:
 
 ### Custom init helper
 
-During cluster initialization the operator uses init containers as helpers. For these containers a busybox image is used ( specifically `docker.io/busybox:latest`). In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
+The operator adds init containers to the OpenSearch and bootstrap pods (the `init` container that `chown`s the data directory and, with `setVMMaxMapCount`, the `init-sysctl` container). They run on every pod start and use a busybox image, `docker.io/busybox:latest` by default, or `<general.defaultRepo>/busybox:latest` when `defaultRepo` is set. In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
 
 ```yaml
 spec:
@@ -1209,7 +1300,7 @@ spec:
 
 ### Edit init container resources
 
-Init container run without any resource constraints, but it's possible to specify resource requests and limits by adding a resources section to the YAML definition. This allows you to control the amount of CPU and memory allocated to the init container, it's helps to ensure that it doesn't starve other containers, by setting appropriate resource limits.
+The init helper containers run without resource requests or limits by default. Set `initHelper.resources` to give them requests and limits (for example when a namespace `ResourceQuota` requires them):
 
 ```yaml
 spec:
@@ -1246,8 +1337,8 @@ Note that this replaces the defaults entirely for all init helper containers (ch
 
 ### Disabling the init helper
 
-In some cases, you may want to avoid the `chmod` init container (e.g. on OpenShift or if your cluster blocks containers running as `root`).
-It can be disabled by adding the following to your `values.yaml`:
+In some cases, you may want to avoid the `chown` init container (e.g. on OpenShift or if your cluster blocks containers running as `root`).
+It can be disabled by adding the following to the operator's Helm `values.yaml`. This skips only the `chown` init container; `init-sysctl` is controlled by `general.setVMMaxMapCount`:
 
 ```yaml
 manager:
@@ -1280,7 +1371,7 @@ You must provide either `minAvailable` or `maxUnavailable` to configure PDB, but
 ```yaml
 apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
----
+# ...
 spec:
   nodePools:
     - component: masters
@@ -1319,14 +1410,14 @@ spec:
         paths:
           - backend:
               service:
-                name: my-cluster-dashboards
+                name: my-cluster-dashboards # <general.serviceName>-dashboards
                 port:
                   number: 5601
             path: "/(.*)"
             pathType: ImplementationSpecific
 ```
 
-Note: If you have enabled HTTPS for dashboards you need to instruct your ingress-controller to use a HTTPS connection internally. This is specific for the controller you are using (e.g. nginx-ingress, traefik, ...).
+The Dashboards Service is named `<general.serviceName>-dashboards`. If you have enabled HTTPS for dashboards you need to instruct your ingress-controller to use a HTTPS connection internally. This is specific for the controller you are using (e.g. nginx-ingress, traefik, ...).
 
 ### Configuring the Dashboards K8s Service
 
@@ -1343,12 +1434,14 @@ When using type LoadBalancer you can optionally set the load balancer source ran
 ```yaml
 apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
----
+# ...
 spec:
   dashboards:
     service:
       type: LoadBalancer # Set one of the supported types
-      loadBalancerSourceRanges: "10.0.0.0/24, 192.168.0.0/24" # Optional, add source ranges for a loadbalancer
+      loadBalancerSourceRanges: # Optional, add source ranges for a loadbalancer
+        - "10.0.0.0/24"
+        - "192.168.0.0/24"
 ```
 
 ### Exposing the OpenSearch cluster REST API
@@ -1358,12 +1451,12 @@ Internally you should use self-signed certificates (you can let the operator gen
 
 ### Customizing probe timeouts and thresholds
 
-If the cluster nodes do not spins up before the threshold reaches and the pod restarts the timeouts and thresholds can be configured per node as per the requirements.
+If the nodes take longer to start than the probes allow and get restarted, you can configure the probe timeouts and thresholds per node pool:
 
 ```yaml
 apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
----
+# ...
 spec:
   nodePools:
     - component: masters
@@ -1399,11 +1492,11 @@ If you need to customize the startup or readiness probe commands you can overrid
 ```yaml
 apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
-...
+# ...
 spec:
   nodePools:
     - component: masters
-      ...
+      # ...
       probes:
         startup:
           command:
@@ -1419,29 +1512,14 @@ spec:
 
 In addition to the information provided in the previous sections on how to specify resource requirements for the node pools, it is also possible to specify resources for all entities created by the operator for more advanced use cases.
 
-The operator generates many pods via resources such as jobs, stateful sets, replica sets, and others, which utilize InitContainers. The following configuration allows you to specify a default resources config for all InitContainer.
-
-```yaml
-apiVersion: opensearch.org/v1
-kind: OpenSearchCluster
----
-spec:
-  initHelper:
-    resources:
-      requests:
-        memory: "50Mi"
-        cpu: "50m"
-      limits:
-        memory: "200Mi"
-        cpu: "200m"
-```
+Resources for the init helper containers are set with `initHelper.resources` (see [Edit init container resources](#edit-init-container-resources)).
 
 You can also configure the resources and scheduling options for the security update job as shown below.
 
 ```yaml
 apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
----
+# ...
 spec:
   security:
     config:
@@ -1458,6 +1536,90 @@ spec:
 The `updateJob` also supports standard Kubernetes scheduling options: `nodeSelector`, `tolerations`, `affinity`, `labels`, and `priorityClassName`.
 
 Please note that the examples provided here do not reflect actual resource requirements. You may need to conduct further testing to properly adjust the resources based on your specific needs.
+
+### ReadOnlyRootFilesystem: Enhancing Container Security
+
+The `readOnlyRootFilesystem` security context setting prevents runtime modifications to the container's filesystem, significantly improving security by reducing the attack surface. This section explains how to configure OpenSearch clusters with this security feature.
+
+#### Configuration Overview
+
+To enable `readOnlyRootFilesystem`, you need to:
+
+1. Set `readOnlyRootFilesystem: true` in `general.securityContext`
+2. Configure writable volumes using `emptyDir` in the `general` section
+3. Add initialization containers to copy necessary files before the main container starts
+
+#### Step 1: Configure Writable Volumes
+
+Add the following `emptyDir` volumes to provide writable paths for OpenSearch:
+
+```yaml
+spec:
+  general:
+    securityContext:
+      readOnlyRootFilesystem: true
+    additionalVolumes:
+      - emptyDir: {}
+        name: rw-tmp
+        path: /tmp
+      - emptyDir: {}
+        name: rw-config
+        path: /usr/share/opensearch/config
+      - emptyDir: {}
+        name: rw-plugins
+        path: /usr/share/opensearch/plugins
+      - emptyDir: {}
+        name: rw-logs
+        path: /usr/share/opensearch/logs
+```
+
+#### Step 2: Add Initialization Containers
+
+The operator mounts the volumes specified in `additionalVolumes` before any other volumes. To prevent issues with empty directories in `config` and `plugins`, add initialization containers to copy the necessary files.
+
+> **Note:** The operator ensures these initialization containers run first in the initialization sequence, before any other init containers you may have defined.
+
+##### For the bootstrap section:
+
+```yaml
+spec:
+  bootstrap:
+    initContainers:
+      - name: init-copier
+        image: opensearchproject/opensearch:3.2.0 # Same image as the cluster
+        volumeMounts:
+          - name: rw-config
+            mountPath: /config-tmp
+          - name: rw-plugins
+            mountPath: /plugins-tmp
+        command:
+          - "bash"
+          - "-c"
+          - "cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
+```
+
+##### For the nodePool section:
+
+When using `readOnlyRootFilesystem`, it's recommended to install plugins in the nodePool's initialization container:
+
+```yaml
+spec:
+  nodePools:
+    - component: nodes
+      # ...
+      initContainers:
+        - name: init-copier
+          image: opensearchproject/opensearch:3.2.0 # Same image as the cluster
+          volumeMounts:
+            - name: rw-config
+              mountPath: /config-tmp
+            - name: rw-plugins
+              mountPath: /plugins-tmp
+          command:
+            - "bash"
+            - "-c"
+            - "bin/opensearch-plugin -v install --batch repository-s3 && cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
+```
 
 ## Cluster operations
 
@@ -1489,12 +1651,22 @@ The operator supports automatic rolling version upgrades. To do so simply change
 ```yaml
 spec:
   general:
-    version: 1.2.3
+    version: "3.2.0"
 ```
 
 The Operator will then perform a rolling upgrade and restart the nodes one-by-one, waiting after each node for the cluster to stabilize and have a green cluster status. Depending on the number of nodes and the size of the data stored this can take some time.
 If the cluster stays yellow because some replicas can never be assigned (e.g. `number_of_replicas` is higher than the number of other data nodes), rolling restarts and upgrades with `drainDataNodes: false` still continue once all data nodes have joined and no shards are initializing, relocating or waiting for delayed allocation. The operator never restarts a node that holds the only active copy of a shard that should have replicas, except in a cluster with a single data node, where there is nowhere else to keep a copy. With `drainDataNodes: true` a node is only restarted once its shards have moved elsewhere, so replicas that have nowhere to go still block the restart.
-Downgrades and upgrades that span more than one major version are not supported, as this will put the OpenSearch cluster in an unsupported state. If you are using emptyDir storage for data nodes, it is recommended to set `general.drainDataNodes` to `true`, otherwise you might lose data.
+With `drainDataNodes: true` and exactly two data nodes, the operator only waits for primaries of system indices (such as `.opendistro_security`) to move off a node before restarting it, since the other shards have nowhere to go.
+
+Node pools are upgraded one at a time: data-only pools first, then pools that are both data and master-eligible, then all other pools (for example dedicated cluster managers and coordinating nodes).
+
+The webhook rejects version changes that the operator cannot perform:
+
+- downgrades,
+- upgrades that span more than one major version,
+- changing `general.version` while `general.image` pins a custom image, unless the image changes in the same update (the version does not select the image then).
+
+If you are using emptyDir storage for data nodes, it is recommended to set `general.drainDataNodes` to `true`, otherwise you might lose data.
 
 ### Configuration changes
 
@@ -1509,27 +1681,43 @@ To increase the disk volume size set the `diskSize` of a nodepool to the desired
 The following considerations should be taken into account in order to increase the PVC size.
 
 - This only works for PVC-based persistence
-- Before considering the expansion of the the cluster disk, make sure the volumes/data is backed up in desired format, so that any failure can be tolerated by restoring from the backup.
+- Before considering the expansion of the cluster disk, make sure the volumes/data is backed up in desired format, so that any failure can be tolerated by restoring from the backup.
 - Make sure the cluster storage class has `allowVolumeExpansion: true` before applying the new `diskSize`. For more details checkout the [kubernetes storage classes](https://kubernetes.io/docs/concepts/storage/storage-classes/) document.
-- Once the above step is done, the cluster yaml can be applied with new `diskSize` value, to all decalared nodepool components or to single component.
+- Once the above step is done, the cluster yaml can be applied with new `diskSize` value, to all declared nodepool components or to single component.
 - It is best recommended not to apply any new changes to the cluster along with volume expansion.
 - Make sure the declared size definitions are proper and consistent, example if the `diskSize` is in `G` or `Gi`, make sure the same size definitions are followed for expansion.
 
-Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure data is backed up and make sure the right conversion number is identified, so that the underlying volume has the same value and then re-apply the cluster yaml. This will make sure the statefulset is re-created with right value in VolueClaimTemplates, this operation is expected to have no downtime.
+Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure data is backed up and make sure the right conversion number is identified, so that the underlying volume has the same value and then re-apply the cluster yaml. This will make sure the statefulset is re-created with right value in VolumeClaimTemplates, this operation is expected to have no downtime.
+
+### Status and events
+
+`kubectl get opensearchcluster <name> -o yaml` shows the cluster status:
+
+- `status.phase`: `PENDING` until the operator first reconciles the cluster, `RUNNING` afterwards, and `UPGRADING` during a version upgrade. `RUNNING` does not mean the cluster is healthy.
+- `status.health` (`green`, `yellow`, `red` or `unknown`) and `status.availableNodes`, as reported by OpenSearch.
+- `status.componentsStatus`: progress of ongoing operations, such as `Scaler`, `Upgrader`, `RollingRestart` and `Securityconfig` entries.
+
+The operator records Kubernetes events on the `OpenSearchCluster` (`kubectl describe opensearchcluster <name>`). The event reasons are `RollingRestart`, `Upgrade`, `Scaler`, `PVC`, `PDB`, `StatefulSetRecreated`, `EmptyDirRecovery`, `Monitoring`, `Security`, `DashboardsUserUnmapped` and `ConfigDuplicateKey`.
+
+A few behaviours worth knowing:
+
+- **Stuck pods:** during a rolling restart or upgrade, a pod on an old StatefulSet revision that is stuck (`CrashLoopBackOff`, `ImagePullBackOff`, `ErrImagePull`, `InvalidImageName`, or `RepeatedlyFailing` when its container keeps failing the startup probe) is deleted so it is recreated from the new template. Stuck pods on the current revision are only reported with a `Warning` event.
+- **Yellow clusters:** rolling restarts and upgrades continue on a cluster that stays yellow because some replicas can never be assigned (see [Rolling Upgrades](#rolling-upgrades)).
+- **Securityconfig job:** if the `<cluster-name>-securityconfig-update` job fails, the operator retries it with an exponential backoff from 30 seconds up to 15 minutes.
 
 ## User and role management
 
-An important part of any OpenSearch cluster is the user and role management to give users access to the cluster (via the opensearch-security plugin). By default the operator will use the included demo securityconfig with default users (see [internal_users.yml](https://github.com/opensearch-project/security/blob/main/config/internal_users.yml) for a list of users). For any production installation you should swap that out with your own configuration.
+An important part of any OpenSearch cluster is the user and role management to give users access to the cluster (via the opensearch-security plugin). The operator ships a minimal `internal_users.yml` with only the `admin` and `kibanaserver` users, both with operator-generated random passwords. All other security files (roles, role mappings, `config.yml`, ...) come from the defaults of the security plugin in the OpenSearch image. For any production installation you should replace them with your own configuration.
 There are two ways to do that with the operator:
 
 - Defining your own securityconfig
-- Managing users and roles via kubernetes resources
+- Managing users, roles and other objects via kubernetes resources
 
-Note that currently a combination of both approaches is not possible. Once you use the CRDs you cannot provide your own securityconfig as those would overwrite each other. We are working on a feature to merge these options.
+The two can be combined, but see the caveat about `internal_users.yml` below.
 
 ### Securityconfig
 
-You can provide your own securityconfig (see the entire [demo securityconfig](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/opensearch-operator/examples/securityconfig-secret.yaml) as an example and the [Access control documentation](https://opensearch.org/docs/latest/security-plugin/access-control/index/) of the OpenSearch project) with your own users and roles. To do that, you must provide a secret with all the required securityconfig yaml files.
+You can provide your own securityconfig (see the [example securityconfig secret](../../opensearch-operator/examples/securityconfig-secret.yaml) and the [Access control documentation](https://opensearch.org/docs/latest/security-plugin/access-control/index/) of the OpenSearch project) with your own users and roles. To do that, you provide a secret with the securityconfig yaml files you want to replace.
 
 The Operator can be controlled using the following fields in the `OpenSearchCluster` custom resource:
 
@@ -1547,34 +1735,31 @@ spec:
 # ...
 ```
 
-Provide the name of the secret that contains your securityconfig yaml files as `securityConfigSecret.name`. This secret acts as the source of truth that you manage. The operator always creates its own runtime secret named `<cluster-name>-security-config-generated`, copies your files into it (or falls back to the bundled defaults when no secret is supplied), and automatically updates the password hashes for the admin and dashboard (kibanaserver) users before applying the configuration to the cluster.
+Provide the name of the secret that contains your securityconfig yaml files as `securityConfigSecret.name`. This secret is the source of truth that you manage. The operator builds its own runtime secret named `<cluster-name>-security-config-generated`: it starts from the bundled `internal_users.yml`, replaces it with any file of the same name from your secret, adds your other files, and then sets the password hashes of the `admin` and Dashboards users before the configuration is applied.
 
-**Important:** You no longer need to provide password hashes for the `admin` or `kibanaserver` users in your security config secret. The operator will automatically generate password hashes from the credentials secrets and override any hash values you provide in the security config secret for these users. This means you only need to manage passwords in one place (the credentials secrets), not in both the credentials secrets and the security config secret.
+- **Password hashes:** you do not need to provide hashes for the `admin` or `kibanaserver` users. The operator generates them from the credentials secrets and overrides any hash you provide for these users, so passwords are managed in one place (the credentials secrets). If you provide your own `internal_users.yml`, it must contain an `admin` user.
+- **Role mappings:** password hashes are the only thing the operator manages for you. If your secret includes its own `roles_mapping.yml`, it replaces the image's default file entirely, and you are responsible for keeping the Dashboards user mapped to a role that has cluster monitoring permissions (`kibana_server` by default). See [Custom Dashboards user](#custom-dashboards-user) below.
+- **Missing files:** when the cluster is first created, files you do not provide come from the security plugin defaults in the image (see [opensearch-security](https://github.com/opensearch-project/security/tree/main/config)). To start with an empty file instead, provide a minimal one, for example:
 
-**Important:** password hashes are the only thing the operator manages for you. If your security config secret includes its own `roles_mapping.yml`, it replaces the image's default file entirely, and you are responsible for keeping the Dashboards user mapped to a role that has cluster monitoring permissions (`kibana_server` by default). See [Custom Dashboards user](#custom-dashboards-user) below.
+  ```yaml
+  tenants.yml: |-
+    _meta:
+      type: "tenants"
+      config_version: 2
+  ```
 
-Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
+  Once the cluster exists, you can remove such minimal files from the secret so that later updates do not overwrite objects created via the CRDs or the REST API.
+- **`internal_users.yml` is always re-applied:** because the generated secret always contains `internal_users.yml`, every run of the update job replaces all internal users, including users created via `OpensearchUser` resources or the REST API. Leaving the file out of your secret does not prevent this. The operator emits a `Warning` event whenever it re-applies the securityconfig on an initialized cluster; users managed by `OpensearchUser` resources are re-created on their next check (every 30 seconds).
 
-If you don't want to use the default files, you must provide at least a minimum configuration for the file. Example:
+In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (for health checks, cluster status and node draining). When you omit this field the operator creates `<cluster-name>-admin-password` with the `admin` username and a **random password**. Either way, the operator hashes the password into the generated securityconfig without modifying your source secret, and copies the credentials into `<cluster-name>-admin-password`. See [Custom admin password](#custom-admin-password).
 
-```yaml
-tenants.yml: |-
-  _meta:
-    type: "tenants"
-    config_version: 2
-```
+Similarly, for OpenSearch Dashboards, if you don't provide `dashboards.opensearchCredentialsSecret`, the operator automatically creates `<cluster-name>-dashboards-password` with a **random password** for the `kibanaserver` user and adds its hash to the generated securityconfig.
 
-These minimum configuration files can later be removed from the secret so that you don't overwrite the resources created via the CRDs or the REST APIs when modifying other configuration files.
+You must also configure SSL/TLS HTTP. You can either let the operator generate all needed certificates or supply them yourself.
 
-In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (currently used for getting the cluster status, doing health checks and coordinating node draining during cluster scaling operations). When you omit this field the operator automatically creates `<cluster-name>-admin-password`, seeds it with the default `admin` username and a **random password**, and automatically generates the password hash and adds it to the generated securityconfig. If you bring your own secret, the operator reads the password from your secret and automatically generates the hash and adds it to the generated securityconfig without modifying your source secret.
+If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certificate cannot be used or recognized as a node certificate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
-Similarly, for OpenSearch Dashboards, if you don't provide `dashboards.opensearchCredentialsSecret`, the operator automatically creates `<cluster-name>-dashboards-password` with a **random password** for the `kibanaserver` user and automatically generates the password hash and adds it to the generated securityconfig.
-
-You must also configure SSL/TLS HTTP. You can either let the operator generate all needed certificates or supply them yourself. If you use your own certificates you must also provide an admin certificate that the operator can use to apply the securityconfig.
-
-If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
-
-To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
+To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the securityconfig and credentials secrets for changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. A failed job is retried with a backoff from 30 seconds up to 15 minutes. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
 #### Applying the securityconfig without HTTP TLS
 
@@ -1584,7 +1769,7 @@ Clusters that enable transport TLS but disable HTTP TLS (`security.tls.http.enab
 # ...
 spec:
   general:
-    version: 2.19.4
+    version: "3.2.0"
   security:
     tls:
       transport:
@@ -1610,7 +1795,7 @@ The referenced secret must be of type `kubernetes.io/tls` and contain `tls.crt` 
 
 #### Option A: reuse the operator-managed admin client cert (easiest)
 
-When `security.tls.http.generate: true` (the default) the operator already creates an admin client certificate for its own use (running `securityadmin.sh` to apply the securityconfig). It is stored in the secret `<cluster-name>-admin-cert` and its DN is automatically added to `plugins.security.authcz.admin_dn` in the generated `opensearch.yml`, so OpenSearch accepts it as a full-privilege admin client. You can simply point `operatorClientCert` at it — no new certificates or mappings required:
+When `security.config.adminSecret` is empty, the operator creates an admin client certificate for its own use (running `securityadmin.sh` to apply the securityconfig), signed by the operator CA. This requires HTTP TLS with generated certificates (`generate` defaults to `false`, so set it explicitly). The certificate is stored in the secret `<cluster-name>-admin-cert`, its DN is `CN=admin,OU=<cluster-name>`, and that DN is added to `plugins.security.authcz.admin_dn`, so OpenSearch accepts it as a full-privilege admin client. `adminDn` is ignored for this generated certificate. You can simply point `operatorClientCert` at it, no new certificates or mappings required:
 
 ```yaml
 # ...
@@ -1622,8 +1807,6 @@ spec:
     tls:
       http:
         generate: true
-        adminDn:
-          - "CN=admin,OU=dev-cluster"
 ```
 
 #### Option B: bring your own client certificate
@@ -1672,6 +1855,16 @@ spec:
 
 The operator provides custom kubernetes resources that allow you to create/update/manage security configuration resources such as users, roles, action groups etc. as kubernetes objects.
 
+These resources, and the ISM policy, template and snapshot policy resources further below, share some behaviour:
+
+- They must be in the namespace of the `OpenSearchCluster`. `spec.opensearchCluster.name` is immutable, and the webhook rejects a resource whose cluster does not exist yet (create the cluster first when using GitOps).
+- The operator waits until the cluster's `status.phase` is `RUNNING` before creating the object in OpenSearch.
+- `metadata.name` is the name of the object in OpenSearch. ISM policies (`policyId`) and index and component templates (`name`) can set a different name in the spec, and snapshot policies always use their required `policyName`. These name fields are immutable.
+- If an object with the same name already exists in OpenSearch and was not created by the operator, the resource's `status.state` is `IGNORED`, `status.existing*` is `true`, and the object is neither modified nor deleted. Users are the exception: the resource goes into the `ERROR` state instead.
+- Deleting the resource deletes the object from OpenSearch (through a finalizer), unless it was pre-existing.
+
+Fields not shown in the examples below include `attributes` and `opendistroSecurityRoles` for users; `tenantPermissions`, and `dls`, `fls` and `maskedFields` in `indexPermissions`, for roles. See the [CRD reference](../designs/crd/opensearch.org.md) for all fields.
+
 #### Opensearch Users
 
 It is possible to manage Opensearch users in Kubernetes with the operator. The operator will not modify users that already exist. You can create an example user as follows:
@@ -1692,9 +1885,11 @@ spec:
     - kibanauser
 ```
 
-The namespace of the `OpenSearchUser` must be the namespace the OpenSearch cluster itself is deployed in.
+The namespace of the `OpensearchUser` must be the namespace the OpenSearch cluster itself is deployed in.
 
 Note that a secret called `sample-user-password` will need to exist in the `default` namespace with the base64 encoded password in the `password` key.
+
+The operator re-checks each user every 30 seconds and updates the password in OpenSearch when the secret's `resourceVersion` changes.
 
 Also, it is possible to store multiple Users password in the same Secret. To do this, you **must** create a secret where
 each key will be equal to a **User name** and value is a user password. **Otherwise, changes in the secret will not trigger User
@@ -1726,7 +1921,7 @@ spec:
 
 #### Linking Opensearch Users and Roles
 
-The operator allows you link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role. E.g:
+The operator allows you to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user and backend role in the binding will be granted each role. If a role mapping already exists in OpenSearch, the binding adds its users and backend roles to it, and removes only those again when the binding changes or is deleted. E.g:
 
 ```yaml
 apiVersion: opensearch.org/v1
@@ -1781,11 +1976,9 @@ spec:
   description: Sample tenant
 ```
 
-### Custom Admin User
+### Custom admin password
 
-In order to create your cluster with an admin user different from the default, you can provide your own admin credentials secret. The operator will automatically generate the password hash and add it to the security config, so you no longer need to manually generate and include the password hash in your security config secret.
-
-First, create a secret with your admin user configuration (in this example `admin-credentials-secret`):
+The operator always manages the password of the internal user named `admin`. To choose that password yourself instead of using a generated one, create a secret with `username` and `password` keys and reference it as `adminCredentialsSecret`. The username should be `admin`: the operator uses the secret's credentials for its own API calls, but always writes the password hash to the `admin` user.
 
 ```yaml
 apiVersion: v1
@@ -1796,16 +1989,28 @@ type: Opaque
 data:
   # admin
   username: YWRtaW4=
-  # admin123
-  password: YWRtaW4xMjM=
+  # Adm1n-Secure-Passw0rd!
+  password: QWRtMW4tU2VjdXJlLVBhc3N3MHJkIQ==
 ```
 
-**Important:** You do **not** need to include the password hash in your security config secret. The operator will automatically:
-1. Read the password from your `adminCredentialsSecret`
-2. Generate the bcrypt hash
-3. Override the `admin` user's hash in the generated security config secret (`<cluster-name>-security-config-generated`)
+Use a strong password. The example meets the security plugin's default password policy (at least 8 characters with upper- and lowercase letters, a digit and a special character), as do the passwords the operator generates.
 
-If you provide your own securityconfig secret, you can optionally include the admin user definition, but any hash you provide will be automatically overridden by the operator:
+```yaml
+spec:
+  security:
+    config:
+      adminCredentialsSecret:
+        name: admin-credentials-secret # The secret with the admin credentials for the operator to use
+      securityConfigSecret:
+        name: securityconfig-secret # Optional: The secret containing your customized securityconfig
+    tls:
+      transport:
+        generate: true
+      http:
+        generate: true
+```
+
+The operator reads the password, generates the bcrypt hash and writes it to the `admin` user in `<cluster-name>-security-config-generated`, overriding any hash in your securityconfig secret. If you provide your own `internal_users.yml`, keep an `admin` entry (the hash can be omitted):
 
 ```yaml
 internal_users.yml: |-
@@ -1813,47 +2018,17 @@ internal_users.yml: |-
     type: "internalusers"
     config_version: 2
   admin:
-    # hash field is optional - operator will override it automatically
     reserved: true
     backend_roles:
     - "admin"
-    description: "Demo admin user"
+    description: "Admin user"
 ```
 
-Add the security configuration to your cluster spec:
-
-```yaml
-security:
-  config:
-    adminCredentialsSecret:
-      name: admin-credentials-secret # The secret with the admin credentials for the operator to use
-    securityConfigSecret:
-      name: securityconfig-secret # Optional: The secret containing your customized securityconfig
-  tls:
-    transport:
-      generate: true
-    http:
-      generate: true
-```
-
-**Changing the admin password:** To change the admin password after the cluster has been created, simply update the password in your `admin-credentials-secret`. The operator will automatically:
-1. Detect the password change
-2. Generate a new password hash
-3. Update the generated security config secret
-4. Trigger a security config update job to apply the changes to OpenSearch
-
-You no longer need to manually update the password hash in the security config secret.
+**Changing the admin password:** update the password in your `admin-credentials-secret`, or, if you do not set `adminCredentialsSecret`, in `<cluster-name>-admin-password`. The operator detects the change, updates the hash in the generated securityconfig and reruns the securityconfig update job.
 
 ### Custom Dashboards user
 
-Dashboards requires an opensearch user (typically `kibanaserver`) to connect to the cluster. 
-
-**If you don't provide a custom credentials secret**, the operator automatically:
-1. Creates a secret named `<cluster-name>-dashboards-password` with a **random password** for the `kibanaserver` user
-2. Generates the password hash and automatically adds it to the generated security config secret
-3. Configures Dashboards to use these credentials
-
-**If you want to use custom credentials**, create a secret with keys `username` and `password` and supply it to the operator via the cluster spec:
+Dashboards connects to OpenSearch with its own user. By default the operator creates `<cluster-name>-dashboards-password` with a random password for the `kibanaserver` user and configures Dashboards to use it. To use other credentials, create a secret with keys `username` and `password` and reference it:
 
 ```yaml
 spec:
@@ -1862,10 +2037,7 @@ spec:
       name: dashboards-credentials # This is the name of your secret that contains the credentials for Dashboards to use
 ```
 
-**Important:** Similar to the admin user, you do **not** need to include the password hash for the `kibanaserver` user in your security config secret. The operator will automatically:
-1. Read the password from your `opensearchCredentialsSecret` (or use the generated random password if not provided)
-2. Generate the bcrypt hash
-3. Override the Dashboards user's hash in the generated security config secret (using the `username` from `opensearchCredentialsSecret` if you provided one, `kibanaserver` otherwise)
+As for the admin user, the operator writes the password hash for this user (the `username` from the secret, or `kibanaserver`) into the generated securityconfig; you do not need to include it in your securityconfig secret.
 
 **Important:** the operator only manages the password hash. If you supply your own `roles_mapping.yml`, it replaces the image's default file, and the default `kibana_server -> kibanaserver` mapping is gone with it. You must keep the Dashboards user mapped to a role with cluster monitoring permissions yourself, for example:
 
@@ -1880,27 +2052,23 @@ roles_mapping.yml: |-
 
 ### Security Plugin Disabled
 
-When the security plugin is disabled (`spec.security.disable: true`), password management works differently:
+There is no field to disable the security plugin directly. When neither `security.tls.transport` nor `security.tls.http` TLS is enabled, the operator sets `plugins.security.disabled: true`, and the cluster runs over plain HTTP without authentication. In that case:
 
 **Admin User:**
-- You can now set a custom password for the admin user by providing `adminCredentialsSecret` with your desired password
-- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in the bootstrap pod and all OpenSearch StatefulSet pods
-- This allows OpenSearch to use your custom password during initial setup, even when the security plugin is disabled
+- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in the bootstrap pod and all OpenSearch pods from `<cluster-name>-admin-password`, which holds the password of `adminCredentialsSecret` if you provide one, or a generated one otherwise.
 
 **Dashboards User:**
-- Custom passwords for the Dashboards user are **not supported** when the security plugin is disabled
-- The operator will use the default `kibanaserver` password
-- This is a current limitation
+- Custom passwords for the Dashboards user are **not supported**; the generated `<cluster-name>-dashboards-password` secret uses the default `kibanaserver` password.
 
 ## Adding Opensearch Monitoring to your cluster
 
-The operator allows you to install and enable the [Prometheus exporter plugin for OpenSearch](https://github.com/opensearch-project/opensearch-prometheus-exporter) on your cluster as a built-in feature. If enabled the operator will install the  plugin into the opensearch pods and generate a Prometheus ServiceMonitor object to configure the plugin for scraping.
-This feature needs internet connectivity to download the plugin. if you are working in a restricted environment, please download the plugin zip for your cluster version (example for 2.3.0: `https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/2.3.0.0/prometheus-exporter-2.3.0.0.zip`) and provide it at a location the operator can reach. Configure that URL as `pluginURL` in the monitoring config. By default the convention shown below in the example will be used if no `pluginUrl` is specified.
+The operator allows you to install and enable the [Prometheus exporter plugin for OpenSearch](https://github.com/opensearch-project/opensearch-prometheus-exporter) on your cluster as a built-in feature. If enabled the operator will install the plugin into the opensearch pods and generate a Prometheus ServiceMonitor object to configure the plugin for scraping. If the ServiceMonitor CRD (from the Prometheus Operator) is not installed, the operator skips the ServiceMonitor and emits a `Warning` event; the rest of the cluster is reconciled normally.
+This feature needs internet connectivity to download the plugin. If you are working in a restricted environment, please download the plugin zip for your cluster version (example for 3.2.0: `https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/3.2.0.0/prometheus-exporter-3.2.0.0.zip`) and provide it at a location the pods can reach. Configure that URL as `pluginUrl` in the monitoring config. By default the convention shown below in the example will be used if no `pluginUrl` is specified.
 
 By default the Opensearch admin user will be used to access the monitoring API. If you want to use a separate user with limited permissions you need to create that user using either of the following options:
 
 a. Create new applicative User using OpenSearch API/UI, create new secret with 'username' and 'password' keys and provide that secret name under `monitoringUserSecret`.
-b. Use Our OpenSearchUser CRD and provide the secret under monitoringUserSecret.
+b. Use the `OpensearchUser` CRD and provide the secret under `monitoringUserSecret`.
 
 ### Configuration
 
@@ -1919,8 +2087,8 @@ spec:
       enable: true # Enable or disable the monitoring plugin
       labels: # The labels add for ServiceMonitor
         someLabelKey: someLabelValue
-      scrapeInterval: 30s # The scrape interval for Prometheus
-      monitoringUserSecret: monitoring-user-secret # Optional, name of a secret with username/password for prometheus to acces the plugin metrics endpoint with, defaults to the admin user
+      scrapeInterval: 30s # The scrape interval for Prometheus, default 30s
+      monitoringUserSecret: monitoring-user-secret # Optional, name of a secret with username/password for prometheus to access the plugin metrics endpoint with, defaults to the admin user
       pluginUrl: https://github.com/opensearch-project/opensearch-prometheus-exporter/releases/download/<YOUR_CLUSTER_VERSION>.0/prometheus-exporter-<YOUR_CLUSTER_VERSION>.0.zip # Optional, custom URL for the monitoring plugin
       tlsConfig: # Optional, use this to override the tlsConfig of the generated ServiceMonitor, only the following provided options can be set currently
         serverName: "testserver.test.local"
@@ -1945,11 +2113,11 @@ You can customize the generated Prometheus `ServiceMonitor` endpoint with relabe
 - `relabelings` are applied **before scraping** and allow modifying target labels.
 - `metricRelabelings` are applied **after scraping** and allow filtering or transforming metrics.
 
-### Managing ISM policies with Kubernetes resources
+## Managing ISM policies with Kubernetes resources
 
-The operator provides a custom Kubernetes resource that allow you to create/update/manage ISM policies using Kubernetes objects.
+The operator provides a custom Kubernetes resource that allows you to create/update/manage ISM policies using Kubernetes objects.
 
-It is possible to manage OpenSearch ISM policies in Kubernetes with the operator. Fields in the CRD directly maps to the OpenSearch ISM Policy structure. The operator will not modify policies that already exist. You can create an example policy as follows:
+It is possible to manage OpenSearch ISM policies in Kubernetes with the operator. Fields in the CRD directly map to the OpenSearch ISM Policy structure. The operator will not modify policies that already exist (see the [common behaviour](#managing-security-configurations-with-kubernetes-resources) of these resources). You can create an example policy as follows:
 
 ```yaml
 apiVersion: opensearch.org/v1
@@ -1984,14 +2152,52 @@ spec:
         - delete: {}
 ```
 
-The namespace of the `OpenSearchISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in. `policyId` is an optional field, and if not provided `metadata.name` is used as the default.
+The namespace of the `OpenSearchISMPolicy` must be the namespace the OpenSearch cluster itself is deployed in. `policyId` is an optional field, and if not provided `metadata.name` is used as the default. It cannot be changed later. `errorNotification` (and `notification` actions) configure ISM notifications; see the [CRD reference](../designs/crd/opensearch.org.md).
+
+### Apply ism policies to existing indices
+
+The operator provides a flag to apply ism policies to already existing indices in the opensearch cluster.
+This is done by setting the `applyToExistingIndices` flag to true in the `OpenSearchISMPolicy` CRD. An example of this can be seen below:
+
+```yaml
+apiVersion: opensearch.org/v1
+kind: OpenSearchISMPolicy
+metadata:
+  name: test-policy-apply
+spec:
+  opensearchCluster:
+    name: my-first-cluster
+  applyToExistingIndices: true
+  description: "Test ISM policy - Apply to existing indices is true"
+  defaultState: "hot"
+  ismTemplate:
+    indexPatterns:
+      - "test-*"
+  states:
+    - name: hot
+      actions:
+        - replicaCount:
+            numberOfReplicas: 2
+      transitions:
+        - stateName: warm
+          conditions:
+            minIndexAge: "1d"
+    - name: warm
+      actions:
+        - replicaCount:
+            numberOfReplicas: 1
+```
+
+Note that the default setting of `applyToExistingIndices` is false and it will be false if the flag is omitted in the manifest.
+
+When the flag is true, existing indices matching `ismTemplate.indexPatterns` get this ism policy applied when the policy is first created. Without `ismTemplate.indexPatterns` the flag does nothing, and setting it on an existing policy has no effect. If multiple ism policies use this with the same index pattern, the priority has to be different between the ism policies.
 
 ## Managing index and component templates
 
-The operator provides the OpensearchIndexTemplate and OpensearchComponentTemplate CRDs, which is used for managing index and component templates respectively.
+The operator provides the OpensearchIndexTemplate and OpensearchComponentTemplate CRDs, which are used for managing index and component templates respectively.
 
-The two CRD specifications attempts to be as close as possible to what the OpenSearch API expects, with some changes from snake_case to camelCase.
-The fields that have been changed, is `index_patterns` to `indexPatterns` (OpensearchIndexTemplate only), `composed_of` to `composedOf` (OpensearchIndexTemplate only) and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
+The two CRD specifications attempt to be as close as possible to what the OpenSearch API expects, with some changes from snake_case to camelCase.
+The fields that have been changed are `index_patterns` to `indexPatterns` (OpensearchIndexTemplate only), `composed_of` to `composedOf` (OpensearchIndexTemplate only) and `template.aliases.<alias>.is_write_index` to `template.aliases.<alias>.isWriteIndex`.
 
 The following example creates a component template for setting the number of shards and replicas, together with specifying a specific time format for documents:
 
@@ -2046,45 +2252,9 @@ spec:
   _meta: {} # optional
 ```
 
-Note: the `.spec.name` is immutable, meaning that it cannot be changed after the resources have been deployed to a Kubernetes cluster
+Note: `.spec.name` of both resources is immutable, meaning that it cannot be changed after the resources have been deployed to a Kubernetes cluster.
 
-## Apply ism policies to existing indices
-
-The operator provides a flag to apply ism policies to already existing indices in the opensearch cluster.
-This is done by setting the `applyToExistingIndices` flag to true in the `OpenSearchISMPolicy` CRD. An example of this can be seen below:
-
-```yaml
-apiVersion: opensearch.org/v1
-kind: OpenSearchISMPolicy
-metadata:
-  name: test-policy-apply
-spec:
-  opensearchCluster:
-    name: opensearch-cluster
-  applyToExistingIndices: true
-  description: "Test ISM policy - Apply to existing indices is true"
-  defaultState: "hot"
-  ismTemplate:
-    indexPatterns:
-      - "test-*"
-  states:
-    - name: hot
-      actions:
-        - replicaCount:
-            numberOfReplicas: 2
-      transitions:
-        - stateName: warm
-          conditions:
-            minIndexAge: "1d"
-    - name: warm
-      actions:
-        - replicaCount:
-            numberOfReplicas: 1
-```
-
-Note that the default setting of `applyToExistingIndices` is false and it will be false if the flag is omitted in the manifest.
-
-When the flag is true, any existing indices in the opensearch cluster with the specified index pattern will have this ism policy applied to it. If multiple ism policies use this with the same index pattern, the priority has to be different between the ism policies.
+Index templates also accept `dataStream` (with `timestamp_field.name`) to create data streams; component templates accept `allowAutoCreate`. See the [CRD reference](../designs/crd/opensearch.org.md) for all fields.
 
 ## Managing Snapshot Policies with Kubernetes Resources
 
@@ -2092,7 +2262,7 @@ The OpenSearch Operator provides a custom Kubernetes resource to create, update,
 
 Fields in the CRD map directly to the OpenSearch snapshot policy structure, allowing seamless integration. Policies are not modified if they already exist in OpenSearch. You can define a new policy using the following example:
 
-```
+```yaml
 apiVersion: opensearch.org/v1
 kind: OpensearchSnapshotPolicy
 metadata:
@@ -2130,91 +2300,19 @@ spec:
     dateFormatTimezone: "UTC"
     metadata:
       createdBy: "sample-operator"
+  notification: # Optional
+    channel:
+      id: my-notification-channel-id
+    conditions:
+      creation: false
+      deletion: false
+      failure: true
 ```
 
 Note:
 
 - The OpensearchSnapshotPolicy must be created in the same namespace as the OpenSearch cluster it targets.
 
-- `policyName` is an optional field, and if not provided `metadata.name` is used as the default.
+- `policyName` is required and cannot be changed later.
 
-- The repository field must reference an existing snapshot repository in the OpenSearch cluster. For creating a snapshot repository, you can use [this](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#configuring-snapshot-repositories) guide.
-### ReadOnlyRootFilesystem: Enhancing Container Security
-
-The `readOnlyRootFilesystem` security context setting prevents runtime modifications to the container's filesystem, significantly improving security by reducing the attack surface. This section explains how to configure OpenSearch clusters with this security feature.
-
-#### Configuration Overview
-
-An example configuration is available in [readonlyrootfs-example.yaml](../../opensearch-operator/examples/2.x/readonlyrootfs-example.yaml).
-
-To enable `readOnlyRootFilesystem`, you need to:
-
-1. Configure writable volumes using `emptyDir` in the `general` section
-2. Add initialization containers to copy necessary files before the main container starts
-
-#### Step 1: Configure Writable Volumes
-
-Add the following `emptyDir` volumes to provide writable paths for OpenSearch:
-
-```yaml
-general:
-  additionalVolumes:
-  - emptyDir: {}
-    name: rw-tmp
-    path: /tmp
-  - emptyDir: {}
-    name: rw-config
-    path: /usr/share/opensearch/config
-  - emptyDir: {}
-    name: rw-plugins
-    path: /usr/share/opensearch/plugins
-  - emptyDir: {}
-    name: rw-logs
-    path: /usr/share/opensearch/logs
-```
-
-#### Step 2: Add Initialization Containers
-
-The operator mounts the volumes specified in `additionalVolumes` before any other volumes. To prevent issues with empty directories in `config` and `plugins`, add initialization containers to copy the necessary files. 
-
-
-> **Note:** The operator ensures these initialization containers run first in the initialization sequence, before any other init containers you may have defined.
-
-
-##### For the bootstrap section:
-```yaml
-bootstrap:
-  initContainers:
-    - name: init-copier
-      image: opensearchproject/opensearch:2.17.1
-      volumeMounts:
-        - name: rw-config
-          mountPath: /config-tmp
-        - name: rw-plugins
-          mountPath: /plugins-tmp
-      command: [
-        "bash", 
-        "-c", 
-        "cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
-      ]
-```
-
-##### For the nodePool section:
-
-When using `readOnlyRootFilesystem`, it's recommended to install plugins in the nodePool's initialization container:
-```yaml
-nodePools:
-  initContainers:
-    - name: init-copier
-      image: opensearchproject/opensearch:2.17.1
-      volumeMounts:
-        - name: rw-config
-          mountPath: /config-tmp
-        - name: rw-plugins
-          mountPath: /plugins-tmp
-      command: [
-        "bash", 
-        "-c", 
-        "bin/opensearch-plugin -v install --batch repository-s3 && cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
-      ]
-```
+- The repository field must reference an existing snapshot repository in the OpenSearch cluster. For creating a snapshot repository, see [Configuring Snapshot Repositories](#configuring-snapshot-repositories).

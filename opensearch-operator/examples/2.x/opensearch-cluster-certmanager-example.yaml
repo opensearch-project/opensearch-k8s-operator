@@ -2,7 +2,7 @@
 # This example shows how to use external certificates from cert-manager with a LoadBalancer
 # and configure the operator to use the same FQDN for communication
 
-apiVersion: opensearch.opster.io/v1
+apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
 metadata:
   name: my-cluster
@@ -11,17 +11,23 @@ spec:
   general:
     serviceName: my-cluster
     httpPort: 9200
-    version: "2.11.0"
+    version: "2.19.1"
     vendor: "opensearch"
     # Configure the operator to communicate with OpenSearch using the external FQDN
     # This allows using a single external certificate for both external traffic and operator communication
     operatorClusterURL: "opensearch.example.com"
   security:
+    config:
+      # Provided HTTP certificates require an admin client certificate for the operator
+      # (a TLS secret with ca.crt, tls.crt and tls.key), e.g. issued by your internal CA
+      adminSecret:
+        name: opensearch-admin-cert
     tls:
       http:
         generate: false  # Use external certificates from cert-manager
         secret:
           name: opensearch-tls  # Secret created by cert-manager
+        adminDn: ["CN=admin,OU=my-cluster"]  # Must match the admin certificate's DN
       transport:
         generate: true  # Generate internal transport certificates
         perNode: true
@@ -83,4 +89,4 @@ spec:
       targetPort: 9200
       protocol: TCP
   selector:
-    opster.io/opensearch-cluster: my-cluster
+    opensearch.org/opensearch-cluster: my-cluster
