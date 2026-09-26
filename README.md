@@ -1,10 +1,10 @@
-![build](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opensearch-project/opensearch-k8s-operator) [![Golang Lint](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/linting.yaml/badge.svg)](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/linting.yaml) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/opensearch-operator)](https://artifacthub.io/packages/search?repo=opensearch-operator)
+![build](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/docker-build.yaml/badge.svg) ![test](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/testing.yaml/badge.svg) ![release](https://img.shields.io/github/v/release/opensearch-project/opensearch-k8s-operator) [![Golang Lint](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/go-linting.yaml/badge.svg)](https://github.com/opensearch-project/opensearch-k8s-operator/actions/workflows/go-linting.yaml) [![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/opensearch-operator)](https://artifacthub.io/packages/search?repo=opensearch-operator)
 
 # OpenSearch Kubernetes Operator
 
 The Kubernetes OpenSearch Operator is used for automating the deployment, provisioning, management, and orchestration of OpenSearch clusters and OpenSearch dashboards.
 
-> **API Group Migration Notice:** The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Please see the Migration Guide for details.
+> **API Group Migration Notice:** The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Please see the [Migration Guide](./docs/userguide/migration-guide.md) for details.
 
 ## Getting started
 
