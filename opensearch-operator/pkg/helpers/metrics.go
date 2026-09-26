@@ -31,7 +31,7 @@ var (
 	ClusterHealth = prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: clusterMetricsPrefix + "health",
-			Help: "Health status of the cluster. 0=red, 1=yellow, 2=green, -1=unknown",
+			Help: "Health status of the cluster. 0=green, 1=yellow, 2=red, -1=unknown",
 		}, []string{
 			"namespace", "opensearch_cluster",
 		})
