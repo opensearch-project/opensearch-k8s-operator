@@ -84,6 +84,7 @@ if [ -z "$VERSION" ] || [ -z "$DOCKERFILE" ] || [ -z "$ARCHITECTURE" ] || [ -z "
   usage
   exit 1
 else
+  VERSION=v3.0.0
   echo $VERSION $DOCKERFILE $PRODUCT $ARCHITECTURE
   IFS=', ' read -r -a ARCHITECTURE_ARRAY <<< "$ARCHITECTURE"
   IFS=', ' read -r -a TARBALL_ARRAY <<< "$TARBALL"
