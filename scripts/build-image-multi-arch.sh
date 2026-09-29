@@ -132,6 +132,8 @@ echo -e "\n* Check buildx status"
 docker buildx ls | grep $BUILDER_NAME
 docker ps | grep $BUILDER_NAME
 
+# Copy LICENSE into the build context
+cp -vf ../LICENSE ./LICENSE
 
 # Build multi-arch images
 PLATFORMS=`echo "${ARCHITECTURE_ARRAY[@]/#/linux/}" | sed 's/x64/amd64/g;s/ /,/g'` && echo PLATFORMS $PLATFORMS
