@@ -2,8 +2,9 @@ package services
 
 import (
 	"context"
-	"github.com/opensearch-project/opensearch-go/opensearchapi"
 	"strings"
+
+	"github.com/opensearch-project/opensearch-go/opensearchapi"
 )
 
 func CreateIndex(clusterClient *OsClusterClient, indexName string, mapping *strings.Reader) (int, error) {
