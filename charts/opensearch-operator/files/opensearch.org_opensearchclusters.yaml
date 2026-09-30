@@ -5620,6 +5620,11 @@ spec:
                         readiness:
                           properties:
                             command:
+                              description: |-
+                                Command overrides the probe handler. For startup probes, the default is a
+                                TCP socket check (so nodes can become Started before securityadmin runs);
+                                setting Command switches the startup probe to Exec. Readiness probes always
+                                default to an authenticated curl Exec command.
                               items:
                                 type: string
                               type: array
@@ -5642,6 +5647,11 @@ spec:
                         startup:
                           properties:
                             command:
+                              description: |-
+                                Command overrides the probe handler. For startup probes, the default is a
+                                TCP socket check (so nodes can become Started before securityadmin runs);
+                                setting Command switches the startup probe to Exec. Readiness probes always
+                                default to an authenticated curl Exec command.
                               items:
                                 type: string
                               type: array
