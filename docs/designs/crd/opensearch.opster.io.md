@@ -192,7 +192,7 @@ _Appears in:_
 | `timeoutSeconds` _integer_ |  |  |  |
 | `successThreshold` _integer_ |  |  |  |
 | `failureThreshold` _integer_ |  |  |  |
-| `command` _string array_ |  |  |  |
+| `command` _string array_ | Command overrides the probe handler. For startup probes, the default is a<br />TCP socket check (so nodes can become Started before securityadmin runs);<br />setting Command switches the startup probe to Exec. Readiness probes always<br />default to an authenticated curl Exec command. |  |  |
 
 
 #### Condition
