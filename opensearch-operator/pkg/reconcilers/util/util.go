@@ -24,7 +24,6 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -464,22 +463,6 @@ func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, c
 	}
 
 	return availableNodes
-}
-
-// PodSpecChanged checks if any meaningful pod spec fields have changed
-func PodSpecChanged(existing, desired *corev1.Pod) bool {
-	existingSpec := existing.Spec
-	desiredSpec := desired.Spec
-
-	sanitizeBootstrapPodSpec(&existingSpec)
-	sanitizeBootstrapPodSpec(&desiredSpec)
-
-	return !apiequality.Semantic.DeepEqual(existingSpec, desiredSpec)
-}
-
-func sanitizeBootstrapPodSpec(spec *corev1.PodSpec) {
-	spec.NodeName = ""
-	spec.Tolerations = removeDefaultNodeLifecycleTolerations(spec.Tolerations)
 }
 
 func removeDefaultNodeLifecycleTolerations(tolerations []corev1.Toleration) []corev1.Toleration {

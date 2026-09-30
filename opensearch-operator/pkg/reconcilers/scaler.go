@@ -568,7 +568,7 @@ func (r *ScalerReconciler) votingExclusionsToKeep(stayingNode string, alreadyExc
 			continue
 		}
 		role := pod.Labels["opensearch.role"]
-		if role == "master" || role == "cluster_manager" || pod.Name == builders.BootstrapPodName(r.instance) {
+		if role == "master" || role == "cluster_manager" {
 			add(pod.Name)
 		}
 	}
@@ -1103,9 +1103,6 @@ func (r *ScalerReconciler) sweepVotingConfigExclusions() {
 // replica count, and no Scaler status targets it. The bootstrap pod is owned by
 // the cluster reconciler while it exists.
 func (r *ScalerReconciler) isDanglingVotingExclusion(nodeName string) (bool, error) {
-	if nodeName == builders.BootstrapPodName(r.instance) {
-		return false, nil
-	}
 	for _, cs := range r.instance.Status.ComponentsStatus {
 		if cs.Component == "Scaler" && (cs.Status == "Excluded" || cs.Status == "Drained") && scalerTargetNodeName(cs.Conditions) == nodeName {
 			return false, nil
