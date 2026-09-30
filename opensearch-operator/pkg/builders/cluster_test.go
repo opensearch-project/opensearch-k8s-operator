@@ -1210,8 +1210,9 @@ var _ = Describe("Builders", func() {
 				},
 			}
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.TCPSocket).NotTo(BeNil())
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.TCPSocket.Port.IntValue()).To(Equal(9200))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.TCPSocket).To(BeNil())
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
 				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
 		})
@@ -1651,7 +1652,7 @@ var _ = Describe("Builders", func() {
 	})
 
 	When("configuring a host alias for the cluster", func() {
-		It("should configure the host alias for the statefulset", func() {
+		It("should configure the host alias for the statefulset pods", func() {
 			hostNames := []string{"dummy.com"}
 			hostAlias := corev1.HostAlias{
 				IP:        "3.5.7.9",
