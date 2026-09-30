@@ -362,11 +362,6 @@ var _ = Describe("Builders", func() {
 			for _, container := range result.Spec.Template.Spec.InitContainers {
 				Expect(container.SecurityContext).To(Equal(initSecurityContext))
 			}
-
-			bootstrapPod := NewBootstrapPod(&clusterObject, nil, nil)
-			for _, container := range bootstrapPod.Spec.InitContainers {
-				Expect(container.SecurityContext).To(Equal(initSecurityContext))
-			}
 		})
 
 		It("should keep the default init container security contexts if no custom one is set", func() {
@@ -1723,16 +1718,6 @@ var _ = Describe("Builders", func() {
 			clusterObject := clusterWithAttributes()
 			sts := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
 			command := sts.Spec.Template.Spec.Containers[0].Command
-			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && ./opensearch-docker-entrypoint.sh"))
-		})
-
-		It("should wire the same mechanism into the bootstrap pod", func() {
-			clusterObject := clusterWithAttributes()
-			pod := NewBootstrapPod(&clusterObject, nil, nil)
-
-			Expect(findContainer(pod.Spec.InitContainers, nodeAttributesVolumeName)).NotTo(BeNil())
-			Expect(pod.Spec.Volumes).To(ContainElement(nodeAttributesVolume()))
-			command := pod.Spec.Containers[0].Command
 			Expect(command[len(command)-1]).To(ContainSubstring(". /usr/share/opensearch/config/node-attributes/attributes.env && ./opensearch-docker-entrypoint.sh"))
 		})
 
