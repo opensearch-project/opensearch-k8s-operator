@@ -1,15 +1,20 @@
 package reconcilers
 
 import (
+	"context"
 	"errors"
+	"net/http"
 	"time"
 
+	"github.com/go-logr/logr"
+	"github.com/jarcoal/httpmock"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/stretchr/testify/mock"
 	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -17,6 +22,7 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -603,5 +609,146 @@ var _ = Describe("StatefulSet recreation on immutable field change", func() {
 		Expect(err).NotTo(HaveOccurred())
 		Expect(pod).NotTo(BeNil())
 		Expect(pod.Name).To(Equal("os-nodes-0"))
+	})
+})
+
+var _ = Describe("Legacy bootstrap cleanup", func() {
+	const (
+		clusterName      = "test-cluster"
+		clusterNamespace = "test-namespace"
+	)
+
+	newCluster := func() *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterNamespace, UID: "dummyuid"},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{ServiceName: clusterName, HttpPort: 9200},
+			},
+			Status: opensearchv1.ClusterStatus{Initialized: true},
+		}
+	}
+
+	legacyBootstrapPod := func(instance *opensearchv1.OpenSearchCluster) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      builders.BootstrapPodName(instance),
+				Namespace: instance.Namespace,
+			},
+		}
+	}
+
+	It("Should POST a voting exclusion, delete the pod and PVC, then waiting-DELETE exclusions once the node has left", func() {
+		instance := newCluster()
+		bootstrapPod := legacyBootstrapPod(instance)
+		transport := httpmock.NewMockTransport()
+		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+		registerOsPingResponders(transport, instance)
+		registerCatNodesSequence(transport, []string{builders.BootstrapPodName(instance)}, []string{})
+		registerVotingExclusionsState(transport, builders.BootstrapPodName(instance))
+		calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+		mockClient.On("ReconcileResource", mock.Anything, reconciler.StateAbsent).Return(&ctrl.Result{}, nil)
+
+		underTest := &ClusterReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			instance:          instance,
+			logger:            logr.Discard(),
+			osClientTransport: transport,
+		}
+		result, err := underTest.cleanupLegacyBootstrapResources()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(&ctrl.Result{}))
+		Expect(*calls).To(Equal([]string{
+			"POST node_names=" + builders.BootstrapPodName(instance) + "&timeout=10s",
+			"DELETE wait_for_removal=true",
+		}))
+		mockClient.AssertNumberOfCalls(GinkgoT(), "ReconcileResource", 2)
+	})
+
+	It("Should POST, delete resources and leave the clear to the scaler sweep while the bootstrap node is still a member", func() {
+		instance := newCluster()
+		bootstrapPod := legacyBootstrapPod(instance)
+		transport := httpmock.NewMockTransport()
+		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+		registerOsPingResponders(transport, instance)
+		registerCatNodesResponder(transport, builders.BootstrapPodName(instance))
+		calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+		mockClient.On("ReconcileResource", mock.Anything, reconciler.StateAbsent).Return(&ctrl.Result{}, nil)
+
+		underTest := &ClusterReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			instance:          instance,
+			logger:            logr.Discard(),
+			osClientTransport: transport,
+		}
+		result, err := underTest.cleanupLegacyBootstrapResources()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(&ctrl.Result{}))
+		Expect(*calls).To(Equal([]string{"POST node_names=" + builders.BootstrapPodName(instance) + "&timeout=10s"}))
+	})
+
+	It("Should leave the bootstrap pod and not fail the reconciler if the voting-config POST fails", func() {
+		instance := newCluster()
+		bootstrapPod := legacyBootstrapPod(instance)
+		transport := httpmock.NewMockTransport()
+		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+		registerOsPingResponders(transport, instance)
+		registerCatNodesResponder(transport, builders.BootstrapPodName(instance))
+		calls := recordVotingConfigCalls(transport, http.StatusInternalServerError, http.StatusOK)
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+
+		underTest := &ClusterReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			instance:          instance,
+			logger:            logr.Discard(),
+			osClientTransport: transport,
+		}
+		result, err := underTest.cleanupLegacyBootstrapResources()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(10 * time.Second))
+		Expect(result.Requeue).To(BeFalse())
+		Expect(*calls).To(HaveLen(1))
+		Expect((*calls)[0]).To(HavePrefix("POST "))
+		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
+	})
+
+	It("Should delete an orphaned bootstrap PVC when the pod is already gone", func() {
+		instance := newCluster()
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockClient.On("GetPod", builders.BootstrapPodName(instance), clusterNamespace).Return(
+			corev1.Pod{},
+			k8serrors.NewNotFound(schema.GroupResource{Resource: "pods"}, builders.BootstrapPodName(instance)),
+		)
+		mockClient.On("ReconcileResource", mock.MatchedBy(func(obj client.Object) bool {
+			pvc, ok := obj.(*corev1.PersistentVolumeClaim)
+			return ok && pvc.Name == builders.BootstrapPVCName(instance)
+		}), reconciler.StateAbsent).Return(&ctrl.Result{}, nil)
+
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			ctx:      context.Background(),
+			instance: instance,
+			logger:   logr.Discard(),
+		}
+		result, err := underTest.cleanupLegacyBootstrapResources()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(&ctrl.Result{}))
 	})
 })
