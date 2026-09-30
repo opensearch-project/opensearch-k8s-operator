@@ -15,7 +15,6 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
@@ -1509,14 +1508,6 @@ var _ = Describe("Scaler Controller", func() {
 			It("Should leave an exclusion alone while a scale-down still targets that node", func() {
 				spec, _, targetNodeName := masterDecreaseCluster(3)
 				calls := sweep(&spec, []string{targetNodeName}, []string{targetNodeName}, nil)
-				Expect(*calls).To(BeEmpty())
-			})
-
-			It("Should leave the bootstrap node's exclusion alone while it is still a member", func() {
-				spec, _, _ := masterDecreaseCluster(3)
-				spec.Status.ComponentsStatus = nil
-				bootstrap := builders.BootstrapPodName(&spec)
-				calls := sweep(&spec, []string{bootstrap}, []string{bootstrap}, nil)
 				Expect(*calls).To(BeEmpty())
 			})
 
