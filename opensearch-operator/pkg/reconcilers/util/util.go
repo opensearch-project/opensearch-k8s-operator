@@ -26,7 +26,6 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	apiequality "k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -467,41 +466,6 @@ func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, c
 	}
 
 	return availableNodes
-}
-
-// PodSpecChanged checks if any meaningful pod spec fields have changed
-func PodSpecChanged(existing, desired *corev1.Pod) bool {
-	existingSpec := existing.Spec
-	desiredSpec := desired.Spec
-
-	sanitizeBootstrapPodSpec(&existingSpec)
-	sanitizeBootstrapPodSpec(&desiredSpec)
-
-	return !apiequality.Semantic.DeepEqual(existingSpec, desiredSpec)
-}
-
-// BootstrapPodNeedsRecreation reports whether the operator's desired bootstrap
-// pod spec has changed since the pod was last applied. Live spec mutations from
-// admission controllers (LimitRange, mutating webhooks) are ignored by comparing
-// against the last-applied annotation rather than the live pod spec. Pods
-// without a last-applied annotation are left running to avoid recreate loops.
-func BootstrapPodNeedsRecreation(existing, desired *corev1.Pod) bool {
-	original, err := patch.DefaultAnnotator.GetOriginalConfiguration(existing)
-	if err != nil || len(original) == 0 {
-		return false
-	}
-
-	lastApplied := &corev1.Pod{}
-	if err := json.Unmarshal(original, lastApplied); err != nil {
-		return false
-	}
-
-	return PodSpecChanged(lastApplied, desired)
-}
-
-func sanitizeBootstrapPodSpec(spec *corev1.PodSpec) {
-	spec.NodeName = ""
-	spec.Tolerations = removeDefaultNodeLifecycleTolerations(spec.Tolerations)
 }
 
 func removeDefaultNodeLifecycleTolerations(tolerations []corev1.Toleration) []corev1.Toleration {
