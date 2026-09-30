@@ -468,33 +468,6 @@ func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, c
 	return availableNodes
 }
 
-func removeDefaultNodeLifecycleTolerations(tolerations []corev1.Toleration) []corev1.Toleration {
-	if len(tolerations) == 0 {
-		return tolerations
-	}
-
-	filtered := make([]corev1.Toleration, 0, len(tolerations))
-	for _, tol := range tolerations {
-		if isDefaultNodeLifecycleToleration(tol) {
-			continue
-		}
-		filtered = append(filtered, tol)
-	}
-	return filtered
-}
-
-func isDefaultNodeLifecycleToleration(t corev1.Toleration) bool {
-	if t.Operator != corev1.TolerationOpExists || t.Effect != corev1.TaintEffectNoExecute {
-		return false
-	}
-
-	if t.TolerationSeconds == nil || *t.TolerationSeconds != 300 {
-		return false
-	}
-
-	return t.Key == "node.kubernetes.io/not-ready" || t.Key == "node.kubernetes.io/unreachable"
-}
-
 // CleanStaleExclusionList removes from the cluster exclude list any node whose pod has already
 // been restarted (updated revision) or no longer exists. Call this when DrainDataNodes or
 // SmartScaler use the exclude list, so that a failed RemoveExcludeNodeHost (e.g. connection
