@@ -16,12 +16,14 @@ import (
 
 	"github.com/go-logr/logr"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/samber/lo"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -84,7 +86,7 @@ func (r *ClusterReconciler) SetNodeAttributesClusterRoleName(name string) {
 }
 
 // SetOSClientTransport overrides the OpenSearch HTTP transport. Tests use this
-// so voting-config calls in removeBootstrapPod hit httpmock instead of the network.
+// so voting-config calls in cleanupLegacyBootstrapResources hit httpmock instead of the network.
 func (r *ClusterReconciler) SetOSClientTransport(transport http.RoundTripper) {
 	r.osClientTransport = transport
 }
@@ -173,6 +175,13 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	passwordSecret := builders.PasswordSecret(r.instance, username, password)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, passwordSecret, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(passwordSecret, reconciler.StatePresent))
+
+	if !r.reconcileNodeAttributesRBAC(&result) {
+		return result.Result, result.Err
+	}
+
+	// Best-effort cleanup of leftover bootstrap resources from older operator versions.
+	result.Combine(r.cleanupLegacyBootstrapResources())
 
 	if _, err := builders.InitialMasterNodes(r.instance); err != nil {
 		r.logger.Error(err, "Invalid cluster spec")
@@ -385,6 +394,74 @@ func (r *ClusterReconciler) reconcileNodeAttributesRBAC(result *reconciler.Combi
 	sa := builders.NodeAttributesManagedServiceAccount(r.instance)
 	result.Combine(r.client.ReconcileResource(sa, reconciler.StateAbsent))
 	return true
+}
+
+// cleanupLegacyBootstrapResources removes leftover bootstrap pods/PVCs left by older
+// operator versions that used a dedicated bootstrap pod. Newer operators bootstrap via
+// cluster-manager StatefulSet pods, so these resources are never recreated.
+//
+// When the pod still exists it is excluded from the voting configuration before deletion
+// so small master pools do not lose quorum. Client/POST failures return RequeueAfter
+// without an error so the rest of the reconcile chain can still run.
+func (r *ClusterReconciler) cleanupLegacyBootstrapResources() (*ctrl.Result, error) {
+	bootstrapPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      builders.BootstrapPodName(r.instance),
+			Namespace: r.instance.Namespace,
+		},
+	}
+	bootstrapPVC := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      builders.BootstrapPVCName(r.instance),
+			Namespace: r.instance.Namespace,
+		},
+	}
+
+	_, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
+	if k8serrors.IsNotFound(err) {
+		// Pod already gone; still drop any orphaned PVC from older operators.
+		return r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent)
+	}
+	if err != nil {
+		return &ctrl.Result{}, err
+	}
+
+	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+	if err != nil {
+		r.logger.Error(err, "Failed to create OpenSearch client before legacy bootstrap removal; will retry")
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	nodeName := builders.BootstrapPodName(r.instance)
+	if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
+		r.logger.Error(err, "Failed to add voting config exclusion for legacy bootstrap pod; will retry", "pod", nodeName)
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	result, err := r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent)
+	if err != nil {
+		return result, err
+	}
+
+	// The pod is normally still terminating here, so a waiting clear would sit on
+	// OpenSearch's 30s wait_for_removal deadline. Clear only once the node has
+	// left; otherwise the scaler's voting-config exclusion sweep clears it on a
+	// later pass. Never clear without wait here: that can re-admit a still-alive
+	// voter. Failures do not fail the reconciler chain.
+	cleared, clearErr := services.ClearVotingConfigExclusionsIfNodeGone(clusterClient, r.logger, nodeName)
+	if clearErr != nil {
+		r.logger.Error(clearErr, "Failed to clear voting config exclusions after legacy bootstrap removal; the scaler sweep retries", "pod", nodeName)
+	} else if !cleared {
+		r.logger.Info("Legacy bootstrap node still leaving; its voting config exclusion is cleared by the scaler sweep", "pod", nodeName)
+	}
+
+	pvcResult, pvcErr := r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent)
+	if pvcErr != nil {
+		return pvcResult, pvcErr
+	}
+
+	r.logger.Info("Removed legacy bootstrap resources after voting config exclusion", "pod", nodeName)
+	return result, nil
 }
 
 // isImmutableFieldChangeError checks if an error is due to immutable field changes in StatefulSet

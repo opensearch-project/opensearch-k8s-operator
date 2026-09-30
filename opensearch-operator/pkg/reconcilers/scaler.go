@@ -536,7 +536,7 @@ func (r *ScalerReconciler) votingConfigExcludes(nodeName string) (bool, error) {
 
 // votingExclusionsToKeep is the set of exclusion names a cluster-wide no-wait clear
 // must restore: names already on the list, scaler targets still marked Excluded or
-// Drained, and terminating master or bootstrap pods. stayingNode is omitted because
+// Drained, and terminating master-eligible pods. stayingNode is omitted because
 // that scale-down was reverted and the node has to vote again.
 func (r *ScalerReconciler) votingExclusionsToKeep(stayingNode string, alreadyExcluded []string) ([]string, error) {
 	seen := make(map[string]bool, len(alreadyExcluded))
@@ -1021,8 +1021,8 @@ func (r *ScalerReconciler) clearVotingExclusionsAfterRemoval(clusterClient *serv
 // master removal owns any more. Two cases are distinguished:
 //
 //   - every excluded node has left the cluster: the removal completed but its
-//     clear was never issued or failed (removeStatefulSet, the bootstrap pod, an
-//     operator restart). Clear with wait_for_removal=true, which returns at once.
+//     clear was never issued or failed (removeStatefulSet, legacy bootstrap
+//     cleanup, an operator restart). Clear with wait_for_removal=true, which returns at once.
 //   - every excluded node is a live member of a pool in the spec that nothing is
 //     removing (a failure after the POST, a pool re-added mid-removal). Such a
 //     node is silently out of the voting configuration and a later restart of any
@@ -1100,8 +1100,7 @@ func (r *ScalerReconciler) sweepVotingConfigExclusions() {
 // isDanglingVotingExclusion reports whether an excluded node that is still a
 // cluster member is one nothing is removing: its pod exists, is not
 // terminating, belongs to a node pool in the spec within that pool's current
-// replica count, and no Scaler status targets it. The bootstrap pod is owned by
-// the cluster reconciler while it exists.
+// replica count, and no Scaler status targets it.
 func (r *ScalerReconciler) isDanglingVotingExclusion(nodeName string) (bool, error) {
 	for _, cs := range r.instance.Status.ComponentsStatus {
 		if cs.Component == "Scaler" && (cs.Status == "Excluded" || cs.Status == "Drained") && scalerTargetNodeName(cs.Conditions) == nodeName {

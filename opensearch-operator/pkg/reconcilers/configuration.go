@@ -174,7 +174,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 	result := reconciler.CombinedResult{}
 
-	// Always create shared configmap if General.AdditionalConfig exists (for bootstrap and security update jobs)
+	// Always create shared configmap if General.AdditionalConfig exists (for security update jobs)
 	// This is needed even when per-nodepool configmaps are created
 	if len(r.reconcilerContext.OpenSearchConfig) != 0 {
 		baseData := buildConfigString(r.reconcilerContext.OpenSearchConfig)
@@ -188,7 +188,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 			return result.Result, result.Err
 		}
 
-		// Add shared volume and mount for shared configmap (used by bootstrap and security update jobs)
+		// Add shared volume and mount for shared configmap (used by security update jobs)
 		// Nodepools with AdditionalConfig will override this with their own per-nodepool configmap
 		volume := corev1.Volume{
 			Name: "config",

@@ -406,6 +406,10 @@ func NewSTSForNodePool(
 	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
+	// Default to TCP so nodes can become Started before securityadmin has run
+	// (authenticated HTTP probes would fail during first bootstrap). A custom
+	// probes.startup.command overrides this with an Exec probe.
+	var startupProbeCommand []string
 	probeProtocol := "https"
 	if !helpers.IsHttpTlsEnabled(cr) {
 		probeProtocol = "http"
@@ -471,6 +475,10 @@ func NewSTSForNodePool(
 			if node.Probes.Startup.SuccessThreshold > 0 {
 				startupProbeSuccessThreshold = node.Probes.Startup.SuccessThreshold
 			}
+
+			if len(node.Probes.Startup.Command) > 0 {
+				startupProbeCommand = node.Probes.Startup.Command
+			}
 		}
 
 		if node.Probes.Readiness != nil {
@@ -517,7 +525,15 @@ func NewSTSForNodePool(
 		FailureThreshold:    startupProbeFailureThreshold,
 		SuccessThreshold:    startupProbeSuccessThreshold,
 		InitialDelaySeconds: startupProbeInitialDelaySeconds,
-		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: httpPort}}},
+	}
+	if len(startupProbeCommand) > 0 {
+		startupProbe.ProbeHandler = corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{Command: startupProbeCommand},
+		}
+	} else {
+		startupProbe.ProbeHandler = corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: httpPort}},
+		}
 	}
 
 	// Because the http endpoint requires auth we need to do it as a curl script
@@ -1140,6 +1156,17 @@ func DiscoveryServiceName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-discovery", cr.Name)
 }
 
+// BootstrapPodName is the historical name of the dedicated bootstrap pod used by
+// older operator versions. Kept so upgrades can locate and clean it up.
+func BootstrapPodName(cr *opensearchv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s-bootstrap-0", cr.Name)
+}
+
+// BootstrapPVCName is the historical name of the bootstrap pod's data PVC.
+func BootstrapPVCName(cr *opensearchv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s-bootstrap-data", cr.Name)
+}
+
 // initialMasterNodes returns a comma-separated list of pod-0 names from every
 // master-eligible node pool. These are the nodes that participate in the
 // initial cluster election. Returns empty string if no master pool exists.
@@ -1343,8 +1370,7 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearc
 // HasRetainedMasterPVC reports whether ordinal 0 of any cluster-manager pool already has a
 // data PVC (left behind by a previous incarnation of the same cluster, since the operator
 // never deletes node pool PVCs). Such a cluster re-forms from disk and ignores
-// cluster.initial_master_nodes, so a bootstrap pod would only start a second, unrelated
-// cluster that no node ever joins.
+// cluster.initial_master_nodes, so it does not need a fresh cluster bootstrap.
 // An existing-but-empty PVC (pre-provisioned, or a cluster that never formed) is
 // indistinguishable here; delete the pool PVCs to force a fresh bootstrap.
 // Non-NotFound API errors are returned so the caller can fail closed and retry rather than

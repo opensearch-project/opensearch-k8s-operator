@@ -146,12 +146,16 @@ type ProbeConfig struct {
 }
 
 type CommandProbeConfig struct {
-	InitialDelaySeconds int32    `json:"initialDelaySeconds,omitempty"`
-	PeriodSeconds       int32    `json:"periodSeconds,omitempty"`
-	TimeoutSeconds      int32    `json:"timeoutSeconds,omitempty"`
-	SuccessThreshold    int32    `json:"successThreshold,omitempty"`
-	FailureThreshold    int32    `json:"failureThreshold,omitempty"`
-	Command             []string `json:"command,omitempty"`
+	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
+	SuccessThreshold    int32 `json:"successThreshold,omitempty"`
+	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+	// Command overrides the probe handler. For startup probes, the default is a
+	// TCP socket check (so nodes can become Started before securityadmin runs);
+	// setting Command switches the startup probe to Exec. Readiness probes always
+	// default to an authenticated curl Exec command.
+	Command []string `json:"command,omitempty"`
 }
 
 type NodePool struct {
