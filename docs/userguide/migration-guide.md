@@ -91,6 +91,17 @@ Check these settings on existing clusters after upgrading the operator and CRDs.
   ```bash
   kubectl patch opensearchcluster <name> -n <namespace> --type merge -p '{"spec":{"general":{"setVMMaxMapCount":false}}}'
   ```
+### Removal of the bootstrap pod
+
+Older operator versions started a dedicated `{cluster}-bootstrap-0` bare pod to form the cluster, then tore it down once `status.initialized` flipped. The operator now bootstraps via the first pod of each cluster-manager node pool (`cluster.initial_master_nodes` is set to those pod names).
+
+Upgrading to an operator build that includes this change:
+
+- Deletes any leftover `{cluster}-bootstrap-0` pod and `{cluster}-bootstrap-data` PVC. Before deleting the pod the operator adds a voting-config exclusion so small master pools do not lose quorum.
+- Changes `cluster.initial_master_nodes` on every node pool StatefulSet from the old bootstrap name to the manager pool-0 names. That env change is picked up by the rolling restart reconciler, so **every existing cluster goes through one managed rolling restart**.
+- Ignores any remaining `spec.bootstrap` fields in applied manifests (the field is removed from the CRD). Move plugins, keystore entries, hostAliases, affinity, and initContainers onto `spec.general` / `spec.nodePools` before upgrading if you relied on them only under `bootstrap`.
+
+Plan the restart the same way as the 2.x→3.x restart above (replicas on every index, time proportional to cluster size).
 
 ### Resource Readiness Requirements
 
