@@ -1509,6 +1509,52 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("operatorClientCert is set", func() {
+		certVolume := corev1.Volume{
+			Name: "operator-client-cert",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "client-cert"},
+			},
+		}
+		certMount := corev1.VolumeMount{Name: "operator-client-cert", MountPath: "/mnt/operator-client-cert"}
+		withClientCert := func(httpTls bool) opensearchv1.OpenSearchCluster {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Config: &opensearchv1.SecurityConfig{
+					OperatorClientCert: corev1.LocalObjectReference{Name: "client-cert"},
+				},
+				Tls: &opensearchv1.TlsConfig{
+					Http: &opensearchv1.TlsConfigHttp{Enabled: &httpTls},
+				},
+			}
+			return clusterObject
+		}
+		nodePool := opensearchv1.NodePool{
+			Component: "masters",
+			Roles:     []string{"cluster_manager"},
+		}
+
+		It("should mount the cert and use it instead of basic auth in default probes", func() {
+			clusterObject := withClientCert(true)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			expected := []string{"/bin/bash", "-c", "curl -k --cert /mnt/operator-client-cert/tls.crt --key /mnt/operator-client-cert/tls.key --silent --fail 'https://localhost:9200'"}
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Volumes).To(ContainElement(certVolume))
+			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(certMount))
+		})
+
+		It("should keep basic auth and not mount the cert when HTTP TLS is disabled", func() {
+			clusterObject := withClientCert(false)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			expected := []string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Volumes).NotTo(ContainElement(certVolume))
+			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).NotTo(ContainElement(certMount))
+		})
+	})
+
 	When("HTTP TLS is disabled", func() {
 		It("should use http protocol in URLForCluster", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")

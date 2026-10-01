@@ -1430,7 +1430,7 @@ spec:
 
 ### Customize startup and readiness probe command
 
-While liveness probe is a TCP check the startup and readiness probes use the OpenSearch API with curl.
+While liveness probe is a TCP check the startup and readiness probes use the OpenSearch API with curl, authenticating with the admin credentials, or with the [operator client certificate](#authenticating-the-operator-to-opensearch-with-mtls-client-certificate) when one is set and HTTP TLS is enabled.
 
 If you need to customize the startup or readiness probe commands you can override it as shown below:
 
@@ -1706,6 +1706,7 @@ spec:
 
 - When `operatorClientCert` is set, the operator does **not** send basic-auth credentials and `adminCredentialsSecret` is no longer required for runtime API calls. (`adminCredentialsSecret` may still be useful for other purposes such as seeding the admin user password during initial securityconfig generation.)
 - The operator only re-reads the secret on its next reconcile, so a cert rotation triggers a normal reconcile loop.
+- With HTTP TLS enabled, the default startup and readiness probes also authenticate with this certificate (mounted into the OpenSearch pods at `/mnt/operator-client-cert`) instead of the admin credentials. Together, this lets the cluster run with basic auth disabled (`http_enabled: false` on the basic auth domain in `config.yml`). The certificate's DN must be in `admin_dn` or map to a role allowed `cluster:monitor/main`, or the pods never become ready. Setting or removing `operatorClientCert` therefore rolls the node pods.
 
 ### Managing security configurations with kubernetes resources
 

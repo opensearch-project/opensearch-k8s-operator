@@ -259,6 +259,16 @@ func getAffinity(affinity *corev1.Affinity, clusterName string) *corev1.Affinity
 	return GetDefaultAffinity(clusterName)
 }
 
+// probeClientCertSecret returns the operatorClientCert secret the default probes
+// authenticate with, so they keep working with basic auth disabled. Empty means
+// basic auth. Client certs need HTTPS, so plain HTTP keeps basic auth.
+func probeClientCertSecret(cr *opensearchv1.OpenSearchCluster) string {
+	if !helpers.IsHttpTlsEnabled(cr) || cr.Spec.Security.Config == nil {
+		return ""
+	}
+	return cr.Spec.Security.Config.OperatorClientCert.Name
+}
+
 func NewSTSForNodePool(
 	username string,
 	cr *opensearchv1.OpenSearchCluster,
@@ -411,22 +421,20 @@ func NewSTSForNodePool(
 	if !helpers.IsHttpTlsEnabled(cr) {
 		probeProtocol = "http"
 	}
-	startupProbeCommand := []string{
-		"/bin/bash",
-		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
+	probeAuth := "-u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\""
+	probeClientCert := probeClientCertSecret(cr)
+	if probeClientCert != "" {
+		probeAuth = "--cert /mnt/operator-client-cert/tls.crt --key /mnt/operator-client-cert/tls.key"
 	}
+	probeCurl := fmt.Sprintf("curl -k %s --silent --fail '%s://localhost:%d'", probeAuth, probeProtocol, PortForCluster(cr))
+	startupProbeCommand := []string{"/bin/bash", "-c", probeCurl}
 
 	readinessProbePeriodSeconds := int32(30)
 	readinessProbeTimeoutSeconds := int32(30)
 	readinessProbeFailureThreshold := int32(5)
 	readinessProbeSuccessThreshold := int32(1)
 	readinessProbeInitialDelaySeconds := int32(60)
-	readinessProbeCommand := []string{
-		"/bin/bash",
-		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
-	}
+	readinessProbeCommand := []string{"/bin/bash", "-c", probeCurl}
 
 	livenessProbePeriodSeconds := int32(20)
 	livenessProbeTimeoutSeconds := int32(5)
@@ -556,6 +564,18 @@ func NewSTSForNodePool(
 		Name:      "admin-credentials",
 		MountPath: "/mnt/admin-credentials",
 	})
+	if probeClientCert != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "operator-client-cert",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: probeClientCert},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "operator-client-cert",
+			MountPath: "/mnt/operator-client-cert",
+		})
+	}
 
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
