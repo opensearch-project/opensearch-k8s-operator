@@ -106,6 +106,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `serviceAccount.name` | string | `""` |  |
 | `useRoleBindings` | bool | `false` |  |
 | `webhook.enabled` | bool | `true` |  |
+| `webhook.createConfiguration` | bool | `true` | Render the cluster-scoped ValidatingWebhookConfiguration. Set to false when a cluster admin installs it separately, e.g. for a namespace-scoped install. |
 | `webhook.port` | int | `9443` |  |
 | `webhook.failurePolicy` | string | `"Fail"` |  |
 | `webhook.secretName` | string | `""` |  |
@@ -129,6 +130,7 @@ helm install opensearch-operator opensearch-operator/opensearch-operator \
 
 When `useRoleBindings` is enabled:
 
+- **CRDs and the webhook configuration** are still cluster-scoped. To install without cluster-wide permissions, also set `installCRDs=false` and `webhook.createConfiguration=false`, and have a cluster admin apply those separately, as described in the [User Guide](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#installing-without-cluster-wide-permissions)
 - **Manager and proxy roles** will be created as namespace-scoped `Role` resources instead of `ClusterRole`
 - **Metrics ClusterRole** will NOT be created, as Kubernetes does not allow namespace-scoped Roles to grant permissions to non-resource URLs (like `/metrics`)
 - **Metrics endpoint access**: The operator's `/metrics` endpoint is exposed via the kube-apiserver and requires authentication (via `TokenReviews`) and authorization (via `SubjectAccessReviews`). If you need to access metrics with monitoring tools (e.g., Prometheus), you must manually create the appropriate `ClusterRole` and `ClusterRoleBinding`:
@@ -158,4 +160,4 @@ subjects:
   namespace: <monitoring-namespace>
 ```
 
-Opensearch-operator Helm Chart version: `3.0.14`
+Opensearch-operator Helm Chart version: `3.0.15`

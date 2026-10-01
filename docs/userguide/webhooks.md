@@ -58,6 +58,10 @@ When running the manager outside of Helm (for example, during local development)
 ./manager --webhook-port=9443
 ```
 
+### Installing the webhook configuration separately
+
+The `ValidatingWebhookConfiguration` is cluster-scoped. To install the chart without cluster-wide permissions, set `webhook.createConfiguration=false`: the webhook server, its service and certificate are still installed, and a cluster admin applies the configuration separately. See [Installing without cluster-wide permissions](./main.md#installing-without-cluster-wide-permissions).
+
 ### Failure Policy
 
 The failure policy determines what happens when the webhook cannot be reached or returns an error:
