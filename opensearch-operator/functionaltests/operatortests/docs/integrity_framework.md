@@ -149,6 +149,7 @@ The test suite is organized into separate files by operation type:
 ### `scaling_test.go`
 - **Scale up** - Tests data integrity when scaling up node pools
 - **Scale down** - Tests data integrity when scaling down node pools
+- **Scale down masters** - Shrinks the master pool 3 → 2 and back, checking `_cat/nodes`, voting config exclusions, health and data
 
 ### `nodepool_operations_test.go`
 - **Add node pool** - Tests data integrity when adding a new node pool
