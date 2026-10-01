@@ -182,9 +182,9 @@ Use the standard configuration format. The operator will automatically apply rol
 
 ### Events
 The operator emits detailed events during rolling restarts:
-- `"Starting rolling restart"` - When restart begins
-- `"Starting rolling restart of master node pool X"` - Master-specific restarts
-- `"Skipping restart of master node pool X: insufficient quorum"` - Quorum preservation
+- `"Starting rolling restart"` and `"Rolling restart completed"` - Normal events at start and end
+- `"Rolling restart is waiting for cluster manager quorum: ..."` - Warning while a master restart is blocked by quorum preservation
+- `"Pod 'X' in node pool 'Y' is in <reason>; ..."` - Warning while a stuck pod stalls the restart
 
 ### Logs
 Enhanced logging provides visibility into:
