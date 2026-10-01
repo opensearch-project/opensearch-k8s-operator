@@ -38,6 +38,31 @@ A few notes on operator releases:
 - The userguide in the repository corresponds to the current development state of the code. To view the documentation for a specific released version switch to that tag in the Github menu.
 - We track feature requests as Github Issues. If you are missing a feature and find an issue for it, please be aware that an issue ticket closed as completed only means that feature has been implemented in the development version. After that it might still take some for the feature to be contained in a release. If you are unsure, please check the list of releases in our Github project if your feature is mentioned in the release notes.
 
+### Installing without cluster-wide permissions
+
+The chart's only cluster-scoped resources are the CRDs, the `ValidatingWebhookConfiguration` of the webhook and, unless `useRoleBindings=true`, the RBAC roles. A user who may only manage one namespace can install the operator once a cluster admin has applied the cluster-scoped parts.
+
+The admin renders them from the same chart version, with the same release name, namespace and `legacyAPI.enabled` value the operator will be installed with, since the webhook configuration points at the release's webhook service. The CRDs are too large for a client-side apply, so use `--server-side`:
+
+```bash
+helm template opensearch-operator opensearch-operator/opensearch-operator --namespace <namespace> \
+  --show-only templates/crds.yaml \
+  --show-only templates/opensearch-operator-validating-webhook-configuration.yaml \
+  | kubectl apply --server-side -f -
+```
+
+The namespace user then installs the rest:
+
+```bash
+helm install opensearch-operator opensearch-operator/opensearch-operator --namespace <namespace> \
+  --set installCRDs=false \
+  --set useRoleBindings=true \
+  --set webhook.createConfiguration=false \
+  --set manager.watchNamespace=<namespace>
+```
+
+With cert-manager, the webhook configuration carries the `cert-manager.io/inject-ca-from` annotation and cert-manager fills in its `caBundle` once the release's `Certificate` exists. Without cert-manager, the admin sets `caBundle` on each webhook by hand (see the [Webhooks guide](./webhooks.md#manual-certificate-management)). The admin re-runs the `helm template` step on chart upgrades.
+
 ## Quickstart
 
 After you have successfully installed the Operator, you can deploy your first OpenSearch cluster. This is done by creating an `OpenSearchCluster` custom object in Kubernetes or using Helm.

@@ -114,6 +114,8 @@ useRoleBindings: false
 webhook:
   # Enable validation webhooks
   enabled: true
+  # -- Render the cluster-scoped ValidatingWebhookConfiguration. Set to false when a cluster admin installs it separately, e.g. for a namespace-scoped install.
+  createConfiguration: true
   # Port exposed by the webhook server container
   port: 9443
   # Failure policy for webhooks. Options: Fail, Ignore
