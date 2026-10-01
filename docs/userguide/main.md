@@ -1499,6 +1499,7 @@ Downgrades and upgrades that span more than one major version are not supported,
 ### Configuration changes
 
 As explained in the section [Configuring opensearch.yml](#configuring-opensearchyml) you can add extra opensearch configuration to your cluster. Changing this configuration on an already installed cluster will be detected by the operator and it will do a rolling restart of all cluster nodes to apply that new configuration. The same goes for nodepool-specific configuration like `resources`, `annotation` or `labels`.
+Cluster manager nodes restart last, one at a time, and only while a majority of them stays ready. A cluster with one or two cluster manager nodes has no such majority: it restarts them once all are ready, and has no elected cluster manager while its voting node restarts.
 
 ### Volume Expansion
 
