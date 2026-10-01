@@ -605,33 +605,43 @@ func (r *TLSReconciler) certShouldBeRenewed(ca tls.Cert, cd certDescription, exi
 		panic("unrecognized certDescription.certContext value")
 	}
 
-	daysRemaining, err := getDaysRemainingFromCertificate(existingCertData)
-	if err != nil {
-		r.logger.Error(err, "Failed to parse certificate for expiry date - regenerating", "interface",
+	reason, daysRemaining, parsed := certRenewalReason(existingCertData, ca, renewBeforeExpirationDays)
+	if parsed {
+		helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace,
+			clusterName, string(cd.certContext), cd.loggingName).Set(float64(daysRemaining))
+	}
+	if reason != "" {
+		r.logger.Info("Renewing certificate", "reason", reason, "interface",
 			cd.certContext, "node", cd.loggingName)
 		return true
 	}
+	return false
+}
 
-	helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace,
-		clusterName, string(cd.certContext), cd.loggingName).Set(float64(daysRemaining))
+// certRenewalReason says why a generated certificate must be replaced, or
+// returns "" to keep it. parsed is false when the certificate is unreadable.
+func certRenewalReason(certData []byte, ca tls.Cert, renewBeforeExpirationDays int) (reason string, daysRemaining int, parsed bool) {
+	daysRemaining, err := getDaysRemainingFromCertificate(certData)
+	if err != nil {
+		return fmt.Sprintf("failed to parse certificate for expiry date: %v", err), daysRemaining, false
+	}
 
 	// An expired certificate is unusable and can only cause an outage, so always
 	// replace it, even if rotation is disabled.
 	if daysRemaining <= 0 {
-		r.logger.Info("Certificate is expired - renewing", "interface",
-			cd.certContext, "node", cd.loggingName)
-		return true
+		return "certificate is expired", daysRemaining, true
 	}
 
 	// A replaced CA (even with the same subject) leaves the certificate
 	// unverifiable for new pods and truststores, so renew against the current CA
-	if !certSignedByCA(existingCertData, ca) {
-		r.logger.Info("Certificate is not signed by the current CA - renewing", "interface",
-			cd.certContext, "node", cd.loggingName)
-		return true
+	if !certSignedByCA(certData, ca) {
+		return "certificate is not signed by the current CA", daysRemaining, true
 	}
 
-	return (renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays)
+	if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+		return "certificate is inside the rotation window", daysRemaining, true
+	}
+	return "", daysRemaining, true
 }
 
 func (r *TLSReconciler) handleTransportExistingCerts() error {
