@@ -54,7 +54,8 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 		_ = corev1.AddToScheme(scheme)
 		_ = opensearchv1.AddToScheme(scheme)
 		_ = opsterv1.AddToScheme(scheme)
-		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		fakeClient = fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(&opensearchv1.OpenSearchCluster{}, &opsterv1.OpenSearchCluster{}).Build()
 		reconciler = &ClusterMigrationReconciler{
 			Client: fakeClient,
 			Scheme: scheme,
@@ -320,7 +321,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 					},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable:   true,
-						Replicas: 0, // explicit zero; the value that trips CRD re-defaulting on a full Update
+						Replicas: ptr.To(int32(0)), // explicit zero; the value that trips CRD re-defaulting on a full Update
 					},
 				},
 				Status: opsterv1.ClusterStatus{
@@ -358,7 +359,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			updatedCluster := &opsterv1.OpenSearchCluster{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
-			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(int32(0)))
+			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(ptr.To(int32(0))))
 		})
 	})
 
@@ -412,7 +413,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 					},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable:   true,
-						Replicas: 0,
+						Replicas: ptr.To(int32(0)),
 					},
 				},
 			}
@@ -454,7 +455,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
 			Expect(containsString(updatedCluster.Finalizers, OldClusterFinalizer)).To(BeFalse())
-			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(int32(0)))
+			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(ptr.To(int32(0))))
 		})
 
 		It("should allow deletion when annotation indicates new cluster deletion", func() {
