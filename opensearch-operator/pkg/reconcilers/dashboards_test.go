@@ -62,7 +62,7 @@ func setupDashboardsCredentialsSecretMocks(mockClient *k8s.MockK8sClient, cluste
 	mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).Return(&ctrl.Result{}, nil)
 }
 
-// signTestCert issues a certificate from the CA that expires at notAfter
+// signTestCertExpiringAt issues a year-old certificate from the CA that expires at notAfter
 func signTestCertExpiringAt(ca pkitls.Cert, notAfter time.Time) []byte {
 	caCertBlock, _ := pem.Decode(ca.CertData())
 	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
@@ -513,21 +513,21 @@ var _ = Describe("Dashboards Reconciler generated certificate renewal", func() {
 
 	It("should rewrite an expired certificate", func() {
 		expired := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, -1))
-		secret, _ := reconcileDashboardsWithCert("dashboards-renew-expired", ca, expired, 0)
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-expired", ca, expired, -1)
 		Expect(secret).ToNot(BeNil())
 		Expect(secret.Data["tls.crt"]).ToNot(Equal(expired))
 		Expect(secret.Data["tls.key"]).ToNot(Equal([]byte("old-key")))
 	})
 
 	It("should rewrite an unparseable certificate", func() {
-		secret, _ := reconcileDashboardsWithCert("dashboards-renew-garbage", ca, []byte("not a certificate"), 0)
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-garbage", ca, []byte("not a certificate"), -1)
 		Expect(secret).ToNot(BeNil())
 		Expect(secret.Data["tls.crt"]).ToNot(Equal([]byte("not a certificate")))
 	})
 
 	It("should rewrite a certificate that is not signed by the current CA", func() {
 		foreign := signTestCertExpiringAt(otherCa, time.Now().AddDate(0, 0, 200))
-		secret, _ := reconcileDashboardsWithCert("dashboards-renew-wrongca", ca, foreign, 0)
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-wrongca", ca, foreign, -1)
 		Expect(secret).ToNot(BeNil())
 		Expect(secret.Data["tls.crt"]).ToNot(Equal(foreign))
 		Expect(secret.Data["ca.crt"]).To(Equal(ca.CertData()))
@@ -546,22 +546,28 @@ var _ = Describe("Dashboards Reconciler generated certificate renewal", func() {
 		Expect(secret).To(BeNil())
 	})
 
-	It("should not rotate early when rotateDaysBeforeExpiry is unset", func() {
+	It("should not rotate early when rotation is disabled", func() {
 		soon := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, 10))
-		secret, _ := reconcileDashboardsWithCert("dashboards-renew-disabled", ca, soon, 0)
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-disabled", ca, soon, -1)
+		Expect(secret).To(BeNil())
+	})
+
+	It("should not reissue a fresh certificate that is shorter-lived than the rotation window", func() {
+		shortLived := signTestCert(ca, "dashboards", "dashboards", 20*24*time.Hour)
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-short", ca, shortLived, 30)
 		Expect(secret).To(BeNil())
 	})
 
 	It("should change the pod template checksum when the certificate is renewed", func() {
 		expired := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, -1))
-		secret, renewedDeployment := reconcileDashboardsWithCert("dashboards-renew-checksum", ca, expired, 0)
+		secret, renewedDeployment := reconcileDashboardsWithCert("dashboards-renew-checksum", ca, expired, -1)
 		Expect(secret).ToNot(BeNil())
 		renewedChecksum := renewedDeployment.Spec.Template.Annotations[helpers.DashboardTlsChecksumName]
 		Expect(renewedChecksum).To(Equal(checksumOf(secret.Data["tls.crt"])))
 		Expect(renewedChecksum).ToNot(Equal(checksumOf(expired)))
 
 		healthy := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, 200))
-		_, healthyDeployment := reconcileDashboardsWithCert("dashboards-renew-checksum-ok", ca, healthy, 0)
+		_, healthyDeployment := reconcileDashboardsWithCert("dashboards-renew-checksum-ok", ca, healthy, -1)
 		Expect(healthyDeployment.Spec.Template.Annotations[helpers.DashboardTlsChecksumName]).To(Equal(checksumOf(healthy)))
 	})
 })

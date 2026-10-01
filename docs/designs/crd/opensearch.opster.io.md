@@ -397,7 +397,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `enable` _boolean_ | Enable HTTPS for Dashboards |  |  |
 | `generate` _boolean_ | Generate certificate, if false secret must be provided |  |  |
-| `rotateDaysBeforeExpiry` _integer_ | Automatically rotate the generated certificate this many days before it expires, set to 0 to disable.<br />Only applies to operator-generated certificates. Expired or unparseable certificates are<br />always regenerated regardless of this setting. |  |  |
+| `rotateDaysBeforeExpiry` _integer_ | Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.<br />Only applies to operator-generated certificates. Expired or unparseable certificates are<br />always regenerated regardless of this setting. | 30 |  |
 | `TlsCertificateConfig` _[TlsCertificateConfig](#tlscertificateconfig)_ | TLS certificate configuration |  |  |
 
 

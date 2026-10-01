@@ -3578,8 +3578,9 @@ spec:
                           provided
                         type: boolean
                       rotateDaysBeforeExpiry:
+                        default: 30
                         description: |-
-                          Automatically rotate the generated certificate this many days before it expires, set to 0 to disable.
+                          Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.
                           Only applies to operator-generated certificates. Expired or unparseable certificates are
                           always regenerated regardless of this setting.
                         type: integer
