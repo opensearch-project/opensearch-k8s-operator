@@ -1393,6 +1393,25 @@ spec:
       loadBalancerSourceRanges: "10.0.0.0/24, 192.168.0.0/24" # Optional, add source ranges for a loadbalancer
 ```
 
+### Customizing Dashboards probes
+
+Dashboards only starts listening once its saved-objects migration has finished. If the startup probe gives up first, the pod is killed mid-migration and can stay in a crash loop until the `.kibana_1` index is deleted by hand. The default startup probe allows about 20 minutes (`initialDelaySeconds: 10`, `periodSeconds: 20`, `failureThreshold: 60`). Raise `failureThreshold` if first boot on your cluster takes longer, for example while a new cluster is still allocating shards. Liveness and readiness default to `failureThreshold: 10` with the same timings. Each field is optional; unset fields keep the default.
+
+```yaml
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+---
+spec:
+  dashboards:
+    probes:
+      startup:
+        failureThreshold: 90
+      liveness:
+        timeoutSeconds: 10
+      readiness:
+        periodSeconds: 10
+```
+
 ### Exposing the OpenSearch cluster REST API
 
 If you want to expose the REST API of OpenSearch outside your Kubernetes cluster, the recommended way is to do this via ingress.
