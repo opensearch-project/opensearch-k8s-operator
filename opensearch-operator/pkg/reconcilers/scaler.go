@@ -473,44 +473,52 @@ func (r *ScalerReconciler) finishDecreaseCleanup(currentStatus opensearchv1.Comp
 }
 
 // cancelDecrease undoes a scale-down that was reverted before its target node was
-// removed: the node stays, so it must hold shards and vote again.
+// removed: the node stays, so it must hold shards and vote again. A cluster that
+// cannot be reached keeps the status and returns no error: an error would stop the
+// reconcile chain before the rolling restart that recovers stuck pods, and the next
+// pass retries.
 func (r *ScalerReconciler) cancelDecrease(currentStatus opensearchv1.ComponentStatus, nodePoolGroupName, targetNodeName string, isMaster bool) (bool, error) {
 	lg := log.FromContext(r.ctx)
-	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
-	if err != nil {
-		lg.Error(err, "failed to create os client")
-		return true, err
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	retryLater := func(err error, what string) (bool, error) {
+		lg.Error(err, what+", keeping the scale-down status to retry")
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Group-%s . Failed to cancel scale-down, will retry: %s", nodePoolGroupName, what)
+		return false, nil
 	}
-	if targetNodeName != "" {
-		if _, err := services.RemoveExcludeNodeHost(clusterClient, lg, targetNodeName); err != nil {
-			return true, err
-		}
-	}
-	if isMaster {
-		// wait_for_removal=false: the node is staying, so a waiting clear would never
-		// finish. The DELETE drops every exclusion, including voters that are already
-		// past their StatefulSet shrink and will not be posted again by decreaseOneNode.
-		// Read those names first and re-add them after the clear.
-		excluded, err := services.GetVotingConfigExclusions(clusterClient)
+
+	if targetNodeName != "" || isMaster {
+		clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 		if err != nil {
-			lg.Error(err, "failed to read voting config exclusions before cancelled scale-down clear")
-			return true, err
+			return retryLater(err, "failed to create os client")
 		}
-		keep, err := r.votingExclusionsToKeep(targetNodeName, excluded)
-		if err != nil {
-			return true, err
+		if targetNodeName != "" {
+			if _, err := services.RemoveExcludeNodeHost(clusterClient, lg, targetNodeName); err != nil {
+				return retryLater(err, fmt.Sprintf("failed to remove allocation exclusion for %s", targetNodeName))
+			}
 		}
-		if err := clusterClient.ClearVotingConfigExclusions(r.ctx, false); err != nil {
-			lg.Error(err, fmt.Sprintf("failed to clear voting config exclusions after cancelled scale-down of %s", targetNodeName))
-			return true, err
-		}
-		if err := r.reapplyLeavingVotingExclusions(clusterClient, keep); err != nil {
-			lg.Error(err, "failed to re-apply voting config exclusions for nodes still being removed")
-			return true, err
+		if isMaster {
+			// wait_for_removal=false: the node is staying, so a waiting clear would never
+			// finish. The DELETE drops every exclusion, including voters that are already
+			// past their StatefulSet shrink and will not be posted again by decreaseOneNode.
+			// Read those names first and re-add them after the clear.
+			excluded, err := services.GetVotingConfigExclusions(clusterClient)
+			if err != nil {
+				return retryLater(err, "failed to read voting config exclusions")
+			}
+			keep, err := r.votingExclusionsToKeep(targetNodeName, excluded)
+			if err != nil {
+				return retryLater(err, "failed to list voting config exclusions to keep")
+			}
+			if err := clusterClient.ClearVotingConfigExclusions(r.ctx, false); err != nil {
+				return retryLater(err, fmt.Sprintf("failed to clear voting config exclusions for %s", targetNodeName))
+			}
+			if err := r.reapplyLeavingVotingExclusions(clusterClient, keep); err != nil {
+				return retryLater(err, "failed to re-apply voting config exclusions for nodes still being removed")
+			}
 		}
 	}
 	lg.Info(fmt.Sprintf("Group: %s, scale-down reverted, keeping node %s", nodePoolGroupName, targetNodeName))
-	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+	err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
 	})
 	return false, err
