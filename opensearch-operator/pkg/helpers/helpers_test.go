@@ -1392,3 +1392,32 @@ var _ = Describe("CountRunningPodsForNodePool", func() {
 		Expect(count).To(Equal(1))
 	})
 })
+
+var _ = DescribeTable("ValidateSearchCacheSize",
+	func(value string, valid bool) {
+		err := ValidateSearchCacheSize(value)
+		if valid {
+			Expect(err).NotTo(HaveOccurred())
+		} else {
+			Expect(err).To(HaveOccurred())
+		}
+	},
+	Entry("byte size", "50gb", true),
+	Entry("short unit, upper case", "512M", true),
+	Entry("bytes", "1073741824b", true),
+	Entry("percentage", "80%", true),
+	Entry("fractional percentage", "99.5%", true),
+	Entry("ratio", "0.5", true),
+	Entry("zero", "0", false),
+	Entry("zero bytes", "0gb", false),
+	Entry("zero percent", "0%", false),
+	Entry("full disk", "100%", false),
+	Entry("full disk as a ratio", "1", false),
+	Entry("over 100%", "120%", false),
+	Entry("negative", "-1", false),
+	Entry("fractional byte size", "1.5gb", false),
+	Entry("missing unit", "50", false),
+	Entry("unknown unit", "50xb", false),
+	Entry("garbage", "lots", false),
+	Entry("empty", "", false),
+)

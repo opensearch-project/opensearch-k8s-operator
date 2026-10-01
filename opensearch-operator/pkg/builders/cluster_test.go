@@ -153,7 +153,7 @@ var _ = Describe("Builders", func() {
 				Value: "master",
 			}))
 		})
-		It("should accept the warm role", func() {
+		It("should accept the warm role without the searchable snapshot flag", func() {
 			clusterObject := ClusterDescWithVersion("3.0.0")
 			nodePool := opensearchv1.NodePool{
 				Component: "masters",
@@ -163,6 +163,10 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "warm",
+			}))
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xms512M -Xmx512M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 		It("should convert the warm role", func() {

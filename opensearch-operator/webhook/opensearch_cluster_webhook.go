@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strings"
 
+	version "github.com/hashicorp/go-version"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -51,10 +52,15 @@ func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj run
 	if err := validateNodePoolComponentUniqueness(cluster); err != nil {
 		return nil, err
 	}
-	if err := validateNodePools(cluster); err != nil {
+	warnings, err := validateNodePools(cluster)
+	if err != nil {
 		return nil, err
 	}
-	return v.validateTlsConfig(cluster)
+	tlsWarnings, err := v.validateTlsConfig(cluster)
+	if err != nil {
+		return nil, err
+	}
+	return append(warnings, tlsWarnings...), nil
 }
 
 func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj, newObj runtime.Object) (admission.Warnings, error) {
@@ -81,7 +87,12 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 		return nil, err
 	}
 
-	if err := validateNodePools(newCluster); err != nil {
+	if err := validateSearchRoleUpgrade(oldCluster, newCluster); err != nil {
+		return nil, err
+	}
+
+	warnings, err := validateNodePools(newCluster)
+	if err != nil {
 		return nil, err
 	}
 
@@ -95,7 +106,11 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 		return nil, err
 	}
 
-	return v.validateTlsConfig(newCluster)
+	tlsWarnings, err := v.validateTlsConfig(newCluster)
+	if err != nil {
+		return nil, err
+	}
+	return append(warnings, tlsWarnings...), nil
 }
 
 // validateVersionTransition rejects a spec.general.version change that the upgrade reconciler
@@ -163,16 +178,28 @@ func validateNodePoolComponentUniqueness(cluster *opensearchv1.OpenSearchCluster
 }
 
 // validateNodePools rejects unknown node pool roles (the StatefulSet builder silently drops
-// anything not on helpers.ValidNodeRoles) and clusters with no cluster-manager-eligible node
-// pool that has replicas >= 1 (such a cluster can never form a quorum).
-func validateNodePools(cluster *opensearchv1.OpenSearchCluster) error {
+// anything not on helpers.ValidNodeRoles), clusters with no cluster-manager-eligible node
+// pool that has replicas >= 1 (such a cluster can never form a quorum) and, on OpenSearch
+// 3.x, search and warm role setups that fail at node startup.
+func validateNodePools(cluster *opensearchv1.OpenSearchCluster) (admission.Warnings, error) {
 	managerRole := helpers.ResolveClusterManagerRole(cluster.Spec.General.Version)
+	isV3 := isOpenSearch3OrLater(cluster.Spec.General.Version)
 	hasManager := false
+	var warnings admission.Warnings
 	for i := range cluster.Spec.NodePools {
 		pool := &cluster.Spec.NodePools[i]
 		for _, role := range pool.Roles {
 			if !helpers.ContainsString(helpers.ValidNodeRoles, role) {
-				return fmt.Errorf("node pool '%s' has unknown role '%s' (valid roles: %s)", pool.Component, role, strings.Join(helpers.ValidNodeRoles, ", "))
+				return nil, fmt.Errorf("node pool '%s' has unknown role '%s' (valid roles: %s)", pool.Component, role, strings.Join(helpers.ValidNodeRoles, ", "))
+			}
+		}
+		if isV3 {
+			warning, err := validateSearchAndWarmRoles(cluster, pool)
+			if err != nil {
+				return nil, err
+			}
+			if warning != "" {
+				warnings = append(warnings, warning)
 			}
 		}
 		if pool.Replicas >= 1 && helpers.ContainsString(helpers.MapClusterRoles(pool.Roles, cluster.Spec.General.Version), managerRole) {
@@ -180,9 +207,62 @@ func validateNodePools(cluster *opensearchv1.OpenSearchCluster) error {
 		}
 	}
 	if !hasManager {
-		return fmt.Errorf("at least one node pool must have the %s role and replicas >= 1", managerRole)
+		return nil, fmt.Errorf("at least one node pool must have the %s role and replicas >= 1", managerRole)
+	}
+	return warnings, nil
+}
+
+// validateSearchAndWarmRoles applies the OpenSearch 3.x node startup rules: 'search' can't be
+// combined with another role, and only a dedicated warm node gets a default file cache size.
+func validateSearchAndWarmRoles(cluster *opensearchv1.OpenSearchCluster, pool *opensearchv1.NodePool) (string, error) {
+	if helpers.ContainsString(pool.Roles, "search") {
+		for _, role := range pool.Roles {
+			if role != "search" {
+				return "", fmt.Errorf("node pool '%s': the 'search' role cannot be combined with other roles on OpenSearch 3.x", pool.Component)
+			}
+		}
+		return fmt.Sprintf("node pool '%s': on OpenSearch 3.x the 'search' role hosts search replicas; for searchable snapshots use the 'warm' role", pool.Component), nil
+	}
+
+	if !helpers.ContainsString(pool.Roles, "warm") {
+		return "", nil
+	}
+	cacheSize, ok := pool.AdditionalConfig[helpers.SearchCacheSizeSetting]
+	if !ok {
+		cacheSize, ok = cluster.Spec.General.AdditionalConfig[helpers.SearchCacheSizeSetting]
+	}
+	if !ok {
+		if len(pool.Roles) > 1 {
+			return "", fmt.Errorf("node pool '%s': a 'warm' node pool with other roles must set %s in its additionalConfig or in general.additionalConfig; see 'Searchable snapshots (warm nodes)' in the user guide", pool.Component, helpers.SearchCacheSizeSetting)
+		}
+		return "", nil
+	}
+	if err := helpers.ValidateSearchCacheSize(cacheSize); err != nil {
+		return "", fmt.Errorf("node pool '%s': %w", pool.Component, err)
+	}
+	return "", nil
+}
+
+// validateSearchRoleUpgrade rejects moving spec.general.version from 2.x to 3.x while a pool has
+// the 'search' role: on 2.x it serves searchable snapshots, on 3.x it hosts search replicas.
+func validateSearchRoleUpgrade(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
+	oldVersion := oldCluster.Spec.General.Version
+	newVersion := newCluster.Spec.General.Version
+	if _, err := version.NewVersion(oldVersion); err != nil || isOpenSearch3OrLater(oldVersion) || !isOpenSearch3OrLater(newVersion) {
+		return nil
+	}
+	for _, pool := range newCluster.Spec.NodePools {
+		if helpers.ContainsString(pool.Roles, "search") {
+			return fmt.Errorf("cannot change spec.general.version from %s to %s while node pool '%s' has the 'search' role: on OpenSearch 3.x it hosts search replicas instead of searchable snapshots; change the pool's role to 'warm' in the same update", oldVersion, newVersion, pool.Component)
+		}
 	}
 	return nil
+}
+
+// isOpenSearch3OrLater is false for an unparsable version; 3.x prereleases count as 3.x.
+func isOpenSearch3OrLater(ver string) bool {
+	v, err := version.NewVersion(ver)
+	return err == nil && v.Segments()[0] >= 3
 }
 
 func (v *OpenSearchClusterValidator) validateStorageClassChanges(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
