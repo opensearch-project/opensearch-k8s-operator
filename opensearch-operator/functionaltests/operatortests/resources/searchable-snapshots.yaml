@@ -1,4 +1,4 @@
-# OpenSearch 3.x cluster with a dedicated warm pool, backed by MinIO as the S3 repository.
+# OpenSearch 3.x cluster with a dedicated warm pool, backed by SeaweedFS as the S3 repository.
 apiVersion: v1
 kind: Secret
 metadata:
@@ -6,44 +6,49 @@ metadata:
   namespace: default
 type: Opaque
 stringData:
-  s3.client.default.access_key: minioadmin
-  s3.client.default.secret_key: minioadmin-secret
+  s3.client.default.access_key: s3admin
+  s3.client.default.secret_key: s3admin-secret
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: searchable-snapshots-minio
+  name: searchable-snapshots-seaweedfs
   namespace: default
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: searchable-snapshots-minio
+      app: searchable-snapshots-seaweedfs
   template:
     metadata:
       labels:
-        app: searchable-snapshots-minio
+        app: searchable-snapshots-seaweedfs
     spec:
       containers:
-        - name: minio
-          # The official MinIO images are no longer published on Docker Hub or quay.io.
-          image: docker.io/bitnamilegacy/minio:2025.7.23
+        - name: seaweedfs
+          image: docker.io/chrislusf/seaweedfs:4.48
+          args:
+            - mini
+            - -bucket=snapshots
+            - -webdav=false
+            - -admin.ui=false
+            - -s3.port.iceberg=0
+            - -s3.port.lance=0
+            - -master.telemetry=false
           env:
-            - name: MINIO_ROOT_USER
-              value: minioadmin
-            - name: MINIO_ROOT_PASSWORD
-              value: minioadmin-secret
-            - name: MINIO_DEFAULT_BUCKETS
-              value: snapshots
+            - name: AWS_ACCESS_KEY_ID
+              value: s3admin
+            - name: AWS_SECRET_ACCESS_KEY
+              value: s3admin-secret
           ports:
-            - containerPort: 9000
+            - containerPort: 8333
           readinessProbe:
             httpGet:
-              path: /minio/health/ready
-              port: 9000
+              path: /healthz
+              port: 8333
           volumeMounts:
             - name: data
-              mountPath: /bitnami/minio/data
+              mountPath: /data
       volumes:
         - name: data
           emptyDir: {}
@@ -51,14 +56,14 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: searchable-snapshots-minio
+  name: searchable-snapshots-seaweedfs
   namespace: default
 spec:
   selector:
-    app: searchable-snapshots-minio
+    app: searchable-snapshots-seaweedfs
   ports:
-    - port: 9000
-      targetPort: 9000
+    - port: 8333
+      targetPort: 8333
 ---
 apiVersion: opensearch.org/v1
 kind: OpenSearchCluster
@@ -88,6 +93,10 @@ spec:
       cluster.routing.allocation.disk.watermark.low: 500m
       cluster.routing.allocation.disk.watermark.high: 300m
       cluster.routing.allocation.disk.watermark.flood_stage: 100m
+      s3.client.default.endpoint: searchable-snapshots-seaweedfs.default.svc:8333
+      s3.client.default.protocol: http
+      s3.client.default.path_style_access: "true"
+      s3.client.default.region: us-east-1
   dashboards:
     enable: false
   initHelper:
@@ -109,13 +118,6 @@ spec:
         - cluster_manager
         - data
         - ingest
-      # S3 client settings live on the pools, not in general.additionalConfig, because the
-      # bootstrap pod does not install repository-s3 and would reject them.
-      additionalConfig:
-        s3.client.default.endpoint: searchable-snapshots-minio.default.svc:9000
-        s3.client.default.protocol: http
-        s3.client.default.path_style_access: "true"
-        s3.client.default.region: us-east-1
     - component: warm
       replicas: 1
       diskSize: 1Gi
@@ -129,10 +131,6 @@ spec:
       roles:
         - warm
       additionalConfig:
-        s3.client.default.endpoint: searchable-snapshots-minio.default.svc:9000
-        s3.client.default.protocol: http
-        s3.client.default.path_style_access: "true"
-        s3.client.default.region: us-east-1
         # local-path volumes report the host disk size, so the 80% default would be huge. With the
         # absolute watermarks above, the warm disk decider needs cache x remote_data_ratio (5) to
         # stay well above 500m x 5, or it refuses remote shards once file cache stats arrive.
