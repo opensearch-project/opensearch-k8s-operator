@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 ## [3.0.14] - 2026-09-25
+Chart version 3.0.13 was never published; its changes are listed here.
 ### Changed
 - Bumped `appVersion` to `3.0.0` (#1603).
 ### Fixed
@@ -22,7 +23,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 ## [3.0.12] - 2026-09-22
-Chart versions 3.0.3 to 3.0.10 were tagged but never published; their changes are listed here.
+Chart versions 3.0.3 to 3.0.11 were never published; their changes are listed here.
 ### Added
 - `legacyAPI.enabled` (default `true`). Set it to `false` to skip the deprecated `opensearch.opster.io` CRDs, webhooks, RBAC rules and manager watches (#1438).
 - `manager.maxConcurrentReconciles` and `manager.maxConcurrentReconcilesPerController` (#1510).
@@ -109,7 +110,7 @@ First chart for operator 3.x. Read the [migration guide](../../docs/userguide/mi
 - CRD fields for bootstrap `pluginsList` and `keystore` (#862), projected volumes (#808) and ServiceMonitor labels (#770).
 ### Changed
 - Bumped `appVersion` to `2.7.0` (#892).
-- **Breaking:** ISM policy `transitions[].conditions` now wraps `expression` and `timezone` in a `cron` object (#838).
+- **Breaking:** ISM policy `transitions[].conditions.cron` now nests `expression` and `timezone` under another `cron` key, matching the OpenSearch API (#838).
 - kube-rbac-proxy runs with a read-only root filesystem, no privilege escalation and all capabilities dropped (#848).
 ### Fixed
 - ISM policy CRD types for actions (#788).
