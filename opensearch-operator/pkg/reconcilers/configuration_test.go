@@ -39,8 +39,8 @@ var _ = Describe("Configuration Controller", func() {
 		clusterName = "configuration-test"
 	)
 
-	Context("When Reconciling the configuration controller with no configuration snippets", func() {
-		It("should not create a configmap ", func() {
+	Context("When Reconciling the configuration controller with no configuration snippets and no security", func() {
+		It("should create a configmap that disables the security plugin", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
 			spec := opensearchv1.OpenSearchCluster{
@@ -63,6 +63,15 @@ var _ = Describe("Configuration Controller", func() {
 				},
 			}
 
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().Context().Return(context.Background())
+			var createdConfigMap *corev1.ConfigMap
+			mockClient.On("CreateConfigMap", mock.Anything).
+				Return(func(cm *corev1.ConfigMap) (*ctrl.Result, error) {
+					createdConfigMap = cm
+					return &ctrl.Result{}, nil
+				})
+
 			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
 
 			underTest := newConfigurationReconciler(
@@ -73,6 +82,40 @@ var _ = Describe("Configuration Controller", func() {
 			)
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
+
+			Expect(createdConfigMap).ToNot(BeNil())
+			var parsed map[string]interface{}
+			Expect(yaml.Unmarshal([]byte(createdConfigMap.Data["opensearch.yml"]), &parsed)).To(Succeed())
+			Expect(parsed).To(HaveKeyWithValue("plugins.security.disabled", true))
+
+			// The config must reach the pods through the shared volume and mount
+			Expect(reconcilerContext.Volumes).To(HaveLen(1))
+			Expect(reconcilerContext.Volumes[0].ConfigMap.Name).To(Equal(clusterName + "-config"))
+			Expect(reconcilerContext.VolumeMounts).To(HaveLen(1))
+			Expect(reconcilerContext.VolumeMounts[0].SubPath).To(Equal("opensearch.yml"))
+		})
+	})
+
+	Context("When Reconciling with security enabled and nothing to render", func() {
+		It("should not create a configmap", func() {
+			// No client expectations: any call on the mock fails the test
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{Transport: &opensearchv1.TlsConfigTransport{Generate: true}},
+					},
+					NodePools: []opensearchv1.NodePool{{Component: "test", Roles: []string{"master", "data"}}},
+				},
+			}
+
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newConfigurationReconciler(mockClient, &helpers.MockEventRecorder{}, &reconcilerContext, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(reconcilerContext.OpenSearchConfig).To(BeEmpty())
 		})
 	})
 
