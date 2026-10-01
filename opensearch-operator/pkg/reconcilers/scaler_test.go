@@ -1962,6 +1962,17 @@ var _ = Describe("Scaler Controller", func() {
 
 				expectKept(&spec, mockClient, recorder, "Drained", requeue, err)
 			})
+
+			It("Should keep a legacy Drained status without a target when the cluster cannot be reached", func() {
+				spec := revertedPool("Drained", "", "cluster_manager")
+				mockClient := newMock(&spec)
+				mockClient.On("GetSecret", clusterName+"-admin-password", clusterNamespace).Return(corev1.Secret{}, errors.New("secret unavailable"))
+				mockClient.On("ListPods", mock.Anything).Return(readyPods, nil)
+
+				requeue, recorder, err := reconcilePool(&spec, mockClient, nil)
+
+				expectKept(&spec, mockClient, recorder, "Drained", requeue, err)
+			})
 		})
 	})
 })
