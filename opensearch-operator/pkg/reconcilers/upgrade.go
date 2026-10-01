@@ -533,7 +533,8 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 		return err
 	}
 
-	ready, err = services.PreparePodForDelete(r.osClient, r.logger, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
+	var reason string
+	ready, reason, err = services.PreparePodForDelete(r.osClient, r.logger, workingPod, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		r.logger.Error(err, "Could not prepare pod for delete")
 		conditions = append(conditions, "Could not prepare pod for delete")
@@ -541,7 +542,10 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 		return err
 	}
 	if !ready {
-		conditions = append(conditions, "Waiting for node to drain")
+		if reason == "" {
+			reason = "Waiting for node to drain"
+		}
+		conditions = append(conditions, reason)
 		r.setComponentConditions(conditions, pool.Component)
 		return nil
 	}
