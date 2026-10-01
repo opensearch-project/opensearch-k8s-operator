@@ -11,6 +11,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -447,6 +448,45 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			np := networkingv1.NetworkPolicy{}
 			err := k8sClient.Get(context.Background(), types.NamespacedName{Name: clusterName + "-network-policy", Namespace: OpensearchCluster.Namespace}, &np)
 			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+		})
+		It("should restore an edited or deleted NetworkPolicy and remove it when disabled", func() {
+			ctx := context.Background()
+			// Read directly from the API so stale cache entries cannot look like repairs.
+			apiClient, err := client.New(cfg, client.Options{Scheme: k8sClient.Scheme()})
+			Expect(err).NotTo(HaveOccurred())
+			key := client.ObjectKeyFromObject(&OpensearchCluster)
+			Expect(apiClient.Get(ctx, key, &OpensearchCluster)).To(Succeed())
+			OpensearchCluster.Spec.General.NetworkPolicy.Enable = true
+			Expect(apiClient.Update(ctx, &OpensearchCluster)).To(Succeed())
+
+			wanted := builders.NewNetworkPolicyForCR(&OpensearchCluster)
+			policyKey := client.ObjectKeyFromObject(wanted)
+			policy := &networkingv1.NetworkPolicy{}
+			assertRestored := func() {
+				Eventually(func(g Gomega) {
+					g.Expect(apiClient.Get(ctx, policyKey, policy)).To(Succeed())
+					g.Expect(policy.Spec).To(Equal(wanted.Spec))
+					g.Expect(HasOwnerReference(policy, &OpensearchCluster)).To(BeTrue())
+				}, timeout, interval).Should(Succeed())
+			}
+			assertRestored()
+			policy.Spec.Ingress = nil
+			Expect(apiClient.Update(ctx, policy)).To(Succeed())
+			assertRestored()
+			previousUID := policy.UID
+			Expect(apiClient.Delete(ctx, policy)).To(Succeed())
+			Eventually(func(g Gomega) {
+				g.Expect(apiClient.Get(ctx, policyKey, policy)).To(Succeed())
+				g.Expect(policy.UID).NotTo(Equal(previousUID))
+			}, timeout, interval).Should(Succeed())
+			assertRestored()
+
+			Expect(apiClient.Get(ctx, key, &OpensearchCluster)).To(Succeed())
+			OpensearchCluster.Spec.General.NetworkPolicy.Enable = false
+			Expect(apiClient.Update(ctx, &OpensearchCluster)).To(Succeed())
+			Eventually(func() bool {
+				return k8serrors.IsNotFound(apiClient.Get(ctx, policyKey, policy))
+			}, timeout, interval).Should(BeTrue())
 		})
 	})
 

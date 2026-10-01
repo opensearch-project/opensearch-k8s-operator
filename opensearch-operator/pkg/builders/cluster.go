@@ -1847,6 +1847,11 @@ func NewNetworkPolicyForCR(cr *opensearchv1.OpenSearchCluster) *networkingv1.Net
 			MatchLabels: map[string]string{dashboardsSelectorLabel: cr.Name},
 		},
 	}
+	securityconfigPeer := networkingv1.NetworkPolicyPeer{
+		PodSelector: &metav1.LabelSelector{
+			MatchLabels: map[string]string{helpers.JobLabel: cr.Name + "-securityconfig-update"},
+		},
+	}
 
 	ingress := []networkingv1.NetworkPolicyIngressRule{
 		{
@@ -1855,6 +1860,10 @@ func NewNetworkPolicyForCR(cr *opensearchv1.OpenSearchCluster) *networkingv1.Net
 		},
 		{
 			From:  []networkingv1.NetworkPolicyPeer{dashboardsPeer},
+			Ports: httpNetworkPolicyPorts(cr),
+		},
+		{
+			From:  []networkingv1.NetworkPolicyPeer{securityconfigPeer},
 			Ports: httpNetworkPolicyPorts(cr),
 		},
 	}
