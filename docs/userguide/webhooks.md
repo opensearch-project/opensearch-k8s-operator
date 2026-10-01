@@ -177,7 +177,7 @@ If webhook validation is failing, check the following:
 
 If you're experiencing certificate-related issues:
 
-1. **Verify cert-manager is installed:**
+1. **Verify cert-manager is installed** (with `webhook.certManager.enabled=true`, `helm install` fails early with `cert-manager is required ...` when it isn't):
    ```bash
    kubectl get pods -n cert-manager
    ```
