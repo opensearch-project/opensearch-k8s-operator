@@ -1706,7 +1706,7 @@ spec:
 
 - When `operatorClientCert` is set, the operator does **not** send basic-auth credentials and `adminCredentialsSecret` is no longer required for runtime API calls. (`adminCredentialsSecret` may still be useful for other purposes such as seeding the admin user password during initial securityconfig generation.)
 - The operator only re-reads the secret on its next reconcile, so a cert rotation triggers a normal reconcile loop.
-- With HTTP TLS enabled, the default startup and readiness probes also authenticate with this certificate (mounted into the OpenSearch pods at `/mnt/operator-client-cert`) instead of the admin credentials. Together, this lets the cluster run with basic auth disabled (`http_enabled: false` on the basic auth domain in `config.yml`). The certificate's DN must be in `admin_dn` or map to a role allowed `cluster:monitor/main`, or the pods never become ready. Setting or removing `operatorClientCert` therefore rolls the node pods.
+- With HTTP TLS enabled, the default startup and readiness probes also authenticate with this certificate (mounted into the OpenSearch pods at `/mnt/operator-client-cert`) instead of the admin credentials. Together, this lets the cluster run with basic auth disabled (`http_enabled: false` on the basic auth domain in `config.yml`). The certificate's DN must be in `admin_dn` or map to a role allowed `cluster:monitor/main`, or the pods never become ready. Setting or removing `operatorClientCert` therefore rolls the node pods. Every node pod can read the key, as it can the admin credentials, so use a certificate dedicated to this cluster rather than one shared with other clusters.
 
 ### Managing security configurations with kubernetes resources
 
