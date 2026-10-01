@@ -88,7 +88,7 @@ The same check (`helpers.ValidateVersionTransition`) runs at admission time in t
 
 If validation fails in the reconciler (for example with the webhook disabled), a warning event is emitted and the upgrade reconciler returns a terminal error. The rest of the reconciler chain (rolling restart, snapshot repositories, ...) keeps running.
 
-If a custom image is pinned in `spec.general.image`, a version change does not change the pod image. The reconciler emits a warning, copies the version into `status.version` and does not restart any pods. The webhook rejects a version bump that leaves a pinned image unchanged.
+If a custom image is pinned in `spec.general.image`, a version change does not change the pod image. The webhook rejects a version bump that leaves the pinned image unchanged. With the webhook disabled, the reconciler validates the version first. A downgrade or a jump of more than one major version returns a terminal error and leaves `status.version` unchanged. When validation passes, or when `status.version` is not valid semver, the reconciler emits a warning, copies the requested version into `status.version`, and does not restart any pods.
 
 ### Phase management
 

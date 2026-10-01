@@ -1161,12 +1161,12 @@ spec:
 
 - Exactly one volume source must be set per entry.
 - `subPath` is supported for configMap, secret, CSI and projected volumes.
-- ConfigMap, secret and projected volumes are mounted read-only. CSI, PVC and NFS volumes follow their `readOnly` field (CSI defaults to read-only); emptyDir and hostPath volumes are writable.
+- ConfigMap, secret and projected volumes are mounted read-only. CSI and PVC volumes follow their `readOnly` field (CSI defaults to read-only). NFS volumes are always mounted read-only: `nfs.readOnly` is copied onto the volume source, and the volume mount stays read-only. emptyDir and hostPath volumes are writable.
 - `restartPods` only works for configMap and secret volumes on the OpenSearch pods: the operator restarts the pods when the content changes. It has no effect in `spec.dashboards.additionalVolumes`.
 
 #### NFS Volume Support
 
-NFS volumes can be mounted directly into OpenSearch pods without requiring external provisioners or CSI drivers. This is particularly useful for snapshot repositories stored on NFS shares. To configure an NFS volume, specify the `nfs` field with the required `server` and `path` parameters:
+NFS volumes can be mounted directly into OpenSearch pods without requiring external provisioners or CSI drivers. To configure an NFS volume, specify the `nfs` field with the required `server` and `path` parameters:
 
 ```yaml
 spec:
@@ -1177,29 +1177,9 @@ spec:
         nfs:
           server: 192.168.1.233
           path: /export/backups/opensearch
-          readOnly: false # false gives a writable mount
 ```
 
-Operator 3.0.0 and earlier mount NFS volumes read-only regardless of this field.
-
-This can be combined with snapshot repository configuration:
-
-```yaml
-spec:
-  general:
-    additionalVolumes:
-      - name: nfs-backups
-        path: /mnt/backups/opensearch
-        nfs:
-          server: 192.168.1.233
-          path: /export/backups/opensearch
-          readOnly: false
-    snapshotRepositories:
-      - name: nfs-repository
-        type: fs
-        settings:
-          location: /mnt/backups/opensearch
-```
+The mount is read-only even when `nfs.readOnly` is `false`, so OpenSearch cannot write to that path. An `fs` snapshot repository on this mount cannot create snapshots.
 
 #### HostPath Volume Support
 
@@ -1654,8 +1634,8 @@ spec:
     version: "3.2.0"
 ```
 
-The Operator will then perform a rolling upgrade and restart the nodes one-by-one, waiting after each node for the cluster to stabilize and have a green cluster status. Depending on the number of nodes and the size of the data stored this can take some time.
-If the cluster stays yellow because some replicas can never be assigned (e.g. `number_of_replicas` is higher than the number of other data nodes), rolling restarts and upgrades with `drainDataNodes: false` still continue once all data nodes have joined and no shards are initializing, relocating or waiting for delayed allocation. The operator never restarts a node that holds the only active copy of a shard that should have replicas, except in a cluster with a single data node, where there is nowhere else to keep a copy. With `drainDataNodes: true` a node is only restarted once its shards have moved elsewhere, so replicas that have nowhere to go still block the restart.
+The Operator then performs a rolling upgrade and restarts the nodes one by one. Before each node it checks cluster health. Green passes. Yellow passes once shard allocation is enabled, every data node has joined, and no shards are initializing, relocating, or waiting for delayed allocation (for example when `number_of_replicas` is higher than the number of other data nodes). Red does not pass. Depending on the number of nodes and the size of the data stored this can take some time.
+The operator skips a node that holds the only active copy of a shard that should have replicas, except in a cluster with a single data node, where there is nowhere else to keep a copy. With `drainDataNodes: true` the health check can still pass on yellow, and the node is restarted only after its shards have moved elsewhere, so replicas that have nowhere to go still block the restart.
 With `drainDataNodes: true` and exactly two data nodes, the operator only waits for primaries of system indices (such as `.opendistro_security`) to move off a node before restarting it, since the other shards have nowhere to go.
 
 Node pools are upgraded one at a time: data-only pools first, then pools that are both data and master-eligible, then all other pools (for example dedicated cluster managers and coordinating nodes).
@@ -1702,7 +1682,7 @@ The operator records Kubernetes events on the `OpenSearchCluster` (`kubectl desc
 A few behaviours worth knowing:
 
 - **Stuck pods:** during a rolling restart or upgrade, a pod on an old StatefulSet revision that is stuck (`CrashLoopBackOff`, `ImagePullBackOff`, `ErrImagePull`, `InvalidImageName`, or `RepeatedlyFailing` when its container keeps failing the startup probe) is deleted so it is recreated from the new template. Stuck pods on the current revision are only reported with a `Warning` event.
-- **Yellow clusters:** rolling restarts and upgrades continue on a cluster that stays yellow because some replicas can never be assigned (see [Rolling Upgrades](#rolling-upgrades)).
+- **Yellow clusters:** the health check for a rolling restart or upgrade passes on a cluster that stays yellow because some replicas can never be assigned. With `drainDataNodes: true` the node still waits until its shards have moved (see [Rolling Upgrades](#rolling-upgrades)).
 - **Securityconfig job:** if the `<cluster-name>-securityconfig-update` job fails, the operator retries it with an exponential backoff from 30 seconds up to 15 minutes.
 
 ## User and role management
