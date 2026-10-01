@@ -96,8 +96,8 @@ jobs:
           -f functionaltests/helmtests/ci-operator-values.yml \
           --namespace default --wait
           cd functionaltests
-          ## Set SKIP_SUITE_SETUP for migration and upgrade tests
-          if [ "${{ inputs.test_focus }}" == "APIGroupMigration" ] || [ "${{ inputs.test_focus }}" == "OperatorUpgrade" ]; then
+          ## Set SKIP_SUITE_SETUP for tests that create their own cluster
+          if [ "${{ inputs.test_focus }}" == "APIGroupMigration" ] || [ "${{ inputs.test_focus }}" == "OperatorUpgrade" ] || [ "${{ inputs.test_focus }}" == "SearchableSnapshots" ]; then
             export SKIP_SUITE_SETUP=true
           fi
           ## Run tests with focus pattern
