@@ -181,6 +181,55 @@ var _ = Describe("Configuration Controller", func() {
 		})
 	})
 
+	Context("When Reconciling with transport TLS enabled but HTTP TLS disabled", func() {
+		It("should configure the security plugin instead of disabling it", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			httpTlsDisabled := false
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.19.4"},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Enabled: &httpTlsDisabled},
+						},
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "test",
+							Roles:     []string{"master", "data"},
+						},
+					},
+				},
+			}
+
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.On("CreateConfigMap", mock.Anything).Return(&ctrl.Result{}, nil)
+
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+			reconcilerContext.AddConfig("foo", "bar")
+
+			underTest := newConfigurationReconciler(
+				mockClient,
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(reconcilerContext.OpenSearchConfig).ToNot(HaveKey("plugins.security.disabled"))
+			Expect(reconcilerContext.OpenSearchConfig).To(HaveKeyWithValue("plugins.security.audit.type", "internal_opensearch"))
+		})
+	})
+
 	Context("When Reconciling with General.Grpc enabled", func() {
 		It("should render valid gRPC settings in opensearch.yml", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())

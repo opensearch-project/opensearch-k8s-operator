@@ -37,16 +37,21 @@ import (
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
-	k8s "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 )
 
 const (
 	// Migration annotations
-	MigratedFromAnnotation             = "opensearch.org/migrated-from"
-	MigrationTimestampAnnotation       = "opensearch.org/migration-timestamp"
-	SourceUIDAnnotation                = "opensearch.org/source-uid"
-	MigrationSyncAnnotation            = "opensearch.org/migration-sync"
-	DeletedByNewResourceAnnotation     = "opensearch.org/deleted-by-new-resource"
+	MigratedFromAnnotation         = "opensearch.org/migrated-from"
+	MigrationTimestampAnnotation   = "opensearch.org/migration-timestamp"
+	SourceUIDAnnotation            = "opensearch.org/source-uid"
+	MigrationSyncAnnotation        = "opensearch.org/migration-sync"
+	DeletedByNewResourceAnnotation = "opensearch.org/deleted-by-new-resource"
+	// MigrationStatusPendingAnnotation marks a migrated twin whose legacy status
+	// has not been written yet (Create ignores the status subresource). It is
+	// removed once the restore lands, so a failed restore is retried on the next
+	// reconcile instead of being lost.
+	MigrationStatusPendingAnnotation   = "opensearch.org/migration-status-pending"
 	CertOwnershipTransferredAnnotation = "opensearch.org/cert-ownership-transferred"
 
 	// Finalizer for migration
@@ -69,6 +74,7 @@ type ClusterMigrationReconciler struct {
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters/finalizers,verbs=update
+//+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;update;patch
 
 func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
@@ -117,15 +123,23 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 
-		// Add migration finalizer to new cluster if not present
-		// This ensures we can handle deletion even after main reconciler removes its finalizer
+		// Add migration finalizer to new cluster, but only if there is actually a
+		// legacy twin to migrate/clean up. Otherwise every cluster on a fresh
+		// install (no opensearch.opster.io twin at all) would pick up a
+		// finalizer that nothing will ever remove.
 		if !containsString(newCluster.Finalizers, MigrationFinalizer) {
-			newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
-			if err := r.Update(ctx, newCluster); err != nil {
+			hasTwin, err := genericHasLegacyTwin[opsterv1.OpenSearchCluster, *opsterv1.OpenSearchCluster](ctx, r.Client, req.NamespacedName, newCluster)
+			if err != nil {
 				return ctrl.Result{}, err
 			}
-			// Requeue to process deletion if needed
-			return ctrl.Result{Requeue: true}, nil
+			if hasTwin {
+				newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
+				if err := r.Update(ctx, newCluster); err != nil {
+					return ctrl.Result{}, err
+				}
+				// Requeue to process deletion if needed
+				return ctrl.Result{Requeue: true}, nil
+			}
 		}
 		// If new cluster exists and is not being deleted, continue to check old cluster
 	}
@@ -142,8 +156,14 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 
 		// Add finalizer if not present
 		if !containsString(oldCluster.Finalizers, MigrationFinalizer) {
+			// Patch only metadata.finalizers instead of a full-object Update: a full
+			// Update round-trips oldCluster.Spec through the typed Go struct, which
+			// drops any zero-valued field with `omitempty` (e.g. dashboards.replicas: 0)
+			// and lets the CRD re-default it, making the legacy validating webhook see
+			// a spec change and reject the write (see #1540).
+			patch := client.MergeFrom(oldCluster.DeepCopy())
 			oldCluster.Finalizers = append(oldCluster.Finalizers, MigrationFinalizer)
-			if err := r.Update(ctx, oldCluster); err != nil {
+			if err := r.Patch(ctx, oldCluster, patch); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -293,6 +313,16 @@ func (r *ClusterMigrationReconciler) syncOldToNew(ctx context.Context, oldCluste
 		logger.Error(err, "Failed to transfer certificate secret ownership during sync, will retry")
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 	}
+	// Only backfill PVC labels once the new cluster is initialized. Doing this earlier
+	// can make legacy PVCs visible to parallel recovery while the migrated CR is still
+	// settling (e.g. Status.Initialized not yet true), which recreates STS in Parallel
+	// mode and can break a healthy cluster mid-migration.
+	if newCluster.Status.Initialized {
+		if err := r.backfillPVCLegacyLabels(ctx, oldCluster); err != nil {
+			logger.Error(err, "Failed to backfill PVC labels during sync, will retry")
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		}
+	}
 	// Only sync status from new back to old
 	// Spec sync is intentionally disabled - the new CR is the source of truth after migration
 	// Users should make changes to the new opensearch.org CR, not the old opster.io CR
@@ -349,11 +379,14 @@ func (r *ClusterMigrationReconciler) handleNewClusterDeletion(ctx context.Contex
 	// This allows handleOldClusterDeletion to distinguish between:
 	// 1. Old CR manually deleted before migration (should wait for migration)
 	// 2. Old CR deleted because new CR was deleted (should allow deletion)
+	// Patch only metadata.annotations instead of a full-object Update - see the
+	// comment on the finalizer patch above (#1540).
+	patch := client.MergeFrom(oldCluster.DeepCopy())
 	if oldCluster.Annotations == nil {
 		oldCluster.Annotations = make(map[string]string)
 	}
 	oldCluster.Annotations[DeletedByNewResourceAnnotation] = "true"
-	if err := r.Update(ctx, oldCluster); err != nil {
+	if err := r.Patch(ctx, oldCluster, patch); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -380,10 +413,11 @@ func (r *ClusterMigrationReconciler) handleOldClusterDeletion(ctx context.Contex
 				if oldCluster.Annotations != nil && oldCluster.Annotations[DeletedByNewResourceAnnotation] == "true" {
 					// Old cluster deletion was triggered by new cluster deletion - safe to allow
 					logger.Info("Old cluster deletion triggered by new cluster deletion, allowing deletion", "name", oldCluster.Name)
-					// Remove all finalizers (migration finalizer and old finalizers)
+					// Patch only metadata.finalizers
+					patch := client.MergeFrom(oldCluster.DeepCopy())
 					oldCluster.Finalizers = removeString(oldCluster.Finalizers, MigrationFinalizer)
 					oldCluster.Finalizers = removeString(oldCluster.Finalizers, OldClusterFinalizer)
-					if err := r.Update(ctx, oldCluster); err != nil {
+					if err := r.Patch(ctx, oldCluster, patch); err != nil {
 						return ctrl.Result{}, err
 					}
 					return ctrl.Result{}, nil
@@ -398,10 +432,11 @@ func (r *ClusterMigrationReconciler) handleOldClusterDeletion(ctx context.Contex
 
 		// New cluster exists, safe to remove finalizers and allow deletion
 		logger.Info("Removing finalizers from old cluster", "name", oldCluster.Name)
-		// Remove all finalizers (migration finalizer and old finalizers)
+		// Patch only metadata.finalizers
+		patch := client.MergeFrom(oldCluster.DeepCopy())
 		oldCluster.Finalizers = removeString(oldCluster.Finalizers, MigrationFinalizer)
 		oldCluster.Finalizers = removeString(oldCluster.Finalizers, OldClusterFinalizer)
-		if err := r.Update(ctx, oldCluster); err != nil {
+		if err := r.Patch(ctx, oldCluster, patch); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -642,6 +677,29 @@ func (r *ComponentTemplateMigrationReconciler) SetupWithManager(mgr ctrl.Manager
 		Complete(r)
 }
 
+// genericHasLegacyTwin reports whether the new-group object has a legacy
+// (opensearch.opster.io) twin that the migration finalizer would need to
+// clean up: either the twin still exists, or the object's annotations record
+// that it was created by migrating one (covers the window after the legacy
+// twin has already been deleted).
+func genericHasLegacyTwin[OldType any, OldPtr interface {
+	*OldType
+	client.Object
+}](ctx context.Context, c client.Client, key types.NamespacedName, newResource client.Object) (bool, error) {
+	if annotations := newResource.GetAnnotations(); annotations != nil && annotations[MigratedFromAnnotation] != "" {
+		return true, nil
+	}
+	oldResource := OldPtr(new(OldType))
+	err := c.Get(ctx, key, oldResource)
+	if err == nil {
+		return true, nil
+	}
+	if errors.IsNotFound(err) {
+		return false, nil
+	}
+	return false, err
+}
+
 // Generic migration reconciler using generics
 func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 	*OldType
@@ -696,15 +754,40 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 			return ctrl.Result{}, nil
 		}
 
-		// Add migration finalizer to new resource if not present
-		// This ensures we can handle deletion even after main reconciler removes its finalizer
+		// Finish a pending legacy status restore before adding the migration
+		// finalizer. Returning early for the finalizer while status is still
+		// empty widens the window where the twin's reconciler probes OpenSearch
+		// and parks the object in IGNORED.
+		if newResource.GetAnnotations()[MigrationStatusPendingAnnotation] == "true" {
+			oldForRestore := OldPtr(new(OldType))
+			if getErr := c.Get(ctx, req.NamespacedName, oldForRestore); getErr != nil {
+				if !errors.IsNotFound(getErr) {
+					return ctrl.Result{}, getErr
+				}
+				// Legacy twin is gone; cannot restore. Fall through so finalizer
+				// / cleanup logic can still run.
+			} else {
+				return restoreGenericStatus[OldType, NewType, OldPtr, NewPtr](ctx, c, oldForRestore, newResource)
+			}
+		}
+
+		// Add migration finalizer to new resource, but only if there is actually a
+		// legacy twin to migrate/clean up. Otherwise every object on a fresh
+		// install (no opensearch.opster.io twins at all) would pick up a
+		// finalizer that nothing will ever remove.
 		if !containsString(newResource.GetFinalizers(), MigrationFinalizer) {
-			newResource.SetFinalizers(append(newResource.GetFinalizers(), MigrationFinalizer))
-			if err := c.Update(ctx, newResource); err != nil {
+			hasTwin, err := genericHasLegacyTwin[OldType, OldPtr](ctx, c, req.NamespacedName, newResource)
+			if err != nil {
 				return ctrl.Result{}, err
 			}
-			// Requeue to process deletion if needed
-			return ctrl.Result{Requeue: true}, nil
+			if hasTwin {
+				newResource.SetFinalizers(append(newResource.GetFinalizers(), MigrationFinalizer))
+				if err := c.Update(ctx, newResource); err != nil {
+					return ctrl.Result{}, err
+				}
+				// Requeue to process deletion if needed
+				return ctrl.Result{Requeue: true}, nil
+			}
 		}
 		// If new resource exists and is not being deleted, continue to check old resource
 	}
@@ -723,8 +806,11 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 
 		// Add finalizer if not present
 		if !containsString(oldResource.GetFinalizers(), MigrationFinalizer) {
+			// Patch only metadata.finalizers - see the comment on the equivalent
+			// OpenSearchCluster patch above (#1540).
+			patch := client.MergeFrom(oldResource.DeepCopyObject().(OldPtr))
 			oldResource.SetFinalizers(append(oldResource.GetFinalizers(), MigrationFinalizer))
-			if err := c.Update(ctx, oldResource); err != nil {
+			if err := c.Patch(ctx, oldResource, patch); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -752,6 +838,12 @@ func reconcileGenericMigration[OldType, NewType any, OldPtr interface {
 				return createGenericNewFromOld[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, req)
 			}
 			return ctrl.Result{}, err
+		}
+
+		// A previous createGenericNewFromOld got the twin created but its status
+		// restore failed (e.g. cached Get lagging behind Create): finish it now.
+		if newResource.GetAnnotations()[MigrationStatusPendingAnnotation] == "true" {
+			return restoreGenericStatus[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, newResource)
 		}
 
 		// Sync old to new
@@ -802,17 +894,14 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 	annotations[MigratedFromAnnotation] = "opensearch.opster.io/v1"
 	annotations[MigrationTimestampAnnotation] = time.Now().UTC().Format(time.RFC3339)
 	annotations[SourceUIDAnnotation] = string(oldResource.GetUID())
+	annotations[MigrationStatusPendingAnnotation] = "true"
 	newResource.SetAnnotations(annotations)
 
 	// Clear finalizers on new resource
 	newResource.SetFinalizers(nil)
 
-	// Save the old status before clearing it (we'll set it after creation)
-	// The status was already copied during JSON unmarshal, so get it from newResource
-	// Use reflection to get and save the status value
-	oldStatusValue := getStatusFieldValue(newResource)
-
-	// Clear status temporarily for creation (status can only be set after creation)
+	// Clear status for creation (the status subresource is ignored on Create);
+	// restoreGenericStatus writes it afterwards.
 	clearStatusField(newResource)
 
 	if err := c.Create(ctx, newResource); err != nil {
@@ -823,22 +912,46 @@ func createGenericNewFromOld[OldType, NewType any, OldPtr interface {
 		return ctrl.Result{}, err
 	}
 
-	// Copy status from old to new, but clear ManagedCluster so reconciler can set it to new cluster UID
-	if oldStatusValue != nil {
-		// Use UdateObjectStatus helper method for conflict handling
-		k8sClient := k8s.NewK8sClient(c, ctx)
-		statusToSet := oldStatusValue // Capture for closure
-		if err := k8sClient.UdateObjectStatus(newResource, func(instance client.Object) {
-			// Set the status back
-			setStatusFieldValue(instance, statusToSet)
-			// Clear ManagedCluster so reconciler can set it to new cluster UID
-			clearManagedClusterField(instance)
-		}); err != nil {
-			return ctrl.Result{}, fmt.Errorf("failed to update new resource status: %w", err)
-		}
+	return restoreGenericStatus[OldType, NewType, OldPtr, NewPtr](ctx, c, oldResource, newResource)
+}
+
+// restoreGenericStatus copies the legacy status onto the migrated twin (with
+// ManagedCluster cleared so the reconciler re-binds it to the new cluster UID)
+// and then drops MigrationStatusPendingAnnotation. newResource must carry a
+// current resourceVersion (from Create or Get); no cached re-Get is done, so a
+// cache that lags behind Create cannot turn the restore into a NotFound. Any
+// failure leaves the annotation in place and the next reconcile retries.
+func restoreGenericStatus[OldType, NewType any, OldPtr interface {
+	*OldType
+	client.Object
+}, NewPtr interface {
+	*NewType
+	client.Object
+}](ctx context.Context, c client.Client, oldResource OldPtr, newResource NewPtr) (ctrl.Result, error) {
+	logger := log.FromContext(ctx)
+
+	converted := NewPtr(new(NewType))
+	oldBytes, err := json.Marshal(oldResource)
+	if err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to marshal old resource: %w", err)
+	}
+	if err := json.Unmarshal(oldBytes, converted); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to unmarshal to new resource: %w", err)
+	}
+	setStatusFieldValue(newResource, getStatusFieldValue(converted))
+	clearManagedClusterField(newResource)
+	if err := c.Status().Update(ctx, newResource); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to update new resource status: %w", err)
 	}
 
-	logger.Info("Created new API group resource with status", "name", req.Name, "namespace", req.Namespace)
+	annotations := newResource.GetAnnotations()
+	delete(annotations, MigrationStatusPendingAnnotation)
+	newResource.SetAnnotations(annotations)
+	if err := c.Update(ctx, newResource); err != nil {
+		return ctrl.Result{}, fmt.Errorf("failed to clear status-pending annotation: %w", err)
+	}
+
+	logger.Info("Created new API group resource with status", "name", newResource.GetName(), "namespace", newResource.GetNamespace())
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
@@ -878,13 +991,16 @@ func handleGenericNewDeletion[OldType, NewType any, OldPtr interface {
 	// This allows handleGenericDeletion to distinguish between:
 	// 1. Old resource manually deleted before migration (should wait for migration)
 	// 2. Old resource deleted because new resource was deleted (should allow deletion)
+	// Patch only metadata.annotations - see the comment on the equivalent
+	// OpenSearchCluster patch above (#1540).
+	patch := client.MergeFrom(oldResource.DeepCopyObject().(OldPtr))
 	if oldResource.GetAnnotations() == nil {
 		oldResource.SetAnnotations(make(map[string]string))
 	}
 	annotations := oldResource.GetAnnotations()
 	annotations[DeletedByNewResourceAnnotation] = "true"
 	oldResource.SetAnnotations(annotations)
-	if err := c.Update(ctx, oldResource); err != nil {
+	if err := c.Patch(ctx, oldResource, patch); err != nil {
 		return ctrl.Result{}, err
 	}
 
@@ -918,11 +1034,12 @@ func handleGenericDeletion[OldType, NewType any, OldPtr interface {
 				if annotations != nil && annotations[DeletedByNewResourceAnnotation] == "true" {
 					// Old resource deletion was triggered by new resource deletion - safe to allow
 					logger.Info("Old resource deletion triggered by new resource deletion, allowing deletion", "kind", resourceKind, "name", req.Name)
-					// Remove all finalizers (migration finalizer and old finalizers)
+					// Patch only metadata.finalizers
+					patch := client.MergeFrom(oldResource.DeepCopyObject().(OldPtr))
 					finalizers := removeString(oldResource.GetFinalizers(), MigrationFinalizer)
 					finalizers = removeString(finalizers, OldResourceFinalizer)
 					oldResource.SetFinalizers(finalizers)
-					if err := c.Update(ctx, oldResource); err != nil {
+					if err := c.Patch(ctx, oldResource, patch); err != nil {
 						return ctrl.Result{}, err
 					}
 					return ctrl.Result{}, nil
@@ -937,11 +1054,13 @@ func handleGenericDeletion[OldType, NewType any, OldPtr interface {
 
 		// New resource exists, safe to remove finalizers and allow deletion
 		logger.Info("Removing finalizers from old resource", "kind", resourceKind, "name", req.Name)
-		// Remove all finalizers (migration finalizer and old finalizers)
+		// Patch only metadata.finalizers - see the equivalent OpenSearchCluster
+		// finalizer-add comment above (#1540).
+		patch := client.MergeFrom(oldResource.DeepCopyObject().(OldPtr))
 		finalizers := removeString(oldResource.GetFinalizers(), MigrationFinalizer)
 		finalizers = removeString(finalizers, OldResourceFinalizer)
 		oldResource.SetFinalizers(finalizers)
-		if err := c.Update(ctx, oldResource); err != nil {
+		if err := c.Patch(ctx, oldResource, patch); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -985,7 +1104,7 @@ func isGenericResourceReady(resource client.Object, resourceKind string) bool {
 // getStatusFieldValue uses reflection to get the Status field value from a resource
 func getStatusFieldValue(obj client.Object) interface{} {
 	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -1003,14 +1122,14 @@ func getStatusFieldValue(obj client.Object) interface{} {
 // setStatusFieldValue uses reflection to set the Status field value on a resource
 func setStatusFieldValue(obj client.Object, statusValue interface{}) {
 	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
 	statusField := val.FieldByName("Status")
 	if statusField.IsValid() && statusField.CanSet() && statusValue != nil {
 		statusVal := reflect.ValueOf(statusValue)
-		if statusVal.Kind() == reflect.Ptr {
+		if statusVal.Kind() == reflect.Pointer {
 			statusVal = statusVal.Elem()
 		}
 		statusField.Set(statusVal)
@@ -1021,7 +1140,7 @@ func setStatusFieldValue(obj client.Object, statusValue interface{}) {
 // This is needed during migration to reset ManagedCluster so the reconciler can set it to the correct new cluster UID
 func clearStatusField(obj client.Object) {
 	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -1036,7 +1155,7 @@ func clearStatusField(obj client.Object) {
 // This allows other status fields to be preserved while resetting the cluster reference
 func clearManagedClusterField(obj client.Object) {
 	val := reflect.ValueOf(obj)
-	if val.Kind() == reflect.Ptr {
+	if val.Kind() == reflect.Pointer {
 		val = val.Elem()
 	}
 
@@ -1051,6 +1170,45 @@ func clearManagedClusterField(obj client.Object) {
 		// Set ManagedCluster to nil
 		managedClusterField.Set(reflect.Zero(managedClusterField.Type()))
 	}
+}
+
+// backfillPVCLegacyLabels migrates legacy PVC labels from opster.io/* to opensearch.org/*.
+func (r *ClusterMigrationReconciler) backfillPVCLegacyLabels(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster) error {
+	pvcList := &corev1.PersistentVolumeClaimList{}
+	if err := r.List(ctx, pvcList, &client.ListOptions{
+		Namespace: oldCluster.Namespace,
+	}, client.MatchingLabels{
+		helpers.OldClusterLabel: oldCluster.Name,
+	}); err != nil {
+		return fmt.Errorf("failed to list PVCs for label migration: %w", err)
+	}
+
+	for i := range pvcList.Items {
+		pvc := &pvcList.Items[i]
+		original := pvc.DeepCopy()
+		if pvc.Labels == nil {
+			pvc.Labels = map[string]string{}
+		}
+
+		updated := false
+		if pvc.Labels[helpers.ClusterLabel] == "" {
+			pvc.Labels[helpers.ClusterLabel] = oldCluster.Name
+			updated = true
+		}
+		if pvc.Labels[helpers.NodePoolLabel] == "" {
+			if oldNodePool, ok := pvc.Labels[helpers.OldNodePoolLabel]; ok && oldNodePool != "" {
+				pvc.Labels[helpers.NodePoolLabel] = oldNodePool
+				updated = true
+			}
+		}
+
+		if updated {
+			if err := r.Patch(ctx, pvc, client.MergeFrom(original)); err != nil {
+				return fmt.Errorf("failed to patch PVC %s/%s labels: %w", pvc.Namespace, pvc.Name, err)
+			}
+		}
+	}
+	return nil
 }
 
 // transferCertificateSecretOwnership transfers owner references on certificate secrets

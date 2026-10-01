@@ -31,6 +31,14 @@ const (
 	securityConfigComponentName  = "Securityconfig"
 
 	checksumAnnotation = "securityconfig/checksum"
+	// userChecksumAnnotation stores a checksum of only the user-provided securityConfigSecret,
+	// before it is merged with the operator's embedded defaults and managed admin/kibanaserver
+	// hashes. Operator <=2.8.0 wrote exactly this value under checksumAnnotation (it never merged
+	// in defaults). Comparing against it lets a cluster adopted from an old operator recognize its
+	// pre-existing job as current when the user's own secret hasn't changed, instead of treating
+	// the 2.8.1 hashing-scheme change (#1193) as a config change that must be destructively
+	// re-applied via securityadmin.sh.
+	userChecksumAnnotation = "securityconfig/user-checksum"
 
 	securityConfigStatusReady   = "Ready"
 	securityConfigStatusRunning = "Running"
@@ -42,7 +50,28 @@ const (
 	securityConfigInitialRetryDelay = 30 * time.Second
 	securityConfigMaxRetryDelay     = 15 * time.Minute
 
+	// securityConfigConnectWaitAttempts bounds the connect-wait loop in
+	// SecurityAdminBaseCmdTmpl: 60 probes 20s apart, i.e. up to 20 minutes for
+	// the HTTP endpoint of a freshly created cluster to start answering.
 	securityConfigConnectWaitAttempts = 60
+
+	// securityConfigApplyRetryAttempts and securityConfigApplyRetryIntervalSeconds
+	// bound the retry loop around each securityadmin.sh invocation in
+	// ApplyAllYmlCmdTmpl and ApplySingleYmlCmdTmpl. The loop only has to cover
+	// the short transient window after the HTTP endpoint answers but before the
+	// cluster is ready to accept the security index (cluster manager not yet
+	// elected, cluster not yet yellow on first boot); the connect-wait loop
+	// above already covers the long "cluster is still coming up" phase, and
+	// securityadmin.sh itself waits up to 5 minutes for a yellow cluster on
+	// every invocation. count is post-incremented, so the loop runs attempts+1
+	// invocations with attempts sleeps in between: 6 invocations and 100s of
+	// sleeps per file. A securityadmin.sh run that fails deterministically (an
+	// unparseable or legacy-format yml) therefore fails the job in roughly
+	// 2.5 minutes per file instead of ~10, and the operator's own retry with
+	// exponential backoff (handleExistingSecurityConfigJob) takes over from
+	// there.
+	securityConfigApplyRetryAttempts        = 5
+	securityConfigApplyRetryIntervalSeconds = 20
 
 	adminCert = "/certs/tls.crt"
 	adminKey  = "/certs/tls.key"
@@ -60,22 +89,25 @@ do
   echo 'Waiting to connect to the cluster'; sleep 20;
 done;`
 
+	// ApplyAllYmlCmdTmpl and ApplySingleYmlCmdTmpl take, after the securityadmin
+	// arguments, securityConfigApplyRetryAttempts twice (loop bound and
+	// message) and securityConfigApplyRetryIntervalSeconds.
 	ApplyAllYmlCmdTmpl = `count=0;
 until $ADMIN -cacert %s -cert %s -key %s -cd %s -icl -nhnv -h %s -p %v; do
-  if (( count++ >= 20 )); then
-    echo "Failed to apply securityconfig after 20 attempts";
+  if (( count++ >= %d )); then
+    echo "Failed to apply securityconfig after %d attempts";
     exit 1;
   fi;
-  sleep 20;
+  sleep %d;
 done;`
 
 	ApplySingleYmlCmdTmpl = `count=0;
 until $ADMIN -cacert %s -cert %s -key %s -f %s -t %s -icl -nhnv -h %s -p %v; do
-  if (( count++ >= 20 )); then
-    echo "Failed to apply securityconfig after 20 attempts";
+  if (( count++ >= %d )); then
+    echo "Failed to apply securityconfig after %d attempts";
     exit 1;
   fi;
-  sleep 20;
+  sleep %d;
 done;`
 )
 
@@ -124,25 +156,28 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.logger.Info("Security plugin is disabled, skipping securityconfig reconciliation")
 		return ctrl.Result{}, nil
 	}
+
+	// When securityadmin cannot run (see CanRunSecurityAdmin), the securityconfig is applied
+	// by the security plugin itself when the cluster first forms: the generated securityconfig
+	// secret is mounted into the nodes below, and default init loads it into the security index.
+	// The flag is added before any early return so the node config is deterministic from the
+	// first reconciliation.
+	applyViaDefaultInit := !helpers.CanRunSecurityAdmin(r.instance)
+	if applyViaDefaultInit {
+		r.reconcilerContext.AddConfig("plugins.security.allow_default_init_securityindex", "true")
+	}
+
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 
 	var configSecretName string
 	var checksumval string
 	var cmdArg string
 
-	adminCertName := r.determineAdminSecret()
 	namespace := r.instance.Namespace
 	clusterName := r.instance.Name
 	jobName := clusterName + "-securityconfig-update"
 
 	configSecretName = helpers.GeneratedSecurityConfigSecretName(r.instance)
-
-	// TODO(joseb): Check if admin certificate is provided or generated in webhook
-	if adminCertName == "" {
-		err := errors.New("admin certificate neither provided nor generation is enabled")
-		r.logger.Error(err, "Skipping securityconfig reconciliation")
-		return ctrl.Result{}, err
-	}
 
 	adminCredentialsSecret, managedByOperator, err := helpers.EnsureAdminCredentialsSecret(r.client, r.instance)
 	if err != nil {
@@ -198,24 +233,58 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	if checksumerr != nil {
 		return ctrl.Result{}, checksumerr
 	}
+	userChecksumVal, err := r.userSecurityConfigChecksum()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := r.securityconfigSubpaths(r.instance, &configSecret); err != nil {
 		return ctrl.Result{}, err
 	}
+
+	r.warnIfDashboardsUserUnmapped(&configSecret, annotations)
+
+	if applyViaDefaultInit {
+		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusReady, "securityconfig applied via default init", nil); err != nil {
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{}, nil
+	}
+
+	adminCertName := r.determineAdminSecret()
+
+	// TODO(joseb): Check if admin certificate is provided or generated in webhook
+	if adminCertName == "" {
+		err := errors.New("admin certificate neither provided nor generation is enabled")
+		r.logger.Error(err, "Skipping securityconfig reconciliation")
+		return ctrl.Result{}, err
+	}
+
 	cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
 
 	job, err := r.client.GetJob(jobName, namespace)
 	resetRetryCount := false
 	if err == nil {
 		value, exists := job.Annotations[checksumAnnotation]
-		if exists && value == checksumval {
+		_, userExists := job.Annotations[userChecksumAnnotation]
+		current := (exists && value == checksumval) ||
+			(exists && !userExists && value == userChecksumVal)
+		if current {
 			result, done, handleErr := r.handleExistingSecurityConfigJob(job, annotations)
 			if handleErr != nil {
 				return ctrl.Result{}, handleErr
 			}
 			if done {
+				// Legacy (<=2.8.0) and 2.8.1 jobs only carry securityconfig/checksum. Stamp both
+				// annotations onto the existing job without re-running securityadmin.sh so later
+				// generated-only changes (e.g. admin password rotation) are detected correctly.
+				if migrateErr := r.ensureSecurityConfigJobChecksumAnnotations(&job, checksumval, userChecksumVal); migrateErr != nil {
+					return ctrl.Result{}, migrateErr
+				}
 				return result, nil
 			}
 			// Failed job past backoff window: delete and recreate below.
+			// UpdateComponentStatus keeps r.instance in sync, so the Running
+			// write below preserves the retry/lastRetry conditions just set.
 		} else {
 			resetRetryCount = true
 		}
@@ -243,9 +312,16 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		opensearchHome := r.instance.Spec.General.GetOpenSearchHome()
 		httpPort, securityConfigPort, securityconfigPath := helpers.VersionCheck(r.instance)
 		cmdArg = fmt.Sprintf(SecurityAdminBaseCmdTmpl, opensearchHome, clusterHostName, httpPort, securityConfigConnectWaitAttempts, securityConfigConnectWaitAttempts) +
-			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort)
+			fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, securityconfigPath, clusterHostName, securityConfigPort,
+				securityConfigApplyRetryAttempts, securityConfigApplyRetryAttempts, securityConfigApplyRetryIntervalSeconds)
 	}
 
+	if r.instance.Status.Initialized {
+		// securityadmin.sh replaces (not merges) the internalusers/roles/rolesmapping/tenants/
+		// actiongroups documents in the security index with the contents being applied here, so
+		// any object created afterwards via the REST API or Dashboards is about to be wiped.
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Re-applying securityconfig on an already-initialized cluster; this replaces internal users, roles, role mappings, tenants and action groups with the contents of the generated securityconfig secret, discarding anything created since via the REST API or Dashboards")
+	}
 	r.logger.Info("Starting securityconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting securityconfig update job")
 
@@ -254,6 +330,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		jobName,
 		namespace,
 		checksumval,
+		userChecksumVal,
 		adminCertName,
 		r.determineAdminCASecret(adminCertName),
 		cmdArg,
@@ -305,7 +382,8 @@ func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret
 		// Even if the field was removed from the yaml file it was applied from
 		// Instead it sets it to an empty value
 		if string(secret.Data[k]) != "" {
-			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, securityConfigPort)
+			arg = arg + fmt.Sprintf(ApplySingleYmlCmdTmpl, caCert, adminCert, adminKey, filePath, fileType, clusterHostName, securityConfigPort,
+				securityConfigApplyRetryAttempts, securityConfigApplyRetryAttempts, securityConfigApplyRetryIntervalSeconds)
 		}
 	}
 
@@ -333,18 +411,57 @@ func checksum(data map[string][]byte) (string, error) {
 	return base64.StdEncoding.EncodeToString(hash.Sum(nil)), nil
 }
 
+// userSecurityConfigChecksum computes a checksum of the user's own securityConfigSecret,
+// i.e. exactly what operator <=2.8.0 used to hash into checksumAnnotation before the
+// generated/merged secret existed. Returns "" (also what <=2.8.0 wrote when no secret was
+// configured) when no SecurityconfigSecret is configured or it does not exist yet.
+func (r *SecurityconfigReconciler) userSecurityConfigChecksum() (string, error) {
+	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Config == nil || r.instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
+		return "", nil
+	}
+	userSecret, err := r.client.GetSecret(r.instance.Spec.Security.Config.SecurityconfigSecret.Name, r.instance.Namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return "", nil
+		}
+		return "", err
+	}
+	return checksum(userSecret.Data)
+}
+
+// ensureSecurityConfigJobChecksumAnnotations updates a current job's checksum annotations in
+// place when they are missing or still use the <=2.8.0 single-annotation scheme. This avoids a
+// destructive securityadmin re-apply while ensuring future reconciles compare against the
+// generated checksum rather than the legacy user-secret value stored in checksumAnnotation.
+func (r *SecurityconfigReconciler) ensureSecurityConfigJobChecksumAnnotations(job *batchv1.Job, checksumval, userChecksumVal string) error {
+	if job.Annotations == nil {
+		job.Annotations = map[string]string{}
+	}
+	_, userExists := job.Annotations[userChecksumAnnotation]
+	if userExists &&
+		job.Annotations[checksumAnnotation] == checksumval &&
+		job.Annotations[userChecksumAnnotation] == userChecksumVal {
+		return nil
+	}
+
+	r.logger.Info("Migrating securityconfig job checksum annotations to the dual-checksum scheme")
+	job.Annotations[checksumAnnotation] = checksumval
+	job.Annotations[userChecksumAnnotation] = userChecksumVal
+	return r.client.UpdateJob(job)
+}
+
 func (r *SecurityconfigReconciler) determineAdminSecret() string {
 	if r.instance.Spec.Security != nil {
 		if r.instance.Spec.Security.Config != nil && r.instance.Spec.Security.Config.AdminSecret.Name != "" {
 			return r.instance.Spec.Security.Config.AdminSecret.Name
 		}
 	}
-	// Webhook validation ensures that if security plugin is enabled and no AdminSecret is provided,
+	// Webhook validation ensures that if securityadmin can run and no AdminSecret is provided,
 	// then TLS Generate must be true. So we can safely return the default admin cert name.
-	if helpers.IsSecurityPluginEnabled(r.instance) {
+	if helpers.CanRunSecurityAdmin(r.instance) {
 		return fmt.Sprintf("%s-admin-cert", r.instance.Name)
 	}
-	// Security plugin is not enabled, no admin cert needed
+	// securityadmin is not used, no admin cert needed
 	return ""
 }
 
@@ -390,6 +507,54 @@ func (r *SecurityconfigReconciler) securityconfigSubpaths(instance *opensearchv1
 	return nil
 }
 
+// warnIfDashboardsUserUnmapped emits a Warning event when Dashboards is enabled and the
+// Dashboards user is not authorized by roles_mapping.yml. That includes a custom
+// roles_mapping.yml that lists neither the user nor its backend_roles, and a custom
+// Dashboards username with no roles_mapping.yml in the generated secret (the image
+// default only maps kibanaserver). Hosts-based mappings are not checked. This never
+// blocks reconciliation.
+func (r *SecurityconfigReconciler) warnIfDashboardsUserUnmapped(configSecret *corev1.Secret, annotations map[string]string) {
+	if !r.instance.Spec.Dashboards.Enable {
+		return
+	}
+	dashboardsUsername, err := helpers.DashboardsUsername(r.client, r.instance)
+	if err != nil {
+		r.logger.Error(err, "Unable to determine Dashboards username for roles mapping check")
+		return
+	}
+	rolesMapping := configSecret.Data["roles_mapping.yml"]
+	if len(rolesMapping) == 0 {
+		if dashboardsUsername == "kibanaserver" {
+			return
+		}
+		r.recorder.AnnotatedEventf(
+			r.instance,
+			annotations,
+			"Warning",
+			"DashboardsUserUnmapped",
+			"Dashboards user %q is not kibanaserver and no custom roles_mapping.yml is present; the image default mapping only includes kibanaserver, so Dashboards may fail to authorize",
+			dashboardsUsername,
+		)
+		return
+	}
+	mapped, err := helpers.DashboardsUserMapped(rolesMapping, configSecret.Data["internal_users.yml"], dashboardsUsername)
+	if err != nil {
+		r.logger.Error(err, "Unable to parse roles_mapping.yml for Dashboards user mapping check")
+		return
+	}
+	if mapped {
+		return
+	}
+	r.recorder.AnnotatedEventf(
+		r.instance,
+		annotations,
+		"Warning",
+		"DashboardsUserUnmapped",
+		"Dashboards user %q is not listed under any role's users in the custom roles_mapping.yml, and none of its backend_roles are mapped; Dashboards may fail to authorize",
+		dashboardsUsername,
+	)
+}
+
 // BuildClusterSvcHostName builds the cluster host name as {svc-name}.{namespace}.svc.{dns-base}
 func BuildClusterSvcHostName(instance *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s.svc.%s", builders.DnsOfService(instance), helpers.ClusterDnsBase())
@@ -406,13 +571,12 @@ func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
 		return ctrl.Result{}, true, nil
 	}
 
-	if job.Status.Active > 0 {
-		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", nil); err != nil {
-			return ctrl.Result{}, true, err
-		}
-		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, true, nil
-	}
-
+	// Checked before Active so a failure is acted on as soon as it is observed.
+	// With a Job-level pod retry (backoffLimit > 0) a failed pod's replacement
+	// could otherwise be starting (Active>0) while Failed>0 also holds, and
+	// waiting for Active to drop to 0 would double detection time for a
+	// deterministic failure (e.g. a malformed yml) that the replacement pod is
+	// guaranteed to hit as well.
 	if job.Status.Failed > 0 {
 		retryCount := r.securityConfigRetryCount()
 		delay := securityConfigRetryDelay(retryCount)
@@ -426,7 +590,8 @@ func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
 			); err != nil {
 				return ctrl.Result{}, true, err
 			}
-			return ctrl.Result{Requeue: true, RequeueAfter: remaining}, true, nil
+			// RequeueAfter-only so the parent controller keeps running other reconcilers
+			return ctrl.Result{RequeueAfter: remaining}, true, nil
 		}
 
 		retryCount++
@@ -449,7 +614,14 @@ func (r *SecurityconfigReconciler) handleExistingSecurityConfigJob(
 		return ctrl.Result{}, false, nil
 	}
 
-	if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", nil); err != nil {
+	if job.Status.Active > 0 {
+		if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", r.currentSecurityConfigRetryConditions()); err != nil {
+			return ctrl.Result{}, true, err
+		}
+		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, true, nil
+	}
+
+	if err := r.updateSecurityConfigComponentStatus(securityConfigStatusRunning, "", r.currentSecurityConfigRetryConditions()); err != nil {
 		return ctrl.Result{}, true, err
 	}
 	return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, true, nil

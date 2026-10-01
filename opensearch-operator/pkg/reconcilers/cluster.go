@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"reflect"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/go-logr/logr"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
@@ -42,6 +44,7 @@ type ClusterReconciler struct {
 	logger                           logr.Logger
 	nodeAttributesClusterRoleName    string
 	skipClusterRoleBindingManagement bool
+	osClientTransport                http.RoundTripper
 }
 
 func NewClusterReconciler(
@@ -80,6 +83,12 @@ func (r *ClusterReconciler) SetNodeAttributesClusterRoleName(name string) {
 	if name != "" {
 		r.nodeAttributesClusterRoleName = name
 	}
+}
+
+// SetOSClientTransport overrides the OpenSearch HTTP transport. Tests use this
+// so voting-config calls in removeBootstrapPod hit httpmock instead of the network.
+func (r *ClusterReconciler) SetOSClientTransport(transport http.RoundTripper) {
+	r.osClientTransport = transport
 }
 
 func (r *ClusterReconciler) getNodeAttributesClusterRoleName() string {
@@ -187,17 +196,15 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// Create bootstrap PVC for persistent storage
 	bootstrapPVC := builders.NewBootstrapPVC(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPVC, r.client.Scheme()))
-	if r.instance.Status.Initialized {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
-	} else {
-		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
-	}
 
 	bootstrapPod := builders.NewBootstrapPod(r.instance, r.reconcilerContext.Volumes, r.reconcilerContext.VolumeMounts)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, bootstrapPod, r.client.Scheme()))
 	if r.instance.Status.Initialized {
-		result.Combine(r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent))
+		// Exclude bootstrap from voting before deletion so small master pools do not lose quorum.
+		result.Combine(r.removeBootstrapPod(bootstrapPod))
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent))
 	} else {
+		result.Combine(r.client.ReconcileResource(bootstrapPVC, reconciler.StatePresent))
 		result.Combine(r.reconcileBootstrapPod(bootstrapPod))
 	}
 
@@ -356,13 +363,7 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 	if err != nil {
 		// Check if this is an immutable field change error that requires recreation
 		if r.isImmutableFieldChangeError(err) {
-			r.logger.Info(fmt.Sprintf("Detected immutable field change error, recreating StatefulSet %s/%s", sts.Namespace, sts.Name))
-			// Delete StatefulSet with orphan (pods remain) - following maybeUpdateVolumes pattern
-			if err := r.deleteSTSWithOrphan(&existing); err != nil {
-				return &ctrl.Result{}, err
-			}
-			// Reconcile resource again to create the new StatefulSet
-			return r.client.ReconcileResource(sts, reconciler.StatePresent)
+			return r.recreateSTSForImmutableFieldChange(&existing, sts)
 		}
 		// Return other errors as-is
 		return result, err
@@ -485,9 +486,11 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			Status:      emptyDirRecoveryStatusPending,
 			Description: now.Format(time.RFC3339),
 		}
-		currentStatus := opensearchv1.ComponentStatus{Component: emptyDirRecoveryComponent}
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
-			instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
+			instance.Status.ComponentsStatus = append(
+				removeComponentStatusesByComponent(instance.Status.ComponentsStatus, emptyDirRecoveryComponent),
+				componentStatus,
+			)
 		})
 		if err != nil {
 			lg.Error(err, "Failed to update emptyDir recovery status")
@@ -498,7 +501,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 			annotations,
 			"Warning",
 			"EmptyDirRecovery",
-			"Detected missing pods for emptyDir cluster %s/%s; waiting %s before recreating cluster to avoid acting on transient failures",
+			"Detected emptyDir data loss for cluster %s/%s (pods missing or recreated with a fresh emptyDir); waiting %s before recreating cluster to avoid acting on transient failures",
 			clusterNamespace,
 			clusterName,
 			emptyDirRecoveryGracePeriod,
@@ -518,7 +521,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 		annotations,
 		"Warning",
 		"EmptyDirRecovery",
-		"Recreating emptyDir cluster %s/%s after pods were missing for %s",
+		"Recreating emptyDir cluster %s/%s after data loss remained for %s",
 		clusterNamespace,
 		clusterName,
 		emptyDirRecoveryGracePeriod,
@@ -544,8 +547,7 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 	err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 		instance.Status.Initialized = false
-		currentStatus := opensearchv1.ComponentStatus{Component: emptyDirRecoveryComponent}
-		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+		instance.Status.ComponentsStatus = removeComponentStatusesByComponent(instance.Status.ComponentsStatus, emptyDirRecoveryComponent)
 	})
 	if err != nil {
 		lg.Error(err, "Failed to update cluster status")
@@ -565,6 +567,8 @@ func (r *ClusterReconciler) checkForEmptyDirRecovery() (*ctrl.Result, error) {
 
 func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) {
 	var stats emptyDirPodStats
+	var uidUpdates []opensearchv1.ComponentStatus
+	now := time.Now().UTC()
 	clusterName := r.instance.Name
 	clusterNamespace := r.instance.Namespace
 
@@ -578,10 +582,13 @@ func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) 
 			return emptyDirPodStats{}, err
 		}
 
-		existingPods, err := helpers.CountExistingPodsForNodePool(r.client, r.instance, &nodePool)
+		pods, err := helpers.ListPodsForNodePool(r.client, r.instance, &nodePool)
 		if err != nil {
 			return emptyDirPodStats{}, err
 		}
+
+		existingPods, poolUIDUpdates := classifyEmptyDirPods(pods, r.instance.Status.ComponentsStatus, now)
+		uidUpdates = append(uidUpdates, poolUIDUpdates...)
 
 		if helpers.HasDataRole(&nodePool) {
 			stats.totalDataPods += *sts.Spec.Replicas
@@ -594,7 +601,24 @@ func (r *ClusterReconciler) collectEmptyDirPodStats() (emptyDirPodStats, error) 
 		}
 	}
 
+	if len(uidUpdates) > 0 {
+		if err := r.persistEmptyDirPodUIDs(uidUpdates); err != nil {
+			return emptyDirPodStats{}, err
+		}
+	}
+
 	return stats, nil
+}
+
+// persistEmptyDirPodUIDs records the last known-good UID for pods that are currently
+// Ready, so a later reconcile can tell a recreated pod (new UID, fresh emptyDir) apart
+// from the same pod merely flapping ready/not-ready.
+func (r *ClusterReconciler) persistEmptyDirPodUIDs(updates []opensearchv1.ComponentStatus) error {
+	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		for _, update := range updates {
+			instance.Status.ComponentsStatus = upsertComponentStatus(instance.Status.ComponentsStatus, update)
+		}
+	})
 }
 
 func (r *ClusterReconciler) clearEmptyDirRecoveryStatus() error {
@@ -605,7 +629,7 @@ func (r *ClusterReconciler) clearEmptyDirRecoveryStatus() error {
 	}
 
 	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
-		instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
+		instance.Status.ComponentsStatus = removeComponentStatusesByComponent(instance.Status.ComponentsStatus, emptyDirRecoveryComponent)
 	})
 }
 
@@ -664,7 +688,7 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 		return nil
 	}
 
-	r.logger.Info("Disk sizes differ for nodePool %s, Current: %s, Desired: %s", nodePool.Component, existingDisk.String(), nodePoolDiskSize.String())
+	r.logger.Info("Disk sizes differ for nodePool", "nodePool", nodePool.Component, "current", existingDisk.String(), "desired", nodePoolDiskSize.String())
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "PVC", "Starting to resize PVC %s/%s from %s to  %s ", existing.Namespace, existing.Name, existingDisk.String(), nodePoolDiskSize.String())
 	// To update the PVCs we need to temporarily delete the StatefulSet while allowing the pods to continue to run
@@ -691,6 +715,56 @@ func (r *ClusterReconciler) maybeUpdateVolumes(existing *appsv1.StatefulSet, nod
 		}
 	}
 	return nil
+}
+
+// recreateSTSForImmutableFieldChange deletes the existing StatefulSet while orphaning its pods and
+// creates the desired one in its place. A Warning event is emitted only after both steps succeed.
+// When the pod template changed, adopted pods keep their old controller-revision-hash. The rolling
+// restart reconciler then restarts each of them once, unless an OpenSearch version upgrade is
+// already in progress, in which case the upgrade reconciler restarts them.
+func (r *ClusterReconciler) recreateSTSForImmutableFieldChange(existing *appsv1.StatefulSet, sts *appsv1.StatefulSet) (*ctrl.Result, error) {
+	r.logger.Info(fmt.Sprintf("Detected immutable field change error, recreating StatefulSet %s/%s", sts.Namespace, sts.Name))
+	// Delete StatefulSet with orphan (pods remain) - following maybeUpdateVolumes pattern
+	if err := r.deleteSTSWithOrphan(existing); err != nil {
+		return &ctrl.Result{}, err
+	}
+	// Reconcile resource again to create the new StatefulSet
+	result, err := r.client.ReconcileResource(sts, reconciler.StatePresent)
+	if err != nil {
+		return result, err
+	}
+	if r.recorder != nil {
+		annotations := map[string]string{"cluster-name": r.instance.GetName()}
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "StatefulSetRecreated",
+			"%s", r.statefulSetRecreatedMessage(existing, sts))
+	}
+	return result, nil
+}
+
+func (r *ClusterReconciler) statefulSetRecreatedMessage(existing, sts *appsv1.StatefulSet) string {
+	reason := "an immutable field changed"
+	if !reflect.DeepEqual(statefulSetSelectorLabels(existing), statefulSetSelectorLabels(sts)) {
+		reason = "its selector changed (a StatefulSet created by operator 2.x is being adopted after the API group migration)"
+	}
+	message := fmt.Sprintf("StatefulSet %s/%s recreated because %s", sts.Namespace, sts.Name, reason)
+	if reflect.DeepEqual(existing.Spec.Template, sts.Spec.Template) {
+		return message
+	}
+	if r.openSearchUpgradeInProgress() {
+		return message + "; its pods will be restarted by the in-progress OpenSearch version upgrade"
+	}
+	return message + "; its pods will be rolling-restarted once to pick up the new pod template"
+}
+
+func statefulSetSelectorLabels(sts *appsv1.StatefulSet) map[string]string {
+	if sts == nil || sts.Spec.Selector == nil {
+		return nil
+	}
+	return sts.Spec.Selector.MatchLabels
+}
+
+func (r *ClusterReconciler) openSearchUpgradeInProgress() bool {
+	return r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version
 }
 
 func (r *ClusterReconciler) deleteSTSWithOrphan(existing *appsv1.StatefulSet) error {
@@ -768,31 +842,80 @@ func (r *ClusterReconciler) UpdateClusterStatus() error {
 	})
 }
 
-// reconcileBootstrapPod handles bootstrap pod reconciliation with recreation for any changes
+// reconcileBootstrapPod creates the bootstrap pod if it is missing and recreates
+// it only when the operator's last-applied spec has changed. Live spec drift from
+// admission controllers (LimitRange, mutating webhooks) is ignored so the pod is
+// not deleted in a loop. See https://github.com/opensearch-project/opensearch-k8s-operator/issues/1364
 func (r *ClusterReconciler) reconcileBootstrapPod(desiredPod *corev1.Pod) (*ctrl.Result, error) {
-	// Check if bootstrap pod exists
 	existingPod, err := r.client.GetPod(desiredPod.Name, desiredPod.Namespace)
 	if err != nil && !k8serrors.IsNotFound(err) {
 		return &ctrl.Result{}, err
 	}
 
 	if k8serrors.IsNotFound(err) {
-		// Pod doesn't exist, create it
 		r.logger.Info("Creating bootstrap pod", "pod", desiredPod.Name)
 		return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
 	}
 
-	updatePod := desiredPod.DeepCopy()
-	if _, err := r.client.ReconcileResource(updatePod, reconciler.StatePresent); err != nil {
-		if isImmutablePodUpdateErr(err) {
-			r.logger.Info("Bootstrap pod update touched immutable fields, recreating pod", "pod", desiredPod.Name)
-			return r.recreateBootstrapPod(&existingPod, desiredPod)
-		}
-		r.logger.Error(err, "Failed to update bootstrap pod", "pod", desiredPod.Name)
+	if existingPod.DeletionTimestamp != nil {
+		return &ctrl.Result{Requeue: true, RequeueAfter: 2 * time.Second}, nil
+	}
+
+	if !util.BootstrapPodNeedsRecreation(&existingPod, desiredPod) {
+		return &ctrl.Result{}, nil
+	}
+
+	r.logger.Info("Bootstrap pod spec changed, recreating pod", "pod", desiredPod.Name)
+	return r.recreateBootstrapPod(&existingPod, desiredPod)
+}
+
+// removeBootstrapPod excludes the bootstrap node from the voting configuration before
+// deleting it, so that a 1-master (or even-count) pool does not lose quorum when the
+// bootstrap voter that formed the cluster is removed.
+//
+// Client/POST failures return RequeueAfter without an error so ClusterReconciler
+// does not fail the whole reconcile chain (scaler/upgrade/restart still run). The
+// bootstrap pod is left in place until the exclusion succeeds.
+func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.Result, error) {
+	_, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
+	if k8serrors.IsNotFound(err) {
+		return &ctrl.Result{}, nil
+	}
+	if err != nil {
 		return &ctrl.Result{}, err
 	}
 
-	return &ctrl.Result{}, nil
+	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+	if err != nil {
+		r.logger.Error(err, "Failed to create OpenSearch client before bootstrap removal; will retry")
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	nodeName := builders.BootstrapPodName(r.instance)
+	if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
+		r.logger.Error(err, "Failed to add voting config exclusion for bootstrap pod; will retry", "pod", nodeName)
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	}
+
+	result, err := r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent)
+	if err != nil {
+		return result, err
+	}
+
+	// The pod is normally still terminating here, so a waiting clear would sit on
+	// OpenSearch's 30s wait_for_removal deadline. Clear only once the node has
+	// left; otherwise the scaler's voting-config exclusion sweep clears it on a
+	// later pass. Never clear without wait here: that can re-admit a still-alive
+	// voter. Failures do not fail the reconciler chain.
+	cleared, clearErr := services.ClearVotingConfigExclusionsIfNodeGone(clusterClient, r.logger, nodeName)
+	if clearErr != nil {
+		r.logger.Error(clearErr, "Failed to clear voting config exclusions after bootstrap removal; the scaler sweep retries", "pod", nodeName)
+	} else if !cleared {
+		r.logger.Info("Bootstrap node still leaving; its voting config exclusion is cleared by the scaler sweep", "pod", nodeName)
+	}
+
+	r.logger.Info("Removed bootstrap pod after voting config exclusion", "pod", nodeName)
+	return result, nil
 }
 
 func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {
@@ -807,16 +930,4 @@ func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desire
 
 	r.logger.Info("Creating new bootstrap pod with updated spec", "pod", desiredPod.Name)
 	return r.client.ReconcileResource(desiredPod, reconciler.StateCreated)
-}
-
-func isImmutablePodUpdateErr(err error) bool {
-	if err == nil {
-		return false
-	}
-	if statusErr, ok := err.(*k8serrors.StatusError); ok {
-		if statusErr.ErrStatus.Reason == metav1.StatusReasonInvalid && strings.Contains(statusErr.ErrStatus.Message, "pod updates may not change") {
-			return true
-		}
-	}
-	return strings.Contains(err.Error(), "pod updates may not change")
 }

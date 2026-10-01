@@ -18,6 +18,7 @@ package controllers
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -30,6 +31,7 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/retry"
 
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -46,14 +48,16 @@ import (
 
 // OpenSearchClusterReconciler reconciles a OpenSearchCluster object
 // Now reconciles opensearch.org/v1 API group (new API) instead of opensearch.opster.io/v1 (old API)
+// Per-request state (cluster instance and logger) is kept off this struct so
+// MaxConcurrentReconciles > 1 cannot leak state between in-flight reconciles.
 type OpenSearchClusterReconciler struct {
 	client.Client
 	Scheme                           *runtime.Scheme
 	Recorder                         record.EventRecorder
-	Instance                         *opensearchv1.OpenSearchCluster
 	SkipClusterRoleBindingManagement bool
 	NodeAttributesClusterRoleName    string
-	logr.Logger
+	// osClientTransport overrides the OpenSearch HTTP transport; only set by tests.
+	osClientTransport http.RoundTripper
 }
 
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
@@ -88,13 +92,13 @@ type OpenSearchClusterReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.8.3/pkg/reconcile
 func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("cluster", req.NamespacedName, "apiGroup", "opensearch.org/v1")
-	r.Info("Reconciling OpenSearchCluster (opensearch.org/v1)")
+	logger := log.FromContext(ctx).WithValues("cluster", req.NamespacedName, "apiGroup", "opensearch.org/v1")
+	logger.Info("Reconciling OpenSearchCluster (opensearch.org/v1)")
 	myFinalizerName := "Opensearch"
 
 	// Try to get new API group resource first
-	r.Instance = &opensearchv1.OpenSearchCluster{}
-	err := r.Get(ctx, req.NamespacedName, r.Instance)
+	instance := &opensearchv1.OpenSearchCluster{}
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			// If new API group resource not found, check if old one exists (for backward compatibility during migration)
@@ -102,7 +106,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			if err := r.Get(ctx, req.NamespacedName, oldInstance); err == nil {
 				// Old instance exists but new one doesn't - migration controller should handle this
 				// Just requeue to let migration controller create the new one
-				r.Info("Old API group resource exists, waiting for migration", "name", req.Name)
+				logger.Info("Old API group resource exists, waiting for migration", "name", req.Name)
 				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 			}
 			return ctrl.Result{}, nil
@@ -111,24 +115,24 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 	}
 	/// ------ check if CRD has been deleted ------ ///
 	///	if ns deleted, delete the associated resources ///
-	if r.Instance.DeletionTimestamp.IsZero() {
-		if !helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
+	if instance.DeletionTimestamp.IsZero() {
+		if !helpers.ContainsString(instance.GetFinalizers(), myFinalizerName) {
 			// Use RetryOnConflict to update finalizer to handle any changes to resource
 			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(ctx, req.NamespacedName, r.Instance); err != nil {
+				if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 					return err
 				}
-				controllerutil.AddFinalizer(r.Instance, myFinalizerName)
-				return r.Update(ctx, r.Instance)
+				controllerutil.AddFinalizer(instance, myFinalizerName)
+				return r.Update(ctx, instance)
 			})
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 		}
 	} else {
-		if helpers.ContainsString(r.Instance.GetFinalizers(), myFinalizerName) {
+		if helpers.ContainsString(instance.GetFinalizers(), myFinalizerName) {
 			// our finalizer is present, so lets handle any external dependency
-			if result, err := r.deleteExternalResources(ctx); err != nil {
+			if result, err := r.deleteExternalResources(ctx, instance, logger); err != nil {
 				// if fail to delete the external dependency here, return with error
 				// so that it can be retried
 				return result, err
@@ -136,31 +140,31 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 
 			// remove our finalizer from the list and update it.
 			err = retry.RetryOnConflict(retry.DefaultRetry, func() error {
-				if err := r.Get(ctx, req.NamespacedName, r.Instance); err != nil {
+				if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 					return err
 				}
-				controllerutil.RemoveFinalizer(r.Instance, myFinalizerName)
-				return r.Update(ctx, r.Instance)
+				controllerutil.RemoveFinalizer(instance, myFinalizerName)
+				return r.Update(ctx, instance)
 			})
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
-			helpers.DeleteClusterMetrics(req.Namespace, r.Instance.Name)
+			helpers.DeleteClusterMetrics(req.Namespace, instance.Name)
 		}
 		return ctrl.Result{}, nil
 	}
 
 	/// if crd not deleted started phase 1
-	if r.Instance.Status.Phase == "" {
-		r.Instance.Status.Phase = opensearchv1.PhasePending
+	if instance.Status.Phase == "" {
+		instance.Status.Phase = opensearchv1.PhasePending
 	}
 
-	switch r.Instance.Status.Phase {
+	switch instance.Status.Phase {
 	case opensearchv1.PhasePending:
-		return r.reconcilePhasePending(ctx)
+		return r.reconcilePhasePending(ctx, instance, logger)
 	case opensearchv1.PhaseRunning, opensearchv1.PhaseUpgrading:
-		return r.reconcilePhaseRunning(ctx)
+		return r.reconcilePhaseRunning(ctx, instance, logger)
 	default:
 		// NOTHING WILL HAPPEN - DEFAULT
 		return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
@@ -168,7 +172,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrentReconciles int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpenSearchCluster{}). // Watch new API group
 		Owns(&corev1.Pod{}).
@@ -179,52 +183,54 @@ func (r *OpenSearchClusterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Owns(&appsv1.StatefulSet{}).
 		Owns(&corev1.PersistentVolumeClaim{}).
 		Owns(&networkingv1.NetworkPolicy{}).
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		Complete(r)
 }
 
 // delete associated cluster resources //
-func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Context) (ctrl.Result, error) {
-	r.Info("Deleting resources")
+func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Context, instance *opensearchv1.OpenSearchCluster, logger logr.Logger) (ctrl.Result, error) {
+	logger.Info("Deleting resources")
 	// Run through all sub controllers to delete existing objects
-	reconcilerContext := reconcilers.NewReconcilerContext(r.Recorder, r.Instance, r.Instance.Spec.NodePools)
+	reconcilerContext := reconcilers.NewReconcilerContext(r.Recorder, instance, instance.Spec.NodePools)
 
 	tls := reconcilers.NewTLSReconciler(
 		r.Client,
 		ctx,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	securityconfig := reconcilers.NewSecurityconfigReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	config := reconcilers.NewConfigurationReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	cluster := reconcilers.NewClusterReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	if r.SkipClusterRoleBindingManagement {
 		cluster.DisableClusterRoleBindingManagement()
 	}
 	cluster.SetNodeAttributesClusterRoleName(r.NodeAttributesClusterRoleName)
+	cluster.SetOSClientTransport(r.osClientTransport)
 	dashboards := reconcilers.NewDashboardsReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 
 	componentReconcilers := []reconcilers.NamedComponentReconciler{
@@ -237,26 +243,40 @@ func (r *OpenSearchClusterReconciler) deleteExternalResources(ctx context.Contex
 	for _, rec := range componentReconcilers {
 		result, err := rec.Func()
 		if err != nil {
-			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
+			helpers.ReconcileErrors.WithLabelValues(instance.Namespace, instance.Name, rec.Name).Inc()
 			return result, err
 		}
 		if result.Requeue {
 			return result, nil
 		}
 	}
-	r.Info("Finished deleting resources")
+	logger.Info("Finished deleting resources")
 	return ctrl.Result{}, nil
 }
 
-func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context) (ctrl.Result, error) {
-	r.Info("Start reconcile - Phase: PENDING")
+func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context, instance *opensearchv1.OpenSearchCluster, logger logr.Logger) (ctrl.Result, error) {
+	logger.Info("Start reconcile - Phase: PENDING")
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
+		if err := r.Get(ctx, client.ObjectKeyFromObject(instance), instance); err != nil {
 			return err
 		}
-		r.Instance.Status.Phase = opensearchv1.PhaseRunning
-		r.Instance.Status.ComponentsStatus = make([]opensearchv1.ComponentStatus, 0)
-		return r.Status().Update(ctx, r.Instance)
+		instance.Status.Phase = opensearchv1.PhaseRunning
+		instance.Status.ComponentsStatus = make([]opensearchv1.ComponentStatus, 0)
+		// A CR re-applied over the retained data PVCs of a previous incarnation re-forms that
+		// cluster from disk and must not get a bootstrap pod (#1573). Decide this once, before
+		// anything is created: once the StatefulSets exist their PVCs exist too, so the check
+		// cannot tell a retained cluster from a first bootstrap in progress.
+		if !instance.Status.Initialized {
+			hasRetained, err := builders.HasRetainedMasterPVC(ctx, r.Client, instance)
+			if err != nil {
+				return err
+			}
+			if hasRetained {
+				logger.Info("Existing node pool PVCs found, cluster will re-form from disk without a bootstrap pod")
+				instance.Status.Initialized = true
+			}
+		}
+		return r.Status().Update(ctx, instance)
 	})
 	if err != nil {
 		return ctrl.Result{}, err
@@ -264,94 +284,103 @@ func (r *OpenSearchClusterReconciler) reconcilePhasePending(ctx context.Context)
 	return ctrl.Result{Requeue: true}, nil
 }
 
-func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context) (ctrl.Result, error) {
+func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context, instance *opensearchv1.OpenSearchCluster, logger logr.Logger) (ctrl.Result, error) {
 	// Update initialized status first. Only set Initialized when all master pods are ready
 	// and the OpenSearch cluster API is reachable (cluster has formed). This prevents
 	// deleting the bootstrap pod before the cluster has actually bootstrapped, which
 	// can happen with parallel pod management when pods report ready before quorum is formed.
-	if !r.Instance.Status.Initialized {
+	if !instance.Status.Initialized {
 		if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-			if err := r.Get(ctx, client.ObjectKeyFromObject(r.Instance), r.Instance); err != nil {
+			if err := r.Get(ctx, client.ObjectKeyFromObject(instance), instance); err != nil {
 				return err
 			}
-			allMastersReady := builders.AllMastersReady(ctx, r.Client, r.Instance)
-			k8sClient := k8s.NewK8sClient(r.Client, ctx)
-			health, _ := util.GetClusterHealth(k8sClient, ctx, r.Instance, r.Logger)
-			clusterReachable := health != opensearchv1.OpenSearchUnknownHealth
-			r.Instance.Status.Initialized = allMastersReady && clusterReachable
-			return r.Status().Update(ctx, r.Instance)
+			// Check if all master pods are ready and have actually joined the OpenSearch cluster
+			initialized := builders.AllMastersReady(ctx, r.Client, instance)
+			if initialized {
+				initialized = util.ClusterHasAllMasters(
+					k8s.NewK8sClient(r.Client, ctx),
+					ctx,
+					instance,
+					r.osClientTransport,
+					logger,
+				)
+			}
+			instance.Status.Initialized = initialized
+			return r.Status().Update(ctx, instance)
 		}); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
 
 	// Run through all sub controllers to create or update all needed objects
-	reconcilerContext := reconcilers.NewReconcilerContext(r.Recorder, r.Instance, r.Instance.Spec.NodePools)
+	reconcilerContext := reconcilers.NewReconcilerContext(r.Recorder, instance, instance.Spec.NodePools)
 
 	tls := reconcilers.NewTLSReconciler(
 		r.Client,
 		ctx,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	securityconfig := reconcilers.NewSecurityconfigReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	config := reconcilers.NewConfigurationReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	cluster := reconcilers.NewClusterReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	if r.SkipClusterRoleBindingManagement {
 		cluster.DisableClusterRoleBindingManagement()
 	}
 	cluster.SetNodeAttributesClusterRoleName(r.NodeAttributesClusterRoleName)
+	cluster.SetOSClientTransport(r.osClientTransport)
 	scaler := reconcilers.NewScalerReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
+		reconcilers.WithOSClientTransport(r.osClientTransport),
 	)
 	dashboards := reconcilers.NewDashboardsReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	upgrade := reconcilers.NewUpgradeReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	restart := reconcilers.NewRollingRestartReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
 		&reconcilerContext,
-		r.Instance,
+		instance,
 	)
 	snapshotrepository := reconcilers.NewSnapshotRepositoryReconciler(
 		r.Client,
 		ctx,
 		r.Recorder,
-		r.Instance,
+		instance,
 	)
 
 	componentReconcilers := []reconcilers.NamedComponentReconciler{
@@ -375,11 +404,11 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context)
 			if reconcilers.IsTerminal(err) {
 				// Permanent config/validation failure: surface via metrics/logs but
 				// keep running later reconcilers (e.g. bad version must not block restart).
-				helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
-				r.Info("terminal reconciler error, continuing chain", "reconciler", rec.Name, "error", err.Error())
+				helpers.ReconcileErrors.WithLabelValues(instance.Namespace, instance.Name, rec.Name).Inc()
+				logger.Info("terminal reconciler error, continuing chain", "reconciler", rec.Name, "error", err.Error())
 				continue
 			}
-			helpers.ReconcileErrors.WithLabelValues(r.Instance.Namespace, r.Instance.Name, rec.Name).Inc()
+			helpers.ReconcileErrors.WithLabelValues(instance.Namespace, instance.Name, rec.Name).Inc()
 			return result, err
 		}
 		// Requeue=true short-circuits so in-progress scaler/upgrade work is exclusive.

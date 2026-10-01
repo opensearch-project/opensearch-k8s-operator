@@ -196,7 +196,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `general` _[GeneralConfig](#generalconfig)_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file |  |  |
-| `confMgmt` _[ConfMgmt](#confmgmt)_ |  |  |  |
+| `confMgmt` _[ConfMgmt](#confmgmt)_ |  | \{ smartScaler:true \} |  |
 | `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ |  |  |  |
 | `dashboards` _[DashboardsConfig](#dashboardsconfig)_ |  |  |  |
 | `security` _[Security](#security)_ |  |  |  |
@@ -1269,6 +1269,7 @@ _Appears in:_
 
 
 _Appears in:_
+- [PersistenceConfig](#persistenceconfig)
 - [PersistenceSource](#persistencesource)
 
 | Field | Description | Default | Validation |
@@ -1310,7 +1311,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `PersistenceSource` _[PersistenceSource](#persistencesource)_ |  |  |  |
+| `pvc` _[PVCSource](#pvcsource)_ |  |  |  |
+| `emptyDir` _[EmptyDirVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#emptydirvolumesource-v1-core)_ |  |  |  |
+| `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ |  |  |  |
 
 
 #### PersistenceSource

@@ -17,7 +17,9 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/labels"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func ClusterDescWithVersion(version string) opensearchv1.OpenSearchCluster {
@@ -79,6 +81,15 @@ func ClusterDescWithAdditionalConfigs(addtitionalConfig map[string]string, boots
 
 var _ = Describe("Builders", func() {
 	When("Constructing a STS for a NodePool", func() {
+		It("should accept every vendor value allowed by the CRD enum", func() {
+			for _, vendor := range []string{"", "Opensearch", "Op", "OP", "os", "opensearch"} {
+				clusterObject := ClusterDescWithVersion("2.2.1")
+				clusterObject.Spec.General.Vendor = vendor
+				Expect(func() {
+					NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
+				}).NotTo(Panic(), "vendor %q", vendor)
+			}
+		})
 		It("should use Parallel podManagementPolicy", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewSTSForNodePool("foobar", &clusterObject, opensearchv1.NodePool{}, "foobar", nil, nil)
@@ -1012,6 +1023,97 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("Creating a cluster without a confMgmt block", func() {
+		It("should default smartScaler to true", func() {
+			namespaceName := "confmgmt-default"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			// A typed client always serializes confMgmt (smartScaler has no omitempty),
+			// so mimic a user manifest that omits the block entirely.
+			obj := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "opensearch.org/v1",
+				"kind":       "OpenSearchCluster",
+				"metadata":   map[string]interface{}{"name": "no-confmgmt", "namespace": namespaceName},
+				"spec": map[string]interface{}{
+					"general":   map[string]interface{}{"version": "2.2.1", "serviceName": "no-confmgmt"},
+					"nodePools": []interface{}{map[string]interface{}{"component": "masters", "replicas": int64(1), "roles": []interface{}{"cluster_manager", "data"}}},
+				},
+			}}
+			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed())
+
+			cluster := opensearchv1.OpenSearchCluster{}
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: "no-confmgmt", Namespace: namespaceName}, &cluster)).To(Succeed())
+			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeTrue())
+		})
+
+		It("should keep smartScaler true after a typed Update (finalizer write path)", func() {
+			namespaceName := "confmgmt-finalizer"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			obj := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "opensearch.org/v1",
+				"kind":       "OpenSearchCluster",
+				"metadata":   map[string]interface{}{"name": "confmgmt-update", "namespace": namespaceName},
+				"spec": map[string]interface{}{
+					"general":   map[string]interface{}{"version": "2.2.1", "serviceName": "confmgmt-update"},
+					"nodePools": []interface{}{map[string]interface{}{"component": "masters", "replicas": int64(1), "roles": []interface{}{"cluster_manager", "data"}}},
+				},
+			}}
+			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed())
+
+			cluster := opensearchv1.OpenSearchCluster{}
+			key := types.NamespacedName{Name: "confmgmt-update", Namespace: namespaceName}
+			Expect(k8sClient.Get(context.Background(), key, &cluster)).To(Succeed())
+			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeTrue())
+
+			// Mimic the cluster controller adding a finalizer and rewriting the object.
+			cluster.Finalizers = append(cluster.Finalizers, "Opensearch")
+			Expect(k8sClient.Update(context.Background(), &cluster)).To(Succeed())
+
+			updated := opensearchv1.OpenSearchCluster{}
+			Expect(k8sClient.Get(context.Background(), key, &updated)).To(Succeed())
+			Expect(updated.Spec.ConfMgmt.SmartScaler).To(BeTrue())
+		})
+
+		It("should keep an explicit smartScaler false", func() {
+			namespaceName := "confmgmt-explicit-false"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			obj := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "opensearch.org/v1",
+				"kind":       "OpenSearchCluster",
+				"metadata":   map[string]interface{}{"name": "confmgmt-false", "namespace": namespaceName},
+				"spec": map[string]interface{}{
+					"general":   map[string]interface{}{"version": "2.2.1", "serviceName": "confmgmt-false"},
+					"confMgmt":  map[string]interface{}{"smartScaler": false},
+					"nodePools": []interface{}{map[string]interface{}{"component": "masters", "replicas": int64(1), "roles": []interface{}{"cluster_manager", "data"}}},
+				},
+			}}
+			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed())
+
+			cluster := opensearchv1.OpenSearchCluster{}
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: "confmgmt-false", Namespace: namespaceName}, &cluster)).To(Succeed())
+			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeFalse())
+		})
+
+		It("should default smartScaler when confMgmt is an empty object", func() {
+			namespaceName := "confmgmt-empty-object"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			obj := &unstructured.Unstructured{Object: map[string]interface{}{
+				"apiVersion": "opensearch.org/v1",
+				"kind":       "OpenSearchCluster",
+				"metadata":   map[string]interface{}{"name": "confmgmt-empty", "namespace": namespaceName},
+				"spec": map[string]interface{}{
+					"general":   map[string]interface{}{"version": "2.2.1", "serviceName": "confmgmt-empty"},
+					"confMgmt":  map[string]interface{}{},
+					"nodePools": []interface{}{map[string]interface{}{"component": "masters", "replicas": int64(1), "roles": []interface{}{"cluster_manager", "data"}}},
+				},
+			}}
+			Expect(k8sClient.Create(context.Background(), obj)).To(Succeed())
+
+			cluster := opensearchv1.OpenSearchCluster{}
+			Expect(k8sClient.Get(context.Background(), types.NamespacedName{Name: "confmgmt-empty", Namespace: namespaceName}, &cluster)).To(Succeed())
+			Expect(cluster.Spec.ConfMgmt.SmartScaler).To(BeTrue())
+		})
+	})
+
 	When("Checking for AllMastersReady", func() {
 		It("should map all roles based on version", func() {
 			namespaceName := "rolemapping"
@@ -1075,6 +1177,95 @@ var _ = Describe("Builders", func() {
 			result := AllMastersReady(context.Background(), k8sClient, &clusterObject)
 			Expect(result).To(BeFalse())
 		})
+
+		It("should return false when no cluster-manager node pool exists", func() {
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Namespace = "default"
+			clusterObject.Name = "no-masters"
+			clusterObject.Spec.NodePools = []opensearchv1.NodePool{{
+				Replicas:  1,
+				Component: "data",
+				Roles:     []string{"data"},
+			}}
+			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeFalse())
+		})
+
+		It("should return false when the STS exists but no pods are ready", func() {
+			namespaceName := "allmastersready-unready"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "unready"
+			clusterObject.Spec.General.ServiceName = "unready"
+			nodePool := opensearchv1.NodePool{
+				Replicas:  1,
+				Component: "master",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("unready", &clusterObject, nodePool, "hash", nil, nil)
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeFalse())
+		})
+
+		It("should return true when all cluster-manager pods are ready", func() {
+			namespaceName := "allmastersready-ready"
+			Expect(CreateNamespace(k8sClient, namespaceName)).Should(Succeed())
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Namespace = namespaceName
+			clusterObject.Name = "ready"
+			clusterObject.Spec.General.ServiceName = "ready"
+			nodePool := opensearchv1.NodePool{
+				Replicas:  1,
+				Component: "master",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("ready", &clusterObject, nodePool, "hash", nil, nil)
+			Expect(k8sClient.Create(context.Background(), sts)).To(Not(HaveOccurred()))
+
+			pod := &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("%s-0", sts.Name),
+					Namespace: namespaceName,
+					Labels: map[string]string{
+						helpers.ClusterLabel:  clusterObject.Name,
+						helpers.NodePoolLabel: nodePool.Component,
+					},
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "opensearch",
+						Image: "opensearchproject/opensearch:3.7.0",
+					}},
+				},
+			}
+			Expect(k8sClient.Create(context.Background(), pod)).To(Not(HaveOccurred()))
+			pod.Status.Conditions = []corev1.PodCondition{{
+				Type:   corev1.PodReady,
+				Status: corev1.ConditionTrue,
+			}}
+			Expect(k8sClient.Status().Update(context.Background(), pod)).To(Succeed())
+
+			Expect(AllMastersReady(context.Background(), k8sClient, &clusterObject)).To(BeTrue())
+		})
+	})
+
+	When("Listing expected master node names", func() {
+		It("should return one pod name per replica of each cluster-manager pool", func() {
+			clusterObject := ClusterDescWithVersion("3.7.0")
+			clusterObject.Name = "names"
+			clusterObject.Spec.NodePools = []opensearchv1.NodePool{
+				{Replicas: 2, Component: "masters", Roles: []string{"cluster_manager"}},
+				{Replicas: 3, Component: "data", Roles: []string{"data"}},
+				{Replicas: 1, Component: "mixed", Roles: []string{"master", "data"}},
+			}
+			Expect(ExpectedMasterNodeNames(&clusterObject)).To(Equal([]string{
+				"names-masters-0", "names-masters-1", "names-mixed-0",
+			}))
+		})
 	})
 
 	When("Using custom command for OpenSearch startup", func() {
@@ -1114,7 +1305,7 @@ var _ = Describe("Builders", func() {
 			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			Expect(sts.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "", "admin-cert", "", "cmd", nil, nil)
 			Expect(job.Spec.Template.Spec.ServiceAccountName).To(Equal(serviceAccount))
 		})
 	})
@@ -1480,7 +1671,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
 		})
 
@@ -1498,13 +1689,13 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Containers[0].Resources).To(Equal(clusterObject.Spec.Security.Config.UpdateJob.Resources))
 		})
 
 		It("should mount admin cert as a secret volume when no separate CA secret is configured", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "admin-cert", "", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "", "admin-cert", "", "dummy", nil, nil)
 
 			adminVolume := job.Spec.Template.Spec.Volumes[0]
 			Expect(adminVolume.Name).To(Equal("admin-cert"))
@@ -1515,7 +1706,7 @@ var _ = Describe("Builders", func() {
 
 		It("should project CA cert into admin-cert mount when configured separately", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "admin-cert", "http-ca", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "", "admin-cert", "http-ca", "dummy", nil, nil)
 
 			adminVolume := job.Spec.Template.Spec.Volumes[0]
 			Expect(adminVolume.Name).To(Equal("admin-cert"))
@@ -1584,16 +1775,54 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			clusterObject.Spec.General.HostNetwork = true
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "", "admin-cert", "", "cmd", nil, nil)
 			Expect(job.Spec.Template.Spec.HostNetwork).To(BeTrue())
 		})
 
-		It("should retry failed securityconfig update jobs and enforce a deadline", func() {
+		It("should leave retries of failed securityconfig update jobs to the operator and enforce a deadline", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "admin-cert", "", "cmd", nil, nil)
-			Expect(*job.Spec.BackoffLimit).To(Equal(int32(1)))
+			job := NewSecurityconfigUpdateJob(&clusterObject, "foobar", "foobar", "foobar", "", "admin-cert", "", "cmd", nil, nil)
+			// The securityconfig reconciler re-creates a failed job with its own
+			// exponential backoff; a Job-level second pod would only re-run
+			// securityadmin.sh with the same input.
+			Expect(*job.Spec.BackoffLimit).To(Equal(int32(0)))
 			Expect(*job.Spec.ActiveDeadlineSeconds).To(Equal(int64(2400)))
+			Expect(job.Spec.Template.Spec.RestartPolicy).To(Equal(corev1.RestartPolicyNever))
+		})
+	})
+
+	When("configuring persistentVolumeClaimRetentionPolicy for the cluster", func() {
+		It("should set the retention policy on the statefulset when configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			clusterObject.Spec.General.PersistentVolumeClaimRetentionPolicy = &appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy{
+				WhenDeleted: appsv1.DeletePersistentVolumeClaimRetentionPolicyType,
+				WhenScaled:  appsv1.RetainPersistentVolumeClaimRetentionPolicyType,
+			}
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy).NotTo(BeNil())
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenDeleted).To(Equal(appsv1.DeletePersistentVolumeClaimRetentionPolicyType))
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy.WhenScaled).To(Equal(appsv1.RetainPersistentVolumeClaimRetentionPolicyType))
+		})
+
+		It("should not set the retention policy on the statefulset when not configured", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			nodePool := opensearchv1.NodePool{
+				Replicas:  3,
+				Component: "masters",
+				Roles:     []string{"cluster_manager", "data"},
+			}
+			clusterObject.Spec.NodePools = append(clusterObject.Spec.NodePools, nodePool)
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.PersistentVolumeClaimRetentionPolicy).To(BeNil())
 		})
 	})
 
@@ -1616,7 +1845,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Tolerations).To(Equal(tolerations))
 		})
 
@@ -1633,7 +1862,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.NodeSelector).To(Equal(nodeSelector))
 		})
 
@@ -1664,7 +1893,7 @@ var _ = Describe("Builders", func() {
 				},
 			}
 
-			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "dummy", "", "dummy", nil, nil)
+			job := NewSecurityconfigUpdateJob(&clusterObject, "dummy", "dummy", "dummy", "", "dummy", "", "dummy", nil, nil)
 			Expect(job.Spec.Template.Spec.Affinity).To(Equal(affinity))
 		})
 	})
@@ -1948,7 +2177,7 @@ var _ = Describe("NetworkPolicy builder", func() {
 			cr.Spec.General.HttpPort = httpPort
 			cr.Spec.General.NetworkPolicy.Enable = true
 			cr.Spec.General.Grpc = &opensearchv1.GrpcConfig{Enable: true, Port: "9400"}
-			job := NewSecurityconfigUpdateJob(&cr, clusterName+"-securityconfig-update", namespace, "checksum", "admin-cert", "", "cmd", nil, nil)
+			job := NewSecurityconfigUpdateJob(&cr, clusterName+"-securityconfig-update", namespace, "checksum", "", "admin-cert", "", "cmd", nil, nil)
 
 			result := NewNetworkPolicyForCR(&cr)
 			rule := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {

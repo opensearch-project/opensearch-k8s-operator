@@ -184,7 +184,21 @@ func IsTransportTlsEnabled(cluster *opensearchv1.OpenSearchCluster) bool {
 	return true
 }
 
+// IsSecurityPluginEnabled determines if the security plugin is active in the cluster.
+// The plugin handles both transport and HTTP TLS, so it is active if either is enabled.
+// Note that this does not imply securityadmin can run; see CanRunSecurityAdmin.
 func IsSecurityPluginEnabled(cr *opensearchv1.OpenSearchCluster) bool {
+	return IsHttpTlsEnabled(cr) || IsTransportTlsEnabled(cr)
+}
+
+// CanRunSecurityAdmin determines if securityadmin.sh can be used to manage the
+// securityconfig. securityadmin authenticates with the admin client certificate,
+// which requires TLS on the port it connects to: the HTTP port for OpenSearch >= 2.0,
+// the transport port for earlier versions. When the security plugin is enabled but
+// securityadmin cannot run (HTTP TLS disabled on >= 2.0), the securityconfig is
+// applied through the security plugin's default init instead (see the
+// securityconfig reconciler).
+func CanRunSecurityAdmin(cr *opensearchv1.OpenSearchCluster) bool {
 	if SecurityChangeVersion(cr) {
 		return IsHttpTlsEnabled(cr)
 	}
@@ -234,13 +248,23 @@ func GetField(v *appsv1.StatefulSetSpec, field string) interface{} {
 	return f
 }
 
+// RemoveIt drops every entry identified by ss.Component+ss.Description from ssSlice.
+// Status is deliberately not part of the match: the caller's "remove" value is usually
+// a status snapshot taken at the start of the reconcile, which can be stale by the time
+// this runs against a freshly-read object (informer cache lag, or a RetryOnConflict
+// re-run). Matching on Status as well as identity would then miss the (already-updated)
+// entry and leave the write to append a duplicate. Since callers key one status entry per
+// component+description, keying removal on that identity alone also self-heals any
+// duplicates already present.
 func RemoveIt(ss opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
-	for idx, v := range ssSlice {
-		if ComponentStatusEqual(v, ss) {
-			return append(ssSlice[0:idx], ssSlice[idx+1:]...)
+	out := ssSlice[:0:0]
+	for _, v := range ssSlice {
+		if ComponentIdentityEqual(v, ss) {
+			continue
 		}
+		out = append(out, v)
 	}
-	return ssSlice
+	return out
 }
 
 func Replace(remove opensearchv1.ComponentStatus, add opensearchv1.ComponentStatus, ssSlice []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
@@ -249,8 +273,10 @@ func Replace(remove opensearchv1.ComponentStatus, add opensearchv1.ComponentStat
 	return fullSliced
 }
 
-func ComponentStatusEqual(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) bool {
-	return left.Component == right.Component && left.Description == right.Description && left.Status == right.Status
+// ComponentIdentityEqual reports whether left and right refer to the same componentsStatus
+// entry (Component+Description), regardless of Status.
+func ComponentIdentityEqual(left opensearchv1.ComponentStatus, right opensearchv1.ComponentStatus) bool {
+	return left.Component == right.Component && left.Description == right.Description
 }
 
 func FindFirstPartial(
@@ -380,9 +406,13 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 		return nil, err
 	}
 	var dashboardsPassword []byte
+	dashboardsUsername := "kibanaserver"
 	if dashboardsSecret != nil {
 		if pwd, exists := dashboardsSecret.Data["password"]; exists {
 			dashboardsPassword = pwd
+		}
+		if username, exists := dashboardsSecret.Data["username"]; exists && len(username) > 0 {
+			dashboardsUsername = string(username)
 		}
 	}
 	if len(dashboardsPassword) == 0 {
@@ -406,21 +436,22 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 	var adminHashOverride, dashboardsHashOverride string
 	if existingGenerated != nil {
 		if existingInternal, exists := existingGenerated.Data["internal_users.yml"]; exists {
-			var existingConfig InternalUserConfig
+			// Generic map lookup rather than InternalUserConfig, since the Dashboards
+			// user entry can live under any username (dashboardsUsername), not just
+			// the hardcoded "kibanaserver" key.
+			var existingConfig map[string]interface{}
 			if err := yaml.Unmarshal(existingInternal, &existingConfig); err == nil {
-				if existingConfig.Admin.Hash != "" && bcrypt.CompareHashAndPassword([]byte(existingConfig.Admin.Hash), adminPassword) == nil {
-					adminHashOverride = existingConfig.Admin.Hash
+				if hash := existingUserHash(existingConfig, "admin"); hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), adminPassword) == nil {
+					adminHashOverride = hash
 				}
-				if existingConfig.Kibanaserver != nil && existingConfig.Kibanaserver.Hash != "" {
-					if bcrypt.CompareHashAndPassword([]byte(existingConfig.Kibanaserver.Hash), dashboardsPassword) == nil {
-						dashboardsHashOverride = existingConfig.Kibanaserver.Hash
-					}
+				if hash := existingUserHash(existingConfig, dashboardsUsername); hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), dashboardsPassword) == nil {
+					dashboardsHashOverride = hash
 				}
 			}
 		}
 	}
 
-	internalUsers, err = applyUserHashes(internalUsers, adminPassword, adminHashOverride, dashboardsPassword, dashboardsHashOverride)
+	internalUsers, err = applyUserHashes(internalUsers, adminPassword, adminHashOverride, dashboardsUsername, dashboardsPassword, dashboardsHashOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -438,10 +469,23 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 	return secret, nil
 }
 
-func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
+// existingUserHash returns the "hash" field of a user entry in an
+// internal_users.yml document already unmarshalled into a generic map, or ""
+// if the user or its hash field is not present.
+func existingUserHash(data map[string]interface{}, username string) string {
+	user, ok := data[username].(map[interface{}]interface{})
+	if !ok {
+		return ""
+	}
+	hash, _ := user["hash"].(string)
+	return hash
+}
+
+func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsUsername string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
 	// Use a generic map to preserve all users (including custom ones).
-	// Only "admin" and "kibanaserver" are modified; all other entries
-	// (including _meta and any custom users) pass through unchanged.
+	// Only "admin" and the Dashboards user (dashboardsUsername) are modified;
+	// all other entries (including _meta and any custom users) pass through
+	// unchanged.
 	var data map[string]interface{}
 	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
@@ -496,12 +540,12 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 	}
 	adminUser["backend_roles"] = backendRoles
 
-	// Update kibanaserver user (same yaml.v2 map type as above)
-	kibanaUser, ok := data["kibanaserver"].(map[interface{}]interface{})
+	// Update the Dashboards user (same yaml.v2 map type as above)
+	kibanaUser, ok := data[dashboardsUsername].(map[interface{}]interface{})
 	if !ok {
-		// Create kibanaserver if it doesn't exist
+		// Create the Dashboards user if it doesn't exist
 		kibanaUser = make(map[interface{}]interface{})
-		data["kibanaserver"] = kibanaUser
+		data[dashboardsUsername] = kibanaUser
 	}
 
 	var dashboardsHash string
@@ -522,6 +566,18 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 
 	if description, ok := kibanaUser["description"].(string); !ok || description == "" {
 		kibanaUser["description"] = "Demo user for the OpenSearch Dashboards server"
+	}
+
+	// The bundled default ships a kibanaserver entry with hash: "". We used to
+	// always overwrite that hash; with a custom Dashboards username it would
+	// otherwise be applied as an empty hash, which OpenSearch can reject.
+	if dashboardsUsername != "kibanaserver" {
+		if leftover, ok := data["kibanaserver"].(map[interface{}]interface{}); ok {
+			hash, _ := leftover["hash"].(string)
+			if strings.TrimSpace(hash) == "" {
+				delete(data, "kibanaserver")
+			}
+		}
 	}
 
 	// Marshal back to YAML, preserving all users (base + custom)
@@ -613,6 +669,26 @@ func SortedJsonKeys(obj *apiextensionsv1.JSON) (*apiextensionsv1.JSON, error) {
 	return &apiextensionsv1.JSON{Raw: rawBytes}, err
 }
 
+// ValidNodeRoles is the set of node pool roles the operator understands and renders into
+// node.roles. Shared by the StatefulSet builder (which silently drops anything not on this
+// list) and the validating webhook (which rejects it instead).
+var ValidNodeRoles = []string{
+	"master",
+	"data",
+	"data_content",
+	"data_hot",
+	"data_warm",
+	"data_cold",
+	"data_frozen",
+	"ingest",
+	"ml",
+	"remote_cluster_client",
+	"transform",
+	"cluster_manager",
+	"search",
+	"warm",
+}
+
 func ResolveClusterManagerRole(ver string) string {
 	masterRole := "master"
 	osVer, err := version.NewVersion(ver)
@@ -673,7 +749,8 @@ func DiffSlice(leftSlice, rightSlice []string) []string {
 	return diff
 }
 
-func listPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) ([]corev1.Pod, error) {
+// ListPodsForNodePool returns all pods belonging to the given cluster and nodePool.
+func ListPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) ([]corev1.Pod, error) {
 	clusterReq, err := labels.NewRequirement(ClusterLabel, selection.Equals, []string{cr.Name})
 	if err != nil {
 		return nil, err
@@ -691,10 +768,20 @@ func listPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchClu
 	return list.Items, nil
 }
 
+// IsPodReady reports whether the pod's Ready condition is currently true.
+func IsPodReady(pod corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
+			return true
+		}
+	}
+	return false
+}
+
 // CountExistingPodsForNodePool returns the number of non-terminating pods for a node pool,
 // regardless of readiness. emptyDir data survives in-place pod restarts while the pod exists.
 func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
+	pods, err := ListPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
 	}
@@ -708,29 +795,27 @@ func CountExistingPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.Open
 	return numExistingPods, nil
 }
 
-// Count the number of pods running and ready and not terminating for a given nodePool
+// Count the number of pods running and ready and not terminating for a given nodePool.
+// A terminating pod counts against the result: it is still a cluster member on its way
+// out, so a pool with one is not settled even when the ready count already matches
+// spec.replicas (e.g. right after the scaler lowered the StatefulSet). Otherwise a
+// rolling restart or upgrade could delete a second pod while the first is still leaving.
 func CountRunningPodsForNodePool(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) (int, error) {
-	pods, err := listPodsForNodePool(k8sClient, cr, nodePool)
+	pods, err := ListPodsForNodePool(k8sClient, cr, nodePool)
 	if err != nil {
 		return 0, err
 	}
 	numReadyPods := 0
 	for _, pod := range pods {
 		if pod.DeletionTimestamp != nil {
+			numReadyPods--
 			continue
 		}
-		podReady := false
-		for _, condition := range pod.Status.Conditions {
-			if condition.Type == corev1.PodReady && condition.Status == corev1.ConditionTrue {
-				podReady = true
-				break
-			}
-		}
-		if podReady {
+		if IsPodReady(pod) {
 			numReadyPods++
 		}
 	}
-	return numReadyPods, nil
+	return max(numReadyPods, 0), nil
 }
 
 // ReadyReplicasForNodePool returns the number of ready replicas derived from the actual running pods.
@@ -804,12 +889,68 @@ func DeleteSecurityUpdateJob(k8sClient k8s.K8sClient, clusterName, clusterNamesp
 	return k8sClient.DeleteJob(&job)
 }
 
+// dataRoles is the subset of ValidNodeRoles that makes a node hold shards, i.e. the
+// roles OpenSearch counts in cluster health's number_of_data_nodes (every role whose
+// DiscoveryNodeRole can contain data). Matching that set matters wherever the operator
+// compares its own node count against the cluster's, and wherever "this pool holds
+// data" decides whether a pod can be restarted or its storage lost.
+var dataRoles = []string{
+	"data",
+	"data_content",
+	"data_hot",
+	"data_warm",
+	"data_cold",
+	"data_frozen",
+	"search",
+	"warm",
+}
+
 func HasDataRole(nodePool *opensearchv1.NodePool) bool {
-	return ContainsString(nodePool.Roles, "data")
+	for _, role := range dataRoles {
+		if ContainsString(nodePool.Roles, role) {
+			return true
+		}
+	}
+	return false
 }
 
 func HasManagerRole(nodePool *opensearchv1.NodePool) bool {
 	return ContainsString(nodePool.Roles, "master") || ContainsString(nodePool.Roles, "cluster_manager")
+}
+
+// IsMasterStatefulSet returns true if the StatefulSet belongs to a master-eligible node pool.
+// The opensearch.role label is checked first. User-supplied nodePool labels are merged
+// after it and older StatefulSets may predate it, so the OpenSearch container's node.roles
+// env is the fallback. When that container sets node.roles more than once, the last value
+// wins, matching the kubelet. Other containers are ignored.
+func IsMasterStatefulSet(sts appsv1.StatefulSet) bool {
+	role := sts.Labels["opensearch.role"]
+	if role == "master" || role == "cluster_manager" {
+		return true
+	}
+	for _, container := range sts.Spec.Template.Spec.Containers {
+		if container.Name != "opensearch" {
+			continue
+		}
+		var roles string
+		found := false
+		for _, env := range container.Env {
+			if env.Name == "node.roles" {
+				roles = env.Value
+				found = true
+			}
+		}
+		if !found {
+			continue
+		}
+		for _, r := range strings.Split(roles, ",") {
+			r = strings.TrimSpace(r)
+			if r == "master" || r == "cluster_manager" {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func RemoveDuplicateStrings(strSlice []string) []string {
@@ -912,26 +1053,95 @@ func WorkingPodForRollingRestart(k8sClient k8s.K8sClient, sts *appsv1.StatefulSe
 	return "", errors.New("unable to calculate the working pod for rolling restart")
 }
 
-// DeleteStuckPodWithOlderRevision deletes the crashed pod only if there is any update in StatefulSet.
-func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) error {
-	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
-	if err != nil {
-		return err
-	}
-	if podWithOlderRevision != nil {
-		for _, container := range podWithOlderRevision.Status.ContainerStatuses {
-			// If any container is getting crashed, restart it by deleting the pod so that new update in sts can take place.
-			if !container.Ready && container.State.Waiting != nil && container.State.Waiting.Reason == "CrashLoopBackOff" {
-				return k8sClient.DeletePod(&corev1.Pod{
-					ObjectMeta: metav1.ObjectMeta{
-						Name:      podWithOlderRevision.Name,
-						Namespace: sts.Namespace,
-					},
-				})
-			}
+// stuckWaitingReasons are container waiting reasons a pod does not recover from on its own.
+// A pod on a stale StatefulSet revision in one of these states is safe to delete because
+// the StatefulSet recreates it from the current template (issue #1531).
+var stuckWaitingReasons = map[string]bool{
+	"CrashLoopBackOff": true,
+	"ImagePullBackOff": true,
+	"ErrImagePull":     true,
+	"InvalidImageName": true,
+}
+
+// stuckRestartThreshold is the number of restarts a container that has not passed its startup
+// probe must accumulate, with a recorded last-terminated state, before it is treated as stuck
+// even though it never sits in one of stuckWaitingReasons. This catches a container that is
+// repeatedly killed while Running-but-not-ready (e.g. by a failing startup probe) and immediately
+// restarted, so kubelet only reports it as Waiting/CrashLoopBackOff for brief moments between
+// attempts.
+const stuckRestartThreshold = 3
+
+// StuckContainerReason returns the reason the first non-ready container of the pod is
+// stuck in a non-recoverable state, or "" if the pod is not stuck.
+func StuckContainerReason(pod *corev1.Pod) string {
+	for _, container := range pod.Status.ContainerStatuses {
+		if container.Ready {
+			continue
+		}
+		if container.State.Waiting != nil && stuckWaitingReasons[container.State.Waiting.Reason] {
+			return container.State.Waiting.Reason
+		}
+		// Started is false while the current attempt has not passed its startup probe, and is reset
+		// on every restart. Gating on it keeps the restart count from firing on a container that
+		// did start up and only later went not-ready: restart count and last-terminated state stick
+		// around from earlier restarts and would otherwise look identical to a kill loop.
+		if container.Started != nil && !*container.Started &&
+			container.RestartCount >= stuckRestartThreshold && container.LastTerminationState.Terminated != nil {
+			return "RepeatedlyFailing"
 		}
 	}
-	return nil
+	return ""
+}
+
+// DeleteStuckPodWithOlderRevision deletes a stuck pod (see StuckContainerReason) that is still on an
+// older StatefulSet revision so the update can proceed. Returns the deleted pod name when a delete occurs.
+func DeleteStuckPodWithOlderRevision(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (string, error) {
+	podWithOlderRevision, err := GetPodWithOlderRevision(k8sClient, sts)
+	if err != nil {
+		return "", err
+	}
+	if podWithOlderRevision == nil || StuckContainerReason(podWithOlderRevision) == "" {
+		return "", nil
+	}
+	err = k8sClient.DeletePod(&corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      podWithOlderRevision.Name,
+			Namespace: sts.Namespace,
+		},
+	})
+	if err != nil {
+		return "", err
+	}
+	return podWithOlderRevision.Name, nil
+}
+
+// StuckPods returns the pods in the StatefulSet that have a stuck container (see
+// StuckContainerReason), keyed by pod name with the waiting reason as value.
+func StuckPods(k8sClient k8s.K8sClient, sts *appsv1.StatefulSet) (map[string]string, error) {
+	pods := map[string]string{}
+	for i := int32(0); i < lo.FromPtrOr(sts.Spec.Replicas, 1); i++ {
+		podName := ReplicaHostName(*sts, i)
+		pod, err := k8sClient.GetPod(podName, sts.Namespace)
+		if err != nil {
+			return nil, err
+		}
+		if reason := StuckContainerReason(&pod); reason != "" {
+			pods[pod.Name] = reason
+		}
+	}
+	return pods, nil
+}
+
+// ClearUpgraderComponentStatuses removes all Upgrader entries from componentsStatus,
+// including entries for node pools that no longer exist in the spec.
+func ClearUpgraderComponentStatuses(statuses []opensearchv1.ComponentStatus) []opensearchv1.ComponentStatus {
+	result := make([]opensearchv1.ComponentStatus, 0, len(statuses))
+	for _, status := range statuses {
+		if status.Component != "Upgrader" {
+			result = append(result, status)
+		}
+	}
+	return result
 }
 
 // GetPodWithOlderRevision fetches the pod that is not having the updated revision.
@@ -1092,4 +1302,105 @@ func EnsureDashboardsCredentialsSecret(k8sClient k8s.K8sClient, cr *opensearchv1
 		return nil, true, err
 	}
 	return &createdSecret, true, nil
+}
+
+func dashboardsCredentialsSecretName(cr *opensearchv1.OpenSearchCluster) string {
+	if cr.Spec.Dashboards.OpensearchCredentialsSecret.Name != "" {
+		return cr.Spec.Dashboards.OpensearchCredentialsSecret.Name
+	}
+	return GeneratedDashboardsCredentialsSecretName(cr)
+}
+
+// DashboardsUsername returns the username Dashboards authenticates to
+// OpenSearch with, i.e. the "username" field of its credentials secret
+// (custom or operator-generated), defaulting to "kibanaserver" if absent.
+// This only reads an existing secret; it never creates one.
+func DashboardsUsername(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (string, error) {
+	secret, err := k8sClient.GetSecret(dashboardsCredentialsSecretName(cr), cr.Namespace)
+	if err != nil {
+		return "", err
+	}
+	if username := secret.Data["username"]; len(username) > 0 {
+		return string(username), nil
+	}
+	return "kibanaserver", nil
+}
+
+// DashboardsUserMapped reports whether the Dashboards user is authorized by a
+// roles_mapping.yml document: listed under any role's "users", or any of the
+// user's backend_roles (from internal_users.yml) is listed under a role's
+// backend_roles. Hosts-based mappings are not checked.
+func DashboardsUserMapped(rolesMappingData, internalUsersData []byte, username string) (bool, error) {
+	return RolesMappingAuthorizes(rolesMappingData, username, userBackendRoles(internalUsersData, username))
+}
+
+// RolesMappingAuthorizes reports whether username is listed under any role's
+// "users", or any of backendRoles is listed under any role's "backend_roles".
+func RolesMappingAuthorizes(rolesMappingData []byte, username string, backendRoles []string) (bool, error) {
+	var data map[string]interface{}
+	if err := yaml.Unmarshal(rolesMappingData, &data); err != nil {
+		return false, err
+	}
+	backendWant := make(map[string]struct{}, len(backendRoles))
+	for _, role := range backendRoles {
+		if role != "" {
+			backendWant[role] = struct{}{}
+		}
+	}
+	for key, value := range data {
+		if key == "_meta" {
+			continue
+		}
+		role, ok := value.(map[interface{}]interface{})
+		if !ok {
+			continue
+		}
+		if users, ok := role["users"].([]interface{}); ok {
+			for _, u := range users {
+				if s, ok := u.(string); ok && s == username {
+					return true, nil
+				}
+			}
+		}
+		if len(backendWant) == 0 {
+			continue
+		}
+		mappedRoles, ok := role["backend_roles"].([]interface{})
+		if !ok {
+			continue
+		}
+		for _, br := range mappedRoles {
+			if s, ok := br.(string); ok {
+				if _, found := backendWant[s]; found {
+					return true, nil
+				}
+			}
+		}
+	}
+	return false, nil
+}
+
+func userBackendRoles(internalUsersData []byte, username string) []string {
+	if len(internalUsersData) == 0 || username == "" {
+		return nil
+	}
+	var data map[string]interface{}
+	if err := yaml.Unmarshal(internalUsersData, &data); err != nil {
+		return nil
+	}
+	user, ok := data[username].(map[interface{}]interface{})
+	if !ok {
+		return nil
+	}
+	roles, ok := user["backend_roles"].([]interface{})
+	if !ok {
+		return nil
+	}
+	var out []string
+	for _, role := range roles {
+		if s, ok := role.(string); ok && s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }

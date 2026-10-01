@@ -2,9 +2,26 @@
 
 This guide is intended for users of the Opensearch Operator. If you want to contribute to the development of the Operator, please see the [Design documents](../designs/high-level.md) and the [Developer guide](../developing.md) instead.
 
-> **API Group Migration Notice**: The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Please see the [Migration Guide](./migration-guide.md) for details.
+> **API Group Migration Notice**: The operator is migrating from `opensearch.opster.io` to `opensearch.org` API group. Both are currently supported, but `opensearch.opster.io` is deprecated. Upgrading the operator from 2.x to 3.x rolling-restarts every node of existing clusters once. Please see the [Migration Guide](./migration-guide.md) for details.
 
 ## Installation
+
+### Prerequisites
+
+The chart installs a validation webhook by default (`webhook.enabled=true`) and issues its serving certificate with [cert-manager](https://cert-manager.io/) (`webhook.certManager.enabled=true`), so cert-manager 1.0 or later has to be present in the cluster before the Operator is installed. See the [cert-manager installation docs](https://cert-manager.io/docs/installation/helm/) for the current options:
+
+```bash
+helm repo add jetstack https://charts.jetstack.io
+helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --set crds.enabled=true
+```
+
+Without it, `helm install` fails while rendering the `Issuer` and `Certificate` resources of the webhook:
+
+```
+Error: INSTALLATION FAILED: unable to build kubernetes objects from release manifest: ... no matches for kind "Certificate" in version "cert-manager.io/v1" ... ensure CRDs are installed first
+```
+
+If you would rather not run cert-manager, the [Webhooks guide](./webhooks.md) describes the two alternatives: set `webhook.certManager.enabled=false` and provide the serving certificate yourself through `webhook.secretName`, or turn the webhook off entirely with `webhook.enabled=false`.
 
 The Operator can be easily installed using Helm:
 
@@ -101,6 +118,15 @@ manager:
   # watchNamespaces: 'ns1,ns2'
   # watchNamespace: [ns1, ns2]
   watchNamespace:
+
+  # Global default max concurrent reconciles for all controllers.
+  maxConcurrentReconciles: 1
+
+  # Per-controller overrides (controller name -> max concurrent reconciles).
+  # Example:
+  # maxConcurrentReconcilesPerController:
+  #   opensearchcluster: 4
+  maxConcurrentReconcilesPerController: {}
 
   # Configure extra environment variables for the operator. You can also pull them from secrets or configmaps
   extraEnv: []
@@ -437,6 +463,16 @@ SmartScaler is a mechanism built into the Operator that enables nodes to be safe
 
 During the safe drain process, the node being removed is marked as "draining", which means that it will no longer receive any new requests. Instead, it will only process outstanding requests until its workload has been completed. Once all requests have been processed, the node will begin transferring its data to other nodes in the cluster. The safe drain process will continue until all data has been transferred and the node is no longer part of the cluster. Only after that, the OMC will turn down the node.
 
+SmartScaler is enabled by default (`spec.confMgmt.smartScaler: true`) for newly created clusters, whether or not the `confMgmt` block is present in the manifest. Setting it to `false` removes nodes without draining, and the operator emits a `Warning` event each time it does so.
+
+**Upgrade note:** Clusters that were created before this default was applied to the parent `confMgmt` object may already have `smartScaler: false` stored in etcd (for example after the operator added a finalizer and rewrote the spec). CRD defaulting does not override a present value. After upgrading the operator/CRDs, check `spec.confMgmt.smartScaler` on existing clusters and set it to `true` if safe draining was intended.
+
+#### Removing master-eligible nodes
+
+Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time regardless of the SmartScaler setting, following the sequence OpenSearch documents for shrinking the voting configuration: the node is first added to the cluster's voting configuration exclusions (`POST /_cluster/voting_config_exclusions`), which blocks until it has left the voting configuration, then its pod is removed, and once every excluded node has left the cluster the exclusions list is cleared (`DELETE /_cluster/voting_config_exclusions?wait_for_removal=true`). With SmartScaler off only this voting step is performed; the shard drain remains opt-in. The same steps apply when a whole master-eligible node pool is removed from `spec.nodePools` and when the bootstrap pod is torn down after initialization.
+
+The exclusions list is cluster-wide and can only be cleared as a whole. The waiting clear is held until no excluded node is still a member, because OpenSearch waits for all of them and that wait shares the operator's 30s client deadline. If a master scale-down is reverted while its target node is still excluded, the operator clears the list without waiting so that node can vote again, then immediately re-adds an exclusion for every other node that is still being removed, including one whose StatefulSet has already shrunk. On every reconcile the operator also clears exclusions that no removal owns any more, for example after an operator restart mid-removal, and emits a `Warning` event when it finds a live node that was left excluded. The admission webhook rejects clusters whose master-eligible pools would have fewer than one replica in total (see [webhooks](webhooks.md)).
+
 ### Set Java heap size
 
 To configure the amount of memory allocated to the OpenSearch nodes, configure the heap size using the JVM args. This operation is expected to have no downtime and the cluster should be operational.
@@ -750,7 +786,7 @@ The Opensearch pods by default launch an init container to configure the volume.
 
 Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods, and the same `initHelper.securityContext` for its init containers.
 
-The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod.
+The bootstrap pod uses persistent storage (PVC) to maintain cluster state across restarts during initialization. This prevents cluster formation failures when the bootstrap pod restarts after the security configuration update job completes. The bootstrap PVC is automatically created and deleted along with the bootstrap pod. No bootstrap pod is started for an `OpenSearchCluster` that is re-created over the data PVCs of a previous cluster with the same name (the operator never deletes node pool PVCs): the nodes re-form the existing cluster from disk. Delete those PVCs first if you want a fresh cluster.
 
 ### Host Aliases for pods and containers
 
@@ -1476,10 +1512,14 @@ Scaling, rolling restarts, and version upgrades remain sequenced by the operator
 
 If the cluster is using emptyDir i.e. every node pool is using emptyDir, the operator starts recovery in case of these failure scenarios:
 
-1. More than half the master nodes are missing or crashed and thus, the quorum is broken.
-2. All data nodes are missing or crashed and thus, no data node is available.
+1. More than half the master nodes have lost their original emptyDir data and thus, the quorum is broken.
+2. All data nodes have lost their original emptyDir data and thus, no data node is available.
 
-But since the cluster is using emptyDir, data is lost and not recoverable. So, it is impossible to restore the cluster to its old state. Therefore, the operator deletes and recreates the entire OpenSearch cluster.
+"Lost emptyDir data" means the pod that held the volume is gone — not merely NotReady. An emptyDir lives exactly as long as its pod UID: container restarts and readiness blips keep the same UID and the volume, while force-delete, eviction, or node loss causes the StatefulSet to recreate the pod with the same name, a new UID, and a fresh empty directory. The operator records the UID of each Ready pod and treats a NotReady pod with a different UID as missing for this check.
+
+Recovery waits for a 5 minute grace period after the condition is first observed, then deletes and recreates the StatefulSets (and related resources), sets `status.initialized` to `false`, and re-bootstraps the cluster. Because the cluster is using emptyDir, the previous data is not recoverable.
+
+Until each pod has been observed Ready at least once after this tracking is enabled (for example right after an operator upgrade), a NotReady pod with no recorded UID is treated as missing only when its `creationTimestamp` is newer than the 5 minute grace period (a freshly recreated pod). A longer-lived NotReady pod with no record is still counted as existing, so upgrading the operator while nodes are crash-looping does not wipe an intact emptyDir cluster.
 
 ### Rolling Upgrades
 
@@ -1492,6 +1532,7 @@ spec:
 ```
 
 The Operator will then perform a rolling upgrade and restart the nodes one-by-one, waiting after each node for the cluster to stabilize and have a green cluster status. Depending on the number of nodes and the size of the data stored this can take some time.
+If the cluster stays yellow because some replicas can never be assigned (e.g. `number_of_replicas` is higher than the number of other data nodes), rolling restarts and upgrades with `drainDataNodes: false` still continue once all data nodes have joined and no shards are initializing, relocating or waiting for delayed allocation. The operator never restarts a node that holds the only active copy of a shard that should have replicas, except in a cluster with a single data node, where there is nowhere else to keep a copy. With `drainDataNodes: true` a node is only restarted once its shards have moved elsewhere, so replicas that have nowhere to go still block the restart.
 Downgrades and upgrades that span more than one major version are not supported, as this will put the OpenSearch cluster in an unsupported state. If you are using emptyDir storage for data nodes, it is recommended to set `general.drainDataNodes` to `true`, otherwise you might lose data.
 
 ### Configuration changes
@@ -1549,6 +1590,8 @@ Provide the name of the secret that contains your securityconfig yaml files as `
 
 **Important:** You no longer need to provide password hashes for the `admin` or `kibanaserver` users in your security config secret. The operator will automatically generate password hashes from the credentials secrets and override any hash values you provide in the security config secret for these users. This means you only need to manage passwords in one place (the credentials secrets), not in both the credentials secrets and the security config secret.
 
+**Important:** password hashes are the only thing the operator manages for you. If your security config secret includes its own `roles_mapping.yml`, it replaces the image's default file entirely, and you are responsible for keeping the Dashboards user mapped to a role that has cluster monitoring permissions (`kibana_server` by default). See [Custom Dashboards user](#custom-dashboards-user) below.
+
 Note that OpenSearch requires all the files to be applied when the cluster is first created. So, the files that you do not provide in the securityconfig secret, the operator will use the default files provided in the opensearch-security plugin. See [opensearch-security](https://github.com/opensearch-project/security/tree/main/config) for the list of all configuration files and their default values.
 
 If you don't want to use the default files, you must provide at least a minimum configuration for the file. Example:
@@ -1571,6 +1614,32 @@ You must also configure SSL/TLS HTTP. You can either let the operator generate a
 If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certficate cannot be used or recognized as a node certficiate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the secret with the securityconfig for any changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
+
+#### Applying the securityconfig without HTTP TLS
+
+Clusters that enable transport TLS but disable HTTP TLS (`security.tls.http.enabled: false`) are supported, for example when TLS is terminated by a service mesh:
+
+```yaml
+# ...
+spec:
+  general:
+    version: 2.19.4
+  security:
+    tls:
+      transport:
+        generate: true
+        perNode: true
+      http:
+        enabled: false
+# ...
+```
+
+On OpenSearch 2.0 and later `securityadmin.sh` needs TLS on the HTTP port, so in this mode the Operator cannot run the `<cluster-name>-securityconfig-update` job. Instead it sets `plugins.security.allow_default_init_securityindex: true` and mounts the generated securityconfig into the nodes, and the security plugin loads it into the security index itself when the cluster first forms. The admin and `kibanaserver` credentials are generated and hashed into the securityconfig as usual, no admin certificate is required, and the Operator talks to the cluster over plain HTTP.
+
+Limitations of this mode:
+
+- **Changes to the securityconfig secret after the cluster is created are not applied automatically.** The securityconfig is only read once, when the security index is first initialized. To manage users, roles, tenants and action groups on a running cluster use the [Kubernetes resources](#managing-security-configurations-with-kubernetes-resources) or the security plugin REST API. `config.yml` (authentication backends) has no CRD equivalent, so plan for a cluster recreation or keep HTTP TLS enabled if you expect to change it later.
+- There is no `<cluster-name>-securityconfig-update` job to inspect. The `Securityconfig` entry in the cluster's `status.componentsStatus` reports `securityconfig applied via default init`.
 
 ### Authenticating the operator to OpenSearch with mTLS (client certificate)
 
@@ -1835,7 +1904,18 @@ spec:
 **Important:** Similar to the admin user, you do **not** need to include the password hash for the `kibanaserver` user in your security config secret. The operator will automatically:
 1. Read the password from your `opensearchCredentialsSecret` (or use the generated random password if not provided)
 2. Generate the bcrypt hash
-3. Override the `kibanaserver` user's hash in the generated security config secret
+3. Override the Dashboards user's hash in the generated security config secret (using the `username` from `opensearchCredentialsSecret` if you provided one, `kibanaserver` otherwise)
+
+**Important:** the operator only manages the password hash. If you supply your own `roles_mapping.yml`, it replaces the image's default file, and the default `kibana_server -> kibanaserver` mapping is gone with it. You must keep the Dashboards user mapped to a role with cluster monitoring permissions yourself, for example:
+
+```yaml
+roles_mapping.yml: |-
+  kibana_server:
+    users:
+      - "kibanaserver" # or the username from opensearchCredentialsSecret
+```
+
+`kibana_server` is a static role built into the security plugin, so you do not need to define it in `roles.yml` (a definition there is ignored in favor of the built-in one). If you use a custom Dashboards username via `opensearchCredentialsSecret`, you must map that username even when you do not supply `roles_mapping.yml` — the image default only maps `kibanaserver`. Without this mapping, the Dashboards user authenticates successfully but has no permissions, and the Dashboards deployment crash-loops with authorization errors in its logs (e.g. `no permissions for [cluster:monitor/nodes/info]`). The operator emits a `DashboardsUserUnmapped` warning event on the `OpenSearchCluster` when it detects this.
 
 ### Security Plugin Disabled
 

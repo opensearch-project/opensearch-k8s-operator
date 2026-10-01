@@ -134,25 +134,30 @@ func (c *ReconcilerContext) replaceNodePoolHash(newConfig NodePoolHash) {
 	c.NodePoolHashes = configs
 }
 
+func applyComponentStatus(components *[]opensearchv1.ComponentStatus, status opensearchv1.ComponentStatus) {
+	for idx, value := range *components {
+		if value.Component == status.Component {
+			(*components)[idx] = status
+			return
+		}
+	}
+	*components = append(*components, status)
+}
+
 func UpdateComponentStatus(
 	k8sClient k8s.K8sClient,
 	cluster *opensearchv1.OpenSearchCluster,
 	status *opensearchv1.ComponentStatus,
 ) error {
 	if status != nil {
-		return k8sClient.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(cluster), func(instance *opensearchv1.OpenSearchCluster) {
-			found := false
-			for idx, value := range instance.Status.ComponentsStatus {
-				if value.Component == status.Component {
-					instance.Status.ComponentsStatus[idx] = *status
-					found = true
-					break
-				}
-			}
-			if !found {
-				instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, *status)
-			}
+		err := k8sClient.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(cluster), func(instance *opensearchv1.OpenSearchCluster) {
+			applyComponentStatus(&instance.Status.ComponentsStatus, *status)
 		})
+		if err != nil {
+			return err
+		}
+		// Keep the reconciler's in-memory copy in sync so mid-reconcile reads see what was just persisted.
+		applyComponentStatus(&cluster.Status.ComponentsStatus, *status)
 	}
 	return nil
 }

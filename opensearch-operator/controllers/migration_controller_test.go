@@ -18,19 +18,25 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 )
 
 var _ = Describe("ClusterMigrationReconciler", func() {
@@ -45,6 +51,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 	BeforeEach(func() {
 		ctx = context.Background()
 		scheme = runtime.NewScheme()
+		_ = corev1.AddToScheme(scheme)
 		_ = opensearchv1.AddToScheme(scheme)
 		_ = opsterv1.AddToScheme(scheme)
 		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
@@ -61,7 +68,15 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 	})
 
 	Describe("Reconcile - New Cluster Deletion", func() {
-		It("should add migration finalizer to new cluster", func() {
+		It("should add migration finalizer to new cluster that has a legacy twin", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
 			newCluster := &opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -83,6 +98,31 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			updatedCluster := &opensearchv1.OpenSearchCluster{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
+		})
+
+		It("should not add migration finalizer to a new cluster with no legacy twin", func() {
+			// Fresh installs never had an opensearch.opster.io twin, so there is
+			// nothing for the migration finalizer to clean up (#1544).
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+				},
+			}
+			Expect(fakeClient.Create(ctx, newCluster)).To(Succeed())
+
+			result, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedCluster := &opensearchv1.OpenSearchCluster{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
+			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
 		})
 
 		It("should not add migration finalizer to a new cluster that is being deleted", func() {
@@ -260,6 +300,66 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
 		})
+
+		// Regression test for #1540: a legacy CR with dashboards.replicas explicitly
+		// stored as 0 is rejected by the legacy validating webhook if the finalizer
+		// is added via a full-object Update, because the zero value is dropped by
+		// `omitempty` on the typed round-trip and the CRD re-defaults it to 1, making
+		// the webhook see a (fake) spec change. The reconciler must add the finalizer
+		// via a metadata-only Patch instead, which never touches spec and so can
+		// never trigger this false positive.
+		It("should add the migration finalizer via a metadata-only patch, not a full-object update", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable:   true,
+						Replicas: 0, // explicit zero; the value that trips CRD re-defaulting on a full Update
+					},
+				},
+				Status: opsterv1.ClusterStatus{
+					Phase: opsterv1.PhaseRunning,
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			// Simulate the legacy validating webhook: any full-object Update is
+			// denied (as it would be in a real cluster once the round-tripped spec
+			// no longer matches byte-for-byte), while a Patch is only allowed if it
+			// never touches spec.
+			watchClient, ok := fakeClient.(client.WithWatch)
+			Expect(ok).To(BeTrue())
+			reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					// Only the legacy (opensearch.opster.io) CR is guarded by the
+					// legacy validating webhook; leave opensearch.org writes alone.
+					if _, ok := obj.(*opsterv1.OpenSearchCluster); ok {
+						return fmt.Errorf("admission webhook \"vopensearchcluster.opensearch.opster.io\" denied the request: Direct updates to old API group OpenSearchCluster resources are not allowed")
+					}
+					return c.Update(ctx, obj, opts...)
+				},
+				Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					data, err := patch.Data(obj)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(data)).NotTo(ContainSubstring(`"spec"`), "finalizer patch must not touch spec: %s", string(data))
+					return c.Patch(ctx, obj, patch, opts...)
+				},
+			})
+
+			_, err := reconciler.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedCluster := &opsterv1.OpenSearchCluster{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
+			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
+			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(int32(0)))
+		})
 	})
 
 	Describe("handleOldClusterDeletion", func() {
@@ -292,6 +392,69 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			updatedCluster := &opsterv1.OpenSearchCluster{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
+		})
+
+		// Regression for #1540: finalizer removal must also be a metadata-only Patch.
+		// DeletionTimestamp would let a full Update past the webhook, but Update still
+		// re-defaults omitempty zeros on the dying object.
+		It("should remove finalizers via a metadata-only patch when new cluster exists", func() {
+			now := metav1.Now()
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:              "test-cluster",
+					Namespace:         "default",
+					DeletionTimestamp: &now,
+					Finalizers:        []string{MigrationFinalizer, OldClusterFinalizer},
+				},
+				Spec: opsterv1.ClusterSpec{
+					General: opsterv1.GeneralConfig{
+						Version: "2.19.4",
+					},
+					Dashboards: opsterv1.DashboardsConfig{
+						Enable:   true,
+						Replicas: 0,
+					},
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, newCluster)).To(Succeed())
+
+			watchClient, ok := fakeClient.(client.WithWatch)
+			Expect(ok).To(BeTrue())
+			reconciler.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				Update: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.UpdateOption) error {
+					if _, ok := obj.(*opsterv1.OpenSearchCluster); ok {
+						return fmt.Errorf("admission webhook \"vopensearchcluster.opensearch.opster.io\" denied the request: Direct updates to old API group OpenSearchCluster resources are not allowed")
+					}
+					return c.Update(ctx, obj, opts...)
+				},
+				Patch: func(ctx context.Context, c client.WithWatch, obj client.Object, patch client.Patch, opts ...client.PatchOption) error {
+					data, err := patch.Data(obj)
+					Expect(err).NotTo(HaveOccurred())
+					Expect(string(data)).NotTo(ContainSubstring(`"spec"`), "finalizer removal patch must not touch spec: %s", string(data))
+					return c.Patch(ctx, obj, patch, opts...)
+				},
+			})
+
+			// Re-fetch so the in-memory object matches what the interceptor-backed client sees
+			Expect(reconciler.Get(ctx, req.NamespacedName, oldCluster)).To(Succeed())
+
+			result, err := reconciler.handleOldClusterDeletion(ctx, oldCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedCluster := &opsterv1.OpenSearchCluster{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
+			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
+			Expect(containsString(updatedCluster.Finalizers, OldClusterFinalizer)).To(BeFalse())
+			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(int32(0)))
 		})
 
 		It("should allow deletion when annotation indicates new cluster deletion", func() {
@@ -390,6 +553,170 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 		})
 	})
 
+	Describe("backfillPVCLegacyLabels", func() {
+		It("should backfill new PVC labels from legacy labels", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-test-cluster-master-0",
+					Namespace: "default",
+					Labels: map[string]string{
+						helpers.OldClusterLabel:  "test-cluster",
+						helpers.OldNodePoolLabel: "master",
+					},
+				},
+			}
+			Expect(fakeClient.Create(ctx, pvc)).To(Succeed())
+
+			Expect(reconciler.backfillPVCLegacyLabels(ctx, oldCluster)).To(Succeed())
+
+			updatedPVC := &corev1.PersistentVolumeClaim{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
+			Expect(updatedPVC.Labels[helpers.ClusterLabel]).To(Equal("test-cluster"))
+			Expect(updatedPVC.Labels[helpers.NodePoolLabel]).To(Equal("master"))
+		})
+
+		It("should not overwrite existing new labels", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldCluster)).To(Succeed())
+
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-test-cluster-master-1",
+					Namespace: "default",
+					Labels: map[string]string{
+						helpers.OldClusterLabel:  "test-cluster",
+						helpers.OldNodePoolLabel: "master",
+						helpers.ClusterLabel:     "already-set-cluster",
+						helpers.NodePoolLabel:    "already-set-nodepool",
+					},
+				},
+			}
+			Expect(fakeClient.Create(ctx, pvc)).To(Succeed())
+
+			Expect(reconciler.backfillPVCLegacyLabels(ctx, oldCluster)).To(Succeed())
+
+			updatedPVC := &corev1.PersistentVolumeClaim{}
+			Expect(fakeClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
+			Expect(updatedPVC.Labels[helpers.ClusterLabel]).To(Equal("already-set-cluster"))
+			Expect(updatedPVC.Labels[helpers.NodePoolLabel]).To(Equal("already-set-nodepool"))
+		})
+	})
+
+	Describe("syncOldToNew PVC label backfill gating", func() {
+		var statusClient client.Client
+		var statusReconciler *ClusterMigrationReconciler
+
+		BeforeEach(func() {
+			statusClient = fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&opensearchv1.OpenSearchCluster{}, &opsterv1.OpenSearchCluster{}).
+				Build()
+			statusReconciler = &ClusterMigrationReconciler{
+				Client: statusClient,
+				Scheme: scheme,
+			}
+		})
+
+		It("should not backfill PVC labels before the new cluster is initialized", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(statusClient.Create(ctx, oldCluster)).To(Succeed())
+
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+					Annotations: map[string]string{
+						CertOwnershipTransferredAnnotation: "true",
+					},
+				},
+			}
+			Expect(statusClient.Create(ctx, newCluster)).To(Succeed())
+			newCluster.Status = opensearchv1.ClusterStatus{Initialized: false}
+			Expect(statusClient.Status().Update(ctx, newCluster)).To(Succeed())
+
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-test-cluster-master-2",
+					Namespace: "default",
+					Labels: map[string]string{
+						helpers.OldClusterLabel:  "test-cluster",
+						helpers.OldNodePoolLabel: "master",
+					},
+				},
+			}
+			Expect(statusClient.Create(ctx, pvc)).To(Succeed())
+
+			_, err := statusReconciler.syncOldToNew(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedPVC := &corev1.PersistentVolumeClaim{}
+			Expect(statusClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
+			Expect(updatedPVC.Labels).NotTo(HaveKey(helpers.ClusterLabel))
+			Expect(updatedPVC.Labels).NotTo(HaveKey(helpers.NodePoolLabel))
+		})
+
+		It("should backfill PVC labels once the new cluster is initialized", func() {
+			oldCluster := &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(statusClient.Create(ctx, oldCluster)).To(Succeed())
+
+			newCluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+					Annotations: map[string]string{
+						CertOwnershipTransferredAnnotation: "true",
+					},
+				},
+			}
+			Expect(statusClient.Create(ctx, newCluster)).To(Succeed())
+			newCluster.Status = opensearchv1.ClusterStatus{Initialized: true}
+			Expect(statusClient.Status().Update(ctx, newCluster)).To(Succeed())
+
+			pvc := &corev1.PersistentVolumeClaim{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "data-test-cluster-master-3",
+					Namespace: "default",
+					Labels: map[string]string{
+						helpers.OldClusterLabel:  "test-cluster",
+						helpers.OldNodePoolLabel: "master",
+					},
+				},
+			}
+			Expect(statusClient.Create(ctx, pvc)).To(Succeed())
+
+			_, err := statusReconciler.syncOldToNew(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+
+			updatedPVC := &corev1.PersistentVolumeClaim{}
+			Expect(statusClient.Get(ctx, types.NamespacedName{Name: pvc.Name, Namespace: pvc.Namespace}, updatedPVC)).To(Succeed())
+			Expect(updatedPVC.Labels[helpers.ClusterLabel]).To(Equal("test-cluster"))
+			Expect(updatedPVC.Labels[helpers.NodePoolLabel]).To(Equal("master"))
+		})
+	})
+
 	Describe("isClusterReady", func() {
 		It("should return true for RUNNING phase", func() {
 			cluster := &opsterv1.OpenSearchCluster{
@@ -444,7 +771,15 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeFalse())
 		})
 
-		It("should add migration finalizer to a new resource that is not being deleted", func() {
+		It("should add migration finalizer to a new resource that has a legacy twin", func() {
+			oldUser := &opsterv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldUser)).To(Succeed())
+
 			newUser := &opensearchv1.OpensearchUser{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "test-cluster",
@@ -459,6 +794,65 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(result.Requeue).To(BeTrue())
 
 			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeTrue())
+		})
+
+		It("should not add migration finalizer to a new resource with no legacy twin", func() {
+			// Fresh installs never had an opensearch.opster.io twin, so there is
+			// nothing for the migration finalizer to clean up (#1544).
+			newUser := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
+
+			userMigration := &UserMigrationReconciler{Client: fakeClient, Scheme: scheme}
+			result, err := userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeFalse())
+		})
+
+		It("should add migration finalizer once a legacy twin appears after the new resource already existed", func() {
+			// Edge case: the new-group resource was created first (or existed with
+			// no twin), and a legacy opensearch.opster.io twin with the same
+			// name/namespace shows up afterwards.
+			newUser := &opensearchv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, newUser)).To(Succeed())
+
+			userMigration := &UserMigrationReconciler{Client: fakeClient, Scheme: scheme}
+			result, err := userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+
+			updatedUser := &opensearchv1.OpensearchUser{}
+			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
+			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeFalse())
+
+			// Now the legacy twin appears.
+			oldUser := &opsterv1.OpensearchUser{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+			}
+			Expect(fakeClient.Create(ctx, oldUser)).To(Succeed())
+
+			result, err = userMigration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedUser)).To(Succeed())
 			Expect(containsString(updatedUser.Finalizers, MigrationFinalizer)).To(BeTrue())
 		})
@@ -521,6 +915,87 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			updatedOld := &opsterv1.OpensearchUser{}
 			err = fakeClient.Get(ctx, req.NamespacedName, updatedOld)
 			Expect(errors.IsNotFound(err)).To(BeTrue())
+		})
+	})
+
+	Describe("Generic Migration Reconciler - status restore", func() {
+		It("should restore the legacy status even when the cached Get lags behind Create", func() {
+			// The twin is created with an empty status and the legacy status is
+			// written afterwards through a Get + Status().Update. The Get goes
+			// through the informer cache, which may not contain the object yet
+			// right after Create (seen in the field as "failed to update new
+			// resource status: ... not found"). That restore must be retried on
+			// the next reconcile instead of being lost forever, otherwise the
+			// twin's own reconciler probes OpenSearch, finds the object the
+			// legacy CR created and parks the twin in IGNORED (#1543 residual).
+			oldTemplate := &opsterv1.OpensearchComponentTemplate{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Status: opsterv1.OpensearchComponentTemplateStatus{
+					State:                     opsterv1.OpensearchComponentTemplateCreated,
+					ExistingComponentTemplate: ptr.To(false),
+					ManagedCluster:            ptr.To(types.UID("old-cluster-uid")),
+				},
+			}
+			base := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&opensearchv1.OpensearchComponentTemplate{}, &opsterv1.OpensearchComponentTemplate{}).
+				WithObjects(oldTemplate).
+				Build()
+
+			created, lagged, conflicted := false, false, false
+			twinGR := schema.GroupResource{Group: "opensearch.org", Resource: "opensearchcomponenttemplates"}
+			lagClient := interceptor.NewClient(base, interceptor.Funcs{
+				Create: func(ctx context.Context, c client.WithWatch, obj client.Object, opts ...client.CreateOption) error {
+					err := c.Create(ctx, obj, opts...)
+					if _, ok := obj.(*opensearchv1.OpensearchComponentTemplate); ok && err == nil {
+						created = true
+					}
+					return err
+				},
+				// First status write on the twin loses to a concurrent writer (the
+				// twin's own reconciler setting ManagedCluster on the Create event).
+				SubResourceUpdate: func(ctx context.Context, c client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+					if _, ok := obj.(*opensearchv1.OpensearchComponentTemplate); ok && sub == "status" && !conflicted {
+						conflicted = true
+						return errors.NewConflict(twinGR, obj.GetName(), fmt.Errorf("simulated concurrent status write"))
+					}
+					return c.SubResource(sub).Update(ctx, obj, opts...)
+				},
+				// First Get of the twin after its Create: informer cache not populated yet.
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					if _, ok := obj.(*opensearchv1.OpensearchComponentTemplate); ok && created && !lagged {
+						lagged = true
+						return errors.NewNotFound(twinGR, key.Name)
+					}
+					return c.Get(ctx, key, obj, opts...)
+				},
+			})
+
+			migration := &ComponentTemplateMigrationReconciler{Client: lagClient, Scheme: scheme}
+
+			// First pass creates the twin; the status restore fails.
+			_, err := migration.Reconcile(ctx, req)
+			Expect(err).To(HaveOccurred())
+
+			// Controller-runtime requeues on error; give the reconciler a few more
+			// passes (finalizer add on the twin, then the old-resource path).
+			for i := 0; i < 3; i++ {
+				_, err = migration.Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			Expect(lagged).To(BeTrue())
+			Expect(conflicted).To(BeTrue())
+
+			twin := &opensearchv1.OpensearchComponentTemplate{}
+			Expect(base.Get(ctx, req.NamespacedName, twin)).To(Succeed())
+			Expect(twin.Annotations).To(HaveKeyWithValue(MigratedFromAnnotation, "opensearch.opster.io/v1"))
+			Expect(twin.Annotations).NotTo(HaveKey(MigrationStatusPendingAnnotation))
+			Expect(twin.Status.State).To(Equal(opensearchv1.OpensearchComponentTemplateCreated))
+			Expect(twin.Status.ExistingComponentTemplate).To(Equal(ptr.To(false)))
+			Expect(twin.Status.ManagedCluster).To(BeNil())
 		})
 	})
 

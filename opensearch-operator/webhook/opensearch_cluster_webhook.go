@@ -18,7 +18,9 @@ package webhook
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"strings"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -49,6 +51,9 @@ func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj run
 	if err := validateNodePoolComponentUniqueness(cluster); err != nil {
 		return nil, err
 	}
+	if err := validateNodePools(cluster); err != nil {
+		return nil, err
+	}
 	return v.validateTlsConfig(cluster)
 }
 
@@ -65,12 +70,79 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 		return nil, err
 	}
 
+	// Reject invalid spec.general.version transitions (bad semver, downgrade, more than one
+	// major version jump) before they can be admitted and rendered into the StatefulSet pod
+	// template. This runs regardless of whether a custom image is pinned: the version field
+	// also drives role mapping, security config paths, and settings cleanup elsewhere even when
+	// the image itself is fixed, so it needs to stay valid on its own. It runs before the node
+	// pool checks because those map roles based on the version, so an unparsable version
+	// would otherwise surface as a misleading node pool error.
+	if err := validateVersionTransition(oldCluster, newCluster); err != nil {
+		return nil, err
+	}
+
+	if err := validateNodePools(newCluster); err != nil {
+		return nil, err
+	}
+
 	// Validate storage class changes - storage class is immutable in StatefulSets
 	if err := v.validateStorageClassChanges(oldCluster, newCluster); err != nil {
 		return nil, err
 	}
 
+	// Reject version-only changes when a custom image pins the running image (version is ignored).
+	if err := validateCustomImageVersionChange(oldCluster, newCluster); err != nil {
+		return nil, err
+	}
+
 	return v.validateTlsConfig(newCluster)
+}
+
+// validateVersionTransition rejects a spec.general.version change that the upgrade reconciler
+// would refuse (downgrade, more than one major version jump, or invalid semver), so a bad
+// version never lands in the spec in the first place. Before the cluster has finished its
+// initial bring-up, status.Version is not yet a meaningful baseline, so nothing is checked then.
+func validateVersionTransition(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
+	// Only guard actual transitions. A cluster whose spec already holds a rejected version
+	// (created before this webhook existed, or while it was disabled) must stay editable for
+	// everything else, otherwise unrelated changes - replica counts, a full manifest re-apply
+	// from GitOps - are blocked too.
+	if oldCluster.Spec.General.Version == newCluster.Spec.General.Version {
+		return nil
+	}
+	if !oldCluster.Status.Initialized || oldCluster.Status.Version == "" {
+		return nil
+	}
+	// Returning to the version that is actually running is always allowed, so a pending bad
+	// change can be rolled back.
+	if oldCluster.Status.Version == newCluster.Spec.General.Version {
+		return nil
+	}
+	err := helpers.ValidateVersionTransition(oldCluster.Status.Version, newCluster.Spec.General.Version)
+	// An unparsable baseline is not something the user can fix by picking a different target, and
+	// blocking on it would wedge the object; leave that case to the reconciler.
+	if err == nil || errors.Is(err, helpers.ErrInvalidExistingVersion) {
+		return nil
+	}
+	return fmt.Errorf("invalid spec.general.version change from %s to %s: %w", oldCluster.Status.Version, newCluster.Spec.General.Version, err)
+}
+
+// validateCustomImageVersionChange rejects bumping spec.general.version while a custom image remains
+// pinned unchanged. In that case ResolveImage ignores version, so an "upgrade" would be a silent no-op.
+func validateCustomImageVersionChange(oldCluster, newCluster *opensearchv1.OpenSearchCluster) error {
+	if !helpers.HasPinnedCustomImage(newCluster) {
+		return nil
+	}
+	if oldCluster.Spec.General.Version == newCluster.Spec.General.Version {
+		return nil
+	}
+	oldImage := helpers.PinnedCustomImage(oldCluster)
+	newImage := helpers.PinnedCustomImage(newCluster)
+	if oldImage == newImage {
+		return fmt.Errorf("cannot change spec.general.version from %s to %s while a custom image is pinned (%s); update imageSpec.image (or remove it) to change the running image, since version is ignored when a custom image is set",
+			oldCluster.Spec.General.Version, newCluster.Spec.General.Version, newImage)
+	}
+	return nil
 }
 
 // validateNodePoolComponentUniqueness ensures no two node pools share the same component name,
@@ -86,6 +158,29 @@ func validateNodePoolComponentUniqueness(cluster *opensearchv1.OpenSearchCluster
 			return fmt.Errorf("duplicate node pool component name '%s': each node pool must have a unique component name (used for K8s resource naming)", component)
 		}
 		seen[component] = struct{}{}
+	}
+	return nil
+}
+
+// validateNodePools rejects unknown node pool roles (the StatefulSet builder silently drops
+// anything not on helpers.ValidNodeRoles) and clusters with no cluster-manager-eligible node
+// pool that has replicas >= 1 (such a cluster can never form a quorum).
+func validateNodePools(cluster *opensearchv1.OpenSearchCluster) error {
+	managerRole := helpers.ResolveClusterManagerRole(cluster.Spec.General.Version)
+	hasManager := false
+	for i := range cluster.Spec.NodePools {
+		pool := &cluster.Spec.NodePools[i]
+		for _, role := range pool.Roles {
+			if !helpers.ContainsString(helpers.ValidNodeRoles, role) {
+				return fmt.Errorf("node pool '%s' has unknown role '%s' (valid roles: %s)", pool.Component, role, strings.Join(helpers.ValidNodeRoles, ", "))
+			}
+		}
+		if pool.Replicas >= 1 && helpers.ContainsString(helpers.MapClusterRoles(pool.Roles, cluster.Spec.General.Version), managerRole) {
+			hasManager = true
+		}
+	}
+	if !hasManager {
+		return fmt.Errorf("at least one node pool must have the %s role and replicas >= 1", managerRole)
 	}
 	return nil
 }
@@ -144,26 +239,28 @@ func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opensearchv1.Ope
 
 	tlsConfig := cluster.Spec.Security.Tls
 
-	// Validate transport TLS: if enabled=true, transport config must be provided
-	if tlsConfig.Transport != nil && tlsConfig.Transport.Enabled != nil && *tlsConfig.Transport.Enabled {
-		// Transport TLS is explicitly enabled, config is already provided (Transport != nil)
-		// Validation: if enabled=true, we need either Generate=true or existing certs via Secret
+	// Validate transport TLS: enabled defaults to true when the transport block is present
+	// (see helpers.IsTransportTlsEnabled), so use the shared helper rather than the raw pointer.
+	if helpers.IsTransportTlsEnabled(cluster) && tlsConfig.Transport != nil {
+		// Validation: if enabled, we need either Generate=true or existing certs via Secret
 		if !tlsConfig.Transport.Generate && tlsConfig.Transport.Secret.Name == "" {
 			return nil, fmt.Errorf("transport TLS is enabled but neither generate nor secret is provided")
 		}
 	}
 
-	// Validate HTTP TLS: if enabled=true, HTTP config must be provided
-	if tlsConfig.Http != nil && tlsConfig.Http.Enabled != nil && *tlsConfig.Http.Enabled {
-		// HTTP TLS is explicitly enabled, config is already provided (Http != nil)
-		// Validation: if enabled=true, we need either Generate=true or existing certs via Secret
+	// Validate HTTP TLS: enabled defaults to true when the http block is present
+	// (see helpers.IsHttpTlsEnabled), so use the shared helper rather than the raw pointer.
+	if helpers.IsHttpTlsEnabled(cluster) && tlsConfig.Http != nil {
+		// Validation: if enabled, we need either Generate=true or existing certs via Secret
 		if !tlsConfig.Http.Generate && tlsConfig.Http.Secret.Name == "" {
 			return nil, fmt.Errorf("HTTP TLS is enabled but neither generate nor secret is provided")
 		}
 	}
 
 	// Validate admin secret name: if AdminSecret is empty, tls generate should be true.
-	if helpers.IsSecurityPluginEnabled(cluster) {
+	// The admin certificate is only needed when securityadmin is used; with default init
+	// (security plugin enabled but securityadmin unavailable) no admin cert is required.
+	if helpers.CanRunSecurityAdmin(cluster) {
 		if cluster.Spec.Security.Config != nil && cluster.Spec.Security.Config.AdminSecret.Name != "" {
 			return nil, nil
 		} else {

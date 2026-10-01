@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -87,6 +88,8 @@ type GeneralConfig struct {
 	Grpc *GrpcConfig `json:"grpc,omitempty"`
 	// HostNetwork enables host networking for all pods in the cluster.
 	HostNetwork bool `json:"hostNetwork,omitempty"`
+	// Set the retention policy for the cluster PVCs
+	PersistentVolumeClaimRetentionPolicy *appsv1.StatefulSetPersistentVolumeClaimRetentionPolicy `json:"persistentVolumeClaimRetentionPolicy,omitempty"`
 	// OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set.
 	OpenSearchHome string `json:"opensearchHome,omitempty"`
 	// NodeAttributes derives OpenSearch node attributes (node.attr.*) from
@@ -185,7 +188,7 @@ type NodePool struct {
 
 // PersistenceConfig defines options for data persistence
 type PersistenceConfig struct {
-	PersistenceSource `json:","`
+	PersistenceSource `json:",inline"`
 }
 
 type PersistenceSource struct {
@@ -499,7 +502,8 @@ type GrpcConfig struct {
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	General    GeneralConfig    `json:"general,omitempty"`
+	General GeneralConfig `json:"general,omitempty"`
+	// +kubebuilder:default={smartScaler:true}
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
 	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`

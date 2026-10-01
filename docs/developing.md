@@ -4,7 +4,7 @@ This page provides information how to develop changes for the operator code. Ple
 
 ## Needed environment and tools
 
-The operator is developed in Go, as such you need a current Go toolkit (for Linux most distributions provide packages, otherwise get it from the [go homepage](https://go.dev/)). Please use version 1.25.13 as this version is used by the CI pipelines. You also need an editor/IDE, ideally with Go support. We recommend either [VS Code](https://code.visualstudio.com/) with the official Go extension or [GoLand](https://www.jetbrains.com/go/).
+The operator is developed in Go, as such you need a current Go toolkit (for Linux most distributions provide packages, otherwise get it from the [go homepage](https://go.dev/)). Please use version 1.26.8 as this version is used by the CI pipelines. You also need an editor/IDE, ideally with Go support. We recommend either [VS Code](https://code.visualstudio.com/) with the official Go extension or [GoLand](https://www.jetbrains.com/go/).
 
 Additional tools you will need:
 
@@ -83,7 +83,7 @@ To test your changes you can launch the operator locally. You need a running kub
 * Navigate into the `opensearch-operator` directory
 * Run `make build manifests` to build the controller binary and the manifests
 * Run `make install` to create the CRD in the kubernetes cluster
-* Start the Operator by running `make run`
+* Start the Operator by running `make run` (validating webhooks are disabled for local runs, since they need TLS serving certificates that only exist in-cluster)
 * In a separate terminal apply a `OpenSearchCluster` YAML (you can use one of the examples as a starting point, for example `kubectl apply -f examples/opensearch-cluster.yaml`)
 * In the end you can delete your cluster again by running `kubectl delete -f examples/opensearch-cluster.yaml`
 

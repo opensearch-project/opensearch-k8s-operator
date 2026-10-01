@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/Masterminds/semver"
 	"github.com/go-logr/logr"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
@@ -16,6 +15,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/samber/lo"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
@@ -25,16 +25,19 @@ import (
 )
 
 var (
-	ErrVersionDowngrade = errors.New("version requested is downgrade")
-	ErrMajorVersionJump = errors.New("version request is more than 1 major version ahead")
+	// Aliased from helpers so callers in this package (and existing tests) keep referring to
+	// these as reconcilers.ErrVersionDowngrade / reconcilers.ErrMajorVersionJump.
+	ErrVersionDowngrade = helpers.ErrVersionDowngrade
+	ErrMajorVersionJump = helpers.ErrMajorVersionJump
 	ErrUnexpectedStatus = errors.New("unexpected upgrade status")
 )
 
 const (
-	componentNameUpgrader   = "Upgrader"
-	upgradeStatusPending    = "Pending"
-	upgradeStatusInProgress = "Upgrading"
-	upgradeStatusFinished   = "Finished"
+	componentNameUpgrader    = "Upgrader"
+	upgradeStatusPending     = "Pending"
+	upgradeStatusInProgress  = "Upgrading"
+	upgradeStatusFinished    = "Finished"
+	upgradeTargetDescription = "__upgrade_target__"
 )
 
 const upgradeReconcilerName = "upgrade"
@@ -47,6 +50,7 @@ type UpgradeReconciler struct {
 	reconcilerContext *ReconcilerContext
 	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
+	ReconcilerOptions
 }
 
 func NewUpgradeReconciler(
@@ -70,12 +74,27 @@ func NewUpgradeReconciler(
 func (r *UpgradeReconciler) Name() string { return upgradeReconcilerName }
 
 func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
-	// If versions are in sync do nothing
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+
+	// If versions are in sync do nothing ΓÇö but always clear leftover Upgrader bookkeeping so an
+	// aborted/reverted upgrade cannot skip pools on the next upgrade (issue #1453).
 	if r.instance.Spec.General.Version == r.instance.Status.Version {
-		// If phase is UPGRADING but versions are in sync, set it back to RUNNING
-		if r.instance.Status.Phase == opensearchv1.PhaseUpgrading {
-			err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		if r.instance.Status.Phase == opensearchv1.PhaseUpgrading || r.hasUpgraderStatuses() {
+			// PreparePodForDelete left allocation.enable=primaries and only a completed pool
+			// upgrade restores it; an aborted/reverted upgrade skips that, so restore it here
+			// before the Upgrader bookkeeping (our only trigger) is cleared (issue #1571).
+			osClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+			if err != nil {
+				r.logger.Error(err, "Could not create client for cluster to reactivate shard allocation")
+				return ctrl.Result{}, err
+			}
+			if err := services.ReactivateShardAllocation(osClient); err != nil {
+				r.logger.Error(err, "Could not reactivate shard allocation")
+				return ctrl.Result{}, err
+			}
+			err = r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 				instance.Status.Phase = opensearchv1.PhaseRunning
+				instance.Status.ComponentsStatus = helpers.ClearUpgraderComponentStatuses(instance.Status.ComponentsStatus)
 			})
 			return ctrl.Result{}, err
 		}
@@ -90,15 +109,52 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		}, nil
 	}
 
-	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	// Validate before the pinned-custom-image branch below: that branch copies spec.general.version
+	// into status.Version and returns, so validating after it would let a downgrade or a multi-major
+	// jump through whenever the webhook is disabled and both image and version change together.
+	// If validation fails log a warning and do nothing, returning a terminal error so the main
+	// chain can continue (restart, snapshots, etc.) instead of freezing all maintenance on a
+	// permanent spec mistake. The one exception is when status.Version is not valid semver (e.g.
+	// "latest" set before the webhook existed): no target the user picks can clear that error by
+	// changing the requested version alone. Skip it so a pinned image can resync status.Version
+	// below, or a normal upgrade can proceed and eventually rewrite status after pods roll.
+	validationErr := r.validateUpgrade()
+	if validationErr != nil && !errors.Is(validationErr, helpers.ErrInvalidExistingVersion) {
+		r.logger.V(1).Error(validationErr, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Failed to validate version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
+		return ctrl.Result{}, AsTerminal(validationErr)
+	}
 
-	// If version validation fails log a warning and do nothing. Return a
-	// terminal error so the main chain can continue (restart, snapshots, etc.)
-	// instead of freezing all maintenance on a permanent spec mistake.
-	if err := r.validateUpgrade(); err != nil {
-		r.logger.V(1).Error(err, "version validation failed", "currentVersion", r.instance.Status.Version, "requestedVersion", r.instance.Spec.General.Version)
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Failed to validation version, currentVersion: %s , requestedVersion: %s", r.instance.Status.Version, r.instance.Spec.General.Version)
-		return ctrl.Result{}, AsTerminal(err)
+	// A pinned custom image ignores spec.general.version for the pod template. Bumping version
+	// alone would otherwise look like an instant successful upgrade with no pods restarted.
+	if helpers.HasPinnedCustomImage(r.instance) {
+		r.logger.Info("Skipping version upgrade because a custom image is pinned",
+			"image", helpers.PinnedCustomImage(r.instance),
+			"requestedVersion", r.instance.Spec.General.Version,
+			"statusVersion", r.instance.Status.Version)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade",
+			"spec.general.version changed to %s but a custom image is pinned (%s); pods are not upgraded by version changes. Update imageSpec.image (or remove it) to change the running image",
+			r.instance.Spec.General.Version, helpers.PinnedCustomImage(r.instance))
+		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+			instance.Status.Version = instance.Spec.General.Version
+			instance.Status.Phase = opensearchv1.PhaseRunning
+			instance.Status.ComponentsStatus = helpers.ClearUpgraderComponentStatuses(instance.Status.ComponentsStatus)
+		})
+		return ctrl.Result{}, err
+	}
+
+	// Reset per-pool progress when the upgrade target changes mid-flight (or after an abort that
+	// left stale Upgraded entries while versions still differ).
+	if err := r.ensureUpgradeTarget(); err != nil {
+		r.logger.Error(err, "Could not update upgrade target status")
+		return ctrl.Result{}, err
+	}
+
+	// Drop Upgrader entries for pools that were removed from the spec so they cannot permanently
+	// leave IsUpgradeInProgress stuck true.
+	if err := r.cleanOrphanedUpgraderStatuses(); err != nil {
+		r.logger.Error(err, "Could not clean orphaned upgrader statuses")
+		return ctrl.Result{}, err
 	}
 
 	// Set phase to UPGRADING if not already set
@@ -141,7 +197,8 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 		// Set it to upgrading and requeue
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			componentStatus.Status = upgradeStatusInProgress
-			instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, componentStatus)
+			// Identity-keyed Replace avoids duplicating an already-written Upgrading entry (#1534).
+			instance.Status.ComponentsStatus = helpers.Replace(componentStatus, componentStatus, instance.Status.ComponentsStatus)
 		})
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Starting upgrade of node pool '%s'", componentStatus.Description)
 		return ctrl.Result{
@@ -155,20 +212,17 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 			RequeueAfter: 30 * time.Second,
 		}, err
 	case upgradeStatusFinished:
+		// A pool removed from the spec mid-upgrade (cleanOrphanedUpgraderStatuses) never
+		// reaches its own ReactivateShardAllocation in doNodePoolUpgrade.
+		if err := services.ReactivateShardAllocation(r.osClient); err != nil {
+			r.logger.Error(err, "Could not reactivate shard allocation")
+			return ctrl.Result{}, err
+		}
 		// Cleanup status after successful upgrade
 		err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 			instance.Status.Version = instance.Spec.General.Version
 			instance.Status.Phase = opensearchv1.PhaseRunning
-			for _, pool := range instance.Spec.NodePools {
-				componentStatus := opensearchv1.ComponentStatus{
-					Component:   componentNameUpgrader,
-					Description: pool.Component,
-				}
-				currentStatus, found := helpers.FindFirstPartial(instance.Status.ComponentsStatus, componentStatus, helpers.GetByDescriptionAndComponent)
-				if found {
-					instance.Status.ComponentsStatus = helpers.RemoveIt(currentStatus, instance.Status.ComponentsStatus)
-				}
-			}
+			instance.Status.ComponentsStatus = helpers.ClearUpgraderComponentStatuses(instance.Status.ComponentsStatus)
 		})
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Upgrade", "Finished upgrade - NewVersion: %s", r.instance.Spec.General.Version)
 		return ctrl.Result{}, err
@@ -178,40 +232,110 @@ func (r *UpgradeReconciler) Reconcile() (ctrl.Result, error) {
 	}
 }
 
+func (r *UpgradeReconciler) hasUpgraderStatuses() bool {
+	for _, status := range r.instance.Status.ComponentsStatus {
+		if status.Component == componentNameUpgrader {
+			return true
+		}
+	}
+	return false
+}
+
+// ensureUpgradeTarget records the version currently being upgraded to. If the target changes
+// (or no target is recorded yet while Upgrader entries exist), clear per-pool progress so pools
+// are not skipped.
+func (r *UpgradeReconciler) ensureUpgradeTarget() error {
+	target := opensearchv1.ComponentStatus{
+		Component:   componentNameUpgrader,
+		Description: upgradeTargetDescription,
+	}
+	current, found := helpers.FindFirstPartial(r.instance.Status.ComponentsStatus, target, helpers.GetByDescriptionAndComponent)
+	desiredVersion := r.instance.Spec.General.Version
+
+	if found && current.Status == desiredVersion {
+		return nil
+	}
+
+	r.logger.Info("Resetting upgrade progress for new target version",
+		"previousTarget", current.Status,
+		"newTarget", desiredVersion,
+		"hadPreviousTarget", found)
+
+	targetStatus := opensearchv1.ComponentStatus{
+		Component:   componentNameUpgrader,
+		Description: upgradeTargetDescription,
+		Status:      desiredVersion,
+	}
+	err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		instance.Status.ComponentsStatus = helpers.ClearUpgraderComponentStatuses(instance.Status.ComponentsStatus)
+		instance.Status.ComponentsStatus = append(instance.Status.ComponentsStatus, targetStatus)
+	})
+	if err != nil {
+		return err
+	}
+	// Keep the local copy in sync so pool selection in this reconcile does not use stale entries.
+	r.instance.Status.ComponentsStatus = helpers.ClearUpgraderComponentStatuses(r.instance.Status.ComponentsStatus)
+	r.instance.Status.ComponentsStatus = append(r.instance.Status.ComponentsStatus, targetStatus)
+	return nil
+}
+
+func (r *UpgradeReconciler) cleanOrphanedUpgraderStatuses() error {
+	validPools := make(map[string]struct{}, len(r.instance.Spec.NodePools)+1)
+	for _, pool := range r.instance.Spec.NodePools {
+		validPools[pool.Component] = struct{}{}
+	}
+	validPools[upgradeTargetDescription] = struct{}{}
+
+	filtered := make([]opensearchv1.ComponentStatus, 0, len(r.instance.Status.ComponentsStatus))
+	removed := false
+	for _, status := range r.instance.Status.ComponentsStatus {
+		if status.Component == componentNameUpgrader {
+			if _, ok := validPools[status.Description]; !ok {
+				removed = true
+				continue
+			}
+		}
+		filtered = append(filtered, status)
+	}
+	if !removed {
+		return nil
+	}
+
+	err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
+		kept := make([]opensearchv1.ComponentStatus, 0, len(instance.Status.ComponentsStatus))
+		for _, status := range instance.Status.ComponentsStatus {
+			if status.Component == componentNameUpgrader {
+				if _, ok := validPools[status.Description]; !ok {
+					continue
+				}
+			}
+			kept = append(kept, status)
+		}
+		instance.Status.ComponentsStatus = kept
+	})
+	if err != nil {
+		return err
+	}
+	r.instance.Status.ComponentsStatus = filtered
+	return nil
+}
+
 // Currently provides basic validation on versions.
 // TODO Improve the validation (maybe allow patch version downgrades)
 func (r *UpgradeReconciler) validateUpgrade() error {
-	// Parse versions
-	existing, err := semver.NewVersion(r.instance.Status.Version)
-	if err != nil {
-		return err
+	err := helpers.ValidateVersionTransition(r.instance.Status.Version, r.instance.Spec.General.Version)
+	if err == nil {
+		return nil
 	}
 
-	new, err := semver.NewVersion(r.instance.Spec.General.Version)
-	if err != nil {
-		return err
-	}
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
-
-	// Don't allow version downgrades as they might cause unexpected issues
-	if new.LessThan(existing) {
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Error", "Upgrade", "Invalid version: specified version is a downgrade")
-		return ErrVersionDowngrade
+	switch {
+	case errors.Is(err, ErrVersionDowngrade):
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Invalid version: specified version is a downgrade")
+	case errors.Is(err, ErrMajorVersionJump):
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade", "Invalid version: specified version is more than 1 major version greater than existing")
 	}
-
-	// Don't allow more than one major version upgrade
-	nextMajor := existing.IncMajor().IncMajor()
-	upgradeConstraint, err := semver.NewConstraint(fmt.Sprintf("< %s", nextMajor.String()))
-	if err != nil {
-		return err
-	}
-
-	if !upgradeConstraint.Check(new) {
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Error", "Upgrade", "Invalid version: specified version is more than 1 major version greater than existing")
-		return ErrMajorVersionJump
-	}
-
-	return nil
+	return err
 }
 
 // Find which nodepool to work on
@@ -344,6 +468,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 	if sts.Status.ReadyReplicas < lo.FromPtrOr(sts.Spec.Replicas, 1) {
 		r.logger.Info("Waiting for all pods to be ready")
 		conditions = append(conditions, "Waiting for all pods to be ready")
+		r.handleUnreadyPods(pool, &sts, annotations)
 		r.setComponentConditions(conditions, pool.Component)
 		return nil
 	}
@@ -360,7 +485,7 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 		return err
 	}
 
-	ready, condition, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
+	ready, condition, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		r.logger.Error(err, "Could not check opensearch cluster status")
 		conditions = append(conditions, "Could not check opensearch cluster status")
@@ -444,6 +569,32 @@ func (r *UpgradeReconciler) doNodePoolUpgrade(pool opensearchv1.NodePool) error 
 	}
 
 	return nil
+}
+
+// handleUnreadyPods tries to unblock upgrades stalled by stuck (CrashLoopBackOff/ImagePullBackOff/...) pods and emits Warning events.
+func (r *UpgradeReconciler) handleUnreadyPods(pool opensearchv1.NodePool, sts *appsv1.StatefulSet, annotations map[string]string) {
+	deletedPod, err := helpers.DeleteStuckPodWithOlderRevision(r.client, sts)
+	if err != nil {
+		r.logger.Error(err, "Could not delete stuck pod with older revision", "pool", pool.Component)
+	} else if deletedPod != "" {
+		r.logger.Info("Deleted stuck pod with older revision", "pod", deletedPod, "pool", pool.Component)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade",
+			"Deleted stuck pod '%s' in node pool '%s' to allow the upgrade to proceed", deletedPod, pool.Component)
+	}
+
+	stuckPods, err := helpers.StuckPods(r.client, sts)
+	if err != nil {
+		r.logger.Error(err, "Could not list stuck pods", "pool", pool.Component)
+		return
+	}
+	for podName, reason := range stuckPods {
+		if podName == deletedPod {
+			continue
+		}
+		r.logger.Info("Upgrade stalled by stuck pod", "pod", podName, "reason", reason, "pool", pool.Component)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Upgrade",
+			"Pod '%s' in node pool '%s' is in %s; upgrade is stalled until the pod becomes ready", podName, pool.Component, reason)
+	}
 }
 
 func (r *UpgradeReconciler) setComponentConditions(conditions []string, component string) {

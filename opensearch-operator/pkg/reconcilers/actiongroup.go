@@ -76,7 +76,7 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
 				instance.Status.State = opensearchv1.OpensearchActionGroupCreated
 			}
-			if reason == opensearchActionGroupExists {
+			if reason == opensearchActionGroupExists && ptr.Deref(instance.Status.ExistingActionGroup, false) {
 				instance.Status.State = opensearchv1.OpensearchActionGroupIgnored
 			}
 		})
@@ -160,7 +160,11 @@ func (r *ActionGroupReconciler) Reconcile() (retResult ctrl.Result, retErr error
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 				instance := object.(*opensearchv1.OpensearchActionGroup)
-				instance.Status.ExistingActionGroup = &exists
+				// A concurrent writer (e.g. the migration controller restoring
+				// the migrated status) may have set this already; don't clobber it.
+				if instance.Status.ExistingActionGroup == nil {
+					instance.Status.ExistingActionGroup = &exists
+				}
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)

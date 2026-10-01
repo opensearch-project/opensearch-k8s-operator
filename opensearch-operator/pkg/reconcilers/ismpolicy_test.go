@@ -20,6 +20,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -501,6 +502,55 @@ var _ = Describe("ism policy reconciler", func() {
 					}
 					Expect(len(events)).To(Equal(1))
 					Expect(events[0]).To(Equal(fmt.Sprintf("Warning %s the ISM policy already exists in the OpenSearch cluster", opensearchIsmPolicyExists)))
+				})
+			})
+
+			When("existing status is nil but a concurrent status write already set it", func() {
+				JustBeforeEach(func() {
+					reconciler.updateStatus = ptr.To(true)
+				})
+
+				BeforeEach(func() {
+					instance.Spec.DefaultState = "test-state"
+					instance.Spec.Description = "test-policy"
+					instance.Status.ExistingISMPolicy = nil
+					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).RunAndReturn(
+						func(obj client.Object, f func(client.Object)) error {
+							f(obj)
+							return nil
+						},
+					).Once()
+					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).RunAndReturn(
+						func(obj client.Object, f func(client.Object)) error {
+							obj.(*opensearchv1.OpenSearchISMPolicy).Status.ExistingISMPolicy = ptr.To(false)
+							f(obj)
+							return nil
+						},
+					).Once()
+					mockClient.EXPECT().UdateObjectStatus(mock.Anything, mock.Anything).RunAndReturn(
+						func(obj client.Object, f func(client.Object)) error {
+							f(obj)
+							return nil
+						},
+					)
+				})
+
+				It("takes the managed path instead of returning ignored", func() {
+					go func() {
+						defer GinkgoRecover()
+						defer close(recorder.Events)
+						_, err := reconciler.Reconcile()
+						Expect(err).ToNot(HaveOccurred())
+						Expect(instance.Status.ExistingISMPolicy).ToNot(BeNil())
+						Expect(*instance.Status.ExistingISMPolicy).To(BeFalse())
+						Expect(instance.Status.State).ToNot(Equal(opensearchv1.OpensearchISMPolicyIgnored))
+					}()
+					var events []string
+					for msg := range recorder.Events {
+						events = append(events, msg)
+					}
+					Expect(events).To(ContainElement(fmt.Sprintf("Normal %s policy is in sync", opensearchAPIUnchanged)))
+					Expect(events).ToNot(ContainElement(fmt.Sprintf("Warning %s the ISM policy already exists in the OpenSearch cluster", opensearchIsmPolicyExists)))
 				})
 			})
 

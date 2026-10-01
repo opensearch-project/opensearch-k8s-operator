@@ -193,7 +193,7 @@ _Appears in:_
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
 | `general` _[GeneralConfig](#generalconfig)_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file |  |  |
-| `confMgmt` _[ConfMgmt](#confmgmt)_ |  |  |  |
+| `confMgmt` _[ConfMgmt](#confmgmt)_ |  | \{ smartScaler:true \} |  |
 | `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ |  |  |  |
 | `dashboards` _[DashboardsConfig](#dashboardsconfig)_ |  |  |  |
 | `security` _[Security](#security)_ |  |  |  |
@@ -515,6 +515,7 @@ _Appears in:_
 | `operatorClusterURL` _string_ | Operator cluster URL. If set, the operator will use this URL to communicate with OpenSearch<br />instead of the default internal Kubernetes service DNS name. |  |  |
 | `grpc` _[GrpcConfig](#grpcconfig)_ | gRPC API configuration for OpenSearch |  |  |
 | `hostNetwork` _boolean_ | HostNetwork enables host networking for all pods in the cluster. |  |  |
+| `persistentVolumeClaimRetentionPolicy` _[StatefulSetPersistentVolumeClaimRetentionPolicy](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#statefulsetpersistentvolumeclaimretentionpolicy-v1-apps)_ | Set the retention policy for the cluster PVCs |  |  |
 | `opensearchHome` _string_ | OpenSearch installation directory inside the container. Defaults to /usr/share/opensearch if not set. |  |  |
 | `nodeAttributes` _[NodeAttribute](#nodeattribute) array_ | NodeAttributes derives OpenSearch node attributes (node.attr.*) from<br />Kubernetes node labels at runtime. For each entry the operator injects an<br />init container that reads the label off the node hosting the pod and<br />exposes its value to OpenSearch, enabling shard allocation awareness<br />(e.g. zone or rack awareness) without splitting topology into separate<br />node pools. The pods' ServiceAccount must be allowed to "get" nodes. |  |  |
 
@@ -1316,6 +1317,7 @@ _Appears in:_
 
 
 _Appears in:_
+- [PersistenceConfig](#persistenceconfig)
 - [PersistenceSource](#persistencesource)
 
 | Field | Description | Default | Validation |
@@ -1357,7 +1359,9 @@ _Appears in:_
 
 | Field | Description | Default | Validation |
 | --- | --- | --- | --- |
-| `PersistenceSource` _[PersistenceSource](#persistencesource)_ |  |  |  |
+| `pvc` _[PVCSource](#pvcsource)_ |  |  |  |
+| `emptyDir` _[EmptyDirVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#emptydirvolumesource-v1-core)_ |  |  |  |
+| `hostPath` _[HostPathVolumeSource](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostpathvolumesource-v1-core)_ |  |  |  |
 
 
 #### PersistenceSource

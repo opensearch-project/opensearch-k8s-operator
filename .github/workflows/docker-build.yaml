@@ -34,6 +34,12 @@ jobs:
   cve-scan:
     runs-on: ubuntu-latest
     name: CVE Scan
+    # upload-sarif needs security-events: write; without it the weekly
+    # scheduled run fails at the upload step with "Resource not accessible
+    # by integration" even though the scan itself passed.
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - name: Checkout
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4

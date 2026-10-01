@@ -3,9 +3,12 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"regexp"
+	"strconv"
 	"time"
 
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -23,6 +26,28 @@ import (
 	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v2"
 )
+
+// applyRetryLoopPattern matches one `until $ADMIN ...; do ... sleep N; done` retry
+// loop of the generated securityconfig-update command.
+var applyRetryLoopPattern = regexp.MustCompile(`(?s)until \$ADMIN\b.*?count\+\+ >= (\d+).*?sleep (\d+);`)
+
+// connectWaitLoopPattern matches the `until curl ...; do ... sleep N; done` loop
+// that waits for the cluster's HTTP endpoint before securityadmin.sh is run.
+var connectWaitLoopPattern = regexp.MustCompile(`(?s)until curl\b.*?wait_count\+\+ >= (\d+).*?sleep (\d+);`)
+
+// applyRetryBudget returns the total time the generated command spends sleeping
+// between retries of securityadmin.sh invocations that never succeed.
+func applyRetryBudget(cmdArg string) time.Duration {
+	var total time.Duration
+	for _, match := range applyRetryLoopPattern.FindAllStringSubmatch(cmdArg, -1) {
+		attempts, err := strconv.Atoi(match[1])
+		Expect(err).ToNot(HaveOccurred())
+		interval, err := strconv.Atoi(match[2])
+		Expect(err).ToNot(HaveOccurred())
+		total += time.Duration(attempts) * time.Duration(interval) * time.Second
+	}
+	return total
+}
 
 func newSecurityconfigReconciler(
 	client *k8s.MockK8sClient,
@@ -366,8 +391,8 @@ do
   echo 'Waiting to connect to the cluster'; sleep 20;
 done;count=0;
 until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd /usr/share/opensearch/config/opensearch-security -icl -nhnv -h no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local -p 9200; do
-  if (( count++ >= 20 )); then
-    echo "Failed to apply securityconfig after 20 attempts";
+  if (( count++ >= 5 )); then
+    echo "Failed to apply securityconfig after 5 attempts";
     exit 1;
   fi;
   sleep 20;
@@ -442,11 +467,19 @@ done;`
 			Expect(*generatedConfigSecret).ToNot(BeNil())
 			checksumval, err := checksum((*generatedConfigSecret).Data)
 			Expect(err).ToNot(HaveOccurred())
+			userChecksumVal, err := checksum(map[string][]byte{
+				"config.yml":         []byte(configYAML),
+				"internal_users.yml": internalUsersYAML("", ""),
+			})
+			Expect(err).ToNot(HaveOccurred())
 			return batchv1.Job{
 				ObjectMeta: metav1.ObjectMeta{
-					Name:        "securityconfig-securityconfig-update",
-					Namespace:   clusterName,
-					Annotations: map[string]string{checksumAnnotation: checksumval},
+					Name:      "securityconfig-securityconfig-update",
+					Namespace: clusterName,
+					Annotations: map[string]string{
+						checksumAnnotation:     checksumval,
+						userChecksumAnnotation: userChecksumVal,
+					},
 				},
 				Status: status,
 			}
@@ -504,6 +537,590 @@ done;`
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(createdJob).ToNot(BeNil())
+		})
+
+		It("should persist the retry count it just computed instead of clobbering it later in the same reconcile", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			// Mirrors the real client: each call mutates a persisted snapshot,
+			// registered before buildReconcileFixture's catch-all stub so it wins.
+			var lastPersisted *opensearchv1.ClusterStatus
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Return(func(_ client.ObjectKey, f func(*opensearchv1.OpenSearchCluster)) error {
+					tmp := opensearchv1.OpenSearchCluster{}
+					f(&tmp)
+					lastPersisted = &tmp.Status
+					return nil
+				})
+
+			spec, generatedConfigSecret := buildReconcileFixture(mockClient)
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				RunAndReturn(func(string, string) (batchv1.Job, error) {
+					return jobWithStatus(generatedConfigSecret, batchv1.JobStatus{Failed: 1}), nil
+				})
+			mockClient.EXPECT().DeleteJob(mock.AnythingOfType("*v1.Job")).Return(nil)
+			mockClient.On("CreateJob", mock.Anything).Return(&ctrl.Result{}, nil)
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(lastPersisted).ToNot(BeNil())
+			var found bool
+			var component opensearchv1.ComponentStatus
+			for _, c := range lastPersisted.ComponentsStatus {
+				if c.Component == securityConfigComponentName {
+					found = true
+					component = c
+				}
+			}
+			Expect(found).To(BeTrue())
+			Expect(component.Status).To(Equal(securityConfigStatusRunning))
+			Expect(component.Conditions).To(ContainElement("retry:1"))
+		})
+	})
+
+	Describe("handleExistingSecurityConfigJob", func() {
+		newHandlerReconciler := func(mockClient *k8s.MockK8sClient, instance *opensearchv1.OpenSearchCluster) *SecurityconfigReconciler {
+			return &SecurityconfigReconciler{
+				client:   mockClient,
+				recorder: &helpers.MockEventRecorder{},
+				instance: instance,
+				logger:   log.FromContext(context.Background()),
+			}
+		}
+
+		captureStatusWrite := func(mockClient *k8s.MockK8sClient) func() *opensearchv1.ComponentStatus {
+			var captured *opensearchv1.ComponentStatus
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Return(func(_ client.ObjectKey, f func(*opensearchv1.OpenSearchCluster)) error {
+					tmp := opensearchv1.OpenSearchCluster{}
+					f(&tmp)
+					if len(tmp.Status.ComponentsStatus) > 0 {
+						captured = &tmp.Status.ComponentsStatus[0]
+					}
+					return nil
+				})
+			return func() *opensearchv1.ComponentStatus { return captured }
+		}
+
+		It("acts on a failed pod even while a backoffLimit replacement pod is active", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			getCaptured := captureStatusWrite(mockClient)
+
+			instance := &opensearchv1.OpenSearchCluster{ObjectMeta: metav1.ObjectMeta{Name: "n", Namespace: "n"}}
+			underTest := newHandlerReconciler(mockClient, instance)
+
+			job := batchv1.Job{Status: batchv1.JobStatus{Active: 1, Failed: 1}}
+			result, done, err := underTest.handleExistingSecurityConfigJob(job, nil)
+			Expect(err).ToNot(HaveOccurred())
+			// done=false signals the caller to delete/recreate the job now,
+			// which only happens once the failure was actually processed.
+			Expect(done).To(BeFalse())
+			Expect(result).To(Equal(ctrl.Result{}))
+
+			captured := getCaptured()
+			Expect(captured).ToNot(BeNil())
+			Expect(captured.Status).To(Equal(securityConfigStatusFailed))
+			Expect(captured.Conditions).To(ContainElement("retry:1"))
+		})
+
+		It("preserves the retry/backoff conditions while a fresh attempt is still running", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			getCaptured := captureStatusWrite(mockClient)
+
+			instance := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "n", Namespace: "n"},
+				Status: opensearchv1.ClusterStatus{
+					ComponentsStatus: []opensearchv1.ComponentStatus{
+						{
+							Component:  securityConfigComponentName,
+							Status:     securityConfigStatusFailed,
+							Conditions: []string{"retry:2", "lastRetry:" + time.Now().UTC().Format(time.RFC3339)},
+						},
+					},
+				},
+			}
+			underTest := newHandlerReconciler(mockClient, instance)
+
+			job := batchv1.Job{Status: batchv1.JobStatus{Active: 1}}
+			_, done, err := underTest.handleExistingSecurityConfigJob(job, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(done).To(BeTrue())
+
+			captured := getCaptured()
+			Expect(captured).ToNot(BeNil())
+			Expect(captured.Conditions).To(ContainElement("retry:2"))
+		})
+
+		It("honors the backoff window without short-circuiting the parent reconcile chain", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			getCaptured := captureStatusWrite(mockClient)
+
+			instance := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "n", Namespace: "n"},
+				Status: opensearchv1.ClusterStatus{
+					ComponentsStatus: []opensearchv1.ComponentStatus{
+						{
+							Component:  securityConfigComponentName,
+							Status:     securityConfigStatusFailed,
+							Conditions: []string{"retry:1", "lastRetry:" + time.Now().UTC().Format(time.RFC3339)},
+						},
+					},
+				},
+			}
+			underTest := newHandlerReconciler(mockClient, instance)
+
+			job := batchv1.Job{Status: batchv1.JobStatus{Failed: 1}}
+			result, done, err := underTest.handleExistingSecurityConfigJob(job, nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(done).To(BeTrue())
+			Expect(result.Requeue).To(BeFalse())
+			// securityConfigRetryDelay(1) == 60s, just retried, so remaining should be close to 60s.
+			Expect(result.RequeueAfter).To(BeNumerically(">", 55*time.Second))
+			Expect(result.RequeueAfter).To(BeNumerically("<=", 60*time.Second))
+
+			captured := getCaptured()
+			Expect(captured).ToNot(BeNil())
+			Expect(captured.Conditions).To(ContainElement("retry:1"))
+		})
+	})
+
+	When("Adopting a cluster previously managed by operator <=2.8.0", func() {
+		It("should treat the legacy job as current and migrate checksum annotations without re-applying", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			adminCredSecret := newAdminCredentialsSecret(clusterName)
+			// The user's own secret, unchanged since operator <=2.8.0 applied it.
+			securityConfigSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data: map[string][]byte{
+					"config.yml":         []byte(configYAML),
+					"internal_users.yml": internalUsersYAML("", ""),
+				},
+			}
+			// What operator <=2.8.0 wrote under checksumAnnotation: a checksum of the raw user
+			// secret, computed before the generated/merged secret existed (see #1193).
+			legacyChecksum, err := checksum(securityConfigSecret.Data)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					// Copied verbatim from the legacy CR by the migration controller.
+					Initialized:          true,
+					ContextSecretCreated: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme).Maybe()
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			// The job left behind by operator <=2.8.0: it only ever set the (now-reused)
+			// checksumAnnotation, and did so over the raw user secret rather than the
+			// generated one, so its value never matches a checksum of the generated secret.
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				Return(batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        "securityconfig-securityconfig-update",
+						Namespace:   clusterName,
+						Annotations: map[string]string{checksumAnnotation: legacyChecksum},
+					},
+					Status: batchv1.JobStatus{Succeeded: 1},
+				}, nil)
+
+			var updatedJob *batchv1.Job
+			mockClient.EXPECT().UpdateJob(mock.AnythingOfType("*v1.Job")).
+				RunAndReturn(func(job *batchv1.Job) error {
+					updatedJob = job.DeepCopy()
+					return nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, &spec)
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(generatedConfigSecret).ToNot(BeNil())
+			generatedChecksum, err := checksum(generatedConfigSecret.Data)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updatedJob).ToNot(BeNil())
+			Expect(updatedJob.Annotations[checksumAnnotation]).To(Equal(generatedChecksum))
+			Expect(updatedJob.Annotations[userChecksumAnnotation]).To(Equal(legacyChecksum))
+
+			mockClient.AssertNotCalled(GinkgoT(), "DeleteJob", mock.Anything)
+			mockClient.AssertNotCalled(GinkgoT(), "CreateJob", mock.Anything)
+		})
+
+		It("should recreate after annotation migration when only the generated checksum later changes", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			adminCredSecret := newAdminCredentialsSecret(clusterName)
+			securityConfigSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data: map[string][]byte{
+					"config.yml":         []byte(configYAML),
+					"internal_users.yml": internalUsersYAML("", ""),
+				},
+			}
+			userChecksumVal, err := checksum(securityConfigSecret.Data)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Initialized:          true,
+					ContextSecretCreated: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			// Job after the adoption migration step: both annotations present, but the generated
+			// checksum is now stale (e.g. admin password rotated after adoption).
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				Return(batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "securityconfig-securityconfig-update",
+						Namespace: clusterName,
+						Annotations: map[string]string{
+							checksumAnnotation:     "stale-generated-checksum-after-adoption",
+							userChecksumAnnotation: userChecksumVal,
+						},
+					},
+					Status: batchv1.JobStatus{Succeeded: 1},
+				}, nil)
+			mockClient.EXPECT().DeleteJob(mock.AnythingOfType("*v1.Job")).Return(nil)
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, &spec)
+			_, err = underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(createdJob).ToNot(BeNil())
+			Expect(createdJob.Annotations[userChecksumAnnotation]).To(Equal(userChecksumVal))
+			Expect(createdJob.Annotations[checksumAnnotation]).ToNot(Equal("stale-generated-checksum-after-adoption"))
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateJob", mock.Anything)
+		})
+	})
+
+	When("Comparing jobs that already carry user-checksum", func() {
+		It("should recreate when the generated checksum changed even if the user checksum still matches", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			adminCredSecret := newAdminCredentialsSecret(clusterName)
+			securityConfigSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data: map[string][]byte{
+					"config.yml":         []byte(configYAML),
+					"internal_users.yml": internalUsersYAML("", ""),
+				},
+			}
+			userChecksumVal, err := checksum(securityConfigSecret.Data)
+			Expect(err).ToNot(HaveOccurred())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Initialized:          true,
+					ContextSecretCreated: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			// Job previously written by this operator: both annotations present, user checksum
+			// still matches, but generated checksum is stale (e.g. admin password hash changed).
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				Return(batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "securityconfig-securityconfig-update",
+						Namespace: clusterName,
+						Annotations: map[string]string{
+							checksumAnnotation:     "stale-generated-checksum",
+							userChecksumAnnotation: userChecksumVal,
+						},
+					},
+					Status: batchv1.JobStatus{Succeeded: 1},
+				}, nil)
+			mockClient.EXPECT().DeleteJob(mock.AnythingOfType("*v1.Job")).Return(nil)
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, &spec)
+			_, err = underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(createdJob).ToNot(BeNil())
+			Expect(createdJob.Annotations[userChecksumAnnotation]).To(Equal(userChecksumVal))
+			Expect(createdJob.Annotations[checksumAnnotation]).ToNot(Equal("stale-generated-checksum"))
+		})
+
+		It("should recreate when there is no user securityconfig secret and only the generated checksum changed", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			adminCredSecret := newAdminCredentialsSecret(clusterName)
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Initialized:          true,
+					ContextSecretCreated: true,
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			// Empty user-checksum is what jobs get when no SecurityconfigSecret is configured.
+			// Matching it must not suppress a generated-checksum mismatch.
+			mockClient.EXPECT().GetJob("securityconfig-securityconfig-update", clusterName).
+				Return(batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:      "securityconfig-securityconfig-update",
+						Namespace: clusterName,
+						Annotations: map[string]string{
+							checksumAnnotation:     "stale-generated-checksum",
+							userChecksumAnnotation: "",
+						},
+					},
+					Status: batchv1.JobStatus{Succeeded: 1},
+				}, nil)
+			mockClient.EXPECT().DeleteJob(mock.AnythingOfType("*v1.Job")).Return(nil)
+
+			var createdJob *batchv1.Job
+			mockClient.On("CreateJob", mock.Anything).
+				Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+					createdJob = job
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(createdJob).ToNot(BeNil())
+			Expect(createdJob.Annotations).To(HaveKey(userChecksumAnnotation))
+			Expect(createdJob.Annotations[userChecksumAnnotation]).To(Equal(""))
+			Expect(createdJob.Annotations[checksumAnnotation]).ToNot(Equal("stale-generated-checksum"))
+		})
+	})
+
+	Describe("securityadmin in-container retry budget", func() {
+		newInstance := func() *opensearchv1.OpenSearchCluster {
+			return &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+				},
+				Status: opensearchv1.ClusterStatus{Initialized: true},
+			}
+		}
+
+		// A securityadmin.sh invocation that fails deterministically (an unparseable
+		// or legacy-format yml) fails identically on every retry. The generated
+		// command must not keep re-running it for minutes: the job has to reach
+		// Failed quickly so the operator can surface it and apply its own backoff.
+		It("bounds the wall-clock a deterministically failing securityadmin invocation can burn", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data:       map[string][]byte{"roles.yml": []byte("not-security-7-format")},
+			}
+
+			cmdArg := BuildCmdArg(newInstance(), secret, log.FromContext(context.Background()))
+			budget := applyRetryBudget(cmdArg)
+
+			Expect(budget).To(BeNumerically(">", 0), "expected the apply command to contain a retry loop")
+			Expect(budget).To(BeNumerically("<=", 2*time.Minute),
+				"a permanently failing securityadmin invocation may stall the job for %s of sleeps before it exits", budget)
+		})
+
+		It("applies the same retry budget to the initial apply-all command", func() {
+			cmdArg := fmt.Sprintf(SecurityAdminBaseCmdTmpl, "/usr/share/opensearch", "host", 9200, securityConfigConnectWaitAttempts, securityConfigConnectWaitAttempts) +
+				fmt.Sprintf(ApplyAllYmlCmdTmpl, caCert, adminCert, adminKey, "/cfg", "host", 9200,
+					securityConfigApplyRetryAttempts, securityConfigApplyRetryAttempts, securityConfigApplyRetryIntervalSeconds)
+
+			matches := applyRetryLoopPattern.FindAllStringSubmatch(cmdArg, -1)
+			Expect(matches).To(HaveLen(1))
+			Expect(matches[0][1]).To(Equal(strconv.Itoa(securityConfigApplyRetryAttempts)))
+			Expect(matches[0][2]).To(Equal(strconv.Itoa(securityConfigApplyRetryIntervalSeconds)))
+			Expect(applyRetryBudget(cmdArg)).To(BeNumerically("<=", 2*time.Minute))
+		})
+
+		// The connect-wait loop is the one that has to absorb a slow first boot of
+		// the cluster, so shrinking the apply retry budget must not touch it.
+		It("keeps the connect-wait loop at 60 attempts of 20 seconds", func() {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: "securityconfig-secret", Namespace: clusterName},
+				Data:       map[string][]byte{"roles.yml": []byte("roles")},
+			}
+
+			cmdArg := BuildCmdArg(newInstance(), secret, log.FromContext(context.Background()))
+
+			match := connectWaitLoopPattern.FindStringSubmatch(cmdArg)
+			Expect(match).To(HaveLen(3), "expected the command to start with a connect-wait loop")
+			Expect(match[1]).To(Equal("60"))
+			Expect(match[2]).To(Equal("20"))
+			Expect(securityConfigConnectWaitAttempts).To(Equal(60))
 		})
 	})
 
@@ -704,6 +1321,276 @@ done;`
 			Expect(cmdArg).To(ContainSubstring("-cacert /certs/ca.crt"))
 			Expect(cmdArg).To(ContainSubstring("-cert /certs/tls.crt"))
 			Expect(cmdArg).To(ContainSubstring("-key /certs/tls.key"))
+		})
+	})
+	When("When Reconciling the securityconfig reconciler with transport TLS enabled but HTTP TLS disabled", func() {
+		It("should apply the securityconfig via default init instead of a securityadmin job", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			var clusterName = "securityconfig-default-init"
+
+			adminCredSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: adminCredsName, Namespace: clusterName},
+				Data: map[string][]byte{
+					"username": []byte("admin"),
+					"password": []byte("changeme"),
+				},
+			}
+			httpTlsDisabled := false
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.19.4",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Enabled: &httpTlsDisabled},
+						},
+					},
+				},
+			}
+			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.On("GetSecret", generatedConfigName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil)
+
+			var generatedConfigSecret *corev1.Secret
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedConfigName {
+						generatedConfigSecret = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedConfigName, clusterName).
+				Return(func(string, string) corev1.Secret {
+					Expect(generatedConfigSecret).ToNot(BeNil())
+					return *generatedConfigSecret
+				}, nil).Once()
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, &spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(
+				mockClient,
+				context.Background(),
+				&reconcilerContext,
+				&spec,
+			)
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(reconcilerContext.OpenSearchConfig).To(HaveKeyWithValue("plugins.security.allow_default_init_securityindex", "true"))
+
+			Expect(generatedConfigSecret).ToNot(BeNil())
+			var mountPaths []string
+			for _, mount := range reconcilerContext.VolumeMounts {
+				if mount.Name == "securityconfig" {
+					mountPaths = append(mountPaths, mount.MountPath)
+				}
+			}
+			Expect(mountPaths).ToNot(BeEmpty())
+			Expect(mountPaths).To(ContainElement(ContainSubstring("internal_users.yml")))
+		})
+	})
+
+	Describe("warnIfDashboardsUserUnmapped", func() {
+		newReconciler := func(mockClient *k8s.MockK8sClient, recorder record.EventRecorder, instance *opensearchv1.OpenSearchCluster) *SecurityconfigReconciler {
+			return &SecurityconfigReconciler{
+				client:            mockClient,
+				reconcilerContext: &ReconcilerContext{},
+				recorder:          recorder,
+				instance:          instance,
+				logger:            log.FromContext(context.Background()),
+			}
+		}
+
+		setupDashboardsUsernameGet := func(mockClient *k8s.MockK8sClient, clusterName, username string) {
+			dashboardsSecretName := clusterName + "-dashboards-password"
+			mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: dashboardsSecretName, Namespace: clusterName},
+				Data:       map[string][]byte{"username": []byte(username)},
+			}, nil)
+		}
+
+		It("emits a Warning event when a custom roles_mapping.yml does not map the Dashboards user", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
+				},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "kibanaserver")
+
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{
+				Data: map[string][]byte{
+					"roles_mapping.yml": []byte(`
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+all_access:
+  reserved: true
+  backend_roles:
+    - "admin"
+`),
+				},
+			}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Eventually(recorder.Events).Should(Receive(ContainSubstring("DashboardsUserUnmapped")))
+		})
+
+		It("does not emit an event when the Dashboards user is mapped", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
+				},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "kibanaserver")
+
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{
+				Data: map[string][]byte{
+					"roles_mapping.yml": []byte(`
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+kibana_server:
+  reserved: true
+  users:
+    - "kibanaserver"
+`),
+				},
+			}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Consistently(recorder.Events).ShouldNot(Receive())
+		})
+
+		It("does not emit an event when the Dashboards user is mapped via backend_roles", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
+				},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "admin")
+
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{
+				Data: map[string][]byte{
+					"internal_users.yml": []byte(`
+admin:
+  hash: "x"
+  backend_roles:
+    - "admin"
+`),
+					"roles_mapping.yml": []byte(`
+all_access:
+  reserved: true
+  backend_roles:
+    - "admin"
+`),
+				},
+			}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Consistently(recorder.Events).ShouldNot(Receive())
+		})
+
+		It("does nothing when Dashboards is disabled", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec:       opensearchv1.ClusterSpec{Dashboards: opensearchv1.DashboardsConfig{Enable: false}},
+			}
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{
+				Data: map[string][]byte{
+					"roles_mapping.yml": []byte(`all_access:
+  users:
+    - "someoneelse"
+`),
+				},
+			}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Consistently(recorder.Events).ShouldNot(Receive())
+		})
+
+		It("does nothing when roles_mapping.yml is not present and the username is kibanaserver", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec:       opensearchv1.ClusterSpec{Dashboards: opensearchv1.DashboardsConfig{Enable: true}},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "kibanaserver")
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{Data: map[string][]byte{}}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Consistently(recorder.Events).ShouldNot(Receive())
+		})
+
+		It("emits a Warning event when a custom Dashboards username has no roles_mapping.yml", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec:       opensearchv1.ClusterSpec{Dashboards: opensearchv1.DashboardsConfig{Enable: true}},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "mydashboardsuser")
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{Data: map[string][]byte{}}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Eventually(recorder.Events).Should(Receive(ContainSubstring("DashboardsUserUnmapped")))
+		})
+
+		It("does not emit an event when a custom Dashboards username is listed under users", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec:       opensearchv1.ClusterSpec{Dashboards: opensearchv1.DashboardsConfig{Enable: true}},
+			}
+			setupDashboardsUsernameGet(mockClient, clusterName, "mydashboardsuser")
+			recorder := record.NewFakeRecorder(1)
+			underTest := newReconciler(mockClient, recorder, &spec)
+
+			configSecret := &corev1.Secret{
+				Data: map[string][]byte{
+					"roles_mapping.yml": []byte(`
+kibana_server:
+  users:
+    - "mydashboardsuser"
+`),
+				},
+			}
+			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
+
+			Consistently(recorder.Events).ShouldNot(Receive())
 		})
 	})
 })

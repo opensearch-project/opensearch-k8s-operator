@@ -19,11 +19,11 @@ package controllers
 import (
 	"context"
 
-	"github.com/go-logr/logr"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -31,13 +31,11 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 )
 
-// OpensearchUserRoleBindingReconciler reconciles a OpensearchUserRoleBinding object
+// OpensearchUserRoleBindingReconciler reconciles a OpensearchUserRoleBinding object.
 type OpensearchUserRoleBindingReconciler struct {
 	client.Client
 	Scheme   *runtime.Scheme
 	Recorder record.EventRecorder
-	Instance *opensearchv1.OpensearchUserRoleBinding
-	logr.Logger
 }
 
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchuserrolebindings,verbs=get;list;watch;create;update;patch;delete
@@ -49,11 +47,11 @@ type OpensearchUserRoleBindingReconciler struct {
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	r.Logger = log.FromContext(ctx).WithValues("userrolebinding", req.NamespacedName)
-	r.Info("Reconciling OpensearchUserRoleBinding")
+	logger := log.FromContext(ctx).WithValues("userrolebinding", req.NamespacedName)
+	logger.Info("Reconciling OpensearchUserRoleBinding")
 
-	r.Instance = &opensearchv1.OpensearchUserRoleBinding{}
-	err := r.Get(ctx, req.NamespacedName, r.Instance)
+	instance := &opensearchv1.OpensearchUserRoleBinding{}
+	err := r.Get(ctx, req.NamespacedName, instance)
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
@@ -62,24 +60,24 @@ func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req
 		r.Client,
 		ctx,
 		r.Recorder,
-		r.Instance,
+		instance,
 	)
 
-	if r.Instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(r.Instance, OpensearchFinalizer)
-		err = r.Update(ctx, r.Instance)
+	if instance.DeletionTimestamp.IsZero() {
+		controllerutil.AddFinalizer(instance, OpensearchFinalizer)
+		err = r.Update(ctx, instance)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		return userRoleBindingReconciler.Reconcile()
 	} else {
-		if controllerutil.ContainsFinalizer(r.Instance, OpensearchFinalizer) {
+		if controllerutil.ContainsFinalizer(instance, OpensearchFinalizer) {
 			err = userRoleBindingReconciler.Delete()
 			if err != nil {
 				return ctrl.Result{}, err
 			}
-			controllerutil.RemoveFinalizer(r.Instance, OpensearchFinalizer)
-			return ctrl.Result{}, r.Update(ctx, r.Instance)
+			controllerutil.RemoveFinalizer(instance, OpensearchFinalizer)
+			return ctrl.Result{}, r.Update(ctx, instance)
 		}
 	}
 
@@ -87,9 +85,10 @@ func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req
 }
 
 // SetupWithManager sets up the controller with the Manager.
-func (r *OpensearchUserRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager) error {
+func (r *OpensearchUserRoleBindingReconciler) SetupWithManager(mgr ctrl.Manager, maxConcurrentReconciles int) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&opensearchv1.OpensearchUserRoleBinding{}).
 		Owns(&opensearchv1.OpenSearchCluster{}). // Get notified when opensearch clusters change
+		WithOptions(controller.Options{MaxConcurrentReconciles: maxConcurrentReconciles}).
 		Complete(r)
 }

@@ -188,6 +188,104 @@ func RemoveExcludeNodeHost(service *OsClusterClient, lg logr.Logger, nodeNameToE
 	return err == nil, err
 }
 
+// NodeInCluster reports whether a node with the given name is currently a
+// member of the cluster.
+func NodeInCluster(service *OsClusterClient, nodeName string) (bool, error) {
+	nodes, err := service.CatNodes()
+	if err != nil {
+		return false, err
+	}
+	for _, n := range nodes {
+		if n.Name == nodeName {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// AddVotingConfigExclusion excludes a master-eligible node from the voting
+// configuration before it is permanently removed from the cluster. The call
+// blocks until the node has left the voting configuration.
+//
+// A node that is not a cluster member is skipped: OpenSearch accepts a POST for
+// an unknown node name and records an `_absent_` tombstone that only counts
+// toward cluster.max_voting_config_exclusions without excluding anything.
+func AddVotingConfigExclusion(service *OsClusterClient, lg logr.Logger, nodeName string) error {
+	present, err := NodeInCluster(service, nodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not list cluster nodes before excluding %s from voting", nodeName))
+		return err
+	}
+	if !present {
+		lg.Info(fmt.Sprintf("Node %s is not a cluster member, skipping voting config exclusion", nodeName))
+		return nil
+	}
+	lg.Info(fmt.Sprintf("Adding voting config exclusion for node: %s", nodeName))
+	err = service.AddVotingConfigExclusion(context.Background(), nodeName)
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not add voting config exclusion for node %s", nodeName))
+	}
+	return err
+}
+
+// ClearVotingConfigExclusions clears voting configuration exclusions after a
+// master-eligible node has been removed. Always waits for excluded nodes to
+// leave the cluster first; clearing without wait can put a still-alive node
+// back into the voting configuration.
+func ClearVotingConfigExclusions(service *OsClusterClient, lg logr.Logger) error {
+	lg.Info("Clearing voting config exclusions", "waitForRemoval", true)
+	err := service.ClearVotingConfigExclusions(context.Background(), true)
+	if err != nil {
+		lg.Error(err, "Could not clear voting config exclusions")
+	}
+	return err
+}
+
+// ClearVotingConfigExclusionsIfNodeGone issues the waiting clear only once no
+// excluded node is still a cluster member. The DELETE is cluster-wide and, with
+// wait_for_removal=true, waits for every excluded node; OpenSearch's 30s default
+// is also the operator's client deadline. Returns false when the clear was not
+// attempted. An empty exclusion list is already clear and returns true.
+func ClearVotingConfigExclusionsIfNodeGone(service *OsClusterClient, lg logr.Logger, nodeName string) (bool, error) {
+	nodes, err := service.CatNodes()
+	if err != nil {
+		lg.Error(err, fmt.Sprintf("Could not list cluster nodes before clearing voting config exclusions for %s", nodeName))
+		return false, err
+	}
+	members := make(map[string]bool, len(nodes))
+	for _, n := range nodes {
+		members[n.Name] = true
+	}
+	if members[nodeName] {
+		lg.Info(fmt.Sprintf("Node %s is still a cluster member, deferring voting config exclusion clear", nodeName))
+		return false, nil
+	}
+	excluded, err := GetVotingConfigExclusions(service)
+	if err != nil {
+		lg.Error(err, "Could not read voting config exclusions before clearing them")
+		return false, err
+	}
+	if len(excluded) == 0 {
+		return true, nil
+	}
+	for _, name := range excluded {
+		if members[name] {
+			lg.Info(fmt.Sprintf("Excluded node %s is still a cluster member, deferring voting config exclusion clear", name))
+			return false, nil
+		}
+	}
+	if err := ClearVotingConfigExclusions(service, lg); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// GetVotingConfigExclusions returns the node names currently excluded from the
+// voting configuration.
+func GetVotingConfigExclusions(service *OsClusterClient) ([]string, error) {
+	return service.GetVotingConfigExclusions(context.Background())
+}
+
 func SetClusterShardAllocation(service *OsClusterClient, enableType ClusterSettingsAllocation) error {
 	settings := createClusterSettingsAllocationEnable(enableType)
 	_, err := service.PutClusterSettings(settings)
@@ -224,7 +322,7 @@ func createClusterSettingsAllocationEnable(enable ClusterSettingsAllocation) res
 	}}
 }
 
-func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bool, string, error) {
+func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool, dataNodes int32) (bool, string, error) {
 	health, err := service.GetHealth()
 	if err != nil {
 		return false, "failed to fetch health", err
@@ -235,18 +333,34 @@ func CheckClusterStatusForRestart(service *OsClusterClient, drainNodes bool) (bo
 	}
 
 	if health.Status == "yellow" {
-		// During an upgrade, if the primary of a shard end on an upgraded node,
-		// its replicas cannot be allocated to non-upgraded nodes,
-		// which will cause the cluster to remain yellow until the number of upgraded nodes
-		// is enough to allocate all replicas.
-		// If the cluster is locked in yellow state just for this reason, it's safe to restart.
-		safeToRestart, err := CheckClusterRestartOnYellow(service, health)
+		// Yellow means every primary is active. Lift our own allocation throttle
+		// (PreparePodForDelete sets "primaries") so it can't masquerade as a
+		// permanently unassignable replica.
+		flatSettings, err := service.GetFlatClusterSettings()
 		if err != nil {
-			return false, "", err
+			return false, "could not fetch cluster settings", err
 		}
-		if safeToRestart {
-			return true, "", nil
+		if flatSettings.Transient.ClusterRoutingAllocationEnable != string(ClusterSettingsAllocationAll) {
+			if err := SetClusterShardAllocation(service, ClusterSettingsAllocationAll); err != nil {
+				return false, "failed to set shard allocation", err
+			}
+			return false, "enabled shard allocation", nil
 		}
+		// A data node that hasn't (re)joined yet leaves no trace in the shard
+		// activity counters once its delayed allocation expires, and a pod can be
+		// Ready before it joins. Wait until every data node is part of the cluster.
+		if health.NumberOfDataNodes < int(dataNodes) {
+			return false, "waiting for all data nodes to join the cluster", nil
+		}
+		// With all data nodes present, allocation enabled and no shard activity,
+		// the allocator has already decided the remaining replicas cannot be placed
+		// (same_shard, awareness, filters, disk watermarks, node_version
+		// mid-upgrade): waiting never turns it green. The candidate itself is
+		// vetted in PreparePodForDelete.
+		if hasShardActivity(health) {
+			return false, "waiting for shard recovery to finish", nil
+		}
+		return true, "", nil
 	}
 
 	if drainNodes {
@@ -304,20 +418,41 @@ func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName strin
 			if err != nil {
 				return false, err
 			}
-			lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
-			return !systemPrimaries, nil
+			if systemPrimaries {
+				lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
+				return false, nil
+			}
+		} else {
+			// Checks if the pod is safe to delete because either:
+			// - there are no shards allocated on the node
+			// - all allocated shards are replicas stuck due to version mismatch (during upgrade)
+			safeToDelete, err := CheckPodSafeToDelete(service, podName)
+			if err != nil {
+				return false, err
+			}
+			if !safeToDelete {
+				// If the node isn't empty requeue to wait for shards to drain
+				lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
+				return false, nil
+			}
 		}
-
-		// Checks if the pod is safe to delete because either:
-		// - there are no shards allocated on the node
-		// - all allocated shards are replicas stuck due to version mismatch (during upgrade)
-		safeToDelete, err := CheckPodSafeToDelete(service, podName)
+	}
+	// Whatever is still on the node goes offline with it. Never take down the
+	// only active copy of a shard that is supposed to have others (red window,
+	// permanent loss on emptyDir). A lone data node is exempt: there is nowhere
+	// else a copy could live, same as a green cluster with number_of_replicas: 0.
+	if nodeCount > 1 {
+		shards, err := service.CatShards([]string{"index", "shard", "prirep", "state", "node"})
 		if err != nil {
 			return false, err
 		}
-		// If the node isn't empty requeue to wait for shards to drain
-		lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
-		return safeToDelete, nil
+		if shard, ok := soleActiveCopyOnNode(shards, podName); ok {
+			lg.Info(fmt.Sprintf("Not restarting %s: it holds the only active copy of %s[%s]", podName, shard.Index, shard.Shard))
+			return false, nil
+		}
+	}
+	if drainNode {
+		return true, nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
 	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationPrimaries); err != nil {
@@ -597,48 +732,37 @@ func DeleteComponentTemplate(ctx context.Context, service *OsClusterClient, comp
 	return nil
 }
 
-func CheckClusterRestartOnYellow(service *OsClusterClient, health responses.ClusterHealthResponse) (bool, error) {
-	if health.Status != "yellow" {
-		return false, nil
-	}
+// hasShardActivity reports whether the allocator is still making progress:
+// shards moving, initializing, waiting on delayed allocation or on shard fetches.
+func hasShardActivity(h responses.ClusterHealthResponse) bool {
+	return h.RelocatingShards > 0 || h.InitializingShards > 0 || h.DelayedUnassigned > 0 || h.InFlightFetch > 0
+}
 
-	// Make sure that there are no moving shards,
-	// i.e. the yellow status is caused by unassigned replicas
-	if health.RelocatingShards > 0 || health.InitializingShards > 0 {
-		return false, nil
-	}
-
-	// Check each yellow index
-	stuckReplicasCount := 0
-	for index, indexHealth := range health.Indices {
-		if indexHealth.Status == "yellow" {
-			// Get all shards for this index
-			headers := []string{}
-			indices := []string{index}
-			shards, err := service.CatNamedIndicesShards(headers, indices)
-			if err != nil {
-				return false, err
-			}
-
-			// Check each unassigned replica
-			for _, shard := range shards {
-				if shard.State == "UNASSIGNED" && shard.PrimaryOrReplica == "r" {
-					isStuck, err := DetectShardStuckVersionMismatch(service, shard)
-					if err != nil {
-						return false, err
-					}
-					if isStuck {
-						stuckReplicasCount += 1
-					}
-				}
-			}
+// soleActiveCopyOnNode returns a shard whose only active copy is on nodeName
+// while other copies of it exist but are not active. Shards with no other
+// copies (number_of_replicas: 0) are ignored, as they are on a green cluster.
+// Search replicas can't be promoted to primary, so they are not counted.
+func soleActiveCopyOnNode(shards []responses.CatShardsResponse, nodeName string) (responses.CatShardsResponse, bool) {
+	type key struct{ index, shard string }
+	copies := map[key]int{}
+	activeElsewhere := map[key]int{}
+	for _, s := range shards {
+		if s.PrimaryOrReplica == "s" {
+			continue
+		}
+		k := key{s.Index, s.Shard}
+		copies[k]++
+		if extractNodeName(s.NodeName) != nodeName && (s.State == "STARTED" || s.State == "RELOCATING") {
+			activeElsewhere[k]++
 		}
 	}
-
-	// Make sure that all unassigned shards are stuck due to node version mismatch
-	isDeadlocked := health.UnassignedShards == stuckReplicasCount
-
-	return isDeadlocked, nil
+	for _, s := range shardsOnNodeFromResponse(shards, nodeName) {
+		k := key{s.Index, s.Shard}
+		if copies[k] > 1 && activeElsewhere[k] == 0 {
+			return s, true
+		}
+	}
+	return responses.CatShardsResponse{}, false
 }
 
 func CheckPodSafeToDelete(service *OsClusterClient, nodeName string) (bool, error) {

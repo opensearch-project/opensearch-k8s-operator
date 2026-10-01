@@ -120,6 +120,7 @@ func (r *RollingRestartReconciler) Reconcile() (ctrl.Result, error) {
 
 		if sts.Status.ReadyReplicas != ptr.Deref(sts.Spec.Replicas, 1) {
 			r.logger.Info("StatefulSet is not ready", "name", sts.Name, "namespace", sts.Namespace, "readyReplicas", sts.Status.ReadyReplicas, "desiredReplicas", ptr.Deref(sts.Spec.Replicas, 1))
+			r.handleUnreadyPods(nodePool, &sts)
 			return ctrl.Result{
 				Requeue:      true,
 				RequeueAfter: 10 * time.Second,
@@ -367,7 +368,7 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 		r.logger.Info("Only 2 data nodes and drain is set, some shards may not drain")
 	}
 
-	ready, message, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes)
+	ready, message, err := services.CheckClusterStatusForRestart(r.osClient, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -418,6 +419,33 @@ func (r *RollingRestartReconciler) findStatus() *opensearchv1.ComponentStatus {
 		return &found
 	}
 	return nil
+}
+
+// handleUnreadyPods tries to unblock rolling restarts stalled by stuck (CrashLoopBackOff/ImagePullBackOff/...) pods and emits Warning events.
+func (r *RollingRestartReconciler) handleUnreadyPods(pool opensearchv1.NodePool, sts *appsv1.StatefulSet) {
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	deletedPod, err := helpers.DeleteStuckPodWithOlderRevision(r.client, sts)
+	if err != nil {
+		r.logger.Error(err, "Could not delete stuck pod with older revision", "pool", pool.Component)
+	} else if deletedPod != "" {
+		r.logger.Info("Deleted stuck pod with older revision", "pod", deletedPod, "pool", pool.Component)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "RollingRestart",
+			"Deleted stuck pod '%s' in node pool '%s' to allow the rolling restart to proceed", deletedPod, pool.Component)
+	}
+
+	stuckPods, err := helpers.StuckPods(r.client, sts)
+	if err != nil {
+		r.logger.Error(err, "Could not list stuck pods", "pool", pool.Component)
+		return
+	}
+	for podName, reason := range stuckPods {
+		if podName == deletedPod {
+			continue
+		}
+		r.logger.Info("Rolling restart stalled by stuck pod", "pod", podName, "reason", reason, "pool", pool.Component)
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "RollingRestart",
+			"Pod '%s' in node pool '%s' is in %s; rolling restart is stalled until the pod becomes ready", podName, pool.Component, reason)
+	}
 }
 
 func (r *RollingRestartReconciler) DeleteResources() (ctrl.Result, error) {

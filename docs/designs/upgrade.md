@@ -91,6 +91,7 @@ The reconciler manages the cluster phase during upgrades:
 - When a version difference is detected and validation passes, the phase is set to `UPGRADING`
 - When all node pools are upgraded and versions match, the phase is set back to `RUNNING`
 - If versions are in sync but phase is still `UPGRADING`, it is automatically corrected to `RUNNING`
+- When an upgrade is aborted by reverting `spec.general.version`, shard allocation is re-enabled (`cluster.routing.allocation.enable=all`) before the leftover `Upgrader` statuses are cleared, since only a completed node pool upgrade would otherwise restore it
 
 ### Node pool upgrade mechanism
 

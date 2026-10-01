@@ -76,7 +76,7 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			if retErr == nil && retResult.Requeue {
 				instance.Status.State = opensearchv1.OpensearchRoleStateCreated
 			}
-			if reason == opensearchRoleExists {
+			if reason == opensearchRoleExists && ptr.Deref(instance.Status.ExistingRole, false) {
 				instance.Status.State = opensearchv1.OpensearchRoleIgnored
 			}
 		})
@@ -160,7 +160,11 @@ func (r *RoleReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 				instance := object.(*opensearchv1.OpensearchRole)
-				instance.Status.ExistingRole = &exists
+				// A concurrent writer (e.g. the migration controller restoring
+				// the migrated status) may have set this already; don't clobber it.
+				if instance.Status.ExistingRole == nil {
+					instance.Status.ExistingRole = &exists
+				}
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)

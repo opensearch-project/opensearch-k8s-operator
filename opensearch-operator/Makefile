@@ -95,7 +95,7 @@ fmt: ## Run go fmt against code.
 
 .PHONY: lint
 lint:
-	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v2.7-alpine golangci-lint run
+	docker run --rm --volume="${PROJECT_PATH}:/go/src/opensearch-operator" -w /go/src/opensearch-operator golangci/golangci-lint:v2.13-alpine golangci-lint run
 
 .PHONY: vet
 vet: ## Run go vet against code.
@@ -115,7 +115,7 @@ build: generate fmt vet ## Build manager binary.
 	go build -o bin/manager main.go
 
 run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./main.go --loglevel debug
+	go run ./main.go --loglevel debug --enable-webhooks=false
 
 docker-build: generate fmt vet ## Build docker image with the manager.
 	@cp -f ../LICENSE LICENSE 2>/dev/null || true

@@ -6,6 +6,7 @@ import (
 	cryptotls "crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"sort"
@@ -20,6 +21,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
@@ -163,6 +165,7 @@ func CreateAdditionalVolumes(
 			})
 		}
 		if volumeConfig.NFS != nil {
+			readOnly = volumeConfig.NFS.ReadOnly
 			retVolumes = append(retVolumes, corev1.Volume{
 				Name: volumeConfig.Name,
 				VolumeSource: corev1.VolumeSource{
@@ -403,6 +406,37 @@ func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *ope
 	return opensearchv1.OpenSearchHealth(healthResponse.Status), healthResponse
 }
 
+// ClusterHasAllMasters reports whether every expected cluster-manager pod has joined the OpenSearch cluster according to _cat/nodes.
+func ClusterHasAllMasters(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, transport http.RoundTripper, lg logr.Logger) bool {
+	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, transport)
+	if err != nil {
+		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster membership: %v", err))
+		return false
+	}
+
+	nodes, err := osClient.CatNodes()
+	if err != nil {
+		lg.V(1).Info(fmt.Sprintf("Failed to list OpenSearch nodes while checking cluster membership: %v", err))
+		return false
+	}
+
+	return AllMastersJoinedCluster(nodes, builders.ExpectedMasterNodeNames(cluster))
+}
+
+// AllMastersJoinedCluster reports whether every expected node name is present in the listed OpenSearch nodes.
+func AllMastersJoinedCluster(nodes []responses.CatNodesResponse, expected []string) bool {
+	joined := map[string]bool{}
+	for _, n := range nodes {
+		joined[n.Name] = true
+	}
+	for _, name := range expected {
+		if !joined[name] {
+			return false
+		}
+	}
+	return len(expected) > 0
+}
+
 // GetAvailableOpenSearchNodes returns the sum of ready pods for all node pools
 func GetAvailableOpenSearchNodes(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, lg logr.Logger) int32 {
 	clusterName := cluster.Name
@@ -444,6 +478,25 @@ func PodSpecChanged(existing, desired *corev1.Pod) bool {
 	sanitizeBootstrapPodSpec(&desiredSpec)
 
 	return !apiequality.Semantic.DeepEqual(existingSpec, desiredSpec)
+}
+
+// BootstrapPodNeedsRecreation reports whether the operator's desired bootstrap
+// pod spec has changed since the pod was last applied. Live spec mutations from
+// admission controllers (LimitRange, mutating webhooks) are ignored by comparing
+// against the last-applied annotation rather than the live pod spec. Pods
+// without a last-applied annotation are left running to avoid recreate loops.
+func BootstrapPodNeedsRecreation(existing, desired *corev1.Pod) bool {
+	original, err := patch.DefaultAnnotator.GetOriginalConfiguration(existing)
+	if err != nil || len(original) == 0 {
+		return false
+	}
+
+	lastApplied := &corev1.Pod{}
+	if err := json.Unmarshal(original, lastApplied); err != nil {
+		return false
+	}
+
+	return PodSpecChanged(lastApplied, desired)
 }
 
 func sanitizeBootstrapPodSpec(spec *corev1.PodSpec) {

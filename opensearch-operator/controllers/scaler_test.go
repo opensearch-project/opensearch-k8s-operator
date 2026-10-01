@@ -112,6 +112,8 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 
 			By("Check ComponentsStatus")
 			Eventually(func() bool {
+				// Keep pods ready so the scale-down gate does not hold the shrink.
+				_ = MarkStsReady(k8sClient, namespace)
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: OpensearchCluster.Name}, &cluster2); err != nil {
 					return false
 				}
@@ -124,6 +126,9 @@ var _ = Describe("Scaler Reconciler", Ordered, func() {
 		It("should implement new number of replicas to the cluster", func() {
 			By("check replicas")
 			Eventually(func() bool {
+				// Keep pods ready so the scale-down gate does not hold the shrink.
+				_ = MarkStsReady(k8sClient, namespace)
+
 				if err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: namespace, Name: clusterName + "-" + cluster2.Spec.NodePools[0].Component}, &nodePool); err != nil {
 					return false
 				}

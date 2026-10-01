@@ -1,12 +1,15 @@
 package helpers
 
 import (
+	"time"
+
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	k8smocks "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v2"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -393,6 +396,7 @@ snapshotrestore:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			"",
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			"",
 		)
@@ -450,6 +454,7 @@ customuser:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			adminHashOverride,
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			dashboardsHashOverride,
 		)
@@ -510,6 +515,7 @@ kibanaro:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			"$2a$12$newhash",
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			"$2a$12$newkibanahash",
 		)
@@ -557,6 +563,7 @@ customuser:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			"$2a$12$adminhash",
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			"$2a$12$dashhash",
 		)
@@ -599,6 +606,7 @@ kibanaserver:
 			[]byte(inputYaml),
 			[]byte("adminpass"),
 			"$2a$12$newhash",
+			"kibanaserver",
 			[]byte("dashboardspass"),
 			"$2a$12$newkibanahash",
 		)
@@ -621,6 +629,176 @@ kibanaserver:
 		}
 		Expect(roleStrings).To(ContainElement("other_role"))
 		Expect(roleStrings).To(ContainElement("admin"))
+	})
+
+	It("should inject the hash under a custom Dashboards username, not kibanaserver", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "adminhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			"$2a$12$adminhash",
+			"mydashboardsuser",
+			[]byte("dashboardspass"),
+			"$2a$12$customuserhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		// The custom username must carry the hash, and "kibanaserver" must not be created.
+		Expect(output).ToNot(HaveKey("kibanaserver"))
+		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).To(Equal("$2a$12$customuserhash"))
+	})
+
+	It("should drop a leftover empty-hash kibanaserver when using a custom Dashboards username", func() {
+		defaults, err := defaultSecurityconfigData()
+		Expect(err).NotTo(HaveOccurred())
+		inputYaml := defaults["internal_users.yml"]
+		Expect(inputYaml).NotTo(BeEmpty())
+
+		result, err := applyUserHashes(
+			inputYaml,
+			[]byte("adminpass"),
+			"$2a$12$adminhash",
+			"mydashboardsuser",
+			[]byte("dashboardspass"),
+			"$2a$12$customuserhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(output).ToNot(HaveKey("kibanaserver"))
+		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).To(Equal("$2a$12$customuserhash"))
+	})
+
+	It("should keep a leftover kibanaserver entry that already has a hash", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "adminhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+kibanaserver:
+  hash: "$2a$12$existingkibanahash"
+  reserved: true
+  description: "kept"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			[]byte("adminpass"),
+			"$2a$12$adminhash",
+			"mydashboardsuser",
+			[]byte("dashboardspass"),
+			"$2a$12$customuserhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(output).To(HaveKey("kibanaserver"))
+		kibana, ok := output["kibanaserver"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(kibana["hash"]).To(Equal("$2a$12$existingkibanahash"))
+		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).To(Equal("$2a$12$customuserhash"))
+	})
+})
+
+var _ = Describe("RolesMappingAuthorizes", func() {
+	It("returns true when the username is listed under a role's users", func() {
+		rolesMapping := `
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+kibana_server:
+  reserved: true
+  users:
+    - "kibanaserver"
+`
+		mapped, err := RolesMappingAuthorizes([]byte(rolesMapping), "kibanaserver", nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeTrue())
+	})
+
+	It("returns false when the username is not listed under any role", func() {
+		rolesMapping := `
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+all_access:
+  reserved: true
+  backend_roles:
+    - "admin"
+  users:
+    - "someoneelse"
+`
+		mapped, err := RolesMappingAuthorizes([]byte(rolesMapping), "kibanaserver", nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeFalse())
+	})
+
+	It("returns false on an empty document without error", func() {
+		mapped, err := RolesMappingAuthorizes([]byte(""), "kibanaserver", nil)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeFalse())
+	})
+
+	It("returns true when a backend_role of the user is mapped", func() {
+		rolesMapping := `
+_meta:
+  type: "rolesmapping"
+  config_version: 2
+all_access:
+  reserved: true
+  backend_roles:
+    - "admin"
+`
+		mapped, err := RolesMappingAuthorizes([]byte(rolesMapping), "admin", []string{"admin"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeTrue())
+	})
+})
+
+var _ = Describe("DashboardsUserMapped", func() {
+	It("treats the user as mapped when internal_users backend_roles match roles_mapping", func() {
+		rolesMapping := []byte(`
+all_access:
+  backend_roles:
+    - "admin"
+`)
+		internalUsers := []byte(`
+admin:
+  hash: "x"
+  backend_roles:
+    - "admin"
+`)
+		mapped, err := DashboardsUserMapped(rolesMapping, internalUsers, "admin")
+		Expect(err).NotTo(HaveOccurred())
+		Expect(mapped).To(BeTrue())
 	})
 })
 
@@ -708,6 +886,157 @@ var _ = Describe("EnsureDashboardsCredentialsSecret", func() {
 	})
 })
 
+var _ = Describe("DashboardsUsername", func() {
+	It("reads the username from the credentials secret without creating one", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+			Spec: opensearchv1.ClusterSpec{
+				Dashboards: opensearchv1.DashboardsConfig{
+					OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: "dash-creds"},
+				},
+			},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret("dash-creds", "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{"username": []byte("mydashboardsuser")},
+		}, nil).Once()
+
+		username, err := DashboardsUsername(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(username).To(Equal("mydashboardsuser"))
+	})
+
+	It("defaults to kibanaserver when the username field is absent", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret(GeneratedDashboardsCredentialsSecretName(cr), "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{"password": []byte("secret")},
+		}, nil).Once()
+
+		username, err := DashboardsUsername(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(username).To(Equal("kibanaserver"))
+	})
+})
+
+var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
+	It("injects the hash under a custom Dashboards username from the credentials secret", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+			Spec: opensearchv1.ClusterSpec{
+				Dashboards: opensearchv1.DashboardsConfig{
+					OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: "dash-creds"},
+				},
+			},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret("dash-creds", "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{
+				"username": []byte("mydashboardsuser"),
+				"password": []byte("dashboardspass"),
+			},
+		}, nil).Once()
+		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+		mockClient.EXPECT().GetSecret(GeneratedSecurityConfigSecretName(cr), "pwtest").Return(corev1.Secret{}, notFound).Once()
+
+		secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
+			Data: map[string][]byte{"password": []byte("adminpass")},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(secret.Data["internal_users.yml"], &output)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(output).ToNot(HaveKey("kibanaserver"))
+		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(custom["hash"]).NotTo(BeEmpty())
+	})
+})
+
+var _ = Describe("Master role helpers", func() {
+	Describe("IsMasterStatefulSet", func() {
+		It("should detect master role label", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "master"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeTrue())
+		})
+
+		It("should detect cluster_manager role label", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "cluster_manager"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeTrue())
+		})
+
+		It("should return false for data pools", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "data"},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
+		})
+
+		It("should fall back to the node.roles env when the role label was overridden or is missing", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "custom"},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{{
+								Name: "opensearch",
+								Env:  []corev1.EnvVar{{Name: "node.roles", Value: "cluster_manager, data"}},
+							}},
+						},
+					},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeTrue())
+
+			sts.Spec.Template.Spec.Containers[0].Env[0].Value = "data,ingest"
+			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
+		})
+
+		It("should use the last node.roles value and ignore other containers", func() {
+			sts := appsv1.StatefulSet{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{"opensearch.role": "custom"},
+				},
+				Spec: appsv1.StatefulSetSpec{
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name: "sidecar",
+									Env:  []corev1.EnvVar{{Name: "node.roles", Value: "cluster_manager"}},
+								},
+								{
+									Name: "opensearch",
+									Env: []corev1.EnvVar{
+										{Name: "node.roles", Value: "cluster_manager"},
+										{Name: "node.roles", Value: "data"},
+									},
+								},
+							},
+						},
+					},
+				},
+			}
+			Expect(IsMasterStatefulSet(sts)).To(BeFalse())
+		})
+	})
+})
+
 var _ = Describe("HotReloadEnabled", func() {
 	cluster := func(version string) *opensearchv1.OpenSearchCluster {
 		return &opensearchv1.OpenSearchCluster{
@@ -730,5 +1059,348 @@ var _ = Describe("HotReloadEnabled", func() {
 
 	It("honors explicit false on OpenSearch 3.x", func() {
 		Expect(HotReloadEnabled(cluster("3.0.0"), ptr.To(false))).To(BeFalse())
+	})
+})
+
+var _ = Describe("Upgrade status helpers", func() {
+	Describe("ClearUpgraderComponentStatuses", func() {
+		It("should remove all Upgrader entries including orphaned pools", func() {
+			statuses := []opensearchv1.ComponentStatus{
+				{Component: "RollingRestart", Status: "Finished"},
+				{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				{Component: "Upgrader", Description: "removed-pool", Status: "Upgrading"},
+				{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+				{Component: "Scaler", Description: "masters", Status: "Finished"},
+			}
+
+			result := ClearUpgraderComponentStatuses(statuses)
+			Expect(result).To(ConsistOf(
+				opensearchv1.ComponentStatus{Component: "RollingRestart", Status: "Finished"},
+				opensearchv1.ComponentStatus{Component: "Scaler", Description: "masters", Status: "Finished"},
+			))
+		})
+	})
+
+	Describe("Replace", func() {
+		It("does not duplicate an entry when the fresh list already reflects the transition (issue #1534)", func() {
+			// remove is the status snapshot taken at the start of the reconcile (informer-cache read);
+			// list is what UpdateOpenSearchClusterStatus's fresh Get returned, which already has the
+			// new status because a previous run of this same transition already applied it (either a
+			// concurrent reconcile that started from a stale cache, or a RetryOnConflict re-run).
+			remove := opensearchv1.ComponentStatus{Component: "Upgrader", Description: "data", Status: "Upgrading"}
+			add := opensearchv1.ComponentStatus{Component: "Upgrader", Description: "data", Status: "Upgraded"}
+			list := []opensearchv1.ComponentStatus{add}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(add))
+		})
+
+		It("self-heals a list that already carries a duplicate for the same identity", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded"}
+			add := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:new"}}
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:old-1"}},
+				{Component: "Scaler", Description: "data", Status: "Excluded", Conditions: []string{"drainStarted:old-2"}},
+			}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(add))
+		})
+
+		It("only touches entries with the same identity, leaving other components/pools untouched", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Running"}
+			add := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Excluded"}
+			other := opensearchv1.ComponentStatus{Component: "Scaler", Description: "masters", Status: "Running"}
+			list := []opensearchv1.ComponentStatus{other, {Component: "Scaler", Description: "data", Status: "Running"}}
+
+			result := Replace(remove, add, list)
+
+			Expect(result).To(ConsistOf(other, add))
+		})
+	})
+
+	Describe("RemoveIt", func() {
+		It("removes by identity even if the caller's remembered Status is stale", func() {
+			remove := opensearchv1.ComponentStatus{Component: "Scaler", Description: "data", Status: "Running"}
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Waiting"},
+			}
+
+			result := RemoveIt(remove, list)
+
+			Expect(result).To(BeEmpty())
+		})
+
+		It("does not mutate the input slice", func() {
+			list := []opensearchv1.ComponentStatus{
+				{Component: "Scaler", Description: "data", Status: "Running"},
+				{Component: "Scaler", Description: "masters", Status: "Running"},
+			}
+			listCopy := append([]opensearchv1.ComponentStatus(nil), list...)
+
+			_ = RemoveIt(opensearchv1.ComponentStatus{Component: "Scaler", Description: "data"}, list)
+
+			Expect(list).To(Equal(listCopy))
+		})
+	})
+
+	Describe("HasPinnedCustomImage", func() {
+		It("should return true when a custom image is set", func() {
+			image := "example.com/opensearch:1"
+			cluster := &opensearchv1.OpenSearchCluster{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ImageSpec: &opensearchv1.ImageSpec{Image: &image},
+					},
+				},
+			}
+			Expect(HasPinnedCustomImage(cluster)).To(BeTrue())
+			Expect(PinnedCustomImage(cluster)).To(Equal(image))
+		})
+
+		It("should return false when no custom image is set", func() {
+			cluster := &opensearchv1.OpenSearchCluster{
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.12.0"},
+				},
+			}
+			Expect(HasPinnedCustomImage(cluster)).To(BeFalse())
+			Expect(PinnedCustomImage(cluster)).To(BeEmpty())
+		})
+	})
+
+	Describe("IsUpgradeInProgress", func() {
+		It("should be true while an upgrade target marker exists", func() {
+			status := opensearchv1.ClusterStatus{
+				ComponentsStatus: []opensearchv1.ComponentStatus{
+					{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+					{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				},
+			}
+			Expect(IsUpgradeInProgress(status)).To(BeTrue())
+		})
+
+		It("should be false when only Upgraded entries remain", func() {
+			status := opensearchv1.ClusterStatus{
+				ComponentsStatus: []opensearchv1.ComponentStatus{
+					{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				},
+			}
+			Expect(IsUpgradeInProgress(status)).To(BeFalse())
+		})
+	})
+})
+
+var _ = Describe("Stuck pod handling (issue #1531)", func() {
+	sts := &appsv1.StatefulSet{
+		ObjectMeta: metav1.ObjectMeta{Name: "c-nodes", Namespace: "ns"},
+		Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To[int32](2)},
+		Status:     appsv1.StatefulSetStatus{UpdateRevision: "rev-new"},
+	}
+	pod := func(name, revision, waitingReason string) corev1.Pod {
+		p := corev1.Pod{ObjectMeta: metav1.ObjectMeta{
+			Name: name, Namespace: "ns", Labels: map[string]string{stsRevisionLabel: revision},
+		}}
+		if waitingReason != "" {
+			p.Status.ContainerStatuses = []corev1.ContainerStatus{{
+				Ready: false,
+				State: corev1.ContainerState{Waiting: &corev1.ContainerStateWaiting{Reason: waitingReason}},
+			}}
+		} else {
+			p.Status.ContainerStatuses = []corev1.ContainerStatus{{Ready: true}}
+		}
+		return p
+	}
+
+	It("deletes an older-revision pod stuck in ImagePullBackOff", func() {
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetPod("c-nodes-0", "ns").Return(pod("c-nodes-0", "rev-old", "ImagePullBackOff"), nil)
+		mockClient.EXPECT().DeletePod(mock.MatchedBy(func(p *corev1.Pod) bool { return p.Name == "c-nodes-0" })).Return(nil)
+
+		deleted, err := DeleteStuckPodWithOlderRevision(mockClient, sts)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(deleted).To(Equal("c-nodes-0"))
+	})
+
+	It("does not delete an older-revision pod that is merely starting", func() {
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetPod("c-nodes-0", "ns").Return(pod("c-nodes-0", "rev-old", "ContainerCreating"), nil)
+
+		deleted, err := DeleteStuckPodWithOlderRevision(mockClient, sts)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(deleted).To(BeEmpty())
+	})
+
+	It("reports every stuck pod with its waiting reason", func() {
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetPod("c-nodes-0", "ns").Return(pod("c-nodes-0", "rev-new", "ErrImagePull"), nil)
+		mockClient.EXPECT().GetPod("c-nodes-1", "ns").Return(pod("c-nodes-1", "rev-new", ""), nil)
+
+		stuck, err := StuckPods(mockClient, sts)
+		Expect(err).ToNot(HaveOccurred())
+		Expect(stuck).To(Equal(map[string]string{"c-nodes-0": "ErrImagePull"}))
+	})
+
+	// A container whose startup probe kills it (e.g. exit code 143) spends most of its time
+	// Running/not-ready and only briefly passes through a Waiting state, so it never matches
+	// stuckWaitingReasons. See issue #1537.
+	runningNotReady := func(name, revision string, restartCount int32, withLastTerminated bool) corev1.Pod {
+		status := corev1.ContainerStatus{
+			Ready:        false,
+			Started:      ptr.To(false),
+			RestartCount: restartCount,
+			State:        corev1.ContainerState{Running: &corev1.ContainerStateRunning{}},
+		}
+		if withLastTerminated {
+			status.LastTerminationState = corev1.ContainerState{
+				Terminated: &corev1.ContainerStateTerminated{ExitCode: 143, Reason: "Error"},
+			}
+		}
+		return corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: name, Namespace: "ns", Labels: map[string]string{stsRevisionLabel: revision},
+			},
+			Status: corev1.PodStatus{ContainerStatuses: []corev1.ContainerStatus{status}},
+		}
+	}
+
+	It("flags a Running-but-not-ready container repeatedly killed by its startup probe", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold, true)
+		Expect(StuckContainerReason(&p)).To(Equal("RepeatedlyFailing"))
+	})
+
+	It("does not flag a Running-but-not-ready container below the restart threshold", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold-1, true)
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+
+	It("does not flag a Running-but-not-ready container with no recorded last-terminated state", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, false)
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+
+	It("does not flag a ready container regardless of restart count", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, true)
+		p.Status.ContainerStatuses[0].Ready = true
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+
+	// Restart count and last-terminated state stick around after a container has started up, so a
+	// container that went not-ready without restarting must not be flagged.
+	It("does not flag a started container that later went not-ready", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, true)
+		p.Status.ContainerStatuses[0].Started = ptr.To(true)
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+
+	It("does not flag a container whose started state is not reported", func() {
+		p := runningNotReady("c-nodes-0", "rev-new", stuckRestartThreshold+2, true)
+		p.Status.ContainerStatuses[0].Started = nil
+		Expect(StuckContainerReason(&p)).To(BeEmpty())
+	})
+})
+
+var _ = Describe("IsSecurityPluginEnabled and CanRunSecurityAdmin", func() {
+	makeCluster := func(version string, transport *opensearchv1.TlsConfigTransport, http *opensearchv1.TlsConfigHttp) *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{Version: version},
+				Security: &opensearchv1.Security{
+					Tls: &opensearchv1.TlsConfig{
+						Transport: transport,
+						Http:      http,
+					},
+				},
+			},
+		}
+	}
+
+	It("should report both disabled without any TLS", func() {
+		cluster := &opensearchv1.OpenSearchCluster{
+			Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{Version: "2.19.4"}},
+		}
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeFalse())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report the plugin enabled but securityadmin unavailable with transport TLS only on >= 2.0", func() {
+		cluster := makeCluster("2.19.4", &opensearchv1.TlsConfigTransport{Generate: true}, nil)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report the plugin enabled but securityadmin unavailable with HTTP TLS explicitly disabled on >= 2.0", func() {
+		cluster := makeCluster(
+			"2.19.4",
+			&opensearchv1.TlsConfigTransport{Generate: true},
+			&opensearchv1.TlsConfigHttp{Enabled: ptr.To(false)},
+		)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeFalse())
+	})
+
+	It("should report both enabled with transport and HTTP TLS on >= 2.0", func() {
+		cluster := makeCluster(
+			"2.19.4",
+			&opensearchv1.TlsConfigTransport{Generate: true},
+			&opensearchv1.TlsConfigHttp{Generate: true},
+		)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeTrue())
+	})
+
+	It("should report both enabled with transport TLS only on < 2.0 (securityadmin uses the transport port)", func() {
+		cluster := makeCluster("1.3.0", &opensearchv1.TlsConfigTransport{Generate: true}, nil)
+		Expect(IsSecurityPluginEnabled(cluster)).To(BeTrue())
+		Expect(CanRunSecurityAdmin(cluster)).To(BeTrue())
+	})
+})
+
+var _ = Describe("CountRunningPodsForNodePool", func() {
+	readyPod := func(name string) corev1.Pod {
+		return corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: "ns"},
+			Status: corev1.PodStatus{
+				Conditions: []corev1.PodCondition{{
+					Type:   corev1.PodReady,
+					Status: corev1.ConditionTrue,
+				}},
+			},
+		}
+	}
+
+	It("counts ready node-pool pods", func() {
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().ListPods(mock.Anything).Return(corev1.PodList{
+			Items: []corev1.Pod{readyPod("cluster-master-0")},
+		}, nil)
+
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		}
+		count, err := CountRunningPodsForNodePool(mockClient, cr, &opensearchv1.NodePool{Component: "master"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(Equal(1))
+	})
+
+	It("counts a terminating pod against the ready pods", func() {
+		// After a scale-down the removed pod is still a cluster member while it
+		// terminates, so two ready pods plus one terminating pod must not look like
+		// a settled pool of two (issue #1572).
+		terminating := readyPod("cluster-master-2")
+		terminating.DeletionTimestamp = &metav1.Time{Time: time.Now()}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().ListPods(mock.Anything).Return(corev1.PodList{
+			Items: []corev1.Pod{readyPod("cluster-master-0"), readyPod("cluster-master-1"), terminating},
+		}, nil)
+
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "cluster", Namespace: "ns"},
+		}
+		count, err := CountRunningPodsForNodePool(mockClient, cr, &opensearchv1.NodePool{Component: "master"})
+		Expect(err).NotTo(HaveOccurred())
+		Expect(count).To(Equal(1))
 	})
 })

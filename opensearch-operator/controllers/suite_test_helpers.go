@@ -2,11 +2,14 @@ package controllers
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -14,23 +17,102 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// MarkStsReady simulates the StatefulSet controller by setting
-// Status.ReadyReplicas and Status.AvailableReplicas to match Spec.Replicas
-// for all StatefulSets in the given namespace that belong to the cluster.
-// This is needed in envtest where no real StatefulSet controller runs.
+// MarkStsReady simulates the StatefulSet controller by setting Status.ReadyReplicas and Status.AvailableReplicas
+// to match Spec.Replicas for all StatefulSets in the given namespace, and by creating ready pods for each ordinal.
+// Envtest has no StatefulSet controller, and the scaler and rolling-restart reconcilers derive readiness from pods
+// (ReadyReplicasForNodePool), not from StatefulSet status alone.
 func MarkStsReady(k8sClient client.Client, namespace string) error {
 	stsList := &appsv1.StatefulSetList{}
 	if err := k8sClient.List(context.Background(), stsList, client.InNamespace(namespace)); err != nil {
 		return err
 	}
-	for _, sts := range stsList.Items {
+	for i := range stsList.Items {
+		sts := &stsList.Items[i]
 		if sts.Spec.Replicas == nil {
 			continue
 		}
-		sts.Status.Replicas = *sts.Spec.Replicas
-		sts.Status.ReadyReplicas = *sts.Spec.Replicas
-		sts.Status.AvailableReplicas = *sts.Spec.Replicas
-		if err := k8sClient.Status().Update(context.Background(), &sts); err != nil {
+		replicas := *sts.Spec.Replicas
+		sts.Status.Replicas = replicas
+		sts.Status.ReadyReplicas = replicas
+		sts.Status.AvailableReplicas = replicas
+		if err := k8sClient.Status().Update(context.Background(), sts); err != nil {
+			return err
+		}
+		if err := markPodsReadyForStatefulSet(k8sClient, sts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// markPodsReadyForStatefulSet creates or updates one Ready pod per ordinal so pod-level readiness matches Spec.Replicas.
+// Labels come from the StatefulSet so ListPodsForNodePool finds them.
+func markPodsReadyForStatefulSet(k8sClient client.Client, sts *appsv1.StatefulSet) error {
+	replicas := int32(0)
+	if sts.Spec.Replicas != nil {
+		replicas = *sts.Spec.Replicas
+	}
+	labels := map[string]string{}
+	if sts.Spec.Selector != nil {
+		for k, v := range sts.Spec.Selector.MatchLabels {
+			labels[k] = v
+		}
+	}
+	if cluster, ok := sts.Labels[helpers.ClusterLabel]; ok {
+		labels[helpers.ClusterLabel] = cluster
+	}
+	if pool, ok := sts.Labels[helpers.NodePoolLabel]; ok {
+		labels[helpers.NodePoolLabel] = pool
+	}
+
+	for ordinal := int32(0); ordinal < replicas; ordinal++ {
+		podName := fmt.Sprintf("%s-%d", sts.Name, ordinal)
+		pod := &corev1.Pod{}
+		err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: sts.Namespace, Name: podName}, pod)
+		if errors.IsNotFound(err) {
+			pod = &corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      podName,
+					Namespace: sts.Namespace,
+					Labels:    labels,
+				},
+				Spec: corev1.PodSpec{
+					Containers: []corev1.Container{{
+						Name:  "opensearch",
+						Image: "opensearchproject/opensearch:latest",
+					}},
+				},
+			}
+			if err := k8sClient.Create(context.Background(), pod); err != nil {
+				return err
+			}
+		} else if err != nil {
+			return err
+		}
+
+		pod.Status.Phase = corev1.PodRunning
+		pod.Status.Conditions = []corev1.PodCondition{{
+			Type:   corev1.PodReady,
+			Status: corev1.ConditionTrue,
+		}}
+		if err := k8sClient.Status().Update(context.Background(), pod); err != nil {
+			return err
+		}
+	}
+
+	// Drop ordinals the StatefulSet no longer asks for so ReadyReplicasForNodePool
+	// matches Spec.Replicas after a scale-down.
+	for ordinal := replicas; ; ordinal++ {
+		podName := fmt.Sprintf("%s-%d", sts.Name, ordinal)
+		pod := &corev1.Pod{}
+		err := k8sClient.Get(context.Background(), client.ObjectKey{Namespace: sts.Namespace, Name: podName}, pod)
+		if errors.IsNotFound(err) {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if err := k8sClient.Delete(context.Background(), pod); err != nil && !errors.IsNotFound(err) {
 			return err
 		}
 	}

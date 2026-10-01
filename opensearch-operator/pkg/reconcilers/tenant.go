@@ -78,7 +78,7 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 			if retErr == nil && retResult.RequeueAfter == 30*time.Second {
 				instance.Status.State = opensearchv1.OpensearchTenantCreated
 			}
-			if reason == opensearchTenantExists {
+			if reason == opensearchTenantExists && ptr.Deref(instance.Status.ExistingTenant, false) {
 				instance.Status.State = opensearchv1.OpensearchTenantIgnored
 			}
 		})
@@ -162,7 +162,11 @@ func (r *TenantReconciler) Reconcile() (retResult ctrl.Result, retErr error) {
 		if ptr.Deref(r.updateStatus, true) {
 			retErr = r.client.UdateObjectStatus(r.instance, func(object client.Object) {
 				instance := object.(*opensearchv1.OpensearchTenant)
-				instance.Status.ExistingTenant = &exists
+				// A concurrent writer (e.g. the migration controller restoring
+				// the migrated status) may have set this already; don't clobber it.
+				if instance.Status.ExistingTenant == nil {
+					instance.Status.ExistingTenant = &exists
+				}
 			})
 			if retErr != nil {
 				reason = fmt.Sprintf("failed to update status: %s", retErr)

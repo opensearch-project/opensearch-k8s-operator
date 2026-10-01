@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/go-logr/logr"
+	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
@@ -11,6 +12,10 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
+
+	"github.com/stretchr/testify/mock"
+	corev1 "k8s.io/api/core/v1"
+	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
 
 var _ = Describe("Upgrade version validation", func() {
@@ -40,5 +45,274 @@ var _ = Describe("Upgrade version validation", func() {
 		Expect(err).To(HaveOccurred())
 		Expect(IsTerminal(err)).To(BeTrue())
 		Expect(err.Error()).To(ContainSubstring("downgrade"))
+	})
+})
+
+func newUpgradeReconciler(mockClient *k8s.MockK8sClient, cluster *opensearchv1.OpenSearchCluster) *UpgradeReconciler {
+	reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, cluster, cluster.Spec.NodePools)
+	return &UpgradeReconciler{
+		client:            mockClient,
+		ctx:               context.Background(),
+		recorder:          record.NewFakeRecorder(20),
+		reconcilerContext: &reconcilerContext,
+		instance:          cluster,
+		logger:            zap.New().WithName("upgrade-test"),
+	}
+}
+
+var _ = Describe("Upgrade Reconciler", func() {
+	var (
+		mockClient *k8s.MockK8sClient
+		cluster    *opensearchv1.OpenSearchCluster
+	)
+
+	BeforeEach(func() {
+		mockClient = k8s.NewMockK8sClient(GinkgoT())
+		cluster = &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-cluster",
+				Namespace: "default",
+				UID:       "dummyuid",
+			},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
+					Version: "2.11.0",
+				},
+				NodePools: []opensearchv1.NodePool{
+					{Component: "data", Roles: []string{"data"}, Replicas: 1},
+					{Component: "masters", Roles: []string{"cluster_manager"}, Replicas: 1},
+				},
+			},
+			Status: opensearchv1.ClusterStatus{
+				Version:     "2.11.0",
+				Phase:       opensearchv1.PhaseRunning,
+				Initialized: true,
+			},
+		}
+	})
+
+	Describe("stale Upgrader status cleanup", func() {
+		It("should clear Upgrader entries when versions are in sync", func() {
+			cluster.Spec.General.ServiceName = "test-cluster"
+			cluster.Spec.General.HttpPort = 9200
+			cluster.Status.Phase = opensearchv1.PhaseUpgrading
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				{Component: "Upgrader", Description: "masters", Status: "Upgrading"},
+				{Component: "RollingRestart", Status: "Finished"},
+			}
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, cluster)
+			registerClusterSettingsResponders(transport)
+			mockScalerAdminSecret(mockClient, cluster.Name, cluster.Namespace)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			underTest.osClientTransport = transport
+			result, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			Expect(cluster.Status.Phase).To(Equal(opensearchv1.PhaseRunning))
+			Expect(cluster.Status.ComponentsStatus).To(ConsistOf(
+				opensearchv1.ComponentStatus{Component: "RollingRestart", Status: "Finished"},
+			))
+		})
+
+		It("should re-enable shard allocation when cleaning up after a reverted upgrade", func() {
+			// PreparePodForDelete sets allocation.enable=primaries before each pod delete.
+			// Reverting spec.general.version mid-upgrade lands here with that setting still
+			// in place; nothing else restores it, so replicas stay UNASSIGNED forever.
+			cluster.Spec.General.ServiceName = "test-cluster"
+			cluster.Spec.General.HttpPort = 9200
+			cluster.Status.Phase = opensearchv1.PhaseUpgrading
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+				{Component: "Upgrader", Description: "data", Status: "Upgrading"},
+			}
+
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, cluster)
+			reactivatedTo := registerAllocationEnableSpy(transport)
+
+			mockScalerAdminSecret(mockClient, cluster.Name, cluster.Namespace)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			underTest.osClientTransport = transport
+			_, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cluster.Status.ComponentsStatus).To(BeEmpty())
+			Expect(*reactivatedTo).To(Equal("all"), "allocation.enable must be restored to all after an aborted upgrade")
+		})
+
+		It("should reset pool progress when the upgrade target changes", func() {
+			cluster.Spec.General.Version = "2.13.0"
+			cluster.Status.Version = "2.11.0"
+			cluster.Status.Phase = opensearchv1.PhaseUpgrading
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+				{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				{Component: "Upgrader", Description: "masters", Status: "Upgrading"},
+			}
+
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			err := underTest.ensureUpgradeTarget()
+			Expect(err).NotTo(HaveOccurred())
+
+			Expect(cluster.Status.ComponentsStatus).To(ConsistOf(
+				opensearchv1.ComponentStatus{
+					Component:   "Upgrader",
+					Description: "__upgrade_target__",
+					Status:      "2.13.0",
+				},
+			))
+
+			pool, status := underTest.findNextNodePoolForUpgrade()
+			Expect(status.Status).To(Equal(upgradeStatusPending))
+			Expect(pool.Component).To(Equal("data"))
+		})
+
+		It("should remove Upgrader entries for pools no longer in the spec", func() {
+			cluster.Spec.General.Version = "2.12.0"
+			cluster.Status.Version = "2.11.0"
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+				{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+				{Component: "Upgrader", Description: "gone", Status: "Upgrading"},
+			}
+
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			err := underTest.cleanOrphanedUpgraderStatuses()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cluster.Status.ComponentsStatus).To(ConsistOf(
+				opensearchv1.ComponentStatus{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+				opensearchv1.ComponentStatus{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+			))
+			Expect(helpers.IsUpgradeInProgress(cluster.Status)).To(BeTrue())
+		})
+	})
+
+	Describe("custom image pinned", func() {
+		It("should sync status.version without running a silent upgrade", func() {
+			image := "example.com/opensearch:custom"
+			cluster.Spec.General.Version = "2.12.0"
+			cluster.Spec.General.ImageSpec = &opensearchv1.ImageSpec{Image: &image}
+			cluster.Status.Version = "2.11.0"
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: "Upgrader", Description: "data", Status: "Upgraded"},
+			}
+
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			result, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			Expect(cluster.Status.Version).To(Equal("2.12.0"))
+			Expect(cluster.Status.Phase).To(Equal(opensearchv1.PhaseRunning))
+			Expect(cluster.Status.ComponentsStatus).To(BeEmpty())
+		})
+
+		It("should still sync status.version when the current status.version is not semver", func() {
+			image := "example.com/opensearch:custom"
+			cluster.Spec.General.Version = "3.0.0"
+			cluster.Spec.General.ImageSpec = &opensearchv1.ImageSpec{Image: &image}
+			cluster.Status.Version = "latest"
+
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+				Run(func(args mock.Arguments) {
+					updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+					updateFn(cluster)
+				}).Return(nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(cluster.Status.Version).To(Equal("3.0.0"))
+		})
+
+		It("should reject an invalid version transition instead of syncing status.version", func() {
+			image := "example.com/opensearch:custom"
+			cluster.Spec.General.Version = "1.0.0"
+			cluster.Spec.General.ImageSpec = &opensearchv1.ImageSpec{Image: &image}
+			cluster.Status.Version = "3.0.0"
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).To(MatchError(ErrVersionDowngrade))
+			Expect(IsTerminal(err)).To(BeTrue())
+			Expect(cluster.Status.Version).To(Equal("3.0.0"))
+		})
+	})
+
+	Describe("unparsable status.version without pinned image", func() {
+		It("should not terminal-reject so a normal upgrade can proceed", func() {
+			cluster.Spec.General.Version = "3.0.0"
+			cluster.Status.Version = "latest"
+			cluster.Status.Phase = opensearchv1.PhaseUpgrading
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: componentNameUpgrader, Description: upgradeTargetDescription, Status: "3.0.0"},
+			}
+
+			// Past validation the reconciler needs cluster credentials; return an empty secret so
+			// client creation fails for an unrelated reason. The assertion is that we did not stop
+			// at a terminal ErrInvalidExistingVersion.
+			mockClient.On("GetSecret", mock.Anything, mock.Anything).Return(corev1.Secret{}, nil).Once()
+
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			_, err := underTest.Reconcile()
+			Expect(err).To(HaveOccurred())
+			Expect(err).NotTo(MatchError(helpers.ErrInvalidExistingVersion))
+			Expect(IsTerminal(err)).To(BeFalse())
+		})
+	})
+
+	Describe("findNextNodePoolForUpgrade", func() {
+		It("should skip the upgrade target marker when selecting pools", func() {
+			cluster.Status.ComponentsStatus = []opensearchv1.ComponentStatus{
+				{Component: "Upgrader", Description: "__upgrade_target__", Status: "2.12.0"},
+			}
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			pool, status := underTest.findNextNodePoolForUpgrade()
+			Expect(status.Status).To(Equal(upgradeStatusPending))
+			Expect(pool.Component).To(Equal("data"))
+		})
+	})
+
+	Describe("validateUpgrade events", func() {
+		It("should reject downgrades", func() {
+			cluster.Spec.General.Version = "2.10.0"
+			cluster.Status.Version = "2.11.0"
+			underTest := newUpgradeReconciler(mockClient, cluster)
+			err := underTest.validateUpgrade()
+			Expect(err).To(MatchError(ErrVersionDowngrade))
+		})
 	})
 })

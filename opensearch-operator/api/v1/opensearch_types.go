@@ -159,7 +159,7 @@ type NodePool struct {
 
 // PersistenceConfig defines options for data persistence
 type PersistenceConfig struct {
-	PersistenceSource `json:","`
+	PersistenceSource `json:",inline"`
 }
 
 type PersistenceSource struct {
@@ -435,7 +435,8 @@ type SnapshotRepoConfig struct {
 type ClusterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	General    GeneralConfig    `json:"general,omitempty"`
+	General GeneralConfig `json:"general,omitempty"`
+	// +kubebuilder:default={smartScaler:true}
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
 	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
