@@ -1,0 +1,146 @@
+# OpenSearch 3.x cluster with a dedicated warm pool, backed by MinIO as the S3 repository.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: searchable-snapshots-s3
+  namespace: default
+type: Opaque
+stringData:
+  s3.client.default.access_key: minioadmin
+  s3.client.default.secret_key: minioadmin-secret
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: searchable-snapshots-minio
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: searchable-snapshots-minio
+  template:
+    metadata:
+      labels:
+        app: searchable-snapshots-minio
+    spec:
+      containers:
+        - name: minio
+          # The official MinIO images are no longer published on Docker Hub or quay.io.
+          image: docker.io/bitnamilegacy/minio:2025.7.23
+          env:
+            - name: MINIO_ROOT_USER
+              value: minioadmin
+            - name: MINIO_ROOT_PASSWORD
+              value: minioadmin-secret
+            - name: MINIO_DEFAULT_BUCKETS
+              value: snapshots
+          ports:
+            - containerPort: 9000
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: 9000
+          volumeMounts:
+            - name: data
+              mountPath: /bitnami/minio/data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: searchable-snapshots-minio
+  namespace: default
+spec:
+  selector:
+    app: searchable-snapshots-minio
+  ports:
+    - port: 9000
+      targetPort: 9000
+---
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: searchable-snapshots
+  namespace: default
+spec:
+  general:
+    version: 3.4.0
+    vendor: Opensearch
+    serviceName: searchable-snapshots
+    httpPort: 9200
+    setVMMaxMapCount: true
+    pluginsList: ["repository-s3"]
+    keystore:
+      - secret:
+          name: searchable-snapshots-s3
+    snapshotRepositories:
+      - name: snapshots
+        type: s3
+        settings:
+          bucket: snapshots
+          base_path: searchable-snapshots
+    additionalConfig:
+      # Lower thresholds to avoid tests failing on
+      # resource-constrained environments like Github Action runners
+      cluster.routing.allocation.disk.watermark.low: 500m
+      cluster.routing.allocation.disk.watermark.high: 300m
+      cluster.routing.allocation.disk.watermark.flood_stage: 100m
+  dashboards:
+    enable: false
+  initHelper:
+    image: docker.io/busybox:1.36
+    imagePullPolicy: IfNotPresent
+    version: "1.36"
+  nodePools:
+    - component: hot
+      replicas: 1
+      diskSize: 1Gi
+      resources:
+        limits:
+          cpu: 500m
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 2Gi
+      roles:
+        - cluster_manager
+        - data
+        - ingest
+      # S3 client settings live on the pools, not in general.additionalConfig, because the
+      # bootstrap pod does not install repository-s3 and would reject them.
+      additionalConfig:
+        s3.client.default.endpoint: searchable-snapshots-minio.default.svc:9000
+        s3.client.default.protocol: http
+        s3.client.default.path_style_access: "true"
+        s3.client.default.region: us-east-1
+    - component: warm
+      replicas: 1
+      diskSize: 1Gi
+      resources:
+        limits:
+          cpu: 500m
+          memory: 2Gi
+        requests:
+          cpu: 500m
+          memory: 2Gi
+      roles:
+        - warm
+      additionalConfig:
+        s3.client.default.endpoint: searchable-snapshots-minio.default.svc:9000
+        s3.client.default.protocol: http
+        s3.client.default.path_style_access: "true"
+        s3.client.default.region: us-east-1
+        # local-path volumes report the host disk size, so the 80% default would be huge. With the
+        # absolute watermarks above, the warm disk decider needs cache x remote_data_ratio (5) to
+        # stay well above 500m x 5, or it refuses remote shards once file cache stats arrive.
+        node.search.cache.size: 2gb
+  security:
+    tls:
+      http:
+        generate: true
+      transport:
+        generate: true
+        perNode: true
