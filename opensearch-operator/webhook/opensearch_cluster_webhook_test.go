@@ -1051,6 +1051,16 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			Expect(warnings).To(BeEmpty())
 		})
 
+		It("should allow other updates to a 2.x cluster with a search pool", func() {
+			oldCluster := clusterWithPools("2.19.4", opensearchv1.NodePool{Component: "snapshots", Replicas: 2, Roles: []string{"data", "search"}})
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.NodePools[1].Replicas = 3
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
 		It("should allow an upgrade to 3.x that changes the search pool to warm", func() {
 			oldCluster := clusterWithPools("2.19.4", opensearchv1.NodePool{Component: "snapshots", Replicas: 2, Roles: []string{"search"}})
 			newCluster := oldCluster.DeepCopy()
