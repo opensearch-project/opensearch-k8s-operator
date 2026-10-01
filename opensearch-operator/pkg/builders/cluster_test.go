@@ -682,6 +682,26 @@ var _ = Describe("Builders", func() {
 			}))
 		})
 
+		It("should disable the security plugin through the entrypoint when no TLS is set", func() {
+			disabledEnv := []corev1.EnvVar{
+				{Name: "DISABLE_INSTALL_DEMO_CONFIG", Value: "true"},
+				{Name: "DISABLE_SECURITY_PLUGIN", Value: "true"},
+			}
+			nodePool := opensearchv1.NodePool{Component: "masters", Roles: []string{"cluster_manager"}}
+
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			Expect(NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env).To(ContainElements(disabledEnv))
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElements(disabledEnv))
+
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Tls: &opensearchv1.TlsConfig{Transport: &opensearchv1.TlsConfigTransport{Generate: true}},
+			}
+			Expect(NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env).ToNot(ContainElement(disabledEnv[1]))
+			sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).ToNot(ContainElement(disabledEnv[1]))
+		})
+
 		It("should apply bootstrap pod annotations", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			expectedAnnotations := map[string]string{
