@@ -59,6 +59,20 @@ func nodeAttributesEnabled(cr *opensearchv1.OpenSearchCluster) bool {
 	return len(cr.Spec.General.NodeAttributes) > 0
 }
 
+// securityDisabledEnv turns the security plugin off through the image entrypoint
+// when no TLS is configured, so the demo installer does not enable HTTPS. The
+// entrypoint ignores both variables when the plugin is not installed, unlike
+// plugins.security.disabled in opensearch.yml, which fails node startup then.
+func securityDisabledEnv(cr *opensearchv1.OpenSearchCluster) []corev1.EnvVar {
+	if helpers.IsSecurityPluginEnabled(cr) {
+		return nil
+	}
+	return []corev1.EnvVar{
+		{Name: "DISABLE_INSTALL_DEMO_CONFIG", Value: "true"},
+		{Name: "DISABLE_SECURITY_PLUGIN", Value: "true"},
+	}
+}
+
 // NodeAttributesServiceAccountName returns the name of the managed ServiceAccount
 // created by the operator when nodeAttributes are enabled.
 func NodeAttributesServiceAccountName(cr *opensearchv1.OpenSearchCluster) string {
@@ -878,6 +892,8 @@ func NewSTSForNodePool(
 		Value: nodeRolesValue,
 	})
 
+	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, securityDisabledEnv(cr)...)
+
 	// Append additional env vars from cr.Spec.NodePool.env
 	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
@@ -1215,6 +1231,8 @@ func NewBootstrapPod(
 			},
 		},
 	})
+
+	env = append(env, securityDisabledEnv(cr)...)
 
 	// Add Bootstrap.Env
 	if cr.Spec.Bootstrap.Env != nil {
