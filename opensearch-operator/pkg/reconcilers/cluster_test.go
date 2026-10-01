@@ -974,6 +974,7 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 		registerCatNodesResponder(transport, builders.BootstrapPodName(instance))
 		calls := recordVotingConfigCalls(transport, http.StatusInternalServerError, http.StatusOK)
 
+		recorder := record.NewFakeRecorder(1)
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
 		mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
 		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
@@ -984,6 +985,7 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 			instance:          instance,
 			logger:            logr.Discard(),
 			osClientTransport: transport,
+			recorder:          recorder,
 		}
 		result, err := underTest.removeBootstrapPod(bootstrapPod)
 
@@ -994,5 +996,37 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 		Expect((*calls)[0]).To(HavePrefix("POST "))
 		Expect(*calls).NotTo(ContainElement(ContainSubstring("wait_for_removal=false")))
 		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
+		Expect(recorder.Events).To(HaveLen(1))
+		event := <-recorder.Events
+		Expect(event).To(HavePrefix("Warning BootstrapExclusionFailed"))
+		Expect(event).To(ContainSubstring(bootstrapPod.Name))
+	})
+
+	It("Should leave the bootstrap pod, warn and requeue if the OpenSearch client cannot be created", func() {
+		instance := newCluster()
+		bootstrapPod := builders.NewBootstrapPod(instance, nil, nil)
+
+		recorder := record.NewFakeRecorder(1)
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockClient.On("GetSecret", clusterName+"-admin-password", clusterNamespace).Return(corev1.Secret{}, errors.New("secret unavailable"))
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			ctx:      context.Background(),
+			instance: instance,
+			logger:   logr.Discard(),
+			recorder: recorder,
+		}
+		result, err := underTest.removeBootstrapPod(bootstrapPod)
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(&ctrl.Result{RequeueAfter: 10 * time.Second}))
+		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
+		Expect(recorder.Events).To(HaveLen(1))
+		event := <-recorder.Events
+		Expect(event).To(HavePrefix("Warning BootstrapExclusionFailed"))
+		Expect(event).To(ContainSubstring(bootstrapPod.Name))
+		Expect(event).To(ContainSubstring("secret unavailable"))
 	})
 })
