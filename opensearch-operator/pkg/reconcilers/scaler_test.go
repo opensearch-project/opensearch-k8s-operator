@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -1790,6 +1791,177 @@ var _ = Describe("Scaler Controller", func() {
 			Expect(*grownTo).To(Equal(int32(3)), "scale-up did not proceed while a pod was down")
 			Expect(result.Requeue).To(BeFalse())
 			mockClient.AssertExpectations(GinkgoT())
+		})
+	})
+
+	Context("When a reverted scale-down cannot reach the cluster", func() {
+		const (
+			clusterName       = "test-cluster"
+			clusterNamespace  = "test-namespace"
+			nodePoolComponent = "data"
+		)
+		stsName := fmt.Sprintf("%s-%s", clusterName, nodePoolComponent)
+		target := fmt.Sprintf("%s-1", stsName)
+
+		// revertedPool is a pool whose replicas match its StatefulSet again while the
+		// scaler status still names a live node as the scale-down target.
+		revertedPool := func(status, targetName string, roles ...string) opensearchv1.OpenSearchCluster {
+			spec := scalerDrainTestCluster(clusterName, clusterNamespace, nodePoolComponent, status, targetName, nil)
+			spec.Spec.NodePools[0].Roles = roles
+			if targetName == "" {
+				spec.Status.ComponentsStatus[0].Conditions = nil
+			}
+			return spec
+		}
+
+		// newMock serves the pool's StatefulSet and status updates. The admin secret
+		// behind client creation is left to the test: an unmocked lookup fails it.
+		newMock := func(spec *opensearchv1.OpenSearchCluster) *k8s.MockK8sClient {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			mockClient.On("GetStatefulSet", stsName, clusterNamespace).Return(scalerDrainTestSts(clusterName, clusterNamespace, nodePoolComponent, 2), nil)
+			mockClient.On("ListStatefulSets",
+				client.InNamespace(clusterNamespace),
+				client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{}, nil).Maybe()
+			mockClient.On("UpdateOpenSearchClusterStatus", client.ObjectKeyFromObject(spec), mock.AnythingOfType("func(*v1.OpenSearchCluster)")).Run(func(args mock.Arguments) {
+				args.Get(1).(func(*opensearchv1.OpenSearchCluster))(spec)
+			}).Return(nil).Maybe()
+			return mockClient
+		}
+		readyPods := corev1.PodList{Items: []corev1.Pod{
+			scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 0, true),
+			scalerTestPod(clusterName, clusterNamespace, nodePoolComponent, 1, true),
+		}}
+
+		failingTransport := func(spec *opensearchv1.OpenSearchCluster, register func(*httpmock.MockTransport)) *httpmock.MockTransport {
+			transport := httpmock.NewMockTransport()
+			transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+			registerOsPingResponders(transport, spec)
+			register(transport)
+			return transport
+		}
+
+		expectKept := func(spec *opensearchv1.OpenSearchCluster, mockClient *k8s.MockK8sClient, recorder *record.FakeRecorder, status string, requeue bool, err error) {
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeFalse())
+			Expect(spec.Status.ComponentsStatus).To(HaveLen(1))
+			Expect(spec.Status.ComponentsStatus[0].Status).To(Equal(status))
+			mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+			Expect(recorder.Events).To(Receive(ContainSubstring("Warning Scaler")))
+		}
+
+		reconcilePool := func(spec *opensearchv1.OpenSearchCluster, mockClient *k8s.MockK8sClient, transport http.RoundTripper) (bool, *record.FakeRecorder, error) {
+			underTest := newScalerReconciler(mockClient, spec)
+			recorder := record.NewFakeRecorder(10)
+			underTest.recorder = recorder
+			underTest.osClientTransport = transport
+			requeue, err := underTest.reconcileNodePool(&spec.Spec.NodePools[0])
+			return requeue, recorder, err
+		}
+
+		It("Should keep the status and not fail when the client cannot be created", func() {
+			spec := revertedPool("Excluded", target)
+			mockClient := newMock(&spec)
+			mockClient.On("GetSecret", clusterName+"-admin-password", clusterNamespace).Return(corev1.Secret{}, errors.New("secret unavailable"))
+			mockClient.On("ListPods", mock.Anything).Return(readyPods, nil)
+
+			requeue, recorder, err := reconcilePool(&spec, mockClient, nil)
+
+			expectKept(&spec, mockClient, recorder, "Excluded", requeue, err)
+		})
+
+		It("Should keep the status and not fail when the allocation exclusion cannot be removed", func() {
+			spec := revertedPool("Drained", target)
+			mockClient := newMock(&spec)
+			mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+			mockClient.On("ListPods", mock.Anything).Return(readyPods, nil)
+			transport := failingTransport(&spec, func(t *httpmock.MockTransport) {
+				t.RegisterResponder(http.MethodGet, `=~.*/_cluster/settings.*`, httpmock.NewStringResponder(500, `{}`))
+			})
+
+			requeue, recorder, err := reconcilePool(&spec, mockClient, transport)
+
+			expectKept(&spec, mockClient, recorder, "Drained", requeue, err)
+		})
+
+		It("Should not stop the reconcile chain with an error or Requeue", func() {
+			spec := revertedPool("Excluded", target)
+			mockClient := newMock(&spec)
+			mockClient.On("GetSecret", clusterName+"-admin-password", clusterNamespace).Return(corev1.Secret{}, errors.New("secret unavailable"))
+			mockClient.On("ListPods", mock.Anything).Return(readyPods, nil)
+
+			underTest := newScalerReconciler(mockClient, &spec)
+			underTest.recorder = record.NewFakeRecorder(10)
+			result, err := underTest.Reconcile()
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result.Requeue).To(BeFalse())
+			Expect(spec.Status.ComponentsStatus).To(HaveLen(1))
+		})
+
+		It("Should drop the status of a data pool without a target and without a client", func() {
+			spec := revertedPool("Drained", "")
+			mockClient := newMock(&spec)
+			mockClient.On("ListPods", mock.Anything).Return(readyPods, nil)
+			// No admin secret and no transport: creating a client or calling the cluster fails the test.
+
+			requeue, _, err := reconcilePool(&spec, mockClient, nil)
+
+			Expect(err).NotTo(HaveOccurred())
+			Expect(requeue).To(BeFalse())
+			Expect(spec.Status.ComponentsStatus).To(BeEmpty())
+		})
+
+		Context("on a master-eligible pool", func() {
+			masterPool := func() opensearchv1.OpenSearchCluster {
+				return revertedPool("Drained", target, "cluster_manager")
+			}
+
+			It("Should keep the status when the voting exclusions cannot be read", func() {
+				spec := masterPool()
+				mockClient := newMock(&spec)
+				mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+				mockClient.On("ListPods", mock.Anything).Return(readyPods, nil)
+				transport := failingTransport(&spec, func(t *httpmock.MockTransport) {
+					registerClusterSettingsResponders(t)
+					t.RegisterResponder(http.MethodGet, `=~.*/_cluster/state/metadata.*`, httpmock.NewStringResponder(500, `{}`))
+				})
+
+				requeue, recorder, err := reconcilePool(&spec, mockClient, transport)
+
+				expectKept(&spec, mockClient, recorder, "Drained", requeue, err)
+			})
+
+			It("Should keep the status when the exclusions to keep cannot be listed", func() {
+				spec := masterPool()
+				mockClient := newMock(&spec)
+				mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+				mockClient.On("ListPods", mock.Anything).Return(readyPods, nil).Once()
+				mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{}, errors.New("api unavailable"))
+				transport := failingTransport(&spec, func(t *httpmock.MockTransport) {
+					registerClusterSettingsResponders(t)
+					registerVotingExclusionsState(t, target)
+				})
+
+				requeue, recorder, err := reconcilePool(&spec, mockClient, transport)
+
+				expectKept(&spec, mockClient, recorder, "Drained", requeue, err)
+			})
+
+			It("Should keep the status when the voting exclusions cannot be cleared", func() {
+				spec := masterPool()
+				mockClient := newMock(&spec)
+				mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+				mockClient.On("ListPods", mock.Anything).Return(readyPods, nil)
+				transport := failingTransport(&spec, func(t *httpmock.MockTransport) {
+					registerClusterSettingsResponders(t)
+					registerVotingExclusionsState(t, target)
+					recordVotingConfigCalls(t, http.StatusOK, http.StatusInternalServerError)
+				})
+
+				requeue, recorder, err := reconcilePool(&spec, mockClient, transport)
+
+				expectKept(&spec, mockClient, recorder, "Drained", requeue, err)
+			})
 		})
 	})
 })
