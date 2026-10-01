@@ -42,7 +42,7 @@ A few notes on operator releases:
 
 The chart's only cluster-scoped resources are the CRDs, the `ValidatingWebhookConfiguration` of the webhook and, unless `useRoleBindings=true`, the RBAC roles. A user who may only manage one namespace can install the operator once a cluster admin has applied the cluster-scoped parts.
 
-The admin renders them from the same chart version, with the same release name, namespace and `legacyAPI.enabled` value the operator will be installed with, since the webhook configuration points at the release's webhook service. The CRDs are too large for a client-side apply, so use `--server-side`:
+The admin renders them from the same chart version, with the same release name, namespace, `legacyAPI.enabled` and `webhook.*` values the operator will be installed with, since the webhook configuration points at the release's webhook service. The CRDs are too large for a client-side apply, so use `--server-side`:
 
 ```bash
 helm template opensearch-operator opensearch-operator/opensearch-operator --namespace <namespace> \
