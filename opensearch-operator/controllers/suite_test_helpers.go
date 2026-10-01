@@ -7,6 +7,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/utils/ptr"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -288,7 +289,7 @@ func ComposeOpensearchCrd(clusterName string, namespace string) opensearchv1.Ope
 			},
 			Dashboards: opensearchv1.DashboardsConfig{
 				Enable:   true,
-				Replicas: 3,
+				Replicas: ptr.To(int32(3)),
 				Version:  "2.0.0",
 				Resources: corev1.ResourceRequirements{
 					Limits: corev1.ResourceList{
