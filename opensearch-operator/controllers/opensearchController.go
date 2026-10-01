@@ -433,11 +433,9 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 	return ctrl.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
 }
 
-// patchMetadata applies mutate to obj and sends the change as a merge patch.
-// Unlike Update it does not send the whole object, so the server does not
-// record spec fields as owned by the operator's field manager and Helm 4
-// server-side apply keeps working. The patch carries the resourceVersion, so a
-// concurrent writer of the same list (finalizers) makes it fail with a conflict.
+// patchMetadata applies mutate to obj and sends only the change. A full Update
+// makes the operator co-own spec fields and breaks server-side apply (Helm 4).
+// The resourceVersion is kept because a merge patch replaces whole lists.
 func patchMetadata(ctx context.Context, c client.Client, obj client.Object, mutate func()) error {
 	orig := obj.DeepCopyObject().(client.Object)
 	mutate()
