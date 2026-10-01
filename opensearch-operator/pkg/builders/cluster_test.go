@@ -17,6 +17,7 @@ import (
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 )
 
 func ClusterDescWithVersion(version string) opensearchv1.OpenSearchCluster {
@@ -1911,7 +1912,7 @@ var _ = Describe("NetworkPolicy builder", func() {
 		result := NewNetworkPolicyForCR(&cr)
 		Expect(result.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterName))
 		Expect(result.Spec.PolicyTypes).To(Equal([]networkingv1.PolicyType{networkingv1.PolicyTypeIngress}))
-		Expect(result.Spec.Ingress).To(HaveLen(4))
+		Expect(result.Spec.Ingress).To(HaveLen(5))
 
 		intra := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
 			return peer.PodSelector != nil && peer.PodSelector.MatchLabels[helpers.ClusterLabel] == clusterName
@@ -1939,6 +1940,39 @@ var _ = Describe("NetworkPolicy builder", func() {
 		Expect(networkPolicyPortValues(extra.Ports)).To(Equal([]int32{19200, 9300, 9600, 9650}))
 	})
 
+	DescribeTable("should allow the security config update Job only on the HTTP port",
+		func(httpPort, expectedPort int32) {
+			GinkgoT().Setenv(helpers.PodNamespaceEnvVariable, "operator-ns")
+			cr := baseCluster()
+			cr.Spec.General.Version = "2.2.1"
+			cr.Spec.General.HttpPort = httpPort
+			cr.Spec.General.NetworkPolicy.Enable = true
+			cr.Spec.General.Grpc = &opensearchv1.GrpcConfig{Enable: true, Port: "9400"}
+			job := NewSecurityconfigUpdateJob(&cr, clusterName+"-securityconfig-update", namespace, "checksum", "admin-cert", "", "cmd", nil, nil)
+
+			result := NewNetworkPolicyForCR(&cr)
+			rule := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+				return peer.PodSelector != nil && peer.PodSelector.MatchLabels[helpers.JobLabel] == job.Name
+			})
+			Expect(rule).NotTo(BeNil())
+			Expect(rule.From).To(HaveLen(1))
+			peer := rule.From[0]
+			Expect(peer.NamespaceSelector).To(BeNil())
+			Expect(peer.IPBlock).To(BeNil())
+			selector, err := metav1.LabelSelectorAsSelector(peer.PodSelector)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(selector.Matches(labels.Set(job.Spec.Template.Labels))).To(BeTrue())
+			Expect(selector.Matches(labels.Set{helpers.JobLabel: "other-cluster-securityconfig-update"})).To(BeFalse())
+			Expect(selector.Matches(labels.Set{})).To(BeFalse())
+			Expect(networkPolicyPortValues(rule.Ports)).To(Equal([]int32{expectedPort}))
+			Expect(rule.Ports[0].Protocol).To(Equal(ptr.To(corev1.ProtocolTCP)))
+			Expect(rule.Ports[0].EndPort).To(BeNil())
+		},
+		Entry("with an omitted HTTP port", int32(0), int32(9200)),
+		Entry("with the default HTTP port", int32(9200), int32(9200)),
+		Entry("with a custom HTTP port", int32(19200), int32(19200)),
+	)
+
 	It("should include the gRPC port only when gRPC is enabled", func() {
 		cr := baseCluster()
 		cr.Spec.General.NetworkPolicy.Enable = true
@@ -1963,7 +1997,7 @@ var _ = Describe("NetworkPolicy builder", func() {
 		cr := baseCluster()
 		cr.Spec.General.NetworkPolicy.Enable = true
 		result := NewNetworkPolicyForCR(&cr)
-		Expect(result.Spec.Ingress).To(HaveLen(2))
+		Expect(result.Spec.Ingress).To(HaveLen(3))
 		operator := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
 			return peer.NamespaceSelector != nil
 		})
