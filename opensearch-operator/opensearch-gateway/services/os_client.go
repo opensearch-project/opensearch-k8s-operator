@@ -417,10 +417,9 @@ func (client *OsClusterClient) ClearVotingConfigExclusions(ctx context.Context, 
 	return nil
 }
 
-// noIndexPlaceholder is an index expression that matches nothing: index names
-// must be lowercase. Naming it in a cluster state request makes the master copy
-// no index metadata, only the coordination metadata we read. A leading "_" is
-// rejected with a 400 instead.
+// noIndexPlaceholder matches no index, since index names must be lowercase.
+// Naming it in a cluster state request makes the master copy no index metadata,
+// only the coordination metadata we read. A leading "_" is rejected with a 400.
 const noIndexPlaceholder = "NO_SUCH_INDEX"
 
 // GetVotingConfigExclusions returns the node names currently on the voting
