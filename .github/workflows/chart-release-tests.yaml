@@ -1,0 +1,46 @@
+name: Chart release automation tests
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/chart-release*.yaml'
+      - '.github/workflows/helm-linting.yaml'
+      - 'scripts/chart_release.py'
+      - 'scripts/tests/test_chart_release.py'
+      - 'scripts/tests/chart_release_strategy.cjs'
+      - 'release-please-config.json'
+      - '.release-please-manifest.json'
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          persist-credentials: false
+      - name: Test chart release policy
+        run: python3 -m unittest discover -s scripts/tests -p 'test_chart_release.py' -v
+
+      - name: Check out the pinned action's dependency lockfile
+        uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+        with:
+          repository: googleapis/release-please-action
+          ref: 5c625bfb5d1ff62eadeeb3772007f7f66fdcf071
+          path: release-please-tools
+          persist-credentials: false
+
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+
+      - name: Install locked test dependencies without lifecycle scripts
+        working-directory: release-please-tools
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Test actual Helm version selection and configuration
+        env:
+          NODE_PATH: ${{ github.workspace }}/release-please-tools/node_modules
+        run: node scripts/tests/chart_release_strategy.cjs

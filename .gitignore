@@ -27,3 +27,6 @@ opensearch-operator/functionaltests/kubeconfig
 
 # Ignore direnv file
 .envrc
+
+# Python workflow helper tests
+__pycache__/

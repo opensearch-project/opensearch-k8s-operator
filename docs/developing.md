@@ -102,6 +102,8 @@ To deploy a new version simply rebuild and reimport the docker image and restart
 
 ## Submitting a PR
 
+For Helm chart changes, see [Helm chart release preparation](./chart-releases.md) for the versioning policy, release classification, and maintainer rollout instructions.
+
 Once you are ready to share your work, please fork the repository into your github account, create and push a feature branch, then open a PR.
 
 The PR description must contain the following:

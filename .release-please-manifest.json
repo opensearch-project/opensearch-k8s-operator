@@ -1,0 +1,4 @@
+{
+  "charts/opensearch-operator": "3.0.14",
+  "charts/opensearch-cluster": "3.3.5"
+}

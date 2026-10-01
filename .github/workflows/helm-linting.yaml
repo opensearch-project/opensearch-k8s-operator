@@ -1,6 +1,12 @@
 name: Helm Lint
 
-on: pull_request
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -29,12 +35,25 @@ jobs:
 
       - name: Run chart-testing (list-changed)
         id: list-changed
+        env:
+          TARGET_BRANCH: ${{ github.event.repository.default_branch }}
+          RELEASE_AUTOMATION_ENABLED: ${{ vars.ENABLE_CHART_RELEASE_AUTOMATION == 'true' && github.base_ref == 'main' }}
         run: |
-          changed=$(ct list-changed --target-branch ${{ github.event.repository.default_branch }})
+          changed=$(ct list-changed --target-branch "$TARGET_BRANCH")
           if [[ -n "$changed" ]]; then
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
+          python3 scripts/chart_release.py check-pr \
+            --event "$GITHUB_EVENT_PATH" \
+            --charts "$changed" \
+            --enabled "$RELEASE_AUTOMATION_ENABLED"
 
       - name: Run chart-testing (lint)
         if: steps.list-changed.outputs.changed == 'true'
-        run: ct lint --target-branch ${{ github.event.repository.default_branch }} --validate-maintainers=false
+        env:
+          TARGET_BRANCH: ${{ github.event.repository.default_branch }}
+          CHECK_VERSION_INCREMENT: ${{ steps.list-changed.outputs.check-version-increment }}
+        run: |
+          ct lint --target-branch "$TARGET_BRANCH" \
+            --validate-maintainers=false \
+            --check-version-increment="$CHECK_VERSION_INCREMENT"
