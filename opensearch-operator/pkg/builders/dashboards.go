@@ -143,6 +143,16 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 		},
 	}
 
+	// Dashboards only listens once its saved-objects migration is done, and killing it
+	// mid-migration leaves .kibana_1 stuck, so first boot gets about 20 minutes.
+	startupProbe := probe
+	startupProbe.FailureThreshold = 60
+
+	var startupConfig, livenessConfig, readinessConfig *opensearchv1.ProbeConfig
+	if probes := cr.Spec.Dashboards.Probes; probes != nil {
+		startupConfig, livenessConfig, readinessConfig = probes.Startup, probes.Liveness, probes.Readiness
+	}
+
 	mainCommand := helpers.BuildMainCommandOSD("./bin/opensearch-dashboards-plugin", cr.Spec.Dashboards.PluginsList, "./opensearch-dashboards-docker-entrypoint.sh")
 
 	return &appsv1.Deployment{
@@ -185,9 +195,9 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 									ContainerPort: port,
 								},
 							},
-							StartupProbe:    &probe,
-							LivenessProbe:   &probe,
-							ReadinessProbe:  &probe,
+							StartupProbe:    withProbeConfig(startupProbe, startupConfig),
+							LivenessProbe:   withProbeConfig(probe, livenessConfig),
+							ReadinessProbe:  withProbeConfig(probe, readinessConfig),
 							Env:             env,
 							VolumeMounts:    volumeMounts,
 							Command:         mainCommand,
@@ -208,6 +218,30 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 			},
 		},
 	}
+}
+
+// withProbeConfig returns a copy of probe with every timing field set above zero in config applied.
+func withProbeConfig(probe corev1.Probe, config *opensearchv1.ProbeConfig) *corev1.Probe {
+	result := probe.DeepCopy()
+	if config == nil {
+		return result
+	}
+	if config.InitialDelaySeconds > 0 {
+		result.InitialDelaySeconds = config.InitialDelaySeconds
+	}
+	if config.PeriodSeconds > 0 {
+		result.PeriodSeconds = config.PeriodSeconds
+	}
+	if config.TimeoutSeconds > 0 {
+		result.TimeoutSeconds = config.TimeoutSeconds
+	}
+	if config.SuccessThreshold > 0 {
+		result.SuccessThreshold = config.SuccessThreshold
+	}
+	if config.FailureThreshold > 0 {
+		result.FailureThreshold = config.FailureThreshold
+	}
+	return result
 }
 
 func NewDashboardsConfigMapForCR(cr *opensearchv1.OpenSearchCluster, name string, config map[string]string) *corev1.ConfigMap {

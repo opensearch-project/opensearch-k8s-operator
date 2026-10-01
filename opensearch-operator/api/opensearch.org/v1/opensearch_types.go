@@ -286,6 +286,14 @@ type DashboardsConfig struct {
 	PriorityClassName string                  `json:"priorityClassName,omitempty"`
 	// OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set.
 	OpenSearchDashboardsHome string `json:"opensearchDashboardsHome,omitempty"`
+	// Timings of the Dashboards probes. Fields left unset keep the operator defaults.
+	Probes *DashboardsProbesConfig `json:"probes,omitempty"`
+}
+
+type DashboardsProbesConfig struct {
+	Startup   *ProbeConfig `json:"startup,omitempty"`
+	Liveness  *ProbeConfig `json:"liveness,omitempty"`
+	Readiness *ProbeConfig `json:"readiness,omitempty"`
 }
 
 type DashboardsTlsConfig struct {

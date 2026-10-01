@@ -401,4 +401,71 @@ var _ = Describe("Builders", func() {
 			Expect(userIdx).To(BeNumerically(">", operatorIdx))
 		})
 	})
+
+	When("building the dashboards probes", func() {
+		newSpec := func(dashboards opensearchv1.DashboardsConfig) *opensearchv1.OpenSearchCluster {
+			dashboards.Enable = true
+			return &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General:    opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: dashboards,
+				},
+			}
+		}
+		timings := func(p *corev1.Probe) []int32 {
+			return []int32{p.InitialDelaySeconds, p.PeriodSeconds, p.TimeoutSeconds, p.SuccessThreshold, p.FailureThreshold}
+		}
+
+		It("should give the startup probe a longer budget than liveness and readiness by default", func() {
+			container := NewDashboardsDeploymentForCR(newSpec(opensearchv1.DashboardsConfig{}), nil, nil, nil).Spec.Template.Spec.Containers[0]
+			Expect(timings(container.StartupProbe)).To(Equal([]int32{10, 20, 5, 1, 60}))
+			Expect(timings(container.LivenessProbe)).To(Equal([]int32{10, 20, 5, 1, 10}))
+			Expect(timings(container.ReadinessProbe)).To(Equal([]int32{10, 20, 5, 1, 10}))
+			Expect(container.StartupProbe.HTTPGet.Path).To(Equal("/api/reporting/stats"))
+			Expect(container.StartupProbe.HTTPGet.Scheme).To(Equal(corev1.URISchemeHTTP))
+		})
+
+		It("should apply each probe's overrides only to that probe and keep defaults for unset fields", func() {
+			spec := newSpec(opensearchv1.DashboardsConfig{
+				Probes: &opensearchv1.DashboardsProbesConfig{
+					Startup:   &opensearchv1.ProbeConfig{FailureThreshold: 90},
+					Liveness:  &opensearchv1.ProbeConfig{InitialDelaySeconds: 30, PeriodSeconds: 15, TimeoutSeconds: 8, SuccessThreshold: 1, FailureThreshold: 4},
+					Readiness: &opensearchv1.ProbeConfig{PeriodSeconds: 10, SuccessThreshold: 2},
+				},
+			})
+			container := NewDashboardsDeploymentForCR(spec, nil, nil, nil).Spec.Template.Spec.Containers[0]
+			Expect(timings(container.StartupProbe)).To(Equal([]int32{10, 20, 5, 1, 90}))
+			Expect(timings(container.LivenessProbe)).To(Equal([]int32{30, 15, 8, 1, 4}))
+			Expect(timings(container.ReadinessProbe)).To(Equal([]int32{10, 10, 5, 2, 10}))
+		})
+
+		It("should keep the defaults for probes left out of the probes config", func() {
+			spec := newSpec(opensearchv1.DashboardsConfig{
+				Probes: &opensearchv1.DashboardsProbesConfig{
+					Liveness: &opensearchv1.ProbeConfig{FailureThreshold: 3},
+				},
+			})
+			container := NewDashboardsDeploymentForCR(spec, nil, nil, nil).Spec.Template.Spec.Containers[0]
+			Expect(timings(container.StartupProbe)).To(Equal([]int32{10, 20, 5, 1, 60}))
+			Expect(timings(container.LivenessProbe)).To(Equal([]int32{10, 20, 5, 1, 3}))
+			Expect(timings(container.ReadinessProbe)).To(Equal([]int32{10, 20, 5, 1, 10}))
+		})
+
+		It("should keep the base path and HTTPS scheme on every probe", func() {
+			spec := newSpec(opensearchv1.DashboardsConfig{
+				BasePath: "/dashboards",
+				Tls:      &opensearchv1.DashboardsTlsConfig{Enable: true},
+				Probes: &opensearchv1.DashboardsProbesConfig{
+					Startup: &opensearchv1.ProbeConfig{FailureThreshold: 90},
+				},
+			})
+			container := NewDashboardsDeploymentForCR(spec, nil, nil, nil).Spec.Template.Spec.Containers[0]
+			for _, probe := range []*corev1.Probe{container.StartupProbe, container.LivenessProbe, container.ReadinessProbe} {
+				Expect(probe.HTTPGet.Path).To(Equal("/dashboards/api/reporting/stats"))
+				Expect(probe.HTTPGet.Scheme).To(Equal(corev1.URISchemeHTTPS))
+				Expect(probe.HTTPGet.Port.IntVal).To(Equal(int32(5601)))
+			}
+		})
+	})
 })
