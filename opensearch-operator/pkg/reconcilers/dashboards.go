@@ -58,7 +58,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	}
 	result := reconciler.CombinedResult{}
 
-	volumes, volumeMounts, err := r.handleTls()
+	volumes, volumeMounts, tlsCertChecksum, err := r.handleTls()
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -109,6 +109,10 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 
 		annotations[helpers.DashboardChecksumName] = sha1sum
 	}
+	// Dashboards only reads its certificate at startup, so roll the pods on renewal
+	if tlsCertChecksum != "" {
+		annotations[helpers.DashboardTlsChecksumName] = tlsCertChecksum
+	}
 
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.client.Scheme()))
@@ -121,9 +125,9 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMount, error) {
+func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMount, string, error) {
 	if r.instance.Spec.Dashboards.Tls == nil || !r.instance.Spec.Dashboards.Tls.Enable {
-		return nil, nil, nil
+		return nil, nil, "", nil
 	}
 	clusterName := r.instance.Name
 	namespace := r.instance.Namespace
@@ -132,6 +136,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	tlsConfig := r.instance.Spec.Dashboards.Tls
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
+	var tlsCertChecksum string
 
 	if tlsConfig.Generate {
 		r.logger.Info("Generating certificates")
@@ -145,12 +150,20 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 			ca, err = util.ReadOrGenerateCaCert(r.pki, r.client, r.instance)
 		}
 		if err != nil {
-			return volumes, volumeMounts, err
+			return volumes, volumeMounts, "", err
 		}
 
-		// Generate cert and create secret
+		// Generate cert and create secret, or renew the existing one
 		tlsSecret, err := r.client.GetSecret(tlsSecretName, namespace)
-		if err != nil {
+		exists := err == nil
+		var renewReason string
+		if exists {
+			renewReason, _, _ = certRenewalReason(tlsSecret.Data[corev1.TLSCertKey], ca, tlsConfig.RotateDaysBeforeExpiry)
+			if renewReason != "" {
+				r.logger.Info("Renewing dashboards certificate", "reason", renewReason)
+			}
+		}
+		if !exists || renewReason != "" {
 			// Generate tls cert and put it into secret
 			dnsNames := []string{
 				fmt.Sprintf("%s-dashboards", clusterName),
@@ -166,18 +179,26 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 			if err != nil {
 				r.logger.Error(err, "Failed to create tls certificate")
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Failed to store tls certificate for Dashboard Cluster")
-				return volumes, volumeMounts, err
+				return volumes, volumeMounts, "", err
 			}
-			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
-			if err := ctrl.SetControllerReference(r.instance, &tlsSecret, r.client.Scheme()); err != nil {
-				return nil, nil, err
+			if exists {
+				tlsSecret.Data = nodeCert.SecretData(ca)
+				err = r.client.UpdateSecret(&tlsSecret)
+			} else {
+				tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
+				if err := ctrl.SetControllerReference(r.instance, &tlsSecret, r.client.Scheme()); err != nil {
+					return nil, nil, "", err
+				}
+				_, err = r.client.CreateSecret(&tlsSecret)
 			}
-
-			if _, err := r.client.CreateSecret(&tlsSecret); err != nil {
+			if err != nil {
 				r.logger.Error(err, "Failed to store tls certificate in secret")
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Failed to store tls certificate for Dashboard Cluster")
-				return volumes, volumeMounts, err
+				return volumes, volumeMounts, "", err
 			}
+		}
+		if tlsCertChecksum, err = util.GetSha1Sum(tlsSecret.Data[corev1.TLSCertKey]); err != nil {
+			return nil, nil, "", err
 		}
 		// Mount secret
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsSecretName}}}
@@ -197,7 +218,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.enabled", "true")
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.key", dashboardsHome+"/certs/tls.key")
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.certificate", dashboardsHome+"/certs/tls.crt")
-	return volumes, volumeMounts, nil
+	return volumes, volumeMounts, tlsCertChecksum, nil
 }
 
 func (r *DashboardsReconciler) providedCaCert(secretName string, namespace string) (tls.Cert, error) {
