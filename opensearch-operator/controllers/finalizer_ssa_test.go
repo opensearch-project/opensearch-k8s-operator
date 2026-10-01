@@ -17,9 +17,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
 )
 
-// Regression test for #1496: adding and removing the operator's finalizer must
-// not make the operator's field manager own spec fields, otherwise a later
-// server-side apply from Helm 4 fails with a conflict.
+// Adding and removing the operator's finalizer must not make the operator own
+// spec fields, otherwise a later Helm 4 server-side apply fails with a conflict.
 var _ = Describe("Cluster finalizer and server-side apply", Ordered, func() {
 	const (
 		clusterName = "finalizer-ssa-test"
