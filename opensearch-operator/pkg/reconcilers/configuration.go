@@ -6,6 +6,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strconv"
+	"strings"
+
 	"github.com/goccy/go-yaml"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
@@ -19,9 +23,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sort"
-	"strconv"
-	"strings"
 )
 
 const configurationReconcilerName = "configuration"
@@ -173,7 +174,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 	result := reconciler.CombinedResult{}
 
-	// Always create shared configmap if General.AdditionalConfig exists (for bootstrap and security update jobs)
+	// Always create shared configmap if General.AdditionalConfig exists (for security update jobs)
 	// This is needed even when per-nodepool configmaps are created
 	if len(r.reconcilerContext.OpenSearchConfig) != 0 {
 		baseData := buildConfigString(r.reconcilerContext.OpenSearchConfig)
@@ -187,7 +188,7 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 			return result.Result, result.Err
 		}
 
-		// Add shared volume and mount for shared configmap (used by bootstrap and security update jobs)
+		// Add shared volume and mount for shared configmap (used by security update jobs)
 		// Nodepools with AdditionalConfig will override this with their own per-nodepool configmap
 		volume := corev1.Volume{
 			Name: "config",

@@ -146,12 +146,16 @@ type ProbeConfig struct {
 }
 
 type CommandProbeConfig struct {
-	InitialDelaySeconds int32    `json:"initialDelaySeconds,omitempty"`
-	PeriodSeconds       int32    `json:"periodSeconds,omitempty"`
-	TimeoutSeconds      int32    `json:"timeoutSeconds,omitempty"`
-	SuccessThreshold    int32    `json:"successThreshold,omitempty"`
-	FailureThreshold    int32    `json:"failureThreshold,omitempty"`
-	Command             []string `json:"command,omitempty"`
+	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
+	SuccessThreshold    int32 `json:"successThreshold,omitempty"`
+	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+	// Command overrides the probe handler. For startup probes, the default is a
+	// TCP socket check (so nodes can become Started before securityadmin runs);
+	// setting Command switches the startup probe to Exec. Readiness probes always
+	// default to an authenticated curl Exec command.
+	Command []string `json:"command,omitempty"`
 }
 
 type NodePool struct {
@@ -224,26 +228,6 @@ type MonitoringConfig struct {
 type MonitoringConfigTLS struct {
 	ServerName         string `json:"serverName,omitempty"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
-}
-
-type BootstrapConfig struct {
-	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
-	Tolerations  []corev1.Toleration         `json:"tolerations,omitempty"`
-	NodeSelector map[string]string           `json:"nodeSelector,omitempty"`
-	Affinity     *corev1.Affinity            `json:"affinity,omitempty"`
-	Jvm          string                      `json:"jvm,omitempty"`
-	Annotations  map[string]string           `json:"annotations,omitempty"`
-	Labels       map[string]string           `json:"labels,omitempty"`
-	PluginsList  []string                    `json:"pluginsList,omitempty"`
-	Keystore     []KeystoreValue             `json:"keystore,omitempty"`
-	Env          []corev1.EnvVar             `json:"env,omitempty"`
-	// +kubebuilder:pruning:PreserveUnknownFields
-	// +kubebuilder:validation:Schemaless
-	InitContainers    []corev1.Container `json:"initContainers,omitempty"`
-	HostAliases       []corev1.HostAlias `json:"hostAliases,omitempty"`
-	DiskSize          resource.Quantity  `json:"diskSize,omitempty"`
-	PriorityClassName string             `json:"priorityClassName,omitempty"`
-	StorageClassName  *string            `json:"storageClass,omitempty"`
 }
 
 type DashboardsServiceSpec struct {
@@ -493,7 +477,6 @@ type ClusterSpec struct {
 	General GeneralConfig `json:"general,omitempty"`
 	// +kubebuilder:default={smartScaler:true}
 	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
-	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
 	NodePools  []NodePool       `json:"nodePools"`

@@ -406,14 +406,13 @@ func NewSTSForNodePool(
 	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
+	// Default to TCP so nodes can become Started before securityadmin has run
+	// (authenticated HTTP probes would fail during first bootstrap). A custom
+	// probes.startup.command overrides this with an Exec probe.
+	var startupProbeCommand []string
 	probeProtocol := "https"
 	if !helpers.IsHttpTlsEnabled(cr) {
 		probeProtocol = "http"
-	}
-	startupProbeCommand := []string{
-		"/bin/bash",
-		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
 	}
 
 	readinessProbePeriodSeconds := int32(30)
@@ -509,13 +508,15 @@ func NewSTSForNodePool(
 		}
 	}
 
+	httpPort := PortForCluster(cr)
+
 	livenessProbe := corev1.Probe{
 		PeriodSeconds:       livenessProbePeriodSeconds,
 		TimeoutSeconds:      livenessProbeTimeoutSeconds,
 		FailureThreshold:    livenessProbeFailureThreshold,
 		SuccessThreshold:    livenessProbeSuccessThreshold,
 		InitialDelaySeconds: livenessProbeInitialDelaySeconds,
-		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
+		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: httpPort}}},
 	}
 
 	startupProbe := corev1.Probe{
@@ -524,11 +525,15 @@ func NewSTSForNodePool(
 		FailureThreshold:    startupProbeFailureThreshold,
 		SuccessThreshold:    startupProbeSuccessThreshold,
 		InitialDelaySeconds: startupProbeInitialDelaySeconds,
-		ProbeHandler: corev1.ProbeHandler{
-			Exec: &corev1.ExecAction{
-				Command: startupProbeCommand,
-			},
-		},
+	}
+	if len(startupProbeCommand) > 0 {
+		startupProbe.ProbeHandler = corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{Command: startupProbeCommand},
+		}
+	} else {
+		startupProbe.ProbeHandler = corev1.ProbeHandler{
+			TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: httpPort}},
+		}
 	}
 
 	// Because the http endpoint requires auth we need to do it as a curl script
@@ -743,7 +748,7 @@ func NewSTSForNodePool(
 							Env: []corev1.EnvVar{
 								{
 									Name:  "cluster.initial_master_nodes",
-									Value: BootstrapPodName(cr),
+									Value: initialMasterNodes(cr),
 								},
 								{
 									Name:  "discovery.seed_hosts",
@@ -1089,342 +1094,6 @@ func NewNodePortService(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 	}
 }
 
-func NewBootstrapPod(
-	cr *opensearchv1.OpenSearchCluster,
-	volumes []corev1.Volume,
-	volumeMounts []corev1.VolumeMount,
-) *corev1.Pod {
-	labels := map[string]string{
-		helpers.ClusterLabel: cr.Name,
-	}
-
-	// Merge Bootstrap.Labels into labels
-	if cr.Spec.Bootstrap.Labels != nil {
-		for k, v := range cr.Spec.Bootstrap.Labels {
-			labels[k] = v
-		}
-	}
-
-	resources := cr.Spec.Bootstrap.Resources
-
-	jvmHeapSizeSettings := helpers.CalculateJvmHeapSizeSettings(cr.Spec.Bootstrap.Resources.Requests.Memory())
-	jvm := helpers.AppendJvmHeapSizeSettings(cr.Spec.Bootstrap.Jvm, jvmHeapSizeSettings)
-
-	image := helpers.ResolveImage(cr, nil)
-	initHelperImage := helpers.ResolveInitHelperImage(cr)
-	masterRole := helpers.ResolveClusterManagerRole(cr.Spec.General.Version)
-
-	probe := corev1.Probe{
-		PeriodSeconds:       20,
-		TimeoutSeconds:      5,
-		FailureThreshold:    10,
-		SuccessThreshold:    1,
-		InitialDelaySeconds: 10,
-		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
-	}
-
-	// Use persistent storage for bootstrap pod to maintain cluster state across restarts
-	// This prevents cluster formation failures when the bootstrap pod restarts during initialization
-	volumes = append(volumes, corev1.Volume{
-		Name: "data",
-		VolumeSource: corev1.VolumeSource{
-			PersistentVolumeClaim: &corev1.PersistentVolumeClaimVolumeSource{
-				ClaimName: fmt.Sprintf("%s-bootstrap-data", cr.Name),
-			},
-		},
-	})
-
-	opensearchHome := cr.Spec.General.GetOpenSearchHome()
-	volumeMounts = append(volumeMounts, corev1.VolumeMount{
-		Name:      "data",
-		MountPath: opensearchHome + "/data",
-	})
-
-	podSecurityContext := cr.Spec.General.PodSecurityContext
-	securityContext := cr.Spec.General.SecurityContext
-
-	env := []corev1.EnvVar{
-		{
-			Name:  "cluster.initial_master_nodes",
-			Value: BootstrapPodName(cr),
-		},
-		{
-			Name:  "discovery.seed_hosts",
-			Value: DiscoveryServiceName(cr),
-		},
-		{
-			Name:  "cluster.name",
-			Value: cr.Name,
-		},
-		{
-			Name:  "network.bind_host",
-			Value: "0.0.0.0",
-		},
-		{
-			// Make elasticsearch announce its hostname instead of IP so that certificates using the hostname can be verified
-			Name:      "network.publish_host",
-			ValueFrom: &corev1.EnvVarSource{FieldRef: &corev1.ObjectFieldSelector{APIVersion: "v1", FieldPath: "metadata.name"}},
-		},
-		{
-			Name:  "OPENSEARCH_JAVA_OPTS",
-			Value: jvm,
-		},
-		{
-			Name:  "node.roles",
-			Value: masterRole,
-		},
-		{
-			Name:  "http.port",
-			Value: fmt.Sprint(cr.Spec.General.HttpPort),
-		},
-	}
-
-	// Add OPENSEARCH_INITIAL_ADMIN_PASSWORD from admin credentials secret
-	generatedSecretName := helpers.GeneratedAdminCredentialsSecretName(cr)
-	secretRef := corev1.LocalObjectReference{Name: generatedSecretName}
-	env = append(env, corev1.EnvVar{
-		Name: "OPENSEARCH_INITIAL_ADMIN_PASSWORD",
-		ValueFrom: &corev1.EnvVarSource{
-			SecretKeyRef: &corev1.SecretKeySelector{
-				LocalObjectReference: secretRef,
-				Key:                  "password",
-			},
-		},
-	})
-
-	// Add Bootstrap.Env
-	if cr.Spec.Bootstrap.Env != nil {
-		env = append(env, cr.Spec.Bootstrap.Env...)
-	}
-
-	var initContainers []corev1.Container
-	if len(cr.Spec.Bootstrap.InitContainers) > 0 {
-		initContainers = append(initContainers, cr.Spec.Bootstrap.InitContainers...)
-	}
-
-	if !helpers.SkipInitContainer() {
-		uid, gid := helpers.ResolveUidGid(cr)
-		initContainers = append(initContainers, corev1.Container{
-			Name:            "init",
-			Image:           initHelperImage.GetImage(),
-			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
-			Resources:       cr.Spec.InitHelper.Resources,
-			Command:         []string{"sh", "-c"},
-			Args:            []string{helpers.GetChownCommand(uid, gid, opensearchHome+"/data")},
-			SecurityContext: helpers.ResolveInitHelperSecurityContext(cr, &corev1.SecurityContext{
-				RunAsUser: ptr.To(int64(0)),
-			}),
-			VolumeMounts: []corev1.VolumeMount{
-				{
-					Name:      "data",
-					MountPath: opensearchHome + "/data",
-				},
-			},
-		})
-	}
-
-	// If Keystore Values are set in OpenSearchCluster manifest
-	if len(cr.Spec.Bootstrap.Keystore) > 0 {
-
-		// Add volume and volume mount for keystore
-		volumes = append(volumes, corev1.Volume{
-			Name: "keystore",
-			VolumeSource: corev1.VolumeSource{
-				EmptyDir: &corev1.EmptyDirVolumeSource{},
-			},
-		})
-
-		volumeMounts = append(volumeMounts, corev1.VolumeMount{
-			Name:      "keystore",
-			MountPath: opensearchHome + "/config/opensearch.keystore",
-			SubPath:   "opensearch.keystore",
-		})
-
-		initContainerVolumeMounts := []corev1.VolumeMount{
-			{
-				Name:      "keystore",
-				MountPath: "/tmp/keystore",
-			},
-		}
-
-		// Add volumes and volume mounts for keystore secrets
-		for _, keystoreValue := range cr.Spec.Bootstrap.Keystore {
-			volumes = append(volumes, corev1.Volume{
-				Name: "keystore-" + keystoreValue.Secret.Name,
-				VolumeSource: corev1.VolumeSource{
-					Secret: &corev1.SecretVolumeSource{
-						SecretName: keystoreValue.Secret.Name,
-					},
-				},
-			})
-
-			if len(keystoreValue.KeyMappings) == 0 {
-				// If no renames are necessary, mount secret key-value pairs directly
-				initContainerVolumeMounts = append(initContainerVolumeMounts, corev1.VolumeMount{
-					Name:      "keystore-" + keystoreValue.Secret.Name,
-					MountPath: "/tmp/keystoreSecrets/" + keystoreValue.Secret.Name,
-				})
-			} else {
-				keys := helpers.SortedKeys(keystoreValue.KeyMappings)
-				for _, oldKey := range keys {
-					initContainerVolumeMounts = append(initContainerVolumeMounts, corev1.VolumeMount{
-						Name:      "keystore-" + keystoreValue.Secret.Name,
-						MountPath: "/tmp/keystoreSecrets/" + keystoreValue.Secret.Name + "/" + keystoreValue.KeyMappings[oldKey],
-						SubPath:   oldKey,
-					})
-				}
-			}
-		}
-
-		keystoreInitContainer := corev1.Container{
-			Name:            "keystore",
-			Image:           image.GetImage(),
-			ImagePullPolicy: image.GetImagePullPolicy(),
-			Resources:       resources,
-			Command: []string{
-				"sh",
-				"-c",
-				fmt.Sprintf(`
-				#!/usr/bin/env bash
-				set -euo pipefail
-
-				if [ ! -f %[1]s/config/opensearch.keystore ]; then
-				  %[1]s/bin/opensearch-keystore create
-				fi
-				for i in /tmp/keystoreSecrets/*/*; do
-				  key=$(basename $i)
-				  echo "Adding file $i to keystore key $key"
-				  %[1]s/bin/opensearch-keystore add-file "$key" "$i" --force
-				done
-
-				# Add the bootstrap password since otherwise the opensearch entrypoint tries to do this on startup
-				if [ ! -z ${PASSWORD+x} ]; then
-				  echo 'Adding env $PASSWORD to keystore as key bootstrap.password'
-				  echo "$PASSWORD" | %[1]s/bin/opensearch-keystore add -x bootstrap.password
-				fi
-
-				cp -a %[1]s/config/opensearch.keystore /tmp/keystore/
-				`, opensearchHome),
-			},
-			VolumeMounts:    initContainerVolumeMounts,
-			SecurityContext: securityContext,
-		}
-
-		initContainers = append(initContainers, keystoreInitContainer)
-	}
-
-	// Use General.HostAliases by default, overwrite with Bootstrap.HostAliases if set
-	hostAliases := cr.Spec.General.HostAliases
-	if cr.Spec.Bootstrap.HostAliases != nil {
-		hostAliases = cr.Spec.Bootstrap.HostAliases
-	}
-
-	startUpCommand := "./opensearch-docker-entrypoint.sh"
-
-	// The bootstrap pod mounts the same opensearch.yml as the node pools, so it
-	// must resolve the node.attr.* placeholders too. Reuse the init container
-	// (with the bootstrap resources) to populate them before startup.
-	if nodeAttributesEnabled(cr) {
-		volumes = append(volumes, nodeAttributesVolume())
-		volumeMounts = append(volumeMounts, nodeAttributesVolumeMount(cr))
-		initContainers = append(initContainers, nodeAttributesInitContainer(cr, image, resources))
-	}
-
-	// Use General.PluginsList by default, override with Bootstrap.PluginsList if set
-	pluginslist := cr.Spec.General.PluginsList
-	if len(cr.Spec.Bootstrap.PluginsList) > 0 {
-		pluginslist = cr.Spec.Bootstrap.PluginsList
-	}
-	pluginslist = helpers.RemoveDuplicateStrings(pluginslist)
-	mainCommand := helpers.BuildMainCommand("./bin/opensearch-plugin", pluginslist, true, startUpCommand)
-
-	// Source the resolved node attributes before anything — including the plugin
-	// installer — so that opensearch.yml placeholders are already resolved when
-	// opensearch-plugin reads the config file.
-	if nodeAttributesEnabled(cr) {
-		mainCommand[len(mainCommand)-1] = nodeAttributesEntrypoint(cr, mainCommand[len(mainCommand)-1])
-	}
-	pod := &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:        BootstrapPodName(cr),
-			Namespace:   cr.Namespace,
-			Labels:      labels,
-			Annotations: cr.Spec.Bootstrap.Annotations,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Env:             env,
-					Name:            "opensearch",
-					Command:         mainCommand,
-					Image:           image.GetImage(),
-					ImagePullPolicy: image.GetImagePullPolicy(),
-					Resources:       resources,
-					Ports: func() []corev1.ContainerPort {
-						ports := []corev1.ContainerPort{
-							{
-								Name:          "http",
-								ContainerPort: cr.Spec.General.HttpPort,
-							},
-							{
-								Name:          "transport",
-								ContainerPort: 9300,
-							},
-						}
-						// Add gRPC port if enabled
-						if grpcPort := getGrpcPort(cr); grpcPort > 0 {
-							ports = append(ports, corev1.ContainerPort{
-								Name:          "grpc",
-								ContainerPort: grpcPort,
-							})
-						}
-						return ports
-					}(),
-					StartupProbe:    &probe,
-					LivenessProbe:   &probe,
-					VolumeMounts:    volumeMounts,
-					SecurityContext: securityContext,
-				},
-			},
-			InitContainers: initContainers,
-			Volumes:        volumes,
-			ServiceAccountName: func() string {
-				if nodeAttributesEnabled(cr) {
-					return NodeAttributesEffectiveServiceAccount(cr)
-				}
-				return cr.Spec.General.ServiceAccount
-			}(),
-			NodeSelector:      cr.Spec.Bootstrap.NodeSelector,
-			Tolerations:       cr.Spec.Bootstrap.Tolerations,
-			Affinity:          getAffinity(cr.Spec.Bootstrap.Affinity, cr.Name),
-			ImagePullSecrets:  image.ImagePullSecrets,
-			SecurityContext:   podSecurityContext,
-			HostAliases:       hostAliases,
-			PriorityClassName: cr.Spec.Bootstrap.PriorityClassName,
-			HostNetwork:       cr.Spec.General.HostNetwork,
-		},
-	}
-
-	if cr.Spec.General.SetVMMaxMapCount != nil && *cr.Spec.General.SetVMMaxMapCount {
-		pod.Spec.InitContainers = append(pod.Spec.InitContainers, corev1.Container{
-			Name:            "init-sysctl",
-			Image:           initHelperImage.GetImage(),
-			ImagePullPolicy: initHelperImage.GetImagePullPolicy(),
-			Resources:       cr.Spec.InitHelper.Resources,
-			Command: []string{
-				"sysctl",
-				"-w",
-				"vm.max_map_count=262144",
-			},
-			SecurityContext: helpers.ResolveInitHelperSecurityContext(cr, &corev1.SecurityContext{
-				Privileged: ptr.To(true),
-			}),
-		})
-	}
-
-	return pod
-}
-
 func PortForCluster(cr *opensearchv1.OpenSearchCluster) int32 {
 	httpPort := int32(9200)
 	if cr.Spec.General.HttpPort > 0 {
@@ -1487,40 +1156,38 @@ func DiscoveryServiceName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-discovery", cr.Name)
 }
 
+// BootstrapPodName is the historical name of the dedicated bootstrap pod used by
+// older operator versions. Kept so upgrades can locate and clean it up.
 func BootstrapPodName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-bootstrap-0", cr.Name)
 }
 
-func NewBootstrapPVC(cr *opensearchv1.OpenSearchCluster) *corev1.PersistentVolumeClaim {
-	labels := map[string]string{
-		helpers.ClusterLabel: cr.Name,
-	}
+// BootstrapPVCName is the historical name of the bootstrap pod's data PVC.
+func BootstrapPVCName(cr *opensearchv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s-bootstrap-data", cr.Name)
+}
 
-	// Use default storage class and ReadWriteOnce access mode
-	// The bootstrap pod only needs a small amount of storage for cluster metadata
-	storageSize := resource.MustParse("1Gi")
-	if !cr.Spec.Bootstrap.DiskSize.IsZero() {
-		storageSize = cr.Spec.Bootstrap.DiskSize
+// initialMasterNodes returns a comma-separated list of pod-0 names from every
+// master-eligible node pool. These are the nodes that participate in the
+// initial cluster election. Returns empty string if no master pool exists.
+func initialMasterNodes(cr *opensearchv1.OpenSearchCluster) string {
+	var names []string
+	for _, nodePool := range cr.Spec.NodePools {
+		if helpers.HasManagerRole(&nodePool) {
+			names = append(names, fmt.Sprintf("%s-%s-0", cr.Name, nodePool.Component))
+		}
 	}
+	return strings.Join(names, ",")
+}
 
-	return &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-bootstrap-data", cr.Name),
-			Namespace: cr.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			AccessModes: []corev1.PersistentVolumeAccessMode{
-				corev1.ReadWriteOnce,
-			},
-			Resources: corev1.VolumeResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: storageSize,
-				},
-			},
-			StorageClassName: cr.Spec.Bootstrap.StorageClassName,
-		},
+// InitialMasterNodes is the exported validation wrapper around initialMasterNodes.
+// Returns an error if no master-eligible node pool exists.
+func InitialMasterNodes(cr *opensearchv1.OpenSearchCluster) (string, error) {
+	nodes := initialMasterNodes(cr)
+	if nodes == "" {
+		return "", fmt.Errorf("cluster %s/%s has no master-eligible node pool: at least one node pool must have the 'master' or 'cluster_manager' role", cr.Namespace, cr.Name)
 	}
+	return nodes, nil
 }
 
 func STSInNodePools(sts appsv1.StatefulSet, nodepools []opensearchv1.NodePool) bool {
@@ -1703,8 +1370,7 @@ func AllMastersReady(ctx context.Context, k8sClient client.Client, cr *opensearc
 // HasRetainedMasterPVC reports whether ordinal 0 of any cluster-manager pool already has a
 // data PVC (left behind by a previous incarnation of the same cluster, since the operator
 // never deletes node pool PVCs). Such a cluster re-forms from disk and ignores
-// cluster.initial_master_nodes, so a bootstrap pod would only start a second, unrelated
-// cluster that no node ever joins.
+// cluster.initial_master_nodes, so it does not need a fresh cluster bootstrap.
 // An existing-but-empty PVC (pre-provisioned, or a cluster that never formed) is
 // indistinguishable here; delete the pool PVCs to force a fresh bootstrap.
 // Non-NotFound API errors are returned so the caller can fail closed and retry rather than
