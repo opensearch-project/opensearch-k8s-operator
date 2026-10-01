@@ -22,7 +22,7 @@ The operator implements a **comprehensive global candidate rolling restart strat
 
 1. **Collects candidates across all StatefulSets** - Builds a global list of pods needing updates across all node types
 2. **Applies intelligent candidate selection** - Prioritizes data nodes over master nodes, then sorts by StatefulSet name and highest ordinal
-3. **Enforces master quorum preservation** - Ensures at least 2/3 masters are ready before restarting any master
+3. **Enforces master quorum preservation** - Restarts a master only if a majority of masters stays ready, or if all masters are already ready (the only way to restart a one- or two-master cluster)
 4. **Restarts one pod at a time** - Only deletes one pod per reconciliation loop to maintain precise control
 
 ## Implementation Design
@@ -61,14 +61,10 @@ sort.Slice(candidates, func(i, j int) bool {
 Before restarting any master node:
 
 ```go
-// Calculate cluster-wide master quorum
-totalMasters, readyMasters := r.calculateMasterQuorum()
-
-// Require at least 2/3 masters to be ready
-requiredMasters := (totalMasters + 1) / 2
-if readyMasters <= requiredMasters {
-    // Skip master restart to preserve quorum
-    continue
+totalMasters, readyMasters, err := r.countMasters()
+...
+if !masterQuorumSafe(totalMasters, readyMasters) {
+    // Restart a non-master candidate instead, or emit a Warning event and requeue
 }
 ```
 
@@ -133,7 +129,7 @@ Calculates cluster-wide master node quorum:
 The design includes comprehensive test scenarios:
 
 1. **Intelligent Candidate Selection** - Verifies data nodes restart before masters
-2. **Master Quorum Protection** - Ensures restart is blocked when < 2/3 masters ready
+2. **Master Quorum Protection** - Ensures a master restart is blocked when it would leave no majority of masters ready
 3. **Multi-AZ Distribution** - Tests rolling restart across multiple availability zones
 4. **One-Pod-at-a-Time** - Confirms only one pod restarts per reconciliation loop
 5. **All Node Types** - Validates proper restart order for data, coordinating, and master nodes

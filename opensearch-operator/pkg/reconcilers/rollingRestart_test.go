@@ -4,12 +4,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"time"
 
+	"github.com/jarcoal/httpmock"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/stretchr/testify/mock"
 	appsv1 "k8s.io/api/apps/v1"
@@ -102,6 +105,116 @@ var _ = Describe("RollingRestart readiness gate during a scale-down", func() {
 		Expect(restartStarted).To(BeFalse(), "rolling restart started while a scaled-down pod was still terminating")
 		Expect(result.RequeueAfter).To(Equal(10 * time.Second))
 		mockClient.AssertNotCalled(GinkgoT(), "DeletePod", mock.Anything)
+	})
+})
+
+var _ = DescribeTable("masterQuorumSafe",
+	func(total, ready int32, safe bool) {
+		Expect(masterQuorumSafe(total, ready)).To(Equal(safe))
+	},
+	Entry("single master, ready", int32(1), int32(1), true),
+	Entry("two masters, both ready", int32(2), int32(2), true),
+	Entry("two masters, one down", int32(2), int32(1), false),
+	Entry("three masters, all ready", int32(3), int32(3), true),
+	Entry("three masters, one down", int32(3), int32(2), false),
+	Entry("four masters, one down", int32(4), int32(3), false),
+	Entry("five masters, all ready", int32(5), int32(5), true),
+	Entry("five masters, one down", int32(5), int32(4), true),
+	Entry("five masters, two down", int32(5), int32(3), false),
+)
+
+var _ = Describe("RollingRestart master quorum guard", func() {
+	const (
+		clusterName      = "test-cluster"
+		clusterNamespace = "test-namespace"
+	)
+
+	// newPendingRestart sets up one cluster_manager+data pool whose pods all wait for a
+	// config change; readyPods of them are Ready.
+	newPendingRestart := func(replicas, readyPods int32) (*RollingRestartReconciler, *k8s.MockK8sClient, *record.FakeRecorder) {
+		pool := opensearchv1.NodePool{Component: "nodes", Replicas: replicas, Roles: []string{"cluster_manager", "data"}}
+		cluster := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterNamespace, UID: "dummyuid"},
+			Spec: opensearchv1.ClusterSpec{
+				General:   opensearchv1.GeneralConfig{Version: "2.11.0", ServiceName: clusterName, HttpPort: 9200},
+				NodePools: []opensearchv1.NodePool{pool},
+			},
+			Status: opensearchv1.ClusterStatus{Version: "2.11.0", Initialized: true},
+		}
+		sts := appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-nodes", Namespace: clusterNamespace},
+			Spec:       appsv1.StatefulSetSpec{Replicas: ptr.To(replicas)},
+			Status:     appsv1.StatefulSetStatus{CurrentRevision: "rev1", UpdateRevision: "rev2"},
+		}
+		var pods []corev1.Pod
+		for i := int32(0); i < replicas; i++ {
+			ready := corev1.ConditionFalse
+			if i < readyPods {
+				ready = corev1.ConditionTrue
+			}
+			pods = append(pods, corev1.Pod{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      fmt.Sprintf("%s-nodes-%d", clusterName, i),
+					Namespace: clusterNamespace,
+					Labels: map[string]string{
+						helpers.ClusterLabel:       clusterName,
+						helpers.NodePoolLabel:      "nodes",
+						"controller-revision-hash": "rev1",
+					},
+				},
+				Status: corev1.PodStatus{Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: ready}}},
+			})
+		}
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockClient.On("GetStatefulSet", sts.Name, clusterNamespace).Return(sts, nil)
+		mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{Items: pods}, nil)
+		mockClient.On("GetPod", pods[0].Name, clusterNamespace).Return(pods[0], nil)
+
+		transport := httpmock.NewMockTransport()
+		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+		registerOsPingResponders(transport, cluster)
+		transport.RegisterResponder(http.MethodGet, `=~.*/_cluster/health.*`,
+			httpmock.NewStringResponder(200, fmt.Sprintf(`{"status":"green","number_of_data_nodes":%d}`, replicas)))
+		registerClusterSettingsResponders(transport)
+		registerCatShardsResponder(transport, 200, `[]`)
+		osClient, err := services.NewOsClusterClient(helpers.ClusterURL(cluster), "admin", "admin", services.WithTransport(transport))
+		Expect(err).NotTo(HaveOccurred())
+
+		recorder := record.NewFakeRecorder(20)
+		reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, cluster, cluster.Spec.NodePools)
+		return &RollingRestartReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			osClient:          osClient,
+			recorder:          recorder,
+			reconcilerContext: &reconcilerContext,
+			instance:          cluster,
+			logger:            zap.New().WithName("restart-test"),
+		}, mockClient, recorder
+	}
+
+	It("restarts the only master of a single-node cluster", func() {
+		underTest, mockClient, _ := newPendingRestart(1, 1)
+		mockClient.On("DeletePod", mock.MatchedBy(func(p *corev1.Pod) bool {
+			return p.Name == clusterName+"-nodes-0"
+		})).Return(nil).Once()
+
+		_, err := underTest.globalCandidateRollingRestart()
+
+		Expect(err).NotTo(HaveOccurred())
+		mockClient.AssertCalled(GinkgoT(), "DeletePod", mock.Anything)
+	})
+
+	It("waits with a Warning event when restarting a master would lose quorum", func() {
+		underTest, mockClient, recorder := newPendingRestart(3, 2)
+
+		result, err := underTest.globalCandidateRollingRestart()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(10 * time.Second))
+		mockClient.AssertNotCalled(GinkgoT(), "DeletePod", mock.Anything)
+		Expect(recorder.Events).To(Receive(ContainSubstring("Warning RollingRestart Rolling restart is waiting for cluster manager quorum: 2 of 3")))
 	})
 })
 
