@@ -17,6 +17,7 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/stretchr/testify/mock"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -1484,7 +1485,9 @@ var _ = Describe("Scaler Controller", func() {
 				}
 				underTest := newScalerReconciler(mockClient, spec)
 				underTest.osClientTransport = transport
-				underTest.sweepVotingConfigExclusions()
+				clusterClient, err := util.CreateClientForCluster(mockClient, underTest.ctx, spec, transport)
+				Expect(err).NotTo(HaveOccurred())
+				underTest.sweepVotingConfigExclusions(clusterClient)
 				return calls
 			}
 
@@ -1550,13 +1553,75 @@ var _ = Describe("Scaler Controller", func() {
 				Expect(*calls).To(BeEmpty())
 			})
 
-			It("Should skip the sweep entirely before the cluster is initialized", func() {
-				spec, _, _ := masterDecreaseCluster(3)
-				spec.Status.Initialized = false
-				// No admin secret is mocked and no transport is set: any client creation would fail the mock.
+			// reconcileOnce runs Reconcile on a cluster with no node pools and counts the
+			// root GETs a client costs (one client does several: the product check and
+			// the main page) and the cluster state reads. clientCost is what one client
+			// takes, measured by building one.
+			reconcileOnce := func(spec *opensearchv1.OpenSearchCluster) (rootGets, clientCost, stateGets int) {
+				transport := newTransport(spec)
+				transport.RegisterResponder(http.MethodGet, helpers.ClusterURL(spec)+"/", func(*http.Request) (*http.Response, error) {
+					rootGets++
+					return httpmock.NewStringResponse(200, `{"name":"test","cluster_name":"test","version":{"number":"2.11.0"}}`), nil
+				})
+				transport.RegisterResponder(http.MethodGet, `=~.*/_cluster/state/metadata.*`, func(*http.Request) (*http.Response, error) {
+					stateGets++
+					return httpmock.NewStringResponse(200, `{}`), nil
+				})
+
 				mockClient := k8s.NewMockK8sClient(GinkgoT())
-				underTest := newScalerReconciler(mockClient, &spec)
-				underTest.sweepVotingConfigExclusions()
+				mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+				mockClient.On("ListStatefulSets",
+					client.InNamespace(clusterNamespace),
+					client.MatchingLabels{helpers.ClusterLabel: clusterName}).Return(appsv1.StatefulSetList{}, nil).Maybe()
+				_, err := util.CreateClientForCluster(mockClient, context.Background(), spec, transport)
+				Expect(err).NotTo(HaveOccurred())
+				clientCost, rootGets = rootGets, 0
+
+				underTest := newScalerReconciler(mockClient, spec)
+				underTest.osClientTransport = transport
+				_, err = underTest.Reconcile()
+				Expect(err).NotTo(HaveOccurred())
+				return rootGets, clientCost, stateGets
+			}
+
+			idleCluster := func() opensearchv1.OpenSearchCluster {
+				spec, _, _ := masterDecreaseCluster(3)
+				spec.Spec.NodePools = nil
+				spec.Status.ComponentsStatus = nil
+				return spec
+			}
+
+			It("Should build one client per reconcile for the sweep and the stale exclusion cleanup", func() {
+				spec := idleCluster()
+				spec.Spec.ConfMgmt.SmartScaler = true
+				rootGets, clientCost, stateGets := reconcileOnce(&spec)
+				Expect(clientCost).To(BeNumerically(">", 0))
+				Expect(rootGets).To(Equal(clientCost))
+				Expect(stateGets).To(Equal(1))
+			})
+
+			It("Should build the client for the sweep alone when SmartScaler is off", func() {
+				spec := idleCluster()
+				rootGets, clientCost, stateGets := reconcileOnce(&spec)
+				Expect(rootGets).To(Equal(clientCost))
+				Expect(stateGets).To(Equal(1))
+			})
+
+			It("Should build the client for the cleanup alone before the cluster is initialized", func() {
+				spec := idleCluster()
+				spec.Status.Initialized = false
+				spec.Spec.ConfMgmt.SmartScaler = true
+				rootGets, clientCost, stateGets := reconcileOnce(&spec)
+				Expect(rootGets).To(Equal(clientCost))
+				Expect(stateGets).To(Equal(0))
+			})
+
+			It("Should build no client when neither the sweep nor the cleanup runs", func() {
+				spec := idleCluster()
+				spec.Status.Initialized = false
+				rootGets, _, stateGets := reconcileOnce(&spec)
+				Expect(rootGets).To(Equal(0))
+				Expect(stateGets).To(Equal(0))
 			})
 		})
 	})
