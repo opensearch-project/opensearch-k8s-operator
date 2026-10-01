@@ -43,7 +43,7 @@ flowchart TD
     b10 --> b11(Emit node pool upgrade complete event)
     b8 -->|No| b12(Find working pod to upgrade)
     b12 --> b13(Prepare pod for delete)
-    b13 -->|Not ready| b14(Set condition: Waiting for drain)
+    b13 -->|Not ready| b14(Set condition: reason from the gate)
     b14 --> b4
     b13 -->|Ready| b15(Delete pod)
     b15 --> b16{Drain enabled?}
@@ -144,7 +144,7 @@ During the upgrade process, the reconciler tracks detailed conditions for each n
 - "preparing for pod delete"
 - "Could not find working pod"
 - "Could not prepare pod for delete"
-- "Waiting for node to drain"
+- Why the pod is held back: "Waiting for node {podName} to drain", "Waiting to drain system index primaries from {podName}" or "Not restarting {podName}: it holds the only active copy of {index}[{shard}]"
 - "Could not delete pod"
 - "Deleted pod {podName}"
 

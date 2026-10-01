@@ -378,11 +378,12 @@ func (r *RollingRestartReconciler) restartSpecificPod(cand interface{}) (ctrl.Re
 	}
 
 	r.logger.Info(fmt.Sprintf("Preparing to restart pod %s", c.podName))
-	ready, err = services.PreparePodForDelete(r.osClient, r.logger, c.podName, r.instance.Spec.General.DrainDataNodes, dataCount)
+	ready, message, err = services.PreparePodForDelete(r.osClient, r.logger, c.podName, r.instance.Spec.General.DrainDataNodes, dataCount)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
 	if !ready {
+		r.logger.Info(fmt.Sprintf("Couldn't proceed with rolling restart for Pod %s because %s", c.podName, message))
 		return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 	}
 
