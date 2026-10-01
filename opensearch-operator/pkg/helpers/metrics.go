@@ -56,19 +56,21 @@ func RegisterMetrics() {
 }
 
 func DeleteClusterMetrics(namespace string, clusterName string) {
-	TlsCertificateDaysRemaining.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
-	ClusterInfo.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
-	ClusterHealth.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
-	ClusterShards.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
-	ReconcileErrors.DeletePartialMatch(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
+	// Delete requires the full label set
+	labels := prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName}
+	TlsCertificateDaysRemaining.DeletePartialMatch(labels)
+	ClusterInfo.DeletePartialMatch(labels)
+	ClusterHealth.DeletePartialMatch(labels)
+	ClusterShards.DeletePartialMatch(labels)
+	ReconcileErrors.DeletePartialMatch(labels)
 }
 
 func UpdateClusterInfo(instance *opensearchv1.OpenSearchCluster, health opensearchv1.OpenSearchHealth, healthResponse responses.ClusterHealthResponse) {
 	namespace := instance.Namespace
 	clusterName := instance.Name
 
-	// Delete the old version in case it has changed
-	ClusterInfo.Delete(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
+	// Delete the old version in case it has changed. version is a label, so this must be a partial match.
+	ClusterInfo.DeletePartialMatch(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName})
 	ClusterInfo.With(prometheus.Labels{"namespace": namespace, "opensearch_cluster": clusterName, "version": instance.Status.Version}).Set(1)
 
 	var value float64
