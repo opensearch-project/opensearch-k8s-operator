@@ -95,7 +95,7 @@ All data integrity tests follow a common structure using shared helper functions
 ### Common Setup (BeforeEach)
 All tests use the `setupDataIntegrityTest()` helper function which:
 - Waits for master node pool to be ready (3 replicas)
-- Waits for data node pool to be ready (2 replicas)
+- Waits for data node pool to be ready (3 replicas)
 - Initializes `TestDataManager` for data operations
 - Initializes `ClusterOperations` for cluster operations
 
@@ -110,8 +110,9 @@ All tests use the `setupDataIntegrityTest()` helper function which:
 - Reconnects and verifies data integrity after upgrade
 
 #### Scaling Tests (`scaling_test.go`)
-- **Scale Up**: Tests scaling from 2 to 4 replicas and back
-- **Scale Down**: Tests scaling from 2 to 1 replica and back
+- **Scale Up**: Tests scaling the data pool from 3 to 4 replicas and back
+- **Scale Down**: Tests scaling the data pool from 3 to 2 replicas and back
+- **Scale Down Masters**: Scales the master pool from 3 to 2 and back, checking the removed node leaves `_cat/nodes` and no voting config exclusion is left
 - Each test verifies data integrity before and after scaling
 
 #### Node Pool Operations Tests (`nodepool_operations_test.go`)
