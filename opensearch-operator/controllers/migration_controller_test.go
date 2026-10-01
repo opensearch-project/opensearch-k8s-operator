@@ -247,6 +247,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			newCluster := &opensearchv1.OpenSearchCluster{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, newCluster)).To(Succeed())
 			Expect(newCluster.Spec.General.Version).To(Equal("2.19.4"))
+			Expect(newCluster.Status.Phase).To(Equal(opensearchv1.PhaseRunning))
 		})
 
 		It("should not migrate old cluster that is not ready", func() {
