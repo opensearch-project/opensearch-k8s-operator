@@ -37,7 +37,7 @@ The `opensearchCluster` value was replaced by `cluster`. The configuration struc
 
 By default, the chart deploys one node pool named `masters` with 3 replicas and the `master` and `data` roles (30Gi disk, 2Gi memory), plus one Dashboards replica. The OpenSearch and Dashboards version defaults to the chart's `appVersion`; set `cluster.general.version` and `cluster.dashboards.version` to pin it. For all available values, see the [chart README](../../charts/opensearch-cluster/README.md) and [values.yaml](../../charts/opensearch-cluster/values.yaml).
 
-The values under `cluster` use the same format and naming as the `OpenSearchCluster` spec described in the [User Guide](./main.md), so you can tailor the cluster by overriding them in your own `values.yaml`.
+The values under `cluster` use the same field names as the `OpenSearchCluster` spec described in the [User Guide](./main.md), with one exception for images. `cluster.general.image` and `cluster.dashboards.image` are repository names without a tag (the chart default is `docker.io/opensearchproject/opensearch` and `docker.io/opensearchproject/opensearch-dashboards`). The chart renders each as `<image>:<version>`, using `cluster.general.version` or `cluster.dashboards.version` when set and the chart `appVersion` otherwise. A full reference such as `myregistry.example.com/opensearch:3.2.0` is rendered with a second tag appended. In the `OpenSearchCluster` spec, `general.image` is a full image reference; a per-node-pool `image` in this chart is passed through unchanged.
 
 Other values worth knowing:
 
