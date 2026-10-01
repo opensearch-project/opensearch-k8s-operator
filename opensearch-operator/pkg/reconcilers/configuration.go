@@ -64,7 +64,10 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 
 	hasNodeAttributes := len(r.instance.Spec.General.NodeAttributes) > 0
 
-	if len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
+	// Without the security plugin the config must always be rendered: it carries
+	// plugins.security.disabled, which keeps the image's demo security setup off.
+	if helpers.IsSecurityPluginEnabled(r.instance) &&
+		len(r.instance.Spec.General.AdditionalVolumes) == 0 &&
 		len(r.reconcilerContext.OpenSearchConfig) == 0 &&
 		!hasGeneralConfig && !hasNodePoolConfig && !hasNodeAttributes {
 		return ctrl.Result{}, nil
