@@ -47,9 +47,6 @@ func TestGetVotingConfigExclusions(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("got %v, want %v", got, tt.want)
 			}
-			// An index expression no index can match (names are lowercase) keeps the
-			// master from copying every index's metadata into the response. A
-			// leading "_" is rejected by the cluster, so it must not be used.
 			segments := strings.Split(strings.TrimPrefix(gotPath, "/"), "/")
 			if len(segments) != 4 || segments[0] != "_cluster" || segments[1] != "state" || segments[2] != "metadata" || segments[3] == "" || segments[3] == strings.ToLower(segments[3]) || strings.HasPrefix(segments[3], "_") {
 				t.Errorf("path %q must end in a non-lowercase index name after the metadata metric", gotPath)
