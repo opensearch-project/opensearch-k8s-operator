@@ -13,6 +13,27 @@ import (
 )
 
 var _ = Describe("Builders", func() {
+	When("building the dashboards deployment with different replicas", func() {
+		build := func(replicas *int32) *int32 {
+			cr := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "dashboards-replicas", Namespace: "dashboards-replicas", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General:    opensearchv1.GeneralConfig{ServiceName: "dashboards-replicas"},
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true, Replicas: replicas},
+				},
+			}
+			return NewDashboardsDeploymentForCR(&cr, nil, nil, nil).Spec.Replicas
+		}
+
+		It("should default to 1 replica when unset", func() {
+			Expect(build(nil)).To(HaveValue(Equal(int32(1))))
+		})
+
+		It("should keep an explicit 0 replicas", func() {
+			Expect(build(ptr.To(int32(0)))).To(HaveValue(Equal(int32(0))))
+		})
+	})
+
 	When("building the dashboards deployment with annotations supplied", func() {
 		It("should populate the dashboard pod and deployment spec with annotations provided", func() {
 			clusterName := "dashboards-add-annotations"
