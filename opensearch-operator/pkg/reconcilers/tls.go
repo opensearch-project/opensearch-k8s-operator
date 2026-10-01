@@ -621,7 +621,7 @@ func (r *TLSReconciler) certShouldBeRenewed(ca tls.Cert, cd certDescription, exi
 // certRenewalReason says why a generated certificate must be replaced, or
 // returns "" to keep it. parsed is false when the certificate is unreadable.
 func certRenewalReason(certData []byte, ca tls.Cert, renewBeforeExpirationDays int) (reason string, daysRemaining int, parsed bool) {
-	daysRemaining, err := getDaysRemainingFromCertificate(certData)
+	daysRemaining, lifetimeDays, err := getCertificateDays(certData)
 	if err != nil {
 		return fmt.Sprintf("failed to parse certificate for expiry date: %v", err), daysRemaining, false
 	}
@@ -638,7 +638,10 @@ func certRenewalReason(certData []byte, ca tls.Cert, renewBeforeExpirationDays i
 		return "certificate is not signed by the current CA", daysRemaining, true
 	}
 
-	if renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays {
+	// Cap the window at half the certificate's lifetime: a certificate shorter
+	// than the window would otherwise be reissued on every reconcile
+	window := min(renewBeforeExpirationDays, lifetimeDays/2)
+	if window > 0 && daysRemaining < window {
 		return "certificate is inside the rotation window", daysRemaining, true
 	}
 	return "", daysRemaining, true
@@ -910,17 +913,19 @@ func setCertRenewalAnnotation(secret *corev1.Secret, marker string) {
 	secret.Annotations[CertRenewalAnnotation] = marker
 }
 
-func getDaysRemainingFromCertificate(data []byte) (int, error) {
+// getCertificateDays returns the days a certificate has left and its total validity in days
+func getCertificateDays(data []byte) (remaining int, lifetime int, err error) {
 	der, _ := pem.Decode(data)
 	if der == nil {
-		return -1, fmt.Errorf("failed to decode valid PEM from provided certificate data")
+		return -1, 0, fmt.Errorf("failed to decode valid PEM from provided certificate data")
 	}
 	cert, err := x509.ParseCertificate(der.Bytes)
 	if err != nil {
-		return -1, err
+		return -1, 0, err
 	}
-	daysRemaining := int(time.Until(cert.NotAfter).Hours() / 24)
-	return daysRemaining, nil
+	remaining = int(time.Until(cert.NotAfter).Hours() / 24)
+	lifetime = int(cert.NotAfter.Sub(cert.NotBefore).Hours() / 24)
+	return remaining, lifetime, nil
 }
 
 func (r *TLSReconciler) resolveTransportCertDuration() time.Duration {
