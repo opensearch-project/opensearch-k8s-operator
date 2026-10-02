@@ -25,6 +25,8 @@ The operator provides validation webhooks for the following OpenSearch CRDs:
 
 Create and update of `OpenSearchCluster` are rejected when no node pool has the cluster-manager role (`cluster_manager`, or `master` on OpenSearch 1.x) with at least 1 replica. This covers scaling the last manager pool to 0 and removing it from `spec.nodePools`, both of which would leave the cluster without a quorum. The guard is user-visible: the Helm chart enables the webhook with `failurePolicy: Fail` by default, so such a cluster cannot be created or saved.
 
+On OpenSearch 3.x the webhook also checks node pools that would fail at startup (see [Searchable snapshots](./main.md#searchable-snapshots-warm-nodes)): it rejects a pool that combines `search` with another role, a `warm` pool with other roles that sets no `node.search.cache.size`, and a `warm` pool whose `node.search.cache.size` doesn't parse or isn't above 0 and below 100%. A pool with only the `search` role is allowed with a warning, since on 3.x it hosts search replicas rather than searchable snapshots. An update that moves `spec.general.version` from 2.x to 3.x is rejected while any pool still has the `search` role.
+
 ## Webhook Naming Convention
 
 The webhook names follow a specific naming convention:
