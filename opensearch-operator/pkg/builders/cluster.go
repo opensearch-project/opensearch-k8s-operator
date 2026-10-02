@@ -263,7 +263,10 @@ func getAffinity(affinity *corev1.Affinity, clusterName string) *corev1.Affinity
 // authenticate with, so they keep working with basic auth disabled. Empty means
 // basic auth. Client certs need HTTPS, so plain HTTP keeps basic auth.
 func probeClientCertSecret(cr *opensearchv1.OpenSearchCluster) string {
-	if !helpers.IsHttpTlsEnabled(cr) || cr.Spec.Security.Config == nil {
+	if !helpers.IsHttpTlsEnabled(cr) ||
+		cr.Spec.Security == nil ||
+		cr.Spec.Security.Config == nil ||
+		cr.Spec.Security.Config.OperatorClientCert.Name == "" {
 		return ""
 	}
 	return cr.Spec.Security.Config.OperatorClientCert.Name

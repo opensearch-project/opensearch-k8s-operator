@@ -1553,6 +1553,26 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Volumes).NotTo(ContainElement(certVolume))
 			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).NotTo(ContainElement(certMount))
 		})
+
+		It("should keep a custom probe command and still mount the cert", func() {
+			clusterObject := withClientCert(true)
+			customPool := nodePool
+			customPool.Probes = &opensearchv1.ProbesConfig{
+				Startup: &opensearchv1.CommandProbeConfig{
+					Command: []string{"/bin/bash", "-c", "echo 'startup'"},
+				},
+				Readiness: &opensearchv1.CommandProbeConfig{
+					Command: []string{"/bin/bash", "-c", "echo 'ready'"},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, customPool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
+			Expect(result.Spec.Template.Spec.Volumes).To(ContainElement(certVolume))
+			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(certMount))
+		})
 	})
 
 	When("HTTP TLS is disabled", func() {
