@@ -120,8 +120,9 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 				if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 					return err
 				}
-				controllerutil.AddFinalizer(instance, myFinalizerName)
-				return r.Update(ctx, instance)
+				return patchMetadata(ctx, r.Client, instance, func() {
+					controllerutil.AddFinalizer(instance, myFinalizerName)
+				})
 			})
 			if err != nil {
 				return ctrl.Result{}, err
@@ -141,8 +142,9 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 				if err := r.Get(ctx, req.NamespacedName, instance); err != nil {
 					return err
 				}
-				controllerutil.RemoveFinalizer(instance, myFinalizerName)
-				return r.Update(ctx, instance)
+				return patchMetadata(ctx, r.Client, instance, func() {
+					controllerutil.RemoveFinalizer(instance, myFinalizerName)
+				})
 			})
 			if err != nil {
 				return ctrl.Result{}, err
@@ -429,4 +431,13 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 
 	// -------- all resources has been created -----------
 	return ctrl.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
+}
+
+// patchMetadata applies mutate to obj and sends only the change. A full Update
+// makes the operator co-own spec fields and breaks server-side apply (Helm 4).
+// The resourceVersion is kept because a merge patch replaces whole lists.
+func patchMetadata(ctx context.Context, c client.Client, obj client.Object, mutate func()) error {
+	orig := obj.DeepCopyObject().(client.Object)
+	mutate()
+	return c.Patch(ctx, obj, client.MergeFromWithOptions(orig, client.MergeFromWithOptimisticLock{}))
 }
