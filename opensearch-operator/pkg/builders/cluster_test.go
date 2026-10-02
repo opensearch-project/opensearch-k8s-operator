@@ -14,9 +14,11 @@ import (
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/apimachinery/pkg/types"
 )
 
@@ -2127,5 +2129,173 @@ var _ = Describe("Builders", func() {
 			Expect(crb.Subjects[0].Name).To(Equal("mycluster-node-attributes"))
 			Expect(crb.Subjects[0].Namespace).To(Equal("myns"))
 		})
+	})
+})
+
+func networkPolicyPortValues(ports []networkingv1.NetworkPolicyPort) []int32 {
+	values := make([]int32, 0, len(ports))
+	for _, port := range ports {
+		if port.Port != nil {
+			values = append(values, port.Port.IntVal)
+		}
+	}
+	return values
+}
+
+func findIngressRule(rules []networkingv1.NetworkPolicyIngressRule, match func(networkingv1.NetworkPolicyPeer) bool) *networkingv1.NetworkPolicyIngressRule {
+	for i, rule := range rules {
+		for _, peer := range rule.From {
+			if match(peer) {
+				return &rules[i]
+			}
+		}
+	}
+	return nil
+}
+
+var _ = Describe("NetworkPolicy builder", func() {
+	clusterName := "np-cluster"
+	namespace := "np-ns"
+
+	baseCluster := func() opensearchv1.OpenSearchCluster {
+		return opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
+					HttpPort:    9200,
+					ServiceName: clusterName,
+				},
+			},
+		}
+	}
+
+	It("should return an empty policy when the feature is disabled", func() {
+		cr := baseCluster()
+		result := NewNetworkPolicyForCR(&cr)
+		Expect(result.Name).To(Equal(clusterName + "-network-policy"))
+		Expect(result.Namespace).To(Equal(namespace))
+		Expect(result.Spec.Ingress).To(BeEmpty())
+		Expect(result.Spec.PodSelector.MatchLabels).To(BeEmpty())
+		Expect(result.Spec.PolicyTypes).To(BeEmpty())
+	})
+
+	It("should return an empty policy when the field is omitted", func() {
+		cr := opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: namespace},
+		}
+		result := NewNetworkPolicyForCR(&cr)
+		Expect(result.Spec.Ingress).To(BeEmpty())
+	})
+
+	It("should select cluster pods and allow intra-cluster, dashboards, and extra ingress", func() {
+		GinkgoT().Setenv(helpers.PodNamespaceEnvVariable, "operator-ns")
+		extraPeer := networkingv1.NetworkPolicyPeer{
+			NamespaceSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"team": "observability"},
+			},
+			PodSelector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{"app": "prometheus"},
+			},
+		}
+		cr := baseCluster()
+		cr.Spec.General.HttpPort = 19200
+		cr.Spec.General.NetworkPolicy = opensearchv1.NetworkPolicyConfig{
+			Enable:       true,
+			ExtraIngress: []networkingv1.NetworkPolicyPeer{extraPeer},
+		}
+
+		result := NewNetworkPolicyForCR(&cr)
+		Expect(result.Spec.PodSelector.MatchLabels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterName))
+		Expect(result.Spec.PolicyTypes).To(Equal([]networkingv1.PolicyType{networkingv1.PolicyTypeIngress}))
+		Expect(result.Spec.Ingress).To(HaveLen(5))
+
+		intra := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+			return peer.PodSelector != nil && peer.PodSelector.MatchLabels[helpers.ClusterLabel] == clusterName
+		})
+		Expect(intra).NotTo(BeNil())
+		Expect(networkPolicyPortValues(intra.Ports)).To(Equal([]int32{19200, 9300, 9600, 9650}))
+
+		dashboards := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+			return peer.PodSelector != nil && peer.PodSelector.MatchLabels["opensearch.cluster.dashboards"] == clusterName
+		})
+		Expect(dashboards).NotTo(BeNil())
+		Expect(networkPolicyPortValues(dashboards.Ports)).To(Equal([]int32{19200}))
+
+		operator := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+			return peer.NamespaceSelector != nil && peer.NamespaceSelector.MatchLabels[corev1.LabelMetadataName] == "operator-ns"
+		})
+		Expect(operator).NotTo(BeNil())
+		Expect(networkPolicyPortValues(operator.Ports)).To(Equal([]int32{19200}))
+
+		extra := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+			return peer.NamespaceSelector != nil && peer.NamespaceSelector.MatchLabels["team"] == "observability"
+		})
+		Expect(extra).NotTo(BeNil())
+		Expect(extra.From).To(Equal([]networkingv1.NetworkPolicyPeer{extraPeer}))
+		Expect(networkPolicyPortValues(extra.Ports)).To(Equal([]int32{19200, 9300, 9600, 9650}))
+	})
+
+	DescribeTable("should allow the security config update Job only on the HTTP port",
+		func(httpPort, expectedPort int32) {
+			GinkgoT().Setenv(helpers.PodNamespaceEnvVariable, "operator-ns")
+			cr := baseCluster()
+			cr.Spec.General.Version = "2.2.1"
+			cr.Spec.General.HttpPort = httpPort
+			cr.Spec.General.NetworkPolicy.Enable = true
+			cr.Spec.General.Grpc = &opensearchv1.GrpcConfig{Enable: true, Port: "9400"}
+			job := NewSecurityconfigUpdateJob(&cr, clusterName+"-securityconfig-update", namespace, "checksum", "", "admin-cert", "", "cmd", nil, nil)
+
+			result := NewNetworkPolicyForCR(&cr)
+			rule := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+				return peer.PodSelector != nil && peer.PodSelector.MatchLabels[helpers.JobLabel] == job.Name
+			})
+			Expect(rule).NotTo(BeNil())
+			Expect(rule.From).To(HaveLen(1))
+			peer := rule.From[0]
+			Expect(peer.NamespaceSelector).To(BeNil())
+			Expect(peer.IPBlock).To(BeNil())
+			selector, err := metav1.LabelSelectorAsSelector(peer.PodSelector)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(selector.Matches(labels.Set(job.Spec.Template.Labels))).To(BeTrue())
+			Expect(selector.Matches(labels.Set{helpers.JobLabel: "other-cluster-securityconfig-update"})).To(BeFalse())
+			Expect(selector.Matches(labels.Set{})).To(BeFalse())
+			Expect(networkPolicyPortValues(rule.Ports)).To(Equal([]int32{expectedPort}))
+			Expect(rule.Ports[0].Protocol).To(Equal(ptr.To(corev1.ProtocolTCP)))
+			Expect(rule.Ports[0].EndPort).To(BeNil())
+		},
+		Entry("with an omitted HTTP port", int32(0), int32(9200)),
+		Entry("with the default HTTP port", int32(9200), int32(9200)),
+		Entry("with a custom HTTP port", int32(19200), int32(19200)),
+	)
+
+	It("should include the gRPC port only when gRPC is enabled", func() {
+		cr := baseCluster()
+		cr.Spec.General.NetworkPolicy.Enable = true
+		result := NewNetworkPolicyForCR(&cr)
+		intra := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+			return peer.PodSelector != nil && peer.PodSelector.MatchLabels[helpers.ClusterLabel] == clusterName
+		})
+		Expect(intra).NotTo(BeNil())
+		Expect(networkPolicyPortValues(intra.Ports)).NotTo(ContainElement(int32(9400)))
+
+		cr.Spec.General.Grpc = &opensearchv1.GrpcConfig{Enable: true, Port: "9400-9500"}
+		result = NewNetworkPolicyForCR(&cr)
+		intra = findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+			return peer.PodSelector != nil && peer.PodSelector.MatchLabels[helpers.ClusterLabel] == clusterName
+		})
+		Expect(intra).NotTo(BeNil())
+		Expect(networkPolicyPortValues(intra.Ports)).To(Equal([]int32{9200, 9300, 9600, 9650, 9400}))
+	})
+
+	It("should skip the operator rule when the operator namespace cannot be determined", func() {
+		GinkgoT().Setenv(helpers.PodNamespaceEnvVariable, "")
+		cr := baseCluster()
+		cr.Spec.General.NetworkPolicy.Enable = true
+		result := NewNetworkPolicyForCR(&cr)
+		Expect(result.Spec.Ingress).To(HaveLen(3))
+		operator := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {
+			return peer.NamespaceSelector != nil
+		})
+		Expect(operator).To(BeNil())
 	})
 })
