@@ -99,19 +99,20 @@ func TestPreparePodForDeleteSoleCopy(t *testing.T) {
 		name      string
 		nodeCount int32
 		want      bool
+		wantMsg   string
 	}{
-		{"multi-node blocks sole copy", 3, false},
-		{"single data node is exempt", 1, true},
+		{"multi-node blocks sole copy", 3, false, "Not restarting n0: it holds the only active copy of a[0]"},
+		{"single data node is exempt", 1, true, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			c, _, put := mockClient(t, `{}`, "all", sole)
-			got, err := PreparePodForDelete(c, logr.Discard(), "n0", false, tt.nodeCount)
+			got, msg, err := PreparePodForDelete(c, logr.Discard(), "n0", false, tt.nodeCount)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != tt.want || (*put != "") != tt.want {
-				t.Errorf("got %v put=%q, want %v", got, *put, tt.want)
+			if got != tt.want || (*put != "") != tt.want || msg != tt.wantMsg {
+				t.Errorf("got %v (%q) put=%q, want %v (%q)", got, msg, *put, tt.want, tt.wantMsg)
 			}
 		})
 	}
@@ -124,9 +125,10 @@ func TestPreparePodForDeleteDrainTwoNodes(t *testing.T) {
 	tests := []struct {
 		name, shards string
 		want         bool
+		wantMsg      string
 	}{
-		{"sole copy blocks", `[{"index":"a","shard":"0","prirep":"p","state":"STARTED","node":"n0"},{"index":"a","shard":"0","prirep":"r","state":"UNASSIGNED","node":null}]`, false},
-		{"replica elsewhere proceeds", `[{"index":"a","shard":"0","prirep":"p","state":"STARTED","node":"n0"},{"index":"a","shard":"0","prirep":"r","state":"STARTED","node":"n1"}]`, true},
+		{"sole copy blocks", `[{"index":"a","shard":"0","prirep":"p","state":"STARTED","node":"n0"},{"index":"a","shard":"0","prirep":"r","state":"UNASSIGNED","node":null}]`, false, "Not restarting n0: it holds the only active copy of a[0]"},
+		{"replica elsewhere proceeds", `[{"index":"a","shard":"0","prirep":"p","state":"STARTED","node":"n0"},{"index":"a","shard":"0","prirep":"r","state":"STARTED","node":"n1"}]`, true, ""},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -134,12 +136,39 @@ func TestPreparePodForDeleteDrainTwoNodes(t *testing.T) {
 			tr.RegisterResponder(http.MethodGet, `=~/_cat/indices/`, httpmock.NewStringResponder(404, `{}`))
 			tr.RegisterResponder(http.MethodGet, `http://os.test:9200/_cat/indices/.opendistro_security`, httpmock.NewStringResponder(200, `[{"index":".opendistro_security"}]`))
 			tr.RegisterResponder(http.MethodGet, `http://os.test:9200/_cat/shards/.opendistro_security`, httpmock.NewStringResponder(200, system))
-			got, err := PreparePodForDelete(c, logr.Discard(), "n0", true, 2)
+			got, msg, err := PreparePodForDelete(c, logr.Discard(), "n0", true, 2)
 			if err != nil {
 				t.Fatal(err)
 			}
-			if got != tt.want {
-				t.Errorf("got %v, want %v", got, tt.want)
+			if got != tt.want || msg != tt.wantMsg {
+				t.Errorf("got %v (%q), want %v (%q)", got, msg, tt.want, tt.wantMsg)
+			}
+		})
+	}
+}
+
+func TestPreparePodForDeleteDrainReasons(t *testing.T) {
+	tests := []struct {
+		name      string
+		nodeCount int32
+		wantMsg   string
+	}{
+		{"node still holds shards", 3, "Waiting for node n0 to drain"},
+		{"system index primary still on node", 2, "Waiting to drain system index primaries from n0"},
+	}
+	onNode := `[{"index":".opendistro_security","shard":"0","prirep":"p","state":"STARTED","node":"n0"},{"index":".opendistro_security","shard":"0","prirep":"r","state":"STARTED","node":"n1"}]`
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c, tr, _ := mockClient(t, `{}`, "all", onNode)
+			tr.RegisterResponder(http.MethodGet, `=~/_cat/indices/`, httpmock.NewStringResponder(404, `{}`))
+			tr.RegisterResponder(http.MethodGet, `http://os.test:9200/_cat/indices/.opendistro_security`, httpmock.NewStringResponder(200, `[{"index":".opendistro_security"}]`))
+			tr.RegisterResponder(http.MethodGet, `http://os.test:9200/_cat/shards/.opendistro_security`, httpmock.NewStringResponder(200, onNode))
+			got, msg, err := PreparePodForDelete(c, logr.Discard(), "n0", true, tt.nodeCount)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got || msg != tt.wantMsg {
+				t.Errorf("got %v (%q), want false (%q)", got, msg, tt.wantMsg)
 			}
 		})
 	}
