@@ -42,16 +42,17 @@ A few notes on operator releases:
 
 The chart's only cluster-scoped resources are the CRDs, the `ValidatingWebhookConfiguration` of the webhook and, unless `useRoleBindings=true`, the RBAC roles. A user who may only manage one namespace can install the operator once a cluster admin has applied the cluster-scoped parts.
 
-The admin renders them from the same chart version, with the same release name, namespace, `legacyAPI.enabled` and `webhook.*` values the operator will be installed with, since the webhook configuration points at the release's webhook service. The CRDs are too large for a client-side apply, so use `--server-side`:
+The admin must use the same chart version, release name and namespace as the eventual install, and the same `legacyAPI.enabled`, `webhook.enabled`, `webhook.failurePolicy` and `webhook.certManager.*` values, because the webhook configuration points at the release's webhook service. Do **not** mirror the namespace user's `installCRDs=false` or `webhook.createConfiguration=false` when templating: those flags would omit the CRDs and the `ValidatingWebhookConfiguration` from the admin's render. Leave both at their defaults (`true`) for the `helm template` steps below.
+
+Apply the CRDs first. They are too large for a client-side apply, so use `--server-side`:
 
 ```bash
 helm template opensearch-operator opensearch-operator/opensearch-operator --namespace <namespace> \
   --show-only templates/crds.yaml \
-  --show-only templates/opensearch-operator-validating-webhook-configuration.yaml \
   | kubectl apply --server-side -f -
 ```
 
-The namespace user then installs the rest:
+The namespace user then installs the namespaced resources (webhook server, Service, and cert-manager `Certificate` when enabled):
 
 ```bash
 helm install opensearch-operator opensearch-operator/opensearch-operator --namespace <namespace> \
@@ -61,7 +62,19 @@ helm install opensearch-operator opensearch-operator/opensearch-operator --names
   --set manager.watchNamespace=<namespace>
 ```
 
-With cert-manager, the webhook configuration carries the `cert-manager.io/inject-ca-from` annotation and cert-manager fills in its `caBundle` once the release's `Certificate` exists. Without cert-manager, the admin sets `caBundle` on each webhook by hand (see the [Webhooks guide](./webhooks.md#manual-certificate-management)). The admin re-runs the `helm template` step on chart upgrades.
+After the webhook certificate is ready, the admin applies the `ValidatingWebhookConfiguration`. Applying it before the cert exists leaves `caBundle` empty; with the default `failurePolicy: Fail` that can reject OpenSearch CR mutations cluster-wide until cert-manager injects the CA (or until you set `caBundle` by hand):
+
+```bash
+helm template opensearch-operator opensearch-operator/opensearch-operator --namespace <namespace> \
+  --show-only templates/opensearch-operator-validating-webhook-configuration.yaml \
+  | kubectl apply --server-side -f -
+```
+
+With cert-manager, the webhook configuration carries the `cert-manager.io/inject-ca-from` annotation and cert-manager fills in its `caBundle` once the release's `Certificate` exists. Without cert-manager, the admin sets `caBundle` on each webhook by hand (see the [Webhooks guide](./webhooks.md#manual-certificate-management)). The admin re-runs the `helm template` steps on chart upgrades.
+
+Resources applied with `kubectl` are not owned by the Helm release. `helm uninstall` will not remove those CRDs or the `ValidatingWebhookConfiguration`; delete them separately when retiring the install. If a release already manages the webhook configuration (`createConfiguration=true`) and you later set `createConfiguration=false`, Helm deletes that configuration on upgrade—re-apply it with the admin `helm template` step if you still need admission.
+
+The `ValidatingWebhookConfiguration` has no `namespaceSelector`, so it still intercepts matching OpenSearch CR mutations in every namespace. A namespace-scoped operator that is down or unreachable can therefore block those requests cluster-wide while `failurePolicy` is `Fail`.
 
 ## Quickstart
 
