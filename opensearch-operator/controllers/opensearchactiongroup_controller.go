@@ -39,7 +39,7 @@ func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctr
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	logger.V(4).Info("OpensearchActionGroup is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
+	r.Recorder.Event(instance, "Warning", "Deprecated", "OpensearchActionGroup is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
 
 	actionGroupReconciler := reconcilers.NewActionGroupReconciler(
 		k8s.NewK8sClient(r.Client, ctx),
