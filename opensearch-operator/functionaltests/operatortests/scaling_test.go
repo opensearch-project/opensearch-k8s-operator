@@ -1,6 +1,7 @@
 package operatortests
 
 import (
+	"context"
 	"time"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -116,6 +117,43 @@ var _ = Describe("DataIntegrityScaling", func() {
 			err = operations.WaitForNodePoolReady(clusterName, "data", 3, time.Minute*10)
 			Expect(err).NotTo(HaveOccurred())
 			GinkgoWriter.Printf("  + Scale up completed: 3/3 replicas ready\n")
+		})
+	})
+
+	Context("Voting config exclusions read", func() {
+		It("should return the excluded node names with indices present", func() {
+			ctx := context.Background()
+			osClient := dataManager.osClient
+
+			By("Creating an index so the cluster state has index metadata to skip")
+			_, err := dataManager.ImportTestData(getDefaultTestData()[:1])
+			Expect(err).NotTo(HaveOccurred())
+
+			By("Reading an empty exclusion list")
+			Expect(osClient.ClearVotingConfigExclusions(ctx, false)).To(Succeed())
+			names, err := osClient.GetVotingConfigExclusions(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(names).To(BeEmpty())
+
+			// An absent node name leaves the voting configuration alone. The
+			// operator's sweep clears it within one reconcile, hence the retry.
+			By("Excluding an absent node and reading the list back")
+			node := clusterName + "-absent-voter"
+			DeferCleanup(func() {
+				Expect(osClient.ClearVotingConfigExclusions(ctx, false)).To(Succeed())
+			})
+			Eventually(func(g Gomega) {
+				g.Expect(osClient.AddVotingConfigExclusion(ctx, node)).To(Succeed())
+				names, err := osClient.GetVotingConfigExclusions(ctx)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(names).To(ConsistOf(node))
+			}, time.Minute, time.Second).Should(Succeed())
+
+			By("Reading an empty list again after the clear")
+			Expect(osClient.ClearVotingConfigExclusions(ctx, false)).To(Succeed())
+			names, err = osClient.GetVotingConfigExclusions(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(names).To(BeEmpty())
 		})
 	})
 })

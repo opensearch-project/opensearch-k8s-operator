@@ -73,9 +73,25 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 
 	upgradeInProgress := r.instance.Status.Version != "" && r.instance.Status.Version != r.instance.Spec.General.Version
 
+	// One client serves the sweep and the stale-exclusion cleanup: creating it
+	// pings the cluster and fetches GET /, so it is only built when a step runs.
+	runSweep := r.instance.Status.Initialized
+	runCleanup := !upgradeInProgress && r.instance.Spec.ConfMgmt.SmartScaler
+	var clusterClient *services.OsClusterClient
+	if runSweep || runCleanup {
+		var clientErr error
+		clusterClient, clientErr = util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
+		if clientErr != nil {
+			lg.V(1).Info("skipping voting config exclusion sweep and stale exclusion cleanup: cannot create OpenSearch client", "error", clientErr.Error())
+			clusterClient = nil
+		}
+	}
+
 	// Voting-config exclusions are cluster-wide and survive a failed reconcile;
 	// clear the ones no in-flight master removal owns any more.
-	r.sweepVotingConfigExclusions()
+	if runSweep && clusterClient != nil {
+		r.sweepVotingConfigExclusions(clusterClient)
+	}
 
 	// Skip replica scaling while an upgrade is changing versions — mirrors the
 	// rolling-restart guard so scaler and upgrader do not delete pods at once.
@@ -83,14 +99,11 @@ func (r *ScalerReconciler) Reconcile() (ctrl.Result, error) {
 	if !upgradeInProgress {
 		// Clean stale allocation exclusions (e.g. from a failed RemoveExcludeNodeHost after scale-down or upgrade).
 		// CleanStaleExclusionList itself skips when a scale-down drain is in progress.
-		if r.instance.Spec.ConfMgmt.SmartScaler {
-			clusterClient, clientErr := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
-			if clientErr == nil {
-				if res, cleanupErr := util.CleanStaleExclusionList(r.client, r.instance, clusterClient, lg); cleanupErr != nil {
-					return ctrl.Result{}, cleanupErr
-				} else if res.Requeue {
-					return res, nil
-				}
+		if runCleanup && clusterClient != nil {
+			if res, cleanupErr := util.CleanStaleExclusionList(r.client, r.instance, clusterClient, lg); cleanupErr != nil {
+				return ctrl.Result{}, cleanupErr
+			} else if res.Requeue {
+				return res, nil
 			}
 		}
 
@@ -1033,16 +1046,8 @@ func (r *ScalerReconciler) clearVotingExclusionsAfterRemoval(clusterClient *serv
 // without wait while a voter is terminating can put it back into the voting
 // configuration right before it dies. Errors are logged, never returned, so a
 // failed sweep cannot block the reconcile chain.
-func (r *ScalerReconciler) sweepVotingConfigExclusions() {
-	if !r.instance.Status.Initialized {
-		return
-	}
+func (r *ScalerReconciler) sweepVotingConfigExclusions(clusterClient *services.OsClusterClient) {
 	lg := log.FromContext(r.ctx)
-	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
-	if err != nil {
-		lg.V(1).Info("skipping voting config exclusion sweep: cannot create OpenSearch client", "error", err.Error())
-		return
-	}
 	excluded, err := services.GetVotingConfigExclusions(clusterClient)
 	if err != nil {
 		lg.Error(err, "failed to read voting config exclusions")

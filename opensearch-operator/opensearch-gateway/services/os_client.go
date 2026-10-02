@@ -417,12 +417,17 @@ func (client *OsClusterClient) ClearVotingConfigExclusions(ctx context.Context, 
 	return nil
 }
 
+// noIndexPlaceholder matches no index, since index names must be lowercase.
+// Naming it in a cluster state request makes the master copy no index metadata,
+// only the coordination metadata we read. A leading "_" is rejected with a 400.
+const noIndexPlaceholder = "NO_SUCH_INDEX"
+
 // GetVotingConfigExclusions returns the node names currently on the voting
 // configuration exclusions list, read from the cluster state metadata.
-// See: GET /_cluster/state/metadata?filter_path=metadata.cluster_coordination.voting_config_exclusions
+// See: GET /_cluster/state/metadata/NO_SUCH_INDEX?filter_path=metadata.cluster_coordination.voting_config_exclusions
 func (client *OsClusterClient) GetVotingConfigExclusions(ctx context.Context) ([]string, error) {
 	var path strings.Builder
-	path.WriteString("/_cluster/state/metadata?filter_path=metadata.cluster_coordination.voting_config_exclusions")
+	path.WriteString("/_cluster/state/metadata/" + noIndexPlaceholder + "?filter_path=metadata.cluster_coordination.voting_config_exclusions")
 	resp, err := doHTTPGet(ctx, client.client, path)
 	if err != nil {
 		return nil, err
