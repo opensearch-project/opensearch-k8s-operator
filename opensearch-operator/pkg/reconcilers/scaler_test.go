@@ -689,7 +689,7 @@ var _ = Describe("Scaler Controller", func() {
 
 		It("Should keep the node name as the first condition", func() {
 			started := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-			conditions := scalerDrainConditions("node-1", started, true)
+			conditions := drainConditions("node-1", started, true)
 			Expect(scalerTargetNodeName(conditions)).To(Equal("node-1"))
 			got, ok := drainStartedAt(conditions)
 			Expect(ok).To(BeTrue())

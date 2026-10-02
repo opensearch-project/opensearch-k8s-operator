@@ -378,7 +378,7 @@ func (r *ScalerReconciler) decreaseOneNode(currentStatus opensearchv1.ComponentS
 				Component:   "Scaler",
 				Status:      "Excluded",
 				Description: nodePoolGroupName,
-				Conditions:  scalerDrainConditions(lastReplicaNodeName, startedAt, stalled),
+				Conditions:  drainConditions(lastReplicaNodeName, startedAt, stalled),
 			}
 			if err := r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
 				instance.Status.ComponentsStatus = helpers.Replace(currentStatus, componentStatus, instance.Status.ComponentsStatus)
@@ -632,7 +632,7 @@ func (r *ScalerReconciler) excludeNode(currentStatus opensearchv1.ComponentStatu
 			Component:   "Scaler",
 			Status:      "Excluded",
 			Description: nodePoolGroupName,
-			Conditions:  scalerDrainConditions(lastReplicaNodeName, time.Now().UTC(), false),
+			Conditions:  drainConditions(lastReplicaNodeName, time.Now().UTC(), false),
 		}
 		r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Scaler", "Finished to Exclude %s/%s", r.instance.Namespace, r.instance.Name)
 		lg.Info(fmt.Sprintf("Group: %s, Excluded node: %s", nodePoolGroupName, lastReplicaNodeName))
@@ -923,7 +923,7 @@ func (r *ScalerReconciler) recordDrainWait(currentStatus opensearchv1.ComponentS
 			"Drain of node %s in group %s has made no progress for %s; check remaining capacity, disk watermarks, or replica settings",
 			nodeName, nodePoolGroupName, drainStallWarningAfter)
 	}
-	newConditions := scalerDrainConditions(nodeName, startedAt, stalled || alreadyStalled)
+	newConditions := drainConditions(nodeName, startedAt, stalled || alreadyStalled)
 	if drainConditionsEqual(currentStatus.Conditions, newConditions) {
 		return nil
 	}
@@ -971,7 +971,7 @@ func hasDrainStalledCondition(conditions []string) bool {
 	return false
 }
 
-func scalerDrainConditions(nodeName string, startedAt time.Time, stalled bool) []string {
+func drainConditions(nodeName string, startedAt time.Time, stalled bool) []string {
 	conditions := []string{nodeName}
 	if !startedAt.IsZero() {
 		conditions = append(conditions, drainStartedConditionPrefix+startedAt.UTC().Format(time.RFC3339))
