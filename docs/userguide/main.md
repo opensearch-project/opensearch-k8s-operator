@@ -1568,7 +1568,7 @@ There are two ways to do that with the operator:
 - Defining your own securityconfig
 - Managing users and roles via kubernetes resources (deprecated, see below)
 
-Note that currently a combination of both approaches is not possible. Once you use the CRDs you cannot provide your own securityconfig as those would overwrite each other. We are working on a feature to merge these options.
+Note that currently a combination of both approaches is not possible. Once you use the CRDs you cannot provide your own securityconfig as those would overwrite each other.
 
 ### Securityconfig
 
