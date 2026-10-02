@@ -1,15 +1,18 @@
 # Cluster configuration
 
-The operator makes use of two methods for configuring a cluster.  For user defined additional configuration key value pairs, these are added to the pods as environment variable.  On startup the Opensearch containers will load the environment variables as Opensearch configuration.  Security plugin configurations that are applied by the operator are added to the `opensearch.yml` config file which is then mounted into the container.
+The configuration reconciler renders the OpenSearch settings into `opensearch.yml` and mounts it into the pods from a ConfigMap (subPath `config/opensearch.yml` under the OpenSearch home). Settings are not passed as environment variables.
 
-## Rolling restarts
+The rendered file contains the settings added by the operator itself (TLS, security plugin defaults, gRPC, `node.attr.*` from `general.nodeAttributes`) merged with the user-supplied `additionalConfig`:
 
-If a config file is being injected into the pods then a SHA1 hash is calculated for the content of the file and added as an annotation to the pods.  This allows us to detect changes which will trigger restarts.  For environment variable changes these will also result in a restart.
+* `<cluster>-config`: the shared ConfigMap with the operator settings plus `general.additionalConfig`. It is also used by the bootstrap pod and the securityconfig update job.
+* `<cluster>-<component>-config`: created only for node pools that set `nodePools[].additionalConfig`. It contains the shared settings with the pool's `additionalConfig` merged on top (pool values win). Those pools mount this ConfigMap instead of the shared one.
 
-For non data nodes the Kubernetes stateful set controller will restart the pods.  For data nodes the rolling restart reconciler will detect if there is a pending change to the pods and gracefully restart them.
+## Restarts on configuration changes
+
+For every node pool the reconciler calculates a SHA1 hash over the pool's rendered `opensearch.yml`, the contents of ConfigMap/Secret `general.additionalVolumes` that set `restartPods: true` and, when TLS certificate hot reload is not enabled, the renewal markers of TLS certificates. The hash is written to the pod template as the `opensearch.org/config` annotation, so any change creates a new StatefulSet revision.
+
+All node pool StatefulSets use the `OnDelete` update strategy, so Kubernetes never replaces pods by itself. The [rolling restart reconciler](rolling-restart-improvements.md) restarts every pod that is not on the latest revision, one pod at a time, across all node pools (data, coordinating and master-eligible alike).
 
 ## Configuration changes during upgrades
 
-When a rolling upgrade is in flight non data nodes will not be modified to prevent unexpected restarts.  These changes will be picked up after the data nodes have been upgraded.  For data nodes the changes will be added.  These will be picked up during the restarts for the rolling upgrade.  If a data node pool has already been restarted they will be picked up by the restart reconciler.
-
-To achieve this the operator tracks the changes per node pool, and decides whether to update the hash and environment variables independently for each node pool.
+The hash is calculated for all node pools during a version upgrade too, so the StatefulSet template already carries the new configuration. The rolling restart reconciler does nothing while an upgrade is in progress (`status.version` differs from `spec.general.version`). Pods deleted by the [upgrade reconciler](upgrade.md) come back with both the new version and the new configuration. Once the upgrade is finished, the rolling restart reconciler restarts any pods that are still on an older revision.

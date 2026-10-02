@@ -119,14 +119,18 @@ webhook:
   # Failure policy for webhooks. Options: Fail, Ignore
   failurePolicy: Fail
   # Secret name for webhook TLS certificates (used when certManager.enabled is false)
-  # Defaults to: <release-name>-opensearch-operator-webhook-server-cert
+  # Defaults to: <fullname>-webhook-server-cert
+  # <fullname> is the release full name (the release name when it contains
+  # "opensearch-operator", otherwise <release-name>-opensearch-operator;
+  # fullnameOverride replaces it). With `helm install opensearch-operator`,
+  # <fullname> is opensearch-operator.
   # If certManager is disabled, you must manually create this secret with:
   #   - tls.crt: The TLS certificate
   #   - tls.key: The TLS private key
   #   - ca.crt: The CA certificate (optional, for client verification)
-  # The certificate should be valid for:
-  #   - <release-name>-opensearch-operator-webhook-service.<namespace>.svc
-  #   - <release-name>-opensearch-operator-webhook-service.<namespace>.svc.cluster.local
+  # The certificate must include these subject alternative names:
+  #   - <fullname>-webhook-service.<namespace>.svc
+  #   - <fullname>-webhook-service.<namespace>.svc.cluster.local
   secretName: ""
   # Cert-manager configuration for webhook certificates
   certManager:
