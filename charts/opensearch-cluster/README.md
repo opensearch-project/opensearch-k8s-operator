@@ -116,15 +116,15 @@ The following table lists the configurable parameters of the Helm chart.
 | `cluster.ingress.dashboards.className` | string | `""` | Ingress class name |
 | `cluster.ingress.dashboards.hosts` | list | `[]` | Ingress hostnames |
 | `cluster.ingress.dashboards.tls` | list | `[]` | Ingress tls configuration |
-| `roles` | list | `[]` | List of OpensearchRole. Check values.yaml file for examples. |
-| `users` | list | `[]` | List of OpensearchUser. Check values.yaml file for examples. |
-| `usersRoleBinding` | list | `[]` | Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role Check values.yaml file for examples. |
-| `tenants` | list | `[]` | List of additional tenants. Check values.yaml file for examples. |
-| `actionGroups` | list | `[]` | List of OpensearchActionGroup. Check values.yaml file for examples. |
-| `componentTemplates` | list | `[]` | List of OpensearchComponentTemplate. Check values.yaml file for examples. |
-| `indexTemplates` | list | `[]` | List of OpensearchIndexTemplate. Check values.yaml file for examples. |
-| `ismPolicies` | list | `[]` | List of OpenSearchISMPolicy. Check values.yaml file for examples. |
+| `roles` | list | `[]` | List of OpensearchRole. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md. |
+| `users` | list | `[]` | List of OpensearchUser. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md. |
+| `usersRoleBinding` | list | `[]` | Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md. |
+| `tenants` | list | `[]` | List of additional tenants. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md. |
+| `actionGroups` | list | `[]` | List of OpensearchActionGroup. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md. |
+| `componentTemplates` | list | `[]` | List of OpensearchComponentTemplate. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md. |
+| `indexTemplates` | list | `[]` | List of OpensearchIndexTemplate. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md. |
+| `ismPolicies` | list | `[]` | List of OpenSearchISMPolicy. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md. |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
 
-Opensearch-cluster Helm Chart version: `3.3.5`
+Opensearch-cluster Helm Chart version: `3.3.6`

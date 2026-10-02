@@ -51,6 +51,7 @@ type OpensearchUserStatus struct {
 //+kubebuilder:subresource:status
 
 // OpensearchUser is the Schema for the opensearchusers API
+// +kubebuilder:deprecatedversion:warning="OpensearchUser is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator."
 type OpensearchUser struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

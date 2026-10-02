@@ -38,6 +38,7 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	r.Recorder.Event(instance, "Warning", "Deprecated", "OpenSearchISMPolicy is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
 
 	ismReconciler := reconcilers.NewIsmReconciler(
 		ctx,
