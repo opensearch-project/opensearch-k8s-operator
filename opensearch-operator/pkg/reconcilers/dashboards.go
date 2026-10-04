@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -13,7 +14,9 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -112,6 +115,9 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.client.Scheme()))
+	if err := r.recreateDeploymentOnSelectorChange(deployment); err != nil {
+		return ctrl.Result{}, err
+	}
 	result.Combine(r.client.CreateDeployment(deployment))
 
 	svc := builders.NewDashboardsSvcForCr(r.instance, r.instance.Spec.Dashboards.Service.Labels)
@@ -119,6 +125,30 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	result.Combine(r.client.CreateService(svc))
 
 	return result.Result, result.Err
+}
+
+// recreateDeploymentOnSelectorChange deletes the existing Deployment, orphaning its ReplicaSets and
+// pods, when its selector differs from the desired one. The selector is immutable, and Deployments
+// created before it was narrowed to operator-owned labels still carry the user labels. The
+// recreated Deployment adopts the orphaned ReplicaSets, whose labels match the new selector.
+func (r *DashboardsReconciler) recreateDeploymentOnSelectorChange(desired *appsv1.Deployment) error {
+	existing, err := r.client.GetDeployment(desired.Name, desired.Namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil
+		}
+		return err
+	}
+	if reflect.DeepEqual(existing.Spec.Selector.MatchLabels, desired.Spec.Selector.MatchLabels) {
+		return nil
+	}
+	r.logger.Info(fmt.Sprintf("Deployment selector changed, recreating Deployment %s/%s", existing.Namespace, existing.Name))
+	if err := r.client.DeleteDeployment(&existing, true); err != nil && !apierrors.IsNotFound(err) {
+		return err
+	}
+	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "DeploymentRecreated",
+		"Deployment %s/%s recreated because its selector changed; existing pods keep serving and are adopted by the new Deployment", existing.Namespace, existing.Name)
+	return nil
 }
 
 func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMount, error) {

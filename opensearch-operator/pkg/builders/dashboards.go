@@ -81,8 +81,13 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 	env = append(env, corev1.EnvVar{Name: "OPENSEARCH_USERNAME", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: secretRef, Key: "username"}}})
 	env = append(env, corev1.EnvVar{Name: "OPENSEARCH_PASSWORD", ValueFrom: &corev1.EnvVarSource{SecretKeyRef: &corev1.SecretKeySelector{LocalObjectReference: secretRef, Key: "password"}}})
 
-	labels := map[string]string{
+	// The selector is immutable, so it only holds operator-owned labels
+	selectorLabels := map[string]string{
 		"opensearch.cluster.dashboards": cr.Name,
+	}
+	labels := map[string]string{}
+	for key, value := range selectorLabels {
+		labels[key] = value
 	}
 
 	// cr.Spec.Dashboards.labels
@@ -147,7 +152,7 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
 			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
+				MatchLabels: selectorLabels,
 			},
 			Strategy: appsv1.DeploymentStrategy{
 				Type: appsv1.RollingUpdateDeploymentStrategyType,

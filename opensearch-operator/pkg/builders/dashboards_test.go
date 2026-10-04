@@ -66,6 +66,32 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("building the dashboards deployment with labels that change over time", func() {
+		It("should keep custom labels out of the selector", func() {
+			clusterName := "dashboards-selector-labels"
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable: true,
+						Labels: map[string]string{"helm.sh/chart": "opensearch-cluster-4.0.0"},
+					},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Selector.MatchLabels).To(Equal(map[string]string{
+				"opensearch.cluster.dashboards": clusterName,
+			}))
+			expectedLabels := map[string]string{
+				"opensearch.cluster.dashboards": clusterName,
+				"helm.sh/chart":                 "opensearch-cluster-4.0.0",
+			}
+			Expect(result.ObjectMeta.Labels).To(Equal(expectedLabels))
+			Expect(result.Spec.Template.Labels).To(Equal(expectedLabels))
+		})
+	})
+
 	When("building the dashboards deployment with a custom service type", func() {
 		It("should populate the service with the correct type and source ranges", func() {
 			clusterName := "dashboards-add-service-type-load-balancer"
