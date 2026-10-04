@@ -349,6 +349,57 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(strings.Contains(data, "general.config:")).To(BeTrue())
 			Expect(strings.Contains(data, "general-value")).To(BeTrue())
 		})
+
+		It("should not write plugins.security.* settings when security is not configured", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      clusterName,
+					Namespace: clusterName,
+					UID:       "dummyuid",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						AdditionalConfig: map[string]string{
+							"general.config": "general-value",
+						},
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "test",
+							Roles:     []string{"master", "data"},
+						},
+					},
+				},
+			}
+
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.EXPECT().Context().Return(context.Background())
+			var createdConfigMap *corev1.ConfigMap
+			mockClient.On("CreateConfigMap", mock.Anything).
+				Return(func(cm *corev1.ConfigMap) (*ctrl.Result, error) {
+					createdConfigMap = cm
+					return &ctrl.Result{}, nil
+				})
+
+			reconcilerContext := NewReconcilerContext(&helpers.MockEventRecorder{}, &spec, spec.Spec.NodePools)
+
+			underTest := newConfigurationReconciler(
+				mockClient,
+				&helpers.MockEventRecorder{},
+				&reconcilerContext,
+				&spec,
+			)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(createdConfigMap).ToNot(BeNil())
+			Expect(createdConfigMap.Data["opensearch.yml"]).ToNot(ContainSubstring("plugins.security"))
+			for key := range reconcilerContext.OpenSearchConfig {
+				Expect(key).ToNot(HavePrefix("plugins.security."))
+			}
+		})
 	})
 
 	Context("When Reconciling with General.NodeAttributes", func() {
