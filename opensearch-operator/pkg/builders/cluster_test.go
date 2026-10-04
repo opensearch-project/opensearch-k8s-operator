@@ -1198,6 +1198,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceName = "foobar"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -1219,6 +1220,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar-v1v2"
 			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -1240,6 +1242,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar-v1"
 			clusterObject.Spec.General.ServiceName = "foobar-v1"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -1273,6 +1276,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "unready"
 			clusterObject.Spec.General.ServiceName = "unready"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  1,
 				Component: "master",
@@ -1292,6 +1296,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "ready"
 			clusterObject.Spec.General.ServiceName = "ready"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  1,
 				Component: "master",
