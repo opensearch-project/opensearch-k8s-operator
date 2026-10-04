@@ -115,10 +115,16 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.client.Scheme()))
-	if err := r.recreateDeploymentOnSelectorChange(deployment); err != nil {
+	deleting, err := r.deleteDeploymentOnSelectorChange(deployment)
+	if err != nil {
 		return ctrl.Result{}, err
 	}
-	result.Combine(r.client.CreateDeployment(deployment))
+	if deleting {
+		// The orphaning delete is async; create the new Deployment once the old one is gone
+		result.Combine(&ctrl.Result{RequeueAfter: 5 * time.Second}, nil)
+	} else {
+		result.Combine(r.client.CreateDeployment(deployment))
+	}
 
 	svc := builders.NewDashboardsSvcForCr(r.instance, r.instance.Spec.Dashboards.Service.Labels)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, svc, r.client.Scheme()))
@@ -127,28 +133,32 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-// recreateDeploymentOnSelectorChange deletes the existing Deployment, orphaning its ReplicaSets and
-// pods, when its selector differs from the desired one. The selector is immutable, and Deployments
-// created before it was narrowed to operator-owned labels still carry the user labels. The
-// recreated Deployment adopts the orphaned ReplicaSets, whose labels match the new selector.
-func (r *DashboardsReconciler) recreateDeploymentOnSelectorChange(desired *appsv1.Deployment) error {
+// deleteDeploymentOnSelectorChange deletes the existing Deployment, orphaning its ReplicaSets and
+// pods, when its selector differs from the desired one, and reports whether the old Deployment is
+// still being deleted. The selector is immutable, and Deployments created before it was narrowed
+// to operator-owned labels still carry the user labels. The recreated Deployment adopts the
+// orphaned ReplicaSets, whose labels match the new selector.
+func (r *DashboardsReconciler) deleteDeploymentOnSelectorChange(desired *appsv1.Deployment) (bool, error) {
 	existing, err := r.client.GetDeployment(desired.Name, desired.Namespace)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			return nil
+			return false, nil
 		}
-		return err
+		return false, err
+	}
+	if existing.DeletionTimestamp != nil {
+		return true, nil
 	}
 	if reflect.DeepEqual(existing.Spec.Selector.MatchLabels, desired.Spec.Selector.MatchLabels) {
-		return nil
+		return false, nil
 	}
 	r.logger.Info(fmt.Sprintf("Deployment selector changed, recreating Deployment %s/%s", existing.Namespace, existing.Name))
 	if err := r.client.DeleteDeployment(&existing, true); err != nil && !apierrors.IsNotFound(err) {
-		return err
+		return false, err
 	}
 	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "DeploymentRecreated",
 		"Deployment %s/%s recreated because its selector changed; existing pods keep serving and are adopted by the new Deployment", existing.Namespace, existing.Name)
-	return nil
+	return true, nil
 }
 
 func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMount, error) {

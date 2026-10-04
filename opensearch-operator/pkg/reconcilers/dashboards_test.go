@@ -4,6 +4,7 @@ import (
 	"context"
 	"reflect"
 	"strings"
+	"time"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
@@ -420,7 +421,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 		narrow := map[string]string{"opensearch.cluster.dashboards": clusterName}
 		wide := map[string]string{"opensearch.cluster.dashboards": clusterName, "helm.sh/chart": "chart-4.0.0"}
 
-		reconcileWithExisting := func(selector map[string]string, recreated bool) *record.FakeRecorder {
+		reconcileWithExisting := func(selector map[string]string, deletionTimestamp *metav1.Time) (ctrl.Result, *record.FakeRecorder) {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
@@ -434,16 +435,17 @@ var _ = Describe("Dashboards Reconciler", func() {
 				},
 			}
 			existing := appsv1.Deployment{
-				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-dashboards", Namespace: clusterName},
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-dashboards", Namespace: clusterName, DeletionTimestamp: deletionTimestamp},
 				Spec:       appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: selector}},
 			}
 			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(existing, nil)
-			if recreated {
+			if deletionTimestamp == nil && reflect.DeepEqual(selector, narrow) {
+				mockClient.EXPECT().CreateDeployment(mock.MatchedBy(func(d *appsv1.Deployment) bool {
+					return reflect.DeepEqual(d.Spec.Selector.MatchLabels, narrow)
+				})).Return(&ctrl.Result{}, nil)
+			} else if deletionTimestamp == nil {
 				mockClient.EXPECT().DeleteDeployment(&existing, true).Return(nil)
 			}
-			mockClient.EXPECT().CreateDeployment(mock.MatchedBy(func(d *appsv1.Deployment) bool {
-				return reflect.DeepEqual(d.Spec.Selector.MatchLabels, narrow)
-			})).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().Context().Return(context.Background())
@@ -453,18 +455,25 @@ var _ = Describe("Dashboards Reconciler", func() {
 			recorder := record.NewFakeRecorder(10)
 			_, underTest := newDashboardsReconciler(mockClient, &spec)
 			underTest.recorder = recorder
-			_, err := underTest.Reconcile()
+			result, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
-			return recorder
+			return result, recorder
 		}
 
-		It("is deleted with orphan propagation and recreated when its selector carries custom labels", func() {
-			recorder := reconcileWithExisting(wide, true)
+		It("is deleted with orphan propagation when its selector carries custom labels", func() {
+			result, recorder := reconcileWithExisting(wide, nil)
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
 			Expect(recorder.Events).To(Receive(And(HavePrefix("Warning DeploymentRecreated"), ContainSubstring(clusterName+"/"+clusterName+"-dashboards"))))
 		})
 
+		It("is neither deleted again nor updated while its deletion is pending", func() {
+			result, recorder := reconcileWithExisting(wide, &metav1.Time{Time: time.Now()})
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			Expect(recorder.Events).To(BeEmpty())
+		})
+
 		It("is left alone when its selector is already the operator-owned one", func() {
-			recorder := reconcileWithExisting(narrow, false)
+			_, recorder := reconcileWithExisting(narrow, nil)
 			Expect(recorder.Events).To(BeEmpty())
 		})
 	})
