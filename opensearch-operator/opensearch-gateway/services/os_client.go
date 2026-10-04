@@ -125,6 +125,10 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 
 func NewOsClusterClientFromConfig(config opensearch.Config) (*OsClusterClient, error) {
 	service := new(OsClusterClient)
+	if config.Transport == nil {
+		config.Transport = http.DefaultTransport
+	}
+	config.Transport = contentLengthTransport{next: config.Transport}
 	client, err := opensearch.NewClient(config)
 	if err == nil {
 		service.client = client
