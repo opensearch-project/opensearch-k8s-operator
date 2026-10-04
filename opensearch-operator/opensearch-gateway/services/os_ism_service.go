@@ -83,13 +83,18 @@ func UpdateISMPolicy(ctx context.Context, service *OsClusterClient, ismpolicy re
 	return nil
 }
 
-// DeleteISMPolicy deletes the given policy
+// DeleteISMPolicy deletes the given policy. A policy that no longer exists (404) counts as
+// deleted, so a retried finalizer completes instead of failing forever.
 func DeleteISMPolicy(ctx context.Context, service *OsClusterClient, policyName string) error {
 	resp, err := service.DeleteISMConfig(ctx, policyName)
 	if err != nil {
 		return err
 	}
 	defer helpers.SafeClose(resp.Body)
+	if resp.StatusCode == 404 {
+		log.FromContext(ctx).V(1).Info("ism policy already deleted from opensearch", "policy", policyName)
+		return nil
+	}
 	if resp.IsError() {
 		return fmt.Errorf("failed to delete ism policy: %s", resp.String())
 	}

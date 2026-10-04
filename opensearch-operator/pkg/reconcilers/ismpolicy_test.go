@@ -916,7 +916,25 @@ var _ = Describe("ism policy reconciler", func() {
 						)
 					})
 
-					It("should do nothing and exit", func() {
+					It("should treat the policy as already deleted", func() {
+						Expect(reconciler.Delete()).To(Succeed())
+					})
+				})
+
+				When("policy delete fails", func() {
+					BeforeEach(func() {
+						transport.RegisterResponder(
+							http.MethodDelete,
+							fmt.Sprintf(
+								"%s_plugins/_ism/policies/%s",
+								clusterUrl,
+								instance.Name,
+							),
+							httpmock.NewStringResponder(500, "internal error").Once(failMessage),
+						)
+					})
+
+					It("should return an error", func() {
 						Expect(reconciler.Delete()).NotTo(Succeed())
 					})
 				})
