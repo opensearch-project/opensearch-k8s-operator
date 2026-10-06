@@ -1386,6 +1386,12 @@ var _ = Describe("Builders", func() {
 				helpers.ClusterLabel:  clusterName,
 				helpers.NodePoolLabel: "coordinators",
 			}))
+			// The nodepool label must be left off the Service's own labels so the
+			// ServiceMonitor selector (which matches on its presence) doesn't pick up
+			// this Service too and double-scrape the pods behind it.
+			Expect(result.Labels).To(Equal(map[string]string{
+				helpers.ClusterLabel: clusterName,
+			}))
 			Expect(result.Annotations).To(Equal(map[string]string{
 				"testAnnotationKey":  "testValue",
 				"testAnnotationKey2": "testValue2",

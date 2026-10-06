@@ -973,7 +973,14 @@ func AdditionalServiceName(cr *opensearchv1.OpenSearchCluster, nodePool *opensea
 // across the node pool's pods, so clients can talk to those specific nodes (e.g. dedicated
 // coordinating or ingest nodes) without resolving individual pod endpoints.
 func NewServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) *corev1.Service {
+	// The nodepool label is deliberately left off this Service's own labels (as opposed to its
+	// selector) so it isn't matched by the ServiceMonitor selector, which looks for the nodepool
+	// label to avoid double scraping of pods behind both this and the headless service.
 	labels := map[string]string{
+		helpers.ClusterLabel: cr.Name,
+	}
+
+	selector := map[string]string{
 		helpers.ClusterLabel:  cr.Name,
 		helpers.NodePoolLabel: nodePool.Component,
 	}
@@ -1025,7 +1032,7 @@ func NewServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool *opensea
 					},
 				},
 			},
-			Selector: labels,
+			Selector: selector,
 			Type:     "",
 		},
 	}
