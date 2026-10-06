@@ -102,7 +102,7 @@ To deploy a new version simply rebuild and reimport the docker image and restart
 
 ## Submitting a PR
 
-Regular chart PRs must leave `Chart.yaml`'s `version` unchanged; chart versions are bumped only in the release-cut PR.
+Regular chart PRs must leave `Chart.yaml`'s `version` unchanged; CI enforces this for non-release PRs, and chart versions are bumped only in the release-cut PR.
 
 Once you are ready to share your work, please fork the repository into your github account, create and push a feature branch, then open a PR.
 

@@ -35,6 +35,29 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Ensure chart versions are unchanged outside release PRs
+        if: steps.list-changed.outputs.changed == 'true' && !startsWith(github.event.pull_request.title, 'release:')
+        run: |
+          failed=0
+          base="origin/${{ github.event.repository.default_branch }}"
+
+          for chart in charts/*/Chart.yaml; do
+            if ! git cat-file -e "$base:$chart" 2>/dev/null; then
+              continue
+            fi
+
+            base_version=$(git show "$base:$chart" | awk -F': *' '$1 == "version" { print $2; exit }')
+            pr_version=$(awk -F': *' '$1 == "version" { print $2; exit }' "$chart")
+
+            if [[ "$base_version" != "$pr_version" ]]; then
+              echo "::error file=$chart::Regular PRs must not change Chart.yaml version; chart versions are bumped only in release-cut PRs."
+              echo "$chart: $base_version -> $pr_version"
+              failed=1
+            fi
+          done
+
+          exit "$failed"
+
       - name: Run chart-testing (lint)
         if: steps.list-changed.outputs.changed == 'true'
         run: ct lint --target-branch ${{ github.event.repository.default_branch }} --validate-maintainers=false --check-version-increment=false
