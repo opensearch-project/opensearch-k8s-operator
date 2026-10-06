@@ -503,6 +503,8 @@ During the safe drain process, the node being removed is marked as "draining", w
 
 SmartScaler is enabled by default (`spec.confMgmt.smartScaler: true`) for newly created clusters, whether or not the `confMgmt` block is present in the manifest. Setting it to `false` removes nodes without draining, and the operator emits a `Warning` event each time it does so.
 
+If replicas are set back before a scale-down finishes, the operator removes the node's allocation exclusion (and voting exclusion for master-eligible nodes). When the cluster can't be reached before that clear, it keeps the pool's scale-down status, emits a `Warning` event and retries on the next reconcile, without holding back the rest of the reconcile such as a rolling restart. Once the voting-config clear has succeeded, a failure to restore exclusions for nodes still being removed is returned, so the reconcile stops until those exclusions are posted again.
+
 **Upgrade note:** Clusters that were created before this default was applied to the parent `confMgmt` object may already have `smartScaler: false` stored in etcd (for example after the operator added a finalizer and rewrote the spec). CRD defaulting does not override a present value. After upgrading the operator/CRDs, check `spec.confMgmt.smartScaler` on existing clusters and set it to `true` if safe draining was intended.
 
 #### Removing master-eligible nodes
