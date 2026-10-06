@@ -69,12 +69,12 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		!hasGeneralConfig && !hasNodePoolConfig && !hasNodeAttributes {
 		return ctrl.Result{}, nil
 	}
-	systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
-	if err != nil {
-		return ctrl.Result{}, err
-	}
 
 	if helpers.IsSecurityPluginEnabled(r.instance) {
+		systemIndices, err := json.Marshal(services.AdditionalSystemIndices)
+		if err != nil {
+			return ctrl.Result{}, err
+		}
 		// Add some default config for the security plugin
 		r.reconcilerContext.AddConfig("plugins.security.audit.type", "internal_opensearch")
 		r.reconcilerContext.AddConfig("plugins.security.enable_snapshot_restore_privilege", "true")
@@ -82,8 +82,6 @@ func (r *ConfigurationReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.AddConfig("plugins.security.restapi.roles_enabled", `["all_access", "security_rest_api_access"]`)
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.enabled", "true")
 		r.reconcilerContext.AddConfig("plugins.security.system_indices.indices", string(systemIndices))
-	} else {
-		r.reconcilerContext.AddConfig("plugins.security.disabled", "true")
 	}
 
 	// Process gRPC configuration

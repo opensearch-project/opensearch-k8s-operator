@@ -54,6 +54,17 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 		},
 	}
 
+	// The Dashboards image only removes its security plugin when this is set.
+	// It must be paired with the OpenSearch DISABLE_SECURITY_PLUGIN variables,
+	// which are applied whenever the cluster has no TLS. A later Dashboards env
+	// entry with the same name overrides this.
+	if !helpers.IsSecurityPluginEnabled(cr) {
+		env = append(env, corev1.EnvVar{
+			Name:  "DISABLE_SECURITY_DASHBOARDS_PLUGIN",
+			Value: "true",
+		})
+	}
+
 	if len(cr.Spec.Dashboards.Env) != 0 {
 		env = append(env, cr.Spec.Dashboards.Env...)
 	}

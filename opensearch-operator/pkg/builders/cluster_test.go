@@ -653,6 +653,49 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("custom-init1"))
 			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init2"))
 		})
+
+		It("should disable the security plugin through the entrypoint when no TLS is set", func() {
+			disabledEnv := []corev1.EnvVar{
+				{Name: "DISABLE_INSTALL_DEMO_CONFIG", Value: "true"},
+				{Name: "DISABLE_SECURITY_PLUGIN", Value: "true"},
+			}
+			nodePool := opensearchv1.NodePool{Component: "masters", Roles: []string{"cluster_manager"}}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElements(disabledEnv))
+
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Tls: &opensearchv1.TlsConfig{Transport: &opensearchv1.TlsConfigTransport{Generate: true}},
+			}
+			sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).ToNot(ContainElement(disabledEnv[0]))
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).ToNot(ContainElement(disabledEnv[1]))
+		})
+
+		It("should let node pool env override the security plugin disable variables", func() {
+			nodePool := opensearchv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager"},
+				Env: []corev1.EnvVar{
+					{Name: "DISABLE_SECURITY_PLUGIN", Value: "false"},
+				},
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			env := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil).Spec.Template.Spec.Containers[0].Env
+
+			operatorIdx, userIdx := -1, -1
+			for i, e := range env {
+				if e.Name == "DISABLE_SECURITY_PLUGIN" && e.Value == "true" {
+					operatorIdx = i
+				}
+				if e.Name == "DISABLE_SECURITY_PLUGIN" && e.Value == "false" {
+					userIdx = i
+				}
+			}
+			Expect(operatorIdx).To(BeNumerically(">=", 0))
+			Expect(userIdx).To(BeNumerically(">", operatorIdx))
+		})
 	})
 
 	When("Constructing a bootstrap pod", func() {
@@ -687,19 +730,34 @@ var _ = Describe("Builders", func() {
 				{Name: "DISABLE_INSTALL_DEMO_CONFIG", Value: "true"},
 				{Name: "DISABLE_SECURITY_PLUGIN", Value: "true"},
 			}
-			nodePool := opensearchv1.NodePool{Component: "masters", Roles: []string{"cluster_manager"}}
-
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			Expect(NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env).To(ContainElements(disabledEnv))
-			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
-			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElements(disabledEnv))
 
 			clusterObject.Spec.Security = &opensearchv1.Security{
 				Tls: &opensearchv1.TlsConfig{Transport: &opensearchv1.TlsConfigTransport{Generate: true}},
 			}
-			Expect(NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env).ToNot(ContainElement(disabledEnv[1]))
-			sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
-			Expect(sts.Spec.Template.Spec.Containers[0].Env).ToNot(ContainElement(disabledEnv[1]))
+			env := NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env
+			Expect(env).ToNot(ContainElement(disabledEnv[0]))
+			Expect(env).ToNot(ContainElement(disabledEnv[1]))
+		})
+
+		It("should let bootstrap env override the security plugin disable variables", func() {
+			clusterObject := ClusterDescWithAdditionalConfigs(nil, []corev1.EnvVar{
+				{Name: "DISABLE_SECURITY_PLUGIN", Value: "false"},
+			})
+			env := NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env
+
+			operatorIdx, userIdx := -1, -1
+			for i, e := range env {
+				if e.Name == "DISABLE_SECURITY_PLUGIN" && e.Value == "true" {
+					operatorIdx = i
+				}
+				if e.Name == "DISABLE_SECURITY_PLUGIN" && e.Value == "false" {
+					userIdx = i
+				}
+			}
+			Expect(operatorIdx).To(BeNumerically(">=", 0))
+			Expect(userIdx).To(BeNumerically(">", operatorIdx))
 		})
 
 		It("should apply bootstrap pod annotations", func() {

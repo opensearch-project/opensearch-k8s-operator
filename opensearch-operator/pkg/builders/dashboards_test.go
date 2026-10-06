@@ -299,4 +299,62 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.HostNetwork).To(BeFalse())
 		})
 	})
+
+	When("building the dashboards deployment for a cluster without TLS", func() {
+		disabled := corev1.EnvVar{Name: "DISABLE_SECURITY_DASHBOARDS_PLUGIN", Value: "true"}
+
+		It("should disable the security dashboards plugin", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General:    opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(disabled))
+		})
+
+		It("should not disable the security dashboards plugin when TLS is configured", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{Transport: &opensearchv1.TlsConfigTransport{Generate: true}},
+					},
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).ToNot(ContainElement(disabled))
+		})
+
+		It("should let dashboards env override the security plugin disable variable", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable: true,
+						Env: []corev1.EnvVar{
+							{Name: "DISABLE_SECURITY_DASHBOARDS_PLUGIN", Value: "false"},
+						},
+					},
+				},
+			}
+			env := NewDashboardsDeploymentForCR(&spec, nil, nil, nil).Spec.Template.Spec.Containers[0].Env
+			operatorIdx, userIdx := -1, -1
+			for i, e := range env {
+				if e.Name == "DISABLE_SECURITY_DASHBOARDS_PLUGIN" && e.Value == "true" {
+					operatorIdx = i
+				}
+				if e.Name == "DISABLE_SECURITY_DASHBOARDS_PLUGIN" && e.Value == "false" {
+					userIdx = i
+				}
+			}
+			Expect(operatorIdx).To(BeNumerically(">=", 0))
+			Expect(userIdx).To(BeNumerically(">", operatorIdx))
+		})
+	})
 })
