@@ -90,8 +90,8 @@ spec:
 
 Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. First, a bootstrap pod will be created (`my-first-cluster-bootstrap-0`) that helps with initial master discovery. Then three pods for the OpenSearch cluster will be created (`my-first-cluster-masters-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
 
-Run `kubectl port-forward svc/my-first-cluster-dashboards 5601`, then open [http://localhost:5601](http://localhost:5601) in your browser and log in with the default demo credentials `admin / admin`.
-Alternatively, if you want to access the OpenSearch REST API, run: `kubectl port-forward svc/my-first-cluster 9200`. Then open a second terminal and run: `curl -k -u admin:admin https://localhost:9200/_cat/nodes?v`. You should see the three deployed pods listed.
+Run `kubectl port-forward svc/my-first-cluster-dashboards 5601`, then open [http://localhost:5601](http://localhost:5601). This cluster does not configure TLS, so the security plugin is off and Dashboards does not ask you to log in.
+Alternatively, if you want to access the OpenSearch REST API, run: `kubectl port-forward svc/my-first-cluster 9200`. Then open a second terminal and run: `curl http://localhost:9200/_cat/nodes?v`. You should see the three deployed pods listed. The API does not require credentials.
 
 If you'd like to delete your cluster, run: `kubectl delete -f cluster.yaml`. The Operator will then clean up and delete any Kubernetes resources created for the cluster. Note that this will not delete the persistent volumes for the cluster, in most cases. For a complete cleanup, run: `kubectl delete pvc -l opensearch.org/opensearch-cluster=my-first-cluster` to also delete the PVCs.
 
@@ -273,7 +273,7 @@ spec:
 
 ### TLS
 
-For security reasons, encryption is required for communication with the OpenSearch cluster and between cluster nodes. If you do not configure any encryption, OpenSearch will use the included demo TLS certificates, which are not ideal for most active deployments.
+If you do not configure TLS, the operator disables the security plugin. Nodes serve plain HTTP and do not authenticate clients, and Dashboards does not load its security plugin. That is only suitable for a local demo. An existing cluster with no TLS restarts its nodes when the operator is upgraded, because these settings are added to the pod template. For any other use, configure TLS as described below.
 
 Depending on your requirements, the Operator offers two ways of managing TLS certificates. You can either supply your own certificates, or the Operator will generate its own CA and sign certificates for all nodes using that CA. The second option is recommended, unless you want to directly expose your OpenSearch cluster outside your Kubernetes cluster, or your organization has rules about using self-signed certificates for internal communication.
 
@@ -1880,7 +1880,7 @@ roles_mapping.yml: |-
 
 ### Security Plugin Disabled
 
-When the security plugin is disabled (`spec.security.disable: true`), password management works differently:
+When no TLS is configured, the security plugin is disabled. The operator sets `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN` on the OpenSearch nodes and the bootstrap pod, and `DISABLE_SECURITY_DASHBOARDS_PLUGIN` on Dashboards. The cluster serves plain HTTP with no authentication. Password management works differently:
 
 **Admin User:**
 - You can now set a custom password for the admin user by providing `adminCredentialsSecret` with your desired password

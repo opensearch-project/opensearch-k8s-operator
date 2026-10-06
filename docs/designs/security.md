@@ -5,7 +5,7 @@ The security controller deals with everything related to the opensearch-security
 * Configuring TLS for nodes: Provides default encryption of communication between OpenSearch cluster nodes by [generating self-signed certificates](https://opensearch.org/docs/latest/security-plugin/configuration/generate-certificates/) and configuring them for all nodes. A user may also supply externally managed (e.g. from a company CA) certificates to be used.
 * Managing the securityconfig: Allows the user to provide a custom securityconfig and takes care of applying that to the OpenSearch cluster when it changes.
 
-The controller is configured via the `security` object in the cluster spec. If no config is provided the controller will fall back to the demo certificates and configuration that is included with the opensearch docker image.
+The controller is configured via the `security` object in the cluster spec. With no TLS configured, the security plugin is disabled. The operator does not fall back to the demo certificates shipped in the OpenSearch image.
 
 All generated keys and certificates by the operator are stored in Kubernetes secrets to be securely used by the cluster pods. The operator has two modes for generating/using the certificates: By default it will generate one certificate that is used by all nodes, if the operator is switched to a per-node mode it will generate a certificate for each node.
 
@@ -73,13 +73,15 @@ The security plugin is considered enabled when TLS is enabled for either the tra
 * OpenSearch >= 2.0: the HTTP port, so HTTP TLS must be enabled
 * OpenSearch < 2.0: the transport port, so transport TLS is sufficient
 
-This yields two paths for getting the securityconfig into the cluster:
+The operator applies the securityconfig as follows:
 
 | Situation                                                                               | How the securityconfig is applied                                                                                                                                                                                                                                                              |
 |-----------------------------------------------------------------------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `securityadmin.sh` can run                                                              | The operator runs the `<cluster-name>-securityconfig-update` job, which invokes `securityadmin.sh` with the admin client certificate. The job is rerun whenever the securityconfig changes.                                                                                                    |
 | Security plugin enabled but `securityadmin.sh` cannot run (HTTP TLS disabled on >= 2.0) | The operator sets `plugins.security.allow_default_init_securityindex: true`, mounts the generated securityconfig secret into the nodes, and lets the security plugin load it into the security index itself when the cluster first forms. No admin certificate and no update job are involved. |
-| Security plugin disabled (no TLS at all)                                                | Securityconfig reconciliation is skipped entirely. The nodes get `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN`, so the image entrypoint neither installs the demo HTTPS setup nor enables the plugin; it ignores both when the image has no security plugin.                       |
+| Security plugin disabled (no TLS at all)                                                | Securityconfig reconciliation is skipped. OpenSearch nodes and the bootstrap pod get `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN`. Dashboards gets `DISABLE_SECURITY_DASHBOARDS_PLUGIN`.                                                                                        |
+
+The plugin is disabled with those entrypoint variables, not with `plugins.security.disabled` in `opensearch.yml`. The entrypoint passes `-Eplugins.security.disabled=true` only when the plugin is installed, and ignores the variables otherwise. Writing the setting into `opensearch.yml` would stop a node whose image does not include the plugin. OpenSearch before 2.12 checks the two OpenSearch variables separately, so both are set. Because the entrypoint flag overrides `opensearch.yml`, `additionalConfig` cannot turn the plugin back on. A node pool, bootstrap, or Dashboards env entry with the same name overrides the operator value. A custom `general.command` that does not run the image entrypoint is not covered. An existing cluster with no TLS restarts its nodes when the pod template picks up these variables.
 
 Consequences of the default-init path:
 

@@ -348,6 +348,7 @@ var _ = Describe("Configuration Controller", func() {
 			Expect(exists).To(BeTrue())
 			Expect(strings.Contains(data, "general.config:")).To(BeTrue())
 			Expect(strings.Contains(data, "general-value")).To(BeTrue())
+			Expect(data).ToNot(ContainSubstring("plugins.security.disabled"))
 		})
 	})
 

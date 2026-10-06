@@ -60,9 +60,12 @@ func nodeAttributesEnabled(cr *opensearchv1.OpenSearchCluster) bool {
 }
 
 // securityDisabledEnv turns the security plugin off through the image entrypoint
-// when no TLS is configured, so the demo installer does not enable HTTPS. The
-// entrypoint ignores both variables when the plugin is not installed, unlike
-// plugins.security.disabled in opensearch.yml, which fails node startup then.
+// when no TLS is configured, so the demo installer does not enable HTTPS.
+// OpenSearch before 2.12 checks the two variables separately, so both are set.
+// The entrypoint ignores both when the plugin is not installed. Writing
+// plugins.security.disabled into opensearch.yml would fail startup on those
+// images, and the entrypoint's -E flag overrides opensearch.yml when the plugin
+// is installed. Env appended by the caller overrides these values.
 func securityDisabledEnv(cr *opensearchv1.OpenSearchCluster) []corev1.EnvVar {
 	if helpers.IsSecurityPluginEnabled(cr) {
 		return nil
