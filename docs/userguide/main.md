@@ -715,6 +715,8 @@ spec:
       generate: true # Have the Operator generate and sign a certificate
       # How long generated certificates are valid (default: 8760h = 1 year)
       duration: "8760h"
+      # Reissue the generated certificate this many days before it expires (default: 30, -1 disables)
+      rotateDaysBeforeExpiry: 30
       secret:
         name: # Name of the secret that contains the provided certificate
       caSecret:
@@ -723,6 +725,7 @@ spec:
 ```
 
 To let the Operator generate the certificate, just set `tls.enable: true` and `tls.generate: true` (the other fields under `tls` can be ommitted). Again, as with the node certificates, you can supply your own CA via `caSecret.name` for the Operator to use.
+As with the node certificates, the Operator reissues the generated certificate `rotateDaysBeforeExpiry` days before it expires (default 30, set to -1 to disable), and always reissues expired or unreadable certificates and ones not signed by the current CA. Dashboards does not hot-reload certificates, so its pods are restarted whenever the certificate changes.
 If you want to use your own certificate, you need to provide it as a Kubernetes TLS secret (with fields `tls.key` and `tls.crt`) and provide the name as `secret.name`.
 
 If you want to expose Dashboards outside of the cluster, it is recommended to use Operator-generated certificates internally and let an Ingress present a valid certificate from an accredited CA (e.g. LetsEncrypt).

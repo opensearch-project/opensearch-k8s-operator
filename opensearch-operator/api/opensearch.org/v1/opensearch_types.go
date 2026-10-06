@@ -293,6 +293,11 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
+	// Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.
+	// Only applies to operator-generated certificates. Expired or unparseable certificates are
+	// always regenerated regardless of this setting.
+	//+kubebuilder:default=30
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	// TLS certificate configuration
 	TlsCertificateConfig `json:",omitempty"`
 }
