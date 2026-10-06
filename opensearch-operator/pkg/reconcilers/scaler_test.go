@@ -1963,6 +1963,42 @@ var _ = Describe("Scaler Controller", func() {
 				expectKept(&spec, mockClient, recorder, "Drained", requeue, err)
 			})
 
+			It("Should return the error when voting exclusions were cleared but could not be re-applied", func() {
+				spec := masterPool()
+				other := "test-cluster-managers-1"
+				spec.Status.ComponentsStatus = append(spec.Status.ComponentsStatus, opensearchv1.ComponentStatus{
+					Component:   "Scaler",
+					Status:      "Drained",
+					Description: "managers",
+					Conditions:  []string{other},
+				})
+				mockClient := newMock(&spec)
+				mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+				mockClient.On("ListPods", mock.Anything).Return(readyPods, nil)
+				var calls *[]string
+				transport := failingTransport(&spec, func(t *httpmock.MockTransport) {
+					registerClusterSettingsResponders(t)
+					registerCatNodesResponder(t, target, other)
+					registerVotingExclusionsState(t, target, other)
+					calls = recordVotingConfigCalls(t, http.StatusInternalServerError, http.StatusOK)
+				})
+
+				requeue, _, err := reconcilePool(&spec, mockClient, transport)
+
+				Expect(err).To(HaveOccurred())
+				Expect(requeue).To(BeFalse())
+				Expect(spec.Status.ComponentsStatus).To(ConsistOf(
+					HaveField("Description", nodePoolComponent),
+					HaveField("Description", "managers"),
+				))
+				Expect(spec.Status.ComponentsStatus[0].Status).To(Equal("Drained"))
+				mockClient.AssertNotCalled(GinkgoT(), "UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything)
+				Expect(*calls).To(Equal([]string{
+					"DELETE wait_for_removal=false",
+					"POST node_names=" + other + "&timeout=10s",
+				}))
+			})
+
 			It("Should keep a legacy Drained status without a target when the cluster cannot be reached", func() {
 				spec := revertedPool("Drained", "", "cluster_manager")
 				mockClient := newMock(&spec)

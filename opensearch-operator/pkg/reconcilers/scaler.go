@@ -502,8 +502,11 @@ func (r *ScalerReconciler) cancelDecrease(currentStatus opensearchv1.ComponentSt
 			if err := clusterClient.ClearVotingConfigExclusions(r.ctx, false); err != nil {
 				return r.keepScaleDownStatus(nodePoolGroupName, err, fmt.Sprintf("failed to clear voting config exclusions for %s", targetNodeName))
 			}
+			// The no-wait DELETE has already dropped every exclusion. Returning the error stops the reconcile here
+			// so a rolling restart cannot delete a pod before these voters are excluded again. The workqueue retries.
 			if err := r.reapplyLeavingVotingExclusions(clusterClient, keep); err != nil {
-				return r.keepScaleDownStatus(nodePoolGroupName, err, "failed to re-apply voting config exclusions for nodes still being removed")
+				lg.Error(err, "failed to re-apply voting config exclusions for nodes still being removed")
+				return false, err
 			}
 		}
 	}
@@ -520,7 +523,7 @@ func (r *ScalerReconciler) cancelDecrease(currentStatus opensearchv1.ComponentSt
 func (r *ScalerReconciler) keepScaleDownStatus(nodePoolGroupName string, err error, what string) (bool, error) {
 	annotations := map[string]string{"cluster-name": r.instance.GetName()}
 	log.FromContext(r.ctx).Error(err, what+", keeping the scale-down status to retry")
-	r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Group-%s . Failed to cancel scale-down, will retry: %s", nodePoolGroupName, what)
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Scaler", "Group-%s . %s, will retry", nodePoolGroupName, what)
 	return false, nil
 }
 
