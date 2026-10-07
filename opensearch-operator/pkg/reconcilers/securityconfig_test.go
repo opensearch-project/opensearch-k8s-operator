@@ -302,12 +302,13 @@ config:
 	})
 
 	When("When Reconciling the securityconfig reconciler with no securityconfig secret but tls configured", func() {
-		It("should start an update job and apply all yml files", func() {
+		reconcileAndGetJobArgs := func(initialized bool) string {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 			var clusterName = "no-securityconfig-tls-configured"
 
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Status:     opensearchv1.ClusterStatus{Initialized: initialized},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{
 						ServiceName: clusterName,
@@ -378,7 +379,10 @@ config:
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(createdJob).ToNot(BeNil())
+			return createdJob.Spec.Template.Spec.Containers[0].Args[0]
+		}
 
+		It("should start an update job and apply all yml files", func() {
 			cmdArg := `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
 chmod +x $ADMIN;
 wait_count=0;
@@ -398,7 +402,27 @@ until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd 
   sleep 20;
 done;`
 
-			Expect(createdJob.Spec.Template.Spec.Containers[0].Args[0]).To(Equal(cmdArg))
+			Expect(reconcileAndGetJobArgs(false)).To(Equal(cmdArg))
+		})
+
+		It("should target the cluster service once the cluster is initialized", func() {
+			args := reconcileAndGetJobArgs(true)
+			Expect(args).To(ContainSubstring("https://no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local:9200"))
+			Expect(args).To(ContainSubstring("-h no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local -p 9200"))
+			Expect(args).ToNot(ContainSubstring("-discovery"))
+		})
+	})
+
+	When("Building the service host names for the securityconfig job", func() {
+		It("should use the service name for the cluster service and the cluster name for the discovery service", func() {
+			instance := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "my-cluster", Namespace: "my-ns"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: "my-service"},
+				},
+			}
+			Expect(BuildClusterSvcHostName(instance)).To(Equal("my-service.my-ns.svc.cluster.local"))
+			Expect(BuildDiscoverySvcHostName(instance)).To(Equal("my-cluster-discovery.my-ns.svc.cluster.local"))
 		})
 	})
 
