@@ -55,7 +55,7 @@ func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	r.Recorder.Event(instance, "Warning", "Deprecated", "OpensearchRole is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
+	recordDeprecation(r.Recorder, instance, "OpensearchRole")
 
 	roleReconciler := reconcilers.NewRoleReconciler(
 		r.Client,
