@@ -112,7 +112,7 @@ All tests use the `setupDataIntegrityTest()` helper function which:
 #### Scaling Tests (`scaling_test.go`)
 - **Scale Up**: Tests scaling the data pool from 3 to 4 replicas and back
 - **Scale Down**: Tests scaling the data pool from 3 to 2 replicas and back
-- **Scale Down Masters**: Scales the master pool from 3 to 2 and back, checking the removed node leaves `_cat/nodes` and no voting config exclusion is left
+- **Scale Down Masters**: Scales the master pool from 3 to 2 and back, checking the removed node leaves `_cat/nodes` and the committed voting configuration, and no voting config exclusion is left
 - Each test verifies data integrity before and after scaling
 
 #### Node Pool Operations Tests (`nodepool_operations_test.go`)
