@@ -216,9 +216,6 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.Combine(r.checkForEmptyDirRecovery())
 	}
 
-	// Update the CR status to reflect the current OpenSearch health and nodes
-	result.CombineErr(r.UpdateClusterStatus())
-
 	return result.Result, result.Err
 }
 
@@ -814,19 +811,6 @@ func (r *ClusterReconciler) updateOrphanedPodLabels(oldSTS *appsv1.StatefulSet, 
 	}
 
 	return nil
-}
-
-// UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
-func (r *ClusterReconciler) UpdateClusterStatus() error {
-	health, healthResponse := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
-	availableNodes := util.GetAvailableOpenSearchNodes(r.client, r.ctx, r.instance, r.logger)
-
-	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
-
-	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
-		instance.Status.Health = health
-		instance.Status.AvailableNodes = availableNodes
-	})
 }
 
 // reconcileBootstrapPod creates the bootstrap pod if it is missing and recreates
