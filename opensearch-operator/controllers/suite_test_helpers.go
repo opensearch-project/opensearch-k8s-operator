@@ -17,8 +17,8 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// MarkStsReady simulates the StatefulSet controller by setting Status.ReadyReplicas and Status.AvailableReplicas
-// to match Spec.Replicas for all StatefulSets in the given namespace, and by creating ready pods for each ordinal.
+// MarkStsReady simulates the StatefulSet controller by marking the current spec observed and every replica
+// updated, ready and available for all StatefulSets in the given namespace, and by creating ready pods for each ordinal.
 // Envtest has no StatefulSet controller, and the scaler and rolling-restart reconcilers derive readiness from pods
 // (ReadyReplicasForNodePool), not from StatefulSet status alone.
 func MarkStsReady(k8sClient client.Client, namespace string) error {
@@ -32,7 +32,9 @@ func MarkStsReady(k8sClient client.Client, namespace string) error {
 			continue
 		}
 		replicas := *sts.Spec.Replicas
+		sts.Status.ObservedGeneration = sts.Generation
 		sts.Status.Replicas = replicas
+		sts.Status.UpdatedReplicas = replicas
 		sts.Status.ReadyReplicas = replicas
 		sts.Status.AvailableReplicas = replicas
 		if err := k8sClient.Status().Update(context.Background(), sts); err != nil {

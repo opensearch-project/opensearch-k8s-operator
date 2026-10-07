@@ -88,6 +88,7 @@ Each Reconciler executes and returns a special Result structure, that says two t
 If one of the Reconcilers returns an error, or requests a Requeue (via the Result object), then the OpenSearch Reconciler returns the same result object, meaning the OpenSearch Reconciler will be called again in RequeueAfter seconds, calling the chain of reconcilers again.
 
 Regardless of the Requeue (true/false) returned, the reconciler updates its status in the Status element of the custom resource.
+After the chain, whether it finished, failed or requeued, the OpenSearch Reconciler writes health, `observedGeneration` and the `Ready`/`Progressing`/`Degraded` conditions, derived from the components' statuses and the node pool StatefulSets (`pkg/reconcilers/conditions.go`).
 Notice that Reconcilers in the reconcilers chain do not save any state in their struct instance. They get instantiated on each call to the OpenSearch Reconciler reconcile function so must be treated as stateless and must store any state to be persisted between runs in the Status object.
 
 If all Reconcilers have finished successfully, and didn't ask for Requeue, then a Requeue of 30seconds will be returned. This is done to make sure we keep checking if nothing external have changed. For example, if a Kubernetes secret has changed, we won't currently get notified on it, thus a Busy Wait style of implementation was chosen. 

@@ -389,9 +389,9 @@ func DataNodesCount(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster)
 }
 
 // GetClusterHealth returns the health of OpenSearch cluster
-func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, lg logr.Logger) (opensearchv1.OpenSearchHealth, responses.ClusterHealthResponse) {
+func GetClusterHealth(k8sClient k8s.K8sClient, ctx context.Context, cluster *opensearchv1.OpenSearchCluster, transport http.RoundTripper, lg logr.Logger) (opensearchv1.OpenSearchHealth, responses.ClusterHealthResponse) {
 	healthResponse := responses.ClusterHealthResponse{}
-	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, nil)
+	osClient, err := CreateClientForCluster(k8sClient, ctx, cluster, transport)
 	if err != nil {
 		lg.V(1).Info(fmt.Sprintf("Failed to create OS client while checking cluster health: %v", err))
 		return opensearchv1.OpenSearchUnknownHealth, healthResponse
