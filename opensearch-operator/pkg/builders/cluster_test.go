@@ -703,20 +703,19 @@ var _ = Describe("Builders", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			result := NewBootstrapPod(&clusterObject, nil, nil)
 
-			// The bootstrap pod carries the cluster label, which is exactly the selector of the
-			// cluster service and of the "-exposed" NodePort service, so a readiness probe that
-			// can never succeed is what keeps client traffic off it.
-			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
-			Expect(NewServiceForCR(&clusterObject).Spec.Selector).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
-			Expect(NewNodePortService(&clusterObject).Spec.Selector).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
-
 			readinessProbe := result.Spec.Containers[0].ReadinessProbe
 			Expect(readinessProbe).ToNot(BeNil())
 			Expect(readinessProbe.Exec).ToNot(BeNil())
 			Expect(readinessProbe.Exec.Command).To(Equal([]string{"/bin/false"}))
+		})
 
-			// The discovery service publishes not-ready addresses, so the pod is still
-			// discoverable for cluster formation.
+		It("should be selected by the client services and resolvable through the discovery service", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
+			Expect(NewServiceForCR(&clusterObject).Spec.Selector).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
+			Expect(NewNodePortService(&clusterObject).Spec.Selector).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
 			Expect(NewDiscoveryServiceForCR(&clusterObject).Spec.PublishNotReadyAddresses).To(BeTrue())
 		})
 

@@ -312,9 +312,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		if !r.instance.Status.Initialized {
 			// Nodes only pass their readiness probe once the security index exists, which is
 			// what this job creates, so before the cluster is initialized the cluster Service
-			// has no endpoints to talk to. Use the headless discovery Service, which publishes
-			// not-ready addresses, instead of relying on the bootstrap pod being an endpoint of
-			// the cluster Service (#965).
+			// has no ready endpoints. The headless discovery Service publishes not-ready
+			// addresses, so it resolves to the nodes (bootstrap pod included) regardless.
 			clusterHostName = BuildDiscoverySvcHostName(r.instance)
 		}
 		opensearchHome := r.instance.Spec.General.GetOpenSearchHome()
