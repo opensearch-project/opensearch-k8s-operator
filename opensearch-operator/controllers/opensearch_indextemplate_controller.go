@@ -38,7 +38,7 @@ func (r *OpensearchIndexTemplateReconciler) Reconcile(ctx context.Context, req c
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
-	r.Recorder.Event(instance, "Warning", "Deprecated", "OpensearchIndexTemplate is deprecated and will be removed in v4 of the OpenSearch Kubernetes Operator")
+	recordDeprecation(r.Recorder, instance, "OpensearchIndexTemplate")
 
 	indexTemplateReconciler := reconcilers.NewIndexTemplateReconciler(
 		ctx,
