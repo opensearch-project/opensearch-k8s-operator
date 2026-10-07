@@ -202,6 +202,22 @@ var _ = Describe("deriveConditions", func() {
 		expectCondition(deriveConditions(status, obs, pass), opensearchv1.ConditionDegraded, metav1.ConditionFalse, opensearchv1.ReasonAsExpected)
 	})
 
+	It("keeps the Degraded message while the same reconciler keeps failing", func() {
+		status, obs := convergedCluster()
+		failing := func(reconciler, err string) PassResult {
+			return PassResult{StoppedBy: reconciler, Failure: &ReconcilerError{Reconciler: reconciler, Err: errors.New(err)}, ConsecutiveFailures: DegradedAfterFailedPasses + 1}
+		}
+		status.Conditions = deriveConditions(status, obs, failing("snapshot_repository", "read tcp 10.0.0.5:41234: connection reset"))
+
+		degraded := expectCondition(deriveConditions(status, obs, failing("snapshot_repository", "read tcp 10.0.0.5:51877: connection reset")),
+			opensearchv1.ConditionDegraded, metav1.ConditionTrue, opensearchv1.ReasonReconcileError)
+		Expect(degraded.Message).To(Equal("snapshot_repository reconciler: read tcp 10.0.0.5:41234: connection reset"))
+
+		degraded = expectCondition(deriveConditions(status, obs, failing("tls", "secret not found")),
+			opensearchv1.ConditionDegraded, metav1.ConditionTrue, opensearchv1.ReasonReconcileError)
+		Expect(degraded.Message).To(Equal("tls reconciler: secret not found"))
+	})
+
 	It("truncates a reconciler error to the condition message limit", func() {
 		status, obs := convergedCluster()
 		pass := PassResult{Terminal: &ReconcilerError{Reconciler: "upgrade", Err: errors.New(strings.Repeat("x", 40000))}}
