@@ -631,7 +631,41 @@ func (r *TLSReconciler) certShouldBeRenewed(ca tls.Cert, cd certDescription, exi
 		return true
 	}
 
+	// Generated HTTP certs must cover every Service name clients may use, which can change
+	// after creation (e.g. enabling service.create on a node pool)
+	if cd.certContext == CertContextHttp && len(cd.dnsNames) > 0 && !certHasDnsNames(existingCertData, cd.dnsNames) {
+		r.logger.Info("Certificate SANs differ from the desired ones - renewing", "interface",
+			cd.certContext, "node", cd.loggingName)
+		return true
+	}
+
 	return (renewBeforeExpirationDays > 0 && daysRemaining < renewBeforeExpirationDays)
+}
+
+// serviceDnsNames returns the in-cluster DNS names of a Service.
+func serviceDnsNames(name, namespace string) []string {
+	return []string{
+		name,
+		fmt.Sprintf("%s.%s", name, namespace),
+		fmt.Sprintf("%s.%s.svc", name, namespace),
+		fmt.Sprintf("%s.%s.svc.%s", name, namespace, helpers.ClusterDnsBase()),
+	}
+}
+
+// certHasDnsNames reports whether the certificate's DNS SANs match the wanted set exactly.
+// Unparseable data counts as matching, as expiry handling already covers it.
+func certHasDnsNames(certData []byte, want []string) bool {
+	block, _ := pem.Decode(certData)
+	if block == nil {
+		return true
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return true
+	}
+	have := lo.Uniq(cert.DNSNames)
+	want = lo.Uniq(want)
+	return len(lo.Without(want, have...)) == 0 && len(lo.Without(have, want...)) == 0
 }
 
 func (r *TLSReconciler) handleTransportExistingCerts() error {
@@ -724,6 +758,14 @@ func (r *TLSReconciler) handleHttp() error {
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 		}
+		dnsNames = append(dnsNames, serviceDnsNames(r.instance.Spec.General.ServiceName, namespace)...)
+		for i := range r.instance.Spec.NodePools {
+			nodePool := &r.instance.Spec.NodePools[i]
+			if nodePool.Service != nil && nodePool.Service.Create {
+				dnsNames = append(dnsNames, serviceDnsNames(builders.AdditionalServiceName(r.instance, nodePool), namespace)...)
+			}
+		}
+		dnsNames = lo.Uniq(dnsNames)
 
 		// Prepend custom FQDN if provided
 		if tlsConfig.CustomFQDN != nil && *tlsConfig.CustomFQDN != "" {
