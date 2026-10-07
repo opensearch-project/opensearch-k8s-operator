@@ -160,7 +160,7 @@ var _ = Describe("DataIntegrityScaling", func() {
 
 
 	Context("Scale down masters", func() {
-		const removedMaster = "test-cluster-masters-2"
+		removedMaster := clusterName + "-masters-2"
 
 		masterNames := func() ([]string, error) {
 			nodes, err := dataManager.osClient.CatNodes()
@@ -183,7 +183,7 @@ var _ = Describe("DataIntegrityScaling", func() {
 				Eventually(func() error {
 					return operations.ScaleNodePool(clusterName, "masters", 3)
 				}, time.Minute, time.Second*5).Should(Succeed())
-				Expect(operations.WaitForNodePoolReady(clusterName, "masters", 3, time.Minute*10)).To(Succeed())
+				Expect(operations.WaitForNodePoolReady(clusterName, "masters", 3, time.Minute*5)).To(Succeed())
 			})
 
 			By("Importing test data into OpenSearch indices")
@@ -194,11 +194,16 @@ var _ = Describe("DataIntegrityScaling", func() {
 			By("Verifying data integrity before scaling")
 			Expect(dataManager.ValidateDataIntegrity(testData)).To(Succeed())
 
+			By("Verifying the master to remove is a voter")
+			removedID, err := dataManager.GetNodeID(removedMaster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(dataManager.GetCommittedVotingConfig()).To(ContainElement(removedID))
+
 			By("Scaling down master node pool: 3 -> 2 replicas")
 			Expect(operations.ScaleNodePool(clusterName, "masters", 2)).To(Succeed())
 
 			By("Waiting for scaling to complete (2/2 replicas ready)")
-			Expect(operations.WaitForNodePoolReady(clusterName, "masters", 2, time.Minute*10)).To(Succeed())
+			Expect(operations.WaitForNodePoolReady(clusterName, "masters", 2, time.Minute*5)).To(Succeed())
 
 			By("Reconnecting to cluster")
 			Expect(dataManager.Reconnect(false)).To(Succeed())
@@ -215,6 +220,13 @@ var _ = Describe("DataIntegrityScaling", func() {
 				return dataManager.osClient.GetVotingConfigExclusions(context.Background())
 			}, time.Minute*5, time.Second*5).Should(BeEmpty())
 
+			// Auto-shrink keeps a departed voter while fewer than 3 would remain,
+			// so a master removed without an exclusion stays in the config.
+			By("Verifying the removed master left the voting configuration")
+			Eventually(func() ([]string, error) {
+				return dataManager.GetCommittedVotingConfig()
+			}, time.Minute*2, time.Second*5).ShouldNot(ContainElement(removedID))
+
 			By("Verifying cluster health is green")
 			Eventually(func() error {
 				return dataManager.ValidateClusterHealth(false)
@@ -225,7 +237,7 @@ var _ = Describe("DataIntegrityScaling", func() {
 
 			By("Scaling back up to 3 replicas")
 			Expect(operations.ScaleNodePool(clusterName, "masters", 3)).To(Succeed())
-			Expect(operations.WaitForNodePoolReady(clusterName, "masters", 3, time.Minute*10)).To(Succeed())
+			Expect(operations.WaitForNodePoolReady(clusterName, "masters", 3, time.Minute*5)).To(Succeed())
 
 			By("Verifying the new master joined and no exclusion is left")
 			Eventually(func() ([]string, error) {
