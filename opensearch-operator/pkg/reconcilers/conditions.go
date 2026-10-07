@@ -197,6 +197,13 @@ func degradedCondition(status opensearchv1.ClusterStatus, obs clusterObservation
 		}
 	}
 	if pass.Failure != nil && pass.ConsecutiveFailures >= DegradedAfterFailedPasses {
+		// Keep the message while the same reconciler keeps failing: error texts can carry an
+		// ephemeral port, and each status change triggers another reconcile without backoff.
+		prev := apimeta.FindStatusCondition(status.Conditions, opensearchv1.ConditionDegraded)
+		if prev != nil && prev.Status == metav1.ConditionTrue && prev.Reason == opensearchv1.ReasonReconcileError &&
+			strings.HasPrefix(prev.Message, pass.Failure.Reconciler+" reconciler: ") {
+			return degraded(opensearchv1.ReasonReconcileError, prev.Message)
+		}
 		return degraded(opensearchv1.ReasonReconcileError, reconcilerErrorMessage(pass.Failure))
 	}
 	return metav1.Condition{Type: opensearchv1.ConditionDegraded, Status: metav1.ConditionFalse, Reason: opensearchv1.ReasonAsExpected, Message: ""}
