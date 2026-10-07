@@ -2,7 +2,10 @@ package reconcilers
 
 import (
 	"context"
+	"errors"
+	"reflect"
 	"strings"
+	"time"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
@@ -11,6 +14,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -88,6 +92,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 
 			_, underTest := newDashboardsReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
@@ -119,6 +124,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().GetSecret(clusterName+"-ca", clusterName).Return(corev1.Secret{}, NotFoundError())
 			mockClient.EXPECT().GetSecret(clusterName+"-dashboards-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -170,6 +176,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -226,6 +233,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -278,6 +286,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -323,6 +332,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -377,6 +387,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -403,6 +414,92 @@ var _ = Describe("Dashboards Reconciler", func() {
 						HaveVolumeSource("ConfigMap"),
 					)),
 				))
+		})
+	})
+
+	When("an existing dashboards Deployment", func() {
+		const clusterName = "dashboards-selector"
+		narrow := map[string]string{"opensearch.cluster.dashboards": clusterName}
+		wide := map[string]string{"opensearch.cluster.dashboards": clusterName, "helm.sh/chart": "chart-4.0.0"}
+
+		reconcileWithExisting := func(selector map[string]string, deletionTimestamp *metav1.Time) (ctrl.Result, *record.FakeRecorder) {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable:  true,
+						Labels:  map[string]string{"helm.sh/chart": "chart-4.0.1"},
+						Service: opensearchv1.DashboardsServiceSpec{Labels: map[string]string{}},
+					},
+				},
+			}
+			existing := appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-dashboards", Namespace: clusterName, DeletionTimestamp: deletionTimestamp},
+				Spec:       appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: selector}},
+			}
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(existing, nil)
+			if deletionTimestamp == nil && reflect.DeepEqual(selector, narrow) {
+				mockClient.EXPECT().CreateDeployment(mock.MatchedBy(func(d *appsv1.Deployment) bool {
+					return reflect.DeepEqual(d.Spec.Selector.MatchLabels, narrow)
+				})).Return(&ctrl.Result{}, nil)
+			} else if deletionTimestamp == nil {
+				mockClient.EXPECT().DeleteDeployment(&existing, true).Return(nil)
+			}
+			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+
+			recorder := record.NewFakeRecorder(10)
+			_, underTest := newDashboardsReconciler(mockClient, &spec)
+			underTest.recorder = recorder
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			return result, recorder
+		}
+
+		It("is deleted with orphan propagation when its selector carries custom labels", func() {
+			result, recorder := reconcileWithExisting(wide, nil)
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			Expect(recorder.Events).To(Receive(And(HavePrefix("Warning DeploymentRecreated"), ContainSubstring(clusterName+"/"+clusterName+"-dashboards"))))
+		})
+
+		It("is neither deleted again nor updated while its deletion is pending", func() {
+			result, recorder := reconcileWithExisting(wide, &metav1.Time{Time: time.Now()})
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			Expect(recorder.Events).To(BeEmpty())
+		})
+
+		It("is left alone when its selector is already the operator-owned one", func() {
+			_, recorder := reconcileWithExisting(narrow, nil)
+			Expect(recorder.Events).To(BeEmpty())
+		})
+
+		It("still reconciles the service when the Deployment can't be read", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable:  true,
+						Service: opensearchv1.DashboardsServiceSpec{Labels: map[string]string{}},
+					},
+				},
+			}
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, errors.New("boom"))
+			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+
+			_, underTest := newDashboardsReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).To(MatchError(ContainSubstring("boom")))
 		})
 	})
 })

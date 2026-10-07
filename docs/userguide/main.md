@@ -904,6 +904,8 @@ spec:
 
 Any annotations and labels defined will be added directly to the dashboards pods.
 
+Custom labels are not part of the Deployment selector (which only holds `opensearch.cluster.dashboards`), so they can be changed freely. The `opensearch.cluster.dashboards` label is reserved and cannot be overridden through `labels`. Dashboards Deployments created by earlier operator versions have the custom labels in their selector and are recreated once on upgrade; the existing pods stay up and are adopted by the new Deployment. If label values change in the same upgrade, the adopted pods are then replaced by a regular rolling update.
+
 ### Priority class on OpenSearch nodes
 
 You can configure OpenSearch nodes to use a `PriorityClass` using the name of the priority class. This is useful to prevent unwanted evictions of your OpenSearch nodes.
