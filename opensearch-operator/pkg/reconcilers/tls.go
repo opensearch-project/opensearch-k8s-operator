@@ -631,10 +631,10 @@ func (r *TLSReconciler) certShouldBeRenewed(ca tls.Cert, cd certDescription, exi
 		return true
 	}
 
-	// Generated HTTP certs must cover every Service name clients may use, which can change
+	// Generated HTTP certs must cover every Service name clients may use, which can grow
 	// after creation (e.g. enabling service.create on a node pool)
-	if cd.certContext == CertContextHttp && len(cd.dnsNames) > 0 && !certHasDnsNames(existingCertData, cd.dnsNames) {
-		r.logger.Info("Certificate SANs differ from the desired ones - renewing", "interface",
+	if cd.certContext == CertContextHttp && !certCoversDnsNames(existingCertData, cd.dnsNames) {
+		r.logger.Info("Certificate is missing desired SANs - renewing", "interface",
 			cd.certContext, "node", cd.loggingName)
 		return true
 	}
@@ -652,9 +652,10 @@ func serviceDnsNames(name, namespace string) []string {
 	}
 }
 
-// certHasDnsNames reports whether the certificate's DNS SANs match the wanted set exactly.
-// Unparseable data counts as matching, as expiry handling already covers it.
-func certHasDnsNames(certData []byte, want []string) bool {
+// certCoversDnsNames reports whether every wanted name is among the certificate's DNS SANs.
+// Extra names are tolerated, so removing a Service or customFQDN does not reissue the cert.
+// Unparseable data counts as covering, as expiry handling already covers it.
+func certCoversDnsNames(certData []byte, want []string) bool {
 	block, _ := pem.Decode(certData)
 	if block == nil {
 		return true
@@ -663,9 +664,7 @@ func certHasDnsNames(certData []byte, want []string) bool {
 	if err != nil {
 		return true
 	}
-	have := lo.Uniq(cert.DNSNames)
-	want = lo.Uniq(want)
-	return len(lo.Without(want, have...)) == 0 && len(lo.Without(have, want...)) == 0
+	return len(lo.Without(lo.Uniq(want), cert.DNSNames...)) == 0
 }
 
 func (r *TLSReconciler) handleTransportExistingCerts() error {
@@ -761,6 +760,7 @@ func (r *TLSReconciler) handleHttp() error {
 		dnsNames = append(dnsNames, serviceDnsNames(r.instance.Spec.General.ServiceName, namespace)...)
 		for i := range r.instance.Spec.NodePools {
 			nodePool := &r.instance.Spec.NodePools[i]
+			dnsNames = append(dnsNames, serviceDnsNames(builders.NodePoolServiceName(r.instance, nodePool), namespace)...)
 			if nodePool.Service != nil && nodePool.Service.Create {
 				dnsNames = append(dnsNames, serviceDnsNames(builders.AdditionalServiceName(r.instance, nodePool), namespace)...)
 			}

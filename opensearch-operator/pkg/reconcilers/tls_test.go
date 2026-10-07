@@ -83,6 +83,9 @@ func signTestHttpCert(ca pkitls.Cert, cluster *opensearchv1.OpenSearchCluster, v
 		fmt.Sprintf("%s.%s.svc.%s", name, ns, helpers.ClusterDnsBase()),
 	}
 	dnsNames = append(dnsNames, serviceDnsNames(cluster.Spec.General.ServiceName, ns)...)
+	for i := range cluster.Spec.NodePools {
+		dnsNames = append(dnsNames, serviceDnsNames(builders.NodePoolServiceName(cluster, &cluster.Spec.NodePools[i]), ns)...)
+	}
 	cert, err := ca.CreateAndSignCertificate(name, name, lo.Uniq(dnsNames), validity)
 	Expect(err).ToNot(HaveOccurred())
 	return cert.CertData()
@@ -735,7 +738,7 @@ var _ = Describe("TLS Controller", func() {
 			Expect(underTest.certShouldBeRenewed(mockCA, httpCd, valid200Days)).To(BeFalse())
 		})
 
-		It("should renew generated HTTP certificates when the desired SANs change", func() {
+		It("should renew generated HTTP certificates only when desired SANs are missing", func() {
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "tls-san-change", Namespace: "tls-san-change", UID: "dummyuid"},
 				Spec: opensearchv1.ClusterSpec{
@@ -761,8 +764,8 @@ var _ = Describe("TLS Controller", func() {
 			// A per-pool Service name was added, e.g. by enabling service.create
 			added := append([]string{"tls-san-change-data-lb.tls-san-change.svc"}, oldNames...)
 			Expect(underTest.certShouldBeRenewed(ca, httpCd(added), nodeCert.CertData())).To(BeTrue())
-			// A name was removed
-			Expect(underTest.certShouldBeRenewed(ca, httpCd(oldNames[:1]), nodeCert.CertData())).To(BeTrue())
+			// A name was removed (service.create disabled, pool or customFQDN dropped): not worth a restart
+			Expect(underTest.certShouldBeRenewed(ca, httpCd(oldNames[:1]), nodeCert.CertData())).To(BeFalse())
 		})
 
 		It("should renew certificates when the CA is replaced", func() {
@@ -870,6 +873,46 @@ var _ = Describe("TLS Controller", func() {
 			// The http certificate was still valid and must be left alone
 			Expect(storedHttp().Annotations).ToNot(HaveKey(CertRenewalAnnotation))
 			Expect(storedHttp().Data["tls.crt"]).To(Equal(httpCert))
+		})
+
+		It("should add per-pool Service names to the HTTP cert when service.create is enabled", func() {
+			ca, caSecret := newCA()
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
+			// Issued before service.create was enabled
+			oldSpec := newRenewalSpec(false)
+			oldHttpCert := signTestHttpCert(ca, oldSpec, validFor)
+			transportSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			httpSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": oldHttpCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			mockClient, _, storedHttp := setupMocks(caSecret, transportSecret, httpSecret)
+
+			spec := newRenewalSpec(false)
+			spec.Spec.NodePools[0].Service = &opensearchv1.AdditionalServiceConfig{Create: true}
+			_, underTest := newTLSReconcilerWithPKI(mockClient, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			block, _ := pem.Decode(storedHttp().Data["tls.crt"])
+			Expect(block).ToNot(BeNil())
+			cert, err := x509.ParseCertificate(block.Bytes)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(cert.DNSNames).To(ContainElements(
+				"tls-renewal-masters-lb",
+				"tls-renewal-masters-lb.tls-renewal",
+				"tls-renewal-masters-lb.tls-renewal.svc",
+				"tls-renewal-masters-lb.tls-renewal.svc."+helpers.ClusterDnsBase(),
+				// the headless Service every pool gets
+				"tls-renewal-masters",
+				"tls-renewal-masters.tls-renewal.svc",
+			))
+			Expect(storedHttp().Annotations).To(HaveKey(CertRenewalAnnotation))
 		})
 
 		It("should not touch certificates outside the rotation window", func() {

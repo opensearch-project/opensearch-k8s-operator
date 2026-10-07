@@ -930,7 +930,7 @@ func NewHeadlessServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool 
 			APIVersion: "v1",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:        fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component),
+			Name:        NodePoolServiceName(cr, nodePool),
 			Namespace:   cr.Namespace,
 			Labels:      labels,
 			Annotations: annotations,
@@ -961,6 +961,11 @@ func NewHeadlessServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool 
 			Type:     "",
 		},
 	}
+}
+
+// NodePoolServiceName returns the name of the headless service every node pool gets.
+func NodePoolServiceName(cr *opensearchv1.OpenSearchCluster, nodePool *opensearchv1.NodePool) string {
+	return fmt.Sprintf("%s-%s", cr.Spec.General.ServiceName, nodePool.Component)
 }
 
 // AdditionalServiceName returns the name of the extra, load-balanced ClusterIP service for a node pool.
