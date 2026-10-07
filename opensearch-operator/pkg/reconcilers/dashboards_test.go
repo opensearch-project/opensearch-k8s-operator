@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"time"
@@ -475,6 +476,30 @@ var _ = Describe("Dashboards Reconciler", func() {
 		It("is left alone when its selector is already the operator-owned one", func() {
 			_, recorder := reconcileWithExisting(narrow, nil)
 			Expect(recorder.Events).To(BeEmpty())
+		})
+
+		It("still reconciles the service when the Deployment can't be read", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable:  true,
+						Service: opensearchv1.DashboardsServiceSpec{Labels: map[string]string{}},
+					},
+				},
+			}
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, errors.New("boom"))
+			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+
+			_, underTest := newDashboardsReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).To(MatchError(ContainSubstring("boom")))
 		})
 	})
 })

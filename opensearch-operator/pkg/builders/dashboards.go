@@ -90,8 +90,11 @@ func NewDashboardsDeploymentForCR(cr *opensearchv1.OpenSearchCluster, volumes []
 		labels[key] = value
 	}
 
-	// cr.Spec.Dashboards.labels
+	// cr.Spec.Dashboards.labels; selector labels can't be overridden or the pods stop matching the selector
 	for key, value := range cr.Spec.Dashboards.Labels {
+		if _, reserved := selectorLabels[key]; reserved {
+			continue
+		}
 		labels[key] = value
 	}
 

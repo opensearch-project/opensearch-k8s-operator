@@ -117,9 +117,8 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.client.Scheme()))
 	deleting, err := r.deleteDeploymentOnSelectorChange(deployment)
 	if err != nil {
-		return ctrl.Result{}, err
-	}
-	if deleting {
+		result.CombineErr(err)
+	} else if deleting {
 		// The orphaning delete is async; create the new Deployment once the old one is gone
 		result.Combine(&ctrl.Result{RequeueAfter: 5 * time.Second}, nil)
 	} else {
@@ -149,7 +148,12 @@ func (r *DashboardsReconciler) deleteDeploymentOnSelectorChange(desired *appsv1.
 	if existing.DeletionTimestamp != nil {
 		return true, nil
 	}
-	if reflect.DeepEqual(existing.Spec.Selector.MatchLabels, desired.Spec.Selector.MatchLabels) {
+	// The selector is fully operator-owned; anything that adds selector labels would cause a recreate on every pass
+	var existingSelector map[string]string
+	if existing.Spec.Selector != nil {
+		existingSelector = existing.Spec.Selector.MatchLabels
+	}
+	if reflect.DeepEqual(existingSelector, desired.Spec.Selector.MatchLabels) {
 		return false, nil
 	}
 	r.logger.Info(fmt.Sprintf("Deployment selector changed, recreating Deployment %s/%s", existing.Namespace, existing.Name))
@@ -157,7 +161,7 @@ func (r *DashboardsReconciler) deleteDeploymentOnSelectorChange(desired *appsv1.
 		return false, err
 	}
 	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "DeploymentRecreated",
-		"Deployment %s/%s recreated because its selector changed; existing pods keep serving and are adopted by the new Deployment", existing.Namespace, existing.Name)
+		"Deployment %s/%s is being recreated because its selector changed; existing pods keep serving and will be adopted by the new Deployment", existing.Namespace, existing.Name)
 	return true, nil
 }
 
