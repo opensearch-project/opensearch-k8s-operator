@@ -1,6 +1,9 @@
 name: Helm Lint
 
-on: pull_request
+on:
+  pull_request:
+    # NOTE: re-run the chart version check when the PR title changes
+    types: [opened, synchronize, reopened, edited]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -39,18 +42,22 @@ jobs:
         if: steps.list-changed.outputs.changed == 'true' && !startsWith(github.event.pull_request.title, 'release:')
         run: |
           failed=0
-          base="origin/${{ github.event.repository.default_branch }}"
+          base="origin/${{ github.base_ref }}"
+
+          chart_version() {
+            awk '/^version:/ { sub(/^version:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); print; exit }' | tr -d "\"' \r"
+          }
 
           for chart in charts/*/Chart.yaml; do
             if ! git cat-file -e "$base:$chart" 2>/dev/null; then
               continue
             fi
 
-            base_version=$(git show "$base:$chart" | awk -F': *' '$1 == "version" { print $2; exit }')
-            pr_version=$(awk -F': *' '$1 == "version" { print $2; exit }' "$chart")
+            base_version=$(git show "$base:$chart" | chart_version)
+            pr_version=$(chart_version < "$chart")
 
             if [[ "$base_version" != "$pr_version" ]]; then
-              echo "::error file=$chart::Regular PRs must not change Chart.yaml version; chart versions are bumped only in release-cut PRs."
+              echo "::error file=$chart::Only release-cut PRs may change the Chart.yaml version, and their title must start with 'release:'. Revert the version change, or retitle the PR with the 'release:' prefix."
               echo "$chart: $base_version -> $pr_version"
               failed=1
             fi

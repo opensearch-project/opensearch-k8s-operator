@@ -102,8 +102,6 @@ To deploy a new version simply rebuild and reimport the docker image and restart
 
 ## Submitting a PR
 
-Regular chart PRs must leave `Chart.yaml`'s `version` unchanged; CI enforces this for non-release PRs, and chart versions are bumped only in the release-cut PR.
-
 Once you are ready to share your work, please fork the repository into your github account, create and push a feature branch, then open a PR.
 
 The PR description must contain the following:
@@ -126,6 +124,7 @@ All PRs must conform to the following rules:
     ```
 
 * Changes to the CRD must be documented in the [CRD reference](./designs/crd.md)
+* Chart PRs must leave the `version` in `Chart.yaml` unchanged. Chart versions are bumped only in the release-cut PR, whose title must start with `release:` (see [RELEASING.md](../RELEASING.md)). CI fails any other PR that changes a chart version
 * Any customer-visible features must be documented in the [userguide](./userguide/)
 * No TODOs or commented out code snippets can be in the code
 
