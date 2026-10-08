@@ -154,6 +154,6 @@ var _ = Describe("DataIntegrityScaling", func() {
 			names, err = osClient.GetVotingConfigExclusions(ctx)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(names).To(BeEmpty())
-                })
-        })
+		})
+	})
 })
