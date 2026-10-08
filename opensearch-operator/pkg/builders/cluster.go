@@ -437,10 +437,6 @@ func NewSTSForNodePool(
 	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
-	// Default to TCP so nodes can become Started before securityadmin has run
-	// (authenticated HTTP probes would fail during first bootstrap). A custom
-	// probes.startup.command overrides this with an Exec probe.
-	var startupProbeCommand []string
 	probeProtocol := "https"
 	if !helpers.IsHttpTlsEnabled(cr) {
 		probeProtocol = "http"
