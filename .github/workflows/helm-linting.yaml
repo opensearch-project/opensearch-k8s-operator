@@ -1,6 +1,9 @@
 name: Helm Lint
 
-on: pull_request
+on:
+  pull_request:
+    # NOTE: re-run the chart version check when the PR title changes
+    types: [opened, synchronize, reopened, edited]
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -35,6 +38,33 @@ jobs:
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Ensure chart versions are unchanged outside release PRs
+        if: steps.list-changed.outputs.changed == 'true' && !startsWith(github.event.pull_request.title, 'release:')
+        run: |
+          failed=0
+          base="origin/${{ github.base_ref }}"
+
+          chart_version() {
+            awk '/^version:/ { sub(/^version:[[:space:]]*/, ""); sub(/[[:space:]]+#.*$/, ""); print; exit }' | tr -d "\"' \r"
+          }
+
+          for chart in charts/*/Chart.yaml; do
+            if ! git cat-file -e "$base:$chart" 2>/dev/null; then
+              continue
+            fi
+
+            base_version=$(git show "$base:$chart" | chart_version)
+            pr_version=$(chart_version < "$chart")
+
+            if [[ "$base_version" != "$pr_version" ]]; then
+              echo "::error file=$chart::Only release-cut PRs may change the Chart.yaml version, and their title must start with 'release:'. Revert the version change, or retitle the PR with the 'release:' prefix."
+              echo "$chart: $base_version -> $pr_version"
+              failed=1
+            fi
+          done
+
+          exit "$failed"
+
       - name: Run chart-testing (lint)
         if: steps.list-changed.outputs.changed == 'true'
-        run: ct lint --target-branch ${{ github.event.repository.default_branch }} --validate-maintainers=false
+        run: ct lint --target-branch ${{ github.event.repository.default_branch }} --validate-maintainers=false --check-version-increment=false

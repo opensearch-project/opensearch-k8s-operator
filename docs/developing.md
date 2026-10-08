@@ -124,6 +124,7 @@ All PRs must conform to the following rules:
     ```
 
 * Changes to the CRD must be documented in the [CRD reference](./designs/crd.md)
+* Chart PRs must leave the `version` in `Chart.yaml` unchanged. Chart versions are bumped only in the release-cut PR, whose title must start with `release:` (see [RELEASING.md](../RELEASING.md)). CI fails any other PR that changes a chart version
 * Any customer-visible features must be documented in the [userguide](./userguide/)
 * No TODOs or commented out code snippets can be in the code
 
