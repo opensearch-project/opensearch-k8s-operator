@@ -149,6 +149,14 @@ jobs:
       test_name: "data-integrity-scaling"
       enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
 
+  data-integrity-master-scaling:
+    uses: ./.github/workflows/reusable-functional-test.yaml
+    with:
+      test_focus: "DataIntegrityMasterScaling"
+      test_timeout: "60m"
+      test_name: "data-integrity-master-scaling"
+      enable_debug: ${{ github.event.inputs.enable_debug_tmate == 'true' }}
+
   # TODO: Uncomment this when we have big runners
   # data-integrity-nodepool:
   #   uses: ./.github/workflows/reusable-functional-test.yaml

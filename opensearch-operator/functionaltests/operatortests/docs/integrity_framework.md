@@ -149,6 +149,8 @@ The test suite is organized into separate files by operation type:
 ### `scaling_test.go`
 - **Scale up** - Tests data integrity when scaling up node pools
 - **Scale down** - Tests data integrity when scaling down node pools
+
+### `master_scaling_test.go`
 - **Scale down masters** - Shrinks the master pool 3 → 2 and back, checking `_cat/nodes`, the committed voting configuration, voting config exclusions, health and data
 
 ### `nodepool_operations_test.go`
@@ -230,6 +232,9 @@ go test ./operatortests -ginkgo.focus="DataIntegrityUpgrade" -timeout 30m
 
 # Scaling tests
 go test ./operatortests -ginkgo.focus="DataIntegrityScaling" -timeout 30m
+
+# Master scaling tests
+go test ./operatortests -ginkgo.focus="DataIntegrityMasterScaling" -timeout 30m
 
 # Node pool operation tests
 go test ./operatortests -ginkgo.focus="DataIntegrityNodePoolOperations" -timeout 30m
