@@ -3344,6 +3344,13 @@ spec:
                             type: integer
                         type: object
                     type: object
+                    x-kubernetes-validations:
+                    - message: startup.successThreshold must be 1
+                      rule: '!has(self.startup) || !has(self.startup.successThreshold)
+                        || self.startup.successThreshold == 1'
+                    - message: liveness.successThreshold must be 1
+                      rule: '!has(self.liveness) || !has(self.liveness.successThreshold)
+                        || self.liveness.successThreshold == 1'
                   replicas:
                     default: 1
                     format: int32
