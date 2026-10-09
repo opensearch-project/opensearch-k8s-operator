@@ -205,14 +205,11 @@ rules:
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: {{ include "opensearch-operator.fullname" . }}-metrics
+  name: {{ include "opensearch-operator.metricsClusterRoleName" . }}
   labels:
     {{- include "opensearch-operator.labels" . | nindent 4 }}
 rules:
-- nonResourceURLs:
-  - /metrics
-  verbs:
-  - get
+{{- include "opensearch-operator.metricsClusterRoleRules" . | nindent 0 }}
 {{- end }}
 ---
 apiVersion: rbac.authorization.k8s.io/v1
