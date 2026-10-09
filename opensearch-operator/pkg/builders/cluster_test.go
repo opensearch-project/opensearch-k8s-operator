@@ -699,6 +699,26 @@ var _ = Describe("Builders", func() {
 	})
 
 	When("Constructing a bootstrap pod", func() {
+		It("should never become ready so that it stays out of the cluster service endpoints", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			readinessProbe := result.Spec.Containers[0].ReadinessProbe
+			Expect(readinessProbe).ToNot(BeNil())
+			Expect(readinessProbe.Exec).ToNot(BeNil())
+			Expect(readinessProbe.Exec.Command).To(Equal([]string{"/bin/false"}))
+		})
+
+		It("should be selected by the client services and resolvable through the discovery service", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
+			Expect(NewServiceForCR(&clusterObject).Spec.Selector).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
+			Expect(NewNodePortService(&clusterObject).Spec.Selector).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
+			Expect(NewDiscoveryServiceForCR(&clusterObject).Spec.PublishNotReadyAddresses).To(BeTrue())
+		})
+
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
