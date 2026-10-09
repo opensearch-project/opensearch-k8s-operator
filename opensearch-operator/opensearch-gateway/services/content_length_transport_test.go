@@ -1,6 +1,7 @@
 package services
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -71,11 +72,11 @@ func TestWritesAreSentWithContentLength(t *testing.T) {
 		write  func(c *OsClusterClient) error
 	}{
 		{"doHTTPPut", http.MethodPut, jsonBody, func(c *OsClusterClient) error {
-			_, err := doHTTPPut(nil, c.client, path, opensearchutil.NewJSONReader(map[string]any{"index_patterns": []string{"a-*"}}))
+			_, err := doHTTPPut(context.TODO(), c.client, path, opensearchutil.NewJSONReader(map[string]any{"index_patterns": []string{"a-*"}}))
 			return err
 		}},
 		{"doHTTPPost", http.MethodPost, jsonBody, func(c *OsClusterClient) error {
-			_, err := doHTTPPost(nil, c.client, path, opensearchutil.NewJSONReader(map[string]any{"index_patterns": []string{"a-*"}}))
+			_, err := doHTTPPost(context.TODO(), c.client, path, opensearchutil.NewJSONReader(map[string]any{"index_patterns": []string{"a-*"}}))
 			return err
 		}},
 		{"PutClusterSettings", http.MethodPut, `"cluster.routing.allocation.exclude._name":"node-0"`, func(c *OsClusterClient) error {
