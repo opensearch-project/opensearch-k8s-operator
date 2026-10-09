@@ -382,7 +382,7 @@ config:
 			cmdArg := `ADMIN=/usr/share/opensearch/plugins/opensearch-security/tools/securityadmin.sh;
 chmod +x $ADMIN;
 wait_count=0;
-until curl -k --silent https://no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local:9200;
+until curl -k --silent https://no-securityconfig-tls-configured-discovery.no-securityconfig-tls-configured.svc.cluster.local:9200;
 do
   if (( wait_count++ >= 60 )); then
     echo "Failed to connect to cluster after 60 attempts";
@@ -390,7 +390,7 @@ do
   fi;
   echo 'Waiting to connect to the cluster'; sleep 20;
 done;count=0;
-until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd /usr/share/opensearch/config/opensearch-security -icl -nhnv -h no-securityconfig-tls-configured.no-securityconfig-tls-configured.svc.cluster.local -p 9200; do
+until $ADMIN -cacert /certs/ca.crt -cert /certs/tls.crt -key /certs/tls.key -cd /usr/share/opensearch/config/opensearch-security -icl -nhnv -h no-securityconfig-tls-configured-discovery.no-securityconfig-tls-configured.svc.cluster.local -p 9200; do
   if (( count++ >= 5 )); then
     echo "Failed to apply securityconfig after 5 attempts";
     exit 1;

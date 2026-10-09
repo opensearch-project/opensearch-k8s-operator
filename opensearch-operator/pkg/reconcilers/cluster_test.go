@@ -9,27 +9,25 @@ import (
 	"github.com/go-logr/logr"
 	"github.com/jarcoal/httpmock"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/patch"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/stretchr/testify/mock"
 	appsv1 "k8s.io/api/apps/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	apimeta "k8s.io/apimachinery/pkg/api/meta"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	corev1 "k8s.io/api/core/v1"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
@@ -266,284 +264,6 @@ var _ = Describe("emptyDir recovery", func() {
 		}))
 	})
 })
-
-var _ = Describe("Bootstrap Pod Reconciliation Fix", func() {
-	Context("Bootstrap Pod Recreation Approach", func() {
-		It("should detect when any bootstrap pod spec field has changed", func() {
-			instance := &opensearchv1.OpenSearchCluster{
-				ObjectMeta: metav1.ObjectMeta{
-					Name:      "recreation-test",
-					Namespace: "test-namespace",
-				},
-				Spec: opensearchv1.ClusterSpec{
-					General: opensearchv1.GeneralConfig{
-						HttpPort:       9200,
-						ServiceName:    "recreation-test",
-						Version:        "2.8.0",
-						ServiceAccount: "default-sa",
-					},
-					Bootstrap: opensearchv1.BootstrapConfig{
-						Tolerations: []corev1.Toleration{
-							{
-								Key:      "purpose",
-								Operator: "Equal",
-								Value:    "logging",
-								Effect:   "NoSchedule",
-							},
-						},
-					},
-				},
-				Status: opensearchv1.ClusterStatus{
-					Initialized: false,
-				},
-			}
-
-			volumes := []corev1.Volume{}
-			volumeMounts := []corev1.VolumeMount{}
-
-			originalPod := builders.NewBootstrapPod(instance, volumes, volumeMounts)
-
-			By("Testing PodSpecChanged utility function")
-
-			// Test 1: Same spec should not trigger recreation
-			Expect(util.PodSpecChanged(originalPod, originalPod)).To(BeFalse())
-
-			// Test 2: Different ServiceAccountName should trigger recreation
-			modifiedPod := originalPod.DeepCopy()
-			modifiedPod.Spec.ServiceAccountName = "new-sa"
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 3: Different Tolerations should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Tolerations = []corev1.Toleration{
-				{
-					Key:      "new-purpose",
-					Operator: "Equal",
-					Value:    "monitoring",
-					Effect:   "NoSchedule",
-				},
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 4: Different NodeSelector should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.NodeSelector = map[string]string{
-				"node-type": "compute",
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 5: Different environment variables should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			if len(modifiedPod.Spec.Containers) > 0 {
-				modifiedPod.Spec.Containers[0].Env = append(modifiedPod.Spec.Containers[0].Env, corev1.EnvVar{
-					Name:  "NEW_VAR",
-					Value: "new_value",
-				})
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 6: Different container image should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			if len(modifiedPod.Spec.Containers) > 0 {
-				modifiedPod.Spec.Containers[0].Image = "opensearch:2.9.0"
-			}
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 7: Different volumes should trigger recreation
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Volumes = append(modifiedPod.Spec.Volumes, corev1.Volume{
-				Name: "extra-volume",
-				VolumeSource: corev1.VolumeSource{
-					EmptyDir: &corev1.EmptyDirVolumeSource{},
-				},
-			})
-			Expect(util.PodSpecChanged(originalPod, modifiedPod)).To(BeTrue())
-
-			// Test 8: NodeName changes set by the scheduler should be ignored
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.NodeName = "worker-node-1"
-			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
-
-			// Test 9: Default node lifecycle tolerations injected by Kubelet should be ignored
-			modifiedPod = originalPod.DeepCopy()
-			modifiedPod.Spec.Tolerations = append(modifiedPod.Spec.Tolerations,
-				corev1.Toleration{
-					Key:               "node.kubernetes.io/not-ready",
-					Operator:          corev1.TolerationOpExists,
-					Effect:            corev1.TaintEffectNoExecute,
-					TolerationSeconds: ptr.To[int64](300),
-				},
-				corev1.Toleration{
-					Key:               "node.kubernetes.io/unreachable",
-					Operator:          corev1.TolerationOpExists,
-					Effect:            corev1.TaintEffectNoExecute,
-					TolerationSeconds: ptr.To[int64](300),
-				},
-			)
-			Expect(util.PodSpecChanged(modifiedPod, originalPod)).To(BeFalse())
-		})
-
-		It("should ignore admission controller drift when last-applied spec is unchanged", func() {
-			instance := bootstrapTestCluster("admission-drift-test")
-			desired := builders.NewBootstrapPod(instance, nil, nil)
-
-			existing := desired.DeepCopy()
-			Expect(patch.DefaultAnnotator.SetLastAppliedAnnotation(existing)).To(Succeed())
-			simulateAdmissionControllerDrift(existing)
-
-			Expect(util.BootstrapPodNeedsRecreation(existing, desired)).To(BeFalse())
-		})
-
-		It("should recreate when the operator desired spec has changed", func() {
-			instance := bootstrapTestCluster("spec-change-test")
-			original := builders.NewBootstrapPod(instance, nil, nil)
-
-			existing := original.DeepCopy()
-			Expect(patch.DefaultAnnotator.SetLastAppliedAnnotation(existing)).To(Succeed())
-
-			desired := original.DeepCopy()
-			desired.Spec.ServiceAccountName = "updated-sa"
-			Expect(util.BootstrapPodNeedsRecreation(existing, desired)).To(BeTrue())
-		})
-
-		It("should not recreate when last-applied annotation is missing", func() {
-			instance := bootstrapTestCluster("missing-annotation-test")
-			desired := builders.NewBootstrapPod(instance, nil, nil)
-			existing := desired.DeepCopy()
-			simulateAdmissionControllerDrift(existing)
-
-			Expect(util.BootstrapPodNeedsRecreation(existing, desired)).To(BeFalse())
-		})
-	})
-
-	Context("reconcileBootstrapPod", func() {
-		It("should create the pod when it does not exist", func() {
-			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			instance := bootstrapTestCluster("create-test")
-			desired := builders.NewBootstrapPod(instance, nil, nil)
-			underTest := &ClusterReconciler{client: mockClient, instance: instance}
-
-			mockClient.EXPECT().
-				GetPod(desired.Name, desired.Namespace).
-				Return(corev1.Pod{}, k8serrors.NewNotFound(schema.GroupResource{Resource: "pods"}, desired.Name))
-			mockClient.EXPECT().
-				ReconcileResource(desired, reconciler.StateCreated).
-				Return(&ctrl.Result{}, nil)
-
-			result, err := underTest.reconcileBootstrapPod(desired)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(&ctrl.Result{}))
-		})
-
-		It("should not patch or recreate when admission controllers mutated the live spec", func() {
-			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			instance := bootstrapTestCluster("drift-reconcile-test")
-			desired := builders.NewBootstrapPod(instance, nil, nil)
-			existing := desired.DeepCopy()
-			Expect(patch.DefaultAnnotator.SetLastAppliedAnnotation(existing)).To(Succeed())
-			simulateAdmissionControllerDrift(existing)
-
-			underTest := &ClusterReconciler{client: mockClient, instance: instance}
-			mockClient.EXPECT().
-				GetPod(desired.Name, desired.Namespace).
-				Return(*existing, nil)
-
-			result, err := underTest.reconcileBootstrapPod(desired)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(&ctrl.Result{}))
-		})
-
-		It("should recreate the pod when the operator desired spec has changed", func() {
-			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			instance := bootstrapTestCluster("recreate-test")
-			original := builders.NewBootstrapPod(instance, nil, nil)
-			existing := original.DeepCopy()
-			Expect(patch.DefaultAnnotator.SetLastAppliedAnnotation(existing)).To(Succeed())
-
-			desired := original.DeepCopy()
-			desired.Spec.ServiceAccountName = "updated-sa"
-
-			underTest := &ClusterReconciler{client: mockClient, instance: instance}
-			mockClient.EXPECT().
-				GetPod(desired.Name, desired.Namespace).
-				Return(*existing, nil)
-			mockClient.EXPECT().DeletePod(mock.Anything).Return(nil)
-			mockClient.EXPECT().WaitForPodDeletion(desired.Name, desired.Namespace).Return(nil)
-			mockClient.EXPECT().
-				ReconcileResource(desired, reconciler.StateCreated).
-				Return(&ctrl.Result{}, nil)
-
-			result, err := underTest.reconcileBootstrapPod(desired)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(&ctrl.Result{}))
-		})
-
-		It("should requeue when the existing bootstrap pod is terminating", func() {
-			mockClient := k8s.NewMockK8sClient(GinkgoT())
-			instance := bootstrapTestCluster("terminating-test")
-			desired := builders.NewBootstrapPod(instance, nil, nil)
-			existing := desired.DeepCopy()
-			now := metav1.Now()
-			existing.DeletionTimestamp = &now
-
-			underTest := &ClusterReconciler{client: mockClient, instance: instance}
-			mockClient.EXPECT().
-				GetPod(desired.Name, desired.Namespace).
-				Return(*existing, nil)
-
-			result, err := underTest.reconcileBootstrapPod(desired)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(result).To(Equal(&ctrl.Result{Requeue: true, RequeueAfter: 2 * time.Second}))
-		})
-	})
-})
-
-func bootstrapTestCluster(name string) *opensearchv1.OpenSearchCluster {
-	return &opensearchv1.OpenSearchCluster{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      name,
-			Namespace: "test-namespace",
-		},
-		Spec: opensearchv1.ClusterSpec{
-			General: opensearchv1.GeneralConfig{
-				HttpPort:       9200,
-				ServiceName:    name,
-				Version:        "2.8.0",
-				ServiceAccount: "default-sa",
-			},
-			Bootstrap: opensearchv1.BootstrapConfig{
-				Tolerations: []corev1.Toleration{
-					{
-						Key:      "purpose",
-						Operator: "Equal",
-						Value:    "logging",
-						Effect:   "NoSchedule",
-					},
-				},
-			},
-		},
-		Status: opensearchv1.ClusterStatus{
-			Initialized: false,
-		},
-	}
-}
-
-func simulateAdmissionControllerDrift(pod *corev1.Pod) {
-	pod.Spec.SchedulerName = "gke-custom-scheduler"
-	injected := corev1.ResourceRequirements{
-		Requests: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse("100m"),
-			corev1.ResourceMemory: resource.MustParse("256Mi"),
-		},
-		Limits: corev1.ResourceList{
-			corev1.ResourceCPU:    resource.MustParse("2"),
-			corev1.ResourceMemory: resource.MustParse("2Gi"),
-		},
-	}
-	for i := range pod.Spec.InitContainers {
-		pod.Spec.InitContainers[i].Resources = injected
-	}
-}
 
 var _ = Describe("ServiceMonitor reconciliation", func() {
 	newMonitoringInstance := func() *opensearchv1.OpenSearchCluster {
@@ -889,7 +609,7 @@ var _ = Describe("StatefulSet recreation on immutable field change", func() {
 	})
 })
 
-var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
+var _ = Describe("Legacy bootstrap cleanup", func() {
 	const (
 		clusterName      = "test-cluster"
 		clusterNamespace = "test-namespace"
@@ -905,9 +625,18 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 		}
 	}
 
-	It("Should POST a voting exclusion, delete the pod, then waiting-DELETE exclusions once the node has left", func() {
+	legacyBootstrapPod := func(instance *opensearchv1.OpenSearchCluster) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      builders.BootstrapPodName(instance),
+				Namespace: instance.Namespace,
+			},
+		}
+	}
+
+	It("Should POST a voting exclusion, delete the pod and PVC, then waiting-DELETE exclusions once the node has left", func() {
 		instance := newCluster()
-		bootstrapPod := builders.NewBootstrapPod(instance, nil, nil)
+		bootstrapPod := legacyBootstrapPod(instance)
 		transport := httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		registerOsPingResponders(transport, instance)
@@ -927,7 +656,7 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 			logger:            logr.Discard(),
 			osClientTransport: transport,
 		}
-		result, err := underTest.removeBootstrapPod(bootstrapPod)
+		result, err := underTest.cleanupLegacyBootstrapResources()
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(Equal(&ctrl.Result{}))
@@ -935,11 +664,12 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 			"POST node_names=" + builders.BootstrapPodName(instance) + "&timeout=10s",
 			"DELETE wait_for_removal=true",
 		}))
+		mockClient.AssertNumberOfCalls(GinkgoT(), "ReconcileResource", 2)
 	})
 
-	It("Should POST, delete the pod and leave the clear to the scaler sweep while the bootstrap node is still a member", func() {
+	It("Should POST, delete resources and leave the clear to the scaler sweep while the bootstrap node is still a member", func() {
 		instance := newCluster()
-		bootstrapPod := builders.NewBootstrapPod(instance, nil, nil)
+		bootstrapPod := legacyBootstrapPod(instance)
 		transport := httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		registerOsPingResponders(transport, instance)
@@ -958,7 +688,7 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 			logger:            logr.Discard(),
 			osClientTransport: transport,
 		}
-		result, err := underTest.removeBootstrapPod(bootstrapPod)
+		result, err := underTest.cleanupLegacyBootstrapResources()
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(Equal(&ctrl.Result{}))
@@ -967,14 +697,13 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 
 	It("Should leave the bootstrap pod and not fail the reconciler if the voting-config POST fails", func() {
 		instance := newCluster()
-		bootstrapPod := builders.NewBootstrapPod(instance, nil, nil)
+		bootstrapPod := legacyBootstrapPod(instance)
 		transport := httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		registerOsPingResponders(transport, instance)
 		registerCatNodesResponder(transport, builders.BootstrapPodName(instance))
 		calls := recordVotingConfigCalls(transport, http.StatusInternalServerError, http.StatusOK)
 
-		recorder := record.NewFakeRecorder(1)
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
 		mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
 		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
@@ -985,48 +714,38 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 			instance:          instance,
 			logger:            logr.Discard(),
 			osClientTransport: transport,
-			recorder:          recorder,
 		}
-		result, err := underTest.removeBootstrapPod(bootstrapPod)
+		result, err := underTest.cleanupLegacyBootstrapResources()
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result.RequeueAfter).To(Equal(10 * time.Second))
 		Expect(result.Requeue).To(BeFalse())
 		Expect(*calls).To(HaveLen(1))
 		Expect((*calls)[0]).To(HavePrefix("POST "))
-		Expect(*calls).NotTo(ContainElement(ContainSubstring("wait_for_removal=false")))
 		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
-		Expect(recorder.Events).To(HaveLen(1))
-		event := <-recorder.Events
-		Expect(event).To(HavePrefix("Warning BootstrapExclusionFailed"))
-		Expect(event).To(ContainSubstring(bootstrapPod.Name))
 	})
 
-	It("Should leave the bootstrap pod, warn and requeue if the OpenSearch client cannot be created", func() {
+	It("Should delete an orphaned bootstrap PVC when the pod is already gone", func() {
 		instance := newCluster()
-		bootstrapPod := builders.NewBootstrapPod(instance, nil, nil)
-
-		recorder := record.NewFakeRecorder(1)
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
-		mockClient.On("GetSecret", clusterName+"-admin-password", clusterNamespace).Return(corev1.Secret{}, errors.New("secret unavailable"))
-		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+		mockClient.On("GetPod", builders.BootstrapPodName(instance), clusterNamespace).Return(
+			corev1.Pod{},
+			k8serrors.NewNotFound(schema.GroupResource{Resource: "pods"}, builders.BootstrapPodName(instance)),
+		)
+		mockClient.On("ReconcileResource", mock.MatchedBy(func(obj client.Object) bool {
+			pvc, ok := obj.(*corev1.PersistentVolumeClaim)
+			return ok && pvc.Name == builders.BootstrapPVCName(instance)
+		}), reconciler.StateAbsent).Return(&ctrl.Result{}, nil)
 
 		underTest := &ClusterReconciler{
 			client:   mockClient,
 			ctx:      context.Background(),
 			instance: instance,
 			logger:   logr.Discard(),
-			recorder: recorder,
 		}
-		result, err := underTest.removeBootstrapPod(bootstrapPod)
+		result, err := underTest.cleanupLegacyBootstrapResources()
 
 		Expect(err).NotTo(HaveOccurred())
-		Expect(result).To(Equal(&ctrl.Result{RequeueAfter: 10 * time.Second}))
-		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
-		Expect(recorder.Events).To(HaveLen(1))
-		event := <-recorder.Events
-		Expect(event).To(HavePrefix("Warning BootstrapExclusionFailed"))
-		Expect(event).To(ContainSubstring(bootstrapPod.Name))
-		Expect(event).To(ContainSubstring("secret unavailable"))
+		Expect(result).To(Equal(&ctrl.Result{}))
 	})
 })
