@@ -71,6 +71,37 @@ Specify each parameter using the `--set key=value[,key=value]` argument to `helm
 
 {{ template "chart.valuesSectionHtml" . -}}
 
+## Prometheus metrics
+
+The operator serves controller metrics over HTTPS on Service port `https` (8443) at `/metrics`. Scraping requires a Kubernetes bearer token and RBAC permission to `GET` the `/metrics` non-resource URL.
+
+With the default cluster-scoped install (`useRoleBindings: false`), the chart creates a `ClusterRole` named `<release>-opensearch-operator-metrics`. Bind your Prometheus (or other scraper) ServiceAccount to that role:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-scrape-opensearch-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: <release>-opensearch-operator-metrics
+subjects:
+- kind: ServiceAccount
+  name: <prometheus-service-account>
+  namespace: <prometheus-namespace>
+```
+
+To install a [Prometheus Operator](https://prometheus-operator.dev/) `ServiceMonitor` with the chart (disabled by default):
+
+```shell
+helm install [RELEASE_NAME] opensearch-operator/opensearch-operator \
+  --set serviceMonitor.enabled=true \
+  --set serviceMonitor.labels.purpose=infrastructure
+```
+
+The generated `ServiceMonitor` scrapes `https` port `/metrics` with the pod service account token and `tlsConfig.insecureSkipVerify: true` for the operator's self-signed certificate. Add labels under `serviceMonitor.labels` so your Prometheus instance selects this object.
+
 ## Namespace-scoped RBAC
 
 By default, the operator uses cluster-scoped RBAC resources (ClusterRole and ClusterRoleBinding). If you want to restrict the operator's permissions to a specific namespace, you can enable namespace-scoped RBAC by setting `useRoleBindings: true`.

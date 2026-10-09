@@ -73,7 +73,20 @@ manager:
   # -- Per-controller overrides (controller name -> max concurrent reconciles). Example: `{opensearchcluster: 4}`.
   maxConcurrentReconcilesPerController: {}
 
-  metricsBindAddress: 127.0.0.1:8080
+  # Address for the metrics server. Must match the Service port "https" (containerPort 8443).
+  metricsBindAddress: ":8443"
+
+serviceMonitor:
+  # -- Create a Prometheus Operator ServiceMonitor for operator /metrics
+  enabled: false
+  # -- Additional labels on the ServiceMonitor (for Prometheus Operator discovery)
+  labels: {}
+  # -- Scrape interval (e.g. 30s). Omitted from the manifest when empty.
+  interval: ""
+  # -- Scrape timeout. Omitted from the manifest when empty.
+  scrapeTimeout: ""
+  # -- Override tlsConfig for the scrape endpoint (default: insecureSkipVerify true for self-signed cert)
+  tlsConfig: {}
 
 # Install the Custom Resource Definitions with Helm
 installCRDs: true

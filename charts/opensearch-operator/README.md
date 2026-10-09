@@ -99,7 +99,12 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.watchNamespace` | string | `nil` |  |
 | `manager.maxConcurrentReconciles` | int | `1` | Global default max concurrent reconciles for all controllers. |
 | `manager.maxConcurrentReconcilesPerController` | object | `{}` | Per-controller overrides (controller name -> max concurrent reconciles). Example: `{opensearchcluster: 4}`. |
-| `manager.metricsBindAddress` | string | `"127.0.0.1:8080"` |  |
+| `manager.metricsBindAddress` | string | `":8443"` |  |
+| `serviceMonitor.enabled` | bool | `false` | Create a Prometheus Operator ServiceMonitor for operator /metrics |
+| `serviceMonitor.labels` | object | `{}` | Additional labels on the ServiceMonitor (for Prometheus Operator discovery) |
+| `serviceMonitor.interval` | string | `""` | Scrape interval (e.g. 30s). Omitted from the manifest when empty. |
+| `serviceMonitor.scrapeTimeout` | string | `""` | Scrape timeout. Omitted from the manifest when empty. |
+| `serviceMonitor.tlsConfig` | object | `{}` | Override tlsConfig for the scrape endpoint (default: insecureSkipVerify true for self-signed cert) |
 | `installCRDs` | bool | `true` |  |
 | `legacyAPI.enabled` | bool | `true` | Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped. |
 | `serviceAccount.create` | bool | `true` |  |
@@ -113,6 +118,37 @@ The following table lists the configurable parameters of the Helm chart.
 | `webhook.certManager.enabled` | bool | `true` |  |
 
 Specify each parameter using the `--set key=value[,key=value]` argument to `helm install`.
+
+## Prometheus metrics
+
+The operator serves controller metrics over HTTPS on Service port `https` (8443) at `/metrics`. Scraping requires a Kubernetes bearer token and RBAC permission to `GET` the `/metrics` non-resource URL.
+
+With the default cluster-scoped install (`useRoleBindings: false`), the chart creates a `ClusterRole` named `<release>-opensearch-operator-metrics`. Bind your Prometheus (or other scraper) ServiceAccount to that role:
+
+```yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-scrape-opensearch-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: <release>-opensearch-operator-metrics
+subjects:
+- kind: ServiceAccount
+  name: <prometheus-service-account>
+  namespace: <prometheus-namespace>
+```
+
+To install a [Prometheus Operator](https://prometheus-operator.dev/) `ServiceMonitor` with the chart (disabled by default):
+
+```shell
+helm install [RELEASE_NAME] opensearch-operator/opensearch-operator \
+  --set serviceMonitor.enabled=true \
+  --set serviceMonitor.labels.purpose=infrastructure
+```
+
+The generated `ServiceMonitor` scrapes `https` port `/metrics` with the pod service account token and `tlsConfig.insecureSkipVerify: true` for the operator's self-signed certificate. Add labels under `serviceMonitor.labels` so your Prometheus instance selects this object.
 
 ## Namespace-scoped RBAC
 
