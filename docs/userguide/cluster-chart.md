@@ -38,3 +38,5 @@ By default, the installation will deploy a node pool consisting of three master 
 
 To further customize your OpenSearchCluster installation, you can utilize configuration overrides and modify your `values.yaml`, this allows you to tailor various aspects of the installation to meet your specific requirements.
 Version 3 of the helm chart is designed to have configuration options with the same format and naming as it is defined in the operator doc.
+
+The `users`, `roles`, `usersRoleBinding`, `actionGroups`, `tenants`, `ismPolicies`, `indexTemplates` and `componentTemplates` values render CRDs that are deprecated and will be removed in v4 of the operator. See [Migrating away from the deprecated auxiliary CRDs](deprecated-crds-migration.md).

@@ -38,6 +38,7 @@ func (r *OpensearchIndexTemplateReconciler) Reconcile(ctx context.Context, req c
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpensearchIndexTemplate")
 
 	indexTemplateReconciler := reconcilers.NewIndexTemplateReconciler(
 		ctx,

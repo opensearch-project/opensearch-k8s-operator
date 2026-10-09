@@ -39,6 +39,7 @@ func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctr
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpensearchActionGroup")
 
 	actionGroupReconciler := reconcilers.NewActionGroupReconciler(
 		k8s.NewK8sClient(r.Client, ctx),

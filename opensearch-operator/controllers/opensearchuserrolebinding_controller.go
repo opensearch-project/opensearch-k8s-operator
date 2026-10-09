@@ -55,6 +55,7 @@ func (r *OpensearchUserRoleBindingReconciler) Reconcile(ctx context.Context, req
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpensearchUserRoleBinding")
 
 	userRoleBindingReconciler := reconcilers.NewUserRoleBindingReconciler(
 		r.Client,

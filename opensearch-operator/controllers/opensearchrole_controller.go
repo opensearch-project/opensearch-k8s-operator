@@ -55,6 +55,7 @@ func (r *OpensearchRoleReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpensearchRole")
 
 	roleReconciler := reconcilers.NewRoleReconciler(
 		r.Client,

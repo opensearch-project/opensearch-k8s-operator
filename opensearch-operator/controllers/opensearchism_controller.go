@@ -38,6 +38,7 @@ func (r *OpensearchISMPolicyReconciler) Reconcile(ctx context.Context, req ctrl.
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpenSearchISMPolicy")
 
 	ismReconciler := reconcilers.NewIsmReconciler(
 		ctx,

@@ -38,6 +38,7 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpensearchTenant")
 
 	tenantReconciler := reconcilers.NewTenantReconciler(
 		r.Client,

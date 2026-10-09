@@ -494,7 +494,7 @@ cluster:
       #      - example.com
       #    secretName: tls-secret
 
-# -- List of OpensearchRole. Check values.yaml file for examples.
+# -- List of OpensearchRole. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 roles: []
 #  - name: "example-role"
 #    clusterPermissions:
@@ -526,7 +526,7 @@ roles: []
 #      tenantPatterns:
 #        - "*"
 
-# -- List of OpensearchUser. Check values.yaml file for examples.
+# -- List of OpensearchUser. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 users: []
 #  - name: "example-user"
 #    secretName: "example-secret"
@@ -535,8 +535,7 @@ users: []
 #    opendistroSecurityRoles:
 #      - example-role
 
-# -- Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role
-# Check values.yaml file for examples.
+# -- Allows to link any number of users, backend roles and roles with a OpensearchUserRoleBinding. Each user in the binding will be granted each role. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 usersRoleBinding: []
 #  - name: admin_access
 #    users:
@@ -547,12 +546,12 @@ usersRoleBinding: []
 #    backendRoles:
 #      - example-backend-role
 
-# -- List of additional tenants. Check values.yaml file for examples.
+# -- List of additional tenants. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 tenants: []
 #  - name: "example-tenant"
 #    description: "example-tenant"
 
-# -- List of OpensearchActionGroup. Check values.yaml file for examples.
+# -- List of OpensearchActionGroup. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 actionGroups: []
 #  - name: "example-action-group"
 #    description: "Example of action group"
@@ -561,7 +560,7 @@ actionGroups: []
 #      - indices:admin/aliases/exists
 #    type: index
 
-# -- List of OpensearchComponentTemplate. Check values.yaml file for examples.
+# -- List of OpensearchComponentTemplate. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 componentTemplates: []
 #  - name: example-component-template
 #    templateSpec: # required
@@ -582,7 +581,7 @@ componentTemplates: []
 #    _meta: # optional
 #      description: example description
 
-# -- List of OpensearchIndexTemplate. Check values.yaml file for examples.
+# -- List of OpensearchIndexTemplate. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 indexTemplates: []
 #  - name: example-index-template
 #    indexPatterns:
@@ -595,7 +594,7 @@ indexTemplates: []
 #    version: 1 # optional
 #    _meta: {} # optional
 
-# -- List of OpenSearchISMPolicy. Check values.yaml file for examples.
+# -- List of OpenSearchISMPolicy. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 ismPolicies: []
 #  - name: example-policy
 #    defaultState: hot
