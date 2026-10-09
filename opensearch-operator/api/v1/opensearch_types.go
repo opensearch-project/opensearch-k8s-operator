@@ -258,6 +258,8 @@ type DashboardsConfig struct {
 	Probes *DashboardsProbesConfig `json:"probes,omitempty"`
 }
 
+// +kubebuilder:validation:XValidation:rule="!has(self.startup) || !has(self.startup.successThreshold) || self.startup.successThreshold == 1",message="startup.successThreshold must be 1"
+// +kubebuilder:validation:XValidation:rule="!has(self.liveness) || !has(self.liveness.successThreshold) || self.liveness.successThreshold == 1",message="liveness.successThreshold must be 1"
 type DashboardsProbesConfig struct {
 	Startup   *ProbeConfig `json:"startup,omitempty"`
 	Liveness  *ProbeConfig `json:"liveness,omitempty"`
