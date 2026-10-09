@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -236,7 +237,13 @@ func (m *TestDataManager) ImportTestData(indices []TestIndex) (map[string]map[st
 			return nil, fmt.Errorf("failed to create index %s: %w", index.Name, err)
 		}
 		if res.StatusCode < 200 || res.StatusCode >= 300 {
-			return nil, fmt.Errorf("failed to create index %s: status %d", index.Name, res.StatusCode)
+			body, _ := io.ReadAll(res.Body)
+			res.Body.Close()
+			// A create that timed out on a busy cluster manager (503) is still applied later, so the
+			// client's retry finds the index already there
+			if res.StatusCode != http.StatusBadRequest || !strings.Contains(string(body), "resource_already_exists_exception") {
+				return nil, fmt.Errorf("failed to create index %s: status %d: %s", index.Name, res.StatusCode, body)
+			}
 		}
 
 		// Index documents
