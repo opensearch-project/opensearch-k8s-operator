@@ -628,6 +628,136 @@ Before configuring `snapshotRepositories` for a cluster, please ensure the follo
    }
    ```
 
+### Searchable snapshots (warm nodes)
+
+A [searchable snapshot](https://docs.opensearch.org/latest/tuning-your-cluster/availability-and-recovery/snapshots/searchable_snapshot/) index is restored from a snapshot with `"storage_type": "remote_snapshot"`. Its data stays in the snapshot repository; nodes with the `warm` role read it on demand and keep recently used parts in a local file cache. It suits large, rarely queried data you must keep searchable: storage is cheap, but searches are slower, the object store bills per request, and the index is read-only.
+
+This section covers OpenSearch 3.0 and later. A complete manifest is in [opensearch-searchable-snapshots.yaml](../../opensearch-operator/examples/3.x/opensearch-searchable-snapshots.yaml).
+
+#### Requirements
+
+- OpenSearch 3.0 or later. Searchable snapshots need no feature flag.
+- A snapshot repository on S3, GCS or Azure: the repository plugin in `general.pluginsList`, credentials in `general.keystore` and the repository in `general.snapshotRepositories` (see [Configuring Snapshot Repositories](#configuring-snapshot-repositories)).
+- At least one node pool with the `warm` role. **On 3.x use `warm`, not `search`.** Since 3.0 the `search` role hosts [search replicas](https://docs.opensearch.org/latest/tuning-your-cluster/separate-index-and-search-workloads/) and cannot be combined with any other role.
+
+#### Node pool configuration
+
+Use a dedicated warm pool next to the pools that hold your regular (hot) data:
+
+```yaml
+spec:
+  general:
+    version: "3.4.0"
+    pluginsList: ["repository-s3"]
+    keystore:
+      - secret:
+          name: s3-credentials # keys s3.client.default.access_key and s3.client.default.secret_key
+    snapshotRepositories:
+      - name: snapshots
+        type: s3
+        settings:
+          bucket: my-opensearch-snapshots
+          region: us-east-1
+  nodePools:
+    - component: hot
+      replicas: 3
+      diskSize: "100Gi"
+      roles: ["cluster_manager", "data", "ingest"]
+    - component: warm
+      replicas: 2
+      diskSize: "200Gi" # holds the file cache
+      persistence:
+        pvc:
+          storageClass: fast-ssd
+      jvm: -Xmx4G -Xms4G
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "2"
+      roles: ["warm"]
+      additionalConfig:
+        node.search.cache.size: "150gb" # optional on a dedicated warm pool
+```
+
+The file cache lives on the pool's data volume, so size `diskSize` and pick the storage class for the cache: a faster disk means fewer slow reads from the repository.
+
+A warm pool can also hold other roles, for example `["data", "warm"]`. OpenSearch only sizes the cache by default on a dedicated warm node, so such a pool must set `node.search.cache.size` in its `additionalConfig` (or in `general.additionalConfig`); without it the nodes fail at startup and the webhook rejects the cluster:
+
+```yaml
+    - component: data-warm
+      replicas: 3
+      diskSize: "300Gi"
+      roles: ["data", "warm"]
+      additionalConfig:
+        node.search.cache.size: "40%"
+```
+
+#### Sizing
+
+- `node.search.cache.size` defaults to `80%` of the data volume on a dedicated warm node and to nothing on any other node. It takes a byte size (`150gb`) or a percentage of the volume (`80%`), and must be above zero and below the volume size.
+- A percentage follows `diskSize` when you expand the volume. A byte size is predictable, but must stay below the volume size. On a `["data", "warm"]` pool, leave room for the regular shards next to the cache.
+- `cluster.filecache.remote_data_ratio` caps how much searchable snapshot data the warm nodes can serve: a restore is rejected when the total size of searchable snapshot indices would exceed cache size × ratio. Since 3.2 it defaults to `5` with a minimum of `1`; on 3.0 and 3.1 it defaults to `0`, which disables the check. Set it in `general.additionalConfig` (applies on restart) or at runtime:
+
+  ```bash
+  curl -XPUT "https://localhost:9200/_cluster/settings" -H 'Content-Type: application/json' -d '{"persistent": {"cluster.filecache.remote_data_ratio": 10}}'
+  ```
+
+- Prefer dedicated warm pools when search latency matters: the cache, heap and CPU are not shared with indexing and hot searches.
+
+#### Repository setup
+
+The example above uses static keys from a Kubernetes secret, loaded into the keystore. On EKS you can use IAM roles for service accounts instead: set `general.serviceAccount` to the annotated service account and add the `s3.client.default.*` settings from the [S3 repository docs](https://docs.opensearch.org/latest/tuning-your-cluster/availability-and-recovery/snapshots/snapshot-restore/#amazon-s3). GCS (`repository-gcs`) and Azure (`repository-azure`) work the same way; see [Register repository](https://docs.opensearch.org/latest/tuning-your-cluster/availability-and-recovery/snapshots/snapshot-restore/#register-repository) for their settings and keystore keys.
+
+#### Usage
+
+The operator only manages the cluster; snapshots and restores go through the REST API:
+
+```bash
+# Optional, recommended: fewer segments mean fewer requests to the repository
+POST logs-2025.01/_forcemerge?max_num_segments=1
+
+# Take the snapshot
+PUT _snapshot/snapshots/logs-2025.01?wait_for_completion=true
+{"indices": "logs-2025.01"}
+
+# Restore it as a searchable snapshot index under a new name
+POST _snapshot/snapshots/logs-2025.01/_restore
+{
+  "indices": "logs-2025.01",
+  "storage_type": "remote_snapshot",
+  "rename_pattern": "(.+)",
+  "rename_replacement": "$1-remote"
+}
+
+# Check it: index.store.type is remote_snapshot and the shards sit on warm nodes
+GET logs-2025.01-remote/_settings
+GET _cat/shards/logs-2025.01-remote?v
+```
+
+Delete the original index once the searchable one is in place. Deleting the searchable index later frees its cache but keeps the snapshot.
+
+To tier indices automatically, use an ISM policy (created through the [ISM API](https://docs.opensearch.org/latest/im-plugin/ism/api/)) with a `snapshot` action followed by a [`convert_index_to_remote`](https://docs.opensearch.org/latest/im-plugin/ism/policies-operations/#convert-index-to-remote) action.
+
+#### Operations
+
+The operator treats warm pools as data pools: rolling restarts and upgrades go one node at a time and wait for the cluster to recover (see [Rolling Upgrades](#rolling-upgrades)), and scale-down with SmartScaler drains shards first. Moving a searchable snapshot shard is cheap, as only the cache is rebuilt. With `number_of_replicas: 0` a searchable index goes red while its node restarts; restore it with replicas (`"index_settings": {"index.number_of_replicas": 1}`) if it must stay available.
+
+Monitor the cache with `GET _nodes/stats/file_cache`.
+
+#### Migrating from 2.x
+
+On 2.x the `search` role (or `warm`, which the operator renders as `search`) served searchable snapshots. On 3.x `search` means search replicas. When you change `spec.general.version` to 3.x, change every `search` pool to `warm` in the same update. The webhook rejects the upgrade otherwise, because the pool would come back as a search replica pool (or, combined with other roles, fail to start). Pools already declared as `warm` need no change.
+
+#### Troubleshooting
+
+| Error or symptom | Fix |
+|---|---|
+| `search role cannot be combined with any other role on a node` | Use `warm` instead of `search` for searchable snapshots. |
+| `Missing value for configuration node.search.cache.size` | The warm pool has other roles; set `node.search.cache.size`. |
+| `Cache size must be larger than zero and less than total capacity` | Lower `node.search.cache.size` or grow `diskSize`. |
+| Restored shards stay unassigned | No node has the `warm` role; add a warm pool. `GET _cluster/allocation/explain` gives the reason. |
+| `Size of the indexes to be restored exceeds the file cache bounds` | `remote_data_ratio` is exceeded: grow the cache, add warm nodes or raise `cluster.filecache.remote_data_ratio`. |
+
 ## Configuring Dashboards
 
 The operator can automatically deploy and manage a OpenSearch Dashboards instance. To do so add the following section to your cluster spec:
