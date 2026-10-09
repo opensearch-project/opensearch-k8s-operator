@@ -1,4 +1,9 @@
 {{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
+{{- /* lookup is empty without a live cluster, so helm template and lint skip this check.
+It runs last so installers without get on namespaces aren't blocked when cert-manager is present. */}}
+{{- if and (not (.Capabilities.APIVersions.Has "cert-manager.io/v1")) (lookup "v1" "Namespace" "" "kube-system") }}
+{{- fail "cert-manager is required (webhook.certManager.enabled=true) but cert-manager.io/v1 was not found in the cluster. Install cert-manager first, or set webhook.certManager.enabled=false and create the TLS secret named by webhook.secretName, or set webhook.enabled=false." }}
+{{- end }}
 ---
 apiVersion: cert-manager.io/v1
 kind: Issuer
