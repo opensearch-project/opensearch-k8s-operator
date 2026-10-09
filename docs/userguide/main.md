@@ -1560,6 +1560,20 @@ The following considerations should be taken into account in order to increase t
 
 Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure data is backed up and make sure the right conversion number is identified, so that the underlying volume has the same value and then re-apply the cluster yaml. This will make sure the statefulset is re-created with right value in VolueClaimTemplates, this operation is expected to have no downtime.
 
+### Status and conditions
+
+`status.observedGeneration` is the `metadata.generation` the operator last acted on, and `status.conditions` holds three standard conditions, each stamped with the generation it was computed for:
+
+- `Ready`: the cluster has bootstrapped, every node pool StatefulSet runs the current spec with all pods ready, no securityconfig update, upgrade, scaling or rolling restart is in flight, and the health API answers.
+- `Progressing`: one of those operations is in flight. The reason names the component, the message the node pool and step.
+- `Degraded`: health is red, a pod is stuck (for example `CrashLoopBackOff`), a scale-down drain has stalled, or a reconciler has failed several passes in a row.
+
+A spec change is fully applied once `Ready` is `True` and its `observedGeneration` equals `metadata.generation`. A reconcile pass cut short by an error or a requeue never sets `Ready` to `True`, so the previous `Ready` keeps its older generation until a full pass runs. The reasons are constants in `opensearch-operator/api/opensearch.org/v1/opensearch_types.go`.
+
+```bash
+kubectl wait --for=condition=Ready opensearchcluster/my-cluster --timeout=30m
+```
+
 ## User and role management
 
 An important part of any OpenSearch cluster is the user and role management to give users access to the cluster (via the opensearch-security plugin). By default the operator will use the included demo securityconfig with default users (see [internal_users.yml](https://github.com/opensearch-project/security/blob/main/config/internal_users.yml) for a list of users). For any production installation you should swap that out with your own configuration.
