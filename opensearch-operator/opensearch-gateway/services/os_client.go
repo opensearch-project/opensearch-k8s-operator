@@ -113,6 +113,7 @@ func NewOsClusterClient(clusterUrl string, username string, password string, opt
 		Username:  username,
 		Password:  password,
 	}
+	config.Transport = contentLengthTransport{next: config.Transport}
 
 	client, err := NewOsClusterClientFromConfig(config)
 	if err != nil {
