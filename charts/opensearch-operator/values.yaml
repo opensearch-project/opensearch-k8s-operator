@@ -87,6 +87,17 @@ serviceMonitor:
   scrapeTimeout: ""
   # -- Override tlsConfig for the scrape endpoint (default: insecureSkipVerify true for self-signed cert)
   tlsConfig: {}
+  rbac:
+    # -- Create ClusterRole and/or ClusterRoleBinding for the scraper ServiceAccount
+    create: false
+    # -- Scraper ServiceAccount name (required when create is true)
+    serviceAccountName: ""
+    # -- Scraper ServiceAccount namespace (required when create is true)
+    serviceAccountNamespace: ""
+    # -- ClusterRoleBinding name (default: "<release>-opensearch-operator-metrics-reader")
+    clusterRoleBindingName: ""
+    # -- ClusterRole name for roleRef (default: "<release>-opensearch-operator-metrics")
+    clusterRoleName: ""
 
 # Install the Custom Resource Definitions with Helm
 installCRDs: true

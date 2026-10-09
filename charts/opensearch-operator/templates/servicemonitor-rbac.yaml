@@ -1,0 +1,30 @@
+{{- if .Values.serviceMonitor.rbac.create }}
+{{- $serviceAccountName := required "serviceMonitor.rbac.serviceAccountName is required when serviceMonitor.rbac.create is true" .Values.serviceMonitor.rbac.serviceAccountName }}
+{{- $serviceAccountNamespace := required "serviceMonitor.rbac.serviceAccountNamespace is required when serviceMonitor.rbac.create is true" .Values.serviceMonitor.rbac.serviceAccountNamespace }}
+{{- if .Values.useRoleBindings }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "opensearch-operator.metricsClusterRoleName" . }}
+  labels:
+    {{- include "opensearch-operator.labels" . | nindent 4 }}
+rules:
+{{- include "opensearch-operator.metricsClusterRoleRules" . | nindent 0 }}
+{{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "opensearch-operator.metricsReaderClusterRoleBindingName" . }}
+  labels:
+    {{- include "opensearch-operator.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "opensearch-operator.metricsClusterRoleName" . }}
+subjects:
+- kind: ServiceAccount
+  name: {{ $serviceAccountName }}
+  namespace: {{ $serviceAccountNamespace }}
+{{- end }}
