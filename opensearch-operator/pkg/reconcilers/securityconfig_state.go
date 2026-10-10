@@ -229,7 +229,7 @@ func (r *SecurityconfigReconciler) recordSucceededJob(
 // patchManagedUserHashes updates the admin and Dashboards user password hashes through the security
 // REST API. Unlike re-applying internal_users.yml with securityadmin, this keeps all other internal
 // users, e.g. those created through the REST API or Dashboards.
-func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secret, adminCertName, dashboardsUsername string) error {
+func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secret, adminCertName, dashboardsUsername string, annotations map[string]string) error {
 	adminHash, dashboardsHash, err := managedPasswordHashes(generated.Data[internalUsersFile], dashboardsUsername)
 	if err != nil {
 		return err
@@ -241,11 +241,16 @@ func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secr
 		names = append(names, dashboardsUsername)
 	}
 
+	endpointCASecretName, err := r.resolveEndpointCASecret(r.instance.Namespace, adminCertName, annotations)
+	if err != nil {
+		return err
+	}
+
 	osClient, err := util.CreateAdminCertClientForCluster(
 		r.client,
 		r.instance,
 		adminCertName,
-		r.determineAdminCASecret(adminCertName),
+		endpointCASecretName,
 		r.options.osClientTransport,
 	)
 	if err != nil {
