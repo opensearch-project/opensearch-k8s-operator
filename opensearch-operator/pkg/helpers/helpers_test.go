@@ -351,6 +351,62 @@ var _ = Describe("TlsCASecretRef", func() {
 	})
 })
 
+var _ = Describe("HTTPEndpointCACertSecretRef", func() {
+	It("should return the external HTTP certificate secret", func() {
+		tlsConfig := &opensearchv1.TlsConfigHttp{
+			TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+				Secret:   corev1.LocalObjectReference{Name: "http-cert"},
+				CaSecret: corev1.LocalObjectReference{Name: "test-ca"},
+			},
+		}
+
+		Expect(HTTPEndpointCACertSecretRef("test", tlsConfig).Name).To(Equal("http-cert"))
+	})
+
+	It("should return the generated HTTP certificate secret", func() {
+		tlsConfig := &opensearchv1.TlsConfigHttp{
+			Generate: true,
+			TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+				CaSecret: corev1.LocalObjectReference{Name: "test-ca"},
+			},
+		}
+
+		Expect(HTTPEndpointCACertSecretRef("test", tlsConfig).Name).To(Equal("test-http-cert"))
+	})
+
+	It("should return empty when HTTP TLS is not configured", func() {
+		Expect(HTTPEndpointCACertSecretRef("test", nil).Name).To(BeEmpty())
+	})
+})
+
+var _ = Describe("TransportEndpointCACertSecretRef", func() {
+	It("should return the external transport certificate secret", func() {
+		tlsConfig := &opensearchv1.TlsConfigTransport{
+			TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+				Secret:   corev1.LocalObjectReference{Name: "transport-cert"},
+				CaSecret: corev1.LocalObjectReference{Name: "transport-ca"},
+			},
+		}
+
+		Expect(TransportEndpointCACertSecretRef("test", tlsConfig).Name).To(Equal("transport-cert"))
+	})
+
+	It("should return the generated transport certificate secret", func() {
+		tlsConfig := &opensearchv1.TlsConfigTransport{
+			Generate: true,
+			TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+				CaSecret: corev1.LocalObjectReference{Name: "transport-ca"},
+			},
+		}
+
+		Expect(TransportEndpointCACertSecretRef("test", tlsConfig).Name).To(Equal("test-transport-cert"))
+	})
+
+	It("should return empty when transport TLS is not configured", func() {
+		Expect(TransportEndpointCACertSecretRef("test", nil).Name).To(BeEmpty())
+	})
+})
+
 var _ = Describe("applyUserHashes", func() {
 	It("should preserve custom users alongside admin and kibanaserver", func() {
 		inputYaml := `
