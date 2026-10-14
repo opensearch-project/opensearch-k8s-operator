@@ -69,7 +69,7 @@ The OpenSearch Reconciler runs a chain of Reconcilers. Each one is mapped to a p
 * TLS Reconciler: mapped to `security.tls`. Generates or loads TLS certificates and adds the TLS settings to the node configuration
 * Securityconfig Reconciler: mapped to `security.config`. Builds the securityconfig and applies it, either with the `securityadmin.sh` update job or through the security plugin's default init
 * Configuration Reconciler: renders `opensearch.yml` into ConfigMaps and calculates the per-node-pool config hash
-* Cluster Reconciler: mapped to `nodePools` and `general`. Creates Services, StatefulSets, PDBs, the bootstrap pod and the ServiceMonitor, resizes volumes, updates the cluster health status, and recovers a cluster that uses only `emptyDir` storage after it lost its data by recreating it
+* Cluster Reconciler: mapped to `nodePools` and `general`. Creates Services, StatefulSets, PDBs, the bootstrap pod and the ServiceMonitor, resizes volumes, and recovers a cluster that uses only `emptyDir` storage after it lost its data by recreating it
 * Scaler Reconciler: graceful scale-up and scale-down of node pools, one node at a time. With `confMgmt.smartScaler` data is drained from a node before it is removed. Master-eligible nodes are added to the voting config exclusions before removal
 * Dashboards Reconciler: mapped to `dashboards`. Deploys [OpenSearch Dashboards](https://docs.opensearch.org/latest/dashboards/)
 * Upgrade Reconciler: rolls out `general.version` changes node by node, see [Upgrades](upgrade.md)

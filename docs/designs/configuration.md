@@ -1,6 +1,6 @@
 # Cluster configuration
 
-The configuration reconciler renders the OpenSearch settings into `opensearch.yml` and mounts it into the pods from a ConfigMap (subPath `config/opensearch.yml` under the OpenSearch home). Settings are not passed as environment variables.
+The configuration reconciler renders the OpenSearch settings into `opensearch.yml` and mounts it into the pods from a ConfigMap (key `opensearch.yml`, mounted at `config/opensearch.yml` under the OpenSearch home). The node discovery and role settings (`cluster.name`, `cluster.initial_master_nodes`, `discovery.seed_hosts`, `network.bind_host`, `network.publish_host`, `node.roles`, `http.port`) are not part of this file: the cluster builder passes them to each pod as environment variables.
 
 The rendered file contains the settings added by the operator itself (TLS, security plugin defaults, gRPC, `node.attr.*` from `general.nodeAttributes`) merged with the user-supplied `additionalConfig`:
 

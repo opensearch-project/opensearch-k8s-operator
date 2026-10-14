@@ -90,7 +90,7 @@ To run the test suite use `make test` from a terminal. It can take a minute or m
 
 ### Functional tests
 
-The `functionaltests` directory contains end-to-end tests that run the operator and real OpenSearch clusters in k3d. `functionaltests/execute_tests.sh` creates a k3d cluster, builds and imports the operator image, installs the operator and cluster Helm charts, runs the `operatortests` and `helmtests` suites and deletes the k3d cluster again. It needs Docker, k3d and Helm. CI runs these tests on every PR.
+The `functionaltests` directory contains end-to-end tests that run the operator and real OpenSearch clusters in k3d. `functionaltests/execute_tests.sh` creates a k3d cluster, builds and imports the operator image, installs the operator and cluster Helm charts, runs the `operatortests` and `helmtests` suites and deletes the k3d cluster again. It needs Docker, k3d and Helm. The operator values it uses (`helmtests/ci-operator-values.yml`) enable the webhook with cert-manager, but the script does not install cert-manager, so install it into the new k3d cluster before the operator chart (for example by running the script's steps by hand). CI installs cert-manager itself and runs these tests on every PR.
 
 Please check out the existing tests to get an idea how to structure and write them.
 

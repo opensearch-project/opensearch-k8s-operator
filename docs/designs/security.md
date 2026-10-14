@@ -44,7 +44,7 @@ spec:
         name: opensearch-securityconfig
       adminSecret:                  # Admin client certificate (tls.crt, tls.key, ca.crt). Required if HTTP certs are not generated
         name: opensearch-admin-cert
-      adminCredentialsSecret:       # username/password the operator uses. Required with a custom securityconfig
+      adminCredentialsSecret:       # Optional. username/password the operator uses. Generated as <cluster-name>-admin-password when unset
         name: opensearch-admin-credentials
       operatorClientCert:           # Optional kubernetes.io/tls secret: authenticate the operator via mTLS instead of basic auth
         name: opensearch-operator-client-cert

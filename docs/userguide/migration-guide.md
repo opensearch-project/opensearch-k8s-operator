@@ -18,7 +18,7 @@ The operator includes a migration controller that automatically handles the tran
 
 ### How Migration Works
 
-1. **Automatic Resource Creation**: When you have resources using `opensearch.opster.io/v1`, the migration controller automatically creates corresponding `opensearch.org/v1` resources with the same name and namespace. It copies the spec, labels, annotations and status once, at creation time
+1. **Automatic Resource Creation**: When you have resources using `opensearch.opster.io/v1`, the migration controller automatically creates corresponding `opensearch.org/v1` resources with the same name and namespace. It copies the spec, labels and annotations once, at creation time. Status handling differs per kind (see Status Sync below)
 2. **Readiness Check**: Migration only occurs when the old resource is in a ready status:
    - **Clusters**: Must be in `RUNNING` phase
    - **Other Resources**: Must be in `CREATED` state (not `PENDING`, `ERROR`, or `IGNORED`)
@@ -290,6 +290,9 @@ kubectl delete opensearchclusters.opensearch.opster.io my-cluster
 **Result**: The delete request is accepted, but the `opensearch.org/migration` finalizer keeps the old resource in `Terminating` because the new resource doesn't exist. The migration controller does not create the new resource from an old resource that is being deleted, so the old resource stays `Terminating` until you either:
 
 - create the `opensearch.org/v1` resource yourself (same name and namespace); the controller then removes the old resource's finalizers, or
+
+  > **Warning:** On this path the controller does not add the new cluster as an owner of the certificate Secrets (`<cluster>-ca`, `<cluster>-transport-cert`, `<cluster>-http-cert`, `<cluster>-admin-cert`), as it does during a normal migration. Once the old resource is gone, Kubernetes garbage-collects every object owned only by it, including those Secrets. Back them up first, or add the new cluster to their `ownerReferences` before the old resource's finalizers are removed.
+
 - remove the old resource's finalizers manually (`kubectl patch ... --type merge -p '{"metadata":{"finalizers":null}}'`). Only do this if you really want the old resource gone: Kubernetes then garbage-collects the objects it owns, which for an unmigrated `OpenSearchCluster` includes its StatefulSets.
 
 ### Scenario 3: Delete Old Resource (After Migration)

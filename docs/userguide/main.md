@@ -1205,7 +1205,7 @@ spec:
 
 - Exactly one volume source must be set per entry.
 - `subPath` is supported for configMap, secret, CSI and projected volumes.
-- ConfigMap, secret and projected volumes are mounted read-only. CSI and PVC volumes follow their `readOnly` field (CSI defaults to read-only). NFS volumes are always mounted read-only: `nfs.readOnly` is copied onto the volume source, and the volume mount stays read-only. emptyDir and hostPath volumes are writable.
+- ConfigMap, secret and projected volumes are mounted read-only. CSI and PVC volumes follow their `readOnly` field (CSI defaults to read-only). NFS volumes follow `nfs.readOnly`, and are writable when it is unset or `false`. emptyDir and hostPath volumes are writable.
 - `restartPods` only works for configMap and secret volumes on the OpenSearch pods: the operator restarts the pods when the content changes. It has no effect in `spec.dashboards.additionalVolumes`.
 
 #### NFS Volume Support
@@ -1221,9 +1221,28 @@ spec:
         nfs:
           server: 192.168.1.233
           path: /export/backups/opensearch
+          readOnly: false # Optional, defaults to false
 ```
 
-The mount is read-only even when `nfs.readOnly` is `false`, so OpenSearch cannot write to that path. An `fs` snapshot repository on this mount cannot create snapshots.
+This can be combined with an `fs` snapshot repository. OpenSearch only accepts `fs` repository locations listed in `path.repo`, which the operator does not set, so add it through `additionalConfig`:
+
+```yaml
+spec:
+  general:
+    additionalConfig:
+      path.repo: /mnt/backups/opensearch
+    additionalVolumes:
+      - name: nfs-backups
+        path: /mnt/backups/opensearch
+        nfs:
+          server: 192.168.1.233
+          path: /export/backups/opensearch
+    snapshotRepositories:
+      - name: nfs-repository
+        type: fs
+        settings:
+          location: /mnt/backups/opensearch
+```
 
 #### HostPath Volume Support
 
@@ -1698,7 +1717,7 @@ spec:
 ```
 
 The Operator then performs a rolling upgrade and restarts the nodes one by one. Before each node it checks cluster health. Green passes. Yellow passes once shard allocation is enabled, every data node has joined, and no shards are initializing, relocating, or waiting for delayed allocation (for example when `number_of_replicas` is higher than the number of other data nodes). Red does not pass. Depending on the number of nodes and the size of the data stored this can take some time.
-The operator skips a node that holds the only active copy of a shard that should have replicas, except in a cluster with a single data node, where there is nowhere else to keep a copy. With `drainDataNodes: true` the health check can still pass on yellow, and the node is restarted only after its shards have moved elsewhere, so replicas that have nowhere to go still block the restart.
+The operator does not restart a node that holds the only active copy of a shard that should have replicas, except in a cluster with a single data node, where there is nowhere else to keep a copy. The upgrade waits on that node until another copy of the shard is active. With `drainDataNodes: true` the health check can still pass on yellow, and the node is restarted only after its shards have moved elsewhere, so replicas that have nowhere to go still block the restart.
 With `drainDataNodes: true` and exactly two data nodes, the operator only waits for primaries of system indices (such as `.opendistro_security`) to move off a node before restarting it, since the other shards have nowhere to go.
 
 Node pools are upgraded one at a time: data-only pools first, then pools that are both data and master-eligible, then all other pools (for example dedicated cluster managers and coordinating nodes).
@@ -1740,17 +1759,17 @@ Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure d
 - `status.phase`: `PENDING` until the operator first reconciles the cluster, `RUNNING` afterwards, and `UPGRADING` during a version upgrade. `RUNNING` does not mean the cluster is healthy.
 - `status.health` (`green`, `yellow`, `red` or `unknown`) and `status.availableNodes`, as reported by OpenSearch.
 - `status.componentsStatus`: progress of ongoing operations, such as `Scaler`, `Upgrader`, `RollingRestart` and `Securityconfig` entries.
-- `status.observedGeneration` and `status.conditions`: see [Status and conditions](#status-and-conditions).
+- `status.observedGeneration` and `status.conditions`: see [Conditions](#conditions) below.
 
-The operator records Kubernetes events on the `OpenSearchCluster` (`kubectl describe opensearchcluster <name>`). The event reasons are `RollingRestart`, `Upgrade`, `Scaler`, `PVC`, `PDB`, `StatefulSetRecreated`, `DeploymentRecreated`, `BootstrapExclusionFailed`, `EmptyDirRecovery`, `Monitoring`, `Security`, `DashboardsUserUnmapped` and `ConfigDuplicateKey`.
+The operator records Kubernetes events on the `OpenSearchCluster` (`kubectl describe opensearchcluster <name>`). The event reasons include `RollingRestart`, `Upgrade`, `Scaler`, `PVC`, `PDB`, `StatefulSetRecreated`, `DeploymentRecreated`, `BootstrapExclusionFailed`, `EmptyDirRecovery`, `Monitoring`, `Security`, `DashboardsUserUnmapped` and `ConfigDuplicateKey`. With `general.snapshotRepositories` set, snapshot repository registration also records `OpensearchPending`, `OpensearchError`, `OpensearchAPIError` and `OpensearchAPIUpdated` events.
 
 A few behaviours worth knowing:
 
 - **Stuck pods:** during a rolling restart or upgrade, a pod on an old StatefulSet revision that is stuck (`CrashLoopBackOff`, `ImagePullBackOff`, `ErrImagePull`, `InvalidImageName`, or `RepeatedlyFailing` when its container keeps failing the startup probe) is deleted so it is recreated from the new template. Stuck pods on the current revision are only reported with a `Warning` event.
 - **Yellow clusters:** the health check for a rolling restart or upgrade passes on a cluster that stays yellow because some replicas can never be assigned. With `drainDataNodes: true` the node still waits until its shards have moved (see [Rolling Upgrades](#rolling-upgrades)).
-- **Securityconfig job:** if the `<cluster-name>-securityconfig-update` job fails, the operator retries it with an exponential backoff from 30 seconds up to 15 minutes.
+- **Securityconfig job:** if the `<cluster-name>-securityconfig-update` job fails, the operator retries it right away the first time, then with an exponential backoff starting at 60 seconds and capped at 15 minutes.
 
-### Status and conditions
+#### Conditions
 
 `status.observedGeneration` is the `metadata.generation` the operator last acted on, and `status.conditions` holds three standard conditions, each stamped with the generation it was computed for:
 
@@ -1854,7 +1873,7 @@ The referenced secret must be of type `kubernetes.io/tls` and contain `tls.crt` 
 
 #### Option A: reuse the operator-managed admin client cert (easiest)
 
-When `security.config.adminSecret` is empty, the operator creates an admin client certificate for its own use (running `securityadmin.sh` to apply the securityconfig), signed by the operator CA. This requires HTTP TLS with generated certificates (`generate` defaults to `false`, so set it explicitly). The certificate is stored in the secret `<cluster-name>-admin-cert`, its DN is `CN=admin,OU=<cluster-name>`, and that DN is added to `plugins.security.authcz.admin_dn`, so OpenSearch accepts it as a full-privilege admin client. `adminDn` is ignored for this generated certificate. You can simply point `operatorClientCert` at it, no new certificates or mappings required.
+When `security.config.adminSecret` is empty, the operator creates an admin client certificate for its own use (running `securityadmin.sh` to apply the securityconfig), signed by the operator-generated CA, or by the CA in `security.tls.http.caSecret` if set (`security.tls.transport.caSecret` for OpenSearch before 2.0). This requires HTTP TLS with generated certificates (`generate` defaults to `false`, so set it explicitly). The certificate is stored in the secret `<cluster-name>-admin-cert`, its DN is `CN=admin,OU=<cluster-name>`, and that DN is added to `plugins.security.authcz.admin_dn`, so OpenSearch accepts it as a full-privilege admin client. `adminDn` is ignored for this generated certificate. You can simply point `operatorClientCert` at it, no new certificates or mappings required.
 
 With HTTP TLS enabled the same secret is then also mounted into every OpenSearch node for the default probes, so every pod can read the admin private key. Prefer [Option B](#option-b-bring-your-own-client-certificate) with a certificate mapped only to `cluster:monitor/main` when you want to limit that blast radius; Option A remains fine for development or when that trade-off is acceptable:
 
@@ -1922,8 +1941,8 @@ These resources, and the ISM policy, template and snapshot policy resources furt
 
 - They must be in the namespace of the `OpenSearchCluster`. `spec.opensearchCluster.name` is immutable, and the webhook rejects a resource whose cluster does not exist yet (create the cluster first when using GitOps).
 - The operator waits until the cluster's `status.phase` is `RUNNING` before creating the object in OpenSearch.
-- `metadata.name` is the name of the object in OpenSearch. ISM policies (`policyId`) and index and component templates (`name`) can set a different name in the spec, and snapshot policies always use their required `policyName`. These name fields are immutable.
-- If an object with the same name already exists in OpenSearch and was not created by the operator, the resource's `status.state` is `IGNORED`, `status.existing*` is `true`, and the object is neither modified nor deleted. Users are the exception: the resource goes into the `ERROR` state instead.
+- `metadata.name` is the name of the object in OpenSearch. ISM policies (`policyId`) and index and component templates (`name`) can set a different name in the spec, and snapshot policies always use their required `policyName`. These name fields are immutable. User role bindings are the exception: they edit the role mappings of the roles listed in `spec.roles`.
+- If an object with the same name already exists in OpenSearch and was not created by the operator, the resource's `status.state` is `IGNORED`, `status.existing*` is `true`, and the object is neither modified nor deleted. There are two exceptions: a user resource goes into the `ERROR` state instead, and a user role binding merges into an existing role mapping (see [Linking Opensearch Users and Roles](#linking-opensearch-users-and-roles)).
 - Deleting the resource deletes the object from OpenSearch (through a finalizer), unless it was pre-existing.
 
 Fields not shown in the examples below include `attributes` and `opendistroSecurityRoles` for users; `tenantPermissions`, and `dls`, `fls` and `maskedFields` in `indexPermissions`, for roles. See the [CRD reference](../designs/crd/opensearch.org.md) for all fields.
