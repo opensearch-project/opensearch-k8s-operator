@@ -4,8 +4,6 @@ import (
 	"flag"
 	"testing"
 	"time"
-
-	ctrl "sigs.k8s.io/controller-runtime"
 )
 
 func TestParseWatchNamespacesSingle(t *testing.T) {
@@ -95,20 +93,32 @@ func TestRegisterLeaderElectionFlagsDefaults(t *testing.T) {
 	if *retryPeriod != 5*time.Second {
 		t.Fatalf("expected default retry period 5s, got %s", *retryPeriod)
 	}
+	if err := validateLeaderElectionDurations(*leaseDuration, *renewDeadline, *retryPeriod); err != nil {
+		t.Fatalf("expected defaults to be valid, got %v", err)
+	}
+}
 
-	opts := ctrl.Options{
-		LeaseDuration: leaseDuration,
-		RenewDeadline: renewDeadline,
-		RetryPeriod:   retryPeriod,
+func TestValidateLeaderElectionDurations(t *testing.T) {
+	tests := []struct {
+		name                string
+		lease, renew, retry time.Duration
+		wantErr             bool
+	}{
+		{name: "controller-runtime defaults", lease: 15 * time.Second, renew: 10 * time.Second, retry: 2 * time.Second},
+		{name: "renew equals lease", lease: 30 * time.Second, renew: 30 * time.Second, retry: 5 * time.Second, wantErr: true},
+		{name: "renew greater than lease", lease: 30 * time.Second, renew: 45 * time.Second, retry: 5 * time.Second, wantErr: true},
+		{name: "renew within jitter of retry", lease: 60 * time.Second, renew: 6 * time.Second, retry: 5 * time.Second, wantErr: true},
+		{name: "zero retry", lease: 60 * time.Second, renew: 30 * time.Second, retry: 0, wantErr: true},
 	}
-	if opts.LeaseDuration == nil || *opts.LeaseDuration != 60*time.Second {
-		t.Fatalf("expected ctrl.Options.LeaseDuration to be 60s, got %v", opts.LeaseDuration)
-	}
-	if opts.RenewDeadline == nil || *opts.RenewDeadline != 30*time.Second {
-		t.Fatalf("expected ctrl.Options.RenewDeadline to be 30s, got %v", opts.RenewDeadline)
-	}
-	if opts.RetryPeriod == nil || *opts.RetryPeriod != 5*time.Second {
-		t.Fatalf("expected ctrl.Options.RetryPeriod to be 5s, got %v", opts.RetryPeriod)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateLeaderElectionDurations(tt.lease, tt.renew, tt.retry)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("validateLeaderElectionDurations(%s, %s, %s) error = %v, wantErr %v",
+					tt.lease, tt.renew, tt.retry, err, tt.wantErr)
+			}
+		})
 	}
 }
 

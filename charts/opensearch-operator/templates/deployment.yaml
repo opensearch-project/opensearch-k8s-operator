@@ -28,9 +28,15 @@ spec:
         - --health-probe-bind-address=:8081
         - --metrics-bind-address={{ .Values.manager.metricsBindAddress }}
         - --leader-elect
-        - --leader-elect-lease-duration={{ .Values.manager.leaderElectionLeaseDuration }}
-        - --leader-elect-renew-deadline={{ .Values.manager.leaderElectionRenewDeadline }}
-        - --leader-elect-retry-period={{ .Values.manager.leaderElectionRetryPeriod }}
+        {{- with .Values.manager.leaderElectionLeaseDuration }}
+        - --leader-elect-lease-duration={{ . }}
+        {{- end }}
+        {{- with .Values.manager.leaderElectionRenewDeadline }}
+        - --leader-elect-renew-deadline={{ . }}
+        {{- end }}
+        {{- with .Values.manager.leaderElectionRetryPeriod }}
+        - --leader-elect-retry-period={{ . }}
+        {{- end }}
         - --enable-webhooks={{ .Values.webhook.enabled }}
         - --enable-legacy-api={{ include "opensearch-operator.legacyAPIEnabled" . }}
         - --webhook-port={{ .Values.webhook.port }}

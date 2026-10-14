@@ -50,6 +50,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/leaderelection"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
@@ -84,11 +85,28 @@ func registerLeaderElectionFlags(fs *flag.FlagSet) (leaseDuration, renewDeadline
 	leaseDuration = fs.Duration("leader-elect-lease-duration", 60*time.Second,
 		"The duration that non-leader candidates will wait after observing a leadership renewal until attempting to acquire leadership.")
 	renewDeadline = fs.Duration("leader-elect-renew-deadline", 30*time.Second,
-		"The interval between attempts by the acting leader to renew its leadership before it stops leading. "+
+		"The duration the acting leader keeps retrying to refresh leadership before giving it up. "+
 			"Must be less than the lease duration.")
 	retryPeriod = fs.Duration("leader-elect-retry-period", 5*time.Second,
 		"The duration the leader election clients should wait between tries of actions.")
 	return
+}
+
+// validateLeaderElectionDurations applies the same constraints client-go enforces when the
+// leader elector is built, so misconfiguration fails at startup with a flag-specific message.
+func validateLeaderElectionDurations(leaseDuration, renewDeadline, retryPeriod time.Duration) error {
+	if retryPeriod <= 0 {
+		return fmt.Errorf("--leader-elect-retry-period must be greater than zero, got %s", retryPeriod)
+	}
+	if leaseDuration <= renewDeadline {
+		return fmt.Errorf("--leader-elect-lease-duration (%s) must be greater than --leader-elect-renew-deadline (%s)",
+			leaseDuration, renewDeadline)
+	}
+	if minRenew := time.Duration(leaderelection.JitterFactor * float64(retryPeriod)); renewDeadline <= minRenew {
+		return fmt.Errorf("--leader-elect-renew-deadline (%s) must be greater than %.1f x --leader-elect-retry-period (%s)",
+			renewDeadline, leaderelection.JitterFactor, minRenew)
+	}
+	return nil
 }
 
 func init() {
@@ -177,6 +195,13 @@ func main() {
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
 
+	if enableLeaderElection {
+		if err := validateLeaderElectionDurations(*leaseDuration, *renewDeadline, *retryPeriod); err != nil {
+			setupLog.Error(err, "invalid leader election configuration")
+			os.Exit(1)
+		}
+	}
+
 	var webhookServer webhook.Server
 	if enableWebhooks {
 		webhookServer = webhook.NewServer(webhook.Options{
@@ -194,11 +219,13 @@ func main() {
 		HealthProbeBindAddress: probeAddr,
 		LeaderElection:         enableLeaderElection,
 		LeaderElectionID:       "a867c7dc.opensearch.org",
-		LeaseDuration:          leaseDuration,
-		RenewDeadline:          renewDeadline,
-		RetryPeriod:            retryPeriod,
-		Cache:                  cacheOpts,
-		WebhookServer:          webhookServer,
+		// Requires main to exit as soon as mgr.Start returns; no work may run after the lease is released.
+		LeaderElectionReleaseOnCancel: true,
+		LeaseDuration:                 leaseDuration,
+		RenewDeadline:                 renewDeadline,
+		RetryPeriod:                   retryPeriod,
+		Cache:                         cacheOpts,
+		WebhookServer:                 webhookServer,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
