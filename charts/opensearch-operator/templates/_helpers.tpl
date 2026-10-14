@@ -76,3 +76,27 @@ true
 true
 {{- end -}}
 {{- end }}
+
+{{/*
+ClusterRole rules for scraping the operator /metrics non-resource URL.
+*/}}
+{{- define "opensearch-operator.metricsClusterRoleRules" -}}
+- nonResourceURLs:
+  - /metrics
+  verbs:
+  - get
+{{- end }}
+
+{{/*
+Name of the ClusterRole that grants GET /metrics for Prometheus scraping.
+*/}}
+{{- define "opensearch-operator.metricsClusterRoleName" -}}
+{{- default (printf "%s-metrics" (include "opensearch-operator.fullname" .)) .Values.serviceMonitor.rbac.clusterRoleName -}}
+{{- end }}
+
+{{/*
+Name of the ClusterRoleBinding for the scraper ServiceAccount.
+*/}}
+{{- define "opensearch-operator.metricsReaderClusterRoleBindingName" -}}
+{{- default (printf "%s-metrics-reader" (include "opensearch-operator.fullname" .)) .Values.serviceMonitor.rbac.clusterRoleBindingName -}}
+{{- end }}
