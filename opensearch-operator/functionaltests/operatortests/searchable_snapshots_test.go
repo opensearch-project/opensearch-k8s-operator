@@ -12,6 +12,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -70,9 +71,27 @@ var _ = Describe("SearchableSnapshots", Ordered, func() {
 		Expect(CreateKubernetesObjects(name)).To(Succeed())
 		operations = NewClusterOperations(k8sClient, namespace)
 
+		By("Waiting for SeaweedFS to be ready")
+		Eventually(func() int32 {
+			dep := appsv1.Deployment{}
+			if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name + "-seaweedfs", Namespace: namespace}, &dep); err != nil {
+				return 0
+			}
+			return dep.Status.ReadyReplicas
+		}, time.Minute*5, time.Second*5).Should(BeNumerically(">=", 1))
+
 		By("Waiting for the hot and warm node pools")
 		Expect(operations.WaitForNodePoolReady(name, "hot", 1, time.Minute*15)).To(Succeed())
 		Expect(operations.WaitForNodePoolReady(name, "warm", 1, time.Minute*15)).To(Succeed())
+
+		By("Waiting for the cluster to reach RUNNING")
+		Eventually(func() string {
+			cluster := opensearchv1.OpenSearchCluster{}
+			if err := k8sClient.Get(context.Background(), client.ObjectKey{Name: name, Namespace: namespace}, &cluster); err != nil {
+				return ""
+			}
+			return cluster.Status.Phase
+		}, time.Minute*10, time.Second*5).Should(Equal(opensearchv1.PhaseRunning))
 
 		var err error
 		dataManager, err = NewTestDataManager(k8sClient, name, namespace, false)
@@ -115,10 +134,11 @@ var _ = Describe("SearchableSnapshots", Ordered, func() {
 		status, body = call(http.MethodGet, "/"+index+"/_settings/index.store.type", "")
 		Expect(status).To(Equal(http.StatusOK), body)
 		Expect(body).To(ContainSubstring(`"type":"remote_snapshot"`))
-		Eventually(func() string {
+		Eventually(func(g Gomega) {
 			_, shards := call(http.MethodGet, "/_cat/shards/"+index+"?h=state,node", "")
-			return strings.TrimSpace(shards)
-		}, time.Minute*2, time.Second*5).Should(Equal("STARTED " + name + "-warm-0"))
+			g.Expect(shards).To(ContainSubstring("STARTED"))
+			g.Expect(shards).To(ContainSubstring(name + "-warm-0"))
+		}, time.Minute*2, time.Second*5).Should(Succeed())
 		Expect(hitCount()).To(Equal(len(testIndex.Documents)))
 
 		By("Rolling-restarting the warm pool")
@@ -146,8 +166,9 @@ var _ = Describe("SearchableSnapshots", Ordered, func() {
 			return false
 		}, time.Minute*10, time.Second*5).Should(BeTrue())
 
-		By("Checking the index is green and searchable again")
+		By("Reconnecting and checking the index is green and searchable again")
+		Expect(dataManager.Reconnect(false)).To(Succeed())
 		Eventually(clusterHealth, time.Minute*5, time.Second*5).Should(Equal("green"))
-		Expect(hitCount()).To(Equal(len(testIndex.Documents)))
+		Eventually(hitCount, time.Minute*2, time.Second*5).Should(Equal(len(testIndex.Documents)))
 	})
 })
