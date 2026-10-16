@@ -398,6 +398,10 @@ func NewSTSForNodePool(
 		labels["opensearch.role"] = "cluster_manager"
 	}
 
+	if cr.Spec.General.RoleServices {
+		labels[helpers.ClusterManagerLabel] = strconv.FormatBool(helpers.HasManagerRole(&node))
+	}
+
 	// cr.Spec.NodePool.labels
 	for k, v := range node.Labels {
 		labels[k] = v
@@ -1062,6 +1066,36 @@ func NewServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 			Type:     "",
 		},
 	}
+}
+
+// CoordinatingServiceName returns the name of the Service for the pods without the cluster_manager role.
+func CoordinatingServiceName(cr *opensearchv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s-coordinating", cr.Spec.General.ServiceName)
+}
+
+// ClusterManagerServiceName returns the name of the Service for the pods with the cluster_manager role.
+func ClusterManagerServiceName(cr *opensearchv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s-cluster-manager", cr.Spec.General.ServiceName)
+}
+
+// NewRoleServiceForCR builds the Service for the pods with (true) or without (false) the cluster_manager role.
+func NewRoleServiceForCR(cr *opensearchv1.OpenSearchCluster, clusterManager bool) *corev1.Service {
+	service := NewServiceForCR(cr)
+	service.Name = CoordinatingServiceName(cr)
+	if clusterManager {
+		service.Name = ClusterManagerServiceName(cr)
+	}
+	for _, port := range service.Spec.Ports {
+		if port.Name == "http" {
+			service.Spec.Ports = []corev1.ServicePort{port}
+			break
+		}
+	}
+	service.Spec.Selector = map[string]string{
+		helpers.ClusterLabel:        cr.Name,
+		helpers.ClusterManagerLabel: strconv.FormatBool(clusterManager),
+	}
+	return service
 }
 
 func NewDiscoveryServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {

@@ -1030,3 +1030,38 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 		Expect(event).To(ContainSubstring("secret unavailable"))
 	})
 })
+
+var _ = Describe("Role services reconciliation", func() {
+	serviceNamed := func(name string) any {
+		return mock.MatchedBy(func(obj runtime.Object) bool {
+			svc, ok := obj.(*corev1.Service)
+			return ok && svc.Name == name
+		})
+	}
+
+	DescribeTable("should create or remove the coordinating and cluster manager services",
+		func(enabled bool, state reconciler.DesiredState) {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			instance := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "role-services", Namespace: "test-namespace"},
+				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{
+					ServiceName: "role-services", RoleServices: enabled,
+				}},
+			}
+			underTest := &ClusterReconciler{client: mockClient, instance: instance}
+
+			if enabled {
+				mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			}
+			mockClient.EXPECT().ReconcileResource(serviceNamed(builders.CoordinatingServiceName(instance)), state).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().ReconcileResource(serviceNamed(builders.ClusterManagerServiceName(instance)), state).Return(&ctrl.Result{}, nil)
+
+			result := reconciler.CombinedResult{}
+			underTest.reconcileRoleServices(&result)
+
+			Expect(result.Err).NotTo(HaveOccurred())
+		},
+		Entry("enabled", true, reconciler.StatePresent),
+		Entry("disabled", false, reconciler.StateAbsent),
+	)
+})

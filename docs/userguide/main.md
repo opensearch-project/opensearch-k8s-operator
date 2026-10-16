@@ -1651,6 +1651,28 @@ spec:
 If you want to expose the REST API of OpenSearch outside your Kubernetes cluster, the recommended way is to do this via ingress.
 Internally you should use self-signed certificates (you can let the operator generate them), and then let the ingress use a certificate from an accepted CA (for example LetsEncrypt or a company-internal CA). That way you do not have the hassle of supplying custom certificates to the opensearch cluster but your users still see valid certificates.
 
+### Keeping client traffic off cluster manager nodes
+
+The main Service selects every pod, so dedicated cluster manager nodes also coordinate client requests.
+Set `roleServices: true` to get two extra ClusterIP Services:
+
+```yaml
+spec:
+  general:
+    roleServices: true
+```
+
+* `<serviceName>-coordinating` selects the pods without the `cluster_manager` role. Point your Ingress and clients at it.
+* `<serviceName>-cluster-manager` selects the pods with the `cluster_manager` role.
+
+Notes:
+
+* Both Services get the annotations from `spec.general.annotations`, like the main Service.
+* Do not name a node pool `coordinating` or `cluster-manager`. Its headless Service would have the same name.
+* The operator adds the label `opensearch.org/opensearch-cluster-manager: "true"` or `"false"` to every OpenSearch pod. Changing `roleServices` changes this label, so it causes one rolling restart.
+* This only helps if you have a dedicated cluster manager node pool. If every pool has the `cluster_manager` role, the coordinating Service has no endpoints.
+* The generated HTTP certificate does not list these Service names. Clients that verify the hostname will fail. Most Ingress controllers do not verify the backend certificate by default.
+
 ### Customizing probe timeouts and thresholds
 
 If the nodes take longer to start than the probes allow and get restarted, you can configure the probe timeouts and thresholds per node pool:

@@ -1466,6 +1466,52 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("building role services", func() {
+		clusterWithRoleServices := func(enabled bool) opensearchv1.OpenSearchCluster {
+			return opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "opensearch", Namespace: "opensearch"},
+				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{
+					ServiceName: "opensearch", HttpPort: 9200, RoleServices: enabled,
+				}},
+			}
+		}
+
+		It("should select the pods by cluster_manager role", func() {
+			cluster := clusterWithRoleServices(true)
+			coordinating := NewRoleServiceForCR(&cluster, false)
+			clusterManager := NewRoleServiceForCR(&cluster, true)
+
+			Expect(coordinating.Name).To(Equal(CoordinatingServiceName(&cluster)))
+			Expect(coordinating.Name).To(Equal("opensearch-coordinating"))
+			Expect(coordinating.Spec.Selector).To(Equal(map[string]string{
+				helpers.ClusterLabel:        "opensearch",
+				helpers.ClusterManagerLabel: "false",
+			}))
+			Expect(coordinating.Spec.Ports).To(HaveLen(1))
+			Expect(coordinating.Spec.Ports[0].Port).To(Equal(int32(9200)))
+			Expect(coordinating.Labels).NotTo(HaveKey(helpers.ClusterManagerLabel))
+			Expect(clusterManager.Name).To(Equal(ClusterManagerServiceName(&cluster)))
+			Expect(clusterManager.Name).To(Equal("opensearch-cluster-manager"))
+			Expect(clusterManager.Spec.Selector).To(HaveKeyWithValue(helpers.ClusterManagerLabel, "true"))
+		})
+
+		It("should label the pods by cluster_manager role only when enabled", func() {
+			enabled := clusterWithRoleServices(true)
+			disabled := clusterWithRoleServices(false)
+			managers := opensearchv1.NodePool{Component: "masters", Roles: []string{"cluster_manager"}}
+			data := opensearchv1.NodePool{Component: "data", Roles: []string{"data", "ingest"}}
+
+			managerSts := NewSTSForNodePool("foobar", &enabled, managers, "foobar", nil, nil)
+			dataSts := NewSTSForNodePool("foobar", &enabled, data, "foobar", nil, nil)
+			disabledSts := NewSTSForNodePool("foobar", &disabled, data, "foobar", nil, nil)
+
+			Expect(managerSts.Spec.Template.Labels).To(HaveKeyWithValue(helpers.ClusterManagerLabel, "true"))
+			Expect(dataSts.Spec.Template.Labels).To(HaveKeyWithValue(helpers.ClusterManagerLabel, "false"))
+			Expect(dataSts.Spec.Selector.MatchLabels).NotTo(HaveKey(helpers.ClusterManagerLabel))
+			Expect(disabledSts.Spec.Template.Labels).NotTo(HaveKey(helpers.ClusterManagerLabel))
+		})
+	})
+
 	When("Using custom probe timeouts and thresholds for OpenSearch startup", func() {
 		It("should have default probes timeouts and thresholds", func() {
 			clusterObject := ClusterDescWithVersion("2.7.0")

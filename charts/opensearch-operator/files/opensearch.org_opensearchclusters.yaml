@@ -5192,6 +5192,12 @@ spec:
                             type: string
                         type: object
                     type: object
+                  roleServices:
+                    description: |-
+                      RoleServices creates the Services {serviceName}-coordinating (pods without the
+                      cluster_manager role) and {serviceName}-cluster-manager (pods with it). Toggling it changes a pod label,
+                      which causes one rolling restart.
+                    type: boolean
                   securityContext:
                     description: Set security context for the cluster pods' container
                     properties:
