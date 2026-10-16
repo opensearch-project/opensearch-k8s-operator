@@ -79,6 +79,8 @@ The Reconcilers and Components communicate via a `ReconcilerContext` that is pas
 
 The OpenSearch Reconciler retrieves the current custom resource, based on the ID, from Kubernetes (using its API) and checks to see whether it was deleted (by checking if the custom resource has deletion timestamp field in it). If it was, it calls `DeleteResources` function on all Reconcilers in the chain, then it removes the Finalizer that was placed on the custom resource. All Kubernetes objects created by the operator are using [Owner Reference](https://kubernetes.io/blog/2021/05/14/using-finalizers-to-control-deletion/#owner-references) to the custom resource, thus are deleted in a cascading fashion by Kubernetes once the finalizer has been removed. The `DeleteResources` function, each Reconciler can implement, has the goal of cleaning up any resources that can not be cleaned using the Owner Reference mechanism. 
 
+Controllers write to a user's `OpenSearchCluster` through the status subresource or a metadata patch (`patchMetadata` in `controllers/opensearchController.go`), not a full-object `Update`. An `Update` makes the operator a field manager of `spec`, and the user's next server-side apply (Helm 4 by default) then fails with a conflict.
+
 If it was created or updated, the OpenSearch Reconciler uses the retrieved custom resource YAML to parse it and produces a data structure representing it. It then executes the chain of Reconcilers, passing the Custom Resource data structure as main input.
 
 Each Reconciler executes and returns a special Result structure, that says two things:

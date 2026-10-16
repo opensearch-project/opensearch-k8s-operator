@@ -32,6 +32,10 @@ helm repo update
 helm upgrade [RELEASE_NAME] opensearch-operator/opensearch-cluster
 ```
 
+### Helm 4 server-side apply
+
+The operator only patches `metadata.finalizers` (and annotations used for the API group migration) on an `OpenSearchCluster`, so Helm stays the field manager of `spec` and Helm 4 server-side apply upgrades go through. Clusters reconciled by an older operator may already list the operator's field manager (`manager`) as owner of spec fields. The first upgrade of such a cluster fails with `conflict with "manager"`; run it once with `helm upgrade --force-conflicts`.
+
 ## Configuring OpenSearch Cluster
 
 By default, the installation will deploy a node pool consisting of three master nodes with the dashboard enabled. For the entire configuration, check [helm chart values](../../charts/opensearch-cluster/values.yaml).
