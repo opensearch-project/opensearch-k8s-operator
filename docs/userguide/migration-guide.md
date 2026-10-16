@@ -72,15 +72,13 @@ For each recreated StatefulSet the operator emits a `Warning` event with reason 
 
 ### Removal of the bootstrap pod
 
-Older operator versions started a dedicated `{cluster}-bootstrap-0` bare pod to form the cluster, then tore it down once `status.initialized` flipped. The operator now bootstraps via the first pod of each cluster-manager node pool (`cluster.initial_master_nodes` is set to those pod names).
+Older operator versions started a dedicated `{cluster}-bootstrap-0` bare pod to form the cluster, then tore it down once `status.initialized` flipped. The operator now bootstraps via pod-0 of each cluster-manager node pool that has at least one replica (`cluster.initial_master_nodes` is set to those pod names). A pool scaled to zero is not listed.
 
 Upgrading to an operator build that includes this change:
 
-- Deletes any leftover `{cluster}-bootstrap-0` pod and `{cluster}-bootstrap-data` PVC. Before deleting the pod the operator adds a voting-config exclusion so small master pools do not lose quorum.
-- Changes `cluster.initial_master_nodes` on every node pool StatefulSet from the old bootstrap name to the manager pool-0 names. That env change is picked up by the rolling restart reconciler, so **every existing cluster goes through one managed rolling restart**.
-- Ignores any remaining `spec.bootstrap` fields in applied manifests (the field is removed from the CRD). Move plugins, keystore entries, hostAliases, affinity, and initContainers onto `spec.general` / `spec.nodePools` before upgrading if you relied on them only under `bootstrap`.
-
-Plan the restart the same way as the 2.x→3.x restart above (replicas on every index, time proportional to cluster size).
+- Deletes any leftover `{cluster}-bootstrap-0` pod and `{cluster}-bootstrap-data` PVC only after `status.initialized` is true. If the pod is still a cluster member, the operator adds a voting-config exclusion and deletes it only once the committed voting configuration lists some other node and not the bootstrap pod. Until then the pod is kept and the operator emits a `BootstrapExclusionFailed` warning. While that pod still exists and the cluster is not initialized, StatefulSets keep `cluster.initial_master_nodes` set to the bootstrap pod name so the forming cluster is not split.
+- Leaves `cluster.initial_master_nodes` unchanged on StatefulSets that already exist once the cluster is initialized, and omits it on pools created after that. An upgrade therefore does not by itself roll existing nodes for this setting.
+- Still accepts `spec.bootstrap` in applied manifests. The field is deprecated and ignored, and will be removed in v4. It stays in the CRD so `kubectl apply` (strict validation since Kubernetes 1.27) does not reject existing manifests. Move plugins, keystore entries, hostAliases, affinity, and initContainers onto `spec.general` / `spec.nodePools`; values left under `bootstrap` have no effect.
 
 ### Resource Readiness Requirements
 

@@ -640,8 +640,15 @@ var _ = Describe("Legacy bootstrap cleanup", func() {
 		transport := httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		registerOsPingResponders(transport, instance)
-		registerCatNodesSequence(transport, []string{builders.BootstrapPodName(instance)}, []string{})
+		// NodeInCluster runs twice before the pod is deleted: once here, and once
+		// inside AddVotingConfigExclusion. The third response is the post-delete clear.
+		registerCatNodesSequence(transport,
+			[]string{builders.BootstrapPodName(instance)},
+			[]string{builders.BootstrapPodName(instance)},
+			[]string{},
+		)
 		registerVotingExclusionsState(transport, builders.BootstrapPodName(instance))
+		registerCommittedVotingConfig(transport, clusterName+"-masters-0")
 		calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
 
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -667,13 +674,45 @@ var _ = Describe("Legacy bootstrap cleanup", func() {
 		mockClient.AssertNumberOfCalls(GinkgoT(), "ReconcileResource", 2)
 	})
 
-	It("Should POST, delete resources and leave the clear to the scaler sweep while the bootstrap node is still a member", func() {
+	It("Should POST and keep the pod while the bootstrap node is still a committed voter", func() {
 		instance := newCluster()
 		bootstrapPod := legacyBootstrapPod(instance)
 		transport := httpmock.NewMockTransport()
 		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
 		registerOsPingResponders(transport, instance)
 		registerCatNodesResponder(transport, builders.BootstrapPodName(instance))
+		registerCommittedVotingConfig(transport, builders.BootstrapPodName(instance))
+		calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
+		recorder := record.NewFakeRecorder(1)
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockScalerAdminSecret(mockClient, clusterName, clusterNamespace)
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+
+		underTest := &ClusterReconciler{
+			client:            mockClient,
+			ctx:               context.Background(),
+			instance:          instance,
+			logger:            logr.Discard(),
+			recorder:          recorder,
+			osClientTransport: transport,
+		}
+		result, err := underTest.cleanupLegacyBootstrapResources()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result.RequeueAfter).To(Equal(10 * time.Second))
+		Expect(*calls).To(Equal([]string{"POST node_names=" + builders.BootstrapPodName(instance) + "&timeout=10s"}))
+		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
+		Expect(recorder.Events).To(Receive(ContainSubstring("BootstrapExclusionFailed")))
+	})
+
+	It("Should delete a bootstrap pod that is not a cluster member once the cluster is initialized", func() {
+		instance := newCluster()
+		bootstrapPod := legacyBootstrapPod(instance)
+		transport := httpmock.NewMockTransport()
+		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+		registerOsPingResponders(transport, instance)
+		registerCatNodesResponder(transport)
 		calls := recordVotingConfigCalls(transport, http.StatusOK, http.StatusOK)
 
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
@@ -692,7 +731,29 @@ var _ = Describe("Legacy bootstrap cleanup", func() {
 
 		Expect(err).NotTo(HaveOccurred())
 		Expect(result).To(Equal(&ctrl.Result{}))
-		Expect(*calls).To(Equal([]string{"POST node_names=" + builders.BootstrapPodName(instance) + "&timeout=10s"}))
+		Expect(*calls).To(BeEmpty())
+		mockClient.AssertNumberOfCalls(GinkgoT(), "ReconcileResource", 2)
+	})
+
+	It("Should keep the bootstrap pod and PVC until the cluster is initialized", func() {
+		instance := newCluster()
+		instance.Status.Initialized = false
+		bootstrapPod := legacyBootstrapPod(instance)
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			ctx:      context.Background(),
+			instance: instance,
+			logger:   logr.Discard(),
+		}
+		result, err := underTest.cleanupLegacyBootstrapResources()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(&ctrl.Result{}))
+		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
 	})
 
 	It("Should leave the bootstrap pod and not fail the reconciler if the voting-config POST fails", func() {

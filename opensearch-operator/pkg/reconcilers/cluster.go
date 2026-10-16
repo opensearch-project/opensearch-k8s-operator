@@ -188,12 +188,17 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	bootstrapPodExists, err := r.legacyBootstrapPodExists()
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
 	for _, nodePool := range r.instance.Spec.NodePools {
 		headlessService := builders.NewHeadlessServiceForNodePool(r.instance, &nodePool)
 		result.CombineErr(ctrl.SetControllerReference(r.instance, headlessService, r.client.Scheme()))
 		result.Combine(r.client.ReconcileResource(headlessService, reconciler.StatePresent))
 
-		result.Combine(r.reconcileNodeStatefulSet(nodePool, username))
+		result.Combine(r.reconcileNodeStatefulSet(nodePool, username, bootstrapPodExists))
 	}
 
 	// if Version isn't set we set it now to check for upgrades later.
@@ -212,7 +217,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodePool, username string) (*ctrl.Result, error) {
+func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodePool, username string, bootstrapPodExists bool) (*ctrl.Result, error) {
 	found, nodePoolConfig := r.reconcilerContext.fetchNodePoolHash(nodePool.Component)
 
 	// If config hasn't been set up for the node pool requeue
@@ -269,6 +274,17 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 		volumes,
 		volumeMounts,
 	)
+	preExisting, getErr := r.client.GetStatefulSet(sts.Name, sts.Namespace)
+	if getErr != nil && !k8serrors.IsNotFound(getErr) {
+		return &ctrl.Result{}, getErr
+	}
+	var existingValue string
+	var hasExistingValue bool
+	if getErr == nil && len(preExisting.Spec.Template.Spec.Containers) > 0 {
+		existingValue, hasExistingValue = builders.InitialMasterNodesFromEnv(preExisting.Spec.Template.Spec.Containers[0].Env)
+	}
+	initialMasters, includeInitialMasters := builders.ResolveInitialMasterNodes(r.instance, existingValue, hasExistingValue, bootstrapPodExists)
+	builders.ApplyInitialMasterNodesEnv(sts, initialMasters, includeInitialMasters)
 	if err := ctrl.SetControllerReference(r.instance, sts, r.client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
 	}
@@ -279,11 +295,16 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 		return result, err
 	}
 
-	// Next get the existing statefulset
-	existing, err := r.client.GetStatefulSet(sts.Name, sts.Namespace)
-
-	if err != nil {
-		return result, err
+	// Next get the existing statefulset. Reuse the pre-create read when the
+	// object was already there; StateCreated does not update an existing one.
+	var existing appsv1.StatefulSet
+	if getErr == nil {
+		existing = preExisting
+	} else {
+		existing, err = r.client.GetStatefulSet(sts.Name, sts.Namespace)
+		if err != nil {
+			return result, err
+		}
 	}
 
 	// Fix selector.matchLabels (issue #311), need to recreate the STS for it as spec.selector is immutable
@@ -393,17 +414,31 @@ func (r *ClusterReconciler) reconcileNodeAttributesRBAC(result *reconciler.Combi
 	return true
 }
 
+// legacyBootstrapPodExists reports whether an older operator's bootstrap pod is still present.
+func (r *ClusterReconciler) legacyBootstrapPodExists() (bool, error) {
+	_, err := r.client.GetPod(builders.BootstrapPodName(r.instance), r.instance.Namespace)
+	if k8serrors.IsNotFound(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
 // cleanupLegacyBootstrapResources removes leftover bootstrap pods/PVCs left by older
 // operator versions that used a dedicated bootstrap pod. Newer operators bootstrap via
 // cluster-manager StatefulSet pods, so these resources are never recreated.
 //
-// When the pod still exists it is excluded from the voting configuration before deletion
-// so small master pools do not lose quorum. Client/POST failures return RequeueAfter
-// without an error so the rest of the reconcile chain can still run.
+// Nothing is deleted until the cluster is initialized. A pod that is still a cluster
+// member is excluded from the voting configuration and deleted only after the committed
+// voting configuration lists some other node and not the bootstrap pod. Client failures
+// return RequeueAfter without an error so the rest of the reconcile chain can still run.
 func (r *ClusterReconciler) cleanupLegacyBootstrapResources() (*ctrl.Result, error) {
+	nodeName := builders.BootstrapPodName(r.instance)
 	bootstrapPod := &corev1.Pod{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      builders.BootstrapPodName(r.instance),
+			Name:      nodeName,
 			Namespace: r.instance.Namespace,
 		},
 	}
@@ -415,24 +450,49 @@ func (r *ClusterReconciler) cleanupLegacyBootstrapResources() (*ctrl.Result, err
 	}
 
 	_, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
-	if k8serrors.IsNotFound(err) {
-		// Pod already gone; still drop any orphaned PVC from older operators.
+	if err != nil && !k8serrors.IsNotFound(err) {
+		return &ctrl.Result{}, err
+	}
+	podExists := err == nil
+
+	// The pod or its PVC may still be the only copy of cluster state. Leave both
+	// until a real node pool has formed the cluster.
+	if !r.instance.Status.Initialized {
+		return &ctrl.Result{}, nil
+	}
+	if !podExists {
 		return r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent)
 	}
-	if err != nil {
-		return &ctrl.Result{}, err
+
+	hold := func(cause error) (*ctrl.Result, error) {
+		r.logger.Error(cause, "Keeping legacy bootstrap pod until it can leave the voting configuration", "pod", nodeName)
+		r.warnLegacyBootstrapHeld(nodeName, cause)
+		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 	if err != nil {
-		r.logger.Error(err, "Failed to create OpenSearch client before legacy bootstrap removal; will retry")
-		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		return hold(err)
 	}
 
-	nodeName := builders.BootstrapPodName(r.instance)
-	if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
-		r.logger.Error(err, "Failed to add voting config exclusion for legacy bootstrap pod; will retry", "pod", nodeName)
-		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+	present, err := services.NodeInCluster(clusterClient, nodeName)
+	if err != nil {
+		return hold(err)
+	}
+
+	if present {
+		if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
+			return hold(err)
+		}
+		cfg, err := clusterClient.GetCommittedVotingConfig(r.ctx)
+		if err != nil {
+			return hold(err)
+		}
+		if !services.BootstrapLeftVotingConfig(cfg, nodeName) {
+			r.logger.Info("Legacy bootstrap node is still a committed voter; keeping the pod", "pod", nodeName)
+			r.warnLegacyBootstrapHeld(nodeName, fmt.Errorf("voting configuration still includes %s", nodeName))
+			return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
+		}
 	}
 
 	result, err := r.client.ReconcileResource(bootstrapPod, reconciler.StateAbsent)
@@ -444,12 +504,15 @@ func (r *ClusterReconciler) cleanupLegacyBootstrapResources() (*ctrl.Result, err
 	// OpenSearch's 30s wait_for_removal deadline. Clear only once the node has
 	// left; otherwise the scaler's voting-config exclusion sweep clears it on a
 	// later pass. Never clear without wait here: that can re-admit a still-alive
-	// voter. Failures do not fail the reconciler chain.
-	cleared, clearErr := services.ClearVotingConfigExclusionsIfNodeGone(clusterClient, r.logger, nodeName)
-	if clearErr != nil {
-		r.logger.Error(clearErr, "Failed to clear voting config exclusions after legacy bootstrap removal; the scaler sweep retries", "pod", nodeName)
-	} else if !cleared {
-		r.logger.Info("Legacy bootstrap node still leaving; its voting config exclusion is cleared by the scaler sweep", "pod", nodeName)
+	// voter. Failures do not fail the reconciler chain. A node that was never a
+	// member was not excluded, so there is nothing to clear.
+	if present {
+		cleared, clearErr := services.ClearVotingConfigExclusionsIfNodeGone(clusterClient, r.logger, nodeName)
+		if clearErr != nil {
+			r.logger.Error(clearErr, "Failed to clear voting config exclusions after legacy bootstrap removal; the scaler sweep retries", "pod", nodeName)
+		} else if !cleared {
+			r.logger.Info("Legacy bootstrap node still leaving; its voting config exclusion is cleared by the scaler sweep", "pod", nodeName)
+		}
 	}
 
 	pvcResult, pvcErr := r.client.ReconcileResource(bootstrapPVC, reconciler.StateAbsent)
@@ -457,8 +520,18 @@ func (r *ClusterReconciler) cleanupLegacyBootstrapResources() (*ctrl.Result, err
 		return pvcResult, pvcErr
 	}
 
-	r.logger.Info("Removed legacy bootstrap resources after voting config exclusion", "pod", nodeName)
+	r.logger.Info("Removed legacy bootstrap resources", "pod", nodeName)
 	return result, nil
+}
+
+// warnLegacyBootstrapHeld surfaces a held bootstrap pod on the cluster, since
+// the retry is otherwise only visible in the operator log.
+func (r *ClusterReconciler) warnLegacyBootstrapHeld(podName string, err error) {
+	if r.recorder == nil {
+		return
+	}
+	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "BootstrapExclusionFailed",
+		"Keeping bootstrap pod %s until a non-bootstrap node is in the voting configuration, retrying in 10s: %v", podName, err)
 }
 
 // isImmutableFieldChangeError checks if an error is due to immutable field changes in StatefulSet
@@ -872,17 +945,4 @@ func (r *ClusterReconciler) updateOrphanedPodLabels(oldSTS *appsv1.StatefulSet, 
 	}
 
 	return nil
-}
-
-// UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
-func (r *ClusterReconciler) UpdateClusterStatus() error {
-	health, healthResponse := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
-	availableNodes := util.GetAvailableOpenSearchNodes(r.client, r.ctx, r.instance, r.logger)
-
-	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
-
-	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
-		instance.Status.Health = health
-		instance.Status.AvailableNodes = availableNodes
-	})
 }

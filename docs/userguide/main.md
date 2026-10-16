@@ -126,7 +126,7 @@ spec:
         - "data"
 ```
 
-Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. The cluster-manager nodes themselves bootstrap the cluster (via `cluster.initial_master_nodes` pointing at the first pod of each manager pool). Three pods for the OpenSearch cluster will be created (`my-first-cluster-masters-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
+Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. The cluster-manager nodes themselves bootstrap the cluster (via `cluster.initial_master_nodes` pointing at pod-0 of each manager pool that has at least one replica). Three pods for the OpenSearch cluster will be created (`my-first-cluster-masters-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
 
 Run `kubectl port-forward svc/my-first-cluster-dashboards 5601`, then open [http://localhost:5601](http://localhost:5601). This cluster does not configure TLS, so the security plugin is off and Dashboards does not ask you to log in.
 Alternatively, if you want to access the OpenSearch REST API, run: `kubectl port-forward svc/my-first-cluster 9200`. Then open a second terminal and run: `curl http://localhost:9200/_cat/nodes?v`. You should see the three deployed pods listed. The API does not require credentials.
@@ -497,7 +497,7 @@ If replicas are set back before a scale-down finishes, the operator removes the 
 
 #### Removing master-eligible nodes
 
-Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time regardless of the SmartScaler setting, following the sequence OpenSearch documents for shrinking the voting configuration: the node is first added to the cluster's voting configuration exclusions (`POST /_cluster/voting_config_exclusions`), which blocks until it has left the voting configuration, then its pod is removed, and once every excluded node has left the cluster the exclusions list is cleared (`DELETE /_cluster/voting_config_exclusions?wait_for_removal=true`). With SmartScaler off only this voting step is performed; the shard drain remains opt-in. The same steps apply when a whole master-eligible node pool is removed from `spec.nodePools`. After upgrading from an older operator that still used a dedicated bootstrap pod, leftover `{cluster}-bootstrap-0` pods are cleaned up with the same voting-exclusion sequence.
+Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time regardless of the SmartScaler setting, following the sequence OpenSearch documents for shrinking the voting configuration: the node is first added to the cluster's voting configuration exclusions (`POST /_cluster/voting_config_exclusions`), which blocks until it has left the voting configuration, then its pod is removed, and once every excluded node has left the cluster the exclusions list is cleared (`DELETE /_cluster/voting_config_exclusions?wait_for_removal=true`). With SmartScaler off only this voting step is performed; the shard drain remains opt-in. The same steps apply when a whole master-eligible node pool is removed from `spec.nodePools`. After upgrading from an older operator that still used a dedicated bootstrap pod, a leftover `{cluster}-bootstrap-0` pod is kept until the cluster is initialized. If it is still a cluster member, it is excluded from the voting configuration and deleted only once some other node is a committed voter and the bootstrap pod is not. Until then the operator retries every 10 seconds and emits a `BootstrapExclusionFailed` warning.
 
 The exclusions list is cluster-wide and can only be cleared as a whole. The waiting clear is held until no excluded node is still a member, because OpenSearch waits for all of them and that wait shares the operator's 30s client deadline. If a master scale-down is reverted while its target node is still excluded, the operator clears the list without waiting so that node can vote again, then immediately re-adds an exclusion for every other node that is still being removed, including one whose StatefulSet has already shrunk. On every reconcile the operator also clears exclusions that no removal owns any more, for example after an operator restart mid-removal, and emits a `Warning` event when it finds a live node that was left excluded. The admission webhook rejects clusters whose master-eligible pools would have fewer than one replica in total (see [webhooks](webhooks.md)).
 
@@ -1555,7 +1555,7 @@ spec:
 
 ### Customize startup and readiness probe command
 
-By default the liveness and startup probes are TCP socket checks on the HTTP port (so nodes can become Started before `securityadmin` has run). The readiness probe uses the OpenSearch API with an authenticated curl.
+By default the liveness and startup probes are TCP socket checks on the HTTP port (so nodes can become Started before `securityadmin` has run). The readiness probe uses the OpenSearch API with curl, authenticating with the admin credentials, or with the [operator client certificate](#authenticating-the-operator-to-opensearch-with-mtls-client-certificate) when one is set and HTTP TLS is enabled. If you disable basic auth (`http_enabled: false`) without setting `operatorClientCert`, override the readiness probe command below (for example with a TCP check) or the pods never become ready.
 
 If you need to customize the startup or readiness probe commands you can override them as shown below. Setting `probes.startup.command` switches that probe from TCP to Exec:
 
@@ -2064,7 +2064,7 @@ roles_mapping.yml: |-
 
 ### Security Plugin Disabled
 
-When no TLS is configured, the security plugin is disabled. The operator sets `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN` on the OpenSearch nodes and the bootstrap pod, and `DISABLE_SECURITY_DASHBOARDS_PLUGIN` on Dashboards. The cluster serves plain HTTP with no authentication. Password management works differently:
+When no TLS is configured, the security plugin is disabled. The operator sets `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN` on the OpenSearch nodes, and `DISABLE_SECURITY_DASHBOARDS_PLUGIN` on Dashboards. The cluster serves plain HTTP with no authentication. Password management works differently:
 
 **Admin User:**
 - You can now set a custom password for the admin user by providing `adminCredentialsSecret` with your desired password

@@ -447,7 +447,9 @@ func NewSTSForNodePool(
 		probeAuth = "--cert /mnt/operator-client-cert/tls.crt --key /mnt/operator-client-cert/tls.key"
 	}
 	probeCurl := fmt.Sprintf("curl -k %s --silent --fail '%s://localhost:%d'", probeAuth, probeProtocol, PortForCluster(cr))
-	startupProbeCommand := []string{"/bin/bash", "-c", probeCurl}
+	// Nil keeps the startup probe a TCP socket check. An authenticated curl cannot
+	// succeed until securityadmin has run, so it must not be the default.
+	var startupProbeCommand []string
 
 	readinessProbePeriodSeconds := int32(30)
 	readinessProbeTimeoutSeconds := int32(30)
@@ -789,7 +791,7 @@ func NewSTSForNodePool(
 						{
 							Env: []corev1.EnvVar{
 								{
-									Name:  "cluster.initial_master_nodes",
+									Name:  initialMasterNodesEnv,
 									Value: initialMasterNodes(cr),
 								},
 								{
@@ -1211,17 +1213,85 @@ func BootstrapPVCName(cr *opensearchv1.OpenSearchCluster) string {
 	return fmt.Sprintf("%s-bootstrap-data", cr.Name)
 }
 
+const initialMasterNodesEnv = "cluster.initial_master_nodes"
+
 // initialMasterNodes returns a comma-separated list of pod-0 names from every
-// master-eligible node pool. These are the nodes that participate in the
-// initial cluster election. Returns empty string if no master pool exists.
+// master-eligible node pool that has at least one replica. Pools scaled to zero
+// are omitted so formation does not wait for a pod that will never exist.
+// Returns empty string if no such pool exists.
 func initialMasterNodes(cr *opensearchv1.OpenSearchCluster) string {
 	var names []string
 	for _, nodePool := range cr.Spec.NodePools {
-		if helpers.HasManagerRole(&nodePool) {
+		if nodePool.Replicas >= 1 && helpers.HasManagerRole(&nodePool) {
 			names = append(names, fmt.Sprintf("%s-%s-0", cr.Name, nodePool.Component))
 		}
 	}
 	return strings.Join(names, ",")
+}
+
+// ResolveInitialMasterNodes chooses the cluster.initial_master_nodes value for one
+// StatefulSet. include is false when the env var should be left off the pod template.
+//
+// A cluster that is still forming lists pod-0 of every master-eligible pool with
+// replicas. While a legacy bootstrap pod exists, that name is kept so the forming
+// cluster is not split across two initial-master sets. Once the cluster is
+// initialized the setting is ignored by OpenSearch, so an existing StatefulSet
+// keeps the value it already has and a pool created later does not get one.
+func ResolveInitialMasterNodes(cr *opensearchv1.OpenSearchCluster, existingValue string, hasExistingValue bool, bootstrapPodExists bool) (string, bool) {
+	if cr.Status.Initialized {
+		if hasExistingValue {
+			return existingValue, true
+		}
+		return "", false
+	}
+	if bootstrapPodExists {
+		return BootstrapPodName(cr), true
+	}
+	nodes := initialMasterNodes(cr)
+	if nodes == "" {
+		return "", false
+	}
+	return nodes, true
+}
+
+// InitialMasterNodesFromEnv returns the cluster.initial_master_nodes value
+// already set on a pod template, and whether the env var is present.
+func InitialMasterNodesFromEnv(env []corev1.EnvVar) (string, bool) {
+	for _, e := range env {
+		if e.Name == initialMasterNodesEnv {
+			return e.Value, true
+		}
+	}
+	return "", false
+}
+
+// ApplyInitialMasterNodesEnv sets or removes cluster.initial_master_nodes on the
+// OpenSearch container. include false drops the env var.
+func ApplyInitialMasterNodesEnv(sts *appsv1.StatefulSet, value string, include bool) {
+	if len(sts.Spec.Template.Spec.Containers) == 0 {
+		return
+	}
+	env := sts.Spec.Template.Spec.Containers[0].Env
+	if !include {
+		filtered := make([]corev1.EnvVar, 0, len(env))
+		for _, e := range env {
+			if e.Name != initialMasterNodesEnv {
+				filtered = append(filtered, e)
+			}
+		}
+		sts.Spec.Template.Spec.Containers[0].Env = filtered
+		return
+	}
+	for i := range env {
+		if env[i].Name == initialMasterNodesEnv {
+			env[i].Value = value
+			return
+		}
+	}
+	sts.Spec.Template.Spec.Containers[0].Env = append(env, corev1.EnvVar{
+		Name:  initialMasterNodesEnv,
+		Value: value,
+	})
 }
 
 // InitialMasterNodes is the exported validation wrapper around initialMasterNodes.
