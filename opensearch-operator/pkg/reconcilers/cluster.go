@@ -143,6 +143,22 @@ func isServiceMonitorCRDMissing(err error) bool {
 		strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs: monitoring.coreos.com/v1")
 }
 
+// reconcileRoleServices creates the coordinating and cluster manager Services when
+// spec.general.roleServices is enabled and removes them when it is disabled.
+func (r *ClusterReconciler) reconcileRoleServices(result *reconciler.CombinedResult) {
+	state := reconciler.StateAbsent
+	if r.instance.Spec.General.RoleServices {
+		state = reconciler.StatePresent
+	}
+	for _, clusterManager := range []bool{false, true} {
+		service := builders.NewRoleServiceForCR(r.instance, clusterManager)
+		if state == reconciler.StatePresent {
+			result.CombineErr(ctrl.SetControllerReference(r.instance, service, r.client.Scheme()))
+		}
+		result.Combine(r.client.ReconcileResource(service, state))
+	}
+}
+
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// lg := log.FromContext(r.ctx)
 	result := reconciler.CombinedResult{}
@@ -155,6 +171,8 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(clusterService, reconciler.StatePresent))
+
+	r.reconcileRoleServices(&result)
 
 	discoveryService := builders.NewDiscoveryServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.client.Scheme()))
