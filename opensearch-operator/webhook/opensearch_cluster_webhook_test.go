@@ -549,6 +549,14 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 				Expect(warnings).To(BeEmpty())
 			})
 
+			It("should treat a pool with only warm roles as dedicated even if warm is repeated", func() {
+				cluster := clusterWithPools("3.0.0", opensearchv1.NodePool{Component: "warm", Replicas: 2, Roles: []string{"warm", "warm"}})
+
+				warnings, err := validator.ValidateCreate(ctx, cluster)
+				Expect(err).NotTo(HaveOccurred())
+				Expect(warnings).To(BeEmpty())
+			})
+
 			It("should reject a non-dedicated warm pool without a cache size on 3.x", func() {
 				cluster := clusterWithPools("3.0.0", opensearchv1.NodePool{Component: "hybrid", Replicas: 2, Roles: []string{"data", "warm"}})
 
@@ -1066,6 +1074,18 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			newCluster := oldCluster.DeepCopy()
 			newCluster.Spec.General.Version = "3.0.0"
 			newCluster.Spec.NodePools[1].Roles = []string{"warm"}
+
+			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("should allow an upgrade to 3.x that changes data+search to data+warm with a cache size", func() {
+			oldCluster := clusterWithPools("2.19.4", opensearchv1.NodePool{Component: "hybrid", Replicas: 2, Roles: []string{"data", "search"}})
+			newCluster := oldCluster.DeepCopy()
+			newCluster.Spec.General.Version = "3.0.0"
+			newCluster.Spec.NodePools[1].Roles = []string{"data", "warm"}
+			newCluster.Spec.NodePools[1].AdditionalConfig = map[string]string{"node.search.cache.size": "50gb"}
 
 			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
 			Expect(err).NotTo(HaveOccurred())
