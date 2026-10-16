@@ -57,3 +57,53 @@ func TestGetVotingConfigExclusions(t *testing.T) {
 		})
 	}
 }
+
+func TestBootstrapLeftVotingConfig(t *testing.T) {
+	const bootstrap = "cluster-bootstrap-0"
+	tests := []struct {
+		name string
+		cfg  CommittedVotingConfig
+		want bool
+	}{
+		{name: "empty", cfg: CommittedVotingConfig{}, want: false},
+		{
+			name: "only the bootstrap node",
+			cfg: CommittedVotingConfig{
+				IDs:   []string{"boot"},
+				Names: map[string]string{"boot": bootstrap},
+			},
+			want: false,
+		},
+		{
+			name: "unknown voter id",
+			cfg: CommittedVotingConfig{
+				IDs:   []string{"gone"},
+				Names: map[string]string{},
+			},
+			want: false,
+		},
+		{
+			name: "another node is the only voter",
+			cfg: CommittedVotingConfig{
+				IDs:   []string{"m0"},
+				Names: map[string]string{"m0": "cluster-masters-0"},
+			},
+			want: true,
+		},
+		{
+			name: "bootstrap still listed beside another node",
+			cfg: CommittedVotingConfig{
+				IDs:   []string{"boot", "m0"},
+				Names: map[string]string{"boot": bootstrap, "m0": "cluster-masters-0"},
+			},
+			want: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := BootstrapLeftVotingConfig(tt.cfg, bootstrap); got != tt.want {
+				t.Fatalf("BootstrapLeftVotingConfig() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

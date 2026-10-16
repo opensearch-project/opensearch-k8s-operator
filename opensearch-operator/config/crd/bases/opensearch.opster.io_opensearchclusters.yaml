@@ -61,6 +61,9 @@ spec:
             description: ClusterSpec defines the desired state of OpenSearchCluster
             properties:
               bootstrap:
+                description: |-
+                  Bootstrap is deprecated and ignored. Kept so existing manifests apply
+                  under strict validation until the field is removed in v4.
                 properties:
                   affinity:
                     description: Affinity is a group of affinity scheduling rules.
@@ -6571,6 +6574,11 @@ spec:
                         readiness:
                           properties:
                             command:
+                              description: |-
+                                Command overrides the probe handler. For startup probes, the default is a
+                                TCP socket check (so nodes can become Started before securityadmin runs);
+                                setting Command switches the startup probe to Exec. Readiness probes always
+                                default to an authenticated curl Exec command.
                               items:
                                 type: string
                               type: array
@@ -6593,6 +6601,11 @@ spec:
                         startup:
                           properties:
                             command:
+                              description: |-
+                                Command overrides the probe handler. For startup probes, the default is a
+                                TCP socket check (so nodes can become Started before securityadmin runs);
+                                setting Command switches the startup probe to Exec. Readiness probes always
+                                default to an authenticated curl Exec command.
                               items:
                                 type: string
                               type: array
