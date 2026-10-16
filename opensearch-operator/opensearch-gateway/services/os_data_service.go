@@ -228,6 +228,23 @@ func AddVotingConfigExclusion(service *OsClusterClient, lg logr.Logger, nodeName
 	return err
 }
 
+// BootstrapLeftVotingConfig reports whether nodeName is no longer a committed
+// voter and every committed voter id belongs to some other live node. An empty
+// configuration, the bootstrap node itself, or an id that no longer maps to a
+// name (a voter that has left the cluster but is still committed) all return false.
+func BootstrapLeftVotingConfig(cfg CommittedVotingConfig, nodeName string) bool {
+	if len(cfg.IDs) == 0 {
+		return false
+	}
+	for _, id := range cfg.IDs {
+		name := cfg.Names[id]
+		if name == "" || name == nodeName {
+			return false
+		}
+	}
+	return true
+}
+
 // ClearVotingConfigExclusions clears voting configuration exclusions after a
 // master-eligible node has been removed. Always waits for excluded nodes to
 // leave the cluster first; clearing without wait can put a still-alive node

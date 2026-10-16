@@ -1243,7 +1243,8 @@ var _ = Describe("Builders", func() {
 			clusterObject := withClientCert(true)
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			expected := []string{"/bin/bash", "-c", "curl -k --cert /mnt/operator-client-cert/tls.crt --key /mnt/operator-client-cert/tls.key --silent --fail 'https://localhost:9200'"}
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.TCPSocket).NotTo(BeNil())
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.TCPSocket.Port.IntValue()).To(Equal(9200))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).To(Equal(expected))
 			Expect(result.Spec.Template.Spec.Volumes).To(ContainElement(certVolume))
 			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(certMount))
@@ -1253,7 +1254,8 @@ var _ = Describe("Builders", func() {
 			clusterObject := withClientCert(false)
 			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
 			expected := []string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}
-			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.TCPSocket).NotTo(BeNil())
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.TCPSocket.Port.IntValue()).To(Equal(9200))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).To(Equal(expected))
 			Expect(result.Spec.Template.Spec.Volumes).NotTo(ContainElement(certVolume))
 			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).NotTo(ContainElement(certMount))
