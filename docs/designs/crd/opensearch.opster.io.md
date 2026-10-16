@@ -140,24 +140,14 @@ _Appears in:_
 | `waitFor` _string_ | Wait for the policy to execute before allocating the index to a node with a specified attribute. |  |  |
 
 
-#### Close
-
-
-
-
-
-
-
-_Appears in:_
-- [Action](#action)
-
-
-
 #### BootstrapConfig
 
 
 
-Deprecated and ignored. Kept so existing manifests apply under strict CRD validation. The field will be removed in v4. Configure plugins, keystore, hostAliases, affinity, and initContainers on `spec.general` or `spec.nodePools` instead.
+BootstrapConfig is deprecated and ignored. It remains in the API so existing
+manifests still apply under strict CRD validation. The field will be removed
+in v4. Configure plugins, keystore, hostAliases, affinity, and initContainers
+on spec.general or spec.nodePools instead.
 
 
 
@@ -176,10 +166,23 @@ _Appears in:_
 | `pluginsList` _string array_ |  |  |  |
 | `keystore` _[KeystoreValue](#keystorevalue) array_ |  |  |  |
 | `env` _[EnvVar](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#envvar-v1-core) array_ |  |  |  |
-| `initContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core) array_ |  |  |  |
+| `initContainers` _[Container](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#container-v1-core) array_ |  |  | Schemaless: \{\} <br /> |
 | `hostAliases` _[HostAlias](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#hostalias-v1-core) array_ |  |  |  |
 | `diskSize` _[Quantity](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#quantity-resource-api)_ |  |  |  |
 | `priorityClassName` _string_ |  |  |  |
+
+
+#### Close
+
+
+
+
+
+
+
+_Appears in:_
+- [Action](#action)
+
 
 
 #### ClusterSpec
@@ -197,7 +200,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `general` _[GeneralConfig](#generalconfig)_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file |  |  |
 | `confMgmt` _[ConfMgmt](#confmgmt)_ |  | \{ smartScaler:true \} |  |
-| `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ | Deprecated and ignored. Kept so existing manifests apply under strict validation until the field is removed in v4. |  |  |
+| `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ | Bootstrap is deprecated and ignored. Kept so existing manifests apply<br />under strict validation until the field is removed in v4. |  |  |
 | `dashboards` _[DashboardsConfig](#dashboardsconfig)_ |  |  |  |
 | `security` _[Security](#security)_ |  |  |  |
 | `nodePools` _[NodePool](#nodepool) array_ |  |  |  |
@@ -640,6 +643,7 @@ _Appears in:_
 
 
 _Appears in:_
+- [BootstrapConfig](#bootstrapconfig)
 - [GeneralConfig](#generalconfig)
 
 | Field | Description | Default | Validation |
