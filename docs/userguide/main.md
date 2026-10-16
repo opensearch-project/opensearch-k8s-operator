@@ -131,7 +131,7 @@ spec:
         generate: true
 ```
 
-Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. The cluster-manager nodes themselves bootstrap the cluster (via `cluster.initial_master_nodes` pointing at the first pod of each manager pool). Three pods for the OpenSearch cluster will be created (`my-first-cluster-masters-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
+Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. The cluster-manager nodes themselves bootstrap the cluster (via `cluster.initial_master_nodes` pointing at pod-0 of each manager pool that has at least one replica). Three pods for the OpenSearch cluster will be created (`my-first-cluster-masters-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
 
 The operator generates a random password for the `admin` user and stores it in the `my-first-cluster-admin-password` Secret. Read it with:
 
@@ -553,7 +553,7 @@ The other `confMgmt` fields, `autoScaler` and `VerUpdate`, are not used by the o
 
 #### Removing master-eligible nodes
 
-Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time regardless of the SmartScaler setting, following the sequence OpenSearch documents for shrinking the voting configuration: the node is first added to the cluster's voting configuration exclusions (`POST /_cluster/voting_config_exclusions`), which blocks until it has left the voting configuration, then its pod is removed, and once every excluded node has left the cluster the exclusions list is cleared (`DELETE /_cluster/voting_config_exclusions?wait_for_removal=true`). With SmartScaler off only this voting step is performed; the shard drain remains opt-in. The same steps apply when a whole master-eligible node pool is removed from `spec.nodePools`. After upgrading from an older operator that still used a dedicated bootstrap pod, leftover `{cluster}-bootstrap-0` pods are cleaned up with the same voting-exclusion sequence.
+Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time regardless of the SmartScaler setting, following the sequence OpenSearch documents for shrinking the voting configuration: the node is first added to the cluster's voting configuration exclusions (`POST /_cluster/voting_config_exclusions`), which blocks until it has left the voting configuration, then its pod is removed, and once every excluded node has left the cluster the exclusions list is cleared (`DELETE /_cluster/voting_config_exclusions?wait_for_removal=true`). With SmartScaler off only this voting step is performed; the shard drain remains opt-in. The same steps apply when a whole master-eligible node pool is removed from `spec.nodePools`. After upgrading from an older operator that still used a dedicated bootstrap pod, a leftover `{cluster}-bootstrap-0` pod is kept until the cluster is initialized. If it is still a cluster member, it is excluded from the voting configuration and deleted only once some other node is a committed voter and the bootstrap pod is not. Until then the operator retries every 10 seconds and emits a `BootstrapExclusionFailed` warning.
 
 The operator also clears exclusions that are left over (for example after an operator restart during a removal), and emits a `Warning` event if it finds a live node that was left excluded. The webhook rejects clusters without at least one master-eligible replica (see [webhooks](webhooks.md)).
 
@@ -1626,7 +1626,7 @@ spec:
 
 ### Customize startup and readiness probe command
 
-By default the liveness and startup probes are TCP socket checks on the HTTP port (so nodes can become Started before `securityadmin` has run). The readiness probe uses the OpenSearch API with an authenticated curl.
+By default the liveness and startup probes are TCP socket checks on the HTTP port (so nodes can become Started before `securityadmin` has run). The readiness probe uses the OpenSearch API with curl, authenticating with the admin credentials, or with the [operator client certificate](#authenticating-the-operator-to-opensearch-with-mtls-client-certificate) when one is set and HTTP TLS is enabled. If you disable basic auth (`http_enabled: false`) without setting `operatorClientCert`, override the readiness probe command below (for example with a TCP check) or the pods never become ready.
 
 If you need to customize the startup or readiness probe commands you can override them as shown below. Setting `probes.startup.command` switches that probe from TCP to Exec:
 
@@ -2215,7 +2215,7 @@ roles_mapping.yml: |-
 
 ### Security Plugin Disabled
 
-There is no field to disable the security plugin directly. When neither `security.tls.transport` nor `security.tls.http` TLS is enabled, the operator sets `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN` on the OpenSearch nodes and the bootstrap pod, and `DISABLE_SECURITY_DASHBOARDS_PLUGIN` on Dashboards, and the cluster runs over plain HTTP without authentication. In that case:
+There is no field to disable the security plugin directly. When neither `security.tls.transport` nor `security.tls.http` TLS is enabled, the operator sets `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN` on the OpenSearch nodes, and `DISABLE_SECURITY_DASHBOARDS_PLUGIN` on Dashboards, and the cluster runs over plain HTTP without authentication. Password management works differently:
 
 **Admin User:**
 - The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in the bootstrap pod and all OpenSearch pods from `<cluster-name>-admin-password`, which holds the password of `adminCredentialsSecret` if you provide one, or a generated one otherwise.

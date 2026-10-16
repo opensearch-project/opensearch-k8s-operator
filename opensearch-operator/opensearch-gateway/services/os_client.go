@@ -450,6 +450,57 @@ func (client *OsClusterClient) GetVotingConfigExclusions(ctx context.Context) ([
 	return names, nil
 }
 
+// CommittedVotingConfig is the cluster's last committed voting configuration.
+// IDs are the node ids in last_committed_config. Names maps an id to the node
+// name when that node is still in the cluster state. An id with no name is a
+// committed voter that is no longer a member.
+type CommittedVotingConfig struct {
+	IDs   []string
+	Names map[string]string
+}
+
+type committedVotingConfigResponse struct {
+	Metadata struct {
+		ClusterCoordination struct {
+			LastCommittedConfig []string `json:"last_committed_config"`
+		} `json:"cluster_coordination"`
+	} `json:"metadata"`
+	Nodes map[string]struct {
+		Name string `json:"name"`
+	} `json:"nodes"`
+}
+
+// GetCommittedVotingConfig reads last_committed_config and the node id to name
+// map from cluster state.
+// See: GET /_cluster/state/metadata,nodes/<index>?filter_path=metadata.cluster_coordination.last_committed_config,nodes.*.name
+func (client *OsClusterClient) GetCommittedVotingConfig(ctx context.Context) (CommittedVotingConfig, error) {
+	var path strings.Builder
+	path.WriteString("/_cluster/state/metadata,nodes/" + noIndexPlaceholder + "?filter_path=metadata.cluster_coordination.last_committed_config,nodes.*.name")
+	resp, err := doHTTPGet(ctx, client.client, path)
+	if err != nil {
+		return CommittedVotingConfig{}, err
+	}
+	defer helpers.SafeClose(resp.Body)
+	if resp.IsError() {
+		return CommittedVotingConfig{}, ErrVotingConfigExclusionsFailed(resp.String())
+	}
+	var state committedVotingConfigResponse
+	if err := json.NewDecoder(resp.Body).Decode(&state); err != nil {
+		return CommittedVotingConfig{}, err
+	}
+	names := make(map[string]string, len(state.Nodes))
+	for id, node := range state.Nodes {
+		if node.Name != "" {
+			names[id] = node.Name
+		}
+	}
+	ids := state.Metadata.ClusterCoordination.LastCommittedConfig
+	if ids == nil {
+		ids = []string{}
+	}
+	return CommittedVotingConfig{IDs: ids, Names: names}, nil
+}
+
 // GetSecurityResource performs an HTTP GET request to OS to fetch the security resource specified by name
 func (client *OsClusterClient) GetSecurityResource(ctx context.Context, resource, name string) (*opensearchapi.Response, error) {
 	path := generateAPIPath(resource, name)
