@@ -1418,6 +1418,8 @@ var _ = DescribeTable("ValidateSearchCacheSize",
 	Entry("fractional byte size", "1.5gb", false),
 	Entry("missing unit", "50", false),
 	Entry("unknown unit", "50xb", false),
+	Entry("kubernetes Gi unit", "150Gi", false),
+	Entry("kubernetes gi unit, lower case", "50gi", false),
 	Entry("garbage", "lots", false),
 	Entry("empty", "", false),
 )

@@ -232,8 +232,11 @@ func validateSearchAndWarmRoles(cluster *opensearchv1.OpenSearchCluster, pool *o
 		cacheSize, ok = cluster.Spec.General.AdditionalConfig[helpers.SearchCacheSizeSetting]
 	}
 	if !ok {
-		if len(pool.Roles) > 1 {
-			return "", fmt.Errorf("node pool '%s': a 'warm' node pool with other roles must set %s in its additionalConfig or in general.additionalConfig; see 'Searchable snapshots (warm nodes)' in the user guide", pool.Component, helpers.SearchCacheSizeSetting)
+		// Match OpenSearch DiscoveryNode.isDedicatedWarmNode: every role is warm.
+		for _, role := range pool.Roles {
+			if role != "warm" {
+				return "", fmt.Errorf("node pool '%s': a 'warm' node pool with other roles must set %s in its additionalConfig or in general.additionalConfig; see 'Searchable snapshots (warm nodes)' in the user guide", pool.Component, helpers.SearchCacheSizeSetting)
+			}
 		}
 		return "", nil
 	}

@@ -654,8 +654,8 @@ A warm pool can also hold other roles, for example `["data", "warm"]`. OpenSearc
 
 #### Sizing
 
-- `node.search.cache.size` defaults to `80%` of the data volume on a dedicated warm node and to nothing on any other node. It takes a byte size (`150gb`) or a percentage of the volume (`80%`), and must be above zero and below the volume size.
-- A percentage follows `diskSize` when you expand the volume. A byte size is predictable, but must stay below the volume size. On a `["data", "warm"]` pool, leave room for the regular shards next to the cache.
+- `node.search.cache.size` defaults to `80%` of the data volume on a dedicated warm node and to nothing on any other node. It takes a byte size (`150gb`) or a percentage of the volume (`80%`). Use OpenSearch units (`gb`, `mb`, …), not Kubernetes quantity suffixes (`Gi`, `Mi`). The webhook checks that the value parses; OpenSearch then requires the resolved size to be above zero and below the volume at node startup.
+- A percentage follows `diskSize` when you expand the volume. A byte size is predictable, but must stay below the volume size at runtime. On a `["data", "warm"]` pool, leave room for the regular shards next to the cache.
 - `cluster.filecache.remote_data_ratio` caps how much searchable snapshot data the warm nodes can serve: a restore is rejected when the total size of searchable snapshot indices would exceed cache size × ratio. Since 3.2 it defaults to `5` with a minimum of `1`; on 3.0 and 3.1 it defaults to `0`, which disables the check. Set it in `general.additionalConfig` (applies on restart) or at runtime:
 
   ```bash
