@@ -598,6 +598,11 @@ func (in *DashboardsConfig) DeepCopyInto(out *DashboardsConfig) {
 		(*in).DeepCopyInto(*out)
 	}
 	in.Resources.DeepCopyInto(&out.Resources)
+	if in.Replicas != nil {
+		in, out := &in.Replicas, &out.Replicas
+		*out = new(int32)
+		**out = **in
+	}
 	if in.Tls != nil {
 		in, out := &in.Tls, &out.Tls
 		*out = new(DashboardsTlsConfig)

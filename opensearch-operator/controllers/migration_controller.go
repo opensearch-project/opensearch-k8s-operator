@@ -272,7 +272,7 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 	}
 
 	// Copy status from old to new cluster (status can only be set after creation)
-	// For the initial status copy right after creation, use a regular Update since there's no risk of spec conflict
+	// Status lives on the status subresource, so a main-resource Update would not copy it
 	// Use retry to handle cases where the resource might not be immediately available (especially in tests)
 	var createdCluster *opensearchv1.OpenSearchCluster
 	if err := retry.OnError(retry.DefaultRetry, func(err error) bool {
@@ -286,7 +286,7 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 		}
 		// Update status
 		createdCluster.Status = newStatus
-		return r.Update(ctx, createdCluster)
+		return r.Status().Update(ctx, createdCluster)
 	}); err != nil {
 		return ctrl.Result{}, fmt.Errorf("failed to update new cluster status: %w", err)
 	}
