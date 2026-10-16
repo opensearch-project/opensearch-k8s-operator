@@ -188,6 +188,9 @@ func validateNodePools(cluster *opensearchv1.OpenSearchCluster) (admission.Warni
 	var warnings admission.Warnings
 	for i := range cluster.Spec.NodePools {
 		pool := &cluster.Spec.NodePools[i]
+		if cluster.Spec.General.CoordinatingService && pool.Component == "coordinating" {
+			return fmt.Errorf("node pool 'coordinating' clashes with the coordinating Service, rename the pool or disable coordinatingService")
+		}
 		for _, role := range pool.Roles {
 			if !helpers.ContainsString(helpers.ValidNodeRoles, role) {
 				return nil, fmt.Errorf("node pool '%s' has unknown role '%s' (valid roles: %s)", pool.Component, role, strings.Join(helpers.ValidNodeRoles, ", "))

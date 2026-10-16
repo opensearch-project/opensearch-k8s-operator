@@ -4549,6 +4549,11 @@ spec:
                     type: object
                   command:
                     type: string
+                  coordinatingService:
+                    description: |-
+                      CoordinatingService creates the Service {serviceName}-coordinating for the pods without the
+                      cluster_manager role. Toggling it changes a pod label, which causes one rolling restart.
+                    type: boolean
                   defaultRepo:
                     type: string
                   drainDataNodes:

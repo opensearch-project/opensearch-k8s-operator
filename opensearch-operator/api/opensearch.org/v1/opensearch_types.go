@@ -118,6 +118,9 @@ type GeneralConfig struct {
 	// (e.g. zone or rack awareness) without splitting topology into separate
 	// node pools. The pods' ServiceAccount must be allowed to "get" nodes.
 	NodeAttributes []NodeAttribute `json:"nodeAttributes,omitempty"`
+	// CoordinatingService creates the Service {serviceName}-coordinating for the pods without the
+	// cluster_manager role. Toggling it changes a pod label, which causes one rolling restart.
+	CoordinatingService bool `json:"coordinatingService,omitempty"`
 }
 
 // NodeAttribute maps a Kubernetes node label onto an OpenSearch node attribute
