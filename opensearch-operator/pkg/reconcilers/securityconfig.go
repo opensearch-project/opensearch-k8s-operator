@@ -259,6 +259,22 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		return ctrl.Result{}, err
 	}
 
+	endpointCASecretName := r.determineEndpointCASecret()
+	endpointCASecret, err := r.client.GetSecret(endpointCASecretName, namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			r.logger.Info(fmt.Sprintf("Waiting for secret '%s' that contains the endpoint CA certificate", endpointCASecretName))
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Waiting for secret '%s' that contains the endpoint CA certificate", endpointCASecretName)
+			return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, nil
+		}
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 10}, err
+	}
+	if len(endpointCASecret.Data[CaCertKey]) == 0 {
+		err := fmt.Errorf("secret '%s' must contain a non-empty %s for securityadmin to verify the endpoint", endpointCASecretName, CaCertKey)
+		r.logger.Error(err, "Skipping securityconfig reconciliation")
+		return ctrl.Result{}, err
+	}
+
 	cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
 
 	job, err := r.client.GetJob(jobName, namespace)
@@ -339,7 +355,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		checksumval,
 		userChecksumVal,
 		adminCertName,
-		r.determineAdminCASecret(adminCertName),
+		endpointCASecretName,
 		cmdArg,
 		r.reconcilerContext.Volumes,
 		r.reconcilerContext.VolumeMounts,
@@ -472,13 +488,14 @@ func (r *SecurityconfigReconciler) determineAdminSecret() string {
 	return ""
 }
 
-func (r *SecurityconfigReconciler) determineAdminCASecret(adminSecretName string) string {
-	caSecretName := helpers.TlsCASecretRef(r.instance).Name
-	// If CA comes from the same secret, keep single-secret mounting behavior.
-	if caSecretName == "" || caSecretName == adminSecretName {
-		return ""
+// determineEndpointCASecret returns the secret whose ca.crt securityadmin uses to
+// verify the OpenSearch endpoint: HTTP for OpenSearch 2.x, transport for earlier versions.
+func (r *SecurityconfigReconciler) determineEndpointCASecret() string {
+	tlsConfig := r.instance.Spec.Security.Tls
+	if helpers.SecurityChangeVersion(r.instance) {
+		return helpers.HTTPEndpointCACertSecretRef(r.instance.Name, tlsConfig.Http).Name
 	}
-	return caSecretName
+	return helpers.TransportEndpointCACertSecretRef(r.instance.Name, tlsConfig.Transport).Name
 }
 
 func (r *SecurityconfigReconciler) DeleteResources() (ctrl.Result, error) {
