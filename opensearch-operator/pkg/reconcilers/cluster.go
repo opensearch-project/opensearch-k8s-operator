@@ -143,19 +143,22 @@ func isServiceMonitorCRDMissing(err error) bool {
 		strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs: monitoring.coreos.com/v1")
 }
 
-// reconcileRoleServices creates the coordinating and cluster manager Services when
-// spec.general.roleServices is enabled and removes them when it is disabled.
-func (r *ClusterReconciler) reconcileRoleServices(result *reconciler.CombinedResult) {
-	state := reconciler.StateAbsent
-	if r.instance.Spec.General.RoleServices {
-		state = reconciler.StatePresent
+// reconcileCoordinatingService creates the coordinating Service when spec.general.coordinatingService
+// is enabled. When it is disabled, it removes the Service only if this cluster owns it.
+func (r *ClusterReconciler) reconcileCoordinatingService(result *reconciler.CombinedResult) {
+	service := builders.NewCoordinatingServiceForCR(r.instance)
+	if r.instance.Spec.General.CoordinatingService {
+		result.CombineErr(ctrl.SetControllerReference(r.instance, service, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(service, reconciler.StatePresent))
+		return
 	}
-	for _, clusterManager := range []bool{false, true} {
-		service := builders.NewRoleServiceForCR(r.instance, clusterManager)
-		if state == reconciler.StatePresent {
-			result.CombineErr(ctrl.SetControllerReference(r.instance, service, r.client.Scheme()))
-		}
-		result.Combine(r.client.ReconcileResource(service, state))
+	existing, err := r.client.GetService(service.Name, service.Namespace)
+	if err != nil {
+		result.CombineErr(client.IgnoreNotFound(err))
+		return
+	}
+	if metav1.IsControlledBy(&existing, r.instance) {
+		result.Combine(r.client.ReconcileResource(service, reconciler.StateAbsent))
 	}
 }
 
@@ -172,7 +175,7 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(clusterService, reconciler.StatePresent))
 
-	r.reconcileRoleServices(&result)
+	r.reconcileCoordinatingService(&result)
 
 	discoveryService := builders.NewDiscoveryServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.client.Scheme()))

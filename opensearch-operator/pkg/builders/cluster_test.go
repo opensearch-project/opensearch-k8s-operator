@@ -1462,20 +1462,19 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
-	When("building role services", func() {
-		clusterWithRoleServices := func(enabled bool) opensearchv1.OpenSearchCluster {
+	When("building the coordinating service", func() {
+		clusterWithCoordinatingService := func(enabled bool) opensearchv1.OpenSearchCluster {
 			return opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "opensearch", Namespace: "opensearch"},
 				Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{
-					ServiceName: "opensearch", HttpPort: 9200, RoleServices: enabled,
+					ServiceName: "opensearch", HttpPort: 9200, CoordinatingService: enabled,
 				}},
 			}
 		}
 
-		It("should select the pods by cluster_manager role", func() {
-			cluster := clusterWithRoleServices(true)
-			coordinating := NewRoleServiceForCR(&cluster, false)
-			clusterManager := NewRoleServiceForCR(&cluster, true)
+		It("should select the pods without the cluster_manager role", func() {
+			cluster := clusterWithCoordinatingService(true)
+			coordinating := NewCoordinatingServiceForCR(&cluster)
 
 			Expect(coordinating.Name).To(Equal(CoordinatingServiceName(&cluster)))
 			Expect(coordinating.Name).To(Equal("opensearch-coordinating"))
@@ -1486,14 +1485,11 @@ var _ = Describe("Builders", func() {
 			Expect(coordinating.Spec.Ports).To(HaveLen(1))
 			Expect(coordinating.Spec.Ports[0].Port).To(Equal(int32(9200)))
 			Expect(coordinating.Labels).NotTo(HaveKey(helpers.ClusterManagerLabel))
-			Expect(clusterManager.Name).To(Equal(ClusterManagerServiceName(&cluster)))
-			Expect(clusterManager.Name).To(Equal("opensearch-cluster-manager"))
-			Expect(clusterManager.Spec.Selector).To(HaveKeyWithValue(helpers.ClusterManagerLabel, "true"))
 		})
 
 		It("should label the pods by cluster_manager role only when enabled", func() {
-			enabled := clusterWithRoleServices(true)
-			disabled := clusterWithRoleServices(false)
+			enabled := clusterWithCoordinatingService(true)
+			disabled := clusterWithCoordinatingService(false)
 			managers := opensearchv1.NodePool{Component: "masters", Roles: []string{"cluster_manager"}}
 			data := opensearchv1.NodePool{Component: "data", Roles: []string{"data", "ingest"}}
 
