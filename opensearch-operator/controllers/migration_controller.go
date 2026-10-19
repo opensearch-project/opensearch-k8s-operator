@@ -111,8 +111,9 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 					return result, err
 				}
 				// Remove migration finalizer to allow new CR to be deleted
-				newCluster.Finalizers = removeString(newCluster.Finalizers, MigrationFinalizer)
-				if err := r.Update(ctx, newCluster); err != nil {
+				if err := patchMetadata(ctx, r.Client, newCluster, func() {
+					newCluster.Finalizers = removeString(newCluster.Finalizers, MigrationFinalizer)
+				}); err != nil {
 					return ctrl.Result{}, err
 				}
 				return ctrl.Result{}, nil
@@ -133,8 +134,9 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 				return ctrl.Result{}, err
 			}
 			if hasTwin {
-				newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
-				if err := r.Update(ctx, newCluster); err != nil {
+				if err := patchMetadata(ctx, r.Client, newCluster, func() {
+					newCluster.Finalizers = append(newCluster.Finalizers, MigrationFinalizer)
+				}); err != nil {
 					return ctrl.Result{}, err
 				}
 				// Requeue to process deletion if needed
@@ -1286,11 +1288,12 @@ func (r *ClusterMigrationReconciler) transferCertificateSecretOwnership(ctx cont
 
 	// Mark ownership transfer as complete on the new cluster to avoid repeated checks
 	// Only update if we actually did some work or if this is the first time checking
-	if newCluster.Annotations == nil {
-		newCluster.Annotations = make(map[string]string)
-	}
-	newCluster.Annotations[CertOwnershipTransferredAnnotation] = "true"
-	if err := r.Update(ctx, newCluster); err != nil {
+	if err := patchMetadata(ctx, r.Client, newCluster, func() {
+		if newCluster.Annotations == nil {
+			newCluster.Annotations = make(map[string]string)
+		}
+		newCluster.Annotations[CertOwnershipTransferredAnnotation] = "true"
+	}); err != nil {
 		// Log but don't fail - the ownership transfer succeeded, annotation is just an optimization
 		logger.V(1).Info("Failed to set cert ownership transferred annotation", "error", err)
 	} else if transferredAny {
