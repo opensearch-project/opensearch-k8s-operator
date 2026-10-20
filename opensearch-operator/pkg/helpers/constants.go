@@ -8,6 +8,7 @@ import (
 const (
 	DashboardConfigName          = "opensearch_dashboards.yml"
 	DashboardChecksumName        = "checksum/dashboards.yml"
+	DashboardTlsChecksumName     = "checksum/dashboards-tls.crt"
 	ClusterLabel                 = "opensearch.org/opensearch-cluster"
 	OldClusterLabel              = "opster.io/opensearch-cluster"
 	JobLabel                     = "opensearch.org/opensearch-job"
