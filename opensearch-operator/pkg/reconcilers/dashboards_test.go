@@ -3,14 +3,14 @@ package reconcilers
 import (
 	"bytes"
 	"context"
-	"errors"
-	"reflect"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/pem"
+	"errors"
 	"math/big"
+	"reflect"
 	"strings"
 	"time"
 
@@ -118,6 +118,7 @@ func reconcileDashboardsWithCert(clusterName string, ca pkitls.Cert, certData []
 		Data:       map[string][]byte{"tls.crt": certData, "tls.key": []byte("old-key"), "ca.crt": ca.CertData()},
 	}, nil)
 	setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+	mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 	mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 	mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 	var createdDeployment *appsv1.Deployment
