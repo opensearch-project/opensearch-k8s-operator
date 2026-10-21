@@ -54,7 +54,7 @@ var _ = Describe("loadAdminCertTLSConfig", func() {
 		client := &http.Client{Transport: &http.Transport{TLSClientConfig: cfg}}
 		res, err := client.Get(url)
 		if err == nil {
-			res.Body.Close()
+			_ = res.Body.Close()
 		}
 		return err
 	}
