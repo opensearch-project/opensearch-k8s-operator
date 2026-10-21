@@ -4,9 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
-	"net/http"
 	"time"
 
 	"github.com/jarcoal/httpmock"
