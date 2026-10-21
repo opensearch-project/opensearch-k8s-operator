@@ -231,7 +231,7 @@ func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secr
 		if err != nil {
 			return err
 		}
-		res.Body.Close()
+		_ = res.Body.Close()
 		if res.StatusCode != http.StatusOK {
 			return fmt.Errorf("updating the password hash of %s returned HTTP %d", name, res.StatusCode)
 		}
