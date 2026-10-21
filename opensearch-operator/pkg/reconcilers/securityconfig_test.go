@@ -64,6 +64,13 @@ func newSecurityconfigReconciler(
 	}
 }
 
+// setupGeneratedHTTPCertSecretMock sets up mocks for the generated HTTP certificate secret holding the endpoint CA
+func setupGeneratedHTTPCertSecretMock(mockClient *k8s.MockK8sClient, clusterName string) {
+	mockClient.On("GetSecret", clusterName+"-http-cert", clusterName).Return(corev1.Secret{
+		Data: map[string][]byte{CaCertKey: []byte("http-ca")},
+	}, nil).Maybe()
+}
+
 var _ = Describe("Securityconfig Reconciler", func() {
 	// Define utility constants for object names and testing timeouts/durations and intervals.
 	const (
@@ -208,6 +215,7 @@ config:
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(*securityConfigSecret, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupGeneratedHTTPCertSecretMock(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).
 				Return(corev1.Secret{
 					ObjectMeta: metav1.ObjectMeta{Name: generatedConfigName, Namespace: clusterName},
@@ -342,6 +350,7 @@ config:
 			})).Return(&ctrl.Result{}, nil)
 			mockClient.On("GetSecret", generatedAdminName, clusterName).Return(autoAdminSecret, nil).Once()
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupGeneratedHTTPCertSecretMock(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
 
 			mockClient.EXPECT().GetJob("no-securityconfig-tls-configured-securityconfig-update", clusterName).Return(batchv1.Job{}, NotFoundError())
@@ -465,6 +474,7 @@ done;`
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(*securityConfigSecret, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupGeneratedHTTPCertSecretMock(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).
 				Return(corev1.Secret{}, NotFoundError()).Once()
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -561,6 +571,46 @@ done;`
 			_, err := underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(createdJob).ToNot(BeNil())
+		})
+
+		It("should fail when the endpoint CA secret has no ca.crt", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec, _ := buildReconcileFixture(mockClient)
+			spec.Spec.Security.Config.AdminSecret.Name = "external-admin-cert"
+			spec.Spec.Security.Tls.Http.Generate = false
+			spec.Spec.Security.Tls.Http.Secret.Name = "external-http-cert"
+
+			mockClient.EXPECT().GetSecret("external-http-cert", clusterName).Return(corev1.Secret{
+				Data: map[string][]byte{corev1.TLSCertKey: []byte("server-cert")},
+			}, nil)
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("external-http-cert"))
+			Expect(err.Error()).To(ContainSubstring(CaCertKey))
+			mockClient.AssertNotCalled(GinkgoT(), "GetJob", mock.Anything, mock.Anything)
+			mockClient.AssertNotCalled(GinkgoT(), "CreateJob", mock.Anything)
+		})
+
+		It("should wait for the endpoint CA secret to be created", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec, _ := buildReconcileFixture(mockClient)
+			spec.Spec.Security.Config.AdminSecret.Name = "external-admin-cert"
+			spec.Spec.Security.Tls.Http.Generate = false
+			spec.Spec.Security.Tls.Http.Secret.Name = "external-http-cert"
+
+			mockClient.EXPECT().GetSecret("external-http-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.Requeue).To(BeTrue())
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			mockClient.AssertNotCalled(GinkgoT(), "GetJob", mock.Anything, mock.Anything)
+			mockClient.AssertNotCalled(GinkgoT(), "CreateJob", mock.Anything)
 		})
 
 		It("should persist the retry count it just computed instead of clobbering it later in the same reconcile", func() {
@@ -758,6 +808,7 @@ done;`
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupGeneratedHTTPCertSecretMock(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).
 				Return(corev1.Secret{}, NotFoundError()).Once()
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme).Maybe()
@@ -856,6 +907,7 @@ done;`
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupGeneratedHTTPCertSecretMock(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).
 				Return(corev1.Secret{}, NotFoundError()).Once()
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -952,6 +1004,7 @@ done;`
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			mockClient.EXPECT().GetSecret("securityconfig-secret", clusterName).Return(securityConfigSecret, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupGeneratedHTTPCertSecretMock(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).
 				Return(corev1.Secret{}, NotFoundError()).Once()
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -1033,6 +1086,7 @@ done;`
 
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupGeneratedHTTPCertSecretMock(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).
 				Return(corev1.Secret{}, NotFoundError()).Once()
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -1157,8 +1211,8 @@ done;`
 		})
 	})
 
-	When("Determining admin CA secret for securityconfig update job", func() {
-		It("should use HTTP caSecret for security change versions", func() {
+	When("Determining endpoint CA secret for securityconfig update job", func() {
+		It("should use the HTTP certificate secret for OpenSearch 2.x and later", func() {
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "ca-http", Namespace: "ca-http", UID: "dummyuid"},
 				Spec: opensearchv1.ClusterSpec{
@@ -1169,6 +1223,7 @@ done;`
 						Tls: &opensearchv1.TlsConfig{
 							Http: &opensearchv1.TlsConfigHttp{
 								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret:   corev1.LocalObjectReference{Name: "http-cert"},
 									CaSecret: corev1.LocalObjectReference{Name: "http-ca"},
 								},
 							},
@@ -1177,10 +1232,31 @@ done;`
 				},
 			}
 			underTest := &SecurityconfigReconciler{instance: &spec}
-			Expect(underTest.determineAdminCASecret("admin-secret")).To(Equal("http-ca"))
+			Expect(underTest.determineEndpointCASecret()).To(Equal("http-cert"))
 		})
 
-		It("should return empty when CA secret equals admin secret", func() {
+		It("should use the generated HTTP certificate secret when HTTP TLS is generated", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "generated-http", Namespace: "generated-http"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "2.3.0"},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Http: &opensearchv1.TlsConfigHttp{
+								Generate: true,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									CaSecret: corev1.LocalObjectReference{Name: "admin-ca"},
+								},
+							},
+						},
+					},
+				},
+			}
+			underTest := &SecurityconfigReconciler{instance: &spec}
+			Expect(underTest.determineEndpointCASecret()).To(Equal("generated-http-http-cert"))
+		})
+
+		It("should return the admin secret when it also contains the HTTP endpoint CA", func() {
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "same-ca", Namespace: "same-ca", UID: "dummyuid"},
 				Spec: opensearchv1.ClusterSpec{
@@ -1191,7 +1267,7 @@ done;`
 						Tls: &opensearchv1.TlsConfig{
 							Http: &opensearchv1.TlsConfigHttp{
 								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
-									CaSecret: corev1.LocalObjectReference{Name: "admin-secret"},
+									Secret: corev1.LocalObjectReference{Name: "admin-secret"},
 								},
 							},
 						},
@@ -1199,10 +1275,10 @@ done;`
 				},
 			}
 			underTest := &SecurityconfigReconciler{instance: &spec}
-			Expect(underTest.determineAdminCASecret("admin-secret")).To(BeEmpty())
+			Expect(underTest.determineEndpointCASecret()).To(Equal("admin-secret"))
 		})
 
-		It("should use transport caSecret for pre-2.0 versions", func() {
+		It("should use the transport certificate secret for pre-2.0 versions", func() {
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "ca-transport", Namespace: "ca-transport", UID: "dummyuid"},
 				Spec: opensearchv1.ClusterSpec{
@@ -1213,6 +1289,7 @@ done;`
 						Tls: &opensearchv1.TlsConfig{
 							Transport: &opensearchv1.TlsConfigTransport{
 								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									Secret:   corev1.LocalObjectReference{Name: "transport-cert"},
 									CaSecret: corev1.LocalObjectReference{Name: "transport-ca"},
 								},
 							},
@@ -1221,13 +1298,35 @@ done;`
 				},
 			}
 			underTest := &SecurityconfigReconciler{instance: &spec}
-			Expect(underTest.determineAdminCASecret("admin-secret")).To(Equal("transport-ca"))
+			Expect(underTest.determineEndpointCASecret()).To(Equal("transport-cert"))
+		})
+
+		It("should use the generated transport certificate secret for pre-2.0 versions", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "generated-transport", Namespace: "generated-transport"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{Version: "1.3.0"},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{
+								Generate: true,
+								TlsCertificateConfig: opensearchv1.TlsCertificateConfig{
+									CaSecret: corev1.LocalObjectReference{Name: "admin-ca"},
+								},
+							},
+						},
+					},
+				},
+			}
+			underTest := &SecurityconfigReconciler{instance: &spec}
+			Expect(underTest.determineEndpointCASecret()).To(Equal("generated-transport-transport-cert"))
 		})
 	})
 
 	When("Reconciling with external TLS certs and separate caSecret", func() {
 		const (
 			externalClusterName = "external-tls"
+			adminSecretName     = "my-admin-secret"
 			tlsSecretName       = "my-tls-secret"
 			caSecretName        = "my-ca-secret"
 		)
@@ -1241,7 +1340,7 @@ done;`
 			return corev1.Volume{}
 		}
 
-		It("should project admin-cert from TLS secret and caSecret when reconciling", func() {
+		It("should project the admin certificate and HTTP endpoint CA when reconciling", func() {
 			mockClient := k8s.NewMockK8sClient(GinkgoT())
 
 			adminCredSecret := newAdminCredentialsSecret(externalClusterName)
@@ -1263,7 +1362,7 @@ done;`
 						Config: &opensearchv1.SecurityConfig{
 							SecurityconfigSecret:   corev1.LocalObjectReference{Name: "securityconfig-secret"},
 							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
-							AdminSecret:            corev1.LocalObjectReference{Name: tlsSecretName},
+							AdminSecret:            corev1.LocalObjectReference{Name: adminSecretName},
 						},
 						Tls: &opensearchv1.TlsConfig{
 							Transport: &opensearchv1.TlsConfigTransport{
@@ -1290,6 +1389,9 @@ done;`
 			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
 			mockClient.EXPECT().GetSecret(adminCredsName, externalClusterName).Return(adminCredSecret, nil)
 			mockClient.EXPECT().GetSecret("securityconfig-secret", externalClusterName).Return(*securityConfigSecret, nil)
+			mockClient.EXPECT().GetSecret(tlsSecretName, externalClusterName).Return(corev1.Secret{
+				Data: map[string][]byte{CaCertKey: []byte("http-ca")},
+			}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, externalClusterName)
 			mockClient.EXPECT().GetJob(externalClusterName+"-securityconfig-update", externalClusterName).Return(batchv1.Job{}, NotFoundError())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
@@ -1331,12 +1433,13 @@ done;`
 			adminVolume := findJobVolume(*createdJob, "admin-cert")
 			Expect(adminVolume.Projected).ToNot(BeNil())
 			Expect(adminVolume.Projected.Sources).To(HaveLen(2))
-			Expect(adminVolume.Projected.Sources[0].Secret.Name).To(Equal(tlsSecretName))
+			Expect(adminVolume.Projected.Sources[0].Secret.Name).To(Equal(adminSecretName))
 			Expect(adminVolume.Projected.Sources[0].Secret.Items).To(ConsistOf(
 				corev1.KeyToPath{Key: corev1.TLSCertKey, Path: corev1.TLSCertKey},
 				corev1.KeyToPath{Key: corev1.TLSPrivateKeyKey, Path: corev1.TLSPrivateKeyKey},
 			))
-			Expect(adminVolume.Projected.Sources[1].Secret.Name).To(Equal(caSecretName))
+			Expect(adminVolume.Projected.Sources[1].Secret.Name).To(Equal(tlsSecretName))
+			Expect(adminVolume.Projected.Sources[1].Secret.Optional).To(BeNil())
 			Expect(adminVolume.Projected.Sources[1].Secret.Items).To(ConsistOf(
 				corev1.KeyToPath{Key: "ca.crt", Path: "ca.crt"},
 			))
@@ -1381,6 +1484,7 @@ done;`
 			generatedConfigName := helpers.GeneratedSecurityConfigSecretName(&spec)
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredSecret, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupGeneratedHTTPCertSecretMock(mockClient, clusterName)
 			mockClient.On("GetSecret", generatedConfigName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
 			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil)
