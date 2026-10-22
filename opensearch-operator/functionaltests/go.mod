@@ -1,6 +1,6 @@
 module github.com/opensearch-project/opensearch-k8s-operator/functionaltests
 
-go 1.26.9
+go 1.26.10
 
 require (
 	github.com/go-logr/logr v1.4.3
