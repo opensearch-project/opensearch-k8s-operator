@@ -942,6 +942,76 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 		Expect(ok).To(BeTrue())
 		Expect(custom["hash"]).NotTo(BeEmpty())
 	})
+
+	Context("with a securityConfigMap", func() {
+		var (
+			cr         *opensearchv1.OpenSearchCluster
+			mockClient *k8smocks.MockK8sClient
+			notFound   = &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+			adminCreds = &corev1.Secret{Data: map[string][]byte{"password": []byte("adminpass")}}
+		)
+
+		BeforeEach(func() {
+			cr = &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "cmtest", Namespace: "cmtest"},
+				Spec: opensearchv1.ClusterSpec{
+					Dashboards: opensearchv1.DashboardsConfig{
+						OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: "dash-creds"},
+					},
+					Security: &opensearchv1.Security{Config: &opensearchv1.SecurityConfig{
+						SecurityconfigConfigMap: corev1.LocalObjectReference{Name: "sec-cm"},
+					}},
+				},
+			}
+			mockClient = k8smocks.NewMockK8sClient(GinkgoT())
+		})
+
+		expectRemainingLookups := func() {
+			mockClient.EXPECT().GetSecret("dash-creds", "cmtest").Return(corev1.Secret{
+				Data: map[string][]byte{"password": []byte("dashboardspass")},
+			}, nil).Once()
+			mockClient.EXPECT().GetSecret(GeneratedSecurityConfigSecretName(cr), "cmtest").Return(corev1.Secret{}, notFound).Once()
+		}
+
+		It("uses the files of the configmap without a securityConfigSecret, including binaryData", func() {
+			mockClient.EXPECT().GetConfigMap("sec-cm", "cmtest").Return(corev1.ConfigMap{
+				Data:       map[string]string{"roles.yml": "from-configmap"},
+				BinaryData: map[string][]byte{"tenants.yml": []byte("from-binary-data")},
+			}, nil).Once()
+			expectRemainingLookups()
+
+			secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, adminCreds)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(secret.Data["roles.yml"])).To(Equal("from-configmap"))
+			Expect(string(secret.Data["tenants.yml"])).To(Equal("from-binary-data"))
+			Expect(secret.Data).To(HaveKey("internal_users.yml"))
+		})
+
+		It("lets a file in the securityConfigSecret take precedence over the configmap", func() {
+			cr.Spec.Security.Config.SecurityconfigSecret = corev1.LocalObjectReference{Name: "sec-secret"}
+			mockClient.EXPECT().GetConfigMap("sec-cm", "cmtest").Return(corev1.ConfigMap{
+				Data: map[string]string{"roles.yml": "from-configmap", "tenants.yml": "from-configmap"},
+			}, nil).Once()
+			mockClient.EXPECT().GetSecret("sec-secret", "cmtest").Return(corev1.Secret{
+				Data: map[string][]byte{"roles.yml": []byte("from-secret")},
+			}, nil).Once()
+			expectRemainingLookups()
+
+			secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, adminCreds)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(string(secret.Data["roles.yml"])).To(Equal("from-secret"))
+			Expect(string(secret.Data["tenants.yml"])).To(Equal("from-configmap"))
+		})
+
+		It("returns an error naming the configmap when it does not exist", func() {
+			mockClient.EXPECT().GetConfigMap("sec-cm", "cmtest").Return(corev1.ConfigMap{}, notFound).Once()
+
+			_, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, adminCreds)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring(`securityConfigMap "sec-cm"`))
+			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+		})
+	})
 })
 
 var _ = Describe("Master role helpers", func() {
