@@ -17,6 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      packages: write # needed to push the chart to GHCR
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -63,6 +64,19 @@ jobs:
           body: ${{ steps.meta.outputs.description }}
           prerelease: true
           immutableCreate: true
+
+      # Publish the same package to GHCR as an OCI artifact, so the chart can be
+      # installed with `helm install oci://ghcr.io/<owner>/charts/<chart>` in
+      # addition to the gh-pages HTTP repo.
+      - name: Push chart to GitHub Container Registry
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          printf %s "$GHCR_TOKEN" | helm registry login ghcr.io -u "$GHCR_USER" --password-stdin
+          helm push ".cr-release-packages/${TAG}.tgz" "oci://ghcr.io/${OWNER}/charts"
 
       - name: Update index.yaml and open PR to gh-pages
         env:
