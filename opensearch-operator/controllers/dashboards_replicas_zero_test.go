@@ -12,6 +12,7 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 )
 
@@ -47,6 +48,7 @@ var _ = Describe("dashboards.replicas: 0 survives operator writes", func() {
 			},
 		}}
 		Expect(k8sClient.Create(ctx, u)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, u))).To(Succeed()) })
 		Expect(u.Object["spec"].(map[string]interface{})["dashboards"].(map[string]interface{})["replicas"]).
 			To(BeEquivalentTo(0), "precondition: API server persisted replicas: 0")
 
@@ -70,11 +72,12 @@ var _ = Describe("dashboards.replicas: 0 survives operator writes", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: name, Namespace: namespace},
 			Spec: opensearchv1.ClusterSpec{
 				General:    opensearchv1.GeneralConfig{Version: "2.19.6", ServiceName: name},
-				Dashboards: opensearchv1.DashboardsConfig{Enable: false, Replicas: ptr.To(int32(0)), Version: "2.19.6"},
+				Dashboards: opensearchv1.DashboardsConfig{Enable: true, Replicas: ptr.To(int32(0)), Version: "2.19.6"},
 				NodePools:  []opensearchv1.NodePool{{Component: "nodes", Replicas: 1, Roles: []string{"cluster_manager", "data"}}},
 			},
 		}
 		Expect(k8sClient.Create(ctx, created)).To(Succeed())
+		DeferCleanup(func() { Expect(client.IgnoreNotFound(k8sClient.Delete(ctx, created))).To(Succeed()) })
 
 		// The Create response already carries the defaulted object.
 		Expect(created.Spec.Dashboards.Replicas).To(HaveValue(Equal(int32(0))))
