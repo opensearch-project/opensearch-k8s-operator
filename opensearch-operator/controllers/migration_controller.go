@@ -123,6 +123,18 @@ func (r *ClusterMigrationReconciler) Reconcile(ctx context.Context, req ctrl.Req
 			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 		}
 
+		// Finish a pending legacy status restore before adding the migration finalizer
+		if newCluster.Annotations[MigrationStatusPendingAnnotation] == "true" {
+			oldForRestore := &opsterv1.OpenSearchCluster{}
+			if getErr := r.Get(ctx, req.NamespacedName, oldForRestore); getErr != nil {
+				if !errors.IsNotFound(getErr) {
+					return ctrl.Result{}, getErr
+				}
+			} else if err := r.restorePendingClusterStatus(ctx, oldForRestore, newCluster); err != nil {
+				return ctrl.Result{}, err
+			}
+		}
+
 		// Add migration finalizer to new cluster, but only if there is actually a
 		// legacy twin to migrate/clean up. Otherwise every cluster on a fresh
 		// install (no opensearch.opster.io twin at all) would pick up a
@@ -226,6 +238,7 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 			newCluster.Annotations[k] = v
 		}
 	}
+	newCluster.Annotations[MigrationStatusPendingAnnotation] = "true"
 
 	// Convert spec using JSON marshaling for deep copy
 	specBytes, err := json.Marshal(oldCluster.Spec)
@@ -245,6 +258,9 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 			if err := r.Get(ctx, client.ObjectKeyFromObject(newCluster), existingCluster); err != nil {
 				return ctrl.Result{}, fmt.Errorf("failed to get existing new cluster: %w", err)
 			}
+			if err := r.restorePendingClusterStatus(ctx, oldCluster, existingCluster); err != nil {
+				return ctrl.Result{}, err
+			}
 			if err := r.transferCertificateSecretOwnership(ctx, oldCluster, existingCluster); err != nil {
 				logger.Error(err, "Failed to transfer certificate secret ownership, will retry")
 				return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
@@ -254,47 +270,14 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 		return ctrl.Result{}, err
 	}
 
-	// Copy status from old to new cluster (status can only be set after creation)
-	// Use UpdateOpenSearchClusterStatus helper for conflict handling
-	oldStatusBytes, err := json.Marshal(oldCluster.Status)
-	if err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to marshal old cluster status: %w", err)
-	}
-
-	var newStatus opensearchv1.ClusterStatus
-	if err := json.Unmarshal(oldStatusBytes, &newStatus); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to unmarshal to new cluster status: %w", err)
-	}
-
-	// Ensure ComponentsStatus is not nil (required by new CRD validation)
-	if newStatus.ComponentsStatus == nil {
-		newStatus.ComponentsStatus = []opensearchv1.ComponentStatus{}
-	}
-
-	// Copy status from old to new cluster (status can only be set after creation)
-	// Status lives on the status subresource, so a main-resource Update would not copy it
-	// Use retry to handle cases where the resource might not be immediately available (especially in tests)
-	var createdCluster *opensearchv1.OpenSearchCluster
-	if err := retry.OnError(retry.DefaultRetry, func(err error) bool {
-		// Retry on NotFound errors (resource might not be immediately available)
-		return errors.IsNotFound(err)
-	}, func() error {
-		// Get the newly created cluster
-		createdCluster = &opensearchv1.OpenSearchCluster{}
-		if err := r.Get(ctx, client.ObjectKeyFromObject(newCluster), createdCluster); err != nil {
-			return err
-		}
-		// Update status
-		createdCluster.Status = newStatus
-		return r.Status().Update(ctx, createdCluster)
-	}); err != nil {
-		return ctrl.Result{}, fmt.Errorf("failed to update new cluster status: %w", err)
+	if err := r.restorePendingClusterStatus(ctx, oldCluster, newCluster); err != nil {
+		return ctrl.Result{}, err
 	}
 
 	// Transfer certificate secret ownership from old cluster to new cluster
 	// This prevents garbage collection from deleting secrets when the old CR is deleted,
 	// which would cause SSL handshake failures due to CA/cert mismatch between pods
-	if err := r.transferCertificateSecretOwnership(ctx, oldCluster, createdCluster); err != nil {
+	if err := r.transferCertificateSecretOwnership(ctx, oldCluster, newCluster); err != nil {
 		logger.Error(err, "Failed to transfer certificate secret ownership, will retry")
 		// Don't fail the migration, just requeue to retry the transfer
 		return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
@@ -304,8 +287,61 @@ func (r *ClusterMigrationReconciler) createNewFromOld(ctx context.Context, oldCl
 	return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
 }
 
+// restorePendingClusterStatus copies the legacy status onto the migrated cluster
+// while it carries MigrationStatusPendingAnnotation, then drops the annotation.
+// newCluster must carry a current resourceVersion. Any failure leaves the
+// annotation in place and the next reconcile retries.
+func (r *ClusterMigrationReconciler) restorePendingClusterStatus(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster, newCluster *opensearchv1.OpenSearchCluster) error {
+	if newCluster.Annotations[MigrationStatusPendingAnnotation] != "true" {
+		return nil
+	}
+
+	oldStatusBytes, err := json.Marshal(oldCluster.Status)
+	if err != nil {
+		return fmt.Errorf("failed to marshal old cluster status: %w", err)
+	}
+	var status opensearchv1.ClusterStatus
+	if err := json.Unmarshal(oldStatusBytes, &status); err != nil {
+		return fmt.Errorf("failed to unmarshal to new cluster status: %w", err)
+	}
+	// ComponentsStatus is required by the new CRD validation
+	if status.ComponentsStatus == nil {
+		status.ComponentsStatus = []opensearchv1.ComponentStatus{}
+	}
+
+	// The cluster reconciler writes the status of a freshly created cluster right
+	// away, so conflicts are expected here.
+	refetch := false
+	if err := retry.OnError(retry.DefaultRetry, func(err error) bool {
+		return errors.IsConflict(err) || errors.IsNotFound(err)
+	}, func() error {
+		if refetch {
+			if err := r.Get(ctx, client.ObjectKeyFromObject(newCluster), newCluster); err != nil {
+				return err
+			}
+		}
+		refetch = true
+		newCluster.Status = status
+		return r.Status().Update(ctx, newCluster)
+	}); err != nil {
+		return fmt.Errorf("failed to update new cluster status: %w", err)
+	}
+
+	patch := client.MergeFrom(newCluster.DeepCopy())
+	delete(newCluster.Annotations, MigrationStatusPendingAnnotation)
+	if err := r.Patch(ctx, newCluster, patch); err != nil {
+		return fmt.Errorf("failed to clear status-pending annotation: %w", err)
+	}
+	return nil
+}
+
 func (r *ClusterMigrationReconciler) syncOldToNew(ctx context.Context, oldCluster *opsterv1.OpenSearchCluster, newCluster *opensearchv1.OpenSearchCluster) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	// Until the legacy status is restored, syncing new to old would wipe it.
+	if err := r.restorePendingClusterStatus(ctx, oldCluster, newCluster); err != nil {
+		return ctrl.Result{}, err
+	}
 
 	// Ensure certificate secrets have correct owner references
 	// This handles cases where migration happened before this fix, or where transfer previously failed
