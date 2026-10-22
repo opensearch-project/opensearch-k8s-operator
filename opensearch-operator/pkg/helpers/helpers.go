@@ -400,7 +400,7 @@ func LoadSecurityConfigSource(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSear
 	if cr.Spec.Security != nil && cr.Spec.Security.Config != nil && cr.Spec.Security.Config.SecurityconfigConfigMap.Name != "" {
 		configMap, err := k8sClient.GetConfigMap(cr.Spec.Security.Config.SecurityconfigConfigMap.Name, cr.Namespace)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("unable to get securityConfigMap %q: %w", cr.Spec.Security.Config.SecurityconfigConfigMap.Name, err)
 		}
 		for key, value := range configMap.Data {
 			data[key] = []byte(value)
