@@ -18,6 +18,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -311,7 +312,7 @@ func createUpgradeTestCluster(clusterName, namespace, version string) error {
 			Dashboards: opensearchv1.DashboardsConfig{
 				Enable:   true,
 				Version:  version,
-				Replicas: 1,
+				Replicas: ptr.To(int32(1)),
 			},
 			NodePools: []opensearchv1.NodePool{
 				{
