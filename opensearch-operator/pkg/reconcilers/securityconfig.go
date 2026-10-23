@@ -422,18 +422,43 @@ func checksum(data map[string][]byte) (string, error) {
 // i.e. exactly what operator <=2.8.0 used to hash into checksumAnnotation before the
 // generated/merged secret existed. Returns "" (also what <=2.8.0 wrote when no secret was
 // configured) when no SecurityconfigSecret is configured or it does not exist yet.
+// Operator <=2.8.0 had no securityConfigMap, so when one is configured its files are hashed in
+// as well: the result then never matches a legacy checksum, and a legacy job is re-run instead
+// of being adopted without the files of the configmap ever being applied.
 func (r *SecurityconfigReconciler) userSecurityConfigChecksum() (string, error) {
-	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Config == nil || r.instance.Spec.Security.Config.SecurityconfigSecret.Name == "" {
+	if r.instance.Spec.Security == nil || r.instance.Spec.Security.Config == nil {
 		return "", nil
 	}
-	userSecret, err := r.client.GetSecret(r.instance.Spec.Security.Config.SecurityconfigSecret.Name, r.instance.Namespace)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
+	config := r.instance.Spec.Security.Config
+	data := map[string][]byte{}
+	secretFound := false
+	if config.SecurityconfigSecret.Name != "" {
+		userSecret, err := r.client.GetSecret(config.SecurityconfigSecret.Name, r.instance.Namespace)
+		if err != nil && !apierrors.IsNotFound(err) {
+			return "", err
+		}
+		secretFound = err == nil
+		for key, value := range userSecret.Data {
+			data[key] = value
+		}
+	}
+	if config.SecurityconfigConfigMap.Name == "" {
+		if !secretFound {
 			return "", nil
 		}
+		return checksum(data)
+	}
+	configMap, err := r.client.GetConfigMap(config.SecurityconfigConfigMap.Name, r.instance.Namespace)
+	if err != nil {
 		return "", err
 	}
-	return checksum(userSecret.Data)
+	for key, value := range configMap.Data {
+		data["configmap/"+key] = []byte(value)
+	}
+	for key, value := range configMap.BinaryData {
+		data["configmap/"+key] = value
+	}
+	return checksum(data)
 }
 
 // ensureSecurityConfigJobChecksumAnnotations updates a current job's checksum annotations in
