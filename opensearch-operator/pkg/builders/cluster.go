@@ -437,18 +437,11 @@ func NewSTSForNodePool(
 	startupProbeFailureThreshold := int32(10) // 30s * 10 = 5m time to wait for startup
 	startupProbeSuccessThreshold := int32(1)
 	startupProbeInitialDelaySeconds := int32(10)
-	probeProtocol := "https"
-	if !helpers.IsHttpTlsEnabled(cr) {
-		probeProtocol = "http"
-	}
-	probeAuth := "-u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\""
 	probeClientCert := probeClientCertSecret(cr)
-	if probeClientCert != "" {
-		probeAuth = "--cert /mnt/operator-client-cert/tls.crt --key /mnt/operator-client-cert/tls.key"
-	}
-	probeCurl := fmt.Sprintf("curl -k %s --silent --fail '%s://localhost:%d'", probeAuth, probeProtocol, PortForCluster(cr))
 	// Nil keeps the startup probe a TCP socket check. An authenticated curl cannot
 	// succeed until securityadmin has run, so it must not be the default.
+	// KeepLegacyStartupProbeHandler copies the previous curl handler back onto
+	// StatefulSets that already have it, so the default change does not roll them.
 	var startupProbeCommand []string
 
 	readinessProbePeriodSeconds := int32(30)
@@ -456,7 +449,7 @@ func NewSTSForNodePool(
 	readinessProbeFailureThreshold := int32(5)
 	readinessProbeSuccessThreshold := int32(1)
 	readinessProbeInitialDelaySeconds := int32(60)
-	readinessProbeCommand := []string{"/bin/bash", "-c", probeCurl}
+	readinessProbeCommand := defaultCurlProbeCommand(cr)
 
 	livenessProbePeriodSeconds := int32(20)
 	livenessProbeTimeoutSeconds := int32(5)
@@ -1227,6 +1220,59 @@ func initialMasterNodes(cr *opensearchv1.OpenSearchCluster) string {
 		}
 	}
 	return strings.Join(names, ",")
+}
+
+// defaultCurlProbeCommand is the authenticated curl Exec the operator used as
+// the startup probe before the default became a TCP check, and still uses for
+// the readiness probe.
+func defaultCurlProbeCommand(cr *opensearchv1.OpenSearchCluster) []string {
+	probeProtocol := "https"
+	if !helpers.IsHttpTlsEnabled(cr) {
+		probeProtocol = "http"
+	}
+	probeAuth := "-u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\""
+	if probeClientCertSecret(cr) != "" {
+		probeAuth = "--cert /mnt/operator-client-cert/tls.crt --key /mnt/operator-client-cert/tls.key"
+	}
+	probeCurl := fmt.Sprintf("curl -k %s --silent --fail '%s://localhost:%d'", probeAuth, probeProtocol, PortForCluster(cr))
+	return []string{"/bin/bash", "-c", probeCurl}
+}
+
+// KeepLegacyStartupProbeHandler copies the startup probe handler from existing
+// onto desired when that handler is still the operator's old curl Exec.
+// Timings on desired are left alone. A TCP handler, or an Exec command that is
+// not the old default, is not copied: the former is rebuilt from the current
+// HTTP port, and the latter is a user command that the spec no longer sets.
+func KeepLegacyStartupProbeHandler(desired, existing *appsv1.StatefulSet, cr *opensearchv1.OpenSearchCluster) {
+	desiredProbe := openSearchStartupProbe(desired)
+	existingProbe := openSearchStartupProbe(existing)
+	if desiredProbe == nil || existingProbe == nil || existingProbe.Exec == nil {
+		return
+	}
+	legacy := defaultCurlProbeCommand(cr)
+	command := existingProbe.Exec.Command
+	if len(command) != len(legacy) {
+		return
+	}
+	for i := range command {
+		if command[i] != legacy[i] {
+			return
+		}
+	}
+	desiredProbe.ProbeHandler = existingProbe.ProbeHandler
+}
+
+func openSearchStartupProbe(sts *appsv1.StatefulSet) *corev1.Probe {
+	if sts == nil {
+		return nil
+	}
+	for i := range sts.Spec.Template.Spec.Containers {
+		container := &sts.Spec.Template.Spec.Containers[i]
+		if container.Name == "opensearch" {
+			return container.StartupProbe
+		}
+	}
+	return nil
 }
 
 // ResolveInitialMasterNodes chooses the cluster.initial_master_nodes value for one

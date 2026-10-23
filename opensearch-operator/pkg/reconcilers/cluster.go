@@ -285,6 +285,9 @@ func (r *ClusterReconciler) reconcileNodeStatefulSet(nodePool opensearchv1.NodeP
 	}
 	initialMasters, includeInitialMasters := builders.ResolveInitialMasterNodes(r.instance, existingValue, hasExistingValue, bootstrapPodExists)
 	builders.ApplyInitialMasterNodesEnv(sts, initialMasters, includeInitialMasters)
+	if getErr == nil && !startupProbeCommandSet(nodePool) {
+		builders.KeepLegacyStartupProbeHandler(sts, &preExisting, r.instance)
+	}
 	if err := ctrl.SetControllerReference(r.instance, sts, r.client.Scheme()); err != nil {
 		return &ctrl.Result{}, err
 	}
@@ -415,15 +418,38 @@ func (r *ClusterReconciler) reconcileNodeAttributesRBAC(result *reconciler.Combi
 }
 
 // legacyBootstrapPodExists reports whether an older operator's bootstrap pod is still present.
+// A StatefulSet pod of the same name belongs to a node pool whose component is "bootstrap"
+// and is not the legacy pod.
 func (r *ClusterReconciler) legacyBootstrapPodExists() (bool, error) {
-	_, err := r.client.GetPod(builders.BootstrapPodName(r.instance), r.instance.Namespace)
+	pod, err := r.client.GetPod(builders.BootstrapPodName(r.instance), r.instance.Namespace)
 	if k8serrors.IsNotFound(err) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
+	if isStatefulSetPod(&pod) {
+		return false, nil
+	}
 	return true, nil
+}
+
+// startupProbeCommandSet reports whether the node pool spec overrides the startup probe command.
+func startupProbeCommandSet(nodePool opensearchv1.NodePool) bool {
+	return nodePool.Probes != nil && nodePool.Probes.Startup != nil && len(nodePool.Probes.Startup.Command) > 0
+}
+
+// isStatefulSetPod reports whether a StatefulSet controls the pod.
+func isStatefulSetPod(pod *corev1.Pod) bool {
+	if pod == nil {
+		return false
+	}
+	for _, ref := range pod.OwnerReferences {
+		if ref.Controller != nil && *ref.Controller && ref.Kind == "StatefulSet" {
+			return true
+		}
+	}
+	return false
 }
 
 // cleanupLegacyBootstrapResources removes leftover bootstrap pods/PVCs left by older
@@ -449,11 +475,14 @@ func (r *ClusterReconciler) cleanupLegacyBootstrapResources() (*ctrl.Result, err
 		},
 	}
 
-	_, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
+	pod, err := r.client.GetPod(bootstrapPod.Name, bootstrapPod.Namespace)
 	if err != nil && !k8serrors.IsNotFound(err) {
 		return &ctrl.Result{}, err
 	}
-	podExists := err == nil
+	// A node pool named "bootstrap" owns a pod with this name. Deleting it would
+	// fight the StatefulSet. The legacy data PVC uses a different name and can
+	// still be removed once the cluster is initialized.
+	podExists := err == nil && !isStatefulSetPod(&pod)
 
 	// The pod or its PVC may still be the only copy of cluster state. Leave both
 	// until a real node pool has formed the cluster.
