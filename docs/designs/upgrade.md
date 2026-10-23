@@ -13,7 +13,7 @@ flowchart TD
     a1 -->|Versions differ| a5{Cluster initialized?}
     a5 -->|No| a6(Requeue after 10s)
     a5 -->|Yes| a7(Validate version)
-    a7 -->|Invalid| a8(Emit error event and exit)
+    a7 -->|Invalid| a8(Emit warning event, return terminal error)
     a7 -->|Valid| a9{Phase is UPGRADING?}
     a9 -->|No| a10(Set phase to UPGRADING)
     a10 --> a11(Create OpenSearch client)
@@ -80,10 +80,15 @@ This means that some nodes (such as coordinating nodes) may get upgraded after m
 ### Version validation
 
 Before starting an upgrade, the reconciler validates the requested version:
+- **Valid semver**: The requested version must parse as a semantic version
 - **Downgrade prevention**: The new version must not be less than the current version
 - **Major version jump prevention**: The new version must not be more than one major version ahead of the current version
 
-If validation fails, an error event is emitted and the upgrade is aborted.
+The same check (`helpers.ValidateVersionTransition`) runs at admission time in the `OpenSearchCluster` validating webhook, so an invalid `spec.general.version` change is rejected before it is stored. The webhook only checks actual version changes on an initialized cluster, and always allows reverting to the running `status.version`.
+
+If validation fails in the reconciler (for example with the webhook disabled), a warning event is emitted and the upgrade reconciler returns a terminal error. The rest of the reconciler chain (rolling restart, snapshot repositories, ...) keeps running.
+
+If a custom image is pinned in `spec.general.image`, a version change does not change the pod image. The webhook rejects a version bump that leaves the pinned image unchanged. With the webhook disabled, the reconciler validates the version first. A downgrade or a jump of more than one major version returns a terminal error and leaves `status.version` unchanged. When validation passes, or when `status.version` is not valid semver, the reconciler emits a warning, copies the requested version into `status.version`, and does not restart any pods.
 
 ### Phase management
 
@@ -114,11 +119,10 @@ For each node pool in the `InProgress` state, the following steps are performed 
 
 1. **Check pod readiness**: Ensure all pods in the StatefulSet are ready before proceeding
 2. **Delete deprecated settings**: Remove cluster settings that have been archived in the new version to prevent upgrade deadlocks (see [OpenSearch issue #18515](https://github.com/opensearch-project/OpenSearch/issues/18515))
-3. **Check cluster status**: Verify the cluster is ready for the next pod restart:
-   - If cluster is green, proceed
-   - If cluster is yellow, check if it's safe to restart (e.g., due to version mismatch during upgrade)
-   - If `DrainDataNodes` is enabled and cluster is not green, wait
-   - If shard allocation is disabled, enable it and wait
+3. **Check cluster status**: Verify the cluster is ready for the next pod restart (`CheckClusterStatusForRestart`):
+   - Green passes
+   - Yellow passes once shard allocation is enabled, every data node has joined, and no shards are initializing, relocating, waiting for delayed allocation, or in an in-flight fetch. `general.drainDataNodes` does not change this result. If allocation is not enabled, the reconciler turns it on and waits
+   - Red does not pass. With `general.drainDataNodes` the reconciler waits. Without it, disabled shard allocation is turned back on and the reconciler waits for green
 4. **Check upgrade completion**: If all pods are upgraded (UpdatedReplicas == Replicas):
    - Reactivate shard allocation if it was disabled
    - Set node pool status to `Upgraded`
@@ -150,11 +154,9 @@ During the upgrade process, the reconciler tracks detailed conditions for each n
 
 ### StatefulSet Requirements
 
-Due to the requirements to check cluster status and complete additional actions on each data node pod before it is upgraded we need fine grained control over when each pod is deleted.  To achieve this we use the [OnDelete update strategy](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies).  This lets us have complete control over when a pod in a StatefulSet is deleted and replaced.
+The operator needs fine-grained control over when each pod is replaced, so that it can check cluster health and prepare each node before it goes down. All node pool StatefulSets therefore use the [OnDelete update strategy](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#update-strategies), whatever the node roles.
 
-The cluster reconciler updates the StatefulSet image when it detects a version change, but with OnDelete strategy, pods are not automatically replaced. The upgrade reconciler manually deletes pods after performing the necessary pre-checks and preparations.
-
-For non-data nodes the only requirement is that the pods in each node pool are upgraded one at a time and each pod is ready before the next one is upgraded.  This behaviour is already built in to the Kubernetes StatefulSet controller with the [RollingUpdate](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#rolling-updates) update strategy and the default [OrderedReady](https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/#orderedready-pod-management) pod management strategy.  By including a readiness check in the pod spec this means the pods won't be deleted and upgraded until the previous pod is ready and working.
+The cluster reconciler updates the StatefulSet image when it detects a version change, but with OnDelete pods are not replaced automatically. The upgrade reconciler deletes the pods one at a time, after the pre-checks and preparations above.
 
 ### Requeue intervals
 
@@ -166,5 +168,5 @@ The reconciler uses different requeue intervals based on the upgrade state:
 ### Special considerations
 
 - **Two-node clusters with draining**: If a cluster has only 2 data nodes and `DrainDataNodes` is enabled, some shards may not drain completely. The reconciler logs a warning in this case and only waits for system index primaries to drain.
-- **Yellow cluster state during upgrade**: During upgrades, a cluster may remain yellow because replicas cannot be allocated to non-upgraded nodes when primaries are on upgraded nodes. The reconciler detects this safe condition and allows the upgrade to proceed.
+- **Yellow cluster state during upgrade**: The health check passes on yellow once shard allocation is enabled, every data node has joined, and there is no shard activity. A cluster often stays yellow during an upgrade because replicas cannot be placed on nodes that are still on the old version. With `general.drainDataNodes` the node is still restarted only after its shards have moved.
 - **Deprecated settings cleanup**: Before each pod deletion, deprecated cluster settings are removed. This is necessary because some settings are re-applied automatically during node restart, and archived settings can cause update failures.
