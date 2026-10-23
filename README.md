@@ -13,6 +13,12 @@ The Operator can be easily installed using Helm on any CNCF-certified Kubernetes
 1. Add the helm repo: `helm repo add opensearch-operator https://opensearch-project.github.io/opensearch-k8s-operator/`
 2. Install the Operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
 
+Or install from the OCI registry (no `helm repo add` needed):
+
+```bash
+helm install opensearch-operator oci://ghcr.io/opensearch-project/charts/opensearch-operator --version <chart-version>
+```
+
 After installation, you can deploy your first OpenSearch cluster by creating an `OpenSearchCluster` custom resource. Please refer to the [User Guide](./docs/userguide/main.md) for detailed instructions and configuration options.
 
 ## Video Tutorial

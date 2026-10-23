@@ -8,6 +8,12 @@ After installing the operator (please refer to the [User Guide](./main.md) for d
 helm install [RELEASE_NAME] opensearch-operator/opensearch-cluster
 ```
 
+Or from the OCI registry (no `helm repo add` needed):
+
+```bash
+helm install [RELEASE_NAME] oci://ghcr.io/opensearch-project/charts/opensearch-cluster --version <chart-version>
+```
+
 ## Uninstall Chart
 
 ```bash
