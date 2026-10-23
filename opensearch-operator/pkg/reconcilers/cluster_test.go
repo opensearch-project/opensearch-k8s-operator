@@ -786,6 +786,38 @@ var _ = Describe("Legacy bootstrap cleanup", func() {
 		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
 	})
 
+	It("Should not delete a StatefulSet pod that reuses the bootstrap name", func() {
+		instance := newCluster()
+		bootstrapPod := legacyBootstrapPod(instance)
+		controller := true
+		bootstrapPod.OwnerReferences = []metav1.OwnerReference{{
+			APIVersion: "apps/v1",
+			Kind:       "StatefulSet",
+			Name:       clusterName + "-bootstrap",
+			UID:        "sts-uid",
+			Controller: &controller,
+		}}
+
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockClient.On("GetPod", bootstrapPod.Name, bootstrapPod.Namespace).Return(*bootstrapPod, nil)
+		mockClient.On("ReconcileResource", mock.MatchedBy(func(obj client.Object) bool {
+			pvc, ok := obj.(*corev1.PersistentVolumeClaim)
+			return ok && pvc.Name == builders.BootstrapPVCName(instance)
+		}), reconciler.StateAbsent).Return(&ctrl.Result{}, nil)
+
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			ctx:      context.Background(),
+			instance: instance,
+			logger:   logr.Discard(),
+		}
+		result, err := underTest.cleanupLegacyBootstrapResources()
+
+		Expect(err).NotTo(HaveOccurred())
+		Expect(result).To(Equal(&ctrl.Result{}))
+		mockClient.AssertNumberOfCalls(GinkgoT(), "ReconcileResource", 1)
+	})
+
 	It("Should delete an orphaned bootstrap PVC when the pod is already gone", func() {
 		instance := newCluster()
 		mockClient := k8s.NewMockK8sClient(GinkgoT())

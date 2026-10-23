@@ -64,4 +64,31 @@ var _ = Describe("initial master nodes", func() {
 		Expect(found).To(BeTrue())
 		Expect(value).To(Equal("demo-masters-0"))
 	})
+
+	It("keeps the old curl startup probe on an existing StatefulSet", func() {
+		cr := cluster(true, masters)
+		existing := NewSTSForNodePool("admin", cr, masters, "hash", nil, nil)
+		existing.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler = corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{Command: defaultCurlProbeCommand(cr)},
+		}
+		desired := NewSTSForNodePool("admin", cr, masters, "hash", nil, nil)
+		delay := desired.Spec.Template.Spec.Containers[0].StartupProbe.InitialDelaySeconds
+		KeepLegacyStartupProbeHandler(desired, existing, cr)
+		probe := desired.Spec.Template.Spec.Containers[0].StartupProbe
+		Expect(probe.TCPSocket).To(BeNil())
+		Expect(probe.Exec.Command).To(Equal(defaultCurlProbeCommand(cr)))
+		Expect(probe.InitialDelaySeconds).To(Equal(delay))
+	})
+
+	It("leaves the TCP startup probe when the existing command is not the old curl default", func() {
+		cr := cluster(true, masters)
+		existing := NewSTSForNodePool("admin", cr, masters, "hash", nil, nil)
+		existing.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler = corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{Command: []string{"/bin/true"}},
+		}
+		desired := NewSTSForNodePool("admin", cr, masters, "hash", nil, nil)
+		KeepLegacyStartupProbeHandler(desired, existing, cr)
+		Expect(desired.Spec.Template.Spec.Containers[0].StartupProbe.TCPSocket).NotTo(BeNil())
+		Expect(desired.Spec.Template.Spec.Containers[0].StartupProbe.Exec).To(BeNil())
+	})
 })
