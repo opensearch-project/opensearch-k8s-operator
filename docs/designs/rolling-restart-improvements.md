@@ -8,7 +8,7 @@ The rolling restart reconciler (`pkg/reconcilers/rollingRestart.go`) restarts po
 
 On each reconciliation the reconciler:
 
-1. Does nothing while a version upgrade is in progress (`status.version` differs from `spec.general.version`).
+1. Does nothing while a version upgrade is in progress (`status.version` is set and differs from `spec.general.version`). An empty `status.version` is not treated as an upgrade.
 2. Checks every node pool. If any StatefulSet has fewer ready pods than replicas, it requeues after 10 seconds and restarts nothing. Stuck pods on an older revision (for example in `CrashLoopBackOff` or `ImagePullBackOff`) are deleted to unblock the rollout, and Warning events are emitted.
 3. Skips the restart until the cluster is initialized (`status.initialized`).
 4. With `general.drainDataNodes`, removes stale shard allocation exclusions left by an earlier failed cleanup.

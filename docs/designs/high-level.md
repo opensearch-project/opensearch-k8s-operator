@@ -85,9 +85,9 @@ The OpenSearch Reconciler retrieves the current custom resource from Kubernetes 
 Otherwise the OpenSearch Reconciler runs the chain. Each Reconciler returns a Result and an error:
 * An error stops the chain and the request is retried, unless it is a terminal error (a permanent configuration or validation problem, such as an invalid version change). Terminal errors are counted in the `opensearch_operator_cluster_reconcile_error` metric and logged, and the chain continues.
 * `Requeue: true` stops the chain, so in-progress work such as scaling or an upgrade step is not interleaved with later reconcilers.
-* `RequeueAfter` only: the chain continues, and the shortest requested delay is used.
+* `RequeueAfter` only: the chain continues. Of the requested delays that are shorter than 30 seconds, the soonest one is kept.
 
-When the whole chain completes, the reconcile is requeued after the shortest requested delay, or after 30 seconds by default. This periodic requeue picks up changes that do not trigger a watch event, for example changes to user-supplied secrets.
+When the whole chain completes, the reconcile is requeued after 30 seconds, or sooner when a reconciler asked for a shorter delay. A longer `RequeueAfter` does not extend that wait. This periodic requeue picks up changes that do not trigger a watch event, for example changes to user-supplied secrets.
 
 After the chain, whether it finished, failed or requeued, the OpenSearch Reconciler writes health, `observedGeneration` and the `Ready`/`Progressing`/`Degraded` conditions, derived from the components' statuses and the node pool StatefulSets (`pkg/reconcilers/conditions.go`).
 
