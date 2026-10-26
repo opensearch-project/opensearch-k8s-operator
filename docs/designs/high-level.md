@@ -93,8 +93,6 @@ After the chain, whether it finished, failed or requeued, the OpenSearch Reconci
 
 Controllers write to a user's `OpenSearchCluster` through the status subresource or a metadata patch (`patchMetadata` in `controllers/opensearchController.go`), not a full-object `Update`. An `Update` makes the operator a field manager of `spec`, and the user's next server-side apply (Helm 4 by default) then fails with a conflict.
 
-If it was created or updated, the OpenSearch Reconciler uses the retrieved custom resource YAML to parse it and produces a data structure representing it. It then executes the chain of Reconcilers, passing the Custom Resource data structure as main input.
-
 ### Other controllers
 
 The OpenSearch API resources (`OpensearchUser`, `OpensearchRole`, `OpensearchUserRoleBinding`, `OpensearchTenant`, `OpensearchActionGroup`, `OpenSearchISMPolicy`, `OpensearchIndexTemplate`, `OpensearchComponentTemplate`, `OpensearchSnapshotPolicy`) each have their own controller that reconciles them against the OpenSearch API of the referenced cluster. See [OpenSearch API resources](opensearch-rbac.md).
