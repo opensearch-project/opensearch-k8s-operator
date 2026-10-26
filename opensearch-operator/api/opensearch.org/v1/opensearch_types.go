@@ -595,7 +595,8 @@ type SecurityConfigStatus struct {
 	// Checksums of the securityconfig files last applied, keyed by file name. For internal_users.yml
 	// the checksum covers the file as supplied (or bundled), without the operator-managed password hashes.
 	AppliedChecksums map[string]string `json:"appliedChecksums,omitempty"`
-	// Checksum of the operator-managed admin and kibanaserver password hashes last applied.
+	// Checksum of the operator-managed admin and Dashboards user password hashes last applied.
+	// The Dashboards user is kibanaserver unless the credentials secret names another user.
 	ManagedUsersChecksum string `json:"managedUsersChecksum,omitempty"`
 	// Checksum of the last successful securityconfig update job recorded here.
 	UpdateJobChecksum string `json:"updateJobChecksum,omitempty"`

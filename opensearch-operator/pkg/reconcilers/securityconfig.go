@@ -270,7 +270,12 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
 
-	current, err := securityConfigState(source, &configSecret)
+	dashboardsUsername, err := helpers.DashboardsUsername(r.client, r.instance)
+	if err != nil {
+		r.logger.Error(err, "Unable to determine Dashboards username")
+		return ctrl.Result{}, err
+	}
+	current, err := securityConfigState(source, &configSecret, dashboardsUsername)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -287,6 +292,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	// Once the cluster is initialized and the applied securityconfig is known, only re-apply what
 	// changed: securityadmin replaces the whole document of every file it applies, which would drop
 	// security objects created through the REST API or Dashboards.
+	// partialFiles is set when that selective path is the one creating the update job.
+	var partialFiles []string
 	if r.instance.Status.Initialized && applied != nil {
 		staleJob := jobExists && job.Status.Succeeded == 0 && job.Annotations[checksumAnnotation] != checksumval
 		var dirty []string
@@ -301,12 +308,15 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		if plan.patchManagedUsers {
-			if err := r.patchManagedUserHashes(&configSecret, adminCertName); err != nil {
-				r.logger.Error(err, "Unable to update the admin and kibanaserver password hashes")
-				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Unable to update the admin and kibanaserver password hashes: %v", err)
+			if err := r.patchManagedUserHashes(&configSecret, adminCertName, dashboardsUsername); err != nil {
+				r.logger.Error(err, "Unable to update the admin and Dashboards password hashes")
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Unable to update the admin and Dashboards password hashes: %v", err)
+				if statusErr := r.updateSecurityConfigComponentStatus(securityConfigStatusFailed, "unable to update the admin and Dashboards password hashes", nil); statusErr != nil {
+					return ctrl.Result{}, statusErr
+				}
 				return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
 			}
-			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Updated the admin and kibanaserver password hashes")
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Updated the admin and Dashboards password hashes")
 			updated := applied.DeepCopy()
 			updated.ManagedUsersChecksum = current.ManagedUsersChecksum
 			if err := r.recordAppliedSecurityConfig(*updated); err != nil {
@@ -333,6 +343,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		r.logger.Info("Re-applying changed securityconfig files", "files", plan.files)
+		partialFiles = plan.files
 		cmdArg = BuildCmdArg(r.instance, filterSecurityConfigSecret(&configSecret, plan.files), r.logger)
 	}
 
@@ -398,10 +409,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	if r.instance.Status.Initialized {
-		// securityadmin.sh replaces (not merges) the internalusers/roles/rolesmapping/tenants/
-		// actiongroups documents in the security index with the contents being applied here, so
-		// any object created afterwards via the REST API or Dashboards is about to be wiped.
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Re-applying securityconfig on an already-initialized cluster; this replaces internal users, roles, role mappings, tenants and action groups with the contents of the generated securityconfig secret, discarding anything created since via the REST API or Dashboards")
+		// securityadmin.sh replaces (not merges) each document it applies. A selective re-apply
+		// names those files; a full re-apply still replaces every security document.
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "%s", initializedSecurityConfigReapplyMessage(partialFiles))
 	}
 	r.logger.Info("Starting securityconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting securityconfig update job")
@@ -472,6 +482,18 @@ func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret
 	}
 
 	return arg
+}
+
+// initializedSecurityConfigReapplyMessage is the warning emitted when an update job is started
+// on a cluster that already has a security index.
+func initializedSecurityConfigReapplyMessage(files []string) string {
+	if len(files) == 0 {
+		return "Re-applying securityconfig on an already-initialized cluster; this replaces internal users, roles, role mappings, tenants and action groups with the contents of the generated securityconfig secret, discarding anything created since via the REST API or Dashboards"
+	}
+	return fmt.Sprintf(
+		"Re-applying changed securityconfig files (%s) on an already-initialized cluster; securityadmin replaces the whole document of each of these files and leaves every other security document unchanged",
+		strings.Join(files, ", "),
+	)
 }
 
 func checksum(data map[string][]byte) (string, error) {

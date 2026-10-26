@@ -6,9 +6,11 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"slices"
 	"sort"
+	"strings"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
@@ -36,14 +38,16 @@ type securityConfigPlan struct {
 	// Bundled defaults are only applied when the cluster is set up, so that they never overwrite
 	// security objects created later through the REST API or Dashboards.
 	skippedDefaults []string
-	// patchManagedUsers is set when the admin and kibanaserver password hashes changed and
-	// internal_users.yml is not re-applied anyway.
+	// patchManagedUsers is set when the admin or Dashboards user password hash changed and
+	// internal_users.yml is not re-applied anyway. The Dashboards user is kibanaserver unless
+	// the credentials secret names another user.
 	patchManagedUsers bool
 }
 
 // securityConfigState computes the state recorded for a securityconfig: a checksum per file as
 // supplied (or bundled), and one for the operator-managed password hashes.
-func securityConfigState(source *helpers.SecurityConfigSource, generated *corev1.Secret) (opensearchv1.SecurityConfigStatus, error) {
+// dashboardsUsername is the internal user Dashboards authenticates as.
+func securityConfigState(source *helpers.SecurityConfigSource, generated *corev1.Secret, dashboardsUsername string) (opensearchv1.SecurityConfigStatus, error) {
 	state := opensearchv1.SecurityConfigStatus{AppliedChecksums: map[string]string{}}
 	for name, content := range source.Data {
 		if _, ok := ymlToFileType[name]; ok && len(content) > 0 {
@@ -51,16 +55,44 @@ func securityConfigState(source *helpers.SecurityConfigSource, generated *corev1
 		}
 	}
 
-	var users helpers.InternalUserConfig
-	if err := yaml.Unmarshal(generated.Data[internalUsersFile], &users); err != nil {
-		return state, fmt.Errorf("unable to parse generated %s: %w", internalUsersFile, err)
+	adminHash, dashboardsHash, err := managedPasswordHashes(generated.Data[internalUsersFile], dashboardsUsername)
+	if err != nil {
+		return state, err
 	}
-	hashes := users.Admin.Hash
-	if users.Kibanaserver != nil {
-		hashes += "\n" + users.Kibanaserver.Hash
-	}
-	state.ManagedUsersChecksum = contentChecksum([]byte(hashes))
+	state.ManagedUsersChecksum = managedUsersChecksum(adminHash, dashboardsUsername, dashboardsHash)
 	return state, nil
+}
+
+// managedPasswordHashes reads the admin and Dashboards user hashes from a generated internal_users.yml.
+func managedPasswordHashes(internalUsers []byte, dashboardsUsername string) (string, string, error) {
+	var data map[string]interface{}
+	if err := yaml.Unmarshal(internalUsers, &data); err != nil {
+		return "", "", fmt.Errorf("unable to parse generated %s: %w", internalUsersFile, err)
+	}
+	return internalUserHash(data, "admin"), internalUserHash(data, dashboardsUsername), nil
+}
+
+// internalUserHash returns the hash of username. yaml.v2 decodes nested mappings as map[interface{}]interface{}.
+func internalUserHash(data map[string]interface{}, username string) string {
+	if username == "" {
+		return ""
+	}
+	user, ok := data[username].(map[interface{}]interface{})
+	if !ok {
+		return ""
+	}
+	hash, _ := user["hash"].(string)
+	return hash
+}
+
+// managedUsersChecksum covers the admin hash and, when the Dashboards user is someone else, that user's hash.
+// A kibanaserver entry left beside a custom Dashboards user is not operator-managed and is ignored.
+func managedUsersChecksum(adminHash, dashboardsUsername, dashboardsHash string) string {
+	hashes := adminHash
+	if dashboardsUsername != "admin" && dashboardsHash != "" {
+		hashes += "\n" + dashboardsHash
+	}
+	return contentChecksum([]byte(hashes))
 }
 
 func contentChecksum(content []byte) string {
@@ -194,17 +226,19 @@ func (r *SecurityconfigReconciler) recordSucceededJob(
 	return r.instance.Status.SecurityConfig, nil
 }
 
-// patchManagedUserHashes updates the admin and kibanaserver password hashes through the security
+// patchManagedUserHashes updates the admin and Dashboards user password hashes through the security
 // REST API. Unlike re-applying internal_users.yml with securityadmin, this keeps all other internal
 // users, e.g. those created through the REST API or Dashboards.
-func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secret, adminCertName string) error {
-	var users helpers.InternalUserConfig
-	if err := yaml.Unmarshal(generated.Data[internalUsersFile], &users); err != nil {
-		return fmt.Errorf("unable to parse generated %s: %w", internalUsersFile, err)
+func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secret, adminCertName, dashboardsUsername string) error {
+	adminHash, dashboardsHash, err := managedPasswordHashes(generated.Data[internalUsersFile], dashboardsUsername)
+	if err != nil {
+		return err
 	}
-	hashes := map[string]string{"admin": users.Admin.Hash}
-	if users.Kibanaserver != nil {
-		hashes["kibanaserver"] = users.Kibanaserver.Hash
+	hashes := map[string]string{"admin": adminHash}
+	names := []string{"admin"}
+	if dashboardsUsername != "admin" && dashboardsHash != "" {
+		hashes[dashboardsUsername] = dashboardsHash
+		names = append(names, dashboardsUsername)
 	}
 
 	osClient, err := util.CreateAdminCertClientForCluster(
@@ -218,7 +252,7 @@ func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secr
 		return err
 	}
 
-	for _, name := range []string{"admin", "kibanaserver"} {
+	for _, name := range names {
 		hash := hashes[name]
 		if hash == "" {
 			continue
@@ -231,10 +265,35 @@ func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secr
 		if err != nil {
 			return err
 		}
-		_ = res.Body.Close()
+		detail, readErr := readLimitedBody(res.Body)
 		if res.StatusCode != http.StatusOK {
-			return fmt.Errorf("updating the password hash of %s returned HTTP %d", name, res.StatusCode)
+			if readErr != nil {
+				return fmt.Errorf("updating the password hash of %s returned HTTP %d: %w", name, res.StatusCode, readErr)
+			}
+			if detail == "" {
+				return fmt.Errorf("updating the password hash of %s returned HTTP %d", name, res.StatusCode)
+			}
+			return fmt.Errorf("updating the password hash of %s returned HTTP %d: %s", name, res.StatusCode, detail)
+		}
+		if readErr != nil {
+			return fmt.Errorf("reading the password hash update response for %s: %w", name, readErr)
 		}
 	}
 	return nil
+}
+
+// readLimitedBody reads and closes body, keeping at most 4KiB for error messages.
+func readLimitedBody(body io.ReadCloser) (string, error) {
+	if body == nil {
+		return "", nil
+	}
+	payload, err := io.ReadAll(io.LimitReader(body, 4096))
+	closeErr := body.Close()
+	if err != nil {
+		return "", fmt.Errorf("reading response body: %w", err)
+	}
+	if closeErr != nil {
+		return "", fmt.Errorf("closing response body: %w", closeErr)
+	}
+	return strings.TrimSpace(string(payload)), nil
 }

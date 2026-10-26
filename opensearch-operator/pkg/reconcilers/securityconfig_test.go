@@ -114,6 +114,27 @@ config:
 		return []byte(fmt.Sprintf(internalUsersTemplateYAML, adminHash, kibanaHash))
 	}
 
+	// internalUsersFor returns generated internal_users.yml with the Dashboards hash stored under username.
+	internalUsersFor := func(username, adminHash, userHash string) []byte {
+		if username == "" || username == "kibanaserver" {
+			return internalUsersYAML(adminHash, userHash)
+		}
+		return []byte(fmt.Sprintf(`_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "%s"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "Demo admin user"
+%s:
+  hash: "%s"
+  reserved: true
+  description: "Demo user for the OpenSearch Dashboards server"
+`, adminHash, username, userHash))
+	}
+
 	newAdminCredentialsSecret := func(namespace string) corev1.Secret {
 		return corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -127,8 +148,9 @@ config:
 		}
 	}
 
-	// setupDashboardsCredentialsSecretMocks sets up mocks for dashboards credentials secret creation
-	setupDashboardsCredentialsSecretMocks := func(mockClient *k8s.MockK8sClient, clusterName string) {
+	// setupDashboardsCredentialsSecretMocksForUser sets up mocks for dashboards credentials secret creation.
+	// The secret can be read again after it is created, which is what DashboardsUsername does.
+	setupDashboardsCredentialsSecretMocksForUser := func(mockClient *k8s.MockK8sClient, clusterName, username string) {
 		dashboardsSecretName := clusterName + "-dashboards-password"
 		mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
 		mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
@@ -137,10 +159,13 @@ config:
 		mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: dashboardsSecretName, Namespace: clusterName},
 			Data: map[string][]byte{
-				"username": []byte("kibanaserver"),
+				"username": []byte(username),
 				"password": []byte("test-password"),
 			},
-		}, nil).Once()
+		}, nil)
+	}
+	setupDashboardsCredentialsSecretMocks := func(mockClient *k8s.MockK8sClient, clusterName string) {
+		setupDashboardsCredentialsSecretMocksForUser(mockClient, clusterName, "kibanaserver")
 	}
 
 	When("When Reconciling the securityconfig reconciler with no securityconfig provided in the spec", func() {
@@ -1629,14 +1654,16 @@ kibana_server:
 		)
 
 		var (
-			mockClient *k8s.MockK8sClient
-			transport  *httpmock.MockTransport
-			spec       *opensearchv1.OpenSearchCluster
-			userData   map[string][]byte
-			adminHash  string
-			kibanaHash string
-			generated  *corev1.Secret
-			createdJob *batchv1.Job
+			mockClient         *k8s.MockK8sClient
+			transport          *httpmock.MockTransport
+			spec               *opensearchv1.OpenSearchCluster
+			userData           map[string][]byte
+			adminHash          string
+			kibanaHash         string
+			dashboardsUsername string
+			generated          *corev1.Secret
+			createdJob         *batchv1.Job
+			recorder           *record.FakeRecorder
 		)
 
 		BeforeEach(func() {
@@ -1652,6 +1679,7 @@ kibana_server:
 			hash, err = bcrypt.GenerateFromPassword([]byte("test-password"), bcrypt.MinCost)
 			Expect(err).ToNot(HaveOccurred())
 			kibanaHash = string(hash)
+			dashboardsUsername = "kibanaserver"
 
 			userData = map[string][]byte{
 				"config.yml":         []byte(configYAML),
@@ -1697,8 +1725,8 @@ kibana_server:
 				source.UserKeys[name] = true
 			}
 			state, err := securityConfigState(source, &corev1.Secret{
-				Data: map[string][]byte{"internal_users.yml": internalUsersYAML(adminHash, kibanaHash)},
-			})
+				Data: map[string][]byte{"internal_users.yml": internalUsersFor(dashboardsUsername, adminHash, kibanaHash)},
+			}, dashboardsUsername)
 			Expect(err).ToNot(HaveOccurred())
 			return state
 		}
@@ -1718,10 +1746,10 @@ kibana_server:
 
 			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(newAdminCredentialsSecret(clusterName), nil)
 			mockClient.EXPECT().GetSecret(userSecretName, clusterName).Return(corev1.Secret{Data: userData}, nil)
-			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			setupDashboardsCredentialsSecretMocksForUser(mockClient, clusterName, dashboardsUsername)
 			mockClient.On("GetSecret", generatedName, clusterName).Return(corev1.Secret{
 				ObjectMeta: metav1.ObjectMeta{Name: generatedName, Namespace: clusterName},
-				Data:       map[string][]byte{"internal_users.yml": internalUsersYAML(adminHash, kibanaHash)},
+				Data:       map[string][]byte{"internal_users.yml": internalUsersFor(dashboardsUsername, adminHash, kibanaHash)},
 			}, nil).Once()
 			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
 				Return(&ctrl.Result{}, nil).
@@ -1748,6 +1776,8 @@ kibana_server:
 
 			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
 			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			recorder = record.NewFakeRecorder(20)
+			underTest.recorder = recorder
 			underTest.options.osClientTransport = transport
 			return underTest.Reconcile()
 		}
@@ -1767,6 +1797,10 @@ kibana_server:
 			target, ok := jobAppliedState(*createdJob)
 			Expect(ok).To(BeTrue())
 			Expect(securityConfigStatesEqual(target, expectedState())).To(BeTrue())
+			Expect(recorder.Events).To(Receive(And(
+				ContainSubstring("config.yml"),
+				Not(ContainSubstring("internal users")),
+			)))
 		})
 
 		It("should not re-apply bundled defaults that changed", func() {
@@ -1828,6 +1862,37 @@ kibana_server:
 			Expect(result.RequeueAfter).To(Equal(30 * time.Second))
 			Expect(createdJob).To(BeNil())
 			Expect(spec.Status.SecurityConfig.ManagedUsersChecksum).To(Equal("old"))
+			Expect(spec.Status.ComponentsStatus).To(ConsistOf(opensearchv1.ComponentStatus{
+				Component:   securityConfigComponentName,
+				Status:      securityConfigStatusFailed,
+				Description: "unable to update the admin and Dashboards password hashes",
+			}))
+			Expect(recorder.Events).To(Receive(ContainSubstring(`HTTP 403: {"status":"FORBIDDEN"}`)))
+		})
+
+		It("should update a custom Dashboards user's password hash and ignore a leftover kibanaserver entry", func() {
+			dashboardsUsername = "logs"
+			clusterURL := helpers.ClusterURL(spec) + "/"
+			patchedHashes := map[string]string{}
+			for _, name := range []string{"admin", "logs"} {
+				transport.RegisterResponder(http.MethodPatch, clusterURL+"_plugins/_security/api/internalusers/"+name,
+					func(req *http.Request) (*http.Response, error) {
+						var ops []map[string]string
+						Expect(json.NewDecoder(req.Body).Decode(&ops)).To(Succeed())
+						patchedHashes[name] = ops[0]["value"]
+						return httpmock.NewStringResponse(http.StatusOK, `{"status":"OK"}`), nil
+					})
+			}
+
+			result, err := reconcile(appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
+				s.ManagedUsersChecksum = "old"
+			}), nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(createdJob).To(BeNil())
+			Expect(patchedHashes).To(Equal(map[string]string{"admin": adminHash, "logs": kibanaHash}))
+			Expect(spec.Status.SecurityConfig.ManagedUsersChecksum).To(Equal(expectedState().ManagedUsersChecksum))
 		})
 
 		It("should re-apply a file a succeeded job changed after it was changed back", func() {
@@ -1920,6 +1985,49 @@ kibana_server:
 		It("should re-apply files an unfinished job may have applied", func() {
 			plan := planSecurityConfigUpdate(applied(), applied(), userKeys, []string{"config.yml", "roles.yml"})
 			Expect(plan.files).To(Equal([]string{"config.yml"}))
+		})
+	})
+
+	Describe("managed password checksum", func() {
+		secret := func(internalUsers string) *corev1.Secret {
+			return &corev1.Secret{Data: map[string][]byte{internalUsersFile: []byte(internalUsers)}}
+		}
+		source := &helpers.SecurityConfigSource{Data: map[string][]byte{"config.yml": []byte("config: {}\n")}}
+
+		It("follows the custom Dashboards user and ignores a leftover kibanaserver hash", func() {
+			base := `
+admin:
+  hash: "admin-hash"
+logs:
+  hash: "logs-hash"
+kibanaserver:
+  hash: "leftover"
+`
+			changedLogs := `
+admin:
+  hash: "admin-hash"
+logs:
+  hash: "logs-hash-2"
+kibanaserver:
+  hash: "leftover"
+`
+			changedLeftover := `
+admin:
+  hash: "admin-hash"
+logs:
+  hash: "logs-hash"
+kibanaserver:
+  hash: "leftover-2"
+`
+			first, err := securityConfigState(source, secret(base), "logs")
+			Expect(err).ToNot(HaveOccurred())
+			second, err := securityConfigState(source, secret(changedLogs), "logs")
+			Expect(err).ToNot(HaveOccurred())
+			third, err := securityConfigState(source, secret(changedLeftover), "logs")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(first.ManagedUsersChecksum).ToNot(Equal(second.ManagedUsersChecksum))
+			Expect(first.ManagedUsersChecksum).To(Equal(third.ManagedUsersChecksum))
 		})
 	})
 })
