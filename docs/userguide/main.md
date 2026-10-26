@@ -1404,7 +1404,7 @@ manager:
 
 ### Custom init helper
 
-The operator adds init containers to the OpenSearch and bootstrap pods (the `init` container that `chown`s the data directory and, with `setVMMaxMapCount`, the `init-sysctl` container). They run on every pod start and use a busybox image, `docker.io/busybox:latest` by default, or `<general.defaultRepo>/busybox:latest` when `defaultRepo` is set. In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
+The operator adds init containers to the OpenSearch pods (the `init` container that `chown`s the data directory and, with `setVMMaxMapCount`, the `init-sysctl` container). They run on every pod start and use a busybox image, `docker.io/busybox:latest` by default, or `<general.defaultRepo>/busybox:latest` when `defaultRepo` is set. In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
 
 ```yaml
 spec:
@@ -1720,26 +1720,7 @@ The operator mounts the volumes specified in `additionalVolumes` before any othe
 
 > **Note:** The operator ensures these initialization containers run first in the initialization sequence, before any other init containers you may have defined.
 
-##### For the bootstrap section:
-
-```yaml
-spec:
-  bootstrap:
-    initContainers:
-      - name: init-copier
-        image: opensearchproject/opensearch:3.2.0 # Same image as the cluster
-        volumeMounts:
-          - name: rw-config
-            mountPath: /config-tmp
-          - name: rw-plugins
-            mountPath: /plugins-tmp
-        command:
-          - "bash"
-          - "-c"
-          - "cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
-```
-
-##### For the nodePool section:
+##### For a node pool:
 
 When using `readOnlyRootFilesystem`, it's recommended to install plugins in the nodePool's initialization container:
 
@@ -2218,10 +2199,7 @@ roles_mapping.yml: |-
 There is no field to disable the security plugin directly. When neither `security.tls.transport` nor `security.tls.http` TLS is enabled, the operator sets `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN` on the OpenSearch nodes, and `DISABLE_SECURITY_DASHBOARDS_PLUGIN` on Dashboards, and the cluster runs over plain HTTP without authentication. Password management works differently:
 
 **Admin User:**
-- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in the bootstrap pod and all OpenSearch pods from `<cluster-name>-admin-password`, which holds the password of `adminCredentialsSecret` if you provide one, or a generated one otherwise.
-- You can now set a custom password for the admin user by providing `adminCredentialsSecret` with your desired password
-- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in all OpenSearch StatefulSet pods
-- This allows OpenSearch to use your custom password during initial setup, even when the security plugin is disabled
+- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable on the OpenSearch pods from `<cluster-name>-admin-password`, which holds the password of `adminCredentialsSecret` if you provide one, or a generated one otherwise.
 
 **Dashboards User:**
 - Custom passwords for the Dashboards user are **not supported**; the generated `<cluster-name>-dashboards-password` secret uses the default `kibanaserver` password.
@@ -2487,65 +2465,4 @@ Note:
 
 - `policyName` is required and cannot be changed later.
 
-- The repository field must reference an existing snapshot repository in the OpenSearch cluster. For creating a snapshot repository, you can use [this](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#configuring-snapshot-repositories) guide.
-### ReadOnlyRootFilesystem: Enhancing Container Security
-
-The `readOnlyRootFilesystem` security context setting prevents runtime modifications to the container's filesystem, significantly improving security by reducing the attack surface. This section explains how to configure OpenSearch clusters with this security feature.
-
-#### Configuration Overview
-
-An example configuration is available in [readonlyrootfs-example.yaml](../../opensearch-operator/examples/2.x/readonlyrootfs-example.yaml).
-
-To enable `readOnlyRootFilesystem`, you need to:
-
-1. Configure writable volumes using `emptyDir` in the `general` section
-2. Add initialization containers to copy necessary files before the main container starts
-
-#### Step 1: Configure Writable Volumes
-
-Add the following `emptyDir` volumes to provide writable paths for OpenSearch:
-
-```yaml
-general:
-  additionalVolumes:
-  - emptyDir: {}
-    name: rw-tmp
-    path: /tmp
-  - emptyDir: {}
-    name: rw-config
-    path: /usr/share/opensearch/config
-  - emptyDir: {}
-    name: rw-plugins
-    path: /usr/share/opensearch/plugins
-  - emptyDir: {}
-    name: rw-logs
-    path: /usr/share/opensearch/logs
-```
-
-#### Step 2: Add Initialization Containers
-
-The operator mounts the volumes specified in `additionalVolumes` before any other volumes. To prevent issues with empty directories in `config` and `plugins`, add initialization containers to copy the necessary files. 
-
-
-> **Note:** The operator ensures these initialization containers run first in the initialization sequence, before any other init containers you may have defined.
-
-
-##### For the nodePool section:
-
-When using `readOnlyRootFilesystem`, it's recommended to install plugins in the nodePool's initialization container:
-```yaml
-nodePools:
-  initContainers:
-    - name: init-copier
-      image: opensearchproject/opensearch:2.17.1
-      volumeMounts:
-        - name: rw-config
-          mountPath: /config-tmp
-        - name: rw-plugins
-          mountPath: /plugins-tmp
-      command: [
-        "bash", 
-        "-c", 
-        "bin/opensearch-plugin -v install --batch repository-s3 && cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
-      ]
-```
+- The repository field must reference an existing snapshot repository in the OpenSearch cluster. For creating a snapshot repository, see [Configuring Snapshot Repositories](#configuring-snapshot-repositories).
