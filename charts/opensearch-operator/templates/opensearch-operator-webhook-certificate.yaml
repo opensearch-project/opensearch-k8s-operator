@@ -1,8 +1,25 @@
 {{- if and .Values.webhook.enabled .Values.webhook.certManager.enabled }}
-{{- /* lookup is empty without a live cluster, so helm template and lint skip this check.
-It runs last so installers without get on namespaces aren't blocked when cert-manager is present. */}}
-{{- if and (not (.Capabilities.APIVersions.Has "cert-manager.io/v1")) (lookup "v1" "Namespace" "" "kube-system") }}
-{{- fail "cert-manager is required (webhook.certManager.enabled=true) but cert-manager.io/v1 was not found in the cluster. Install cert-manager first, or set webhook.certManager.enabled=false and create the TLS secret named by webhook.secretName, or set webhook.enabled=false." }}
+{{- /*
+Fail when this render is against a cluster without cert-manager. lookup is empty
+with no cluster, so helm template and helm lint skip the fail.
+
+The lookups are nested so they are skipped when cert-manager.io/v1 is present.
+Helm's sprig and would still evaluate lookup, and a Forbidden error from it
+aborts the release.
+
+The default ServiceAccount is in the release namespace, so a namespace-scoped
+installer can read it. helm install --create-namespace renders before that
+namespace exists and that lookup is empty; kube-system is only read then.
+*/}}
+{{- if not (.Capabilities.APIVersions.Has "cert-manager.io/v1") }}
+{{- $connected := lookup "v1" "ServiceAccount" .Release.Namespace "default" }}
+{{- if not $connected }}
+{{- $connected = lookup "v1" "Namespace" "" "kube-system" }}
+{{- end }}
+{{- if $connected }}
+{{- $tlsSecret := .Values.webhook.secretName | default (printf "%s-webhook-server-cert" (include "opensearch-operator.fullname" .)) }}
+{{- fail (printf "cert-manager is required (webhook.certManager.enabled=true) but cert-manager.io/v1 was not found in the cluster. Install cert-manager first, or set webhook.certManager.enabled=false and create TLS secret %s, or set webhook.enabled=false." $tlsSecret) }}
+{{- end }}
 {{- end }}
 ---
 apiVersion: cert-manager.io/v1

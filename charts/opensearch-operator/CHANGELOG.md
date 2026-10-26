@@ -9,7 +9,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added support for custom image used by `kubeRbacProxy`.
 - Added `spec.dashboards.tls.rotateDaysBeforeExpiry` to rotate the generated Dashboards certificate before it expires (default `30`, `-1` disables).
-- `helm install` and `helm upgrade` now fail with a clear message when `webhook.certManager.enabled` is true and cert-manager is not installed.
 ### Changed
 - `enableHotReload` is now a tri-state pointer. Omitting it enables TLS certificate hot reload on OpenSearch 3.x+ (and leaves it off on older versions). Existing 3.x clusters that never set the field take one rolling restart on operator upgrade because `plugins.security.ssl.certificates_hot_reload.enabled` is added to `opensearch.yml`.
 - StatefulSets now use `Parallel` `podManagementPolicy` (was `OrderedReady`). On operator upgrade, existing STS objects are recreated once with orphan propagation; pods are retained and re-adopted. Scaling and rolling operations remain sequenced by the operator.
@@ -18,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Experimental parallel recovery mode and related Helm/env config (`manager.parallelRecoveryEnabled` / `PARALLEL_RECOVERY_ENABLED`).
 ### Fixed
+- `helm install` and `helm upgrade` fail with a clear message when `webhook.certManager.enabled` is true and cert-manager is not installed. The message names the webhook TLS secret to create when cert-manager is turned off.
 - The generated Dashboards TLS certificate is now renewed when it is expired, unreadable or not signed by the current CA, and the Dashboards pods restart on renewal. It was never renewed before. Clusters with `spec.dashboards.tls.generate: true` take one Dashboards rollout on operator upgrade, because a certificate checksum is added to the pod template.
 - Rotation windows are capped at half a generated certificate's lifetime, so a certificate valid for less than `rotateDaysBeforeExpiry` days is no longer reissued on every reconcile.
 - Removing a master-eligible node now excludes it from the voting configuration first, so a master scale-down, deleting a master pool, or tearing down the bootstrap pod cannot lose quorum. A reverted scale-down clears that exclusion without waiting and re-applies exclusions for nodes that are still being removed.
