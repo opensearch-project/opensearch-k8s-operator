@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Experimental parallel recovery mode and related Helm/env config (`manager.parallelRecoveryEnabled` / `PARALLEL_RECOVERY_ENABLED`).
 ### Fixed
+- `helm install` and `helm upgrade` fail with a clear message when `webhook.certManager.enabled` is true and cert-manager is not installed. The message names the webhook TLS secret to create when cert-manager is turned off.
 - The generated Dashboards TLS certificate is now renewed when it is expired, unreadable or not signed by the current CA, and the Dashboards pods restart on renewal. It was never renewed before. Clusters with `spec.dashboards.tls.generate: true` take one Dashboards rollout on operator upgrade, because a certificate checksum is added to the pod template.
 - Rotation windows are capped at half a generated certificate's lifetime, so a certificate valid for less than `rotateDaysBeforeExpiry` days is no longer reissued on every reconcile.
 - Removing a master-eligible node now excludes it from the voting configuration first, so a master scale-down, deleting a master pool, or tearing down the bootstrap pod cannot lose quorum. A reverted scale-down clears that exclusion without waiting and re-applies exclusions for nodes that are still being removed.

@@ -128,8 +128,9 @@ Webhooks require TLS certificates to secure communication between the Kubernetes
 Cert-manager automatically generates and manages TLS certificates for the webhooks. This is the default and recommended approach.
 
 **Prerequisites:**
-- Cert-manager must be installed in your cluster
-- Cert-manager version 1.0 or later
+- Cert-manager 1.0 or later must be installed before `helm install` or `helm upgrade`
+
+With `webhook.certManager.enabled=true`, Helm fails the install or upgrade when `cert-manager.io/v1` is missing. The error names the TLS secret to create if you set `webhook.certManager.enabled=false` instead (`webhook.secretName`, or `<fullname>-webhook-server-cert` when that is empty). `helm template` does not run this check. See the [install prerequisites](./main.md#prerequisites).
 
 **Configuration:**
 ```yaml
@@ -223,7 +224,7 @@ If webhook validation is failing, check the following:
 
 If you're experiencing certificate-related issues:
 
-1. **Verify cert-manager is installed:**
+1. **Verify cert-manager is installed** (an install or upgrade with `webhook.certManager.enabled=true` fails first when `cert-manager.io/v1` is missing; see the [install prerequisites](./main.md#prerequisites)):
    ```bash
    kubectl get pods -n cert-manager
    ```
