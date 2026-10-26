@@ -375,6 +375,25 @@ _Appears in:_
 | `securityContext` _[SecurityContext](https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.28/#securitycontext-v1-core)_ | Set security context for the dashboards pods' container |  |  |
 | `priorityClassName` _string_ |  |  |  |
 | `opensearchDashboardsHome` _string_ | OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set. |  |  |
+| `probes` _[DashboardsProbesConfig](#dashboardsprobesconfig)_ | Timings of the Dashboards probes. Fields left unset keep the operator defaults. |  |  |
+
+
+#### DashboardsProbesConfig
+
+
+
+
+
+
+
+_Appears in:_
+- [DashboardsConfig](#dashboardsconfig)
+
+| Field | Description | Default | Validation |
+| --- | --- | --- | --- |
+| `startup` _[ProbeConfig](#probeconfig)_ |  |  |  |
+| `liveness` _[ProbeConfig](#probeconfig)_ |  |  |  |
+| `readiness` _[ProbeConfig](#probeconfig)_ |  |  |  |
 
 
 #### DashboardsServiceSpec
@@ -410,6 +429,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `enable` _boolean_ | Enable HTTPS for Dashboards |  |  |
 | `generate` _boolean_ | Generate certificate, if false secret must be provided |  |  |
+| `rotateDaysBeforeExpiry` _integer_ | Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.<br />Only applies to operator-generated certificates. Expired or unparseable certificates are<br />always regenerated regardless of this setting. | 30 |  |
 | `TlsCertificateConfig` _[TlsCertificateConfig](#tlscertificateconfig)_ | TLS certificate configuration |  |  |
 
 
@@ -1389,6 +1409,7 @@ _Appears in:_
 
 
 _Appears in:_
+- [DashboardsProbesConfig](#dashboardsprobesconfig)
 - [ProbesConfig](#probesconfig)
 
 | Field | Description | Default | Validation |

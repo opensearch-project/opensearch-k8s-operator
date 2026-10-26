@@ -3264,6 +3264,72 @@ spec:
                     type: object
                   priorityClassName:
                     type: string
+                  probes:
+                    description: Timings of the Dashboards probes. Fields left unset
+                      keep the operator defaults.
+                    properties:
+                      liveness:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      readiness:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      startup:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: startup.successThreshold must be 1
+                      rule: '!has(self.startup) || !has(self.startup.successThreshold)
+                        || self.startup.successThreshold == 1'
+                    - message: liveness.successThreshold must be 1
+                      rule: '!has(self.liveness) || !has(self.liveness.successThreshold)
+                        || self.liveness.successThreshold == 1'
                   replicas:
                     default: 1
                     format: int32
@@ -3577,6 +3643,13 @@ spec:
                         description: Generate certificate, if false secret must be
                           provided
                         type: boolean
+                      rotateDaysBeforeExpiry:
+                        default: 30
+                        description: |-
+                          Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.
+                          Only applies to operator-generated certificates. Expired or unparseable certificates are
+                          always regenerated regardless of this setting.
+                        type: integer
                       secret:
                         description: Optional, name of a TLS secret that contains
                           ca.crt, tls.key and tls.crt data. If ca.crt is in a different
@@ -6361,6 +6434,30 @@ spec:
                         required:
                         - name
                         type: object
+                      type: array
+                    image:
+                      type: string
+                    imagePullPolicy:
+                      description: PullPolicy describes a policy for if/when to pull
+                        a container image
+                      type: string
+                    imagePullSecrets:
+                      items:
+                        description: |-
+                          LocalObjectReference contains enough information to let you locate the
+                          referenced object inside the same namespace.
+                        properties:
+                          name:
+                            default: ""
+                            description: |-
+                              Name of the referent.
+                              This field is effectively required, but due to backwards compatibility is
+                              allowed to be empty. Instances of this type with an empty value here are
+                              almost certainly wrong.
+                              More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                            type: string
+                        type: object
+                        x-kubernetes-map-type: atomic
                       type: array
                     initContainers:
                       x-kubernetes-preserve-unknown-fields: true

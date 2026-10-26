@@ -100,6 +100,9 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.maxConcurrentReconciles` | int | `1` | Global default max concurrent reconciles for all controllers. |
 | `manager.maxConcurrentReconcilesPerController` | object | `{}` | Per-controller overrides (controller name -> max concurrent reconciles). Example: `{opensearchcluster: 4}`. |
 | `manager.metricsBindAddress` | string | `"127.0.0.1:8080"` |  |
+| `manager.leaderElectionLeaseDuration` | string | `"60s"` | Leader election lease duration. Increase alongside renewDeadline/retryPeriod if reconciles (rolling restarts, upgrades) are being interrupted by transient API server latency. |
+| `manager.leaderElectionRenewDeadline` | string | `"30s"` | Leader election renew deadline. Must be less than leaderElectionLeaseDuration. |
+| `manager.leaderElectionRetryPeriod` | string | `"5s"` | Leader election retry period. |
 | `installCRDs` | bool | `true` |  |
 | `legacyAPI.enabled` | bool | `true` | Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped. |
 | `serviceAccount.create` | bool | `true` |  |

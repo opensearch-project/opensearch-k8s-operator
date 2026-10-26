@@ -66,6 +66,50 @@ var _ = Describe("Builders", func() {
 		})
 	})
 
+	When("building the dashboards deployment with labels that change over time", func() {
+		It("should keep custom labels out of the selector", func() {
+			clusterName := "dashboards-selector-labels"
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable: true,
+						Labels: map[string]string{"helm.sh/chart": "opensearch-cluster-4.0.0"},
+					},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Selector.MatchLabels).To(Equal(map[string]string{
+				"opensearch.cluster.dashboards": clusterName,
+			}))
+			expectedLabels := map[string]string{
+				"opensearch.cluster.dashboards": clusterName,
+				"helm.sh/chart":                 "opensearch-cluster-4.0.0",
+			}
+			Expect(result.ObjectMeta.Labels).To(Equal(expectedLabels))
+			Expect(result.Spec.Template.Labels).To(Equal(expectedLabels))
+		})
+
+		It("should not let custom labels override the selector label", func() {
+			clusterName := "dashboards-selector-override"
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable: true,
+						Labels: map[string]string{"opensearch.cluster.dashboards": "other"},
+					},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Selector.MatchLabels).To(HaveKeyWithValue("opensearch.cluster.dashboards", clusterName))
+			Expect(result.ObjectMeta.Labels).To(HaveKeyWithValue("opensearch.cluster.dashboards", clusterName))
+			Expect(result.Spec.Template.Labels).To(HaveKeyWithValue("opensearch.cluster.dashboards", clusterName))
+		})
+	})
+
 	When("building the dashboards deployment with a custom service type", func() {
 		It("should populate the service with the correct type and source ranges", func() {
 			clusterName := "dashboards-add-service-type-load-balancer"
@@ -297,6 +341,131 @@ var _ = Describe("Builders", func() {
 			}
 			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
 			Expect(result.Spec.Template.Spec.HostNetwork).To(BeFalse())
+		})
+	})
+
+	When("building the dashboards deployment for a cluster without TLS", func() {
+		disabled := corev1.EnvVar{Name: "DISABLE_SECURITY_DASHBOARDS_PLUGIN", Value: "true"}
+
+		It("should disable the security dashboards plugin", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General:    opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(disabled))
+		})
+
+		It("should not disable the security dashboards plugin when TLS is configured", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Security: &opensearchv1.Security{
+						Tls: &opensearchv1.TlsConfig{Transport: &opensearchv1.TlsConfigTransport{Generate: true}},
+					},
+					Dashboards: opensearchv1.DashboardsConfig{Enable: true},
+				},
+			}
+			result := NewDashboardsDeploymentForCR(&spec, nil, nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].Env).ToNot(ContainElement(disabled))
+		})
+
+		It("should let dashboards env override the security plugin disable variable", func() {
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable: true,
+						Env: []corev1.EnvVar{
+							{Name: "DISABLE_SECURITY_DASHBOARDS_PLUGIN", Value: "false"},
+						},
+					},
+				},
+			}
+			env := NewDashboardsDeploymentForCR(&spec, nil, nil, nil).Spec.Template.Spec.Containers[0].Env
+			operatorIdx, userIdx := -1, -1
+			for i, e := range env {
+				if e.Name == "DISABLE_SECURITY_DASHBOARDS_PLUGIN" && e.Value == "true" {
+					operatorIdx = i
+				}
+				if e.Name == "DISABLE_SECURITY_DASHBOARDS_PLUGIN" && e.Value == "false" {
+					userIdx = i
+				}
+			}
+			Expect(operatorIdx).To(BeNumerically(">=", 0))
+			Expect(userIdx).To(BeNumerically(">", operatorIdx))
+		})
+	})
+
+	When("building the dashboards probes", func() {
+		newSpec := func(dashboards opensearchv1.DashboardsConfig) *opensearchv1.OpenSearchCluster {
+			dashboards.Enable = true
+			return &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "some-name", Namespace: "some-namespace", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General:    opensearchv1.GeneralConfig{ServiceName: "some-name"},
+					Dashboards: dashboards,
+				},
+			}
+		}
+		timings := func(p *corev1.Probe) []int32 {
+			return []int32{p.InitialDelaySeconds, p.PeriodSeconds, p.TimeoutSeconds, p.SuccessThreshold, p.FailureThreshold}
+		}
+
+		It("should give the startup probe a longer budget than liveness and readiness by default", func() {
+			container := NewDashboardsDeploymentForCR(newSpec(opensearchv1.DashboardsConfig{}), nil, nil, nil).Spec.Template.Spec.Containers[0]
+			Expect(timings(container.StartupProbe)).To(Equal([]int32{10, 20, 5, 1, 60}))
+			Expect(timings(container.LivenessProbe)).To(Equal([]int32{10, 20, 5, 1, 10}))
+			Expect(timings(container.ReadinessProbe)).To(Equal([]int32{10, 20, 5, 1, 10}))
+			Expect(container.StartupProbe.HTTPGet.Path).To(Equal("/api/reporting/stats"))
+			Expect(container.StartupProbe.HTTPGet.Scheme).To(Equal(corev1.URISchemeHTTP))
+		})
+
+		It("should apply each probe's overrides only to that probe and keep defaults for unset fields", func() {
+			spec := newSpec(opensearchv1.DashboardsConfig{
+				Probes: &opensearchv1.DashboardsProbesConfig{
+					Startup:   &opensearchv1.ProbeConfig{FailureThreshold: 90},
+					Liveness:  &opensearchv1.ProbeConfig{InitialDelaySeconds: 30, PeriodSeconds: 15, TimeoutSeconds: 8, SuccessThreshold: 1, FailureThreshold: 4},
+					Readiness: &opensearchv1.ProbeConfig{PeriodSeconds: 10, SuccessThreshold: 2},
+				},
+			})
+			container := NewDashboardsDeploymentForCR(spec, nil, nil, nil).Spec.Template.Spec.Containers[0]
+			Expect(timings(container.StartupProbe)).To(Equal([]int32{10, 20, 5, 1, 90}))
+			Expect(timings(container.LivenessProbe)).To(Equal([]int32{30, 15, 8, 1, 4}))
+			Expect(timings(container.ReadinessProbe)).To(Equal([]int32{10, 10, 5, 2, 10}))
+		})
+
+		It("should keep the defaults for probes left out of the probes config", func() {
+			spec := newSpec(opensearchv1.DashboardsConfig{
+				Probes: &opensearchv1.DashboardsProbesConfig{
+					Liveness: &opensearchv1.ProbeConfig{FailureThreshold: 3},
+				},
+			})
+			container := NewDashboardsDeploymentForCR(spec, nil, nil, nil).Spec.Template.Spec.Containers[0]
+			Expect(timings(container.StartupProbe)).To(Equal([]int32{10, 20, 5, 1, 60}))
+			Expect(timings(container.LivenessProbe)).To(Equal([]int32{10, 20, 5, 1, 3}))
+			Expect(timings(container.ReadinessProbe)).To(Equal([]int32{10, 20, 5, 1, 10}))
+		})
+
+		It("should keep the base path and HTTPS scheme on every probe", func() {
+			spec := newSpec(opensearchv1.DashboardsConfig{
+				BasePath: "/dashboards",
+				Tls:      &opensearchv1.DashboardsTlsConfig{Enable: true},
+				Probes: &opensearchv1.DashboardsProbesConfig{
+					Startup: &opensearchv1.ProbeConfig{FailureThreshold: 90},
+				},
+			})
+			container := NewDashboardsDeploymentForCR(spec, nil, nil, nil).Spec.Template.Spec.Containers[0]
+			for _, probe := range []*corev1.Probe{container.StartupProbe, container.LivenessProbe, container.ReadinessProbe} {
+				Expect(probe.HTTPGet.Path).To(Equal("/dashboards/api/reporting/stats"))
+				Expect(probe.HTTPGet.Scheme).To(Equal(corev1.URISchemeHTTPS))
+				Expect(probe.HTTPGet.Port.IntVal).To(Equal(int32(5601)))
+			}
 		})
 	})
 })

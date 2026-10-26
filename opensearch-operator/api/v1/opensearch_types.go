@@ -254,6 +254,16 @@ type DashboardsConfig struct {
 	PriorityClassName string                  `json:"priorityClassName,omitempty"`
 	// OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set.
 	OpenSearchDashboardsHome string `json:"opensearchDashboardsHome,omitempty"`
+	// Timings of the Dashboards probes. Fields left unset keep the operator defaults.
+	Probes *DashboardsProbesConfig `json:"probes,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="!has(self.startup) || !has(self.startup.successThreshold) || self.startup.successThreshold == 1",message="startup.successThreshold must be 1"
+// +kubebuilder:validation:XValidation:rule="!has(self.liveness) || !has(self.liveness.successThreshold) || self.liveness.successThreshold == 1",message="liveness.successThreshold must be 1"
+type DashboardsProbesConfig struct {
+	Startup   *ProbeConfig `json:"startup,omitempty"`
+	Liveness  *ProbeConfig `json:"liveness,omitempty"`
+	Readiness *ProbeConfig `json:"readiness,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -261,6 +271,11 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
+	// Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.
+	// Only applies to operator-generated certificates. Expired or unparseable certificates are
+	// always regenerated regardless of this setting.
+	//+kubebuilder:default=30
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	// TLS certificate configuration
 	TlsCertificateConfig `json:",omitempty"`
 }

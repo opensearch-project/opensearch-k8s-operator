@@ -1,20 +1,30 @@
-# Opensearch Roles, Users, and Role Mappings reconciliation
-Opensearch Roles, Users, and Role Mappings can be managed in a Kubernetes native fashion by reconciling custom resources against the Opensearch API.  Each resource needs to contain a reference to an OpenSearchCluster resource to reconcile against.
+# OpenSearch API resources
 
-The reconciliation loop will need mechanisms to prevent overwriting or deleting Opensearch API objects that are not managed by k8s.  The Opensearch cluster reference should also not be changed as this can lead to orphaned objects or unexpected behaviour.  This is enforced by adding the Opensearch cluster reference to the status field when the object is first reconciled.  On subsequent operations if this does not match the reconciler will raise an error.
+Besides `OpenSearchCluster`, the operator provides custom resources that are reconciled against the OpenSearch REST API of a managed cluster. Each has its own controller in `controllers/` and reconciler in `pkg/reconcilers/`:
 
-## Users
-The name of the k8s OpensearchUser object will be the name of the User in Opensearch.  The majority of the CRD matches the Opensearch API, however the password must be stored in a secret, and a reference is passed to the custom resource.
+| Kind | OpenSearch object | Name in OpenSearch |
+|---|---|---|
+| `OpensearchUser` | Internal user (security plugin) | `metadata.name` |
+| `OpensearchRole` | Role | `metadata.name` |
+| `OpensearchUserRoleBinding` | Role mappings | the roles listed in the spec |
+| `OpensearchTenant` | Tenant | `metadata.name` |
+| `OpensearchActionGroup` | Action group | `metadata.name` |
+| `OpenSearchISMPolicy` | ISM policy | `spec.policyId`, default `metadata.name` |
+| `OpensearchIndexTemplate` | Composable index template | `spec.name`, default `metadata.name` |
+| `OpensearchComponentTemplate` | Component template | `spec.name`, default `metadata.name` |
+| `OpensearchSnapshotPolicy` | Snapshot management policy | `spec.policyName` |
 
-When the user is created in the Opensearch API the k8s object UID is added as an attribute.  On all subsequent CRUD operations the UID is checked, and if it is not present, or does not match, then the operation will not be completed.
+## Cluster reference
 
-## Roles
-The name of the k8s OpensearchRole object will be the name of the Role in Opensearch.  The OpensearchRoleSpec matches the Opensearch Roles API.
+Every resource has a `spec.opensearchCluster` reference to an `OpenSearchCluster` in the same namespace. The reference is immutable. Changing it could orphan objects in the old cluster or overwrite objects in the new one. This is enforced twice:
 
-When an OpensearchRole is first reconciled the API is checked to see if the Role already exists.  If it does it is marked in the resource status, and no CRUD operations will be performed against the Opensearch API.
+* The validating webhook of each kind rejects updates that change `spec.opensearchCluster.name`.
+* On first reconciliation the reconciler stores the cluster's UID in `status.managedCluster`. If a later reconciliation finds a different cluster UID (for example because the cluster was deleted and recreated under the same name), it stops with a "cannot change the cluster a ... refers to" error and a Warning event.
 
+## Not overwriting unmanaged objects
 
-## Role Mappings
-The operator uses OpensearchUserRoleBinding object that links users, backend roles and roles together in a many <-> many relationship.  For each role the custom resource the operator will make sure there is a matching Role Mapping in the Opensearch API, that contains all of the users and backend roles that are in the resource.
+The reconcilers must not overwrite or delete OpenSearch objects that were not created through Kubernetes:
 
-Due to the many <-> many nature of the binding, and the simplicity of Role Mappings there are not the same protections against CRUD operations.
+* **Roles, tenants, action groups, ISM policies, index templates, component templates and snapshot policies**: on first reconciliation the reconciler checks whether the object already exists in OpenSearch. If it does, this is recorded in the resource status (`existingRole`, `existingTenant`, ...), and the object is left alone: it is neither updated nor deleted when the custom resource is deleted.
+* **Users**: when the operator creates a user it stores the UID of the `OpensearchUser` object as a user attribute. Updates and deletes are only performed if that attribute is present and matches. The password comes from a Kubernetes secret referenced in the spec, not from the custom resource itself.
+* **Role mappings**: an `OpensearchUserRoleBinding` links users and backend roles to roles in a many-to-many relationship. For each listed role the operator makes sure the role mapping contains the users and backend roles from the resource. The users, backend roles and roles it provisioned are tracked in the resource status; when they are removed from the spec (or the resource is deleted) only those entries are removed from the mapping, and a mapping left empty is deleted. Entries added outside Kubernetes are kept, but role mappings have no ownership marker like users do.

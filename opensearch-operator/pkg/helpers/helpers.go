@@ -10,6 +10,7 @@ import (
 	"log"
 	"reflect"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -734,6 +735,41 @@ func MapClusterRoles(roles []string, version string) []string {
 		mapped_roles = append(mapped_roles, MapClusterRole(role, version))
 	}
 	return mapped_roles
+}
+
+// SearchCacheSizeSetting sizes the file cache of a warm node.
+const SearchCacheSizeSetting = "node.search.cache.size"
+
+var byteSizeUnits = []string{"kb", "k", "mb", "m", "gb", "g", "tb", "t", "pb", "p", "b"}
+
+// ValidateSearchCacheSize accepts what OpenSearch's Node.calculateFileCacheSize accepts and
+// later checks against the disk: a ratio or percentage above 0 and below 100%, or a whole,
+// positive byte size with a unit.
+func ValidateSearchCacheSize(value string) error {
+	v := strings.ToLower(strings.TrimSpace(value))
+	if percent, ok := strings.CutSuffix(v, "%"); ok {
+		p, err := strconv.ParseFloat(strings.TrimSpace(percent), 64)
+		if err != nil || !(p > 0 && p < 100) {
+			return fmt.Errorf("%s '%s' must be a percentage above 0%% and below 100%%", SearchCacheSizeSetting, value)
+		}
+		return nil
+	}
+	if ratio, err := strconv.ParseFloat(v, 64); err == nil {
+		if !(ratio > 0 && ratio < 1) {
+			return fmt.Errorf("%s '%s' must be a byte size with a unit (such as 50gb) or a percentage (such as 80%%)", SearchCacheSizeSetting, value)
+		}
+		return nil
+	}
+	for _, unit := range byteSizeUnits {
+		if number, ok := strings.CutSuffix(v, unit); ok {
+			n, err := strconv.ParseInt(strings.TrimSpace(number), 10, 64)
+			if err != nil || n <= 0 {
+				return fmt.Errorf("%s '%s' must be a positive whole number of %s", SearchCacheSizeSetting, value, unit)
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("%s '%s' must be a byte size with a unit (such as 50gb) or a percentage (such as 80%%)", SearchCacheSizeSetting, value)
 }
 
 // Get leftSlice strings not in rightSlice

@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -57,6 +58,9 @@ type OpenSearchClusterReconciler struct {
 	NodeAttributesClusterRoleName    string
 	// osClientTransport overrides the OpenSearch HTTP transport; only set by tests.
 	osClientTransport http.RoundTripper
+	// failedPasses counts back-to-back passes ending in a reconciler error, per cluster.
+	// In memory only, so an operator restart resets it.
+	failedPasses sync.Map
 }
 
 //+kubebuilder:rbac:groups=opensearch.org,resources=opensearchclusters,verbs=get;list;watch;create;update;patch;delete
@@ -149,6 +153,7 @@ func (r *OpenSearchClusterReconciler) Reconcile(ctx context.Context, req ctrl.Re
 			}
 
 			helpers.DeleteClusterMetrics(req.Namespace, instance.Name)
+			r.failedPasses.Delete(req.NamespacedName)
 		}
 		return ctrl.Result{}, nil
 	}
@@ -392,25 +397,55 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 		{Name: snapshotrepository.Name(), Func: snapshotrepository.Reconcile},
 	}
 
+	result, pass := runReconcilerChain(componentReconcilers, instance, logger)
+	key := client.ObjectKeyFromObject(instance)
+	if pass.Failure != nil {
+		failures, _ := r.failedPasses.Load(key)
+		pass.ConsecutiveFailures, _ = failures.(int)
+		pass.ConsecutiveFailures++
+		r.failedPasses.Store(key, pass.ConsecutiveFailures)
+	} else {
+		r.failedPasses.Delete(key)
+	}
+
+	if err := reconcilers.UpdateClusterConditions(r.Client, ctx, instance, r.osClientTransport, pass); err != nil {
+		logger.Error(err, "failed to update cluster conditions")
+		if pass.Failure == nil {
+			return result, err
+		}
+	}
+	if pass.Failure != nil {
+		return result, pass.Failure.Err
+	}
+	return result, nil
+}
+
+func runReconcilerChain(componentReconcilers []reconcilers.NamedComponentReconciler, instance *opensearchv1.OpenSearchCluster, logger logr.Logger) (ctrl.Result, reconcilers.PassResult) {
 	const defaultRequeueAfter = 30 * time.Second
 	var minRequeueAfter time.Duration
+	pass := reconcilers.PassResult{}
 
 	for _, rec := range componentReconcilers {
 		result, err := rec.Func()
 		if err != nil {
+			helpers.ReconcileErrors.WithLabelValues(instance.Namespace, instance.Name, rec.Name).Inc()
 			if reconcilers.IsTerminal(err) {
-				// Permanent config/validation failure: surface via metrics/logs but
-				// keep running later reconcilers (e.g. bad version must not block restart).
-				helpers.ReconcileErrors.WithLabelValues(instance.Namespace, instance.Name, rec.Name).Inc()
+				// Permanent config/validation failure: surface it but keep running
+				// later reconcilers (e.g. bad version must not block restart).
 				logger.Info("terminal reconciler error, continuing chain", "reconciler", rec.Name, "error", err.Error())
+				if pass.Terminal == nil {
+					pass.Terminal = &reconcilers.ReconcilerError{Reconciler: rec.Name, Err: err}
+				}
 				continue
 			}
-			helpers.ReconcileErrors.WithLabelValues(instance.Namespace, instance.Name, rec.Name).Inc()
-			return result, err
+			pass.StoppedBy = rec.Name
+			pass.Failure = &reconcilers.ReconcilerError{Reconciler: rec.Name, Err: err}
+			return result, pass
 		}
 		// Requeue=true short-circuits so in-progress scaler/upgrade work is exclusive.
 		if result.Requeue {
-			return result, nil
+			pass.StoppedBy = rec.Name
+			return result, pass
 		}
 		// RequeueAfter-only is valid controller-runtime semantics; CombinedResult
 		// often produces it. Track the soonest requested delay instead of always
@@ -428,5 +463,5 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 	}
 
 	// -------- all resources has been created -----------
-	return ctrl.Result{Requeue: true, RequeueAfter: requeueAfter}, nil
+	return ctrl.Result{Requeue: true, RequeueAfter: requeueAfter}, pass
 }

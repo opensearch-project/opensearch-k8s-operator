@@ -218,9 +218,6 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.Combine(r.checkForEmptyDirRecovery())
 	}
 
-	// Update the CR status to reflect the current OpenSearch health and nodes
-	result.CombineErr(r.UpdateClusterStatus())
-
 	return result.Result, result.Err
 }
 
@@ -838,19 +835,6 @@ func (r *ClusterReconciler) updateOrphanedPodLabels(oldSTS *appsv1.StatefulSet, 
 	return nil
 }
 
-// UpdateClusterStatus updates the cluster health and number of available nodes in the CR status
-func (r *ClusterReconciler) UpdateClusterStatus() error {
-	health, healthResponse := util.GetClusterHealth(r.client, r.ctx, r.instance, r.logger)
-	availableNodes := util.GetAvailableOpenSearchNodes(r.client, r.ctx, r.instance, r.logger)
-
-	helpers.UpdateClusterInfo(r.instance, health, healthResponse)
-
-	return r.client.UpdateOpenSearchClusterStatus(client.ObjectKeyFromObject(r.instance), func(instance *opensearchv1.OpenSearchCluster) {
-		instance.Status.Health = health
-		instance.Status.AvailableNodes = availableNodes
-	})
-}
-
 // reconcileBootstrapPod creates the bootstrap pod if it is missing and recreates
 // it only when the operator's last-applied spec has changed. Live spec drift from
 // admission controllers (LimitRange, mutating webhooks) is ignored so the pod is
@@ -897,12 +881,14 @@ func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.
 	clusterClient, err := util.CreateClientForCluster(r.client, r.ctx, r.instance, r.osClientTransport)
 	if err != nil {
 		r.logger.Error(err, "Failed to create OpenSearch client before bootstrap removal; will retry")
+		r.warnBootstrapExclusionFailed(bootstrapPod.Name, err)
 		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
 	nodeName := builders.BootstrapPodName(r.instance)
 	if err := services.AddVotingConfigExclusion(clusterClient, r.logger, nodeName); err != nil {
 		r.logger.Error(err, "Failed to add voting config exclusion for bootstrap pod; will retry", "pod", nodeName)
+		r.warnBootstrapExclusionFailed(nodeName, err)
 		return &ctrl.Result{RequeueAfter: 10 * time.Second}, nil
 	}
 
@@ -925,6 +911,17 @@ func (r *ClusterReconciler) removeBootstrapPod(bootstrapPod *corev1.Pod) (*ctrl.
 
 	r.logger.Info("Removed bootstrap pod after voting config exclusion", "pod", nodeName)
 	return result, nil
+}
+
+// warnBootstrapExclusionFailed surfaces a held bootstrap pod on the cluster, since
+// the retry is otherwise only visible in the operator log.
+func (r *ClusterReconciler) warnBootstrapExclusionFailed(podName string, err error) {
+	if r.recorder == nil {
+		return
+	}
+	annotations := map[string]string{"cluster-name": r.instance.GetName()}
+	r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "BootstrapExclusionFailed",
+		"Keeping bootstrap pod %s until it is excluded from the voting configuration, retrying in 10s: %v", podName, err)
 }
 
 func (r *ClusterReconciler) recreateBootstrapPod(existingPod *corev1.Pod, desiredPod *corev1.Pod) (*ctrl.Result, error) {

@@ -38,6 +38,7 @@ func (r *OpensearchComponentTemplateReconciler) Reconcile(ctx context.Context, r
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpensearchComponentTemplate")
 
 	componentTemplateReconciler := reconcilers.NewComponentTemplateReconciler(
 		ctx,

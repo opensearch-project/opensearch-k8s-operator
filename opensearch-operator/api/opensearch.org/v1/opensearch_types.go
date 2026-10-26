@@ -33,6 +33,28 @@ const (
 	PhaseUpgrading = "UPGRADING"
 )
 
+// Condition types and reasons written to ClusterStatus.Conditions.
+const (
+	ConditionReady       = "Ready"
+	ConditionProgressing = "Progressing"
+	ConditionDegraded    = "Degraded"
+
+	ReasonReconciled            = "Reconciled"
+	ReasonReconciling           = "Reconciling"
+	ReasonInitializing          = "Initializing"
+	ReasonSecurityConfigPending = "SecurityConfigPending"
+	ReasonUpgrading             = "Upgrading"
+	ReasonScaling               = "Scaling"
+	ReasonRollingRestart        = "RollingRestart"
+	ReasonClusterUnreachable    = "ClusterUnreachable"
+	ReasonPodsNotReady          = "PodsNotReady"
+	ReasonAsExpected            = "AsExpected"
+	ReasonClusterRed            = "ClusterRed"
+	ReasonStuckPod              = "StuckPod"
+	ReasonDrainStalled          = "DrainStalled"
+	ReasonReconcileError        = "ReconcileError"
+)
+
 // OpenSearchHealth is the health of the cluster as returned by the health API.
 type OpenSearchHealth string
 
@@ -297,6 +319,16 @@ type DashboardsConfig struct {
 	PriorityClassName string                  `json:"priorityClassName,omitempty"`
 	// OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set.
 	OpenSearchDashboardsHome string `json:"opensearchDashboardsHome,omitempty"`
+	// Timings of the Dashboards probes. Fields left unset keep the operator defaults.
+	Probes *DashboardsProbesConfig `json:"probes,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="!has(self.startup) || !has(self.startup.successThreshold) || self.startup.successThreshold == 1",message="startup.successThreshold must be 1"
+// +kubebuilder:validation:XValidation:rule="!has(self.liveness) || !has(self.liveness.successThreshold) || self.liveness.successThreshold == 1",message="liveness.successThreshold must be 1"
+type DashboardsProbesConfig struct {
+	Startup   *ProbeConfig `json:"startup,omitempty"`
+	Liveness  *ProbeConfig `json:"liveness,omitempty"`
+	Readiness *ProbeConfig `json:"readiness,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -304,6 +336,11 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
+	// Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.
+	// Only applies to operator-generated certificates. Expired or unparseable certificates are
+	// always regenerated regardless of this setting.
+	//+kubebuilder:default=30
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	// TLS certificate configuration
 	TlsCertificateConfig `json:",omitempty"`
 }
@@ -515,6 +552,16 @@ type ClusterSpec struct {
 type ClusterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	// ObservedGeneration is the metadata.generation the controller has acted on.
+	// +optional
+	ObservedGeneration int64 `json:"observedGeneration,omitempty"`
+	// Conditions holds the Ready, Progressing and Degraded conditions.
+	// +optional
+	// +listType=map
+	// +listMapKey=type
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
 	Phase            string            `json:"phase,omitempty"`
 	ComponentsStatus []ComponentStatus `json:"componentsStatus"`
 	Version          string            `json:"version,omitempty"`
@@ -534,6 +581,7 @@ type ClusterStatus struct {
 // +kubebuilder:printcolumn:name="nodes",type="integer",JSONPath=".status.availableNodes",description="Available nodes"
 // +kubebuilder:printcolumn:name="version",type="string",JSONPath=".status.version",description="Opensearch version"
 // +kubebuilder:printcolumn:name="phase",type="string",JSONPath=".status.phase"
+// +kubebuilder:printcolumn:name="ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status"
 // +kubebuilder:printcolumn:name="age",type="date",JSONPath=".metadata.creationTimestamp"
 type OpenSearchCluster struct {
 	metav1.TypeMeta   `json:",inline"`
