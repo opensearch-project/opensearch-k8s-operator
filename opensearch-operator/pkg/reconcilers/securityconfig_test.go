@@ -2,11 +2,14 @@ package reconcilers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strconv"
 	"time"
 
+	"github.com/jarcoal/httpmock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -57,6 +60,7 @@ func newSecurityconfigReconciler(
 ) *SecurityconfigReconciler {
 	return &SecurityconfigReconciler{
 		client:            client,
+		ctx:               ctx,
 		reconcilerContext: reconcilerContext,
 		recorder:          &helpers.MockEventRecorder{},
 		instance:          instance,
@@ -110,6 +114,27 @@ config:
 		return []byte(fmt.Sprintf(internalUsersTemplateYAML, adminHash, kibanaHash))
 	}
 
+	// internalUsersFor returns generated internal_users.yml with the Dashboards hash stored under username.
+	internalUsersFor := func(username, adminHash, userHash string) []byte {
+		if username == "" || username == "kibanaserver" {
+			return internalUsersYAML(adminHash, userHash)
+		}
+		return []byte(fmt.Sprintf(`_meta:
+  type: "internalusers"
+  config_version: 2
+admin:
+  hash: "%s"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "Demo admin user"
+%s:
+  hash: "%s"
+  reserved: true
+  description: "Demo user for the OpenSearch Dashboards server"
+`, adminHash, username, userHash))
+	}
+
 	newAdminCredentialsSecret := func(namespace string) corev1.Secret {
 		return corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
@@ -123,8 +148,9 @@ config:
 		}
 	}
 
-	// setupDashboardsCredentialsSecretMocks sets up mocks for dashboards credentials secret creation
-	setupDashboardsCredentialsSecretMocks := func(mockClient *k8s.MockK8sClient, clusterName string) {
+	// setupDashboardsCredentialsSecretMocksForUser sets up mocks for dashboards credentials secret creation.
+	// The secret can be read again after it is created, which is what DashboardsUsername does.
+	setupDashboardsCredentialsSecretMocksForUser := func(mockClient *k8s.MockK8sClient, clusterName, username string) {
 		dashboardsSecretName := clusterName + "-dashboards-password"
 		mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{}, NotFoundError()).Once()
 		mockClient.On("CreateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
@@ -133,10 +159,13 @@ config:
 		mockClient.On("GetSecret", dashboardsSecretName, clusterName).Return(corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{Name: dashboardsSecretName, Namespace: clusterName},
 			Data: map[string][]byte{
-				"username": []byte("kibanaserver"),
+				"username": []byte(username),
 				"password": []byte("test-password"),
 			},
-		}, nil).Once()
+		}, nil)
+	}
+	setupDashboardsCredentialsSecretMocks := func(mockClient *k8s.MockK8sClient, clusterName string) {
+		setupDashboardsCredentialsSecretMocksForUser(mockClient, clusterName, "kibanaserver")
 	}
 
 	When("When Reconciling the securityconfig reconciler with no securityconfig provided in the spec", func() {
@@ -1615,6 +1644,390 @@ kibana_server:
 			underTest.warnIfDashboardsUserUnmapped(configSecret, map[string]string{})
 
 			Consistently(recorder.Events).ShouldNot(Receive())
+		})
+	})
+
+	When("Reconciling an initialized cluster whose applied securityconfig is recorded", func() {
+		const (
+			userSecretName = "securityconfig-secret"
+			jobName        = clusterName + "-securityconfig-update"
+		)
+
+		var (
+			mockClient         *k8s.MockK8sClient
+			transport          *httpmock.MockTransport
+			spec               *opensearchv1.OpenSearchCluster
+			userData           map[string][]byte
+			adminHash          string
+			kibanaHash         string
+			dashboardsUsername string
+			generated          *corev1.Secret
+			createdJob         *batchv1.Job
+			recorder           *record.FakeRecorder
+		)
+
+		BeforeEach(func() {
+			mockClient = k8s.NewMockK8sClient(GinkgoT())
+			transport = httpmock.NewMockTransport()
+			transport.RegisterNoResponder(func(req *http.Request) (*http.Response, error) {
+				return nil, fmt.Errorf("unexpected request %s %s", req.Method, req.URL)
+			})
+			// Hashes that match the admin and dashboards passwords, so the operator keeps them.
+			hash, err := bcrypt.GenerateFromPassword([]byte("changeme"), bcrypt.MinCost)
+			Expect(err).ToNot(HaveOccurred())
+			adminHash = string(hash)
+			hash, err = bcrypt.GenerateFromPassword([]byte("test-password"), bcrypt.MinCost)
+			Expect(err).ToNot(HaveOccurred())
+			kibanaHash = string(hash)
+			dashboardsUsername = "kibanaserver"
+
+			userData = map[string][]byte{
+				"config.yml":         []byte(configYAML),
+				"internal_users.yml": internalUsersYAML("", ""),
+			}
+			spec = &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						ServiceName: clusterName,
+						Version:     "2.3",
+					},
+					Security: &opensearchv1.Security{
+						Config: &opensearchv1.SecurityConfig{
+							SecurityconfigSecret:   corev1.LocalObjectReference{Name: userSecretName},
+							AdminCredentialsSecret: corev1.LocalObjectReference{Name: adminCredsName},
+						},
+						Tls: &opensearchv1.TlsConfig{
+							Transport: &opensearchv1.TlsConfigTransport{Generate: true},
+							Http:      &opensearchv1.TlsConfigHttp{Generate: true},
+						},
+					},
+				},
+				Status: opensearchv1.ClusterStatus{
+					Initialized:          true,
+					ContextSecretCreated: true,
+				},
+			}
+			generated = nil
+			createdJob = nil
+			transport.RegisterResponder(http.MethodHead, helpers.ClusterURL(spec)+"/",
+				httpmock.NewStringResponder(http.StatusOK, ""))
+			transport.RegisterResponder(http.MethodGet, helpers.ClusterURL(spec)+"/",
+				httpmock.NewStringResponder(http.StatusOK, `{"version":{"number":"2.3.0","distribution":"opensearch"}}`))
+		})
+
+		// expectedState is the state the reconciler computes for userData.
+		expectedState := func() opensearchv1.SecurityConfigStatus {
+			source, err := helpers.LoadSecurityConfigSource(nil, &opensearchv1.OpenSearchCluster{})
+			Expect(err).ToNot(HaveOccurred())
+			for name, content := range userData {
+				source.Data[name] = content
+				source.UserKeys[name] = true
+			}
+			state, err := securityConfigState(source, &corev1.Secret{
+				Data: map[string][]byte{"internal_users.yml": internalUsersFor(dashboardsUsername, adminHash, kibanaHash)},
+			}, dashboardsUsername)
+			Expect(err).ToNot(HaveOccurred())
+			return state
+		}
+
+		appliedWith := func(change func(*opensearchv1.SecurityConfigStatus)) *opensearchv1.SecurityConfigStatus {
+			state := expectedState()
+			state.UpdateJobChecksum = "previous-job"
+			change(&state)
+			return &state
+		}
+
+		// reconcile runs the reconciler with the given applied state. jobFor returns the existing
+		// update job, or nil when there is none.
+		reconcile := func(applied *opensearchv1.SecurityConfigStatus, jobFor func(generated *corev1.Secret) *batchv1.Job) (ctrl.Result, error) {
+			spec.Status.SecurityConfig = applied
+			generatedName := helpers.GeneratedSecurityConfigSecretName(spec)
+
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(newAdminCredentialsSecret(clusterName), nil)
+			mockClient.EXPECT().GetSecret(userSecretName, clusterName).Return(corev1.Secret{Data: userData}, nil)
+			setupDashboardsCredentialsSecretMocksForUser(mockClient, clusterName, dashboardsUsername)
+			mockClient.On("GetSecret", generatedName, clusterName).Return(corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: generatedName, Namespace: clusterName},
+				Data:       map[string][]byte{"internal_users.yml": internalUsersFor(dashboardsUsername, adminHash, kibanaHash)},
+			}, nil).Once()
+			mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).
+				Return(&ctrl.Result{}, nil).
+				Run(func(args mock.Arguments) {
+					if secret, ok := args[0].(*corev1.Secret); ok && secret.Name == generatedName {
+						generated = secret.DeepCopy()
+					}
+				})
+			mockClient.On("GetSecret", generatedName, clusterName).
+				Return(func(string, string) corev1.Secret { return *generated }, nil).Once()
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).Return(nil).Maybe()
+			mockClient.EXPECT().GetJob(jobName, clusterName).RunAndReturn(func(string, string) (batchv1.Job, error) {
+				if jobFor == nil {
+					return batchv1.Job{}, NotFoundError()
+				}
+				return *jobFor(generated), nil
+			})
+			mockClient.On("DeleteJob", mock.AnythingOfType("*v1.Job")).Return(nil).Maybe()
+			mockClient.On("CreateJob", mock.Anything).Return(func(job *batchv1.Job) (*ctrl.Result, error) {
+				createdJob = job
+				return &ctrl.Result{}, nil
+			}).Maybe()
+
+			reconcilerContext := NewReconcilerContext(&record.FakeRecorder{}, spec, spec.Spec.NodePools)
+			underTest := newSecurityconfigReconciler(mockClient, context.Background(), &reconcilerContext, spec)
+			recorder = record.NewFakeRecorder(20)
+			underTest.recorder = recorder
+			underTest.options.osClientTransport = transport
+			return underTest.Reconcile()
+		}
+
+		It("should only re-apply the user-supplied files that changed", func() {
+			_, err := reconcile(appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
+				s.AppliedChecksums["config.yml"] = "old"
+			}), nil)
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(createdJob).ToNot(BeNil())
+			cmdArg := createdJob.Spec.Template.Spec.Containers[0].Args[0]
+			Expect(cmdArg).To(ContainSubstring("config.yml -t config"))
+			Expect(cmdArg).ToNot(ContainSubstring("internal_users.yml"))
+			Expect(cmdArg).ToNot(ContainSubstring("tenants.yml"))
+			Expect(cmdArg).ToNot(ContainSubstring("-cd "))
+			target, ok := jobAppliedState(*createdJob)
+			Expect(ok).To(BeTrue())
+			Expect(securityConfigStatesEqual(target, expectedState())).To(BeTrue())
+			Expect(recorder.Events).To(Receive(And(
+				ContainSubstring("config.yml"),
+				Not(ContainSubstring("internal users")),
+			)))
+		})
+
+		It("should not re-apply bundled defaults that changed", func() {
+			delete(userData, "internal_users.yml")
+			result, err := reconcile(appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
+				s.AppliedChecksums["internal_users.yml"] = "old"
+			}), nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(createdJob).To(BeNil())
+			Expect(securityConfigStatesEqual(*spec.Status.SecurityConfig, expectedState())).To(BeTrue())
+			Expect(spec.Status.SecurityConfig.UpdateJobChecksum).To(Equal("previous-job"))
+		})
+
+		It("should not recreate a deleted update job when nothing changed", func() {
+			result, err := reconcile(appliedWith(func(*opensearchv1.SecurityConfigStatus) {}), nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+			Expect(createdJob).To(BeNil())
+		})
+
+		It("should update rotated password hashes through the REST API instead of re-applying internal_users.yml", func() {
+			clusterURL := helpers.ClusterURL(spec) + "/"
+			patchedHashes := map[string]string{}
+			for _, name := range []string{"admin", "kibanaserver"} {
+				transport.RegisterResponder(http.MethodPatch, clusterURL+"_plugins/_security/api/internalusers/"+name,
+					func(req *http.Request) (*http.Response, error) {
+						var ops []map[string]string
+						Expect(json.NewDecoder(req.Body).Decode(&ops)).To(Succeed())
+						Expect(ops).To(HaveLen(1))
+						Expect(ops[0]).To(HaveKeyWithValue("op", "add"))
+						Expect(ops[0]).To(HaveKeyWithValue("path", "/hash"))
+						patchedHashes[name] = ops[0]["value"]
+						return httpmock.NewStringResponse(http.StatusOK, `{"status":"OK"}`), nil
+					})
+			}
+
+			result, err := reconcile(appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
+				s.ManagedUsersChecksum = "old"
+			}), nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(createdJob).To(BeNil())
+			Expect(patchedHashes).To(Equal(map[string]string{"admin": adminHash, "kibanaserver": kibanaHash}))
+			Expect(spec.Status.SecurityConfig.ManagedUsersChecksum).To(Equal(expectedState().ManagedUsersChecksum))
+		})
+
+		It("should retry later when updating the password hashes fails", func() {
+			clusterURL := helpers.ClusterURL(spec) + "/"
+			transport.RegisterResponder(http.MethodPatch, clusterURL+"_plugins/_security/api/internalusers/admin",
+				httpmock.NewStringResponder(http.StatusForbidden, `{"status":"FORBIDDEN"}`))
+
+			result, err := reconcile(appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
+				s.ManagedUsersChecksum = "old"
+			}), nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.RequeueAfter).To(Equal(30 * time.Second))
+			Expect(createdJob).To(BeNil())
+			Expect(spec.Status.SecurityConfig.ManagedUsersChecksum).To(Equal("old"))
+			Expect(spec.Status.ComponentsStatus).To(ConsistOf(opensearchv1.ComponentStatus{
+				Component:   securityConfigComponentName,
+				Status:      securityConfigStatusFailed,
+				Description: "unable to update the admin and Dashboards password hashes",
+			}))
+			Expect(recorder.Events).To(Receive(ContainSubstring(`HTTP 403: {"status":"FORBIDDEN"}`)))
+		})
+
+		It("should update a custom Dashboards user's password hash and ignore a leftover kibanaserver entry", func() {
+			dashboardsUsername = "logs"
+			clusterURL := helpers.ClusterURL(spec) + "/"
+			patchedHashes := map[string]string{}
+			for _, name := range []string{"admin", "logs"} {
+				transport.RegisterResponder(http.MethodPatch, clusterURL+"_plugins/_security/api/internalusers/"+name,
+					func(req *http.Request) (*http.Response, error) {
+						var ops []map[string]string
+						Expect(json.NewDecoder(req.Body).Decode(&ops)).To(Succeed())
+						patchedHashes[name] = ops[0]["value"]
+						return httpmock.NewStringResponse(http.StatusOK, `{"status":"OK"}`), nil
+					})
+			}
+
+			result, err := reconcile(appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
+				s.ManagedUsersChecksum = "old"
+			}), nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(createdJob).To(BeNil())
+			Expect(patchedHashes).To(Equal(map[string]string{"admin": adminHash, "logs": kibanaHash}))
+			Expect(spec.Status.SecurityConfig.ManagedUsersChecksum).To(Equal(expectedState().ManagedUsersChecksum))
+		})
+
+		It("should re-apply a file a succeeded job changed after it was changed back", func() {
+			applied := appliedWith(func(*opensearchv1.SecurityConfigStatus) {})
+			jobTarget := appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
+				s.AppliedChecksums["config.yml"] = "changed-and-reverted"
+			})
+			_, err := reconcile(applied, func(*corev1.Secret) *batchv1.Job {
+				job := &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        jobName,
+						Namespace:   clusterName,
+						Annotations: map[string]string{checksumAnnotation: "other"},
+					},
+					Status: batchv1.JobStatus{Succeeded: 1},
+				}
+				Expect(setJobAppliedState(job, *jobTarget)).To(Succeed())
+				return job
+			})
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(createdJob).ToNot(BeNil())
+			cmdArg := createdJob.Spec.Template.Spec.Containers[0].Args[0]
+			Expect(cmdArg).To(ContainSubstring("config.yml -t config"))
+			Expect(cmdArg).ToNot(ContainSubstring("internal_users.yml"))
+		})
+
+		It("should record the state applied by a job of an earlier operator version", func() {
+			result, err := reconcile(nil, func(generated *corev1.Secret) *batchv1.Job {
+				checksumval, err := checksum(generated.Data)
+				Expect(err).ToNot(HaveOccurred())
+				return &batchv1.Job{
+					ObjectMeta: metav1.ObjectMeta{
+						Name:        jobName,
+						Namespace:   clusterName,
+						Annotations: map[string]string{checksumAnnotation: checksumval},
+					},
+					Status: batchv1.JobStatus{Succeeded: 1},
+				}
+			})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(createdJob).To(BeNil())
+			Expect(spec.Status.SecurityConfig).ToNot(BeNil())
+			Expect(securityConfigStatesEqual(*spec.Status.SecurityConfig, expectedState())).To(BeTrue())
+		})
+	})
+
+	Describe("planSecurityConfigUpdate", func() {
+		userKeys := map[string]bool{"config.yml": true, "internal_users.yml": true}
+		applied := func() opensearchv1.SecurityConfigStatus {
+			return opensearchv1.SecurityConfigStatus{
+				AppliedChecksums:     map[string]string{"config.yml": "a", "internal_users.yml": "b", "tenants.yml": "c"},
+				ManagedUsersChecksum: "m",
+			}
+		}
+
+		It("should re-apply changed user files and skip changed bundled defaults", func() {
+			current := applied()
+			current.AppliedChecksums["config.yml"] = "a2"
+			current.AppliedChecksums["tenants.yml"] = "c2"
+			current.AppliedChecksums["roles.yml"] = "new"
+
+			plan := planSecurityConfigUpdate(applied(), current, map[string]bool{"config.yml": true, "roles.yml": true}, nil)
+			Expect(plan.files).To(Equal([]string{"config.yml", "roles.yml"}))
+			Expect(plan.skippedDefaults).To(Equal([]string{"tenants.yml"}))
+			Expect(plan.patchManagedUsers).To(BeFalse())
+		})
+
+		It("should patch the managed password hashes when internal_users.yml is not re-applied", func() {
+			current := applied()
+			current.ManagedUsersChecksum = "m2"
+
+			plan := planSecurityConfigUpdate(applied(), current, userKeys, nil)
+			Expect(plan.files).To(BeEmpty())
+			Expect(plan.patchManagedUsers).To(BeTrue())
+		})
+
+		It("should not patch the managed password hashes when internal_users.yml is re-applied", func() {
+			current := applied()
+			current.ManagedUsersChecksum = "m2"
+			current.AppliedChecksums["internal_users.yml"] = "b2"
+
+			plan := planSecurityConfigUpdate(applied(), current, userKeys, nil)
+			Expect(plan.files).To(Equal([]string{"internal_users.yml"}))
+			Expect(plan.patchManagedUsers).To(BeFalse())
+		})
+
+		It("should re-apply files an unfinished job may have applied", func() {
+			plan := planSecurityConfigUpdate(applied(), applied(), userKeys, []string{"config.yml", "roles.yml"})
+			Expect(plan.files).To(Equal([]string{"config.yml"}))
+		})
+	})
+
+	Describe("managed password checksum", func() {
+		secret := func(internalUsers string) *corev1.Secret {
+			return &corev1.Secret{Data: map[string][]byte{internalUsersFile: []byte(internalUsers)}}
+		}
+		source := &helpers.SecurityConfigSource{Data: map[string][]byte{"config.yml": []byte("config: {}\n")}}
+
+		It("follows the custom Dashboards user and ignores a leftover kibanaserver hash", func() {
+			base := `
+admin:
+  hash: "admin-hash"
+logs:
+  hash: "logs-hash"
+kibanaserver:
+  hash: "leftover"
+`
+			changedLogs := `
+admin:
+  hash: "admin-hash"
+logs:
+  hash: "logs-hash-2"
+kibanaserver:
+  hash: "leftover"
+`
+			changedLeftover := `
+admin:
+  hash: "admin-hash"
+logs:
+  hash: "logs-hash"
+kibanaserver:
+  hash: "leftover-2"
+`
+			first, err := securityConfigState(source, secret(base), "logs")
+			Expect(err).ToNot(HaveOccurred())
+			second, err := securityConfigState(source, secret(changedLogs), "logs")
+			Expect(err).ToNot(HaveOccurred())
+			third, err := securityConfigState(source, secret(changedLeftover), "logs")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(first.ManagedUsersChecksum).ToNot(Equal(second.ManagedUsersChecksum))
+			Expect(first.ManagedUsersChecksum).To(Equal(third.ManagedUsersChecksum))
 		})
 	})
 })

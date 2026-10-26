@@ -1967,7 +1967,7 @@ Provide the name of the secret that contains your securityconfig yaml files as `
   ```
 
   Once the cluster exists, you can remove such minimal files from the secret so that later updates do not overwrite objects created via the CRDs or the REST API.
-- **`internal_users.yml` is always re-applied:** because the generated secret always contains `internal_users.yml`, every run of the update job replaces all internal users, including users created via `OpensearchUser` resources or the REST API. Leaving the file out of your secret does not prevent this. The operator emits a `Warning` event whenever it re-applies the securityconfig on an initialized cluster; users managed by `OpensearchUser` resources are re-created on their next check (every 30 seconds).
+- **Re-applying a file replaces that document:** `securityadmin` replaces the whole document for each file it applies. Changing `internal_users.yml` or `roles.yml` removes objects of that type that are not in the file, including ones created via `OpensearchUser` resources or the REST API. Leaving `internal_users.yml` out of your secret avoids that for internal users. The operator emits a `Warning` event naming the files it re-applies on an initialized cluster. Users managed by `OpensearchUser` resources are re-created on their next check (every 30 seconds) if a re-apply removed them.
 
 In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (for health checks, cluster status and node draining). When you omit this field the operator creates `<cluster-name>-admin-password` with the `admin` username and a **random password**. Either way, the operator hashes the password into the generated securityconfig without modifying your source secret, and copies the credentials into `<cluster-name>-admin-password`. See [Custom admin password](#custom-admin-password).
 
@@ -1977,7 +1977,15 @@ You must also configure SSL/TLS HTTP. You can either let the operator generate a
 
 If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certificate cannot be used or recognized as a node certificate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
-To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the securityconfig and credentials secrets for changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. A failed job is retried with a backoff from 30 seconds up to 15 minutes. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
+To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the securityconfig secret for changes and then reruns the update job to apply the files that changed. Password changes for the admin and Dashboards users are applied through the security REST API and do not rerun the job. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. A failed job is retried with a backoff from 30 seconds up to 15 minutes. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
+
+Applying a file replaces the whole corresponding document in the security index: applying `internal_users.yml`, for example, removes every internal user that is not in the file. So that security objects created later through the REST API, OpenSearch Dashboards or other tools survive, the operator only re-applies what changed once the cluster is initialized:
+
+- Only the files from your `securityConfigSecret` whose content changed are re-applied. Changing `config.yml` re-applies `config.yml` only.
+- Bundled default files, used when you do not provide your own, are only applied when the cluster is set up. They are not re-applied later, not even when an operator upgrade changes them. This includes `internal_users.yml`, `config.yml`, `roles.yml`, `roles_mapping.yml`, and the other bundled files.
+- When the admin or Dashboards password changes, the operator updates just those password hashes through the security REST API, authenticated with the admin certificate, instead of re-applying `internal_users.yml`. The Dashboards user is `kibanaserver` unless `dashboards.opensearchCredentialsSecret` sets another username. A failed update is reported on the `Securityconfig` component status and retried.
+
+The checksums of the applied files are recorded in the `status.securityConfig` field of the cluster. To make the operator re-apply all files, delete the `<cluster-name>-securityconfig-update` job and remove `status.securityConfig`, for example with `kubectl edit opensearchcluster <cluster-name> --subresource=status`.
 
 #### Applying the securityconfig without HTTP TLS
 
@@ -2248,7 +2256,9 @@ internal_users.yml: |-
     description: "Admin user"
 ```
 
-**Changing the admin password:** update the password in your `admin-credentials-secret`, or, if you do not set `adminCredentialsSecret`, in `<cluster-name>-admin-password`. The operator detects the change, updates the hash in the generated securityconfig and reruns the securityconfig update job.
+**Changing the admin password:** update the password in your `admin-credentials-secret`, or, if you do not set `adminCredentialsSecret`, in `<cluster-name>-admin-password`. The operator detects the change and updates the `admin` user's password hash through the security REST API. It does not rerun the securityconfig update job, so other internal users stay as they are.
+
+**Changing the Dashboards password:** update the password in `dashboards.opensearchCredentialsSecret`, or, if you do not set it, in `<cluster-name>-dashboards-password`. The operator updates the hash of that secret's `username` (or `kibanaserver` when the username is unset) the same way.
 
 ### Custom Dashboards user
 
@@ -2261,7 +2271,7 @@ spec:
       name: dashboards-credentials # This is the name of your secret that contains the credentials for Dashboards to use
 ```
 
-As for the admin user, the operator writes the password hash for this user (the `username` from the secret, or `kibanaserver`) into the generated securityconfig; you do not need to include it in your securityconfig secret.
+As for the admin user, the operator writes the password hash for this user (the `username` from the secret, or `kibanaserver`) into the generated securityconfig; you do not need to include it in your securityconfig secret. On an initialized cluster, changing this password updates that user's hash through the security REST API and does not re-apply `internal_users.yml`.
 
 **Important:** the operator only manages the password hash. If you supply your own `roles_mapping.yml`, it replaces the image's default file, and the default `kibana_server -> kibanaserver` mapping is gone with it. You must keep the Dashboards user mapped to a role with cluster monitoring permissions yourself, for example:
 

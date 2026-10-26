@@ -560,6 +560,9 @@ type ClusterStatus struct {
 	Health               OpenSearchHealth `json:"health,omitempty"`
 	AdminSecretCreated   bool             `json:"adminsecretcreated,omitempty"`
 	ContextSecretCreated bool             `json:"contextsecretcreated,omitempty"`
+	// SecurityConfig records the securityconfig last applied to the cluster successfully, so that
+	// later changes only re-apply the files that changed.
+	SecurityConfig *SecurityConfigStatus `json:"securityConfig,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -585,6 +588,18 @@ type ComponentStatus struct {
 	Status      string   `json:"status,omitempty"`
 	Description string   `json:"description,omitempty"`
 	Conditions  []string `json:"conditions,omitempty"`
+}
+
+// SecurityConfigStatus records what the operator last applied to the security index successfully.
+type SecurityConfigStatus struct {
+	// Checksums of the securityconfig files last applied, keyed by file name. For internal_users.yml
+	// the checksum covers the file as supplied (or bundled), without the operator-managed password hashes.
+	AppliedChecksums map[string]string `json:"appliedChecksums,omitempty"`
+	// Checksum of the operator-managed admin and Dashboards user password hashes last applied.
+	// The Dashboards user is kibanaserver unless the credentials secret names another user.
+	ManagedUsersChecksum string `json:"managedUsersChecksum,omitempty"`
+	// Checksum of the last successful securityconfig update job recorded here.
+	UpdateJobChecksum string `json:"updateJobChecksum,omitempty"`
 }
 
 // +kubebuilder:object:root=true

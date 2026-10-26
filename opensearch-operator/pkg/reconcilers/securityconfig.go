@@ -126,10 +126,12 @@ var ymlToFileType = map[string]string{
 
 type SecurityconfigReconciler struct {
 	client            k8s.K8sClient
+	ctx               context.Context
 	recorder          record.EventRecorder
 	reconcilerContext *ReconcilerContext
 	instance          *opensearchv1.OpenSearchCluster
 	logger            logr.Logger
+	options           ReconcilerOptions
 }
 
 func NewSecurityconfigReconciler(
@@ -142,6 +144,7 @@ func NewSecurityconfigReconciler(
 ) *SecurityconfigReconciler {
 	return &SecurityconfigReconciler{
 		client:            k8s.NewK8sClient(client, ctx, append(opts, reconciler.WithLog(log.FromContext(ctx).WithValues("reconciler", securityConfigReconcilerName)))...),
+		ctx:               ctx,
 		reconcilerContext: reconcilerContext,
 		recorder:          recorder,
 		instance:          instance,
@@ -195,7 +198,13 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 	}
 
-	generatedConfigSecret, err := helpers.BuildGeneratedSecurityConfigSecret(r.client, r.instance, adminCredentialsSecret)
+	source, err := helpers.LoadSecurityConfigSource(r.client, r.instance)
+	if err != nil {
+		r.logger.Error(err, "Unable to load securityconfig")
+		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 30}, err
+	}
+
+	generatedConfigSecret, err := helpers.BuildGeneratedSecurityConfigSecret(r.client, r.instance, adminCredentialsSecret, source)
 	if err != nil {
 		r.logger.Error(err, "Unable to build generated security config secret")
 		return ctrl.Result{Requeue: true, RequeueAfter: time.Second * 30}, err
@@ -261,9 +270,85 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 
 	cmdArg = BuildCmdArg(r.instance, &configSecret, r.logger)
 
-	job, err := r.client.GetJob(jobName, namespace)
+	dashboardsUsername, err := helpers.DashboardsUsername(r.client, r.instance)
+	if err != nil {
+		r.logger.Error(err, "Unable to determine Dashboards username")
+		return ctrl.Result{}, err
+	}
+	current, err := securityConfigState(source, &configSecret, dashboardsUsername)
+	if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	job, getJobErr := r.client.GetJob(jobName, namespace)
+	jobExists := getJobErr == nil
+
+	applied, err := r.recordSucceededJob(job, jobExists, checksumval, current)
+	if err != nil {
+		r.logger.Error(err, "Unable to record the applied securityconfig")
+		return ctrl.Result{}, err
+	}
+
+	// Once the cluster is initialized and the applied securityconfig is known, only re-apply what
+	// changed: securityadmin replaces the whole document of every file it applies, which would drop
+	// security objects created through the REST API or Dashboards.
+	// partialFiles is set when that selective path is the one creating the update job.
+	var partialFiles []string
+	if r.instance.Status.Initialized && applied != nil {
+		staleJob := jobExists && job.Status.Succeeded == 0 && job.Annotations[checksumAnnotation] != checksumval
+		var dirty []string
+		if staleJob {
+			if target, ok := jobAppliedState(job); ok {
+				dirty = changedSecurityConfigFiles(*applied, target)
+			}
+		}
+		plan := planSecurityConfigUpdate(*applied, current, source.UserKeys, dirty)
+		if len(plan.skippedDefaults) > 0 {
+			r.logger.Info("Not re-applying changed bundled securityconfig defaults, they are only applied when the cluster is set up", "files", plan.skippedDefaults)
+		}
+
+		if plan.patchManagedUsers {
+			if err := r.patchManagedUserHashes(&configSecret, adminCertName, dashboardsUsername); err != nil {
+				r.logger.Error(err, "Unable to update the admin and Dashboards password hashes")
+				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Unable to update the admin and Dashboards password hashes: %v", err)
+				if statusErr := r.updateSecurityConfigComponentStatus(securityConfigStatusFailed, "unable to update the admin and Dashboards password hashes", nil); statusErr != nil {
+					return ctrl.Result{}, statusErr
+				}
+				return ctrl.Result{Requeue: true, RequeueAfter: 30 * time.Second}, nil
+			}
+			r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Updated the admin and Dashboards password hashes")
+			updated := applied.DeepCopy()
+			updated.ManagedUsersChecksum = current.ManagedUsersChecksum
+			if err := r.recordAppliedSecurityConfig(*updated); err != nil {
+				return ctrl.Result{}, err
+			}
+			applied = updated
+		}
+
+		if len(plan.files) == 0 {
+			if staleJob {
+				// The job was started for a securityconfig that has since been changed back.
+				r.logger.Info("Deleting stale update job")
+				if err := r.client.DeleteJob(&job); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+			if !securityConfigStatesEqual(*applied, current) {
+				current.UpdateJobChecksum = applied.UpdateJobChecksum
+				if err := r.recordAppliedSecurityConfig(current); err != nil {
+					return ctrl.Result{}, err
+				}
+			}
+			return ctrl.Result{}, r.updateSecurityConfigComponentStatus(securityConfigStatusReady, "", nil)
+		}
+
+		r.logger.Info("Re-applying changed securityconfig files", "files", plan.files)
+		partialFiles = plan.files
+		cmdArg = BuildCmdArg(r.instance, filterSecurityConfigSecret(&configSecret, plan.files), r.logger)
+	}
+
 	resetRetryCount := false
-	if err == nil {
+	if jobExists {
 		value, exists := job.Annotations[checksumAnnotation]
 		_, userExists := job.Annotations[userChecksumAnnotation]
 		current := (exists && value == checksumval) ||
@@ -324,10 +409,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 	}
 
 	if r.instance.Status.Initialized {
-		// securityadmin.sh replaces (not merges) the internalusers/roles/rolesmapping/tenants/
-		// actiongroups documents in the security index with the contents being applied here, so
-		// any object created afterwards via the REST API or Dashboards is about to be wiped.
-		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Re-applying securityconfig on an already-initialized cluster; this replaces internal users, roles, role mappings, tenants and action groups with the contents of the generated securityconfig secret, discarding anything created since via the REST API or Dashboards")
+		// securityadmin.sh replaces (not merges) each document it applies. A selective re-apply
+		// names those files; a full re-apply still replaces every security document.
+		r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "%s", initializedSecurityConfigReapplyMessage(partialFiles))
 	}
 	r.logger.Info("Starting securityconfig update job")
 	r.recorder.AnnotatedEventf(r.instance, annotations, "Normal", "Security", "Starting securityconfig update job")
@@ -345,6 +429,9 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.reconcilerContext.VolumeMounts,
 	)
 
+	if err := setJobAppliedState(&job, current); err != nil {
+		return ctrl.Result{}, err
+	}
 	if err := ctrl.SetControllerReference(r.instance, &job, r.client.Scheme()); err != nil {
 		return ctrl.Result{}, err
 	}
@@ -395,6 +482,18 @@ func BuildCmdArg(instance *opensearchv1.OpenSearchCluster, secret *corev1.Secret
 	}
 
 	return arg
+}
+
+// initializedSecurityConfigReapplyMessage is the warning emitted when an update job is started
+// on a cluster that already has a security index.
+func initializedSecurityConfigReapplyMessage(files []string) string {
+	if len(files) == 0 {
+		return "Re-applying securityconfig on an already-initialized cluster; this replaces internal users, roles, role mappings, tenants and action groups with the contents of the generated securityconfig secret, discarding anything created since via the REST API or Dashboards"
+	}
+	return fmt.Sprintf(
+		"Re-applying changed securityconfig files (%s) on an already-initialized cluster; securityadmin replaces the whole document of each of these files and leaves every other security document unchanged",
+		strings.Join(files, ", "),
+	)
 }
 
 func checksum(data map[string][]byte) (string, error) {
