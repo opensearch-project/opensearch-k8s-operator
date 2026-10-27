@@ -104,7 +104,8 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.leaderElectionRenewDeadline` | string | `"30s"` | Leader election renew deadline. Must be less than leaderElectionLeaseDuration. |
 | `manager.leaderElectionRetryPeriod` | string | `"5s"` | Leader election retry period. |
 | `installCRDs` | bool | `true` |  |
-| `legacyAPI.enabled` | bool | `true` | Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped. |
+| `crds.keep` | bool | `true` | Keep CRDs (and thus all custom resources stored under them) when the release is uninstalled or upgraded with installCRDs=false, by annotating them with helm.sh/resource-policy: keep. Set to false to let Helm delete the CRDs on uninstall, e.g. for CI/dev environments that want full teardown. Existing CRDs must be deleted manually with `kubectl delete crd`. |
+| `legacyAPI.enabled` | bool | `true` | Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped. WARNING: disabling this while opensearch.opster.io resources still exist deletes those CRDs and all remaining custom resources stored under them, unless crds.keep is true. |
 | `serviceAccount.create` | bool | `true` |  |
 | `serviceAccount.name` | string | `""` |  |
 | `useRoleBindings` | bool | `false` |  |
