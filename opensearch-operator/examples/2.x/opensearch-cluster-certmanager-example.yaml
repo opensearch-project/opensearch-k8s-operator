@@ -19,7 +19,7 @@ spec:
   security:
     config:
       # Provided HTTP certificates require an admin client certificate for the operator
-      # (a TLS secret with ca.crt, tls.crt and tls.key), e.g. issued by your internal CA
+      # (a TLS secret with ca.crt, tls.crt and tls.key; tls.key must be PKCS#8), e.g. issued by your internal CA
       adminSecret:
         name: opensearch-admin-cert
     tls:
