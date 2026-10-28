@@ -143,6 +143,25 @@ func isServiceMonitorCRDMissing(err error) bool {
 		strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs: monitoring.coreos.com/v1")
 }
 
+// reconcileCoordinatingService creates the coordinating Service when spec.general.coordinatingService
+// is enabled. When it is disabled, it removes the Service only if this cluster owns it.
+func (r *ClusterReconciler) reconcileCoordinatingService(result *reconciler.CombinedResult) {
+	service := builders.NewCoordinatingServiceForCR(r.instance)
+	if r.instance.Spec.General.CoordinatingService {
+		result.CombineErr(ctrl.SetControllerReference(r.instance, service, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(service, reconciler.StatePresent))
+		return
+	}
+	existing, err := r.client.GetService(service.Name, service.Namespace)
+	if err != nil {
+		result.CombineErr(client.IgnoreNotFound(err))
+		return
+	}
+	if metav1.IsControlledBy(&existing, r.instance) {
+		result.Combine(r.client.ReconcileResource(service, reconciler.StateAbsent))
+	}
+}
+
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// lg := log.FromContext(r.ctx)
 	result := reconciler.CombinedResult{}
@@ -155,6 +174,8 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(clusterService, reconciler.StatePresent))
+
+	r.reconcileCoordinatingService(&result)
 
 	discoveryService := builders.NewDiscoveryServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.client.Scheme()))
