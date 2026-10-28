@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Removed
 - Experimental parallel recovery mode and related Helm/env config (`manager.parallelRecoveryEnabled` / `PARALLEL_RECOVERY_ENABLED`).
 ### Fixed
+- CRDs are now annotated with `helm.sh/resource-policy: keep`, so `helm uninstall` (or an upgrade with `installCRDs=false` or `legacyAPI.enabled=false`) no longer deletes them along with every custom resource in the cluster. Set the new `crds.keep` value to `false` to restore the old behavior. Helm checks the annotation on the live CRD, so existing releases are protected only after one upgrade to this chart version.
 - The generated Dashboards TLS certificate is now renewed when it is expired, unreadable or not signed by the current CA, and the Dashboards pods restart on renewal. It was never renewed before. Clusters with `spec.dashboards.tls.generate: true` take one Dashboards rollout on operator upgrade, because a certificate checksum is added to the pod template.
 - Rotation windows are capped at half a generated certificate's lifetime, so a certificate valid for less than `rotateDaysBeforeExpiry` days is no longer reissued on every reconcile.
 - Removing a master-eligible node now excludes it from the voting configuration first, so a master scale-down, deleting a master pool, or tearing down the bootstrap pod cannot lose quorum. A reverted scale-down clears that exclusion without waiting and re-applies exclusions for nodes that are still being removed.
