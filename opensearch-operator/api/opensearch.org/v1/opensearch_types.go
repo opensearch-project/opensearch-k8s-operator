@@ -401,7 +401,7 @@ type TlsConfigHttp struct {
 }
 
 type TlsCertificateConfig struct {
-	// Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field. tls.key must be an unencrypted PKCS#8 PEM private key ("BEGIN PRIVATE KEY"); the OpenSearch security plugin cannot load PKCS#1 ("BEGIN RSA PRIVATE KEY") or SEC1 ("BEGIN EC PRIVATE KEY") keys, which is what cert-manager issues by default unless privateKey.encoding: PKCS8 is set on the Certificate.
+	// Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field. For OpenSearch node certificates, tls.key must be an unencrypted PKCS#8 PEM private key ("BEGIN PRIVATE KEY"); the OpenSearch security plugin cannot load PKCS#1 ("BEGIN RSA PRIVATE KEY") or SEC1 ("BEGIN EC PRIVATE KEY") keys, which is what cert-manager issues by default unless privateKey.encoding: PKCS8 is set on the Certificate. Not required for Dashboards TLS.
 	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
 	// Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
 	CaSecret corev1.LocalObjectReference `json:"caSecret,omitempty"`
