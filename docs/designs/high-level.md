@@ -91,6 +91,8 @@ When the whole chain completes, the reconcile is requeued after 30 seconds, or s
 
 After the chain, whether it finished, failed or requeued, the OpenSearch Reconciler writes health, `observedGeneration` and the `Ready`/`Progressing`/`Degraded` conditions, derived from the components' statuses and the node pool StatefulSets (`pkg/reconcilers/conditions.go`).
 
+Controllers write to a user's `OpenSearchCluster` through the status subresource or a metadata patch (`patchMetadata` in `controllers/opensearchController.go`), not a full-object `Update`. An `Update` makes the operator a field manager of `spec`, and the user's next server-side apply (Helm 4 by default) then fails with a conflict.
+
 ### Other controllers
 
 The OpenSearch API resources (`OpensearchUser`, `OpensearchRole`, `OpensearchUserRoleBinding`, `OpensearchTenant`, `OpensearchActionGroup`, `OpenSearchISMPolicy`, `OpensearchIndexTemplate`, `OpensearchComponentTemplate`, `OpensearchSnapshotPolicy`) each have their own controller that reconciles them against the OpenSearch API of the referenced cluster. See [OpenSearch API resources](opensearch-rbac.md).

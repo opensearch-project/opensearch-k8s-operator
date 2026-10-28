@@ -33,6 +33,10 @@ The `opensearchCluster` value was replaced by `cluster`. The configuration struc
 
 **Make sure to test the upgrade process on a non-production environment first.**
 
+### Helm 4 server-side apply
+
+The operator only patches `metadata.finalizers` (and annotations used for the API group migration) on an `OpenSearchCluster`, so Helm stays the field manager of `spec` and Helm 4 server-side apply upgrades go through. Clusters reconciled by an older operator may already list the operator's field manager (`manager`) as owner of spec fields. The first upgrade of such a cluster fails with `conflict with "manager"`; run it once with `helm upgrade --force-conflicts`.
+
 ## Configuring OpenSearch Cluster
 
 By default, the chart deploys one node pool named `masters` with 3 replicas and the `master` and `data` roles (30Gi disk, 2Gi memory), plus one Dashboards replica. The OpenSearch and Dashboards version defaults to the chart's `appVersion`; set `cluster.general.version` and `cluster.dashboards.version` to pin it. For all available values, see the [chart README](../../charts/opensearch-cluster/README.md) and [values.yaml](../../charts/opensearch-cluster/values.yaml).
