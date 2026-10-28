@@ -384,6 +384,12 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 		r.Recorder,
 		instance,
 	)
+	statusconfigmap := reconcilers.NewStatusConfigMapReconciler(
+		r.Client,
+		ctx,
+		r.Recorder,
+		instance,
+	)
 
 	componentReconcilers := []reconcilers.NamedComponentReconciler{
 		{Name: tls.Name(), Func: tls.Reconcile},
@@ -395,6 +401,7 @@ func (r *OpenSearchClusterReconciler) reconcilePhaseRunning(ctx context.Context,
 		{Name: upgrade.Name(), Func: upgrade.Reconcile},
 		{Name: restart.Name(), Func: restart.Reconcile},
 		{Name: snapshotrepository.Name(), Func: snapshotrepository.Reconcile},
+		{Name: statusconfigmap.Name(), Func: statusconfigmap.Reconcile},
 	}
 
 	result, pass := runReconcilerChain(componentReconcilers, instance, logger)

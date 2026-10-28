@@ -158,23 +158,34 @@ func (client *OsClusterClient) GetHealth() (responses.ClusterHealthResponse, err
 	req := opensearchapi.ClusterHealthRequest{
 		Level: "indices",
 	}
-	catNodesRes, err := req.Do(context.Background(), client.client)
 	var response responses.ClusterHealthResponse
-	if err == nil {
-		defer helpers.SafeClose(catNodesRes.Body)
-		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
+	resp, err := req.Do(context.Background(), client.client)
+	if err != nil {
+		return response, err
 	}
+	defer helpers.SafeClose(resp.Body)
+	if resp.IsError() {
+		return response, ErrClusterHealthGetFailed(resp.String())
+	}
+	err = json.NewDecoder(resp.Body).Decode(&response)
 	return response, err
 }
 
 func (client *OsClusterClient) CatNodes() ([]responses.CatNodesResponse, error) {
-	req := opensearchapi.CatNodesRequest{Format: "json"}
-	catNodesRes, err := req.Do(context.Background(), client.client)
-	var response []responses.CatNodesResponse
-	if err == nil {
-		defer helpers.SafeClose(catNodesRes.Body)
-		err = json.NewDecoder(catNodesRes.Body).Decode(&response)
+	req := opensearchapi.CatNodesRequest{
+		Format: "json",
+		H:      []string{"name", "ip", "heap.percent", "ram.percent", "cpu", "load_1m", "node.role", "master", "cluster_manager"},
 	}
+	res, err := req.Do(context.Background(), client.client)
+	var response []responses.CatNodesResponse
+	if err != nil {
+		return response, err
+	}
+	defer helpers.SafeClose(res.Body)
+	if res.IsError() {
+		return response, ErrCatFailed("_cat/nodes", res.String())
+	}
+	err = json.NewDecoder(res.Body).Decode(&response)
 	return response, err
 }
 
@@ -213,6 +224,107 @@ func (client *OsClusterClient) CatShards(headers []string) ([]responses.CatShard
 		return response, ErrCatShardsFailed(indicesRes.String())
 	}
 	err = json.NewDecoder(indicesRes.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) CatAllocation() ([]responses.CatAllocationResponse, error) {
+	req := opensearchapi.CatAllocationRequest{Format: "json"}
+	res, err := req.Do(context.Background(), client.client)
+	var response []responses.CatAllocationResponse
+	if err != nil {
+		return response, err
+	}
+	defer helpers.SafeClose(res.Body)
+	if res.IsError() {
+		return response, ErrCatFailed("_cat/allocation", res.String())
+	}
+	err = json.NewDecoder(res.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) CatClusterManager() ([]responses.CatClusterManagerResponse, error) {
+	// opensearch-go v1 has no CatClusterManagerRequest; CatMasterRequest hits
+	// /_cat/master which is an alias returning identical data on OpenSearch 2.x.
+	req := opensearchapi.CatMasterRequest{Format: "json"}
+	res, err := req.Do(context.Background(), client.client)
+	var response []responses.CatClusterManagerResponse
+	if err != nil {
+		return response, err
+	}
+	defer helpers.SafeClose(res.Body)
+	if res.IsError() {
+		return response, ErrCatFailed("_cat/master", res.String())
+	}
+	err = json.NewDecoder(res.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) CatSegments() ([]responses.CatSegmentsResponse, error) {
+	req := opensearchapi.CatSegmentsRequest{Format: "json"}
+	res, err := req.Do(context.Background(), client.client)
+	var response []responses.CatSegmentsResponse
+	if err != nil {
+		return response, err
+	}
+	defer helpers.SafeClose(res.Body)
+	if res.IsError() {
+		return response, ErrCatFailed("_cat/segments", res.String())
+	}
+	err = json.NewDecoder(res.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) CatPendingTasks() ([]responses.CatPendingTasksResponse, error) {
+	req := opensearchapi.CatPendingTasksRequest{Format: "json"}
+	res, err := req.Do(context.Background(), client.client)
+	var response []responses.CatPendingTasksResponse
+	if err != nil {
+		return response, err
+	}
+	defer helpers.SafeClose(res.Body)
+	if res.IsError() {
+		return response, ErrCatFailed("_cat/pending_tasks", res.String())
+	}
+	err = json.NewDecoder(res.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) CatThreadPool() ([]responses.CatThreadPoolResponse, error) {
+	req := opensearchapi.CatThreadPoolRequest{
+		Format: "json",
+		H:      []string{"node_name", "name", "active", "queue", "rejected"},
+	}
+	res, err := req.Do(context.Background(), client.client)
+	var response []responses.CatThreadPoolResponse
+	if err != nil {
+		return response, err
+	}
+	defer helpers.SafeClose(res.Body)
+	if res.IsError() {
+		return response, ErrCatFailed("_cat/thread_pool", res.String())
+	}
+	err = json.NewDecoder(res.Body).Decode(&response)
+	return response, err
+}
+
+func (client *OsClusterClient) CatRecovery() ([]responses.CatRecoveryResponse, error) {
+	// active_only=true so only in-progress recoveries are returned; completed
+	// recoveries are not useful diagnostic data and would bloat the output.
+	req := opensearchapi.CatRecoveryRequest{
+		Format:     "json",
+		ActiveOnly: ptr.To(true),
+		H:          []string{"index", "shard", "time", "type", "stage", "source_node", "target_node", "files_percent", "bytes_percent"},
+	}
+	res, err := req.Do(context.Background(), client.client)
+	var response []responses.CatRecoveryResponse
+	if err != nil {
+		return response, err
+	}
+	defer helpers.SafeClose(res.Body)
+	if res.IsError() {
+		return response, ErrCatFailed("_cat/recovery", res.String())
+	}
+	err = json.NewDecoder(res.Body).Decode(&response)
 	return response, err
 }
 

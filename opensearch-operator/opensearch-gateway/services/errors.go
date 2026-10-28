@@ -11,6 +11,7 @@ var (
 	ErrClusterSettingsOperation          = errors.New("cluster settings failed")
 	ErrCatIndicesOperation               = errors.New("cat indices failed")
 	ErrCatShardsOperation                = errors.New("cat shards failed")
+	ErrCatOperation                      = errors.New("cat request failed")
 	ErrVotingConfigExclusionsOperation   = errors.New("voting config exclusions failed")
 )
 
@@ -40,4 +41,10 @@ func ErrCatShardsFailed(resp string) error {
 
 func ErrVotingConfigExclusionsFailed(resp string) error {
 	return fmt.Errorf("%w: %s", ErrVotingConfigExclusionsOperation, resp)
+}
+
+// ErrCatFailed wraps a non-2xx response from a _cat endpoint, tagging it with
+// the endpoint so a partial gather failure names which request failed.
+func ErrCatFailed(endpoint, resp string) error {
+	return fmt.Errorf("%w [%s]: %s", ErrCatOperation, endpoint, resp)
 }

@@ -9,6 +9,6 @@ type CatIndicesResponse struct {
 	Rep          string `json:"rep"`
 	DocsCount    string `json:"docs.count"`
 	DocsDeleted  string `json:"docs.deleted"`
-	StoreSize    string `json:"tore.size"`
+	StoreSize    string `json:"store.size"`
 	PriStoreSize string `json:"pri.store.size"`
 }
