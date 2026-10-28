@@ -92,6 +92,8 @@ type GeneralConfig struct {
 	// Additional volumes to mount to all pods in the cluster
 	AdditionalVolumes []AdditionalVolume `json:"additionalVolumes,omitempty"`
 	Monitoring        MonitoringConfig   `json:"monitoring,omitempty"`
+	// Configure the status ConfigMap feature
+	StatusConfigMap StatusConfigMapConfig `json:"statusConfigMap,omitempty"`
 	// Populate opensearch keystore before startup
 	Keystore             []KeystoreValue      `json:"keystore,omitempty"`
 	SnapshotRepositories []SnapshotRepoConfig `json:"snapshotRepositories,omitempty"`
@@ -246,6 +248,14 @@ type MonitoringConfig struct {
 type MonitoringConfigTLS struct {
 	ServerName         string `json:"serverName,omitempty"`
 	InsecureSkipVerify bool   `json:"insecureSkipVerify,omitempty"`
+}
+
+// StatusConfigMapConfig configures the status ConfigMap feature
+type StatusConfigMapConfig struct {
+	// Enable the status ConfigMap reconciler
+	Enable bool `json:"enable,omitempty"`
+	// How often to update the ConfigMap (default 60s)
+	UpdateInterval *metav1.Duration `json:"updateInterval,omitempty"`
 }
 
 type BootstrapConfig struct {

@@ -17,6 +17,7 @@ limitations under the License.
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
@@ -27,6 +28,8 @@ import (
 
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 
 	"sigs.k8s.io/controller-runtime/pkg/cache"
 	"sigs.k8s.io/controller-runtime/pkg/metrics/filters"
@@ -48,10 +51,12 @@ import (
 	opsterv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/v1"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/leaderelection"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/healthz"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -118,6 +123,14 @@ func init() {
 }
 
 func main() {
+	// diagnostics-dump is a one-shot subcommand: it renders the full, uncapped
+	// report to stdout and exits without starting the manager. Run via
+	// `kubectl exec` to capture a report too large for the ConfigMap.
+	if len(os.Args) > 1 && os.Args[1] == "diagnostics-dump" {
+		runDiagnosticsDump(os.Args[2:])
+		return
+	}
+
 	var metricsAddr string
 	var enableLeaderElection bool
 	var enableWebhooks bool
@@ -522,4 +535,64 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// runDiagnosticsDump renders the full, uncapped diagnostics report for one
+// OpenSearchCluster to stdout, then exits.
+func runDiagnosticsDump(argv []string) {
+	fs := flag.NewFlagSet("diagnostics-dump", flag.ExitOnError)
+	clusterName := fs.String("cluster", "", "Name of the OpenSearchCluster to report on (required)")
+	namespace := fs.String("namespace", "", "Namespace of the OpenSearchCluster (required)")
+	maxExplain := fs.Int("max-explain", 100, "Max unassigned shards to run allocation/explain on (one API call each; <=0 means all)")
+	_ = fs.Parse(argv)
+
+	if *clusterName == "" {
+		fmt.Fprintln(os.Stderr, "ERROR: --cluster is required")
+		os.Exit(2)
+	}
+	if *namespace == "" {
+		fmt.Fprintln(os.Stderr, "ERROR: --namespace is required")
+		os.Exit(2)
+	}
+
+	// A logger is needed so the shared helpers can function
+	ctrl.SetLogger(zap.New(zap.UseDevMode(false)))
+	ctx := context.Background()
+
+	cfg, err := ctrl.GetConfig()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR loading kube config: %v\n", err)
+		os.Exit(1)
+	}
+	cl, err := client.New(cfg, client.Options{Scheme: scheme})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR creating kube client: %v\n", err)
+		os.Exit(1)
+	}
+	k8sClient := k8s.NewK8sClient(cl, ctx)
+
+	cluster, err := util.FetchOpensearchCluster(k8sClient, ctx, types.NamespacedName{
+		Name:      *clusterName,
+		Namespace: *namespace,
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR fetching cluster %s/%s: %v\n", *namespace, *clusterName, err)
+		os.Exit(1)
+	}
+	if cluster == nil {
+		fmt.Fprintf(os.Stderr, "ERROR: OpenSearchCluster %s/%s not found\n", *namespace, *clusterName)
+		os.Exit(1)
+	}
+
+	osClient, err := util.CreateClientForCluster(k8sClient, ctx, cluster, nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "ERROR connecting to OpenSearch: %v\n", err)
+		os.Exit(1)
+	}
+
+	limits := util.UnlimitedLimits()
+	limits.AllocationExplain = *maxExplain
+
+	data, dataErr := util.GatherClusterDataWithLimits(osClient, limits)
+	fmt.Print(util.BuildStatusTextWithLimits(cluster.Name, *data, *dataErr, limits))
 }
