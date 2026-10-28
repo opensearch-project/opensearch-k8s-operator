@@ -2,6 +2,7 @@ package reconcilers
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/go-logr/logr"
 	"github.com/jarcoal/httpmock"
@@ -9,11 +10,13 @@ import (
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/services"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 
 	"github.com/stretchr/testify/mock"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 )
@@ -314,5 +317,62 @@ var _ = Describe("Upgrade Reconciler", func() {
 			err := underTest.validateUpgrade()
 			Expect(err).To(MatchError(ErrVersionDowngrade))
 		})
+	})
+})
+
+var _ = Describe("Upgrade pod gate condition", func() {
+	It("reports the sole-active-copy reason instead of a drain", func() {
+		cluster := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default", UID: "dummyuid"},
+			Spec: opensearchv1.ClusterSpec{
+				General:   opensearchv1.GeneralConfig{Version: "2.12.0"},
+				NodePools: []opensearchv1.NodePool{{Component: "data", Roles: []string{"data"}, Replicas: 3}},
+			},
+			Status: opensearchv1.ClusterStatus{Version: "2.11.0", Initialized: true},
+		}
+		replicas := int32(3)
+		sts := appsv1.StatefulSet{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-data", Namespace: "default"},
+			Spec:       appsv1.StatefulSetSpec{Replicas: &replicas},
+			Status:     appsv1.StatefulSetStatus{UpdateRevision: "new"},
+		}
+		ready := corev1.PodStatus{Conditions: []corev1.PodCondition{{Type: corev1.PodReady, Status: corev1.ConditionTrue}}}
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		mockClient.On("GetStatefulSet", sts.Name, "default").Return(sts, nil)
+		mockClient.On("ListPods", mock.Anything).Return(corev1.PodList{Items: []corev1.Pod{
+			{Status: ready}, {Status: ready}, {Status: ready},
+		}}, nil)
+		mockClient.On("GetPod", "test-cluster-data-0", "default").Return(corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{Name: "test-cluster-data-0", Labels: map[string]string{"controller-revision-hash": "old"}},
+		}, nil)
+
+		transport := httpmock.NewMockTransport()
+		transport.RegisterNoResponder(httpmock.NewNotFoundResponder(failMessage))
+		for _, m := range []string{http.MethodGet, http.MethodHead} {
+			transport.RegisterResponder(m, `=~^http://os.test:9200/?$`, httpmock.NewStringResponder(200, `{"version":{"number":"2.11.0"}}`))
+		}
+		transport.RegisterResponder(http.MethodGet, `=~/_cluster/health`, httpmock.NewStringResponder(200, `{"status":"green"}`))
+		transport.RegisterResponder(http.MethodGet, `=~/_cat/shards`, httpmock.NewStringResponder(200,
+			`[{"index":"logs","shard":"2","prirep":"p","state":"STARTED","node":"test-cluster-data-0"},{"index":"logs","shard":"2","prirep":"r","state":"UNASSIGNED","node":null}]`))
+
+		var conditions []string
+		mockClient.On("UpdateOpenSearchClusterStatus", mock.Anything, mock.Anything).
+			Run(func(args mock.Arguments) {
+				updateFn := args.Get(1).(func(*opensearchv1.OpenSearchCluster))
+				updateFn(cluster)
+			}).Return(nil)
+
+		underTest := newUpgradeReconciler(mockClient, cluster)
+		osClient, err := services.NewOsClusterClient("http://os.test:9200", "u", "p", services.WithTransport(transport))
+		Expect(err).NotTo(HaveOccurred())
+		underTest.osClient = osClient
+
+		Expect(underTest.doNodePoolUpgrade(cluster.Spec.NodePools[0])).To(Succeed())
+
+		for _, s := range cluster.Status.ComponentsStatus {
+			conditions = append(conditions, s.Conditions...)
+		}
+		Expect(conditions).To(ContainElement("Not restarting test-cluster-data-0: it holds the only active copy of logs[2]"))
+		Expect(conditions).NotTo(ContainElement("Waiting for node to drain"))
 	})
 })
