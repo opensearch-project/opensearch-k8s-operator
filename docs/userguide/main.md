@@ -80,11 +80,31 @@ The `ValidatingWebhookConfiguration` has no `namespaceSelector`, so it still int
 
 Running `helm uninstall opensearch-operator` removes the operator, but by default it **keeps** the `opensearch.org`/`opensearch.opster.io` CRDs (they are annotated with `helm.sh/resource-policy: keep`). This is deliberate: Kubernetes cascade-deletes every `OpenSearchCluster` (and other custom resource) in the cluster when its CRD is removed, so keeping the CRDs on uninstall protects any clusters still managed by the operator.
 
-If you are sure no custom resources under these CRDs still exist and you want a full teardown (e.g. in CI or a throwaway dev environment), either install/upgrade with `--set crds.keep=false` so the `keep` annotation is never applied, or remove the CRDs manually after uninstalling:
+Releases installed from a chart version without `crds.keep` do not have the annotation on their CRDs yet. Run a plain `helm upgrade` to the current chart before uninstalling, or before disabling `installCRDs` or `legacyAPI.enabled`, so the CRDs are annotated first.
 
-```console
-kubectl delete crd $(kubectl get crd -o name | grep -E 'opensearch\.(org|opster\.io)')
-```
+For a full teardown (e.g. in CI or a throwaway dev environment), remove things in this order. The operator puts finalizers on its custom resources, so it must still be running while they are deleted; otherwise the deletions, and any CRD deletion waiting on them, hang.
+
+1. Delete all custom resources and wait until they are gone:
+
+   ```console
+   for crd in $(kubectl get crd -o name | grep -E 'opensearch\.(org|opster\.io)' | cut -d/ -f2); do
+     kubectl delete "$crd" --all --all-namespaces --wait
+   done
+   ```
+
+2. Uninstall the operator:
+
+   ```console
+   helm uninstall opensearch-operator
+   ```
+
+3. Delete the CRDs:
+
+   ```console
+   kubectl delete crd $(kubectl get crd -o name | grep -E 'opensearch\.(org|opster\.io)')
+   ```
+
+Alternatively, upgrade the release with `--set crds.keep=false` before step 2 so that `helm uninstall` also removes the CRDs.
 
 ## Quickstart
 
@@ -230,12 +250,15 @@ legacyAPI:
 
 > **Warning:** Do not disable legacy API support while
 > `opensearch.opster.io` resources still exist. Disabling the legacy API
-> during an upgrade removes the legacy CRDs from the release. By default they
-> are kept (`crds.keep=true`, see [Uninstalling](#uninstalling)), but if you
-> have set `crds.keep=false`, Kubernetes deletes all remaining custom
-> resources stored under those CRDs as soon as they are removed. Follow the
-> [migration guide](./migration-guide.md) to migrate, verify, and delete
-> every legacy resource before changing this setting.
+> during an upgrade removes the legacy CRDs from the release. Helm keeps them
+> only if the live CRDs already carry the `helm.sh/resource-policy: keep`
+> annotation (`crds.keep=true`, see [Uninstalling](#uninstalling)). CRDs
+> installed by an older chart do not, so first upgrade to the current chart
+> without other changes and disable the legacy API in a separate upgrade.
+> Otherwise, or if you have set `crds.keep=false`, Kubernetes deletes all
+> remaining custom resources stored under those CRDs as soon as they are
+> removed. Follow the [migration guide](./migration-guide.md) to migrate,
+> verify, and delete every legacy resource before changing this setting.
 
 ### Pprof endpoints
 

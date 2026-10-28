@@ -224,11 +224,30 @@ Complete this step only after every legacy resource has migrated, its
 been deleted.
 
 > **Warning:** Setting `legacyAPI.enabled=false` during an upgrade removes
-> the `opensearch.opster.io` CRDs from the rendered release. By default the
-> CRDs are annotated with `helm.sh/resource-policy: keep` (`crds.keep=true`),
-> so Helm leaves them in place; if you have set `crds.keep=false`, Kubernetes
-> deletes every remaining custom resource stored under those CRDs across the
-> cluster as soon as they are removed.
+> the `opensearch.opster.io` CRDs from the rendered release. Helm leaves them
+> in place only if the live CRDs already carry the
+> `helm.sh/resource-policy: keep` annotation (`crds.keep=true`, the default).
+> CRDs installed by an older chart do not have it until a later upgrade adds
+> it. Otherwise, or if you have set `crds.keep=false`, Kubernetes deletes
+> every remaining custom resource stored under those CRDs across the cluster
+> as soon as they are removed.
+
+First upgrade to the current chart without changing any other values, so the
+CRDs get the `keep` annotation:
+
+```bash
+helm upgrade <release-name> opensearch-operator/opensearch-operator \
+  --namespace <operator-namespace> \
+  --reuse-values
+```
+
+Confirm that every legacy CRD shows `keep`:
+
+```bash
+kubectl get crd \
+  -o custom-columns='NAME:.metadata.name,RESOURCE-POLICY:.metadata.annotations.helm\.sh/resource-policy' |
+  grep 'opensearch\.opster\.io'
+```
 
 Check every legacy resource type and namespace before disabling support:
 
@@ -253,6 +272,13 @@ helm upgrade <release-name> opensearch-operator/opensearch-operator \
 This also disables the legacy migration controllers, validation webhooks, and
 RBAC rules. Continue using only `opensearch.org/v1` resources after the
 upgrade.
+
+Helm keeps the now-unused `opensearch.opster.io` CRDs. Once the check above
+reports no legacy resources, delete them:
+
+```bash
+kubectl delete crd $(kubectl get crd -o name | grep 'opensearch\.opster\.io')
+```
 
 ## Resource Mapping
 
