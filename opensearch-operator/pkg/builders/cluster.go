@@ -461,11 +461,6 @@ func NewSTSForNodePool(
 	livenessProbeFailureThreshold := int32(10)
 	livenessProbeSuccessThreshold := int32(1)
 	livenessProbeInitialDelaySeconds := int32(10)
-	livenessProbeCommand := []string{
-		"/bin/bash",
-		"-c",
-		fmt.Sprintf("curl -k -s -o /dev/null '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
-	}
 
 	if node.Probes != nil {
 		if node.Probes.Liveness != nil {
@@ -487,10 +482,6 @@ func NewSTSForNodePool(
 
 			if node.Probes.Liveness.SuccessThreshold > 0 {
 				livenessProbeSuccessThreshold = node.Probes.Liveness.SuccessThreshold
-			}
-
-			if len(node.Probes.Liveness.Command) > 0 {
-				livenessProbeCommand = node.Probes.Liveness.Command
 			}
 		}
 
@@ -558,7 +549,7 @@ func NewSTSForNodePool(
 	if node.Probes != nil && node.Probes.Liveness != nil && len(node.Probes.Liveness.Command) > 0 {
 		livenessProbe.ProbeHandler = corev1.ProbeHandler{
 			Exec: &corev1.ExecAction{
-				Command: livenessProbeCommand,
+				Command: node.Probes.Liveness.Command,
 			},
 		}
 	}
