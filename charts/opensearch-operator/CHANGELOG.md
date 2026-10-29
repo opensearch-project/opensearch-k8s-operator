@@ -9,17 +9,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added support for custom image used by `kubeRbacProxy`.
 - Grant the operator RBAC to manage `networking.k8s.io` NetworkPolicies and set `POD_NAMESPACE` on the manager pod so opt-in cluster NetworkPolicies can allow the operator namespace.
+- Added `spec.dashboards.tls.rotateDaysBeforeExpiry` to rotate the generated Dashboards certificate before it expires (default `30`, `-1` disables).
 ### Changed
 - `enableHotReload` is now a tri-state pointer. Omitting it enables TLS certificate hot reload on OpenSearch 3.x+ (and leaves it off on older versions). Existing 3.x clusters that never set the field take one rolling restart on operator upgrade because `plugins.security.ssl.certificates_hot_reload.enabled` is added to `opensearch.yml`.
 - StatefulSets now use `Parallel` `podManagementPolicy` (was `OrderedReady`). On operator upgrade, existing STS objects are recreated once with orphan propagation; pods are retained and re-adopted. Scaling and rolling operations remain sequenced by the operator.
 ### Deprecated
+- `OpenSearchISMPolicy`, `OpensearchIndexTemplate`, `OpensearchComponentTemplate`, `OpensearchActionGroup`, `OpensearchSnapshotPolicy`, `OpensearchUserRoleBinding`, `OpensearchTenant`, `OpensearchRole`, and `OpensearchUser` CRDs are deprecated and will be removed in v4. The operator is narrowing its scope to core OpenSearch cluster lifecycle management; manage these auxiliary resources with a tool built for declarative OpenSearch config management (e.g. Terraform) instead.
 ### Removed
 - Experimental parallel recovery mode and related Helm/env config (`manager.parallelRecoveryEnabled` / `PARALLEL_RECOVERY_ENABLED`).
 ### Fixed
+- CRDs are now annotated with `helm.sh/resource-policy: keep`, so `helm uninstall` (or an upgrade with `installCRDs=false` or `legacyAPI.enabled=false`) no longer deletes them along with every custom resource in the cluster. Set the new `crds.keep` value to `false` to restore the old behavior. Helm checks the annotation on the live CRD, so existing releases are protected only after one upgrade to this chart version.
+- The generated Dashboards TLS certificate is now renewed when it is expired, unreadable or not signed by the current CA, and the Dashboards pods restart on renewal. It was never renewed before. Clusters with `spec.dashboards.tls.generate: true` take one Dashboards rollout on operator upgrade, because a certificate checksum is added to the pod template.
+- Rotation windows are capped at half a generated certificate's lifetime, so a certificate valid for less than `rotateDaysBeforeExpiry` days is no longer reissued on every reconcile.
 - Removing a master-eligible node now excludes it from the voting configuration first, so a master scale-down, deleting a master pool, or tearing down the bootstrap pod cannot lose quorum. A reverted scale-down clears that exclusion without waiting and re-applies exclusions for nodes that are still being removed.
 - Generated TLS certificates are now rotated 30 days before expiry by default, and expired or unparseable certificates are always regenerated. TLS certificate hot reload is enabled by default on OpenSearch 3.x and above so nodes load renewed certificates without a restart; when hot reload is off (`enableHotReload: false` or OpenSearch < 2.19.1) renewals trigger a rolling restart instead.
   Existing CRs keep a stored `rotateDaysBeforeExpiry: -1` until the spec is re-applied — set `30` (or re-apply) to rotate before expiry rather than recovering after it. Replacing the generated CA secret in place is not a supported rotation procedure; leaf reissue cannot keep dual-CA trust during the swap.
 ### Security
+
+---
+## [3.0.15]
+### Added
+- Added `webhook.createConfiguration` (default `true`). Set it to `false`, together with `installCRDs=false` and `useRoleBindings=true`, to install the chart without cluster-wide permissions while a cluster admin applies the CRDs and the `ValidatingWebhookConfiguration` separately.
 
 ---
 ## [2.0.0]

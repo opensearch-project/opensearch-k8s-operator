@@ -62,6 +62,7 @@ func (r *OpensearchSnapshotPolicyReconciler) Reconcile(ctx context.Context, req 
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpensearchSnapshotPolicy")
 
 	snapshotPolicyReconciler := reconcilers.NewSnapshotPolicyReconciler(
 		ctx,

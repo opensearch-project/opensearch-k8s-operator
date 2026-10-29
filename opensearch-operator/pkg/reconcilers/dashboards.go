@@ -3,6 +3,7 @@ package reconcilers
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/go-logr/logr"
@@ -13,7 +14,9 @@ import (
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -58,7 +61,7 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	}
 	result := reconciler.CombinedResult{}
 
-	volumes, volumeMounts, err := r.handleTls()
+	volumes, volumeMounts, tlsCertChecksum, err := r.handleTls()
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -109,10 +112,22 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 
 		annotations[helpers.DashboardChecksumName] = sha1sum
 	}
+	// Dashboards only reads its certificate at startup, so roll the pods on renewal
+	if tlsCertChecksum != "" {
+		annotations[helpers.DashboardTlsChecksumName] = tlsCertChecksum
+	}
 
 	deployment := builders.NewDashboardsDeploymentForCR(r.instance, volumes, volumeMounts, annotations)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, deployment, r.client.Scheme()))
-	result.Combine(r.client.CreateDeployment(deployment))
+	deleting, err := r.deleteDeploymentOnSelectorChange(deployment)
+	if err != nil {
+		result.CombineErr(err)
+	} else if deleting {
+		// The orphaning delete is async; create the new Deployment once the old one is gone
+		result.Combine(&ctrl.Result{RequeueAfter: 5 * time.Second}, nil)
+	} else {
+		result.Combine(r.client.CreateDeployment(deployment))
+	}
 
 	svc := builders.NewDashboardsSvcForCr(r.instance, r.instance.Spec.Dashboards.Service.Labels)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, svc, r.client.Scheme()))
@@ -121,9 +136,42 @@ func (r *DashboardsReconciler) Reconcile() (ctrl.Result, error) {
 	return result.Result, result.Err
 }
 
-func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMount, error) {
+// deleteDeploymentOnSelectorChange deletes the existing Deployment, orphaning its ReplicaSets and
+// pods, when its selector differs from the desired one, and reports whether the old Deployment is
+// still being deleted. The selector is immutable, and Deployments created before it was narrowed
+// to operator-owned labels still carry the user labels. The recreated Deployment adopts the
+// orphaned ReplicaSets, whose labels match the new selector.
+func (r *DashboardsReconciler) deleteDeploymentOnSelectorChange(desired *appsv1.Deployment) (bool, error) {
+	existing, err := r.client.GetDeployment(desired.Name, desired.Namespace)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if existing.DeletionTimestamp != nil {
+		return true, nil
+	}
+	// The selector is fully operator-owned; anything that adds selector labels would cause a recreate on every pass
+	var existingSelector map[string]string
+	if existing.Spec.Selector != nil {
+		existingSelector = existing.Spec.Selector.MatchLabels
+	}
+	if reflect.DeepEqual(existingSelector, desired.Spec.Selector.MatchLabels) {
+		return false, nil
+	}
+	r.logger.Info(fmt.Sprintf("Deployment selector changed, recreating Deployment %s/%s", existing.Namespace, existing.Name))
+	if err := r.client.DeleteDeployment(&existing, true); err != nil && !apierrors.IsNotFound(err) {
+		return false, err
+	}
+	r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "DeploymentRecreated",
+		"Deployment %s/%s is being recreated because its selector changed; existing pods keep serving and will be adopted by the new Deployment", existing.Namespace, existing.Name)
+	return true, nil
+}
+
+func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMount, string, error) {
 	if r.instance.Spec.Dashboards.Tls == nil || !r.instance.Spec.Dashboards.Tls.Enable {
-		return nil, nil, nil
+		return nil, nil, "", nil
 	}
 	clusterName := r.instance.Name
 	namespace := r.instance.Namespace
@@ -132,6 +180,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	tlsConfig := r.instance.Spec.Dashboards.Tls
 	var volumes []corev1.Volume
 	var volumeMounts []corev1.VolumeMount
+	var tlsCertChecksum string
 
 	if tlsConfig.Generate {
 		r.logger.Info("Generating certificates")
@@ -145,12 +194,20 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 			ca, err = util.ReadOrGenerateCaCert(r.pki, r.client, r.instance)
 		}
 		if err != nil {
-			return volumes, volumeMounts, err
+			return volumes, volumeMounts, "", err
 		}
 
-		// Generate cert and create secret
+		// Generate cert and create secret, or renew the existing one
 		tlsSecret, err := r.client.GetSecret(tlsSecretName, namespace)
-		if err != nil {
+		exists := err == nil
+		var renewReason string
+		if exists {
+			renewReason, _, _ = certRenewalReason(tlsSecret.Data[corev1.TLSCertKey], ca, tlsConfig.RotateDaysBeforeExpiry)
+			if renewReason != "" {
+				r.logger.Info("Renewing dashboards certificate", "reason", renewReason)
+			}
+		}
+		if !exists || renewReason != "" {
 			// Generate tls cert and put it into secret
 			dnsNames := []string{
 				fmt.Sprintf("%s-dashboards", clusterName),
@@ -166,18 +223,26 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 			if err != nil {
 				r.logger.Error(err, "Failed to create tls certificate")
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Failed to store tls certificate for Dashboard Cluster")
-				return volumes, volumeMounts, err
+				return volumes, volumeMounts, "", err
 			}
-			tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
-			if err := ctrl.SetControllerReference(r.instance, &tlsSecret, r.client.Scheme()); err != nil {
-				return nil, nil, err
+			if exists {
+				tlsSecret.Data = nodeCert.SecretData(ca)
+				err = r.client.UpdateSecret(&tlsSecret)
+			} else {
+				tlsSecret = corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: tlsSecretName, Namespace: namespace}, Data: nodeCert.SecretData(ca)}
+				if err := ctrl.SetControllerReference(r.instance, &tlsSecret, r.client.Scheme()); err != nil {
+					return nil, nil, "", err
+				}
+				_, err = r.client.CreateSecret(&tlsSecret)
 			}
-
-			if _, err := r.client.CreateSecret(&tlsSecret); err != nil {
+			if err != nil {
 				r.logger.Error(err, "Failed to store tls certificate in secret")
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Failed to store tls certificate for Dashboard Cluster")
-				return volumes, volumeMounts, err
+				return volumes, volumeMounts, "", err
 			}
+		}
+		if tlsCertChecksum, err = util.GetSha1Sum(tlsSecret.Data[corev1.TLSCertKey]); err != nil {
+			return nil, nil, "", err
 		}
 		// Mount secret
 		volume := corev1.Volume{Name: "tls-cert", VolumeSource: corev1.VolumeSource{Secret: &corev1.SecretVolumeSource{SecretName: tlsSecretName}}}
@@ -197,7 +262,7 @@ func (r *DashboardsReconciler) handleTls() ([]corev1.Volume, []corev1.VolumeMoun
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.enabled", "true")
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.key", dashboardsHome+"/certs/tls.key")
 	r.reconcilerContext.AddDashboardsConfig("server.ssl.certificate", dashboardsHome+"/certs/tls.crt")
-	return volumes, volumeMounts, nil
+	return volumes, volumeMounts, tlsCertChecksum, nil
 }
 
 func (r *DashboardsReconciler) providedCaCert(secretName string, namespace string) (tls.Cert, error) {

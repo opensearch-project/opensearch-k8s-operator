@@ -3264,6 +3264,72 @@ spec:
                     type: object
                   priorityClassName:
                     type: string
+                  probes:
+                    description: Timings of the Dashboards probes. Fields left unset
+                      keep the operator defaults.
+                    properties:
+                      liveness:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      readiness:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                      startup:
+                        properties:
+                          failureThreshold:
+                            format: int32
+                            type: integer
+                          initialDelaySeconds:
+                            format: int32
+                            type: integer
+                          periodSeconds:
+                            format: int32
+                            type: integer
+                          successThreshold:
+                            format: int32
+                            type: integer
+                          timeoutSeconds:
+                            format: int32
+                            type: integer
+                        type: object
+                    type: object
+                    x-kubernetes-validations:
+                    - message: startup.successThreshold must be 1
+                      rule: '!has(self.startup) || !has(self.startup.successThreshold)
+                        || self.startup.successThreshold == 1'
+                    - message: liveness.successThreshold must be 1
+                      rule: '!has(self.liveness) || !has(self.liveness.successThreshold)
+                        || self.liveness.successThreshold == 1'
                   replicas:
                     default: 1
                     format: int32
@@ -3577,10 +3643,23 @@ spec:
                         description: Generate certificate, if false secret must be
                           provided
                         type: boolean
+                      rotateDaysBeforeExpiry:
+                        default: 30
+                        description: |-
+                          Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.
+                          Only applies to operator-generated certificates. Expired or unparseable certificates are
+                          always regenerated regardless of this setting.
+                        type: integer
                       secret:
-                        description: Optional, name of a TLS secret that contains
+                        description: 'Optional, name of a TLS secret that contains
                           ca.crt, tls.key and tls.crt data. If ca.crt is in a different
-                          secret provide it via the caSecret field
+                          secret provide it via the caSecret field. For OpenSearch
+                          node certificates, tls.key must be an unencrypted PKCS#8
+                          PEM private key ("BEGIN PRIVATE KEY"); the OpenSearch security
+                          plugin cannot load PKCS#1 ("BEGIN RSA PRIVATE KEY") or SEC1
+                          ("BEGIN EC PRIVATE KEY") keys, which is what cert-manager
+                          issues by default unless privateKey.encoding: PKCS8 is set
+                          on the Certificate. Not required for Dashboards TLS.'
                         properties:
                           name:
                             default: ""
@@ -7005,7 +7084,10 @@ spec:
                         description: TLS Secret that contains a client certificate
                           (tls.key, tls.crt, ca.crt) with admin rights in the opensearch
                           cluster. Must be set if http certificates are provided by
-                          user and not generated
+                          user and not generated. tls.key must be an unencrypted PKCS#8
+                          PEM private key ("BEGIN PRIVATE KEY"); the OpenSearch security
+                          plugin (and securityadmin.sh) cannot load PKCS#1 or SEC1
+                          keys.
                         properties:
                           name:
                             default: ""
@@ -7198,9 +7280,16 @@ spec:
                               always regenerated regardless of this setting.
                             type: integer
                           secret:
-                            description: Optional, name of a TLS secret that contains
+                            description: 'Optional, name of a TLS secret that contains
                               ca.crt, tls.key and tls.crt data. If ca.crt is in a
-                              different secret provide it via the caSecret field
+                              different secret provide it via the caSecret field.
+                              For OpenSearch node certificates, tls.key must be an
+                              unencrypted PKCS#8 PEM private key ("BEGIN PRIVATE KEY");
+                              the OpenSearch security plugin cannot load PKCS#1 ("BEGIN
+                              RSA PRIVATE KEY") or SEC1 ("BEGIN EC PRIVATE KEY") keys,
+                              which is what cert-manager issues by default unless
+                              privateKey.encoding: PKCS8 is set on the Certificate.
+                              Not required for Dashboards TLS.'
                             properties:
                               name:
                                 default: ""
@@ -7284,9 +7373,16 @@ spec:
                               always regenerated regardless of this setting.
                             type: integer
                           secret:
-                            description: Optional, name of a TLS secret that contains
+                            description: 'Optional, name of a TLS secret that contains
                               ca.crt, tls.key and tls.crt data. If ca.crt is in a
-                              different secret provide it via the caSecret field
+                              different secret provide it via the caSecret field.
+                              For OpenSearch node certificates, tls.key must be an
+                              unencrypted PKCS#8 PEM private key ("BEGIN PRIVATE KEY");
+                              the OpenSearch security plugin cannot load PKCS#1 ("BEGIN
+                              RSA PRIVATE KEY") or SEC1 ("BEGIN EC PRIVATE KEY") keys,
+                              which is what cert-manager issues by default unless
+                              privateKey.encoding: PKCS8 is set on the Certificate.
+                              Not required for Dashboards TLS.'
                             properties:
                               name:
                                 default: ""

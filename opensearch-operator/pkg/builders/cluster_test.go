@@ -155,7 +155,7 @@ var _ = Describe("Builders", func() {
 				Value: "master",
 			}))
 		})
-		It("should accept the warm role", func() {
+		It("should accept the warm role without the searchable snapshot flag", func() {
 			clusterObject := ClusterDescWithVersion("3.0.0")
 			nodePool := opensearchv1.NodePool{
 				Component: "masters",
@@ -165,6 +165,10 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
 				Name:  "node.roles",
 				Value: "warm",
+			}))
+			Expect(result.Spec.Template.Spec.Containers[0].Env).To(ContainElement(corev1.EnvVar{
+				Name:  "OPENSEARCH_JAVA_OPTS",
+				Value: "-Xms512M -Xmx512M -Dopensearch.transport.cname_in_publish_address=true",
 			}))
 		})
 		It("should convert the warm role", func() {
@@ -655,9 +659,72 @@ var _ = Describe("Builders", func() {
 			Expect(result.Spec.Template.Spec.InitContainers[0].Name).To(Equal("custom-init1"))
 			Expect(result.Spec.Template.Spec.InitContainers[1].Name).To(Equal("custom-init2"))
 		})
+
+		It("should disable the security plugin through the entrypoint when no TLS is set", func() {
+			disabledEnv := []corev1.EnvVar{
+				{Name: "DISABLE_INSTALL_DEMO_CONFIG", Value: "true"},
+				{Name: "DISABLE_SECURITY_PLUGIN", Value: "true"},
+			}
+			nodePool := opensearchv1.NodePool{Component: "masters", Roles: []string{"cluster_manager"}}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+
+			sts := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).To(ContainElements(disabledEnv))
+
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Tls: &opensearchv1.TlsConfig{Transport: &opensearchv1.TlsConfigTransport{Generate: true}},
+			}
+			sts = NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).ToNot(ContainElement(disabledEnv[0]))
+			Expect(sts.Spec.Template.Spec.Containers[0].Env).ToNot(ContainElement(disabledEnv[1]))
+		})
+
+		It("should let node pool env override the security plugin disable variables", func() {
+			nodePool := opensearchv1.NodePool{
+				Component: "masters",
+				Roles:     []string{"cluster_manager"},
+				Env: []corev1.EnvVar{
+					{Name: "DISABLE_SECURITY_PLUGIN", Value: "false"},
+				},
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			env := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil).Spec.Template.Spec.Containers[0].Env
+
+			operatorIdx, userIdx := -1, -1
+			for i, e := range env {
+				if e.Name == "DISABLE_SECURITY_PLUGIN" && e.Value == "true" {
+					operatorIdx = i
+				}
+				if e.Name == "DISABLE_SECURITY_PLUGIN" && e.Value == "false" {
+					userIdx = i
+				}
+			}
+			Expect(operatorIdx).To(BeNumerically(">=", 0))
+			Expect(userIdx).To(BeNumerically(">", operatorIdx))
+		})
 	})
 
 	When("Constructing a bootstrap pod", func() {
+		It("should never become ready so that it stays out of the cluster service endpoints", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			readinessProbe := result.Spec.Containers[0].ReadinessProbe
+			Expect(readinessProbe).ToNot(BeNil())
+			Expect(readinessProbe.Exec).ToNot(BeNil())
+			Expect(readinessProbe.Exec.Command).To(Equal([]string{"/bin/false"}))
+		})
+
+		It("should be selected by the client services and resolvable through the discovery service", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+
+			Expect(result.Labels).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
+			Expect(NewServiceForCR(&clusterObject).Spec.Selector).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
+			Expect(NewNodePortService(&clusterObject).Spec.Selector).To(HaveKeyWithValue(helpers.ClusterLabel, clusterObject.Name))
+			Expect(NewDiscoveryServiceForCR(&clusterObject).Spec.PublishNotReadyAddresses).To(BeTrue())
+		})
+
 		It("should use General.DefaultRepo for the InitHelper image if configured", func() {
 			clusterObject := ClusterDescWithVersion("2.2.1")
 			customRepository := "mycustomrepo.cr"
@@ -682,6 +749,41 @@ var _ = Describe("Builders", func() {
 				Name:  mockKey,
 				Value: "/opensearch-operated",
 			}))
+		})
+
+		It("should disable the security plugin through the entrypoint when no TLS is set", func() {
+			disabledEnv := []corev1.EnvVar{
+				{Name: "DISABLE_INSTALL_DEMO_CONFIG", Value: "true"},
+				{Name: "DISABLE_SECURITY_PLUGIN", Value: "true"},
+			}
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			Expect(NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env).To(ContainElements(disabledEnv))
+
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Tls: &opensearchv1.TlsConfig{Transport: &opensearchv1.TlsConfigTransport{Generate: true}},
+			}
+			env := NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env
+			Expect(env).ToNot(ContainElement(disabledEnv[0]))
+			Expect(env).ToNot(ContainElement(disabledEnv[1]))
+		})
+
+		It("should let bootstrap env override the security plugin disable variables", func() {
+			clusterObject := ClusterDescWithAdditionalConfigs(nil, []corev1.EnvVar{
+				{Name: "DISABLE_SECURITY_PLUGIN", Value: "false"},
+			})
+			env := NewBootstrapPod(&clusterObject, nil, nil).Spec.Containers[0].Env
+
+			operatorIdx, userIdx := -1, -1
+			for i, e := range env {
+				if e.Name == "DISABLE_SECURITY_PLUGIN" && e.Value == "true" {
+					operatorIdx = i
+				}
+				if e.Name == "DISABLE_SECURITY_PLUGIN" && e.Value == "false" {
+					userIdx = i
+				}
+			}
+			Expect(operatorIdx).To(BeNumerically(">=", 0))
+			Expect(userIdx).To(BeNumerically(">", operatorIdx))
 		})
 
 		It("should apply bootstrap pod annotations", func() {
@@ -1122,6 +1224,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar"
 			clusterObject.Spec.General.ServiceName = "foobar"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -1143,6 +1246,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar-v1v2"
 			clusterObject.Spec.General.ServiceName = "foobar-v1v2"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -1164,6 +1268,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "foobar-v1"
 			clusterObject.Spec.General.ServiceName = "foobar-v1"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  3,
 				Component: "masters",
@@ -1197,6 +1302,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "unready"
 			clusterObject.Spec.General.ServiceName = "unready"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  1,
 				Component: "master",
@@ -1216,6 +1322,7 @@ var _ = Describe("Builders", func() {
 			clusterObject.Namespace = namespaceName
 			clusterObject.Name = "ready"
 			clusterObject.Spec.General.ServiceName = "ready"
+			clusterObject.Spec.General.HttpPort = 9200
 			nodePool := opensearchv1.NodePool{
 				Replicas:  1,
 				Component: "master",
@@ -1508,6 +1615,72 @@ var _ = Describe("Builders", func() {
 				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
 			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
 				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
+		})
+	})
+
+	When("operatorClientCert is set", func() {
+		certVolume := corev1.Volume{
+			Name: "operator-client-cert",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: "client-cert"},
+			},
+		}
+		certMount := corev1.VolumeMount{Name: "operator-client-cert", MountPath: "/mnt/operator-client-cert"}
+		withClientCert := func(httpTls bool) opensearchv1.OpenSearchCluster {
+			clusterObject := ClusterDescWithVersion("2.7.0")
+			clusterObject.Spec.Security = &opensearchv1.Security{
+				Config: &opensearchv1.SecurityConfig{
+					OperatorClientCert: corev1.LocalObjectReference{Name: "client-cert"},
+				},
+				Tls: &opensearchv1.TlsConfig{
+					Http: &opensearchv1.TlsConfigHttp{Enabled: &httpTls},
+				},
+			}
+			return clusterObject
+		}
+		nodePool := opensearchv1.NodePool{
+			Component: "masters",
+			Roles:     []string{"cluster_manager"},
+		}
+
+		It("should mount the cert and use it instead of basic auth in default probes", func() {
+			clusterObject := withClientCert(true)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			expected := []string{"/bin/bash", "-c", "curl -k --cert /mnt/operator-client-cert/tls.crt --key /mnt/operator-client-cert/tls.key --silent --fail 'https://localhost:9200'"}
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Volumes).To(ContainElement(certVolume))
+			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(certMount))
+		})
+
+		It("should keep basic auth and not mount the cert when HTTP TLS is disabled", func() {
+			clusterObject := withClientCert(false)
+			result := NewSTSForNodePool("foobar", &clusterObject, nodePool, "foobar", nil, nil)
+			expected := []string{"/bin/bash", "-c", "curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail 'http://localhost:9200'"}
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).To(Equal(expected))
+			Expect(result.Spec.Template.Spec.Volumes).NotTo(ContainElement(certVolume))
+			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).NotTo(ContainElement(certMount))
+		})
+
+		It("should keep a custom probe command and still mount the cert", func() {
+			clusterObject := withClientCert(true)
+			customPool := nodePool
+			customPool.Probes = &opensearchv1.ProbesConfig{
+				Startup: &opensearchv1.CommandProbeConfig{
+					Command: []string{"/bin/bash", "-c", "echo 'startup'"},
+				},
+				Readiness: &opensearchv1.CommandProbeConfig{
+					Command: []string{"/bin/bash", "-c", "echo 'ready'"},
+				},
+			}
+			result := NewSTSForNodePool("foobar", &clusterObject, customPool, "foobar", nil, nil)
+			Expect(result.Spec.Template.Spec.Containers[0].StartupProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'startup'"}))
+			Expect(result.Spec.Template.Spec.Containers[0].ReadinessProbe.ProbeHandler.Exec.Command).
+				To(Equal([]string{"/bin/bash", "-c", "echo 'ready'"}))
+			Expect(result.Spec.Template.Spec.Volumes).To(ContainElement(certVolume))
+			Expect(result.Spec.Template.Spec.Containers[0].VolumeMounts).To(ContainElement(certMount))
 		})
 	})
 

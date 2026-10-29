@@ -468,3 +468,62 @@ func (m *TestDataManager) GetDocumentCount(indexName string) (int64, error) {
 
 	return 0, fmt.Errorf("could not parse document count from index %s", indexName)
 }
+
+// GetNodeID returns the node ID of the cluster member with the given node name
+func (m *TestDataManager) GetNodeID(nodeName string) (string, error) {
+	req := opensearchapi.NodesInfoRequest{
+		NodeID:     []string{nodeName},
+		FilterPath: []string{"nodes.*.name"},
+	}
+	res, err := req.Do(context.Background(), m.osClientRaw)
+	if err != nil {
+		return "", err
+	}
+	defer res.Body.Close()
+	if res.IsError() {
+		return "", fmt.Errorf("nodes info request failed: %s", res.String())
+	}
+
+	var info struct {
+		Nodes map[string]struct {
+			Name string `json:"name"`
+		} `json:"nodes"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&info); err != nil {
+		return "", err
+	}
+	for id, n := range info.Nodes {
+		if n.Name == nodeName {
+			return id, nil
+		}
+	}
+	return "", fmt.Errorf("node %s not found", nodeName)
+}
+
+// GetCommittedVotingConfig returns the node IDs in the last committed voting configuration
+func (m *TestDataManager) GetCommittedVotingConfig() ([]string, error) {
+	req := opensearchapi.ClusterStateRequest{
+		Metric:     []string{"metadata"},
+		FilterPath: []string{"metadata.cluster_coordination.last_committed_config"},
+	}
+	res, err := req.Do(context.Background(), m.osClientRaw)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+	if res.IsError() {
+		return nil, fmt.Errorf("cluster state request failed: %s", res.String())
+	}
+
+	var state struct {
+		Metadata struct {
+			ClusterCoordination struct {
+				LastCommittedConfig []string `json:"last_committed_config"`
+			} `json:"cluster_coordination"`
+		} `json:"metadata"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&state); err != nil {
+		return nil, err
+	}
+	return state.Metadata.ClusterCoordination.LastCommittedConfig, nil
+}

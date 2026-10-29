@@ -1,16 +1,28 @@
 package reconcilers
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
+	"errors"
+	"math/big"
+	"reflect"
 	"strings"
+	"time"
 
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
+	pkitls "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/tls"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
+	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
@@ -53,6 +65,85 @@ func setupDashboardsCredentialsSecretMocks(mockClient *k8s.MockK8sClient, cluste
 	mockClient.On("ReconcileResource", mock.AnythingOfType("*v1.Secret"), mock.Anything).Return(&ctrl.Result{}, nil)
 }
 
+// signTestCertExpiringAt issues a year-old certificate from the CA that expires at notAfter
+func signTestCertExpiringAt(ca pkitls.Cert, notAfter time.Time) []byte {
+	caCertBlock, _ := pem.Decode(ca.CertData())
+	caCert, err := x509.ParseCertificate(caCertBlock.Bytes)
+	Expect(err).ToNot(HaveOccurred())
+	caKeyBlock, _ := pem.Decode(ca.KeyData())
+	caKey, err := x509.ParsePKCS1PrivateKey(caKeyBlock.Bytes)
+	Expect(err).ToNot(HaveOccurred())
+	key, err := rsa.GenerateKey(rand.Reader, 2048)
+	Expect(err).ToNot(HaveOccurred())
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(2),
+		Subject:      pkix.Name{CommonName: "dashboards"},
+		NotBefore:    time.Now().AddDate(-1, 0, 0),
+		NotAfter:     notAfter,
+	}
+	der, err := x509.CreateCertificate(rand.Reader, template, caCert, &key.PublicKey, caKey)
+	Expect(err).ToNot(HaveOccurred())
+	buffer := new(bytes.Buffer)
+	Expect(pem.Encode(buffer, &pem.Block{Type: "CERTIFICATE", Bytes: der})).To(Succeed())
+	return buffer.Bytes()
+}
+
+// reconcileDashboardsWithCert runs the reconciler against an existing dashboards cert Secret holding certData.
+// It returns the Secret written back (nil if untouched) and the Deployment created.
+func reconcileDashboardsWithCert(clusterName string, ca pkitls.Cert, certData []byte, rotateDays int) (*corev1.Secret, *appsv1.Deployment) {
+	mockClient := k8s.NewMockK8sClient(GinkgoT())
+	spec := opensearchv1.OpenSearchCluster{
+		ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+		Spec: opensearchv1.ClusterSpec{
+			General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+			Dashboards: opensearchv1.DashboardsConfig{
+				Enable: true,
+				Tls: &opensearchv1.DashboardsTlsConfig{
+					Enable:                 true,
+					Generate:               true,
+					RotateDaysBeforeExpiry: rotateDays,
+				},
+				Service: opensearchv1.DashboardsServiceSpec{Labels: map[string]string{}},
+			},
+		}}
+	certSecretName := clusterName + "-dashboards-cert"
+	mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+	mockClient.EXPECT().Context().Return(context.Background())
+	mockClient.EXPECT().GetSecret(clusterName+"-ca", clusterName).Return(corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-ca", Namespace: clusterName},
+		Data:       ca.SecretDataCA(),
+	}, nil)
+	mockClient.EXPECT().GetSecret(certSecretName, clusterName).Return(corev1.Secret{
+		ObjectMeta: metav1.ObjectMeta{Name: certSecretName, Namespace: clusterName},
+		Data:       map[string][]byte{"tls.crt": certData, "tls.key": []byte("old-key"), "ca.crt": ca.CertData()},
+	}, nil)
+	setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+	mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
+	mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
+	mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+	var createdDeployment *appsv1.Deployment
+	mockClient.On("CreateDeployment", mock.Anything).
+		Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
+			createdDeployment = deployment
+			return &ctrl.Result{}, nil
+		})
+	var updatedSecret *corev1.Secret
+	mockClient.On("UpdateSecret", mock.MatchedBy(func(secret *corev1.Secret) bool {
+		return secret.Name == certSecretName
+	})).
+		Return(func(secret *corev1.Secret) error {
+			updatedSecret = secret
+			return nil
+		}).Maybe()
+
+	_, underTest := newDashboardsReconciler(mockClient, &spec)
+	underTest.pki = pkitls.NewPKI()
+	_, err := underTest.Reconcile()
+	Expect(err).ToNot(HaveOccurred())
+	Expect(createdDeployment).ToNot(BeNil())
+	return updatedSecret, createdDeployment
+}
+
 var _ = Describe("Dashboards Reconciler", func() {
 
 	When("running the dashboards reconciler with TLS enabled and an existing cert in a single secret", func() {
@@ -88,6 +179,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 
 			_, underTest := newDashboardsReconciler(mockClient, &spec)
 			_, err := underTest.Reconcile()
@@ -119,6 +211,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().GetSecret(clusterName+"-ca", clusterName).Return(corev1.Secret{}, NotFoundError())
 			mockClient.EXPECT().GetSecret(clusterName+"-dashboards-cert", clusterName).Return(corev1.Secret{}, NotFoundError())
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -170,6 +263,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -226,6 +320,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().Context().Return(context.Background())
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -278,6 +373,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -323,6 +419,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -377,6 +474,7 @@ var _ = Describe("Dashboards Reconciler", func() {
 			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
 			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
 			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, NotFoundError())
 			var createdDeployment *appsv1.Deployment
 			mockClient.On("CreateDeployment", mock.Anything).
 				Return(func(deployment *appsv1.Deployment) (*ctrl.Result, error) {
@@ -404,5 +502,169 @@ var _ = Describe("Dashboards Reconciler", func() {
 					)),
 				))
 		})
+	})
+
+	When("an existing dashboards Deployment", func() {
+		const clusterName = "dashboards-selector"
+		narrow := map[string]string{"opensearch.cluster.dashboards": clusterName}
+		wide := map[string]string{"opensearch.cluster.dashboards": clusterName, "helm.sh/chart": "chart-4.0.0"}
+
+		reconcileWithExisting := func(selector map[string]string, deletionTimestamp *metav1.Time) (ctrl.Result, *record.FakeRecorder) {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable:  true,
+						Labels:  map[string]string{"helm.sh/chart": "chart-4.0.1"},
+						Service: opensearchv1.DashboardsServiceSpec{Labels: map[string]string{}},
+					},
+				},
+			}
+			existing := appsv1.Deployment{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-dashboards", Namespace: clusterName, DeletionTimestamp: deletionTimestamp},
+				Spec:       appsv1.DeploymentSpec{Selector: &metav1.LabelSelector{MatchLabels: selector}},
+			}
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(existing, nil)
+			if deletionTimestamp == nil && reflect.DeepEqual(selector, narrow) {
+				mockClient.EXPECT().CreateDeployment(mock.MatchedBy(func(d *appsv1.Deployment) bool {
+					return reflect.DeepEqual(d.Spec.Selector.MatchLabels, narrow)
+				})).Return(&ctrl.Result{}, nil)
+			} else if deletionTimestamp == nil {
+				mockClient.EXPECT().DeleteDeployment(&existing, true).Return(nil)
+			}
+			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+
+			recorder := record.NewFakeRecorder(10)
+			_, underTest := newDashboardsReconciler(mockClient, &spec)
+			underTest.recorder = recorder
+			result, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			return result, recorder
+		}
+
+		It("is deleted with orphan propagation when its selector carries custom labels", func() {
+			result, recorder := reconcileWithExisting(wide, nil)
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			Expect(recorder.Events).To(Receive(And(HavePrefix("Warning DeploymentRecreated"), ContainSubstring(clusterName+"/"+clusterName+"-dashboards"))))
+		})
+
+		It("is neither deleted again nor updated while its deletion is pending", func() {
+			result, recorder := reconcileWithExisting(wide, &metav1.Time{Time: time.Now()})
+			Expect(result.RequeueAfter).To(BeNumerically(">", 0))
+			Expect(recorder.Events).To(BeEmpty())
+		})
+
+		It("is left alone when its selector is already the operator-owned one", func() {
+			_, recorder := reconcileWithExisting(narrow, nil)
+			Expect(recorder.Events).To(BeEmpty())
+		})
+
+		It("still reconciles the service when the Deployment can't be read", func() {
+			mockClient := k8s.NewMockK8sClient(GinkgoT())
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName, Namespace: clusterName, UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: clusterName},
+					Dashboards: opensearchv1.DashboardsConfig{
+						Enable:  true,
+						Service: opensearchv1.DashboardsServiceSpec{Labels: map[string]string{}},
+					},
+				},
+			}
+			mockClient.EXPECT().GetDeployment(clusterName+"-dashboards", clusterName).Return(appsv1.Deployment{}, errors.New("boom"))
+			mockClient.EXPECT().CreateService(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().CreateConfigMap(mock.Anything).Return(&ctrl.Result{}, nil)
+			mockClient.EXPECT().Context().Return(context.Background())
+			mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+			setupDashboardsCredentialsSecretMocks(mockClient, clusterName)
+
+			_, underTest := newDashboardsReconciler(mockClient, &spec)
+			_, err := underTest.Reconcile()
+			Expect(err).To(MatchError(ContainSubstring("boom")))
+		})
+	})
+})
+
+var _ = Describe("Dashboards Reconciler generated certificate renewal", func() {
+	var ca, otherCa pkitls.Cert
+
+	BeforeEach(func() {
+		var err error
+		ca, err = pkitls.NewPKI().GenerateCA("dashboards-renewal")
+		Expect(err).ToNot(HaveOccurred())
+		otherCa, err = pkitls.NewPKI().GenerateCA("dashboards-renewal-other")
+		Expect(err).ToNot(HaveOccurred())
+	})
+
+	checksumOf := func(certData []byte) string {
+		sum, err := util.GetSha1Sum(certData)
+		Expect(err).ToNot(HaveOccurred())
+		return sum
+	}
+
+	It("should rewrite an expired certificate", func() {
+		expired := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, -1))
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-expired", ca, expired, -1)
+		Expect(secret).ToNot(BeNil())
+		Expect(secret.Data["tls.crt"]).ToNot(Equal(expired))
+		Expect(secret.Data["tls.key"]).ToNot(Equal([]byte("old-key")))
+	})
+
+	It("should rewrite an unparseable certificate", func() {
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-garbage", ca, []byte("not a certificate"), -1)
+		Expect(secret).ToNot(BeNil())
+		Expect(secret.Data["tls.crt"]).ToNot(Equal([]byte("not a certificate")))
+	})
+
+	It("should rewrite a certificate that is not signed by the current CA", func() {
+		foreign := signTestCertExpiringAt(otherCa, time.Now().AddDate(0, 0, 200))
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-wrongca", ca, foreign, -1)
+		Expect(secret).ToNot(BeNil())
+		Expect(secret.Data["tls.crt"]).ToNot(Equal(foreign))
+		Expect(secret.Data["ca.crt"]).To(Equal(ca.CertData()))
+	})
+
+	It("should renew a certificate inside the rotation window", func() {
+		soon := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, 10))
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-window", ca, soon, 30)
+		Expect(secret).ToNot(BeNil())
+		Expect(secret.Data["tls.crt"]).ToNot(Equal(soon))
+	})
+
+	It("should leave a certificate outside the rotation window alone", func() {
+		healthy := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, 200))
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-healthy", ca, healthy, 30)
+		Expect(secret).To(BeNil())
+	})
+
+	It("should not rotate early when rotation is disabled", func() {
+		soon := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, 10))
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-disabled", ca, soon, -1)
+		Expect(secret).To(BeNil())
+	})
+
+	It("should not reissue a fresh certificate that is shorter-lived than the rotation window", func() {
+		shortLived := signTestCert(ca, "dashboards", "dashboards", 20*24*time.Hour)
+		secret, _ := reconcileDashboardsWithCert("dashboards-renew-short", ca, shortLived, 30)
+		Expect(secret).To(BeNil())
+	})
+
+	It("should change the pod template checksum when the certificate is renewed", func() {
+		expired := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, -1))
+		secret, renewedDeployment := reconcileDashboardsWithCert("dashboards-renew-checksum", ca, expired, -1)
+		Expect(secret).ToNot(BeNil())
+		renewedChecksum := renewedDeployment.Spec.Template.Annotations[helpers.DashboardTlsChecksumName]
+		Expect(renewedChecksum).To(Equal(checksumOf(secret.Data["tls.crt"])))
+		Expect(renewedChecksum).ToNot(Equal(checksumOf(expired)))
+
+		healthy := signTestCertExpiringAt(ca, time.Now().AddDate(0, 0, 200))
+		_, healthyDeployment := reconcileDashboardsWithCert("dashboards-renew-checksum-ok", ca, healthy, -1)
+		Expect(healthyDeployment.Spec.Template.Annotations[helpers.DashboardTlsChecksumName]).To(Equal(checksumOf(healthy)))
 	})
 })

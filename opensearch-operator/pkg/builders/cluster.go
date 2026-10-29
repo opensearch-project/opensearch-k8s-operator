@@ -65,6 +65,23 @@ func nodeAttributesEnabled(cr *opensearchv1.OpenSearchCluster) bool {
 	return len(cr.Spec.General.NodeAttributes) > 0
 }
 
+// securityDisabledEnv turns the security plugin off through the image entrypoint
+// when no TLS is configured, so the demo installer does not enable HTTPS.
+// OpenSearch before 2.12 checks the two variables separately, so both are set.
+// The entrypoint ignores both when the plugin is not installed. Writing
+// plugins.security.disabled into opensearch.yml would fail startup on those
+// images, and the entrypoint's -E flag overrides opensearch.yml when the plugin
+// is installed. Env appended by the caller overrides these values.
+func securityDisabledEnv(cr *opensearchv1.OpenSearchCluster) []corev1.EnvVar {
+	if helpers.IsSecurityPluginEnabled(cr) {
+		return nil
+	}
+	return []corev1.EnvVar{
+		{Name: "DISABLE_INSTALL_DEMO_CONFIG", Value: "true"},
+		{Name: "DISABLE_SECURITY_PLUGIN", Value: "true"},
+	}
+}
+
 // NodeAttributesServiceAccountName returns the name of the managed ServiceAccount
 // created by the operator when nodeAttributes are enabled.
 func NodeAttributesServiceAccountName(cr *opensearchv1.OpenSearchCluster) string {
@@ -265,6 +282,19 @@ func getAffinity(affinity *corev1.Affinity, clusterName string) *corev1.Affinity
 	return GetDefaultAffinity(clusterName)
 }
 
+// probeClientCertSecret returns the operatorClientCert secret the default probes
+// authenticate with, so they keep working with basic auth disabled. Empty means
+// basic auth. Client certs need HTTPS, so plain HTTP keeps basic auth.
+func probeClientCertSecret(cr *opensearchv1.OpenSearchCluster) string {
+	if !helpers.IsHttpTlsEnabled(cr) ||
+		cr.Spec.Security == nil ||
+		cr.Spec.Security.Config == nil ||
+		cr.Spec.Security.Config.OperatorClientCert.Name == "" {
+		return ""
+	}
+	return cr.Spec.Security.Config.OperatorClientCert.Name
+}
+
 func NewSTSForNodePool(
 	username string,
 	cr *opensearchv1.OpenSearchCluster,
@@ -417,22 +447,20 @@ func NewSTSForNodePool(
 	if !helpers.IsHttpTlsEnabled(cr) {
 		probeProtocol = "http"
 	}
-	startupProbeCommand := []string{
-		"/bin/bash",
-		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
+	probeAuth := "-u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\""
+	probeClientCert := probeClientCertSecret(cr)
+	if probeClientCert != "" {
+		probeAuth = "--cert /mnt/operator-client-cert/tls.crt --key /mnt/operator-client-cert/tls.key"
 	}
+	probeCurl := fmt.Sprintf("curl -k %s --silent --fail '%s://localhost:%d'", probeAuth, probeProtocol, PortForCluster(cr))
+	startupProbeCommand := []string{"/bin/bash", "-c", probeCurl}
 
 	readinessProbePeriodSeconds := int32(30)
 	readinessProbeTimeoutSeconds := int32(30)
 	readinessProbeFailureThreshold := int32(5)
 	readinessProbeSuccessThreshold := int32(1)
 	readinessProbeInitialDelaySeconds := int32(60)
-	readinessProbeCommand := []string{
-		"/bin/bash",
-		"-c",
-		fmt.Sprintf("curl -k -u \"$(cat /mnt/admin-credentials/username):$(cat /mnt/admin-credentials/password)\" --silent --fail '%s://localhost:%d'", probeProtocol, PortForCluster(cr)),
-	}
+	readinessProbeCommand := []string{"/bin/bash", "-c", probeCurl}
 
 	livenessProbePeriodSeconds := int32(20)
 	livenessProbeTimeoutSeconds := int32(5)
@@ -562,6 +590,18 @@ func NewSTSForNodePool(
 		Name:      "admin-credentials",
 		MountPath: "/mnt/admin-credentials",
 	})
+	if probeClientCert != "" {
+		volumes = append(volumes, corev1.Volume{
+			Name: "operator-client-cert",
+			VolumeSource: corev1.VolumeSource{
+				Secret: &corev1.SecretVolumeSource{SecretName: probeClientCert},
+			},
+		})
+		volumeMounts = append(volumeMounts, corev1.VolumeMount{
+			Name:      "operator-client-cert",
+			MountPath: "/mnt/operator-client-cert",
+		})
+	}
 
 	image := helpers.ResolveImage(cr, &node)
 	initHelperImage := helpers.ResolveInitHelperImage(cr)
@@ -861,6 +901,8 @@ func NewSTSForNodePool(
 		Value: nodeRolesValue,
 	})
 
+	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, securityDisabledEnv(cr)...)
+
 	// Append additional env vars from cr.Spec.NodePool.env
 	sts.Spec.Template.Spec.Containers[0].Env = append(sts.Spec.Template.Spec.Containers[0].Env, node.Env...)
 
@@ -1130,6 +1172,20 @@ func NewBootstrapPod(
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
 
+	// The bootstrap pod carries only the cluster label, which is also the selector of the
+	// cluster Service and of the "-exposed" NodePort Service, so without a readiness probe it
+	// becomes a load balanced endpoint for client traffic while the cluster is still forming
+	// (#965). It is a temporary seed node and has no business serving clients: a readiness
+	// probe that never succeeds keeps it out of those Services, while the headless discovery
+	// Service still resolves it because it publishes not-ready addresses.
+	neverReadyProbe := corev1.Probe{
+		PeriodSeconds:    3600,
+		FailureThreshold: 1,
+		SuccessThreshold: 1,
+		TimeoutSeconds:   1,
+		ProbeHandler:     corev1.ProbeHandler{Exec: &corev1.ExecAction{Command: []string{"/bin/false"}}},
+	}
+
 	// Use persistent storage for bootstrap pod to maintain cluster state across restarts
 	// This prevents cluster formation failures when the bootstrap pod restarts during initialization
 	volumes = append(volumes, corev1.Volume{
@@ -1198,6 +1254,8 @@ func NewBootstrapPod(
 			},
 		},
 	})
+
+	env = append(env, securityDisabledEnv(cr)...)
 
 	// Add Bootstrap.Env
 	if cr.Spec.Bootstrap.Env != nil {
@@ -1389,6 +1447,7 @@ func NewBootstrapPod(
 					}(),
 					StartupProbe:    &probe,
 					LivenessProbe:   &probe,
+					ReadinessProbe:  &neverReadyProbe,
 					VolumeMounts:    volumeMounts,
 					SecurityContext: securityContext,
 				},

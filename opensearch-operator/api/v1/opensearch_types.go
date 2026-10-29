@@ -266,6 +266,16 @@ type DashboardsConfig struct {
 	PriorityClassName string                  `json:"priorityClassName,omitempty"`
 	// OpenSearch Dashboards installation directory inside the container. Defaults to /usr/share/opensearch-dashboards if not set.
 	OpenSearchDashboardsHome string `json:"opensearchDashboardsHome,omitempty"`
+	// Timings of the Dashboards probes. Fields left unset keep the operator defaults.
+	Probes *DashboardsProbesConfig `json:"probes,omitempty"`
+}
+
+// +kubebuilder:validation:XValidation:rule="!has(self.startup) || !has(self.startup.successThreshold) || self.startup.successThreshold == 1",message="startup.successThreshold must be 1"
+// +kubebuilder:validation:XValidation:rule="!has(self.liveness) || !has(self.liveness.successThreshold) || self.liveness.successThreshold == 1",message="liveness.successThreshold must be 1"
+type DashboardsProbesConfig struct {
+	Startup   *ProbeConfig `json:"startup,omitempty"`
+	Liveness  *ProbeConfig `json:"liveness,omitempty"`
+	Readiness *ProbeConfig `json:"readiness,omitempty"`
 }
 
 type DashboardsTlsConfig struct {
@@ -273,6 +283,11 @@ type DashboardsTlsConfig struct {
 	Enable bool `json:"enable,omitempty"`
 	// Generate certificate, if false secret must be provided
 	Generate bool `json:"generate,omitempty"`
+	// Automatically rotate the generated certificate this many days before it expires, set to -1 to disable.
+	// Only applies to operator-generated certificates. Expired or unparseable certificates are
+	// always regenerated regardless of this setting.
+	//+kubebuilder:default=30
+	RotateDaysBeforeExpiry int `json:"rotateDaysBeforeExpiry,omitempty"`
 	// TLS certificate configuration
 	TlsCertificateConfig `json:",omitempty"`
 }
@@ -344,7 +359,7 @@ type TlsConfigHttp struct {
 }
 
 type TlsCertificateConfig struct {
-	// Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field
+	// Optional, name of a TLS secret that contains ca.crt, tls.key and tls.crt data. If ca.crt is in a different secret provide it via the caSecret field. For OpenSearch node certificates, tls.key must be an unencrypted PKCS#8 PEM private key ("BEGIN PRIVATE KEY"); the OpenSearch security plugin cannot load PKCS#1 ("BEGIN RSA PRIVATE KEY") or SEC1 ("BEGIN EC PRIVATE KEY") keys, which is what cert-manager issues by default unless privateKey.encoding: PKCS8 is set on the Certificate. Not required for Dashboards TLS.
 	Secret corev1.LocalObjectReference `json:"secret,omitempty"`
 	// Optional, secret that contains the ca certificate as ca.crt. If this and generate=true is set the existing CA cert from that secret is used to generate the node certs. In this case must contain ca.crt and ca.key fields
 	CaSecret corev1.LocalObjectReference `json:"caSecret,omitempty"`
@@ -365,7 +380,7 @@ type SecurityConfig struct {
 	// Optional secret that contains the different yml files of the opensearch-security config (config.yml, internal_users.yml, ...).
 	// When omitted the operator seeds the cluster with its bundled defaults.
 	SecurityconfigSecret corev1.LocalObjectReference `json:"securityConfigSecret,omitempty"`
-	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated
+	// TLS Secret that contains a client certificate (tls.key, tls.crt, ca.crt) with admin rights in the opensearch cluster. Must be set if http certificates are provided by user and not generated. tls.key must be an unencrypted PKCS#8 PEM private key ("BEGIN PRIVATE KEY"); the OpenSearch security plugin (and securityadmin.sh) cannot load PKCS#1 or SEC1 keys.
 	AdminSecret corev1.LocalObjectReference `json:"adminSecret,omitempty"`
 	// Secret that contains fields username and password to be used by the operator to access the opensearch cluster for node draining. Must be set if custom securityconfig is provided.
 	AdminCredentialsSecret corev1.LocalObjectReference `json:"adminCredentialsSecret,omitempty"`

@@ -27,6 +27,15 @@ helm install [RELEASE_NAME] opensearch-operator/opensearch-operator
 helm uninstall [RELEASE_NAME]
 ```
 
+By default (`crds.keep=true`) the CRDs carry the `helm.sh/resource-policy: keep`
+annotation, so `helm uninstall` leaves them, and every custom resource stored
+under them, in place. Releases installed from an older chart get the annotation
+on their next `helm upgrade`. For a full teardown, delete the custom resources
+first while the operator is still running (it removes their finalizers), then
+uninstall the chart, then delete the CRDs. See
+[Uninstalling](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#uninstalling)
+in the User Guide.
+
 #### Upgrade Chart
 
 ```shell
@@ -36,10 +45,13 @@ helm upgrade [RELEASE_NAME] opensearch-operator/opensearch-operator
 
 #### Disabling the legacy API
 
-> **Warning:** Helm manages the legacy CRDs as regular Helm resources.
-> Upgrading with `legacyAPI.enabled=false` removes those CRDs from the release.
-> Deleting a CRD also deletes every custom resource stored under it across the
-> cluster.
+> **Warning:** Upgrading with `legacyAPI.enabled=false` removes the legacy CRDs
+> from the release. Helm keeps them only if the live CRDs already carry the
+> `helm.sh/resource-policy: keep` annotation (`crds.keep=true`). CRDs installed
+> by an older chart do not, so upgrade to this chart first without other
+> changes and disable the legacy API in a separate upgrade. Otherwise, or with
+> `crds.keep=false`, Helm deletes the CRDs, and deleting a CRD also deletes
+> every custom resource stored under it across the cluster.
 
 Before disabling the legacy API, follow the
 [migration guide](../../docs/userguide/migration-guide.md) to migrate every
@@ -100,12 +112,17 @@ The following table lists the configurable parameters of the Helm chart.
 | `manager.maxConcurrentReconciles` | int | `1` | Global default max concurrent reconciles for all controllers. |
 | `manager.maxConcurrentReconcilesPerController` | object | `{}` | Per-controller overrides (controller name -> max concurrent reconciles). Example: `{opensearchcluster: 4}`. |
 | `manager.metricsBindAddress` | string | `"127.0.0.1:8080"` |  |
+| `manager.leaderElectionLeaseDuration` | string | `"60s"` | Leader election lease duration. Increase alongside renewDeadline/retryPeriod if reconciles (rolling restarts, upgrades) are being interrupted by transient API server latency. |
+| `manager.leaderElectionRenewDeadline` | string | `"30s"` | Leader election renew deadline. Must be less than leaderElectionLeaseDuration. |
+| `manager.leaderElectionRetryPeriod` | string | `"5s"` | Leader election retry period. |
 | `installCRDs` | bool | `true` |  |
-| `legacyAPI.enabled` | bool | `true` | Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped. |
+| `crds.keep` | bool | `true` | Keep CRDs (and thus all custom resources stored under them) when the release is uninstalled or an upgrade stops rendering them (installCRDs=false or legacyAPI.enabled=false), by annotating them with helm.sh/resource-policy: keep. Helm only honors the annotation once it is on the live CRD, so upgrade to a chart version with this setting before disabling installCRDs or legacyAPI.enabled in a later upgrade. Set to false to let Helm delete the CRDs, e.g. for CI/dev environments that want full teardown. |
+| `legacyAPI.enabled` | bool | `true` | Enable support for the deprecated `opensearch.opster.io/v1` API group. When false, deprecated CRDs, webhooks, RBAC rules, and manager watches are skipped. WARNING: disabling this while opensearch.opster.io resources still exist deletes those CRDs and all remaining custom resources stored under them, unless crds.keep is true and the live CRDs already carry the keep annotation from an earlier upgrade. |
 | `serviceAccount.create` | bool | `true` |  |
 | `serviceAccount.name` | string | `""` |  |
 | `useRoleBindings` | bool | `false` |  |
 | `webhook.enabled` | bool | `true` |  |
+| `webhook.createConfiguration` | bool | `true` | Render the cluster-scoped ValidatingWebhookConfiguration. Set to false when a cluster admin installs it separately, e.g. for a namespace-scoped install. |
 | `webhook.port` | int | `9443` |  |
 | `webhook.failurePolicy` | string | `"Fail"` |  |
 | `webhook.secretName` | string | `""` |  |
@@ -129,6 +146,7 @@ helm install opensearch-operator opensearch-operator/opensearch-operator \
 
 When `useRoleBindings` is enabled:
 
+- **CRDs and the webhook configuration** are still cluster-scoped. To install without cluster-wide permissions, also set `installCRDs=false` and `webhook.createConfiguration=false`, and have a cluster admin apply those separately (CRDs first, then the webhook configuration after the release's certificate is ready), as described in the [User Guide](https://github.com/opensearch-project/opensearch-k8s-operator/blob/main/docs/userguide/main.md#installing-without-cluster-wide-permissions)
 - **Manager and proxy roles** will be created as namespace-scoped `Role` resources instead of `ClusterRole`
 - **Metrics ClusterRole** will NOT be created, as Kubernetes does not allow namespace-scoped Roles to grant permissions to non-resource URLs (like `/metrics`)
 - **Metrics endpoint access**: The operator's `/metrics` endpoint is exposed via the kube-apiserver and requires authentication (via `TokenReviews`) and authorization (via `SubjectAccessReviews`). If you need to access metrics with monitoring tools (e.g., Prometheus), you must manually create the appropriate `ClusterRole` and `ClusterRoleBinding`:

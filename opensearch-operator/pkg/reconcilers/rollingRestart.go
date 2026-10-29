@@ -278,13 +278,11 @@ func (r *RollingRestartReconciler) globalCandidateRollingRestart() (ctrl.Result,
 			r.logger.Error(err, "Failed to count masters")
 			return ctrl.Result{}, err
 		}
-		minRequired := (totalMasters + 1) / 2
 		r.logger.Info("Checking master quorum",
 			"totalMasters", totalMasters,
-			"readyMasters", readyMasters,
-			"minRequired", minRequired)
+			"readyMasters", readyMasters)
 
-		if readyMasters <= minRequired {
+		if !masterQuorumSafe(totalMasters, readyMasters) {
 			r.logger.Info("Master quorum unsafe, looking for non-master candidate")
 			// Try to pick the first non-master candidate instead, if any
 			for _, c := range candidates {
@@ -297,8 +295,10 @@ func (r *RollingRestartReconciler) globalCandidateRollingRestart() (ctrl.Result,
 				}
 			}
 			// If still master and unsafe, requeue and wait
-			if next.isMaster && readyMasters <= minRequired {
+			if next.isMaster {
 				r.logger.Info("No safe non-master candidates, requeuing to wait for quorum")
+				r.recorder.AnnotatedEventf(r.instance, map[string]string{"cluster-name": r.instance.GetName()}, "Warning", "RollingRestart",
+					"Rolling restart is waiting for cluster manager quorum: %d of %d cluster manager nodes are ready, restarting %s now could lose quorum", readyMasters, totalMasters, next.podName)
 				return ctrl.Result{Requeue: true, RequeueAfter: 10 * time.Second}, nil
 			}
 		} else {
@@ -335,6 +335,13 @@ func parseOrdinalFromName(name string) int {
 		return -1
 	}
 	return ord
+}
+
+// masterQuorumSafe reports whether one more ready master can be restarted. A strict
+// majority must stay ready, unless every master already is: waiting can't improve on
+// that, and it is the only way to restart a one- or two-master cluster.
+func masterQuorumSafe(total, ready int32) bool {
+	return ready >= total || 2*(ready-1) > total
 }
 
 func (r *RollingRestartReconciler) countMasters() (int32, int32, error) {

@@ -1,5 +1,6 @@
 {{- if .Values.installCRDs -}}
 {{- $legacyAPIEnabled := eq (include "opensearch-operator.legacyAPIEnabled" .) "true" -}}
+{{- $keepCRDs := eq (include "opensearch-operator.keepCRDs" .) "true" -}}
 {{- range $path, $_ := .Files.Glob "files/*.yaml" }}
 	{{- $isLegacyCRD := contains "opensearch.opster.io" $path -}}
 	{{- if or $legacyAPIEnabled (not $isLegacyCRD) }}
@@ -12,6 +13,11 @@
 				{{- $labels := include "opensearch-operator.labels" $ | fromYaml }}
 				{{- $md := default (dict) $obj.metadata }}
 				{{- $_ := set $md "labels" (merge (default (dict) $obj.metadata.labels) $labels) }}
+				{{- if $keepCRDs }}
+				{{- $ann := default (dict) $md.annotations }}
+				{{- $_ := set $ann "helm.sh/resource-policy" "keep" }}
+				{{- $_ := set $md "annotations" $ann }}
+				{{- end }}
 				{{- $_ := set $obj "metadata" $md }}
 {{ $obj | toYaml }}
 ---
