@@ -91,6 +91,15 @@ Check these settings on existing clusters after upgrading the operator and CRDs.
   ```bash
   kubectl patch opensearchcluster <name> -n <namespace> --type merge -p '{"spec":{"general":{"setVMMaxMapCount":false}}}'
   ```
+### Removal of the bootstrap pod
+
+Older operator versions started a dedicated `{cluster}-bootstrap-0` bare pod to form the cluster, then tore it down once `status.initialized` flipped. The operator now bootstraps via pod-0 of each cluster-manager node pool that has at least one replica (`cluster.initial_master_nodes` is set to those pod names). A pool scaled to zero is not listed.
+
+Upgrading to an operator build that includes this change:
+
+- Deletes any leftover bare `{cluster}-bootstrap-0` pod and `{cluster}-bootstrap-data` PVC only after `status.initialized` is true. A pod of that name owned by a StatefulSet is a node-pool pod and is not deleted. If the bare pod is still a cluster member, the operator adds a voting-config exclusion and deletes it only once the committed voting configuration lists some other node and not the bootstrap pod. Until then the pod is kept and the operator emits a `BootstrapExclusionFailed` warning. While that pod still exists and the cluster is not initialized, StatefulSets keep `cluster.initial_master_nodes` set to the bootstrap pod name so the forming cluster is not split.
+- Leaves `cluster.initial_master_nodes` unchanged on StatefulSets that already exist once the cluster is initialized, and omits it on pools created after that. Existing StatefulSets also keep a startup probe that is still the previous authenticated curl command. New pools get a TCP startup probe unless `probes.startup.command` is set. An upgrade therefore does not by itself roll existing nodes.
+- Still accepts `spec.bootstrap` in applied manifests. The field is deprecated and ignored, and will be removed in v4. It stays in the CRD so `kubectl apply` (strict validation since Kubernetes 1.27) does not reject existing manifests. Move plugins, keystore entries, hostAliases, affinity, and initContainers onto `spec.general` / `spec.nodePools`; values left under `bootstrap` have no effect.
 
 ### Resource Readiness Requirements
 

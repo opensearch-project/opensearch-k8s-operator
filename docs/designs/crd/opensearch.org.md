@@ -140,7 +140,10 @@ _Appears in:_
 
 
 
-
+BootstrapConfig is deprecated and ignored. It remains in the API so existing
+manifests still apply under strict CRD validation. The field will be removed
+in v4. Configure plugins, keystore, hostAliases, affinity, and initContainers
+on spec.general or spec.nodePools instead.
 
 
 
@@ -194,7 +197,7 @@ _Appears in:_
 | --- | --- | --- | --- |
 | `general` _[GeneralConfig](#generalconfig)_ | INSERT ADDITIONAL SPEC FIELDS - desired state of cluster<br />Important: Run "make" to regenerate code after modifying this file |  |  |
 | `confMgmt` _[ConfMgmt](#confmgmt)_ |  | \{ smartScaler:true \} |  |
-| `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ |  |  |  |
+| `bootstrap` _[BootstrapConfig](#bootstrapconfig)_ | Bootstrap is deprecated and ignored. Kept so existing manifests apply<br />under strict validation until the field is removed in v4. |  |  |
 | `dashboards` _[DashboardsConfig](#dashboardsconfig)_ |  |  |  |
 | `security` _[Security](#security)_ |  |  |  |
 | `nodePools` _[NodePool](#nodepool) array_ |  |  |  |
@@ -219,7 +222,7 @@ _Appears in:_
 | `timeoutSeconds` _integer_ |  |  |  |
 | `successThreshold` _integer_ |  |  |  |
 | `failureThreshold` _integer_ |  |  |  |
-| `command` _string array_ |  |  |  |
+| `command` _string array_ | Command overrides the probe handler. For startup probes, the default is a<br />TCP socket check (so nodes can become Started before securityadmin runs);<br />setting Command switches the startup probe to Exec. Readiness probes always<br />default to an authenticated curl Exec command. |  |  |
 
 
 #### Condition

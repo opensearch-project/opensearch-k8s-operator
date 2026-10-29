@@ -15,7 +15,6 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/opensearch-gateway/responses"
-	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconciler"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/util"
@@ -166,7 +165,21 @@ func registerVotingExclusionsState(transport *httpmock.MockTransport, names ...s
 	if len(entries) > 0 {
 		body = `{"metadata":{"cluster_coordination":{"voting_config_exclusions":[` + strings.Join(entries, ",") + `]}}}`
 	}
-	transport.RegisterResponder(http.MethodGet, `=~.*/_cluster/state/metadata.*`, httpmock.NewStringResponder(200, body))
+	transport.RegisterResponder(http.MethodGet, `=~.*/_cluster/state/metadata/.*`, httpmock.NewStringResponder(200, body))
+}
+
+// registerCommittedVotingConfig serves last_committed_config for the given node
+// names. Each name is both the node name and the suffix of its node id.
+func registerCommittedVotingConfig(transport *httpmock.MockTransport, names ...string) {
+	ids := make([]string, 0, len(names))
+	nodes := make([]string, 0, len(names))
+	for _, n := range names {
+		id := "id-" + n
+		ids = append(ids, fmt.Sprintf("%q", id))
+		nodes = append(nodes, fmt.Sprintf("%q:{\"name\":%q}", id, n))
+	}
+	body := fmt.Sprintf(`{"metadata":{"cluster_coordination":{"last_committed_config":[%s]}},"nodes":{%s}}`, strings.Join(ids, ","), strings.Join(nodes, ","))
+	transport.RegisterResponder(http.MethodGet, `=~.*/_cluster/state/metadata,nodes/.*`, httpmock.NewStringResponder(200, body))
 }
 
 func scalerDrainTestCluster(clusterName, namespace, nodePoolComponent, status, nodeName string, extraConditions []string) opensearchv1.OpenSearchCluster {
@@ -1509,14 +1522,6 @@ var _ = Describe("Scaler Controller", func() {
 			It("Should leave an exclusion alone while a scale-down still targets that node", func() {
 				spec, _, targetNodeName := masterDecreaseCluster(3)
 				calls := sweep(&spec, []string{targetNodeName}, []string{targetNodeName}, nil)
-				Expect(*calls).To(BeEmpty())
-			})
-
-			It("Should leave the bootstrap node's exclusion alone while it is still a member", func() {
-				spec, _, _ := masterDecreaseCluster(3)
-				spec.Status.ComponentsStatus = nil
-				bootstrap := builders.BootstrapPodName(&spec)
-				calls := sweep(&spec, []string{bootstrap}, []string{bootstrap}, nil)
 				Expect(*calls).To(BeEmpty())
 			})
 

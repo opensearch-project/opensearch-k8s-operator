@@ -98,32 +98,13 @@ var _ = Describe("TLS Reconciler", Ordered, func() {
 		})
 
 		It("should create certs for all pods in the cluster", func() {
-			// Check any bare pods that are part of the cluster
-			podList := &corev1.PodList{}
-			Expect(k8sClient.List(
-				context.Background(),
-				podList,
-				client.MatchingLabels{helpers.ClusterLabel: spec.Name},
-				client.InNamespace(spec.Namespace),
-			)).To(Succeed())
-			Expect(len(podList.Items)).To(BeNumerically(">", 0))
-
 			secret := corev1.Secret{}
 			Expect(k8sClient.Get(context.Background(), client.ObjectKey{Name: clusterName + "-transport-cert", Namespace: namespace}, &secret)).To(Succeed())
-			for _, pod := range podList.Items {
-				Expect(func() bool {
-					_, ok := secret.Data[fmt.Sprintf("%s.crt", pod.Name)]
-					return ok
-				}()).To(BeTrue())
-			}
-			// Check the master node pool
-			i := 0
-			for i < 3 {
+			for i := 0; i < 3; i++ {
 				Expect(func() bool {
 					_, ok := secret.Data[fmt.Sprintf("%s-masters-%d.crt", spec.Name, i)]
 					return ok
 				}()).To(BeTrue())
-				i = i + 1
 			}
 		})
 

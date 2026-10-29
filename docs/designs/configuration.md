@@ -4,7 +4,7 @@ The configuration reconciler renders the OpenSearch settings into `opensearch.ym
 
 The rendered file contains the settings added by the operator itself (TLS, security plugin defaults, gRPC, `node.attr.*` from `general.nodeAttributes`) merged with the user-supplied `additionalConfig`:
 
-* `<cluster>-config`: the shared ConfigMap with the operator settings plus `general.additionalConfig`. It is also used by the bootstrap pod and the securityconfig update job.
+* `<cluster>-config`: the shared ConfigMap with the operator settings plus `general.additionalConfig`. It is also used by the securityconfig update job.
 * `<cluster>-<component>-config`: created only for node pools that set `nodePools[].additionalConfig`. It contains the shared settings with the pool's `additionalConfig` merged on top (pool values win). Those pools mount this ConfigMap instead of the shared one.
 
 ## Restarts on configuration changes
