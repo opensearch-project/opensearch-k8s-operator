@@ -1,4 +1,4 @@
-name: "Publish Release from tag"
+name: "Release Helm Charts"
 
 on:
   push:

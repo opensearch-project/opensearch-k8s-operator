@@ -1,0 +1,80 @@
+# Example: OpenSearch 3.x cluster with a dedicated warm node pool for searchable snapshots.
+# Indices restored with "storage_type": "remote_snapshot" are served by the warm pool, which
+# reads data from the S3 repository on demand and keeps a local file cache on its PVC.
+# See "Searchable snapshots (warm nodes)" in docs/userguide/main.md.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: s3-credentials
+  namespace: default
+type: Opaque
+stringData:
+  s3.client.default.access_key: "<access-key>"
+  s3.client.default.secret_key: "<secret-key>"
+---
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster-warm
+  namespace: default
+spec:
+  general:
+    serviceName: my-cluster-warm
+    httpPort: 9200
+    version: "3.4.0"
+    vendor: "opensearch"
+    pluginsList: ["repository-s3"]
+    keystore:
+      - secret:
+          name: s3-credentials
+    snapshotRepositories:
+      - name: snapshots
+        type: s3
+        settings:
+          bucket: my-opensearch-snapshots
+          region: us-east-1
+          base_path: my-cluster-warm
+    # Optional. Caps remote data per warm node at cache size x ratio (default 5 since 3.2).
+    # additionalConfig:
+    #   cluster.filecache.remote_data_ratio: "5"
+  nodePools:
+    - component: hot
+      replicas: 3
+      diskSize: "100Gi"
+      resources:
+        requests:
+          memory: "4Gi"
+          cpu: "1"
+        limits:
+          memory: "4Gi"
+          cpu: "1"
+      roles:
+        - "cluster_manager"
+        - "data"
+        - "ingest"
+    - component: warm
+      replicas: 2
+      # The file cache lives on this PVC and defaults to 80% of it on a dedicated warm node.
+      diskSize: "200Gi"
+      jvm: -Xmx4G -Xms4G
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "2"
+        limits:
+          memory: "8Gi"
+          cpu: "2"
+      roles:
+        - "warm"
+      # Optional on a dedicated warm pool: a byte size or a percentage of the data disk.
+      # additionalConfig:
+      #   node.search.cache.size: "150gb"
+    # A warm pool that also holds other roles has no default cache size, so it must set one:
+    # - component: data-warm
+    #   replicas: 2
+    #   diskSize: "200Gi"
+    #   roles:
+    #     - "data"
+    #     - "warm"
+    #   additionalConfig:
+    #     node.search.cache.size: "50%"

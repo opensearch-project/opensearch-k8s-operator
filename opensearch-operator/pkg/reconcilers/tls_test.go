@@ -714,6 +714,8 @@ var _ = Describe("TLS Controller", func() {
 			// Rotation enabled: renewed only within the window
 			Expect(underTest.certShouldBeRenewed(mockCA, httpCd, valid10Days)).To(BeTrue())
 			Expect(underTest.certShouldBeRenewed(mockCA, httpCd, valid200Days)).To(BeFalse())
+			// A certificate shorter-lived than the window is not reissued on every reconcile
+			Expect(underTest.certShouldBeRenewed(mockCA, httpCd, makeTestCertPEM(time.Now(), time.Now().AddDate(0, 0, 20)))).To(BeFalse())
 		})
 
 		It("should renew certificates when the CA is replaced", func() {

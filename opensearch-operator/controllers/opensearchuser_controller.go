@@ -61,6 +61,7 @@ func (r *OpensearchUserReconciler) Reconcile(ctx context.Context, req ctrl.Reque
 	if err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
+	recordDeprecation(r.Recorder, instance, "OpensearchUser")
 
 	userReconciler := reconcilers.NewUserReconciler(
 		r.Client,

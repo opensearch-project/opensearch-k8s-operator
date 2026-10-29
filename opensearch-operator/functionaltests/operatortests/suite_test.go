@@ -11,16 +11,14 @@ import (
 // This ensures the test-cluster cluster exists before any
 // focused scenario (e.g. "Scale up scenario") is executed.
 //
-// For operator upgrade and migration tests, set SKIP_SUITE_SETUP=true
-// environment variable to skip test-cluster creation, as these tests
-// manage their own operator and clusters.
+// For tests that manage their own cluster (migration, operator upgrade,
+// searchable snapshots), set SKIP_SUITE_SETUP=true to skip test-cluster creation.
 // Example: SKIP_SUITE_SETUP=true ginkgo --focus "APIGroupMigration"
 
 var _ = BeforeSuite(func() {
 	// Check environment variable to skip suite setup
-	// Migration and upgrade tests should set SKIP_SUITE_SETUP=true manually
 	if os.Getenv("SKIP_SUITE_SETUP") == "true" {
-		By("SKIP_SUITE_SETUP is set - skipping test-cluster creation (migration/upgrade test will manage its own cluster)")
+		By("SKIP_SUITE_SETUP is set - skipping test-cluster creation (self-managed cluster test)")
 		return
 	}
 
