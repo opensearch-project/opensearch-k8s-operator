@@ -546,6 +546,13 @@ func NewSTSForNodePool(
 		InitialDelaySeconds: livenessProbeInitialDelaySeconds,
 		ProbeHandler:        corev1.ProbeHandler{TCPSocket: &corev1.TCPSocketAction{Port: intstr.IntOrString{IntVal: cr.Spec.General.HttpPort}}},
 	}
+	if node.Probes != nil && node.Probes.Liveness != nil && len(node.Probes.Liveness.Command) > 0 {
+		livenessProbe.ProbeHandler = corev1.ProbeHandler{
+			Exec: &corev1.ExecAction{
+				Command: node.Probes.Liveness.Command,
+			},
+		}
+	}
 
 	startupProbe := corev1.Probe{
 		PeriodSeconds:       startupProbePeriodSeconds,
