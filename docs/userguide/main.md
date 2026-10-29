@@ -499,7 +499,7 @@ Again, you have the option of either letting the Operator generate and sign the 
 
 When using generated certificates, you can optionally specify a `customFQDN` field to include a custom domain in the certificate's Subject Alternative Names (SAN) alongside the default cluster DNS names.
 
-If you provide your own certificates, please make sure the following names are added as SubjectAltNames (SAN): `<cluster-name>`, `<cluster-name>.<namespace>`, `<cluster-name>.<namespace>.svc`, `<cluster-name>.<namespace>.svc.<dnsBase>` (`dnsBase` is the operator's `manager.dnsBase` Helm value, `cluster.local` by default).
+If you provide your own certificates, please make sure the following names are added as SubjectAltNames (SAN): `<cluster-name>`, `<cluster-name>.<namespace>`, `<cluster-name>.<namespace>.svc`, `<cluster-name>.<namespace>.svc.<dnsBase>` (`dnsBase` is the operator's `manager.dnsBase` Helm value, `cluster.local` by default). The secret should also contain `ca.crt`, the CA certificate that issued the certificate. The operator uses it to verify the HTTP endpoint when applying the securityconfig.
 
 Directly exposing the node HTTP port outside the Kubernetes cluster is not recommended. Rather than doing so, you should configure an ingress. The ingress can then also present a certificate from an accredited CA (for example LetsEncrypt) and hide self-signed certificates that are being used internally. In this way, the nodes should be supplied internally with properly signed certificates.
 
