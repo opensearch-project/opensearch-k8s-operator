@@ -5,6 +5,8 @@ podAnnotations: {}
 podLabels: {}
 nodeSelector: {}
 tolerations: []
+# -- Affinity rules for the operator pod.
+affinity: {}
 securityContext:
   runAsNonRoot: true
 priorityClassName: ""

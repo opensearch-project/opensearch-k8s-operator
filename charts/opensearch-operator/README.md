@@ -79,6 +79,7 @@ The following table lists the configurable parameters of the Helm chart.
 | `podLabels` | object | `{}` |  |
 | `nodeSelector` | object | `{}` |  |
 | `tolerations` | list | `[]` |  |
+| `affinity` | object | `{}` | Affinity rules for the operator pod. |
 | `securityContext.runAsNonRoot` | bool | `true` |  |
 | `priorityClassName` | string | `""` |  |
 | `manager.securityContext.allowPrivilegeEscalation` | bool | `false` |  |
