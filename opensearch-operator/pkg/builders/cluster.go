@@ -1000,8 +1000,10 @@ func NewServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool *opensea
 	// The nodepool label is deliberately left off this Service's own labels (as opposed to its
 	// selector) so it isn't matched by the ServiceMonitor selector, which looks for the nodepool
 	// label to avoid double scraping of pods behind both this and the headless service.
+	// The marker label lets the operator find and remove this Service once its pool is gone.
 	labels := map[string]string{
-		helpers.ClusterLabel: cr.Name,
+		helpers.ClusterLabel:           cr.Name,
+		helpers.AdditionalServiceLabel: nodePool.Component,
 	}
 
 	selector := map[string]string{

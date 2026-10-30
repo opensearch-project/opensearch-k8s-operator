@@ -641,25 +641,58 @@ var _ = Describe("Additional node pool service reconciliation", func() {
 		Expect(err).NotTo(HaveOccurred())
 	})
 
-	It("should remove the additional service when not enabled for a node pool", func() {
+	It("should do nothing when not enabled for a node pool", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: newInstance(),
+		}
+
+		_, err := underTest.handleAdditionalService(&opensearchv1.NodePool{Component: "coordinators"})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should remove additional services of disabled and removed node pools", func() {
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
 		instance := newInstance()
+		instance.Spec.NodePools = []opensearchv1.NodePool{
+			{Component: "coordinators", Service: &opensearchv1.AdditionalServiceConfig{Create: true}},
+			{Component: "ingest"},
+		}
 		underTest := &ClusterReconciler{
 			client:   mockClient,
 			instance: instance,
+			logger:   logr.Discard(),
 		}
-		nodePool := &opensearchv1.NodePool{
-			Component: "coordinators",
+		existing := func(component string) corev1.Service {
+			return corev1.Service{ObjectMeta: metav1.ObjectMeta{
+				Name:      "additional-service-test-" + component + "-lb",
+				Namespace: "test-namespace",
+				Labels: map[string]string{
+					helpers.ClusterLabel:           "additional-service-test",
+					helpers.AdditionalServiceLabel: component,
+				},
+			}}
 		}
 
+		mockClient.EXPECT().ListServices(mock.Anything, mock.Anything, mock.Anything).
+			Return(corev1.ServiceList{Items: []corev1.Service{
+				existing("coordinators"), // still wanted
+				existing("ingest"),       // service.create turned off
+				existing("data"),         // node pool removed
+			}}, nil)
+		var removed []string
 		mockClient.EXPECT().
-			ReconcileResource(mock.MatchedBy(func(svc *corev1.Service) bool {
-				return svc.Name == "additional-service-test-coordinators-lb"
-			}), reconciler.StateAbsent).
-			Return(nil, nil)
+			ReconcileResource(mock.AnythingOfType("*v1.Service"), reconciler.StateAbsent).
+			RunAndReturn(func(obj runtime.Object, _ reconciler.DesiredState) (*ctrl.Result, error) {
+				removed = append(removed, obj.(*corev1.Service).Name)
+				return nil, nil
+			})
 
-		_, err := underTest.handleAdditionalService(nodePool)
-		Expect(err).NotTo(HaveOccurred())
+		result := reconciler.CombinedResult{}
+		underTest.cleanupAdditionalServices(&result)
+		Expect(result.Err).NotTo(HaveOccurred())
+		Expect(removed).To(ConsistOf("additional-service-test-ingest-lb", "additional-service-test-data-lb"))
 	})
 })
 
