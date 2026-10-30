@@ -200,8 +200,11 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 		result.CombineErr(ctrl.SetControllerReference(r.instance, headlessService, r.client.Scheme()))
 		result.Combine(r.client.ReconcileResource(headlessService, reconciler.StatePresent))
 
+		result.Combine(r.handleAdditionalService(&nodePool))
+
 		result.Combine(r.reconcileNodeStatefulSet(nodePool, username))
 	}
+	r.cleanupAdditionalServices(&result)
 
 	// if Version isn't set we set it now to check for upgrades later.
 	if r.instance.Status.Version == "" {
@@ -647,6 +650,46 @@ func (r *ClusterReconciler) handlePDB(nodePool *opensearchv1.NodePool) (*ctrl.Re
 			},
 		}
 		return r.client.ReconcileResource(&pdb, reconciler.StateAbsent)
+	}
+}
+
+func (r *ClusterReconciler) handleAdditionalService(nodePool *opensearchv1.NodePool) (*ctrl.Result, error) {
+	if nodePool.Service == nil || !nodePool.Service.Create {
+		return nil, nil
+	}
+	service := builders.NewServiceForNodePool(r.instance, nodePool)
+	if err := ctrl.SetControllerReference(r.instance, service, r.client.Scheme()); err != nil {
+		return &ctrl.Result{}, err
+	}
+	return r.client.ReconcileResource(service, reconciler.StatePresent)
+}
+
+// cleanupAdditionalServices removes additional node pool Services that are no longer wanted,
+// either because service.create was turned off or because the node pool was removed.
+func (r *ClusterReconciler) cleanupAdditionalServices(result *reconciler.CombinedResult) {
+	services, err := r.client.ListServices(client.InNamespace(r.instance.Namespace),
+		client.MatchingLabels{helpers.ClusterLabel: r.instance.Name},
+		client.HasLabels{helpers.AdditionalServiceLabel})
+	if err != nil {
+		result.CombineErr(err)
+		return
+	}
+
+	wanted := make(map[string]struct{})
+	for i := range r.instance.Spec.NodePools {
+		nodePool := &r.instance.Spec.NodePools[i]
+		if nodePool.Service != nil && nodePool.Service.Create {
+			wanted[builders.AdditionalServiceName(r.instance, nodePool)] = struct{}{}
+		}
+	}
+
+	for i := range services.Items {
+		service := &services.Items[i]
+		if _, ok := wanted[service.Name]; ok {
+			continue
+		}
+		r.logger.Info("Removing additional node pool service", "service", service.Name)
+		result.Combine(r.client.ReconcileResource(service, reconciler.StateAbsent))
 	}
 }
 
