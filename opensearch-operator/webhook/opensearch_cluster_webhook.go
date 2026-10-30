@@ -24,8 +24,10 @@ import (
 
 	version "github.com/hashicorp/go-version"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/util/validation"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
@@ -52,6 +54,9 @@ func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj run
 	if err := validateNodePoolComponentUniqueness(cluster); err != nil {
 		return nil, err
 	}
+	if err := validateAdditionalServiceNames(cluster); err != nil {
+		return nil, err
+	}
 	warnings, err := validateNodePools(cluster)
 	if err != nil {
 		return nil, err
@@ -73,6 +78,9 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 
 	// Validate no duplicate node pool component names (component is used for K8s resource names)
 	if err := validateNodePoolComponentUniqueness(newCluster); err != nil {
+		return nil, err
+	}
+	if err := validateAdditionalServiceNames(newCluster); err != nil {
 		return nil, err
 	}
 
@@ -173,6 +181,34 @@ func validateNodePoolComponentUniqueness(cluster *opensearchv1.OpenSearchCluster
 			return fmt.Errorf("duplicate node pool component name '%s': each node pool must have a unique component name (used for K8s resource naming)", component)
 		}
 		seen[component] = struct{}{}
+	}
+	return nil
+}
+
+// validateAdditionalServiceNames rejects additional node pool Services (service.create) whose
+// name is too long for a Service or is also the headless Service name of another node pool
+// (pool "ingest" gets "<serviceName>-ingest-lb", which pool "ingest-lb" also uses), since both
+// would reconcile the same Service on every pass.
+func validateAdditionalServiceNames(cluster *opensearchv1.OpenSearchCluster) error {
+	headless := make(map[string]string)
+	for i := range cluster.Spec.NodePools {
+		pool := &cluster.Spec.NodePools[i]
+		headless[builders.NodePoolServiceName(cluster, pool)] = pool.Component
+	}
+	for i := range cluster.Spec.NodePools {
+		pool := &cluster.Spec.NodePools[i]
+		if pool.Service == nil || !pool.Service.Create {
+			continue
+		}
+		name := builders.AdditionalServiceName(cluster, pool)
+		if len(name) > validation.DNS1035LabelMaxLength {
+			return fmt.Errorf("node pool '%s' has service.create enabled, but its service name '%s' is longer than %d characters; shorten spec.general.serviceName or the component name",
+				pool.Component, name, validation.DNS1035LabelMaxLength)
+		}
+		if other, exists := headless[name]; exists {
+			return fmt.Errorf("node pool '%s' has service.create enabled, but its service name '%s' is already the headless service of node pool '%s'; rename one of the node pools",
+				pool.Component, name, other)
+		}
 	}
 	return nil
 }

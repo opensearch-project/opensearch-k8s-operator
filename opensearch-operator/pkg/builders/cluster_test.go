@@ -1497,7 +1497,8 @@ var _ = Describe("Builders", func() {
 			// ServiceMonitor selector (which matches on its presence) doesn't pick up
 			// this Service too and double-scrape the pods behind it.
 			Expect(result.Labels).To(Equal(map[string]string{
-				helpers.ClusterLabel: clusterName,
+				helpers.ClusterLabel:           clusterName,
+				helpers.AdditionalServiceLabel: "coordinators",
 			}))
 			Expect(result.Annotations).To(Equal(map[string]string{
 				"testAnnotationKey":  "testValue",
