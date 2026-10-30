@@ -15,6 +15,7 @@ const (
 	JobLabel                     = "opensearch.org/opensearch-job"
 	NodePoolLabel                = "opensearch.org/opensearch-nodepool"
 	OldNodePoolLabel             = "opster.io/opensearch-nodepool"
+	AdditionalServiceLabel       = "opensearch.org/opensearch-additional-service"
 	OsUserNameAnnotation         = "opensearchuser/name"
 	OsUserNamespaceAnnotation    = "opensearchuser/namespace"
 	DnsBaseEnvVariable           = "DNS_BASE"
