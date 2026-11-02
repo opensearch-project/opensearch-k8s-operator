@@ -421,6 +421,10 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 	if !passwordExists {
 		return nil, errors.New("admin credentials secret missing password field")
 	}
+	adminUsername := "admin"
+	if username, exists := adminSecret.Data["username"]; exists && len(username) > 0 {
+		adminUsername = string(username)
+	}
 
 	dashboardsSecret, _, err := EnsureDashboardsCredentialsSecret(k8sClient, cr)
 	if err != nil {
@@ -457,12 +461,12 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 	var adminHashOverride, dashboardsHashOverride string
 	if existingGenerated != nil {
 		if existingInternal, exists := existingGenerated.Data["internal_users.yml"]; exists {
-			// Generic map lookup rather than InternalUserConfig, since the Dashboards
-			// user entry can live under any username (dashboardsUsername), not just
-			// the hardcoded "kibanaserver" key.
+			// Generic map lookup rather than InternalUserConfig, since the admin and
+			// Dashboards user entries can live under any username (adminUsername,
+			// dashboardsUsername), not just the default "admin"/"kibanaserver" keys.
 			var existingConfig map[string]interface{}
 			if err := yaml.Unmarshal(existingInternal, &existingConfig); err == nil {
-				if hash := existingUserHash(existingConfig, "admin"); hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), adminPassword) == nil {
+				if hash := existingUserHash(existingConfig, adminUsername); hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), adminPassword) == nil {
 					adminHashOverride = hash
 				}
 				if hash := existingUserHash(existingConfig, dashboardsUsername); hash != "" && bcrypt.CompareHashAndPassword([]byte(hash), dashboardsPassword) == nil {
@@ -472,7 +476,7 @@ func BuildGeneratedSecurityConfigSecret(k8sClient k8s.K8sClient, cr *opensearchv
 		}
 	}
 
-	internalUsers, err = applyUserHashes(internalUsers, adminPassword, adminHashOverride, dashboardsUsername, dashboardsPassword, dashboardsHashOverride)
+	internalUsers, err = applyUserHashes(internalUsers, adminUsername, adminPassword, adminHashOverride, dashboardsUsername, dashboardsPassword, dashboardsHashOverride)
 	if err != nil {
 		return nil, err
 	}
@@ -502,22 +506,31 @@ func existingUserHash(data map[string]interface{}, username string) string {
 	return hash
 }
 
-func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOverride string, dashboardsUsername string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
+func applyUserHashes(internalUserData []byte, adminUsername string, adminPassword []byte, adminHashOverride string, dashboardsUsername string, dashboardsPassword []byte, dashboardsHashOverride string) ([]byte, error) {
 	// Use a generic map to preserve all users (including custom ones).
-	// Only "admin" and the Dashboards user (dashboardsUsername) are modified;
-	// all other entries (including _meta and any custom users) pass through
-	// unchanged.
+	// Only the admin user (adminUsername) and the Dashboards user
+	// (dashboardsUsername) are modified; all other entries (including _meta and
+	// any custom users) pass through unchanged.
 	var data map[string]interface{}
 	if err := yaml.Unmarshal(internalUserData, &data); err != nil {
 		return nil, err
+	}
+	if data == nil {
+		data = make(map[string]interface{})
 	}
 
 	// Update admin user.
 	// NOTE: yaml.v2 deserializes nested mappings as map[interface{}]interface{}.
 	// If migrating to yaml.v3, these assertions must change to map[string]interface{}.
-	adminUser, ok := data["admin"].(map[interface{}]interface{})
-	if !ok {
-		return nil, fmt.Errorf("admin user not found or has invalid format")
+	var adminUser map[interface{}]interface{}
+	switch existing := data[adminUsername].(type) {
+	case map[interface{}]interface{}:
+		adminUser = existing
+	case nil:
+		adminUser = make(map[interface{}]interface{})
+		data[adminUsername] = adminUser
+	default:
+		return nil, fmt.Errorf("admin user %q has invalid format", adminUsername)
 	}
 
 	var adminHash string
@@ -592,14 +605,10 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 	// The bundled default ships a kibanaserver entry with hash: "". We used to
 	// always overwrite that hash; with a custom Dashboards username it would
 	// otherwise be applied as an empty hash, which OpenSearch can reject.
-	if dashboardsUsername != "kibanaserver" {
-		if leftover, ok := data["kibanaserver"].(map[interface{}]interface{}); ok {
-			hash, _ := leftover["hash"].(string)
-			if strings.TrimSpace(hash) == "" {
-				delete(data, "kibanaserver")
-			}
-		}
-	}
+	// The same applies to the bundled "admin" entry when a custom admin
+	// username is used.
+	removeEmptyHashUser(data, "kibanaserver", dashboardsUsername)
+	removeEmptyHashUser(data, "admin", adminUsername)
 
 	// Marshal back to YAML, preserving all users (base + custom)
 	modifiedYaml, err := yaml.Marshal(data)
@@ -607,6 +616,22 @@ func applyUserHashes(internalUserData []byte, adminPassword []byte, adminHashOve
 		return nil, err
 	}
 	return modifiedYaml, nil
+}
+
+// removeEmptyHashUser deletes the defaultUsername entry when it has an empty
+// hash and the operator manages that user under a different configuredUsername.
+func removeEmptyHashUser(data map[string]interface{}, defaultUsername string, configuredUsername string) {
+	if configuredUsername == defaultUsername {
+		return
+	}
+	leftover, ok := data[defaultUsername].(map[interface{}]interface{})
+	if !ok {
+		return
+	}
+	hash, _ := leftover["hash"].(string)
+	if strings.TrimSpace(hash) == "" {
+		delete(data, defaultUsername)
+	}
 }
 
 func UsernameAndPassword(k8sClient k8s.K8sClient, cr *opensearchv1.OpenSearchCluster) (string, string, error) {

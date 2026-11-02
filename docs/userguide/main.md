@@ -2260,7 +2260,7 @@ spec:
 
 ### Custom admin password
 
-The operator always manages the password of the internal user named `admin`. To choose that password yourself instead of using a generated one, create a secret with `username` and `password` keys and reference it as `adminCredentialsSecret`. The username should be `admin`: the operator uses the secret's credentials for its own API calls, but always writes the password hash to the `admin` user.
+The operator always manages the password of the internal admin user. To choose that password yourself instead of using a generated one, create a secret with `username` and `password` keys and reference it as `adminCredentialsSecret`. The operator uses the secret's credentials for its own API calls and writes the password hash to the internal user named by `username` (`admin` if the key is absent), creating that user with the `admin` backend role if it is not in your `internal_users.yml`. When you use a username other than `admin`, the bundled `admin` entry is dropped unless your `internal_users.yml` gives it a hash.
 
 ```yaml
 apiVersion: v1
