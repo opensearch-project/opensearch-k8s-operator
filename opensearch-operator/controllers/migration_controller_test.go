@@ -54,7 +54,8 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 		_ = corev1.AddToScheme(scheme)
 		_ = opensearchv1.AddToScheme(scheme)
 		_ = opsterv1.AddToScheme(scheme)
-		fakeClient = fake.NewClientBuilder().WithScheme(scheme).Build()
+		fakeClient = fake.NewClientBuilder().WithScheme(scheme).
+			WithStatusSubresource(&opensearchv1.OpenSearchCluster{}, &opsterv1.OpenSearchCluster{}).Build()
 		reconciler = &ClusterMigrationReconciler{
 			Client: fakeClient,
 			Scheme: scheme,
@@ -246,6 +247,8 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			newCluster := &opensearchv1.OpenSearchCluster{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, newCluster)).To(Succeed())
 			Expect(newCluster.Spec.General.Version).To(Equal("2.19.4"))
+			Expect(newCluster.Status.Phase).To(Equal(opensearchv1.PhaseRunning))
+			Expect(newCluster.Annotations).NotTo(HaveKey(MigrationStatusPendingAnnotation))
 		})
 
 		It("should not migrate old cluster that is not ready", func() {
@@ -320,7 +323,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 					},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable:   true,
-						Replicas: 0, // explicit zero; the value that trips CRD re-defaulting on a full Update
+						Replicas: ptr.To(int32(0)), // explicit zero; the value that trips CRD re-defaulting on a full Update
 					},
 				},
 				Status: opsterv1.ClusterStatus{
@@ -358,7 +361,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			updatedCluster := &opsterv1.OpenSearchCluster{}
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeTrue())
-			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(int32(0)))
+			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(ptr.To(int32(0))))
 		})
 	})
 
@@ -412,7 +415,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 					},
 					Dashboards: opsterv1.DashboardsConfig{
 						Enable:   true,
-						Replicas: 0,
+						Replicas: ptr.To(int32(0)),
 					},
 				},
 			}
@@ -454,7 +457,7 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(fakeClient.Get(ctx, req.NamespacedName, updatedCluster)).To(Succeed())
 			Expect(containsString(updatedCluster.Finalizers, MigrationFinalizer)).To(BeFalse())
 			Expect(containsString(updatedCluster.Finalizers, OldClusterFinalizer)).To(BeFalse())
-			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(int32(0)))
+			Expect(updatedCluster.Spec.Dashboards.Replicas).To(Equal(ptr.To(int32(0))))
 		})
 
 		It("should allow deletion when annotation indicates new cluster deletion", func() {
@@ -996,6 +999,89 @@ var _ = Describe("ClusterMigrationReconciler", func() {
 			Expect(twin.Status.State).To(Equal(opensearchv1.OpensearchComponentTemplateCreated))
 			Expect(twin.Status.ExistingComponentTemplate).To(Equal(ptr.To(false)))
 			Expect(twin.Status.ManagedCluster).To(BeNil())
+		})
+	})
+
+	Describe("Cluster Migration Reconciler - status restore", func() {
+		newClusterGR := schema.GroupResource{Group: "opensearch.org", Resource: "opensearchclusters"}
+		legacyCluster := func() *opsterv1.OpenSearchCluster {
+			return &opsterv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+				Spec:       opsterv1.ClusterSpec{General: opsterv1.GeneralConfig{Version: "2.19.4"}},
+				Status: opsterv1.ClusterStatus{
+					Phase:       opsterv1.PhaseRunning,
+					Initialized: true,
+					Version:     "2.19.4",
+				},
+			}
+		}
+		buildClient := func(funcs interceptor.Funcs) (client.WithWatch, client.WithWatch) {
+			base := fake.NewClientBuilder().
+				WithScheme(scheme).
+				WithStatusSubresource(&opensearchv1.OpenSearchCluster{}, &opsterv1.OpenSearchCluster{}).
+				WithObjects(legacyCluster()).
+				Build()
+			return base, interceptor.NewClient(base, funcs)
+		}
+		expectRestored := func(base client.Client) {
+			migrated := &opensearchv1.OpenSearchCluster{}
+			Expect(base.Get(ctx, req.NamespacedName, migrated)).To(Succeed())
+			Expect(migrated.Annotations).NotTo(HaveKey(MigrationStatusPendingAnnotation))
+			Expect(migrated.Status.Phase).To(Equal(opensearchv1.PhaseRunning))
+			Expect(migrated.Status.Initialized).To(BeTrue())
+			Expect(migrated.Status.Version).To(Equal("2.19.4"))
+
+			legacy := &opsterv1.OpenSearchCluster{}
+			Expect(base.Get(ctx, req.NamespacedName, legacy)).To(Succeed())
+			Expect(legacy.Status.Initialized).To(BeTrue())
+			Expect(legacy.Status.Version).To(Equal("2.19.4"))
+		}
+
+		It("should retry the status restore when the cluster reconciler writes status first", func() {
+			conflicted := false
+			base, c := buildClient(interceptor.Funcs{
+				SubResourceUpdate: func(ctx context.Context, c client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+					if _, ok := obj.(*opensearchv1.OpenSearchCluster); ok && sub == "status" && !conflicted {
+						conflicted = true
+						return errors.NewConflict(newClusterGR, obj.GetName(), fmt.Errorf("simulated concurrent status write"))
+					}
+					return c.SubResource(sub).Update(ctx, obj, opts...)
+				},
+			})
+			migration := &ClusterMigrationReconciler{Client: c, Scheme: scheme}
+
+			_, err := migration.Reconcile(ctx, req)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(conflicted).To(BeTrue())
+			expectRestored(base)
+		})
+
+		It("should finish a failed status restore on a later reconcile without wiping the legacy status", func() {
+			failed := false
+			base, c := buildClient(interceptor.Funcs{
+				SubResourceUpdate: func(ctx context.Context, c client.Client, sub string, obj client.Object, opts ...client.SubResourceUpdateOption) error {
+					if _, ok := obj.(*opensearchv1.OpenSearchCluster); ok && sub == "status" && !failed {
+						failed = true
+						return errors.NewInternalError(fmt.Errorf("simulated API server error"))
+					}
+					return c.SubResource(sub).Update(ctx, obj, opts...)
+				},
+			})
+			migration := &ClusterMigrationReconciler{Client: c, Scheme: scheme}
+
+			// First pass creates the new cluster; the status restore fails.
+			_, err := migration.Reconcile(ctx, req)
+			Expect(err).To(HaveOccurred())
+			pending := &opensearchv1.OpenSearchCluster{}
+			Expect(base.Get(ctx, req.NamespacedName, pending)).To(Succeed())
+			Expect(pending.Annotations).To(HaveKeyWithValue(MigrationStatusPendingAnnotation, "true"))
+
+			// Requeued passes: restore + finalizer add, then the old-cluster sync path.
+			for i := 0; i < 3; i++ {
+				_, err = migration.Reconcile(ctx, req)
+				Expect(err).NotTo(HaveOccurred())
+			}
+			expectRestored(base)
 		})
 	})
 
