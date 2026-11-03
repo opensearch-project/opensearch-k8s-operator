@@ -28,6 +28,12 @@ The Operator can be easily installed using Helm:
 1. Add the helm repo: `helm repo add opensearch-operator https://opensearch-project.github.io/opensearch-k8s-operator/`
 2. Install the Operator: `helm install opensearch-operator opensearch-operator/opensearch-operator`
 
+Alternatively, install from the OCI registry:
+
+```shell
+helm install opensearch-operator oci://ghcr.io/opensearch-project/charts/opensearch-operator --version <chart-version>
+```
+
 Follow the instructions in this video to install the Operator:
 
 [![Watch the video](https://github.com/user-attachments/assets/3e8881b4-4b93-4322-86e2-f46baa01cad0)](https://pulse.support/kb/running-opensearch-on-kubernetes-video-tutorial-series)

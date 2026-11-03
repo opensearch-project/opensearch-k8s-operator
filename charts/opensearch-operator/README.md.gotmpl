@@ -21,6 +21,12 @@ helm repo update
 helm install [RELEASE_NAME] opensearch-operator/opensearch-operator
 ```
 
+Or from the OCI registry (no `helm repo add` needed):
+
+```shell
+helm install [RELEASE_NAME] oci://ghcr.io/opensearch-project/charts/opensearch-operator --version <chart-version>
+```
+
 #### Uninstall Chart
 
 ```shell
