@@ -1733,11 +1733,11 @@ spec:
           failureThreshold: 5
 ```
 
-### Customize startup and readiness probe command
+### Customize startup, readiness and liveness probe command
 
 While liveness probe is a TCP check the startup and readiness probes use the OpenSearch API with curl, authenticating with the admin credentials, or with the [operator client certificate](#authenticating-the-operator-to-opensearch-with-mtls-client-certificate) when one is set and HTTP TLS is enabled. If you disable basic auth (`http_enabled: false`) without setting `operatorClientCert`, override the probe command below (for example with a TCP check) or the pods never become ready.
 
-If you need to customize the startup or readiness probe commands you can override it as shown below:
+If you need to customize the startup, readiness or liveness probe commands you can override them as shown below:
 
 ```yaml
 apiVersion: opensearch.org/v1
@@ -1748,6 +1748,11 @@ spec:
     - component: masters
       # ...
       probes:
+        liveness:
+          command:
+            - /bin/bash
+            - -c
+            - curl -k -s -o /dev/null https://localhost:9200
         startup:
           command:
             - echo
@@ -2119,7 +2124,7 @@ spec:
 - When `operatorClientCert` is set, the operator does **not** send basic-auth credentials and `adminCredentialsSecret` is no longer required for runtime API calls. (`adminCredentialsSecret` may still be useful for other purposes such as seeding the admin user password during initial securityconfig generation.)
 - The operator only re-reads the secret on its next reconcile, so a cert rotation triggers a normal reconcile loop.
 - With HTTP TLS enabled, the default startup and readiness probes also authenticate with this certificate (mounted into the OpenSearch pods at `/mnt/operator-client-cert`) instead of the admin credentials. Together, this lets the cluster run with basic auth disabled (`http_enabled: false` on the basic auth domain in `config.yml`). The certificate's DN must be in `admin_dn` or map to a role allowed `cluster:monitor/main`, or the pods never become ready. Setting or removing `operatorClientCert` therefore rolls the node pods. Every node pod can read the key — including a full-privilege `admin_dn` cert if you reuse `<cluster-name>-admin-cert` (Option A) — so prefer a per-cluster certificate with only the permissions the probes need, and do not share it across clusters.
-- If you disable basic auth without setting `operatorClientCert`, the default probes still use admin credentials and will fail; [customize the probe command](#customize-startup-and-readiness-probe-command) instead.
+- If you disable basic auth without setting `operatorClientCert`, the default probes still use admin credentials and will fail; [customize the probe command](#customize-startup-readiness-and-liveness-probe-command) instead.
 
 ### Managing security configurations with kubernetes resources
 
