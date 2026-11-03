@@ -388,6 +388,24 @@ With `defaultRepo` set and no `image`, the images become `<defaultRepo>/opensear
 
 `general.grpc` enables the gRPC API of OpenSearch 3.x (`grpc.enable: true`, plus port and tuning options). See the [gRPC example](../../opensearch-operator/examples/3.x/opensearch-cluster-grpc-example.yaml).
 
+### Load-balanced Service per node pool
+
+Every node pool gets a headless Service named `<serviceName>-<component>`, which resolves to the individual pod addresses. To reach only the nodes of one pool through a single address that Kubernetes load-balances, for example dedicated coordinating or ingest nodes, set `service.create: true` on that pool:
+
+```yaml
+spec:
+  nodePools:
+    - component: coordinators
+      replicas: 3
+      roles: []
+      service:
+        create: true
+```
+
+The operator then also creates a regular `ClusterIP` Service named `<serviceName>-<component>-lb` with the HTTP and transport ports, selecting only that pool's pods. It carries the `spec.general.annotations` and the node pool's annotations. Setting `service.create` back to `false` or removing the node pool deletes the Service.
+
+The name must not be another node pool's headless Service name (pools `ingest` with `service.create: true` and `ingest-lb` would both own `<serviceName>-ingest-lb`) and must be at most 63 characters; the admission webhook rejects either case. The ServiceMonitor does not select this Service, so pods are not scraped twice. With `security.tls.http.generate: true` the Service's DNS names are added to the generated HTTP certificate (see [Node HTTP/REST API](#node-httprest-api) and the TLS notes above).
+
 ### Per-node pool image override
 
 By default, all node pools use the image configured in `spec.general` (or the default `opensearchproject/opensearch` image for the cluster version). You can override the OpenSearch container image for a specific node pool by setting `image` on that node pool. This is useful when some node pools require a specialized image, such as GPU-enabled nodes that need a CUDA build of OpenSearch.
@@ -450,7 +468,7 @@ spec:
 
 To have the Operator generate the certificates, set `generate` and `perNode` to `true` (other fields can be omitted). The Operator will generate a CA certificate, issue one certificate per node, and sign them. Certificates default to one year validity, configurable via `duration`. The Operator reissues certificates `rotateDaysBeforeExpiry` days before they expire (default 30, set to -1 to disable). On OpenSearch 3.x and above TLS certificate hot reload is enabled by default (configurable via `enableHotReload`), so nodes load renewed certificates without a restart; when hot reload is disabled or unsupported (OpenSearch < 2.19.1) the Operator performs a rolling restart of the cluster instead. Expired or unreadable generated certificates are always reissued, regardless of `rotateDaysBeforeExpiry`.
 
-The generated HTTP certificate also lists the DNS names of the Services clients can use (the cluster Service, each node pool's headless Service and, with `service.create: true`, its `-lb` Service), and it is reissued when one of these names is missing. Upgrading to the operator version that added these names therefore reissues the HTTP certificate of every cluster with `generate: true` once, which means a rolling restart when hot reload is disabled or unsupported. Later changes (enabling `service.create` on a pool, adding a pool) reissue it the same way, while removing a name does not.
+The generated HTTP certificate also lists the DNS names of the Services clients can use (the cluster Service, each node pool's headless Service and, with `service.create: true`, its `-lb` Service), and it is reissued when one of these names is missing. OpenSearch does not hot reload a certificate whose SANs changed, so such a reissue always triggers one rolling restart, also with hot reload enabled. Upgrading to the operator version that added these names therefore reissues the HTTP certificate of every cluster with `generate: true` once and restarts it once. Later changes (enabling `service.create` on a pool, adding a pool) reissue it and restart the same way, while removing a name does neither. Rotations that keep the SANs are still hot reloaded.
 
 Do not delete and regenerate the CA secret in place: that is not a supported rotation procedure and can leave the cluster in split trust while nodes pick up the new CA. Clusters created with operator 2.x may still have `rotateDaysBeforeExpiry: -1` stored; see [Other Changes When Upgrading from 2.x](./migration-guide.md#other-changes-when-upgrading-from-2x).
 
@@ -1149,7 +1167,7 @@ By default, the bootstrap pods will have the same hostAliases set as the Opensea
 
 You can add additional labels or annotations on the nodepool configuration. This is useful for integration with other applications such as a service mesh, or configuring a prometheus scrape endpoint:
 
-Annotations set in `spec.general.annotations` are added to the cluster's Services only (the main cluster Service and each node pool's headless Service), not to pods.
+Annotations set in `spec.general.annotations` are added to the cluster's Services only (the main cluster Service, each node pool's headless Service and, with `service.create: true`, its `-lb` Service), not to pods.
 
 ```yaml
 spec:
@@ -1173,7 +1191,7 @@ spec:
         - "master"
 ```
 
-Node pool labels and annotations are added to the pool's StatefulSet and pods. Node pool annotations are also added to the pool's headless Service.
+Node pool labels and annotations are added to the pool's StatefulSet and pods. Node pool annotations are also added to the pool's headless Service and, with `service.create: true`, its `-lb` Service.
 
 ### Add Labels or Annotations to the Dashboard Deployment
 

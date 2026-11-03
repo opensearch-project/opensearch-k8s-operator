@@ -82,6 +82,11 @@ const (
 	// folded into the node pool config hashes so that a renewal changes the pod
 	// templates and the rolling-restart machinery reloads the certificates.
 	CertRenewalAnnotation = "opensearch.org/cert-renewal"
+	// CertSanChangeAnnotation is set on the generated HTTP certificate secret when a
+	// renewal changed the certificate's SANs. OpenSearch refuses to hot reload such a
+	// certificate (plugins.security.ssl.http.enforce_cert_reload_dn_verification), so its
+	// value is folded into the config hashes even with hot reload on, forcing one restart.
+	CertSanChangeAnnotation = "opensearch.org/cert-san-change"
 )
 
 func (r *TLSReconciler) Reconcile() (ctrl.Result, error) {
@@ -782,6 +787,8 @@ func (r *TLSReconciler) handleHttp() error {
 			dnsNames = append([]string{*tlsConfig.CustomFQDN}, dnsNames...)
 		}
 
+		existingCertData := nodeSecret.Data[corev1.TLSCertKey]
+		sansChanged := existingCertData != nil && !certCoversDnsNames(existingCertData, dnsNames)
 		nodeCert, err := r.generateNewCertIfNeeded(
 			ca,
 			certDescription{
@@ -801,6 +808,9 @@ func (r *TLSReconciler) handleHttp() error {
 			nodeSecret.Data = nodeCert.SecretData(ca)
 			if renewed {
 				setCertRenewalAnnotation(&nodeSecret, certRenewalMarker(nodeCert.CertData()))
+				if sansChanged {
+					nodeSecret.Annotations[CertSanChangeAnnotation] = certRenewalMarker(nodeCert.CertData())
+				}
 			}
 		}
 
@@ -815,6 +825,10 @@ func (r *TLSReconciler) handleHttp() error {
 		// restart marker is only needed as a fallback when it is off.
 		if marker := nodeSecret.Annotations[CertRenewalAnnotation]; marker != "" && !r.certificatesHotReloadEnabled() {
 			r.reconcilerContext.CertHashData = append(r.reconcilerContext.CertHashData, "http-certs:"+marker)
+		}
+		// A SAN change cannot be hot reloaded, so it always restarts the nodes once
+		if marker := nodeSecret.Annotations[CertSanChangeAnnotation]; marker != "" {
+			r.reconcilerContext.CertHashData = append(r.reconcilerContext.CertHashData, "http-sans:"+marker)
 		}
 
 		// Tell cluster controller to mount secrets

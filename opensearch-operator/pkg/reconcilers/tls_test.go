@@ -1031,6 +1031,44 @@ var _ = Describe("TLS Controller", func() {
 			Expect(reconcilerContext.OpenSearchConfig["plugins.security.ssl.certificates_hot_reload.enabled"]).To(Equal("true"))
 		})
 
+		It("should restart once for an HTTP cert whose SANs changed, even with hot reload", func() {
+			ca, caSecret := newCA()
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
+			// Issued before service.create was enabled on the pool
+			oldHttpCert := signTestHttpCert(ca, newRenewalSpec(false), validFor)
+			transportSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			httpSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": oldHttpCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			mockClient, _, storedHttp := setupMocks(caSecret, transportSecret, httpSecret)
+
+			spec := newRenewalSpec(false)
+			// Hot reload is on by default for OpenSearch 3.x
+			spec.Spec.General.Version = "3.0.0"
+			spec.Spec.NodePools[0].Service = &opensearchv1.AdditionalServiceConfig{Create: true}
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			marker := storedHttp().Annotations[CertSanChangeAnnotation]
+			Expect(marker).ToNot(BeEmpty())
+			Expect(reconcilerContext.CertHashData).To(Equal([]string{"http-sans:" + marker}))
+
+			// The marker stays in the hash on later reconciles, so the restart is not repeated
+			renewedSecret := *storedHttp()
+			mockClient, _, _ = setupMocks(caSecret, transportSecret, renewedSecret)
+			reconcilerContext, underTest = newTLSReconcilerWithPKI(mockClient, spec)
+			_, err = underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+			Expect(reconcilerContext.CertHashData).To(Equal([]string{"http-sans:" + marker}))
+		})
+
 		It("should not restart when hot reload is enabled on either TLS interface", func() {
 			ca, caSecret := newCA()
 			expiredCert := makeTestCertPEM(time.Now().AddDate(-1, 0, 0), time.Now().AddDate(0, 0, -1))
