@@ -15,11 +15,13 @@ helm repo add jetstack https://charts.jetstack.io
 helm install cert-manager jetstack/cert-manager --namespace cert-manager --create-namespace --set crds.enabled=true
 ```
 
-Without it, `helm install` fails while rendering the `Issuer` and `Certificate` resources of the webhook:
+Without it, `helm install` and `helm upgrade` stop while rendering the chart:
 
 ```text
-Error: INSTALLATION FAILED: unable to build kubernetes objects from release manifest: ... no matches for kind "Certificate" in version "cert-manager.io/v1" ... ensure CRDs are installed first
+Error: INSTALLATION FAILED: execution error at (opensearch-operator/templates/opensearch-operator-webhook-certificate.yaml:...): cert-manager is required (webhook.certManager.enabled=true) but cert-manager.io/v1 was not found in the cluster. Install cert-manager first, or set webhook.certManager.enabled=false and create TLS secret opensearch-operator-webhook-server-cert, or set webhook.enabled=false.
 ```
+
+The secret name in that message is `webhook.secretName` when set, and `<fullname>-webhook-server-cert` otherwise. For the release name in the install command below, that secret is `opensearch-operator-webhook-server-cert`. `helm template` and `helm lint` still render the webhook `Issuer` and `Certificate`; they have no cluster connection and skip this check.
 
 If you would rather not run cert-manager, the [Webhooks guide](./webhooks.md) describes the two alternatives: set `webhook.certManager.enabled=false` and provide the serving certificate yourself through `webhook.secretName`, or turn the webhook off entirely with `webhook.enabled=false`.
 
