@@ -3,7 +3,7 @@ module github.com/opensearch-project/opensearch-k8s-operator/functionaltests
 go 1.26.10
 
 require (
-	github.com/go-logr/logr v1.4.3
+	github.com/go-logr/logr v1.4.4
 	github.com/onsi/ginkgo/v2 v2.22.0
 	github.com/onsi/gomega v1.36.1
 	github.com/opensearch-project/opensearch-go v1.1.0
