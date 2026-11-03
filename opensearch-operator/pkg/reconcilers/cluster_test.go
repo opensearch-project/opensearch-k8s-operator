@@ -1030,3 +1030,78 @@ var _ = Describe("Bootstrap pod voting-config exclusion (issue #1448)", func() {
 		Expect(event).To(ContainSubstring("secret unavailable"))
 	})
 })
+
+var _ = Describe("Coordinating service reconciliation", func() {
+	newInstance := func(enabled bool) *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "coordinating", Namespace: "test-namespace", UID: "cluster-uid"},
+			Spec: opensearchv1.ClusterSpec{General: opensearchv1.GeneralConfig{
+				ServiceName: "coordinating", CoordinatingService: enabled,
+			}},
+		}
+	}
+	serviceNamed := func(name string) any {
+		return mock.MatchedBy(func(obj runtime.Object) bool {
+			svc, ok := obj.(*corev1.Service)
+			return ok && svc.Name == name
+		})
+	}
+
+	It("should create the service when enabled", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance(true)
+		underTest := &ClusterReconciler{client: mockClient, instance: instance}
+
+		mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+		mockClient.EXPECT().ReconcileResource(serviceNamed(builders.CoordinatingServiceName(instance)), reconciler.StatePresent).Return(&ctrl.Result{}, nil)
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileCoordinatingService(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
+	})
+
+	It("should delete the service when disabled and owned by the cluster", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance(false)
+		underTest := &ClusterReconciler{client: mockClient, instance: instance}
+		owned := corev1.Service{ObjectMeta: metav1.ObjectMeta{OwnerReferences: []metav1.OwnerReference{
+			{UID: instance.UID, Controller: ptr.To(true)},
+		}}}
+
+		mockClient.EXPECT().GetService(builders.CoordinatingServiceName(instance), instance.Namespace).Return(owned, nil)
+		mockClient.EXPECT().ReconcileResource(serviceNamed(builders.CoordinatingServiceName(instance)), reconciler.StateAbsent).Return(&ctrl.Result{}, nil)
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileCoordinatingService(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
+	})
+
+	It("should keep a service the cluster does not own", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance(false)
+		underTest := &ClusterReconciler{client: mockClient, instance: instance}
+
+		mockClient.EXPECT().GetService(builders.CoordinatingServiceName(instance), instance.Namespace).Return(corev1.Service{}, nil)
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileCoordinatingService(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
+	})
+
+	It("should do nothing when disabled and the service does not exist", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance(false)
+		underTest := &ClusterReconciler{client: mockClient, instance: instance}
+
+		mockClient.EXPECT().GetService(builders.CoordinatingServiceName(instance), instance.Namespace).
+			Return(corev1.Service{}, k8serrors.NewNotFound(corev1.Resource("services"), builders.CoordinatingServiceName(instance)))
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileCoordinatingService(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
+	})
+})
