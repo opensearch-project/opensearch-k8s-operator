@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - Added support for custom image used by `kubeRbacProxy`.
+- Added `affinity` to set affinity rules on the operator Deployment.
 - Added `spec.dashboards.tls.rotateDaysBeforeExpiry` to rotate the generated Dashboards certificate before it expires (default `30`, `-1` disables).
 ### Changed
 - `enableHotReload` is now a tri-state pointer. Omitting it enables TLS certificate hot reload on OpenSearch 3.x+ (and leaves it off on older versions). Existing 3.x clusters that never set the field take one rolling restart on operator upgrade because `plugins.security.ssl.certificates_hot_reload.enabled` is added to `opensearch.yml`.
