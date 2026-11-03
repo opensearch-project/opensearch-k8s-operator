@@ -848,14 +848,12 @@ var _ = Describe("AllMastersJoinedCluster", func() {
 
 	It("returns false when only some masters have joined", func() {
 		Expect(AllMastersJoinedCluster([]responses.CatNodesResponse{
-			{Name: "opensearch-bootstrap-0"},
 			{Name: "opensearch-masters-0"},
 		}, expected)).To(BeFalse())
 	})
 
 	It("returns true when every expected master has joined", func() {
 		Expect(AllMastersJoinedCluster([]responses.CatNodesResponse{
-			{Name: "opensearch-bootstrap-0"},
 			{Name: "opensearch-masters-0"},
 			{Name: "opensearch-masters-1"},
 		}, expected)).To(BeTrue())

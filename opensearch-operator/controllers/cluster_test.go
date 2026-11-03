@@ -14,6 +14,7 @@ import (
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
+	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/builders"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers"
 	monitoring "github.com/prometheus-operator/prometheus-operator/pkg/apis/monitoring/v1"
@@ -330,14 +331,9 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 			Expect(sts.Spec.Template.Spec.TopologySpreadConstraints[0].TopologyKey).To(Equal("zone"))
 		})
 
-		It("should create a bootstrap pod", func() {
-			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
-			Eventually(func() error {
-				return k8sClient.Get(context.Background(), types.NamespacedName{
-					Name:      bootstrapName,
-					Namespace: OpensearchCluster.Namespace,
-				}, &corev1.Pod{})
-			}, timeout, interval).Should(Succeed())
+		It("should set initial_master_nodes to first master pod", func() {
+			initialMasterNodes, err := builders.InitialMasterNodes(&OpensearchCluster)
+			Expect(err).NotTo(HaveOccurred())
 			wg := sync.WaitGroup{}
 			for _, nodePool := range OpensearchCluster.Spec.NodePools {
 				wg.Add(1)
@@ -356,29 +352,11 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 						return sts.Spec.Template.Spec.Containers[0].Env
 					}, timeout, interval).Should(ContainElement(corev1.EnvVar{
 						Name:  "cluster.initial_master_nodes",
-						Value: bootstrapName,
+						Value: initialMasterNodes,
 					}))
 				}(nodePool)
 			}
 			wg.Wait()
-		})
-		It("should configure bootstrap pod correctly", func() {
-			bootstrapName := fmt.Sprintf("%s-bootstrap-0", OpensearchCluster.Name)
-			pod := &corev1.Pod{}
-			Eventually(func() error {
-				return k8sClient.Get(context.Background(), types.NamespacedName{
-					Name:      bootstrapName,
-					Namespace: OpensearchCluster.Namespace,
-				}, pod)
-			}, timeout, interval).Should(Succeed())
-			Expect(pod.Spec.Containers[0].Resources.Limits.Cpu().String()).To(Equal("125m"))
-			Expect(pod.Spec.Containers[0].Resources.Limits.Memory().String()).To(Equal("1Gi"))
-			Expect(pod.Spec.Tolerations).To(ContainElement(corev1.Toleration{
-				Effect:   "NoSchedule",
-				Key:      "foo",
-				Operator: "Equal",
-				Value:    "bar",
-			}))
 		})
 		It("should create a discovery service", func() {
 			discoveryName := fmt.Sprintf("%s-discovery", OpensearchCluster.Name)
@@ -593,8 +571,7 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 	})
 
 	When("Deleting cluster resources", func() {
-		It("should delete bootstrap PVC when cluster is deleted", func() {
-			// Create a cluster reconciler
+		It("should not error when deleting resources", func() {
 			reconcilerContext := reconcilers.NewReconcilerContext(record.NewFakeRecorder(1), &OpensearchCluster, OpensearchCluster.Spec.NodePools)
 			clusterReconciler := reconcilers.NewClusterReconciler(
 				k8sClient,
@@ -604,14 +581,9 @@ var _ = Describe("Cluster Reconciler", Ordered, func() {
 				&OpensearchCluster,
 			)
 
-			// Call DeleteResources
 			result, err := clusterReconciler.DeleteResources()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result.Requeue).To(BeFalse())
-
-			// Verify that the bootstrap PVC would be deleted (StateAbsent)
-			// The actual deletion would happen in a real cluster, but we can verify
-			// that the method doesn't error and returns the expected result
 		})
 	})
 })

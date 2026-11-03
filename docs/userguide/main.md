@@ -161,7 +161,7 @@ spec:
         generate: true
 ```
 
-Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. First, a bootstrap pod will be created (`my-first-cluster-bootstrap-0`) that helps with initial master discovery. Then three pods for the OpenSearch cluster will be created (`my-first-cluster-nodes-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
+Then run `kubectl apply -f cluster.yaml`. If you watch the cluster (e.g. `watch -n 2 kubectl get pods`), you will see that after a few seconds the Operator will create several pods. The cluster-manager nodes themselves bootstrap the cluster (via `cluster.initial_master_nodes` pointing at pod-0 of each manager pool that has at least one replica). Three pods for the OpenSearch cluster will be created (`my-first-cluster-masters-0/1/2`), and one pod for the dashboards instance. After the pods are appearing as ready, which normally takes about 1-2 minutes, you can connect to your cluster using port-forwarding.
 
 The operator generates a random password for the `admin` user and stores it in the `my-first-cluster-admin-password` Secret. Read it with:
 
@@ -544,14 +544,6 @@ spec:
       - sample-plugin-name
 ```
 
-To install a plugin for the bootstrap pod add it to the list under `bootstrap.pluginsList`:
-
-```yaml
-spec:
-  bootstrap:
-    pluginsList: ["repository-s3"]
-```
-
 Please note:
 
 - [Bundled plugins](https://opensearch.org/docs/latest/install-and-configure/install-opensearch/plugins/#bundled-plugins) do not have to be added to the list, they are installed automatically
@@ -597,18 +589,6 @@ general:
 
 Note that only provided keys will be loaded from the secret! Any keys not specified will be ignored.
 
-To populate the keystore of the bootstrap pod add the secrets under the `bootstrap.keystore` section:
-
-```yaml
-bootstrap:
-  # ...
-  keystore:
-    - secret:
-        name: credentials
-    - secret:
-        name: some-other-secret
-```
-
 ### SmartScaler
 
 SmartScaler lets the operator remove data nodes safely when you lower `replicas` of a node pool or remove a pool. Before a node is removed, the operator adds it to `cluster.routing.allocation.exclude._name`, so OpenSearch moves its shards to the remaining nodes. Only after the node holds no more shards does the operator delete the pod, and it then removes the node from the exclusion list again.
@@ -621,7 +601,7 @@ The other `confMgmt` fields, `autoScaler` and `VerUpdate`, are not used by the o
 
 #### Removing master-eligible nodes
 
-Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time, regardless of the SmartScaler setting. The operator follows the procedure OpenSearch documents for shrinking the voting configuration (`/_cluster/voting_config_exclusions`): it adds the node to the voting configuration exclusions, removes the pod once the node has left the voting configuration, and clears the exclusions when the node has left the cluster. The same applies when a whole master-eligible node pool is removed from `spec.nodePools`, and when the bootstrap pod is removed after initialization. If the exclusion fails for the bootstrap pod, the pod is kept and the operator retries every 10 seconds, emitting a `BootstrapExclusionFailed` `Warning` event each time. With SmartScaler off only this voting step is performed; shards are not drained.
+Master-eligible nodes (`master` / `cluster_manager` role) are removed one at a time regardless of the SmartScaler setting, following the sequence OpenSearch documents for shrinking the voting configuration: the node is first added to the cluster's voting configuration exclusions (`POST /_cluster/voting_config_exclusions`), which blocks until it has left the voting configuration, then its pod is removed, and once every excluded node has left the cluster the exclusions list is cleared (`DELETE /_cluster/voting_config_exclusions?wait_for_removal=true`). With SmartScaler off only this voting step is performed; the shard drain remains opt-in. The same steps apply when a whole master-eligible node pool is removed from `spec.nodePools`. After upgrading from an older operator that still used a dedicated bootstrap pod, a leftover bare `{cluster}-bootstrap-0` pod is kept until the cluster is initialized. A pod of that name owned by a StatefulSet is not removed. If the bare pod is still a cluster member, it is excluded from the voting configuration and deleted only once some other node is a committed voter and the bootstrap pod is not. Until then the operator retries every 10 seconds and emits a `BootstrapExclusionFailed` warning.
 
 The operator also clears exclusions that are left over (for example after an operator restart during a removal), and emits a `Warning` event if it finds a live node that was left excluded. The webhook rejects clusters without at least one master-eligible replica (see [webhooks](webhooks.md)).
 
@@ -1088,35 +1068,11 @@ spec:
 
 The Opensearch pods by default launch an init container to configure the volume. This container needs to run with root permissions (`runAsUser: 0`) and does not inherit `general.securityContext`; configure it via `initHelper.securityContext` instead (see [Custom init container security context](#custom-init-container-security-context)). If your k8s environment does not allow containers with the root user you need to [disable this init helper](#disabling-the-init-helper). In this situation also make sure to set `general.setVMMaxMapCount` to `false` as this feature also launches a privileged init container.
 
-Note that the bootstrap pod started during initial cluster setup uses the same (pod)securityContext as the Opensearch pods, and the same `initHelper.securityContext` for its init containers.
-
-### Bootstrap pod
-
-During initial cluster formation the operator runs a single bootstrap pod (`<cluster-name>-bootstrap-0`) and removes it once the cluster is initialized. It uses a PVC to keep cluster state across restarts during initialization; the PVC is created and deleted along with the pod. No bootstrap pod is started for an `OpenSearchCluster` that is re-created over retained data PVCs of a previous cluster with the same name (see [Data Persistence](#data-persistence)).
-
-The bootstrap pod deliberately never reports as ready (`0/1`): it carries the same label as the cluster nodes, and staying not-ready is what keeps it out of the endpoints of the cluster service so that client traffic is never routed to it. It is still discoverable for cluster formation through the headless discovery service, which publishes not-ready addresses. As a consequence, `kubectl wait --for=condition=Ready` on all pods of the cluster blocks until the bootstrap pod has been removed.
-
-The bootstrap pod is configured in `spec.bootstrap`:
-
-```yaml
-spec:
-  bootstrap:
-    resources: # Also used to compute the heap size when jvm has no -Xms/-Xmx
-      requests:
-        memory: "2Gi"
-        cpu: "500m"
-    jvm: "-Xms1g -Xmx1g"
-    diskSize: "1Gi" # Default 1Gi
-    storageClass: mystorageclass # Optional, defaults to the cluster default storage class
-    nodeSelector:
-      disktype: ssd
-```
-
-`spec.bootstrap` also accepts `tolerations`, `affinity` (see [Pod Affinity](#pod-affinity)), `priorityClassName`, `labels`, `annotations`, `env`, `hostAliases`, `pluginsList`, `keystore` and `initContainers`. It uses the same image and (pod) security context as the node pools.
+When an `OpenSearchCluster` is re-created over the data PVCs of a previous cluster with the same name (the operator never deletes node pool PVCs), the nodes re-form the existing cluster from disk and ignore `cluster.initial_master_nodes`. Delete those PVCs first if you want a fresh cluster.
 
 ### Host Aliases for pods and containers
 
-You can add entries to Opensearch, Bootstrap and Dashboard pods /etc/hosts files using [HostAliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/).
+You can add entries to Opensearch and Dashboard pods /etc/hosts files using [HostAliases](https://kubernetes.io/docs/concepts/services-networking/add-entries-to-pod-etc-hosts-with-host-aliases/).
 
 The structure is the same for both Opensearch pods (in `spec.general`) and the Dashboard pod (in `spec.dashboards`):
 
@@ -1132,14 +1088,7 @@ spec:
     - hostnames:
       - example.com
       ip: 127.0.0.1
-  bootstrap:
-    hostAliases:
-    - hostnames:
-      - example.com
-      ip: 127.0.0.1
 ```
-
-By default, the bootstrap pods will have the same hostAliases set as the Opensearch pods. To overwrite this, set the hostAliases in the bootstrap section.
 
 ### Labels or Annotations on OpenSearch nodes
 
@@ -1218,7 +1167,7 @@ By default, the operator applies pod anti-affinity rules to prevent multiple pod
 
 The default anti-affinity uses `PreferredDuringSchedulingIgnoredDuringExecution`, which is a soft preference that won't prevent scheduling if no other nodes are available, but will prefer to spread pods across nodes.
 
-You can override this default behavior by explicitly setting the `affinity` field in your node pool, bootstrap, or dashboards configuration:
+You can override this default behavior by explicitly setting the `affinity` field in your node pool or dashboards configuration:
 
 ```yaml
 spec:
@@ -1233,16 +1182,6 @@ spec:
         podAntiAffinity:
           requiredDuringSchedulingIgnoredDuringExecution:
             - labelSelector:
-                matchLabels:
-                  opensearch.org/opensearch-cluster: my-cluster
-              topologyKey: kubernetes.io/hostname
-  bootstrap:
-    affinity:
-      podAntiAffinity:
-        preferredDuringSchedulingIgnoredDuringExecution:
-          - weight: 100
-            podAffinityTerm:
-              labelSelector:
                 matchLabels:
                   opensearch.org/opensearch-cluster: my-cluster
               topologyKey: kubernetes.io/hostname
@@ -1513,7 +1452,7 @@ manager:
 
 ### Custom init helper
 
-The operator adds init containers to the OpenSearch and bootstrap pods (the `init` container that `chown`s the data directory and, with `setVMMaxMapCount`, the `init-sysctl` container). They run on every pod start and use a busybox image, `docker.io/busybox:latest` by default, or `<general.defaultRepo>/busybox:latest` when `defaultRepo` is set. In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
+The operator adds init containers to the OpenSearch pods (the `init` container that `chown`s the data directory and, with `setVMMaxMapCount`, the `init-sysctl` container). They run on every pod start and use a busybox image, `docker.io/busybox:latest` by default, or `<general.defaultRepo>/busybox:latest` when `defaultRepo` is set. In case you are working in an offline environment and the cluster cannot access the registry or you want to customize the image, you can override the image used by specifying the `initHelper` image in your cluster spec:
 
 ```yaml
 spec:
@@ -1735,9 +1674,9 @@ spec:
 
 ### Customize startup and readiness probe command
 
-While liveness probe is a TCP check the startup and readiness probes use the OpenSearch API with curl, authenticating with the admin credentials, or with the [operator client certificate](#authenticating-the-operator-to-opensearch-with-mtls-client-certificate) when one is set and HTTP TLS is enabled. If you disable basic auth (`http_enabled: false`) without setting `operatorClientCert`, override the probe command below (for example with a TCP check) or the pods never become ready.
+By default the liveness and startup probes are TCP socket checks on the HTTP port (so nodes can become Started before `securityadmin` has run). StatefulSets that already use the previous authenticated curl startup probe keep that handler, so upgrading the operator does not restart nodes just to switch the default. The readiness probe uses the OpenSearch API with curl, authenticating with the admin credentials, or with the [operator client certificate](#authenticating-the-operator-to-opensearch-with-mtls-client-certificate) when one is set and HTTP TLS is enabled. If you disable basic auth (`http_enabled: false`) without setting `operatorClientCert`, override the readiness probe command below (for example with a TCP check) or the pods never become ready.
 
-If you need to customize the startup or readiness probe commands you can override it as shown below:
+If you need to customize the startup or readiness probe commands you can override them as shown below. Setting `probes.startup.command` switches that probe from TCP to Exec:
 
 ```yaml
 apiVersion: opensearch.org/v1
@@ -1829,26 +1768,7 @@ The operator mounts the volumes specified in `additionalVolumes` before any othe
 
 > **Note:** The operator ensures these initialization containers run first in the initialization sequence, before any other init containers you may have defined.
 
-##### For the bootstrap section:
-
-```yaml
-spec:
-  bootstrap:
-    initContainers:
-      - name: init-copier
-        image: opensearchproject/opensearch:3.2.0 # Same image as the cluster
-        volumeMounts:
-          - name: rw-config
-            mountPath: /config-tmp
-          - name: rw-plugins
-            mountPath: /plugins-tmp
-        command:
-          - "bash"
-          - "-c"
-          - "cp -r /usr/share/opensearch/plugins/* /plugins-tmp && cp -r /usr/share/opensearch/config/* /config-tmp"
-```
-
-##### For the nodePool section:
+##### For a node pool:
 
 When using `readOnlyRootFilesystem`, it's recommended to install plugins in the nodePool's initialization container:
 
@@ -2324,10 +2244,10 @@ roles_mapping.yml: |-
 
 ### Security Plugin Disabled
 
-There is no field to disable the security plugin directly. When neither `security.tls.transport` nor `security.tls.http` TLS is enabled, the operator sets `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN` on the OpenSearch nodes and the bootstrap pod, and `DISABLE_SECURITY_DASHBOARDS_PLUGIN` on Dashboards, and the cluster runs over plain HTTP without authentication. In that case:
+There is no field to disable the security plugin directly. When neither `security.tls.transport` nor `security.tls.http` TLS is enabled, the operator sets `DISABLE_INSTALL_DEMO_CONFIG` and `DISABLE_SECURITY_PLUGIN` on the OpenSearch nodes, and `DISABLE_SECURITY_DASHBOARDS_PLUGIN` on Dashboards, and the cluster runs over plain HTTP without authentication. Password management works differently:
 
 **Admin User:**
-- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable in the bootstrap pod and all OpenSearch pods from `<cluster-name>-admin-password`, which holds the password of `adminCredentialsSecret` if you provide one, or a generated one otherwise.
+- The operator sets the `OPENSEARCH_INITIAL_ADMIN_PASSWORD` environment variable on the OpenSearch pods from `<cluster-name>-admin-password`, which holds the password of `adminCredentialsSecret` if you provide one, or a generated one otherwise.
 
 **Dashboards User:**
 - Custom passwords for the Dashboards user are **not supported**; the generated `<cluster-name>-dashboards-password` secret uses the default `kibanaserver` password.
