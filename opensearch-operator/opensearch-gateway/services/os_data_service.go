@@ -399,28 +399,28 @@ func ReactivateShardAllocation(service *OsClusterClient) error {
 	return nil
 }
 
-func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, error) {
+func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName string, drainNode bool, nodeCount int32) (bool, string, error) {
 	if drainNode {
 		// If we are draining nodes then drain the working node
 		_, err := AppendExcludeNodeHost(service, lg, podName)
 		if err != nil {
-			return false, err
+			return false, "", err
 		}
 
 		// If there are only 2 data nodes only check for system indices
 		if nodeCount == 2 {
 			systemIndices, err := GetExistingSystemIndices(service)
 			if err != nil {
-				return false, err
+				return false, "", err
 			}
 
 			systemPrimaries, err := HasIndexPrimariesOnNode(service, podName, systemIndices)
 			if err != nil {
-				return false, err
+				return false, "", err
 			}
 			if systemPrimaries {
 				lg.Info(fmt.Sprintf("Waiting to drain primary replicas for system indices from node %s before deleting", podName))
-				return false, nil
+				return false, fmt.Sprintf("Waiting to drain system index primaries from %s", podName), nil
 			}
 		} else {
 			// Checks if the pod is safe to delete because either:
@@ -428,12 +428,12 @@ func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName strin
 			// - all allocated shards are replicas stuck due to version mismatch (during upgrade)
 			safeToDelete, err := CheckPodSafeToDelete(service, podName)
 			if err != nil {
-				return false, err
+				return false, "", err
 			}
 			if !safeToDelete {
 				// If the node isn't empty requeue to wait for shards to drain
 				lg.Info(fmt.Sprintf("Waiting for node %s to drain before deleting", podName))
-				return false, nil
+				return false, fmt.Sprintf("Waiting for node %s to drain", podName), nil
 			}
 		}
 	}
@@ -444,21 +444,22 @@ func PreparePodForDelete(service *OsClusterClient, lg logr.Logger, podName strin
 	if nodeCount > 1 {
 		shards, err := service.CatShards([]string{"index", "shard", "prirep", "state", "node"})
 		if err != nil {
-			return false, err
+			return false, "", err
 		}
 		if shard, ok := soleActiveCopyOnNode(shards, podName); ok {
-			lg.Info(fmt.Sprintf("Not restarting %s: it holds the only active copy of %s[%s]", podName, shard.Index, shard.Shard))
-			return false, nil
+			reason := fmt.Sprintf("Not restarting %s: it holds the only active copy of %s[%s]", podName, shard.Index, shard.Shard)
+			lg.Info(reason)
+			return false, reason, nil
 		}
 	}
 	if drainNode {
-		return true, nil
+		return true, "", nil
 	}
 	// Update cluster routing before deleting appropriate ordinal pod
 	if err := SetClusterShardAllocation(service, ClusterSettingsAllocationPrimaries); err != nil {
-		return false, err
+		return false, "", err
 	}
-	return true, nil
+	return true, "", nil
 }
 
 func GetExistingSystemIndices(service *OsClusterClient) ([]string, error) {

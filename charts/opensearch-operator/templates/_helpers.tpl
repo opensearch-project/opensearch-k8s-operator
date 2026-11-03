@@ -76,3 +76,19 @@ true
 true
 {{- end -}}
 {{- end }}
+
+{{/*
+Return whether CRDs are annotated with helm.sh/resource-policy: keep.
+Missing crds values default to true so upgrades with --reuse-values keep CRDs.
+*/}}
+{{- define "opensearch-operator.keepCRDs" -}}
+{{- if hasKey .Values "crds" -}}
+{{- if .Values.crds -}}
+{{- ne .Values.crds.keep false -}}
+{{- else -}}
+true
+{{- end -}}
+{{- else -}}
+true
+{{- end -}}
+{{- end }}

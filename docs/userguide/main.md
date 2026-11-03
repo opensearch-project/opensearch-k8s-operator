@@ -78,6 +78,36 @@ Resources applied with `kubectl` are not owned by the Helm release. `helm uninst
 
 The `ValidatingWebhookConfiguration` has no `namespaceSelector`, so it still intercepts matching OpenSearch CR mutations in every namespace. A namespace-scoped operator that is down or unreachable can therefore block those requests cluster-wide while `failurePolicy` is `Fail`.
 
+### Uninstalling
+
+Running `helm uninstall opensearch-operator` removes the operator, but by default it **keeps** the `opensearch.org`/`opensearch.opster.io` CRDs (they are annotated with `helm.sh/resource-policy: keep`). This is deliberate: Kubernetes cascade-deletes every `OpenSearchCluster` (and other custom resource) in the cluster when its CRD is removed, so keeping the CRDs on uninstall protects any clusters still managed by the operator.
+
+Releases installed from a chart version without `crds.keep` do not have the annotation on their CRDs yet. Run a plain `helm upgrade` to the current chart before uninstalling, or before disabling `installCRDs` or `legacyAPI.enabled`, so the CRDs are annotated first.
+
+For a full teardown (e.g. in CI or a throwaway dev environment), remove things in this order. The operator puts finalizers on its custom resources, so it must still be running while they are deleted; otherwise the deletions, and any CRD deletion waiting on them, hang.
+
+1. Delete all custom resources and wait until they are gone:
+
+   ```console
+   for crd in $(kubectl get crd -o name | grep -E 'opensearch\.(org|opster\.io)' | cut -d/ -f2); do
+     kubectl delete "$crd" --all --all-namespaces --wait
+   done
+   ```
+
+2. Uninstall the operator:
+
+   ```console
+   helm uninstall opensearch-operator
+   ```
+
+3. Delete the CRDs:
+
+   ```console
+   kubectl delete crd $(kubectl get crd -o name | grep -E 'opensearch\.(org|opster\.io)')
+   ```
+
+Alternatively, upgrade the release with `--set crds.keep=false` before step 2 so that `helm uninstall` also removes the CRDs.
+
 ## Quickstart
 
 After you have successfully installed the Operator, you can deploy your first OpenSearch cluster. This is done by creating an `OpenSearchCluster` custom object in Kubernetes or using Helm.
@@ -221,11 +251,16 @@ legacyAPI:
 ```
 
 > **Warning:** Do not disable legacy API support while
-> `opensearch.opster.io` resources still exist. The legacy CRDs are managed as
-> regular Helm release resources, so disabling the legacy API during an upgrade
-> removes those CRDs and deletes all remaining custom resources stored under
-> them. Follow the [migration guide](./migration-guide.md) to migrate, verify,
-> and delete every legacy resource before changing this setting.
+> `opensearch.opster.io` resources still exist. Disabling the legacy API
+> during an upgrade removes the legacy CRDs from the release. Helm keeps them
+> only if the live CRDs already carry the `helm.sh/resource-policy: keep`
+> annotation (`crds.keep=true`, see [Uninstalling](#uninstalling)). CRDs
+> installed by an older chart do not, so first upgrade to the current chart
+> without other changes and disable the legacy API in a separate upgrade.
+> Otherwise, or if you have set `crds.keep=false`, Kubernetes deletes all
+> remaining custom resources stored under those CRDs as soon as they are
+> removed. Follow the [migration guide](./migration-guide.md) to migrate,
+> verify, and delete every legacy resource before changing this setting.
 
 ### Pprof endpoints
 
@@ -420,6 +455,19 @@ Do not delete and regenerate the CA secret in place: that is not a supported rot
 Alternatively, you can provide the certificates yourself (e.g. if your organization has an internal CA). You can either provide one certificate to be used by all nodes or provide a certificate for each node (recommended). In this mode, set `generate: false` and `perNode` to `true` or `false` depending on whether you're providing per-node certificates.
 
 If you provide just one certificate, it must be placed in a Kubernetes TLS secret (with the fields `ca.crt`, `tls.key` and `tls.crt`, must all be PEM-encoded), and you must provide the name of the secret as `secret.name`. If you want to keep the CA certificate separate, you can place it in a separate secret and supply that as `caSecret.name`. If you provide one certificate per node, you must place all certificates into one secret (including the `ca.crt`) with a `<hostname>.key` and `<hostname>.crt` for each node. The hostname is defined as `<cluster-name>-<nodepool-component>-<index>` (e.g. `my-first-cluster-masters-0`).
+
+**The private key (`tls.key` / `<hostname>.key`) must be an unencrypted PKCS#8 PEM key (`-----BEGIN PRIVATE KEY-----`).** The OpenSearch security plugin cannot load PKCS#1 (`-----BEGIN RSA PRIVATE KEY-----`) or SEC1 (`-----BEGIN EC PRIVATE KEY-----`) keys; loading one crashes every node with `java.io.IOException: algid parse error, not a sequence` while the operator has no way to detect this, so `kubectl get opensearchcluster` keeps reporting `RUNNING`. cert-manager issues PKCS#1 by default — set `encoding: PKCS8` under `privateKey` on the `Certificate`:
+
+```yaml
+apiVersion: cert-manager.io/v1
+kind: Certificate
+spec:
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS8   # required: the OpenSearch security plugin cannot read PKCS#1 keys
+```
+
+To convert an existing PKCS#1 key: `openssl pkcs8 -topk8 -nocrypt -in tls-pkcs1.key -out tls.key`.
 
 If you provide the certificates yourself, you must also provide the list of certificate DNs in `nodesDn`, wildcards can be used (e.g. `"CN=my-first-cluster-*,OU=my-org"`).
 
@@ -1977,7 +2025,7 @@ Similarly, for OpenSearch Dashboards, if you don't provide `dashboards.opensearc
 
 You must also configure SSL/TLS HTTP. You can either let the operator generate all needed certificates or supply them yourself.
 
-If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certificate cannot be used or recognized as a node certificate, otherwise OpenSearch will reject any authentication request using the admin certificate.
+If you provided your own certificate for SSL/TLS HTTP, then you must also provide an admin client certificate (as a Kubernetes TLS secret with fields `ca.crt`, `tls.key` and `tls.crt`) as `adminSecret.name`. As with node certificates, `tls.key` must be an unencrypted PKCS#8 PEM key (`-----BEGIN PRIVATE KEY-----`) — `securityadmin.sh` uses the same PEM key reader as the security plugin and cannot load PKCS#1 or SEC1 keys. The DN of the certificate must be listed under `security.tls.http.adminDn`. For clusters migrated from operator 2.x, the deprecated `security.tls.transport.adminDn` is still honored when `http.adminDn` is empty. Be advised that the `adminDn` must be defined in a way that the admin certificate cannot be used or recognized as a node certificate, otherwise OpenSearch will reject any authentication request using the admin certificate.
 
 To apply the securityconfig to the OpenSearch cluster, the Operator uses a separate Kubernetes job (named `<cluster-name>-securityconfig-update`). This job is run during the initial provisioning of the cluster. The Operator also monitors the securityconfig and credentials secrets for changes and then reruns the update job to apply the new config. Note that the Operator only checks for changes in certain intervals, so it might take a minute or two for the changes to be applied. A failed job is retried with a backoff from 30 seconds up to 15 minutes. If the changes are not applied after a few minutes, please use 'kubectl' to check the logs of the pod of the `<cluster-name>-securityconfig-update` job. If you have an error in your configuration it will be reported there.
 
