@@ -11,6 +11,7 @@ type AllocationExplainResponse struct {
 	CanMoveToOtherNode      string                          `json:"can_move_to_other_node,omitempty"`     // only if assigned
 	UnassignedInfo          *UnassignedInfo                 `json:"unassigned_info,omitempty"`            // only if unassigned
 	CanAllocate             string                          `json:"can_allocate,omitempty"`               // only if unassigned
+	AllocateExplanation     string                          `json:"allocate_explanation,omitempty"`       // only if unassigned
 	NodeAllocationDecisions []AllocationExplainNodeDecision `json:"node_allocation_decisions"`
 }
 

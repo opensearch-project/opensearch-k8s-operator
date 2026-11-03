@@ -5413,6 +5413,16 @@ spec:
                       - type
                       type: object
                     type: array
+                  statusConfigMap:
+                    description: Configure the status ConfigMap feature
+                    properties:
+                      enable:
+                        description: Enable the status ConfigMap reconciler
+                        type: boolean
+                      updateInterval:
+                        description: How often to update the ConfigMap (default 60s)
+                        type: string
+                    type: object
                   vendor:
                     enum:
                     - Opensearch

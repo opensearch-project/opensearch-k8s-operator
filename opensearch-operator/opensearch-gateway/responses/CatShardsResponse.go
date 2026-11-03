@@ -1,18 +1,18 @@
 package responses
 
 type CatShardsResponse struct {
-	Index             string `json:"index" json:"i" json:"idx"`                         //nolint:staticcheck
-	Shard             string `json:"shard" json:"s" json:"sh"`                          //nolint:staticcheck
-	PrimaryOrReplica  string `json:"prirep" json:"p" json:"pr" json:"primaryOrReplica"` //nolint:staticcheck
-	State             string `json:"state" json:"st"`                                   //nolint:staticcheck
-	Docs              string `json:"docs" json:"d" json:"dc"`                           //nolint:staticcheck
-	Store             string `json:"store" json:"sto"`                                  //nolint:staticcheck
+	Index             string `json:"index"`
+	Shard             string `json:"shard"`
+	PrimaryOrReplica  string `json:"prirep"`
+	State             string `json:"state"`
+	Docs              string `json:"docs"`
+	Store             string `json:"store"`
 	Ip                string `json:"ip"`
-	NodeName          string `json:"node" json:"n"` //nolint:staticcheck
+	NodeName          string `json:"node"`
 	NodeId            string `json:"id"`
-	UnassignedAt      string `json:"unassigned.at" json:"ua"`                            //nolint:staticcheck
-	UnassignedDetails string `json:"ud" json:"unassigned.details" json:"completionSize"` //nolint:staticcheck
-	UnassignedFor     string `json:"uf" json:"unassigned.for" json:"completionSize"`     //nolint:staticcheck
-	UnassignedReason  string `json:"ur" json:"unassigned.reason" json:"completionSize"`  //nolint:staticcheck
-	CompletionSize    string `json:"cs" json:"completion.size" json:"completionSize"`    //nolint:staticcheck
+	UnassignedAt      string `json:"unassigned.at"`
+	UnassignedDetails string `json:"unassigned.details"`
+	UnassignedFor     string `json:"unassigned.for"`
+	UnassignedReason  string `json:"unassigned.reason"`
+	CompletionSize    string `json:"completion.size"`
 }
