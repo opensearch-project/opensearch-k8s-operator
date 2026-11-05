@@ -11,6 +11,7 @@ import (
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	"k8s.io/apimachinery/pkg/api/equality"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -213,7 +214,12 @@ func (c K8sClientImpl) UdateObjectStatus(instance client.Object, f func(client.O
 		if err := c.Get(c.ctx, key, instance); err != nil {
 			return err
 		}
+		before := instance.DeepCopyObject()
 		f(instance)
+		// Most reconciles leave the status as it was, so skip the write then.
+		if equality.Semantic.DeepEqual(before, instance) {
+			return nil
+		}
 		return c.Status().Update(c.ctx, instance)
 	})
 }
