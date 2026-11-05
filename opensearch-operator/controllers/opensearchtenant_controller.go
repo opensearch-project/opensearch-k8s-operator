@@ -48,10 +48,11 @@ func (r *OpensearchTenantReconciler) Reconcile(ctx context.Context, req ctrl.Req
 	)
 
 	if instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(instance, OpensearchFinalizer)
-		err = r.Update(ctx, instance)
-		if err != nil {
-			return ctrl.Result{}, err
+		if controllerutil.AddFinalizer(instance, OpensearchFinalizer) {
+			err = r.Update(ctx, instance)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 		return tenantReconciler.Reconcile()
 	} else {
