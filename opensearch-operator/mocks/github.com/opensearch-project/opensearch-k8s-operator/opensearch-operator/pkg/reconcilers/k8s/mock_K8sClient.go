@@ -1272,6 +1272,75 @@ func (_c *MockK8sClient_ListPods_Call) RunAndReturn(run func(*client.ListOptions
 	return _c
 }
 
+// ListServices provides a mock function with given fields: listOptions
+func (_m *MockK8sClient) ListServices(listOptions ...client.ListOption) (v1.ServiceList, error) {
+	_va := make([]interface{}, len(listOptions))
+	for _i := range listOptions {
+		_va[_i] = listOptions[_i]
+	}
+	var _ca []interface{}
+	_ca = append(_ca, _va...)
+	ret := _m.Called(_ca...)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ListServices")
+	}
+
+	var r0 v1.ServiceList
+	var r1 error
+	if rf, ok := ret.Get(0).(func(...client.ListOption) (v1.ServiceList, error)); ok {
+		return rf(listOptions...)
+	}
+	if rf, ok := ret.Get(0).(func(...client.ListOption) v1.ServiceList); ok {
+		r0 = rf(listOptions...)
+	} else {
+		r0 = ret.Get(0).(v1.ServiceList)
+	}
+
+	if rf, ok := ret.Get(1).(func(...client.ListOption) error); ok {
+		r1 = rf(listOptions...)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockK8sClient_ListServices_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ListServices'
+type MockK8sClient_ListServices_Call struct {
+	*mock.Call
+}
+
+// ListServices is a helper method to define mock.On call
+//   - listOptions ...client.ListOption
+func (_e *MockK8sClient_Expecter) ListServices(listOptions ...interface{}) *MockK8sClient_ListServices_Call {
+	return &MockK8sClient_ListServices_Call{Call: _e.mock.On("ListServices",
+		append([]interface{}{}, listOptions...)...)}
+}
+
+func (_c *MockK8sClient_ListServices_Call) Run(run func(listOptions ...client.ListOption)) *MockK8sClient_ListServices_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		variadicArgs := make([]client.ListOption, len(args)-0)
+		for i, a := range args[0:] {
+			if a != nil {
+				variadicArgs[i] = a.(client.ListOption)
+			}
+		}
+		run(variadicArgs...)
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_ListServices_Call) Return(_a0 v1.ServiceList, _a1 error) *MockK8sClient_ListServices_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockK8sClient_ListServices_Call) RunAndReturn(run func(...client.ListOption) (v1.ServiceList, error)) *MockK8sClient_ListServices_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // ListStatefulSets provides a mock function with given fields: listOptions
 func (_m *MockK8sClient) ListStatefulSets(listOptions ...client.ListOption) (appsv1.StatefulSetList, error) {
 	_va := make([]interface{}, len(listOptions))

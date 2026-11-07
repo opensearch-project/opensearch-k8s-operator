@@ -7023,6 +7023,18 @@ spec:
                       items:
                         type: string
                       type: array
+                    service:
+                      description: |-
+                        Additional Service for this node pool. A headless Service is always created for a node pool;
+                        this configures an extra, regular ClusterIP Service that load-balances traffic across the
+                        node pool's pods, useful for e.g. dedicated coordinating or ingest nodes that clients want to
+                        talk to directly without resolving individual pod endpoints.
+                      properties:
+                        create:
+                          description: Create the additional ClusterIP Service for
+                            this node pool.
+                          type: boolean
+                      type: object
                     sidecarContainers:
                       x-kubernetes-preserve-unknown-fields: true
                     tolerations:
@@ -8657,6 +8669,28 @@ spec:
                 type: integer
               phase:
                 type: string
+              securityConfig:
+                description: |-
+                  SecurityConfig records the securityconfig last applied to the cluster successfully, so that
+                  later changes only re-apply the files that changed.
+                properties:
+                  appliedChecksums:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      Checksums of the securityconfig files last applied, keyed by file name. For internal_users.yml
+                      the checksum covers the file as supplied (or bundled), without the operator-managed password hashes.
+                    type: object
+                  managedUsersChecksum:
+                    description: |-
+                      Checksum of the operator-managed admin and Dashboards user password hashes last applied.
+                      The Dashboards user is kibanaserver unless the credentials secret names another user.
+                    type: string
+                  updateJobChecksum:
+                    description: Checksum of the last successful securityconfig update
+                      job recorded here.
+                    type: string
+                type: object
               version:
                 type: string
             required:
