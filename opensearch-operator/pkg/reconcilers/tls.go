@@ -667,19 +667,41 @@ func serviceDnsNames(name, namespace string) []string {
 	}
 }
 
-// certCoversDnsNames reports whether every wanted name is among the certificate's DNS SANs.
-// Extra names are tolerated, so removing a Service or customFQDN does not reissue the cert.
-// Unparseable data counts as covering, as expiry handling already covers it.
-func certCoversDnsNames(certData []byte, want []string) bool {
+// certDnsNames returns the certificate's DNS SANs, or false if certData is not a parseable PEM certificate.
+func certDnsNames(certData []byte) ([]string, bool) {
 	block, _ := pem.Decode(certData)
 	if block == nil {
-		return true
+		return nil, false
 	}
 	cert, err := x509.ParseCertificate(block.Bytes)
 	if err != nil {
+		return nil, false
+	}
+	return cert.DNSNames, true
+}
+
+// certCoversDnsNames reports whether every wanted name is among the certificate's DNS SANs.
+// Extra names are tolerated, so removing a Service or customFQDN does not reissue the cert;
+// the next rotation drops them. Unparseable data counts as covering, as expiry handling
+// already covers it.
+func certCoversDnsNames(certData []byte, want []string) bool {
+	names, ok := certDnsNames(certData)
+	if !ok {
 		return true
 	}
-	return len(lo.Without(lo.Uniq(want), cert.DNSNames...)) == 0
+	return len(lo.Without(lo.Uniq(want), names...)) == 0
+}
+
+// certDnsNamesDiffer reports whether two certificates' DNS SANs differ as a set. OpenSearch
+// refuses to hot reload a certificate on any SAN difference, added or removed names alike.
+func certDnsNamesDiffer(oldCertData, newCertData []byte) bool {
+	oldNames, okOld := certDnsNames(oldCertData)
+	newNames, okNew := certDnsNames(newCertData)
+	if !okOld || !okNew {
+		return false
+	}
+	added, removed := lo.Difference(newNames, oldNames)
+	return len(added) > 0 || len(removed) > 0
 }
 
 func (r *TLSReconciler) handleTransportExistingCerts() error {
@@ -788,7 +810,6 @@ func (r *TLSReconciler) handleHttp() error {
 		}
 
 		existingCertData := nodeSecret.Data[corev1.TLSCertKey]
-		sansChanged := existingCertData != nil && !certCoversDnsNames(existingCertData, dnsNames)
 		nodeCert, err := r.generateNewCertIfNeeded(
 			ca,
 			certDescription{
@@ -797,18 +818,18 @@ func (r *TLSReconciler) handleHttp() error {
 				commonName:  clusterName,
 				dnsNames:    dnsNames,
 			},
-			nodeSecret.Data[corev1.TLSCertKey],
+			existingCertData,
 		)
 
 		if err != nil {
 			return err
 		}
 		if nodeCert != nil {
-			renewed := nodeSecret.Data[corev1.TLSCertKey] != nil
+			renewed := existingCertData != nil
 			nodeSecret.Data = nodeCert.SecretData(ca)
 			if renewed {
 				setCertRenewalAnnotation(&nodeSecret, certRenewalMarker(nodeCert.CertData()))
-				if sansChanged {
+				if certDnsNamesDiffer(existingCertData, nodeCert.CertData()) {
 					nodeSecret.Annotations[CertSanChangeAnnotation] = certRenewalMarker(nodeCert.CertData())
 				}
 			}
