@@ -30,7 +30,7 @@ import (
 )
 
 // makeTestCertPEM creates a self-signed certificate with the given validity window
-func makeTestCertPEM(notBefore time.Time, notAfter time.Time) []byte {
+func makeTestCertPEM(notBefore time.Time, notAfter time.Time, dnsNames ...string) []byte {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	Expect(err).ToNot(HaveOccurred())
 	template := &x509.Certificate{
@@ -38,6 +38,7 @@ func makeTestCertPEM(notBefore time.Time, notAfter time.Time) []byte {
 		Subject:      pkix.Name{CommonName: "test"},
 		NotBefore:    notBefore,
 		NotAfter:     notAfter,
+		DNSNames:     dnsNames,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
 	Expect(err).ToNot(HaveOccurred())
@@ -73,6 +74,13 @@ func signTestCert(ca pkitls.Cert, commonName, orgUnit string, validity time.Dura
 
 // signTestHttpCert signs a certificate carrying the SANs the reconciler generates for the HTTP cert
 func signTestHttpCert(ca pkitls.Cert, cluster *opensearchv1.OpenSearchCluster, validity time.Duration) []byte {
+	cert, err := ca.CreateAndSignCertificate(cluster.Name, cluster.Name, testHttpDnsNames(cluster), validity)
+	Expect(err).ToNot(HaveOccurred())
+	return cert.CertData()
+}
+
+// testHttpDnsNames returns the SANs the reconciler generates for the HTTP cert, ignoring service.create
+func testHttpDnsNames(cluster *opensearchv1.OpenSearchCluster) []string {
 	name, ns := cluster.Name, cluster.Namespace
 	dnsNames := []string{
 		name,
@@ -86,9 +94,7 @@ func signTestHttpCert(ca pkitls.Cert, cluster *opensearchv1.OpenSearchCluster, v
 	for i := range cluster.Spec.NodePools {
 		dnsNames = append(dnsNames, serviceDnsNames(builders.NodePoolServiceName(cluster, &cluster.Spec.NodePools[i]), ns)...)
 	}
-	cert, err := ca.CreateAndSignCertificate(name, name, lo.Uniq(dnsNames), validity)
-	Expect(err).ToNot(HaveOccurred())
-	return cert.CertData()
+	return lo.Uniq(dnsNames)
 }
 
 var _ = Describe("TLS Controller", func() {
@@ -1066,6 +1072,41 @@ var _ = Describe("TLS Controller", func() {
 			reconcilerContext, underTest = newTLSReconcilerWithPKI(mockClient, spec)
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
+			Expect(reconcilerContext.CertHashData).To(Equal([]string{"http-sans:" + marker}))
+		})
+
+		It("should restart once when a rotation drops a removed SAN, even with hot reload", func() {
+			ca, caSecret := newCA()
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
+			spec := newRenewalSpec(false)
+			// Hot reload is on by default for OpenSearch 3.x
+			spec.Spec.General.Version = "3.0.0"
+			// Issued while the pool still had service.create enabled, now expired and due for rotation.
+			// Apart from the -lb names it has exactly the desired SANs, so only the removal differs.
+			lbName := builders.AdditionalServiceName(spec, &spec.Spec.NodePools[0])
+			oldHttpCert := makeTestCertPEM(time.Now().AddDate(-1, 0, 0), time.Now().AddDate(0, 0, -1),
+				append(testHttpDnsNames(spec), serviceDnsNames(lbName, clusterName)...)...)
+			transportSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			httpSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": oldHttpCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			mockClient, _, storedHttp := setupMocks(caSecret, transportSecret, httpSecret)
+
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			names, ok := certDnsNames(storedHttp().Data[corev1.TLSCertKey])
+			Expect(ok).To(BeTrue())
+			Expect(names).ToNot(ContainElement(lbName))
+			marker := storedHttp().Annotations[CertSanChangeAnnotation]
+			Expect(marker).ToNot(BeEmpty())
 			Expect(reconcilerContext.CertHashData).To(Equal([]string{"http-sans:" + marker}))
 		})
 
