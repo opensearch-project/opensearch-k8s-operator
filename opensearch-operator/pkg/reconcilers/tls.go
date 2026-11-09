@@ -44,6 +44,8 @@ type certDescription struct {
 	certContext certContextType
 	commonName  string
 	dnsNames    []string
+	// requiredDnsNames are the dnsNames whose absence reissues an existing cert before its next rotation
+	requiredDnsNames []string
 }
 
 type TLSReconciler struct {
@@ -615,10 +617,10 @@ func (r *TLSReconciler) certShouldBeRenewed(ca tls.Cert, cd certDescription, exi
 		helpers.TlsCertificateDaysRemaining.WithLabelValues(namespace,
 			clusterName, string(cd.certContext), cd.loggingName).Set(float64(daysRemaining))
 	}
-	// Generated HTTP certs must cover every Service name clients may use, which can grow
-	// after creation (e.g. enabling service.create on a node pool)
-	if reason == "" && cd.certContext == CertContextHttp && !certCoversDnsNames(existingCertData, cd.dnsNames) {
-		reason = "certificate is missing desired SANs"
+	// Opt-in names can be added after creation (e.g. enabling service.create on a node pool).
+	// Disabled rotation (-1) leaves them for the next reissue, like any other change.
+	if reason == "" && renewBeforeExpirationDays >= 0 && !certCoversDnsNames(existingCertData, cd.requiredDnsNames) {
+		reason = "certificate is missing required SANs"
 	}
 	if reason != "" {
 		r.logger.Info("Renewing certificate", "reason", reason, "interface",
@@ -794,29 +796,34 @@ func (r *TLSReconciler) handleHttp() error {
 			fmt.Sprintf("%s.%s.svc", clusterName, namespace),
 			fmt.Sprintf("%s.%s.svc.%s", clusterName, namespace, helpers.ClusterDnsBase()),
 		}
-		dnsNames = append(dnsNames, serviceDnsNames(r.instance.Spec.General.ServiceName, namespace)...)
+		// A missing opt-in name (serviceName, -lb Services, customFQDN) reissues the cert right
+		// away. The headless node pool names only join at the next reissue, so adding a pool
+		// does not restart the existing nodes.
+		requiredDnsNames := serviceDnsNames(r.instance.Spec.General.ServiceName, namespace)
 		for i := range r.instance.Spec.NodePools {
 			nodePool := &r.instance.Spec.NodePools[i]
 			dnsNames = append(dnsNames, serviceDnsNames(builders.NodePoolServiceName(r.instance, nodePool), namespace)...)
 			if nodePool.Service != nil && nodePool.Service.Create {
-				dnsNames = append(dnsNames, serviceDnsNames(builders.AdditionalServiceName(r.instance, nodePool), namespace)...)
+				requiredDnsNames = append(requiredDnsNames, serviceDnsNames(builders.AdditionalServiceName(r.instance, nodePool), namespace)...)
 			}
 		}
-		dnsNames = lo.Uniq(dnsNames)
+		dnsNames = lo.Uniq(append(dnsNames, requiredDnsNames...))
 
 		// Prepend custom FQDN if provided
 		if tlsConfig.CustomFQDN != nil && *tlsConfig.CustomFQDN != "" {
 			dnsNames = append([]string{*tlsConfig.CustomFQDN}, dnsNames...)
+			requiredDnsNames = append(requiredDnsNames, *tlsConfig.CustomFQDN)
 		}
 
 		existingCertData := nodeSecret.Data[corev1.TLSCertKey]
 		nodeCert, err := r.generateNewCertIfNeeded(
 			ca,
 			certDescription{
-				loggingName: "global",
-				certContext: CertContextHttp,
-				commonName:  clusterName,
-				dnsNames:    dnsNames,
+				loggingName:      "global",
+				certContext:      CertContextHttp,
+				commonName:       clusterName,
+				dnsNames:         dnsNames,
+				requiredDnsNames: requiredDnsNames,
 			},
 			existingCertData,
 		)
