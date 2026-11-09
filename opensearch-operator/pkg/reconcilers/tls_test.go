@@ -746,13 +746,13 @@ var _ = Describe("TLS Controller", func() {
 			Expect(underTest.certShouldBeRenewed(mockCA, httpCd, makeTestCertPEM(time.Now(), time.Now().AddDate(0, 0, 20)))).To(BeFalse())
 		})
 
-		It("should renew generated HTTP certificates only when desired SANs are missing", func() {
+		It("should renew generated HTTP certificates only when required SANs are missing", func() {
 			spec := opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{Name: "tls-san-change", Namespace: "tls-san-change", UID: "dummyuid"},
 				Spec: opensearchv1.ClusterSpec{
 					General: opensearchv1.GeneralConfig{},
 					Security: &opensearchv1.Security{Tls: &opensearchv1.TlsConfig{
-						Http: &opensearchv1.TlsConfigHttp{Generate: true, RotateDaysBeforeExpiry: -1},
+						Http: &opensearchv1.TlsConfigHttp{Generate: true, RotateDaysBeforeExpiry: 30},
 					}},
 				},
 			}
@@ -764,16 +764,22 @@ var _ = Describe("TLS Controller", func() {
 			nodeCert, err := ca.CreateAndSignCertificate("tls-san-change", "tls-san-change", oldNames, 200*24*time.Hour)
 			Expect(err).ToNot(HaveOccurred())
 
-			httpCd := func(names []string) certDescription {
-				return certDescription{loggingName: "global", certContext: CertContextHttp, dnsNames: names}
+			httpCd := func(required []string, headless ...string) certDescription {
+				return certDescription{loggingName: "global", certContext: CertContextHttp,
+					dnsNames: append(append([]string{}, required...), headless...), requiredDnsNames: required}
 			}
 			// Same SANs (in any order): left alone
 			Expect(underTest.certShouldBeRenewed(ca, httpCd([]string{oldNames[1], oldNames[0]}), nodeCert.CertData())).To(BeFalse())
-			// A per-pool Service name was added, e.g. by enabling service.create
+			// An opt-in name was added, e.g. by enabling service.create
 			added := append([]string{"tls-san-change-data-lb.tls-san-change.svc"}, oldNames...)
 			Expect(underTest.certShouldBeRenewed(ca, httpCd(added), nodeCert.CertData())).To(BeTrue())
+			// A new pool's headless name waits for the next reissue
+			Expect(underTest.certShouldBeRenewed(ca, httpCd(oldNames, "tls-san-change-data.tls-san-change.svc"), nodeCert.CertData())).To(BeFalse())
 			// A name was removed (service.create disabled, pool or customFQDN dropped): not worth a restart
 			Expect(underTest.certShouldBeRenewed(ca, httpCd(oldNames[:1]), nodeCert.CertData())).To(BeFalse())
+			// Rotation disabled: a missing opt-in name does not reissue either
+			spec.Spec.Security.Tls.Http.RotateDaysBeforeExpiry = -1
+			Expect(underTest.certShouldBeRenewed(ca, httpCd(added), nodeCert.CertData())).To(BeFalse())
 		})
 
 		It("should renew certificates when the CA is replaced", func() {
@@ -1073,6 +1079,34 @@ var _ = Describe("TLS Controller", func() {
 			_, err = underTest.Reconcile()
 			Expect(err).ToNot(HaveOccurred())
 			Expect(reconcilerContext.CertHashData).To(Equal([]string{"http-sans:" + marker}))
+		})
+
+		It("should not reissue the HTTP cert or restart when a node pool is added", func() {
+			ca, caSecret := newCA()
+			validCert := signTestCert(ca, clusterName, clusterName, validFor)
+			httpCert := signTestHttpCert(ca, newRenewalSpec(false), validFor)
+			transportSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-transport-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": validCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			httpSecret := corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: clusterName + "-http-cert", Namespace: clusterName},
+				Type:       corev1.SecretTypeTLS,
+				Data:       map[string][]byte{"tls.crt": httpCert, "tls.key": []byte("key"), "ca.crt": ca.CertData()},
+			}
+			mockClient, _, storedHttp := setupMocks(caSecret, transportSecret, httpSecret)
+
+			spec := newRenewalSpec(false)
+			spec.Spec.NodePools = append(spec.Spec.NodePools, opensearchv1.NodePool{Component: "data", Replicas: 3})
+			reconcilerContext, underTest := newTLSReconcilerWithPKI(mockClient, spec)
+			_, err := underTest.Reconcile()
+			Expect(err).ToNot(HaveOccurred())
+
+			// The new pool's headless name joins at the next reissue
+			Expect(storedHttp().Data[corev1.TLSCertKey]).To(Equal(httpCert))
+			Expect(storedHttp().Annotations).ToNot(HaveKey(CertSanChangeAnnotation))
+			Expect(reconcilerContext.CertHashData).To(BeEmpty())
 		})
 
 		It("should restart once when a rotation drops a removed SAN, even with hot reload", func() {
