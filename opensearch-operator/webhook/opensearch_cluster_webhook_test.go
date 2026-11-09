@@ -18,6 +18,7 @@ package webhook
 
 import (
 	"context"
+	"fmt"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -27,6 +28,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 	"sigs.k8s.io/controller-runtime/pkg/webhook/admission"
 )
 
@@ -1100,6 +1102,104 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			warnings, err := validator.ValidateUpdate(ctx, oldCluster, newCluster)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(warnings).To(ConsistOf(ContainSubstring("node pool 'searchers': on OpenSearch 3.x the 'search' role hosts search replicas")))
+		})
+	})
+
+	Describe("admin credentials username", func() {
+		const secretName = "admin-credentials"
+
+		clusterWithAdminSecret := func() *opensearchv1.OpenSearchCluster {
+			cluster := clusterWithPools("2.19.4")
+			cluster.Spec.Security = &opensearchv1.Security{
+				Config: &opensearchv1.SecurityConfig{
+					AdminCredentialsSecret: corev1.LocalObjectReference{Name: secretName},
+				},
+			}
+			return cluster
+		}
+
+		It("allows create when the secret does not exist yet", func() {
+			warnings, err := validator.ValidateCreate(ctx, clusterWithAdminSecret())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("allows create when the secret has a username", func() {
+			Expect(fakeClient.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
+				Data: map[string][]byte{
+					"username": []byte("myuser"),
+					"password": []byte("adminpass"),
+				},
+			})).To(Succeed())
+
+			warnings, err := validator.ValidateCreate(ctx, clusterWithAdminSecret())
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
+		})
+
+		It("rejects create when the secret has no username", func() {
+			Expect(fakeClient.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
+				Data:       map[string][]byte{"password": []byte("adminpass")},
+			})).To(Succeed())
+
+			_, err := validator.ValidateCreate(ctx, clusterWithAdminSecret())
+			Expect(err).To(MatchError(`admin credentials secret "admin-credentials" is missing username field`))
+		})
+
+		It("rejects create when the username is empty", func() {
+			Expect(fakeClient.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
+				Data: map[string][]byte{
+					"username": []byte(""),
+					"password": []byte("adminpass"),
+				},
+			})).To(Succeed())
+
+			_, err := validator.ValidateCreate(ctx, clusterWithAdminSecret())
+			Expect(err).To(MatchError(`admin credentials secret "admin-credentials" is missing username field`))
+		})
+
+		It("rejects create when the secret cannot be read", func() {
+			watchClient, ok := fakeClient.(client.WithWatch)
+			Expect(ok).To(BeTrue())
+			validator.Client = interceptor.NewClient(watchClient, interceptor.Funcs{
+				Get: func(ctx context.Context, c client.WithWatch, key client.ObjectKey, obj client.Object, opts ...client.GetOption) error {
+					return fmt.Errorf("api unavailable")
+				},
+			})
+
+			_, err := validator.ValidateCreate(ctx, clusterWithAdminSecret())
+			Expect(err).To(MatchError(ContainSubstring(`get admin credentials secret "admin-credentials"`)))
+			Expect(err).To(MatchError(ContainSubstring("api unavailable")))
+		})
+
+		It("rejects update when the secret has no username", func() {
+			Expect(fakeClient.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
+				Data:       map[string][]byte{"password": []byte("adminpass")},
+			})).To(Succeed())
+
+			cluster := clusterWithAdminSecret()
+			_, err := validator.ValidateUpdate(ctx, cluster, cluster)
+			Expect(err).To(MatchError(`admin credentials secret "admin-credentials" is missing username field`))
+		})
+
+		It("allows deletion when the secret has no username", func() {
+			Expect(fakeClient.Create(ctx, &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: secretName, Namespace: "default"},
+				Data:       map[string][]byte{"password": []byte("adminpass")},
+			})).To(Succeed())
+
+			cluster := clusterWithAdminSecret()
+			deleting := cluster.DeepCopy()
+			now := metav1.Now()
+			deleting.DeletionTimestamp = &now
+
+			warnings, err := validator.ValidateUpdate(ctx, cluster, deleting)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(warnings).To(BeEmpty())
 		})
 	})
 

@@ -24,6 +24,7 @@ The operator registers a validating webhook for every `opensearch.org/v1` resour
 | On OpenSearch 3.x, a `warm` pool that also has other roles must set `node.search.cache.size` in its `additionalConfig` or in `general.additionalConfig`. OpenSearch accepts a percentage or ratio above 0 and below 100% / 1, or a positive whole byte size with a unit such as `50gb`. Absolute sizes are not compared to `diskSize`. A pool whose only role is `warm` may omit the setting | ✓ | ✓ |
 | `persistence.pvc.storageClass` of an existing node pool cannot change (StatefulSet volume claims are immutable). New node pools are not checked | | ✓ |
 | When transport or HTTP TLS is enabled (the block is present and `enabled` is not `false`), it needs `generate: true` or a `secret.name` | ✓ | ✓ |
+| When `security.config.adminCredentialsSecret` names a secret that already exists, that secret must contain a non-empty `username`. A secret that does not exist yet is allowed; the reconciler checks the key once the secret appears. Omitting `adminCredentialsSecret` is allowed | ✓ | ✓ |
 | When `security.config.adminSecret` is empty and the operator can run securityadmin (HTTP TLS enabled on 2.x+, transport TLS enabled on 1.x), the admin certificate is generated, so `tls.http.generate` (2.x+) or `tls.transport.generate` (1.x) must be `true` | ✓ | ✓ |
 
 Updates to a cluster that is being deleted are not validated.

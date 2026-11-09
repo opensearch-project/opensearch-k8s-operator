@@ -25,6 +25,8 @@ import (
 	version "github.com/hashicorp/go-version"
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	"github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/helpers"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -58,6 +60,9 @@ func (v *OpenSearchClusterValidator) ValidateCreate(ctx context.Context, obj run
 	}
 	tlsWarnings, err := v.validateTlsConfig(cluster)
 	if err != nil {
+		return nil, err
+	}
+	if err := v.validateAdminCredentialsUsername(ctx, cluster); err != nil {
 		return nil, err
 	}
 	return append(warnings, tlsWarnings...), nil
@@ -108,6 +113,9 @@ func (v *OpenSearchClusterValidator) ValidateUpdate(ctx context.Context, oldObj,
 
 	tlsWarnings, err := v.validateTlsConfig(newCluster)
 	if err != nil {
+		return nil, err
+	}
+	if err := v.validateAdminCredentialsUsername(ctx, newCluster); err != nil {
 		return nil, err
 	}
 	return append(warnings, tlsWarnings...), nil
@@ -368,4 +376,31 @@ func (v *OpenSearchClusterValidator) validateTlsConfig(cluster *opensearchv1.Ope
 
 func (v *OpenSearchClusterValidator) ValidateDelete(ctx context.Context, obj runtime.Object) (admission.Warnings, error) {
 	return nil, nil
+}
+
+// validateAdminCredentialsUsername rejects an adminCredentialsSecret that is
+// already in the cluster but has no username. A secret that does not exist yet
+// is allowed: it is often applied after the cluster, and the reconciler checks
+// the key again once the secret appears. Omitting adminCredentialsSecret is
+// allowed because the operator then generates a secret with username admin.
+func (v *OpenSearchClusterValidator) validateAdminCredentialsUsername(ctx context.Context, cluster *opensearchv1.OpenSearchCluster) error {
+	if cluster.Spec.Security == nil || cluster.Spec.Security.Config == nil {
+		return nil
+	}
+	name := cluster.Spec.Security.Config.AdminCredentialsSecret.Name
+	if name == "" {
+		return nil
+	}
+	secret := &corev1.Secret{}
+	err := v.Client.Get(ctx, client.ObjectKey{Namespace: cluster.Namespace, Name: name}, secret)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("get admin credentials secret %q: %w", name, err)
+	}
+	if len(secret.Data["username"]) == 0 {
+		return fmt.Errorf("admin credentials secret %q is missing username field", name)
+	}
+	return nil
 }
