@@ -603,6 +603,99 @@ var _ = Describe("ServiceMonitor reconciliation", func() {
 	})
 })
 
+var _ = Describe("Additional node pool service reconciliation", func() {
+	newInstance := func() *opensearchv1.OpenSearchCluster {
+		return &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "additional-service-test",
+				Namespace: "test-namespace",
+			},
+			Spec: opensearchv1.ClusterSpec{
+				General: opensearchv1.GeneralConfig{
+					ServiceName: "additional-service-test",
+				},
+			},
+		}
+	}
+
+	It("should create the additional service when enabled for a node pool", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance()
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: instance,
+		}
+		nodePool := &opensearchv1.NodePool{
+			Component: "coordinators",
+			Service:   &opensearchv1.AdditionalServiceConfig{Create: true},
+		}
+
+		mockClient.EXPECT().Scheme().Return(scheme.Scheme)
+		mockClient.EXPECT().
+			ReconcileResource(mock.MatchedBy(func(svc *corev1.Service) bool {
+				return svc.Name == "additional-service-test-coordinators-lb"
+			}), reconciler.StatePresent).
+			Return(nil, nil)
+
+		_, err := underTest.handleAdditionalService(nodePool)
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should do nothing when not enabled for a node pool", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: newInstance(),
+		}
+
+		_, err := underTest.handleAdditionalService(&opensearchv1.NodePool{Component: "coordinators"})
+		Expect(err).NotTo(HaveOccurred())
+	})
+
+	It("should remove additional services of disabled and removed node pools", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance()
+		instance.Spec.NodePools = []opensearchv1.NodePool{
+			{Component: "coordinators", Service: &opensearchv1.AdditionalServiceConfig{Create: true}},
+			{Component: "ingest"},
+		}
+		underTest := &ClusterReconciler{
+			client:   mockClient,
+			instance: instance,
+			logger:   logr.Discard(),
+		}
+		existing := func(component string) corev1.Service {
+			return corev1.Service{ObjectMeta: metav1.ObjectMeta{
+				Name:      "additional-service-test-" + component + "-lb",
+				Namespace: "test-namespace",
+				Labels: map[string]string{
+					helpers.ClusterLabel:           "additional-service-test",
+					helpers.AdditionalServiceLabel: component,
+				},
+			}}
+		}
+
+		mockClient.EXPECT().ListServices(mock.Anything, mock.Anything, mock.Anything).
+			Return(corev1.ServiceList{Items: []corev1.Service{
+				existing("coordinators"), // still wanted
+				existing("ingest"),       // service.create turned off
+				existing("data"),         // node pool removed
+			}}, nil)
+		var removed []string
+		mockClient.EXPECT().
+			ReconcileResource(mock.AnythingOfType("*v1.Service"), reconciler.StateAbsent).
+			RunAndReturn(func(obj runtime.Object, _ reconciler.DesiredState) (*ctrl.Result, error) {
+				removed = append(removed, obj.(*corev1.Service).Name)
+				return nil, nil
+			})
+
+		result := reconciler.CombinedResult{}
+		underTest.cleanupAdditionalServices(&result)
+		Expect(result.Err).NotTo(HaveOccurred())
+		Expect(removed).To(ConsistOf("additional-service-test-ingest-lb", "additional-service-test-data-lb"))
+	})
+})
+
 var _ = Describe("Node attributes RBAC reconciliation", func() {
 	It("should not delete cluster role bindings when cluster-scoped RBAC management is disabled", func() {
 		mockClient := k8s.NewMockK8sClient(GinkgoT())

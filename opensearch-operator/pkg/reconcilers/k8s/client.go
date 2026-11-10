@@ -40,6 +40,7 @@ type K8sClient interface {
 	CreateDeployment(deployment *appsv1.Deployment) (*ctrl.Result, error)
 	DeleteDeployment(deployment *appsv1.Deployment, orphan bool) error
 	GetService(name, namespace string) (corev1.Service, error)
+	ListServices(listOptions ...client.ListOption) (corev1.ServiceList, error)
 	CreateService(svc *corev1.Service) (*ctrl.Result, error)
 	GetOpenSearchCluster(name, namespace string) (opensearchv1.OpenSearchCluster, error)
 	UpdateOpenSearchClusterStatus(key client.ObjectKey, f func(*opensearchv1.OpenSearchCluster)) error
@@ -182,6 +183,12 @@ func (c K8sClientImpl) GetService(name, namespace string) (corev1.Service, error
 	svc := corev1.Service{}
 	err := c.Get(c.ctx, client.ObjectKey{Name: name, Namespace: namespace}, &svc)
 	return svc, err
+}
+
+func (c K8sClientImpl) ListServices(listOptions ...client.ListOption) (corev1.ServiceList, error) {
+	list := corev1.ServiceList{}
+	err := c.List(c.ctx, &list, listOptions...)
+	return list, err
 }
 
 func (c K8sClientImpl) CreateService(svc *corev1.Service) (*ctrl.Result, error) {
