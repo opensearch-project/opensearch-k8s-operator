@@ -232,7 +232,7 @@ Other commonly used values:
 | `webhook.enabled` / `webhook.failurePolicy` | `true` / `Fail` | Validation webhooks and their failure policy (`Fail` or `Ignore`). |
 | `manager.metricsBindAddress` | `127.0.0.1:8080` | Bind address of the operator's metrics endpoint. |
 | `manager.dnsBase` | `cluster.local` | Kubernetes cluster domain (see [Custom cluster domain name](#custom-cluster-domain-name)). |
-| `nodeSelector`, `tolerations`, `priorityClassName`, `podAnnotations`, `podLabels` | empty | Scheduling and metadata of the operator pod. |
+| `nodeSelector`, `tolerations`, `affinity`, `priorityClassName`, `podAnnotations`, `podLabels` | empty | Scheduling and metadata of the operator pod. |
 | `securityContext` / `manager.securityContext` | `runAsNonRoot: true` / `allowPrivilegeEscalation: false` | Pod and container security context of the operator. |
 
 Valid controller names for `maxConcurrentReconcilesPerController` are `opensearchcluster`, `opensearchuser`, `opensearchrole`, `opensearchtenant`, `opensearchuserrolebinding`, `opensearchactiongroup`, `opensearchismpolicy`, `opensearchindextemplate`, `opensearchcomponenttemplate` and `opensearchsnapshotpolicy`.
