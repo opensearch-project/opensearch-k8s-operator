@@ -11,6 +11,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -23,7 +24,7 @@ var _ = Describe("Dashboards deployment against the API server", func() {
 			ObjectMeta: metav1.ObjectMeta{Name: "foobar", Namespace: ns.Name},
 			Spec: opensearchv1.ClusterSpec{
 				General:    opensearchv1.GeneralConfig{Version: "2.11.0"},
-				Dashboards: opensearchv1.DashboardsConfig{Enable: true, Version: "2.11.0", Replicas: 1},
+				Dashboards: opensearchv1.DashboardsConfig{Enable: true, Version: "2.11.0", Replicas: ptr.To(int32(1))},
 			},
 		}
 		build := func() *appsv1.Deployment {

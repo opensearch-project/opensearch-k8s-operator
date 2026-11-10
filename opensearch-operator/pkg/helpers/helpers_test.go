@@ -929,9 +929,12 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
 		mockClient.EXPECT().GetSecret(GeneratedSecurityConfigSecretName(cr), "pwtest").Return(corev1.Secret{}, notFound).Once()
 
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
 		secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
 			Data: map[string][]byte{"password": []byte("adminpass")},
-		})
+		}, source)
 		Expect(err).NotTo(HaveOccurred())
 
 		var output map[string]interface{}
