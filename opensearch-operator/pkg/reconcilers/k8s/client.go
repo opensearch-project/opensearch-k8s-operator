@@ -10,6 +10,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -59,6 +60,8 @@ type K8sClient interface {
 	EnsureClusterRoleBinding(crb *rbacv1.ClusterRoleBinding) error
 	// DeleteClusterRoleBinding deletes a ClusterRoleBinding, ignoring not-found errors.
 	DeleteClusterRoleBinding(name string) error
+	// DeleteNetworkPolicyIfControlledBy deletes only a policy controlled by owner.
+	DeleteNetworkPolicyIfControlledBy(name, namespace string, owner metav1.Object) error
 	Scheme() *runtime.Scheme
 	Context() context.Context
 }
@@ -336,6 +339,22 @@ func (c K8sClientImpl) DeleteClusterRoleBinding(name string) error {
 		return nil
 	}
 	return err
+}
+
+// DeleteNetworkPolicyIfControlledBy leaves user-managed and other clusters' policies intact.
+func (c K8sClientImpl) DeleteNetworkPolicyIfControlledBy(name, namespace string, owner metav1.Object) error {
+	policy := &networkingv1.NetworkPolicy{}
+	if err := c.Get(c.ctx, client.ObjectKey{Name: name, Namespace: namespace}, policy); err != nil {
+		return client.IgnoreNotFound(err)
+	}
+	if !metav1.IsControlledBy(policy, owner) {
+		return nil
+	}
+	// Do not delete a policy that was replaced or had its ownership changed after the read.
+	return client.IgnoreNotFound(c.Delete(c.ctx, policy, client.Preconditions{
+		UID:             &policy.UID,
+		ResourceVersion: &policy.ResourceVersion,
+	}))
 }
 
 // Validate K8sClientImpl implements the interface

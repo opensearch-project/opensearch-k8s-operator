@@ -2350,7 +2350,7 @@ var _ = Describe("NetworkPolicy builder", func() {
 			cr.Spec.General.HttpPort = httpPort
 			cr.Spec.General.NetworkPolicy.Enable = true
 			cr.Spec.General.Grpc = &opensearchv1.GrpcConfig{Enable: true, Port: "9400"}
-			job := NewSecurityconfigUpdateJob(&cr, clusterName+"-securityconfig-update", namespace, "checksum", "admin-cert", "", "cmd", nil, nil)
+			job := NewSecurityconfigUpdateJob(&cr, clusterName+"-securityconfig-update", namespace, "checksum", "", "admin-cert", "", "cmd", nil, nil)
 
 			result := NewNetworkPolicyForCR(&cr)
 			rule := findIngressRule(result.Spec.Ingress, func(peer networkingv1.NetworkPolicyPeer) bool {

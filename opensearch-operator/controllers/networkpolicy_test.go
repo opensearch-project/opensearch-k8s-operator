@@ -55,7 +55,7 @@ var _ = Describe("NetworkPolicy watch", func() {
 			Client: &networkPolicyWatchClient{Client: mgr.GetClient(), requests: requests},
 			Scheme: scheme.Scheme,
 		}
-		Expect(r.SetupWithManager(mgr)).To(Succeed())
+		Expect(r.SetupWithManager(mgr, 1)).To(Succeed())
 		done := make(chan error, 1)
 		go func() { done <- mgr.Start(ctx) }()
 		DeferCleanup(func() {

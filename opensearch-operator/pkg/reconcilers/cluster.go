@@ -130,7 +130,7 @@ func (r *ClusterReconciler) reconcileServiceMonitor(result *reconciler.CombinedR
 }
 
 // reconcileNetworkPolicy creates or removes the ingress-only NetworkPolicy.
-// The feature is opt-in; when disabled the policy is deleted if it exists.
+// The feature is opt-in; when disabled only a policy controlled by this cluster is deleted.
 func (r *ClusterReconciler) reconcileNetworkPolicy(result *reconciler.CombinedResult) {
 	networkPolicy := builders.NewNetworkPolicyForCR(r.instance)
 	if r.instance.Spec.General.NetworkPolicy.Enable {
@@ -138,7 +138,7 @@ func (r *ClusterReconciler) reconcileNetworkPolicy(result *reconciler.CombinedRe
 		result.Combine(r.client.ReconcileResource(networkPolicy, reconciler.StatePresent))
 		return
 	}
-	result.Combine(r.client.ReconcileResource(networkPolicy, reconciler.StateAbsent))
+	result.CombineErr(r.client.DeleteNetworkPolicyIfControlledBy(networkPolicy.Name, networkPolicy.Namespace, r.instance))
 }
 
 // isServiceMonitorCRDMissing reports whether err indicates that the

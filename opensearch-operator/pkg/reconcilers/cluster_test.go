@@ -21,6 +21,9 @@ import (
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/record"
 	ctrl "sigs.k8s.io/controller-runtime"
+	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/client/fake"
+	"sigs.k8s.io/controller-runtime/pkg/client/interceptor"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -610,6 +613,7 @@ var _ = Describe("NetworkPolicy reconciliation", func() {
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      "networkpolicy-test",
 				Namespace: "test-namespace",
+				UID:       "networkpolicy-test-uid",
 			},
 			Spec: opensearchv1.ClusterSpec{
 				General: opensearchv1.GeneralConfig{
@@ -641,26 +645,87 @@ var _ = Describe("NetworkPolicy reconciliation", func() {
 		Expect(result.Err).NotTo(HaveOccurred())
 	})
 
-	It("should delete the NetworkPolicy when disabled", func() {
-		mockClient := k8s.NewMockK8sClient(GinkgoT())
-		instance := newNetworkPolicyInstance(false)
-		underTest := &ClusterReconciler{
-			client:   mockClient,
-			instance: instance,
-		}
+	DescribeTable("should delete only the cluster's controlled NetworkPolicy when disabled",
+		func(ownerUID types.UID, controller, deleted bool) {
+			instance := newNetworkPolicyInstance(false)
+			policy := builders.NewNetworkPolicyForCR(instance)
+			policy.UID = "networkpolicy-uid"
+			policy.Spec = networkingv1.NetworkPolicySpec{
+				PolicyTypes: []networkingv1.PolicyType{networkingv1.PolicyTypeIngress},
+				Ingress:     []networkingv1.NetworkPolicyIngressRule{{}},
+			}
+			if ownerUID != "" {
+				policy.OwnerReferences = []metav1.OwnerReference{{
+					APIVersion: opensearchv1.GroupVersion.String(),
+					Kind:       "OpenSearchCluster",
+					Name:       instance.Name,
+					UID:        ownerUID,
+					Controller: ptr.To(controller),
+				}}
+			}
+			ctx := context.Background()
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+			Expect(fakeClient.Create(ctx, policy)).To(Succeed())
+			original := policy.DeepCopy()
+			underTest := NewClusterReconciler(fakeClient, ctx, nil, nil, instance)
 
-		mockClient.EXPECT().
-			ReconcileResource(mock.MatchedBy(func(obj runtime.Object) bool {
-				np, ok := obj.(*networkingv1.NetworkPolicy)
-				return ok && np.Name == builders.NetworkPolicyName(instance)
-			}), reconciler.StateAbsent).
-			Return(&ctrl.Result{}, nil)
+			result := reconciler.CombinedResult{}
+			underTest.reconcileNetworkPolicy(&result)
+
+			Expect(result.Err).NotTo(HaveOccurred())
+			actual := &networkingv1.NetworkPolicy{}
+			err := fakeClient.Get(ctx, client.ObjectKeyFromObject(policy), actual)
+			if deleted {
+				Expect(k8serrors.IsNotFound(err)).To(BeTrue())
+			} else {
+				Expect(err).NotTo(HaveOccurred())
+				Expect(actual).To(Equal(original))
+			}
+		},
+		Entry("deletes a policy controlled by this cluster", types.UID("networkpolicy-test-uid"), true, true),
+		Entry("preserves an unowned policy", types.UID(""), false, false),
+		Entry("preserves a policy controlled by another cluster UID", types.UID("other-cluster-uid"), true, false),
+		Entry("preserves a policy with a non-controller reference to this cluster", types.UID("networkpolicy-test-uid"), false, false),
+	)
+
+	It("should tolerate a missing NetworkPolicy when disabled", func() {
+		instance := newNetworkPolicyInstance(false)
+		fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).Build()
+		underTest := NewClusterReconciler(fakeClient, context.Background(), nil, nil, instance)
 
 		result := reconciler.CombinedResult{}
 		underTest.reconcileNetworkPolicy(&result)
 
 		Expect(result.Err).NotTo(HaveOccurred())
 	})
+
+	DescribeTable("should propagate NetworkPolicy cleanup errors",
+		func(failGet bool) {
+			instance := newNetworkPolicyInstance(false)
+			policy := builders.NewNetworkPolicyForCR(instance)
+			Expect(ctrl.SetControllerReference(instance, policy, scheme.Scheme)).To(Succeed())
+			failure := errors.New("networkpolicy cleanup failed")
+			funcs := interceptor.Funcs{}
+			if failGet {
+				funcs.Get = func(context.Context, client.WithWatch, client.ObjectKey, client.Object, ...client.GetOption) error {
+					return failure
+				}
+			} else {
+				funcs.Delete = func(context.Context, client.WithWatch, client.Object, ...client.DeleteOption) error {
+					return failure
+				}
+			}
+			fakeClient := fake.NewClientBuilder().WithScheme(scheme.Scheme).WithObjects(policy).WithInterceptorFuncs(funcs).Build()
+			underTest := NewClusterReconciler(fakeClient, context.Background(), nil, nil, instance)
+
+			result := reconciler.CombinedResult{}
+			underTest.reconcileNetworkPolicy(&result)
+
+			Expect(result.Err).To(MatchError(failure))
+		},
+		Entry("when reading the policy fails", true),
+		Entry("when deleting the policy fails", false),
+	)
 })
 
 var _ = Describe("Node attributes RBAC reconciliation", func() {

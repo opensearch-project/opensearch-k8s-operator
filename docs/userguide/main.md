@@ -1658,7 +1658,7 @@ spec:
               app: my-client
 ```
 
-The operator watches the managed policy and restores it if it is edited or deleted. Setting `enable: false` (or omitting the field) deletes the managed policy.
+The operator watches the managed policy and restores it if it is edited or deleted. Setting `enable: false` (or omitting the field) deletes the policy only if it is controlled by this cluster. User-managed policies and policies controlled by another cluster are left unchanged when the feature is disabled, even if they have the same name.
 
 ### Exposing OpenSearch Dashboards
 
