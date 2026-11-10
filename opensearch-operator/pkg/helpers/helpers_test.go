@@ -1167,12 +1167,15 @@ myuser:
 		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
 		mockClient.EXPECT().GetSecret(GeneratedSecurityConfigSecretName(cr), "pwtest").Return(corev1.Secret{}, notFound).Once()
 
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
 		secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
 			Data: map[string][]byte{
 				"username": []byte("myuser"),
 				"password": []byte("adminpass"),
 			},
-		})
+		}, source)
 		Expect(err).NotTo(HaveOccurred())
 
 		var output map[string]interface{}
@@ -1216,12 +1219,15 @@ myuser:
 			Data: map[string][]byte{"internal_users.yml": internalUsers},
 		}, nil).Once()
 
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
 		secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
 			Data: map[string][]byte{
 				"username": []byte("myuser"),
 				"password": []byte("adminpass"),
 			},
-		})
+		}, source)
 		Expect(err).NotTo(HaveOccurred())
 
 		var output map[string]interface{}
@@ -1237,9 +1243,12 @@ myuser:
 			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
 		}
 		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
-		_, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
 			Data: map[string][]byte{"password": []byte("adminpass")},
-		})
+		}, source)
 		Expect(err).To(MatchError("admin credentials secret missing username field"))
 	})
 
@@ -1248,12 +1257,15 @@ myuser:
 			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
 		}
 		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
-		_, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
 			Data: map[string][]byte{
 				"username": []byte(""),
 				"password": []byte("adminpass"),
 			},
-		})
+		}, source)
 		Expect(err).To(MatchError("admin credentials secret missing username field"))
 	})
 })
