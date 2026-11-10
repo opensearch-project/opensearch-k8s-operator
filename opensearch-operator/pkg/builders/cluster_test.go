@@ -1505,6 +1505,32 @@ var _ = Describe("Builders", func() {
 				"testAnnotationKey2": "testValue2",
 			}))
 		})
+
+		It("should expose the gRPC port on the NewServiceForNodePool service only when gRPC is enabled", func() {
+			nodePool := opensearchv1.NodePool{Replicas: 3, Component: "coordinators"}
+			spec := opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{Name: "opensearch", Namespace: "opensearch", UID: "dummyuid"},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{ServiceName: "opensearch", HttpPort: 9200},
+				},
+			}
+			portNames := func(svc *corev1.Service) []string {
+				var names []string
+				for _, p := range svc.Spec.Ports {
+					names = append(names, p.Name)
+				}
+				return names
+			}
+			Expect(portNames(NewServiceForNodePool(&spec, &nodePool))).To(Equal([]string{"http", "transport"}))
+
+			spec.Spec.General.Grpc = &opensearchv1.GrpcConfig{Enable: true, Port: "9450-9500"}
+			result := NewServiceForNodePool(&spec, &nodePool)
+			Expect(portNames(result)).To(Equal([]string{"http", "transport", "grpc"}))
+			grpcPort := result.Spec.Ports[2]
+			Expect(grpcPort.Port).To(Equal(int32(9450)))
+			Expect(grpcPort.TargetPort.IntVal).To(Equal(int32(9450)))
+			Expect(grpcPort.AppProtocol).To(HaveValue(Equal("grpc")))
+		})
 	})
 
 	When("Using custom probe timeouts and thresholds for OpenSearch startup", func() {

@@ -1026,6 +1026,40 @@ func NewServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool *opensea
 		appProtocol = "http"
 	}
 
+	ports := []corev1.ServicePort{
+		{
+			Name:     "http",
+			Protocol: "TCP",
+			Port:     cr.Spec.General.HttpPort,
+			TargetPort: intstr.IntOrString{
+				IntVal: cr.Spec.General.HttpPort,
+			},
+			AppProtocol: &appProtocol,
+		},
+		{
+			Name:     "transport",
+			Protocol: "TCP",
+			Port:     9300,
+			TargetPort: intstr.IntOrString{
+				IntVal: 9300,
+				StrVal: "9300",
+			},
+		},
+	}
+	// Add gRPC port if enabled
+	if grpcPort := getGrpcPort(cr); grpcPort > 0 {
+		grpcAppProtocol := "grpc"
+		ports = append(ports, corev1.ServicePort{
+			Name:     "grpc",
+			Protocol: "TCP",
+			Port:     grpcPort,
+			TargetPort: intstr.IntOrString{
+				IntVal: grpcPort,
+			},
+			AppProtocol: &grpcAppProtocol,
+		})
+	}
+
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "Service",
@@ -1038,26 +1072,7 @@ func NewServiceForNodePool(cr *opensearchv1.OpenSearchCluster, nodePool *opensea
 			Annotations: annotations,
 		},
 		Spec: corev1.ServiceSpec{
-			Ports: []corev1.ServicePort{
-				{
-					Name:     "http",
-					Protocol: "TCP",
-					Port:     cr.Spec.General.HttpPort,
-					TargetPort: intstr.IntOrString{
-						IntVal: cr.Spec.General.HttpPort,
-					},
-					AppProtocol: &appProtocol,
-				},
-				{
-					Name:     "transport",
-					Protocol: "TCP",
-					Port:     9300,
-					TargetPort: intstr.IntOrString{
-						IntVal: 9300,
-						StrVal: "9300",
-					},
-				},
-			},
+			Ports:    ports,
 			Selector: selector,
 			Type:     "",
 		},
