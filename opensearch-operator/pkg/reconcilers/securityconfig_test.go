@@ -1660,6 +1660,7 @@ kibana_server:
 			userData           map[string][]byte
 			adminHash          string
 			kibanaHash         string
+			adminUsername      string
 			dashboardsUsername string
 			generated          *corev1.Secret
 			createdJob         *batchv1.Job
@@ -1679,6 +1680,7 @@ kibana_server:
 			hash, err = bcrypt.GenerateFromPassword([]byte("test-password"), bcrypt.MinCost)
 			Expect(err).ToNot(HaveOccurred())
 			kibanaHash = string(hash)
+			adminUsername = "admin"
 			dashboardsUsername = "kibanaserver"
 
 			userData = map[string][]byte{
@@ -1726,7 +1728,7 @@ kibana_server:
 			}
 			state, err := securityConfigState(source, &corev1.Secret{
 				Data: map[string][]byte{"internal_users.yml": internalUsersFor(dashboardsUsername, adminHash, kibanaHash)},
-			}, dashboardsUsername)
+			}, adminUsername, dashboardsUsername)
 			Expect(err).ToNot(HaveOccurred())
 			return state
 		}
@@ -1744,7 +1746,9 @@ kibana_server:
 			spec.Status.SecurityConfig = applied
 			generatedName := helpers.GeneratedSecurityConfigSecretName(spec)
 
-			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(newAdminCredentialsSecret(clusterName), nil)
+			adminCredentials := newAdminCredentialsSecret(clusterName)
+			adminCredentials.Data["username"] = []byte(adminUsername)
+			mockClient.EXPECT().GetSecret(adminCredsName, clusterName).Return(adminCredentials, nil)
 			mockClient.EXPECT().GetSecret(userSecretName, clusterName).Return(corev1.Secret{Data: userData}, nil)
 			setupDashboardsCredentialsSecretMocksForUser(mockClient, clusterName, dashboardsUsername)
 			mockClient.On("GetSecret", generatedName, clusterName).Return(corev1.Secret{
@@ -1895,6 +1899,35 @@ kibana_server:
 			Expect(spec.Status.SecurityConfig.ManagedUsersChecksum).To(Equal(expectedState().ManagedUsersChecksum))
 		})
 
+		It("should update a custom admin user's password hash and leave the admin entry alone", func() {
+			adminUsername = "myuser"
+			clusterURL := helpers.ClusterURL(spec) + "/"
+			patchedHashes := map[string]string{}
+			for _, name := range []string{"myuser", "kibanaserver"} {
+				transport.RegisterResponder(http.MethodPatch, clusterURL+"_plugins/_security/api/internalusers/"+name,
+					func(req *http.Request) (*http.Response, error) {
+						var ops []map[string]string
+						Expect(json.NewDecoder(req.Body).Decode(&ops)).To(Succeed())
+						patchedHashes[name] = ops[0]["value"]
+						return httpmock.NewStringResponse(http.StatusOK, `{"status":"OK"}`), nil
+					})
+			}
+
+			result, err := reconcile(appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
+				s.ManagedUsersChecksum = "old"
+			}), nil)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result.IsZero()).To(BeTrue())
+
+			Expect(createdJob).To(BeNil())
+			Expect(patchedHashes).To(HaveLen(2))
+			Expect(bcrypt.CompareHashAndPassword([]byte(patchedHashes["myuser"]), []byte("changeme"))).To(Succeed())
+			Expect(patchedHashes["kibanaserver"]).To(Equal(kibanaHash))
+			current, err := securityConfigState(&helpers.SecurityConfigSource{}, generated, adminUsername, dashboardsUsername)
+			Expect(err).ToNot(HaveOccurred())
+			Expect(spec.Status.SecurityConfig.ManagedUsersChecksum).To(Equal(current.ManagedUsersChecksum))
+		})
+
 		It("should re-apply a file a succeeded job changed after it was changed back", func() {
 			applied := appliedWith(func(*opensearchv1.SecurityConfigStatus) {})
 			jobTarget := appliedWith(func(s *opensearchv1.SecurityConfigStatus) {
@@ -2019,15 +2052,73 @@ logs:
 kibanaserver:
   hash: "leftover-2"
 `
-			first, err := securityConfigState(source, secret(base), "logs")
+			first, err := securityConfigState(source, secret(base), "admin", "logs")
 			Expect(err).ToNot(HaveOccurred())
-			second, err := securityConfigState(source, secret(changedLogs), "logs")
+			second, err := securityConfigState(source, secret(changedLogs), "admin", "logs")
 			Expect(err).ToNot(HaveOccurred())
-			third, err := securityConfigState(source, secret(changedLeftover), "logs")
+			third, err := securityConfigState(source, secret(changedLeftover), "admin", "logs")
 			Expect(err).ToNot(HaveOccurred())
 
 			Expect(first.ManagedUsersChecksum).ToNot(Equal(second.ManagedUsersChecksum))
 			Expect(first.ManagedUsersChecksum).To(Equal(third.ManagedUsersChecksum))
+		})
+
+		It("follows the custom admin user and ignores an admin entry left beside it", func() {
+			base := `
+admin:
+  hash: "leftover"
+myuser:
+  hash: "myuser-hash"
+kibanaserver:
+  hash: "kibana-hash"
+`
+			changedMyuser := `
+admin:
+  hash: "leftover"
+myuser:
+  hash: "myuser-hash-2"
+kibanaserver:
+  hash: "kibana-hash"
+`
+			changedLeftover := `
+admin:
+  hash: "leftover-2"
+myuser:
+  hash: "myuser-hash"
+kibanaserver:
+  hash: "kibana-hash"
+`
+			first, err := securityConfigState(source, secret(base), "myuser", "kibanaserver")
+			Expect(err).ToNot(HaveOccurred())
+			second, err := securityConfigState(source, secret(changedMyuser), "myuser", "kibanaserver")
+			Expect(err).ToNot(HaveOccurred())
+			third, err := securityConfigState(source, secret(changedLeftover), "myuser", "kibanaserver")
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(first.ManagedUsersChecksum).ToNot(Equal(second.ManagedUsersChecksum))
+			Expect(first.ManagedUsersChecksum).To(Equal(third.ManagedUsersChecksum))
+		})
+
+		It("covers a Dashboards user that shares the custom admin username once", func() {
+			internalUsers := `
+myuser:
+  hash: "shared-hash"
+`
+			state, err := securityConfigState(source, secret(internalUsers), "myuser", "myuser")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(state.ManagedUsersChecksum).To(Equal(contentChecksum([]byte("shared-hash"))))
+		})
+
+		It("keeps the checksum of earlier versions for the default admin user", func() {
+			internalUsers := `
+admin:
+  hash: "admin-hash"
+kibanaserver:
+  hash: "kibana-hash"
+`
+			state, err := securityConfigState(source, secret(internalUsers), "admin", "kibanaserver")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(state.ManagedUsersChecksum).To(Equal(contentChecksum([]byte("admin-hash\nkibana-hash"))))
 		})
 	})
 })

@@ -275,7 +275,8 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		r.logger.Error(err, "Unable to determine Dashboards username")
 		return ctrl.Result{}, err
 	}
-	current, err := securityConfigState(source, &configSecret, dashboardsUsername)
+	adminUsername := string(adminCredentialsSecret.Data["username"])
+	current, err := securityConfigState(source, &configSecret, adminUsername, dashboardsUsername)
 	if err != nil {
 		return ctrl.Result{}, err
 	}
@@ -308,7 +309,7 @@ func (r *SecurityconfigReconciler) Reconcile() (ctrl.Result, error) {
 		}
 
 		if plan.patchManagedUsers {
-			if err := r.patchManagedUserHashes(&configSecret, adminCertName, dashboardsUsername); err != nil {
+			if err := r.patchManagedUserHashes(&configSecret, adminCertName, adminUsername, dashboardsUsername); err != nil {
 				r.logger.Error(err, "Unable to update the admin and Dashboards password hashes")
 				r.recorder.AnnotatedEventf(r.instance, annotations, "Warning", "Security", "Unable to update the admin and Dashboards password hashes: %v", err)
 				if statusErr := r.updateSecurityConfigComponentStatus(securityConfigStatusFailed, "unable to update the admin and Dashboards password hashes", nil); statusErr != nil {
