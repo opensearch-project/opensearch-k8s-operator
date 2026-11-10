@@ -2,7 +2,7 @@
 
 Releases are driven by three git tags, each versioned independently:
 
-* `v<operator-version>` (e.g. `v3.0.0`): operator source release. Does not trigger any workflow.
+* `v<operator-version>` (e.g. `v3.0.0`): operator source release. The `Docker Build` workflow publishes the multi-arch operator image to Quay.io tagged `<operator-version>` (e.g. `3.0.0`) and, for non-prerelease versions, `latest`.
 * `opensearch-operator-<operator-chart-version>` (e.g. `opensearch-operator-3.0.12`): operator Helm chart release.
 * `opensearch-cluster-<cluster-chart-version>` (e.g. `opensearch-cluster-3.3.5`): cluster Helm chart release.
 
