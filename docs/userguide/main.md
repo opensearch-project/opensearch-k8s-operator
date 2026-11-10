@@ -402,7 +402,7 @@ spec:
         create: true
 ```
 
-The operator then also creates a regular `ClusterIP` Service named `<serviceName>-<component>-lb` with the HTTP and transport ports, selecting only that pool's pods. It carries the `spec.general.annotations` and the node pool's annotations. Setting `service.create` back to `false` or removing the node pool deletes the Service.
+The operator then also creates a regular `ClusterIP` Service named `<serviceName>-<component>-lb` with the HTTP and transport ports (plus the gRPC port when `general.grpc` is enabled), selecting only that pool's pods. It carries the `spec.general.annotations` and the node pool's annotations. Setting `service.create` back to `false` or removing the node pool deletes the Service.
 
 The name must not be another node pool's headless Service name (pools `ingest` with `service.create: true` and `ingest-lb` would both own `<serviceName>-ingest-lb`) and must be at most 63 characters; the admission webhook rejects either case. The ServiceMonitor does not select this Service, so pods are not scraped twice. With `security.tls.http.generate: true` the Service's DNS names are added to the generated HTTP certificate (see [Node HTTP/REST API](#node-httprest-api) and the TLS notes above).
 
