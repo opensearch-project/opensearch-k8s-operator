@@ -14,6 +14,7 @@ import (
 	mock "github.com/stretchr/testify/mock"
 	v1 "k8s.io/api/core/v1"
 	rbacv1 "k8s.io/api/rbac/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
 	types "k8s.io/apimachinery/pkg/types"
 	reconcile "sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -504,6 +505,54 @@ func (_c *MockK8sClient_DeleteJob_Call) Return(_a0 error) *MockK8sClient_DeleteJ
 }
 
 func (_c *MockK8sClient_DeleteJob_Call) RunAndReturn(run func(*batchv1.Job) error) *MockK8sClient_DeleteJob_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
+// DeleteNetworkPolicyIfControlledBy provides a mock function with given fields: name, namespace, owner
+func (_m *MockK8sClient) DeleteNetworkPolicyIfControlledBy(name string, namespace string, owner metav1.Object) error {
+	ret := _m.Called(name, namespace, owner)
+
+	if len(ret) == 0 {
+		panic("no return value specified for DeleteNetworkPolicyIfControlledBy")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(string, string, metav1.Object) error); ok {
+		r0 = rf(name, namespace, owner)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'DeleteNetworkPolicyIfControlledBy'
+type MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call struct {
+	*mock.Call
+}
+
+// DeleteNetworkPolicyIfControlledBy is a helper method to define mock.On call
+//   - name string
+//   - namespace string
+//   - owner metav1.Object
+func (_e *MockK8sClient_Expecter) DeleteNetworkPolicyIfControlledBy(name interface{}, namespace interface{}, owner interface{}) *MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call {
+	return &MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call{Call: _e.mock.On("DeleteNetworkPolicyIfControlledBy", name, namespace, owner)}
+}
+
+func (_c *MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call) Run(run func(name string, namespace string, owner metav1.Object)) *MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(string), args[1].(string), args[2].(metav1.Object))
+	})
+	return _c
+}
+
+func (_c *MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call) Return(_a0 error) *MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call {
+	_c.Call.Return(_a0)
+	return _c
+}
+
+func (_c *MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call) RunAndReturn(run func(string, string, metav1.Object) error) *MockK8sClient_DeleteNetworkPolicyIfControlledBy_Call {
 	_c.Call.Return(run)
 	return _c
 }
