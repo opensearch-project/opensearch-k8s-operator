@@ -39,15 +39,17 @@ type securityConfigPlan struct {
 	// security objects created later through the REST API or Dashboards.
 	skippedDefaults []string
 	// patchManagedUsers is set when the admin or Dashboards user password hash changed and
-	// internal_users.yml is not re-applied anyway. The Dashboards user is kibanaserver unless
-	// the credentials secret names another user.
+	// internal_users.yml is not re-applied anyway. The admin user is the username of the admin
+	// credentials secret. The Dashboards user is kibanaserver unless the credentials secret names
+	// another user.
 	patchManagedUsers bool
 }
 
 // securityConfigState computes the state recorded for a securityconfig: a checksum per file as
 // supplied (or bundled), and one for the operator-managed password hashes.
-// dashboardsUsername is the internal user Dashboards authenticates as.
-func securityConfigState(source *helpers.SecurityConfigSource, generated *corev1.Secret, dashboardsUsername string) (opensearchv1.SecurityConfigStatus, error) {
+// adminUsername is the internal user the operator authenticates as, dashboardsUsername the one
+// Dashboards authenticates as.
+func securityConfigState(source *helpers.SecurityConfigSource, generated *corev1.Secret, adminUsername, dashboardsUsername string) (opensearchv1.SecurityConfigStatus, error) {
 	state := opensearchv1.SecurityConfigStatus{AppliedChecksums: map[string]string{}}
 	for name, content := range source.Data {
 		if _, ok := ymlToFileType[name]; ok && len(content) > 0 {
@@ -55,21 +57,21 @@ func securityConfigState(source *helpers.SecurityConfigSource, generated *corev1
 		}
 	}
 
-	adminHash, dashboardsHash, err := managedPasswordHashes(generated.Data[internalUsersFile], dashboardsUsername)
+	adminHash, dashboardsHash, err := managedPasswordHashes(generated.Data[internalUsersFile], adminUsername, dashboardsUsername)
 	if err != nil {
 		return state, err
 	}
-	state.ManagedUsersChecksum = managedUsersChecksum(adminHash, dashboardsUsername, dashboardsHash)
+	state.ManagedUsersChecksum = managedUsersChecksum(adminHash, adminUsername, dashboardsUsername, dashboardsHash)
 	return state, nil
 }
 
 // managedPasswordHashes reads the admin and Dashboards user hashes from a generated internal_users.yml.
-func managedPasswordHashes(internalUsers []byte, dashboardsUsername string) (string, string, error) {
+func managedPasswordHashes(internalUsers []byte, adminUsername, dashboardsUsername string) (string, string, error) {
 	var data map[string]interface{}
 	if err := yaml.Unmarshal(internalUsers, &data); err != nil {
 		return "", "", fmt.Errorf("unable to parse generated %s: %w", internalUsersFile, err)
 	}
-	return internalUserHash(data, "admin"), internalUserHash(data, dashboardsUsername), nil
+	return internalUserHash(data, adminUsername), internalUserHash(data, dashboardsUsername), nil
 }
 
 // internalUserHash returns the hash of username. yaml.v2 decodes nested mappings as map[interface{}]interface{}.
@@ -86,10 +88,11 @@ func internalUserHash(data map[string]interface{}, username string) string {
 }
 
 // managedUsersChecksum covers the admin hash and, when the Dashboards user is someone else, that user's hash.
-// A kibanaserver entry left beside a custom Dashboards user is not operator-managed and is ignored.
-func managedUsersChecksum(adminHash, dashboardsUsername, dashboardsHash string) string {
+// A kibanaserver or admin entry left beside a custom Dashboards or admin user is not operator-managed and is ignored.
+// Usernames are left out so that checksums recorded by earlier versions still match for the default admin user.
+func managedUsersChecksum(adminHash, adminUsername, dashboardsUsername, dashboardsHash string) string {
 	hashes := adminHash
-	if dashboardsUsername != "admin" && dashboardsHash != "" {
+	if dashboardsUsername != adminUsername && dashboardsHash != "" {
 		hashes += "\n" + dashboardsHash
 	}
 	return contentChecksum([]byte(hashes))
@@ -229,14 +232,14 @@ func (r *SecurityconfigReconciler) recordSucceededJob(
 // patchManagedUserHashes updates the admin and Dashboards user password hashes through the security
 // REST API. Unlike re-applying internal_users.yml with securityadmin, this keeps all other internal
 // users, e.g. those created through the REST API or Dashboards.
-func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secret, adminCertName, dashboardsUsername string) error {
-	adminHash, dashboardsHash, err := managedPasswordHashes(generated.Data[internalUsersFile], dashboardsUsername)
+func (r *SecurityconfigReconciler) patchManagedUserHashes(generated *corev1.Secret, adminCertName, adminUsername, dashboardsUsername string) error {
+	adminHash, dashboardsHash, err := managedPasswordHashes(generated.Data[internalUsersFile], adminUsername, dashboardsUsername)
 	if err != nil {
 		return err
 	}
-	hashes := map[string]string{"admin": adminHash}
-	names := []string{"admin"}
-	if dashboardsUsername != "admin" && dashboardsHash != "" {
+	hashes := map[string]string{adminUsername: adminHash}
+	names := []string{adminUsername}
+	if dashboardsUsername != adminUsername && dashboardsHash != "" {
 		hashes[dashboardsUsername] = dashboardsHash
 		names = append(names, dashboardsUsername)
 	}

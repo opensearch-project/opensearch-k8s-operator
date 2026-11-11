@@ -8,6 +8,7 @@ import (
 	opensearchv1 "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/api/opensearch.org/v1"
 	k8smocks "github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/mocks/github.com/opensearch-project/opensearch-k8s-operator/opensearch-operator/pkg/reconcilers/k8s"
 	"github.com/stretchr/testify/mock"
+	"golang.org/x/crypto/bcrypt"
 	"gopkg.in/yaml.v2"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -394,6 +395,7 @@ snapshotrestore:
 `
 		result, err := applyUserHashes(
 			[]byte(inputYaml),
+			"admin",
 			[]byte("adminpass"),
 			"",
 			"kibanaserver",
@@ -452,6 +454,7 @@ customuser:
 
 		result, err := applyUserHashes(
 			[]byte(inputYaml),
+			"admin",
 			[]byte("adminpass"),
 			adminHashOverride,
 			"kibanaserver",
@@ -513,6 +516,7 @@ kibanaro:
 `
 		result, err := applyUserHashes(
 			[]byte(inputYaml),
+			"admin",
 			[]byte("adminpass"),
 			"$2a$12$newhash",
 			"kibanaserver",
@@ -561,6 +565,7 @@ customuser:
 `
 		result, err := applyUserHashes(
 			[]byte(inputYaml),
+			"admin",
 			[]byte("adminpass"),
 			"$2a$12$adminhash",
 			"kibanaserver",
@@ -604,6 +609,7 @@ kibanaserver:
 `
 		result, err := applyUserHashes(
 			[]byte(inputYaml),
+			"admin",
 			[]byte("adminpass"),
 			"$2a$12$newhash",
 			"kibanaserver",
@@ -644,6 +650,7 @@ admin:
 `
 		result, err := applyUserHashes(
 			[]byte(inputYaml),
+			"admin",
 			[]byte("adminpass"),
 			"$2a$12$adminhash",
 			"mydashboardsuser",
@@ -671,6 +678,7 @@ admin:
 
 		result, err := applyUserHashes(
 			inputYaml,
+			"admin",
 			[]byte("adminpass"),
 			"$2a$12$adminhash",
 			"mydashboardsuser",
@@ -706,6 +714,7 @@ kibanaserver:
 `
 		result, err := applyUserHashes(
 			[]byte(inputYaml),
+			"admin",
 			[]byte("adminpass"),
 			"$2a$12$adminhash",
 			"mydashboardsuser",
@@ -725,6 +734,176 @@ kibanaserver:
 		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
 		Expect(ok).To(BeTrue())
 		Expect(custom["hash"]).To(Equal("$2a$12$customuserhash"))
+	})
+
+	It("should inject the hash under a custom admin username without requiring an admin entry", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+myuser:
+  hash: "oldhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "internal admin user"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			"myuser",
+			[]byte("adminpass"),
+			"$2a$12$myuserhash",
+			"kibanaserver",
+			[]byte("dashboardspass"),
+			"$2a$12$dashhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(output).ToNot(HaveKey("admin"))
+		myuser, ok := output["myuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(myuser["hash"]).To(Equal("$2a$12$myuserhash"))
+		Expect(myuser["description"]).To(Equal("internal admin user"))
+	})
+
+	It("should create a custom admin user and drop the empty-hash default admin entry", func() {
+		defaults, err := defaultSecurityconfigData()
+		Expect(err).NotTo(HaveOccurred())
+
+		result, err := applyUserHashes(
+			defaults["internal_users.yml"],
+			"myuser",
+			[]byte("adminpass"),
+			"$2a$12$myuserhash",
+			"kibanaserver",
+			[]byte("dashboardspass"),
+			"$2a$12$dashhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		Expect(output).ToNot(HaveKey("admin"))
+		myuser, ok := output["myuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(myuser["hash"]).To(Equal("$2a$12$myuserhash"))
+		Expect(myuser["reserved"]).To(Equal(true))
+		Expect(myuser["backend_roles"]).To(ConsistOf("admin"))
+	})
+
+	It("should keep an existing admin entry with a hash when using a custom admin username", func() {
+		inputYaml := `
+admin:
+  hash: "$2a$12$existingadminhash"
+  reserved: true
+myuser:
+  hash: "oldhash"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			"myuser",
+			[]byte("adminpass"),
+			"$2a$12$myuserhash",
+			"kibanaserver",
+			[]byte("dashboardspass"),
+			"$2a$12$dashhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		admin, ok := output["admin"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(admin["hash"]).To(Equal("$2a$12$existingadminhash"))
+		myuser, ok := output["myuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(myuser["hash"]).To(Equal("$2a$12$myuserhash"))
+	})
+
+	It("adds the admin backend role to an existing custom admin user", func() {
+		inputYaml := `
+_meta:
+  type: "internalusers"
+  config_version: 2
+myuser:
+  hash: "oldhash"
+  backend_roles:
+    - "readall"
+  description: "limited user"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			"myuser",
+			[]byte("adminpass"),
+			"$2a$12$myuserhash",
+			"kibanaserver",
+			[]byte("dashboardspass"),
+			"$2a$12$dashhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		myuser, ok := output["myuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(myuser["hash"]).To(Equal("$2a$12$myuserhash"))
+		Expect(myuser["reserved"]).To(Equal(true))
+		Expect(myuser["description"]).To(Equal("limited user"))
+		Expect(myuser["backend_roles"]).To(ConsistOf("readall", "admin"))
+	})
+
+	It("rejects a shared admin and dashboards username when the passwords differ", func() {
+		result, err := applyUserHashes(
+			[]byte("myuser:\n  hash: oldhash\n"),
+			"myuser",
+			[]byte("adminpass"),
+			"$2a$12$adminhash",
+			"myuser",
+			[]byte("dashboardspass"),
+			"$2a$12$dashhash",
+		)
+		Expect(err).To(MatchError(`admin and dashboards usernames are both "myuser" but the passwords differ`))
+		Expect(result).To(BeNil())
+	})
+
+	It("keeps the admin hash and description when the admin and dashboards usernames share one password", func() {
+		inputYaml := `
+myuser:
+  hash: "oldhash"
+  description: "internal admin user"
+`
+		result, err := applyUserHashes(
+			[]byte(inputYaml),
+			"myuser",
+			[]byte("samepass"),
+			"$2a$12$adminhash",
+			"myuser",
+			[]byte("samepass"),
+			"$2a$12$dashhash",
+		)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(result, &output)
+		Expect(err).NotTo(HaveOccurred())
+
+		myuser, ok := output["myuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(myuser["hash"]).To(Equal("$2a$12$adminhash"))
+		Expect(myuser["description"]).To(Equal("internal admin user"))
+		Expect(myuser["backend_roles"]).To(ConsistOf("admin"))
+		Expect(output).ToNot(HaveKey("kibanaserver"))
+		Expect(output).ToNot(HaveKey("admin"))
 	})
 })
 
@@ -945,7 +1124,10 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 		Expect(err).NotTo(HaveOccurred())
 
 		secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
-			Data: map[string][]byte{"password": []byte("adminpass")},
+			Data: map[string][]byte{
+				"username": []byte("admin"),
+				"password": []byte("adminpass"),
+			},
 		}, source)
 		Expect(err).NotTo(HaveOccurred())
 
@@ -956,6 +1138,178 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 		custom, ok := output["mydashboardsuser"].(map[interface{}]interface{})
 		Expect(ok).To(BeTrue())
 		Expect(custom["hash"]).NotTo(BeEmpty())
+	})
+
+	It("uses the admin username from the admin credentials secret (issue #1676)", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+			Spec: opensearchv1.ClusterSpec{
+				Dashboards: opensearchv1.DashboardsConfig{
+					OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: "dash-creds"},
+				},
+				Security: &opensearchv1.Security{
+					Config: &opensearchv1.SecurityConfig{
+						SecurityconfigSecret: corev1.LocalObjectReference{Name: "user-securityconfig"},
+					},
+				},
+			},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret("user-securityconfig", "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{
+				"internal_users.yml": []byte(`
+_meta:
+  type: "internalusers"
+  config_version: 2
+myuser:
+  hash: "userprovidedhash"
+  reserved: true
+  backend_roles:
+    - "admin"
+  description: "internal admin user"
+`),
+			},
+		}, nil).Once()
+		mockClient.EXPECT().GetSecret("dash-creds", "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{
+				"username": []byte("kibanaserver"),
+				"password": []byte("dashboardspass"),
+			},
+		}, nil).Once()
+		notFound := &k8serrors.StatusError{ErrStatus: metav1.Status{Reason: metav1.StatusReasonNotFound}}
+		mockClient.EXPECT().GetSecret(GeneratedSecurityConfigSecretName(cr), "pwtest").Return(corev1.Secret{}, notFound).Once()
+
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
+		secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
+			Data: map[string][]byte{
+				"username": []byte("myuser"),
+				"password": []byte("adminpass"),
+			},
+		}, source)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(secret.Data["internal_users.yml"], &output)
+		Expect(err).NotTo(HaveOccurred())
+		Expect(output).ToNot(HaveKey("admin"))
+		myuser, ok := output["myuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		hash, _ := myuser["hash"].(string)
+		Expect(bcrypt.CompareHashAndPassword([]byte(hash), []byte("adminpass"))).To(Succeed())
+	})
+
+	It("reuses the existing password hash stored under the admin username", func() {
+		existingHash, err := bcrypt.GenerateFromPassword([]byte("adminpass"), 12)
+		Expect(err).NotTo(HaveOccurred())
+		internalUsers, err := yaml.Marshal(map[string]interface{}{
+			"myuser": map[string]interface{}{
+				"hash":          string(existingHash),
+				"reserved":      true,
+				"backend_roles": []string{"admin"},
+			},
+		})
+		Expect(err).NotTo(HaveOccurred())
+
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+			Spec: opensearchv1.ClusterSpec{
+				Dashboards: opensearchv1.DashboardsConfig{
+					OpensearchCredentialsSecret: corev1.LocalObjectReference{Name: "dash-creds"},
+				},
+			},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret("dash-creds", "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{
+				"username": []byte("kibanaserver"),
+				"password": []byte("dashboardspass"),
+			},
+		}, nil).Once()
+		mockClient.EXPECT().GetSecret(GeneratedSecurityConfigSecretName(cr), "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{"internal_users.yml": internalUsers},
+		}, nil).Once()
+
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
+		secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
+			Data: map[string][]byte{
+				"username": []byte("myuser"),
+				"password": []byte("adminpass"),
+			},
+		}, source)
+		Expect(err).NotTo(HaveOccurred())
+
+		var output map[string]interface{}
+		err = yaml.Unmarshal(secret.Data["internal_users.yml"], &output)
+		Expect(err).NotTo(HaveOccurred())
+		myuser, ok := output["myuser"].(map[interface{}]interface{})
+		Expect(ok).To(BeTrue())
+		Expect(myuser["hash"]).To(Equal(string(existingHash)))
+	})
+
+	It("rejects an admin credentials secret without a username", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
+			Data: map[string][]byte{"password": []byte("adminpass")},
+		}, source)
+		Expect(err).To(MatchError("admin credentials secret missing username field"))
+	})
+
+	It("rejects an admin credentials secret with an empty username", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		source, err := LoadSecurityConfigSource(mockClient, cr)
+		Expect(err).NotTo(HaveOccurred())
+
+		_, err = BuildGeneratedSecurityConfigSecret(mockClient, cr, &corev1.Secret{
+			Data: map[string][]byte{
+				"username": []byte(""),
+				"password": []byte("adminpass"),
+			},
+		}, source)
+		Expect(err).To(MatchError("admin credentials secret missing username field"))
+	})
+})
+
+var _ = Describe("UsernameAndPassword", func() {
+	It("rejects a credentials secret without a username", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret(GeneratedAdminCredentialsSecretName(cr), "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{"password": []byte("adminpass")},
+		}, nil).Once()
+
+		_, _, err := UsernameAndPassword(mockClient, cr)
+		Expect(err).To(MatchError("username or password field missing"))
+	})
+
+	It("rejects a credentials secret with an empty username", func() {
+		cr := &opensearchv1.OpenSearchCluster{
+			ObjectMeta: metav1.ObjectMeta{Name: "pwtest", Namespace: "pwtest"},
+		}
+		mockClient := k8smocks.NewMockK8sClient(GinkgoT())
+		mockClient.EXPECT().GetSecret(GeneratedAdminCredentialsSecretName(cr), "pwtest").Return(corev1.Secret{
+			Data: map[string][]byte{
+				"username": []byte(""),
+				"password": []byte("adminpass"),
+			},
+		}, nil).Once()
+
+		_, _, err := UsernameAndPassword(mockClient, cr)
+		Expect(err).To(MatchError("username or password field missing"))
 	})
 })
 

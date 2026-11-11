@@ -2042,10 +2042,10 @@ spec:
 # ...
 ```
 
-Provide the name of the secret that contains your securityconfig yaml files as `securityConfigSecret.name`. This secret is the source of truth that you manage. The operator builds its own runtime secret named `<cluster-name>-security-config-generated`: it starts from the bundled `internal_users.yml`, replaces it with any file of the same name from your secret, adds your other files, and then sets the password hashes of the `admin` and Dashboards users before the configuration is applied.
+Provide the name of the secret that contains your securityconfig yaml files as `securityConfigSecret.name`. This secret is the source of truth that you manage. The operator builds its own runtime secret named `<cluster-name>-security-config-generated`: it starts from the bundled `internal_users.yml`, replaces it with any file of the same name from your secret, adds your other files, and then sets the password hashes of the admin credentials user and the Dashboards user before the configuration is applied.
 
-- **Password hashes:** you do not need to provide hashes for the `admin` or `kibanaserver` users. The operator generates them from the credentials secrets and overrides any hash you provide for these users, so passwords are managed in one place (the credentials secrets). If you provide your own `internal_users.yml`, it must contain an `admin` user.
-- **Role mappings:** password hashes are the only thing the operator manages for you. If your secret includes its own `roles_mapping.yml`, it replaces the image's default file entirely, and you are responsible for keeping the Dashboards user mapped to a role that has cluster monitoring permissions (`kibana_server` by default). See [Custom Dashboards user](#custom-dashboards-user) below.
+- **Password hashes:** you do not need to provide hashes for the admin credentials user or the Dashboards user (`kibanaserver` by default). The operator generates them from the credentials secrets and overrides any hash you provide for these users, so passwords are managed in one place (the credentials secrets). The admin credentials user is the `username` in `adminCredentialsSecret`, or `admin` when the operator generates `<cluster-name>-admin-password`. Your `internal_users.yml` does not have to contain that user: the operator creates it when it is missing, replaces its hash, sets `reserved: true`, and adds the `admin` backend role when the user does not already have it. When the username is not `admin`, an `admin` entry is kept only if your `internal_users.yml` gives it a hash.
+- **Role mappings:** password hashes are the only thing the operator manages for you. If your secret includes its own `roles_mapping.yml`, it replaces the image's default file entirely, and you are responsible for keeping the Dashboards user mapped to a role that has cluster monitoring permissions (`kibana_server` by default). Map the admin credentials user as well: the image default grants `all_access` to backend role `admin`, which the operator adds to that user. A custom mapping that only lists the user `admin` leaves any other username unauthorized. See [Custom admin password](#custom-admin-password) and [Custom Dashboards user](#custom-dashboards-user) below.
 - **Missing files:** when the cluster is first created, files you do not provide come from the security plugin defaults in the image (see [opensearch-security](https://github.com/opensearch-project/security/tree/main/config)). To start with an empty file instead, provide a minimal one, for example:
 
   ```yaml
@@ -2058,7 +2058,7 @@ Provide the name of the secret that contains your securityconfig yaml files as `
   Once the cluster exists, you can remove such minimal files from the secret so that later updates do not overwrite objects created via the CRDs or the REST API.
 - **Re-applying a file replaces that document:** `securityadmin` replaces the whole document for each file it applies. Changing `internal_users.yml` or `roles.yml` removes objects of that type that are not in the file, including ones created via `OpensearchUser` resources or the REST API. Leaving `internal_users.yml` out of your secret avoids that for internal users. The operator emits a `Warning` event naming the files it re-applies on an initialized cluster. Users managed by `OpensearchUser` resources are re-created on their next check (every 30 seconds) if a re-apply removed them.
 
-In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (for health checks, cluster status and node draining). When you omit this field the operator creates `<cluster-name>-admin-password` with the `admin` username and a **random password**. Either way, the operator hashes the password into the generated securityconfig without modifying your source secret, and copies the credentials into `<cluster-name>-admin-password`. See [Custom admin password](#custom-admin-password).
+In addition, you can provide the name of a secret as `adminCredentialsSecret.name` that has fields `username` and `password` for a user that the Operator can use for communicating with OpenSearch (for health checks, cluster status and node draining). Both keys are required. When you omit this field the operator creates `<cluster-name>-admin-password` with the `admin` username and a **random password**. Either way, the operator hashes that user's password into the generated securityconfig without modifying your source secret, and copies the credentials into `<cluster-name>-admin-password`. See [Custom admin password](#custom-admin-password).
 
 Similarly, for OpenSearch Dashboards, if you don't provide `dashboards.opensearchCredentialsSecret`, the operator automatically creates `<cluster-name>-dashboards-password` with a **random password** for the `kibanaserver` user and adds its hash to the generated securityconfig.
 
@@ -2299,7 +2299,7 @@ spec:
 
 ### Custom admin password
 
-The operator always manages the password of the internal user named `admin`. To choose that password yourself instead of using a generated one, create a secret with `username` and `password` keys and reference it as `adminCredentialsSecret`. The username should be `admin`: the operator uses the secret's credentials for its own API calls, but always writes the password hash to the `admin` user.
+The operator manages the password of the internal user named by the `username` key of `adminCredentialsSecret`. Both `username` and `password` are required. When that secret already exists, the validating webhook rejects a create or update of the cluster if `username` is missing or empty. A secret that is not in the cluster yet is allowed through, and the reconciler rejects it once it appears. To choose that password yourself instead of using a generated one, create a secret with those keys and reference it as `adminCredentialsSecret`. The operator uses the secret's credentials for its own API calls and writes the password hash to that internal user. If the user is missing from your `internal_users.yml`, the operator creates it. Either way it replaces the hash, sets `reserved: true`, and adds the `admin` backend role when the user does not already have it. When the username is not `admin`, the bundled `admin` entry is dropped unless your `internal_users.yml` gives it a hash. That username can match the Dashboards username only when both secrets carry the same password. Otherwise securityconfig generation fails, because one internal user cannot store two passwords.
 
 ```yaml
 apiVersion: v1
@@ -2331,21 +2331,25 @@ spec:
         generate: true
 ```
 
-The operator reads the password, generates the bcrypt hash and writes it to the `admin` user in `<cluster-name>-security-config-generated`, overriding any hash in your securityconfig secret. If you provide your own `internal_users.yml`, keep an `admin` entry (the hash can be omitted):
+The operator reads the password, generates the bcrypt hash and writes it to the user named by `username` in `<cluster-name>-security-config-generated`, overriding any hash in your securityconfig secret. If you provide your own `internal_users.yml`, include that user (the hash can be omitted). The secret above uses `admin`:
 
 ```yaml
 internal_users.yml: |-
   _meta:
     type: "internalusers"
     config_version: 2
-  admin:
+  admin: # the username from adminCredentialsSecret
     reserved: true
     backend_roles:
     - "admin"
     description: "Admin user"
 ```
 
-**Changing the admin password:** update the password in your `admin-credentials-secret`, or, if you do not set `adminCredentialsSecret`, in `<cluster-name>-admin-password`. The operator detects the change and updates the `admin` user's password hash through the security REST API. It does not rerun the securityconfig update job, so other internal users stay as they are.
+Use the same name as the secret's `username`. When that name is not `admin`, leave the `admin` entry out, or keep it only with a hash you manage yourself.
+
+If you supply your own `roles_mapping.yml`, it replaces the image default. Map backend role `admin` (or this username) to a role that can administer the cluster, such as `all_access`. A mapping that only lists the user `admin` does not authorize a different username, and the operator's API calls then fail.
+
+**Changing the admin password:** update the password in your `admin-credentials-secret`, or, if you do not set `adminCredentialsSecret`, in `<cluster-name>-admin-password`. The operator detects the change and updates the admin credentials user's password hash through the security REST API. It does not rerun the securityconfig update job, so other internal users stay as they are.
 
 **Changing the Dashboards password:** update the password in `dashboards.opensearchCredentialsSecret`, or, if you do not set it, in `<cluster-name>-dashboards-password`. The operator updates the hash of that secret's `username` (or `kibanaserver` when the username is unset) the same way.
 
