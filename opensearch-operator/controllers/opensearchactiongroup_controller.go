@@ -49,10 +49,11 @@ func (r *OpensearchActionGroupReconciler) Reconcile(ctx context.Context, req ctr
 	)
 
 	if instance.DeletionTimestamp.IsZero() {
-		controllerutil.AddFinalizer(instance, OpensearchFinalizer)
-		err = r.Update(ctx, instance)
-		if err != nil {
-			return ctrl.Result{}, err
+		if controllerutil.AddFinalizer(instance, OpensearchFinalizer) {
+			err = r.Update(ctx, instance)
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 		return actionGroupReconciler.Reconcile()
 	} else {
