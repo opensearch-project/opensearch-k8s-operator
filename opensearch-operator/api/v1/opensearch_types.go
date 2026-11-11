@@ -120,12 +120,16 @@ type ProbeConfig struct {
 }
 
 type CommandProbeConfig struct {
-	InitialDelaySeconds int32    `json:"initialDelaySeconds,omitempty"`
-	PeriodSeconds       int32    `json:"periodSeconds,omitempty"`
-	TimeoutSeconds      int32    `json:"timeoutSeconds,omitempty"`
-	SuccessThreshold    int32    `json:"successThreshold,omitempty"`
-	FailureThreshold    int32    `json:"failureThreshold,omitempty"`
-	Command             []string `json:"command,omitempty"`
+	InitialDelaySeconds int32 `json:"initialDelaySeconds,omitempty"`
+	PeriodSeconds       int32 `json:"periodSeconds,omitempty"`
+	TimeoutSeconds      int32 `json:"timeoutSeconds,omitempty"`
+	SuccessThreshold    int32 `json:"successThreshold,omitempty"`
+	FailureThreshold    int32 `json:"failureThreshold,omitempty"`
+	// Command overrides the probe handler. For startup probes, the default is a
+	// TCP socket check (so nodes can become Started before securityadmin runs);
+	// setting Command switches the startup probe to Exec. Readiness probes always
+	// default to an authenticated curl Exec command.
+	Command []string `json:"command,omitempty"`
 }
 
 type NodePool struct {
@@ -207,6 +211,10 @@ type NetworkPolicyConfig struct {
 	ExtraIngress []networkingv1.NetworkPolicyPeer `json:"extraIngress,omitempty"`
 }
 
+// BootstrapConfig is deprecated and ignored. It remains in the API so existing
+// manifests still apply under strict CRD validation. The field will be removed
+// in v4. Configure plugins, keystore, hostAliases, affinity, and initContainers
+// on spec.general or spec.nodePools instead.
 type BootstrapConfig struct {
 	Resources    corev1.ResourceRequirements `json:"resources,omitempty"`
 	Tolerations  []corev1.Toleration         `json:"tolerations,omitempty"`
@@ -452,7 +460,9 @@ type ClusterSpec struct {
 	// Important: Run "make" to regenerate code after modifying this file
 	General GeneralConfig `json:"general,omitempty"`
 	// +kubebuilder:default={smartScaler:true}
-	ConfMgmt   ConfMgmt         `json:"confMgmt,omitempty"`
+	ConfMgmt ConfMgmt `json:"confMgmt,omitempty"`
+	// Bootstrap is deprecated and ignored. Kept so existing manifests apply
+	// under strict validation until the field is removed in v4.
 	Bootstrap  BootstrapConfig  `json:"bootstrap,omitempty"`
 	Dashboards DashboardsConfig `json:"dashboards,omitempty"`
 	Security   *Security        `json:"security,omitempty"`
