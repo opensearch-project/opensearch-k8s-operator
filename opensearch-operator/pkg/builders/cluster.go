@@ -404,6 +404,10 @@ func NewSTSForNodePool(
 		labels["opensearch.role"] = "cluster_manager"
 	}
 
+	if cr.Spec.General.CoordinatingService {
+		labels[helpers.ClusterManagerLabel] = strconv.FormatBool(helpers.HasManagerRole(&node))
+	}
+
 	// cr.Spec.NodePool.labels
 	for k, v := range node.Labels {
 		labels[k] = v
@@ -1068,6 +1072,30 @@ func NewServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
 			Type:     "",
 		},
 	}
+}
+
+// CoordinatingServiceName returns the name of the Service for the pods without the cluster_manager role.
+func CoordinatingServiceName(cr *opensearchv1.OpenSearchCluster) string {
+	return fmt.Sprintf("%s-coordinating", cr.Spec.General.ServiceName)
+}
+
+// NewCoordinatingServiceForCR builds the Service for the pods without the cluster_manager role.
+func NewCoordinatingServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
+	service := NewServiceForCR(cr)
+	service.Name = CoordinatingServiceName(cr)
+	// Keep only the client ports.
+	ports := []corev1.ServicePort{}
+	for _, port := range service.Spec.Ports {
+		if port.Name == "http" || port.Name == "grpc" {
+			ports = append(ports, port)
+		}
+	}
+	service.Spec.Ports = ports
+	service.Spec.Selector = map[string]string{
+		helpers.ClusterLabel:        cr.Name,
+		helpers.ClusterManagerLabel: "false",
+	}
+	return service
 }
 
 func NewDiscoveryServiceForCR(cr *opensearchv1.OpenSearchCluster) *corev1.Service {
