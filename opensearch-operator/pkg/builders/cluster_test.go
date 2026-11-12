@@ -1489,6 +1489,18 @@ var _ = Describe("Builders", func() {
 			Expect(coordinating.Spec.Ports).To(HaveLen(1))
 			Expect(coordinating.Spec.Ports[0].Port).To(Equal(int32(9200)))
 			Expect(coordinating.Labels).NotTo(HaveKey(helpers.ClusterManagerLabel))
+			Expect(coordinating.Labels).NotTo(HaveKey(helpers.NodePoolLabel))
+		})
+
+		It("should keep the gRPC port when gRPC is enabled", func() {
+			cluster := clusterWithCoordinatingService(true)
+			cluster.Spec.General.Grpc = &opensearchv1.GrpcConfig{Enable: true, Port: "9400"}
+			coordinating := NewCoordinatingServiceForCR(&cluster)
+
+			Expect(coordinating.Spec.Ports).To(HaveLen(2))
+			Expect(coordinating.Spec.Ports[0].Name).To(Equal("http"))
+			Expect(coordinating.Spec.Ports[1].Name).To(Equal("grpc"))
+			Expect(coordinating.Spec.Ports[1].Port).To(Equal(int32(9400)))
 		})
 
 		It("should label the pods by cluster_manager role only when enabled", func() {

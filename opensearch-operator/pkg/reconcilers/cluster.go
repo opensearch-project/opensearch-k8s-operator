@@ -144,7 +144,8 @@ func isServiceMonitorCRDMissing(err error) bool {
 }
 
 // reconcileCoordinatingService creates the coordinating Service when spec.general.coordinatingService
-// is enabled. When it is disabled, it removes the Service only if this cluster owns it.
+// is enabled. When it is disabled, it removes the Service only if this cluster owns it and it is
+// not the headless Service of a node pool named "coordinating", which has the same name.
 func (r *ClusterReconciler) reconcileCoordinatingService(result *reconciler.CombinedResult) {
 	service := builders.NewCoordinatingServiceForCR(r.instance)
 	if r.instance.Spec.General.CoordinatingService {
@@ -157,9 +158,13 @@ func (r *ClusterReconciler) reconcileCoordinatingService(result *reconciler.Comb
 		result.CombineErr(client.IgnoreNotFound(err))
 		return
 	}
-	if metav1.IsControlledBy(&existing, r.instance) {
-		result.Combine(r.client.ReconcileResource(service, reconciler.StateAbsent))
+	if !metav1.IsControlledBy(&existing, r.instance) {
+		return
 	}
+	if _, isNodePoolService := existing.Labels[helpers.NodePoolLabel]; isNodePoolService {
+		return
+	}
+	result.Combine(r.client.ReconcileResource(service, reconciler.StateAbsent))
 }
 
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {

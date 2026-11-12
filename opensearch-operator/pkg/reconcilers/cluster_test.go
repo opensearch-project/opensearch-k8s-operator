@@ -1091,6 +1091,25 @@ var _ = Describe("Coordinating service reconciliation", func() {
 		Expect(result.Err).NotTo(HaveOccurred())
 	})
 
+	It("should keep the headless service of a node pool named coordinating", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance(false)
+		underTest := &ClusterReconciler{client: mockClient, instance: instance}
+		headless := corev1.Service{ObjectMeta: metav1.ObjectMeta{
+			Labels: map[string]string{helpers.NodePoolLabel: "coordinating"},
+			OwnerReferences: []metav1.OwnerReference{
+				{UID: instance.UID, Controller: ptr.To(true)},
+			},
+		}}
+
+		mockClient.EXPECT().GetService(builders.CoordinatingServiceName(instance), instance.Namespace).Return(headless, nil)
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileCoordinatingService(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
+	})
+
 	It("should do nothing when disabled and the service does not exist", func() {
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
 		instance := newInstance(false)
