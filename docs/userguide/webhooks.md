@@ -15,6 +15,7 @@ The operator registers a validating webhook for every `opensearch.org/v1` resour
 | Check | Create | Update |
 |-------|:------:|:------:|
 | Every node pool has a non-empty `component`, and no two pools share one (the component names the pool's StatefulSet, Services and ConfigMaps) | ✓ | ✓ |
+| When `general.coordinatingService` is `true`, no node pool can be named `coordinating` (its headless Service would have the same name as the coordinating Service) | ✓ | ✓ |
 | Every entry in `roles` is a known role: `master`, `cluster_manager`, `data`, `data_content`, `data_hot`, `data_warm`, `data_cold`, `data_frozen`, `ingest`, `ml`, `remote_cluster_client`, `transform`, `search`, `warm` | ✓ | ✓ |
 | At least one node pool has the cluster-manager role and `replicas >= 1`. For OpenSearch 1.x, 2.x and 3.x, `master` and `cluster_manager` are both accepted and mapped to the name that `general.version` uses, so `master` still works on 2.x and 3.x. If `general.version` is empty or not a valid version, only `master` counts. This blocks scaling the last manager pool to 0 or removing it | ✓ | ✓ |
 | A change to `general.version` must be valid semver, must not be a downgrade and must not jump more than one major version, compared with the version in `status.version`. Only checked once the cluster has been initialized and `status.version` is set. Changing back to the running version is always allowed. If `status.version` is not valid semver, the webhook allows the change and leaves it to the reconciler | | ✓ |

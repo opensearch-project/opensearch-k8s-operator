@@ -459,6 +459,38 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			Expect(warnings).To(BeEmpty())
 		})
 
+		It("should reject a node pool named coordinating when the coordinating service is enabled", func() {
+			cluster := &opensearchv1.OpenSearchCluster{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "test-cluster",
+					Namespace: "default",
+				},
+				Spec: opensearchv1.ClusterSpec{
+					General: opensearchv1.GeneralConfig{
+						Version:             "2.19.4",
+						CoordinatingService: true,
+					},
+					NodePools: []opensearchv1.NodePool{
+						{
+							Component: "masters",
+							Replicas:  3,
+							Roles:     []string{"cluster_manager"},
+						},
+						{
+							Component: "coordinating",
+							Replicas:  2,
+							Roles:     []string{"data"},
+						},
+					},
+				},
+			}
+
+			warnings, err := validator.ValidateCreate(ctx, cluster)
+			Expect(err).To(HaveOccurred())
+			Expect(err.Error()).To(ContainSubstring("node pool 'coordinating' clashes with the coordinating Service"))
+			Expect(warnings).To(BeEmpty())
+		})
+
 		It("should reject a cluster with no cluster-manager-eligible node pool with replicas >= 1", func() {
 			cluster := &opensearchv1.OpenSearchCluster{
 				ObjectMeta: metav1.ObjectMeta{

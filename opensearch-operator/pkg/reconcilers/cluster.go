@@ -155,6 +155,43 @@ func isServiceMonitorCRDMissing(err error) bool {
 		strings.Contains(err.Error(), "unable to retrieve the complete list of server APIs: monitoring.coreos.com/v1")
 }
 
+// reconcileCoordinatingService creates the coordinating Service when spec.general.coordinatingService
+// is enabled. When it is disabled, it removes the Service only if this cluster owns it and it is
+// not the headless Service of a node pool named "coordinating", which has the same name.
+// The webhook rejects that pool name while the flag is on, but the webhook can be disabled, so
+// the Service is also skipped here to keep both reconciles from writing the same object.
+func (r *ClusterReconciler) reconcileCoordinatingService(result *reconciler.CombinedResult) {
+	service := builders.NewCoordinatingServiceForCR(r.instance)
+	if r.instance.Spec.General.CoordinatingService {
+		for _, nodePool := range r.instance.Spec.NodePools {
+			if builders.NewHeadlessServiceForNodePool(r.instance, &nodePool).Name != service.Name {
+				continue
+			}
+			if r.recorder != nil {
+				r.recorder.Eventf(r.instance, "Warning", "CoordinatingService",
+					"Skipping Service %s: node pool '%s' uses the same name for its headless Service, rename the pool or disable coordinatingService",
+					service.Name, nodePool.Component)
+			}
+			return
+		}
+		result.CombineErr(ctrl.SetControllerReference(r.instance, service, r.client.Scheme()))
+		result.Combine(r.client.ReconcileResource(service, reconciler.StatePresent))
+		return
+	}
+	existing, err := r.client.GetService(service.Name, service.Namespace)
+	if err != nil {
+		result.CombineErr(client.IgnoreNotFound(err))
+		return
+	}
+	if !metav1.IsControlledBy(&existing, r.instance) {
+		return
+	}
+	if _, isNodePoolService := existing.Labels[helpers.NodePoolLabel]; isNodePoolService {
+		return
+	}
+	result.Combine(r.client.ReconcileResource(service, reconciler.StateAbsent))
+}
+
 func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	// lg := log.FromContext(r.ctx)
 	result := reconciler.CombinedResult{}
@@ -168,6 +205,8 @@ func (r *ClusterReconciler) Reconcile() (ctrl.Result, error) {
 	clusterService := builders.NewServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, clusterService, r.client.Scheme()))
 	result.Combine(r.client.ReconcileResource(clusterService, reconciler.StatePresent))
+
+	r.reconcileCoordinatingService(&result)
 
 	discoveryService := builders.NewDiscoveryServiceForCR(r.instance)
 	result.CombineErr(ctrl.SetControllerReference(r.instance, discoveryService, r.client.Scheme()))

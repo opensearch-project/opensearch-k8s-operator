@@ -1740,6 +1740,33 @@ spec:
 If you want to expose the REST API of OpenSearch outside your Kubernetes cluster, the recommended way is to do this via ingress.
 Internally you should use self-signed certificates (you can let the operator generate them), and then let the ingress use a certificate from an accepted CA (for example LetsEncrypt or a company-internal CA). That way you do not have the hassle of supplying custom certificates to the opensearch cluster but your users still see valid certificates.
 
+### Keeping client traffic off cluster manager nodes
+
+The main Service selects every pod, so dedicated cluster manager nodes also coordinate client requests.
+Set `coordinatingService: true` to get an extra ClusterIP Service `<serviceName>-coordinating`.
+It selects the pods without the `cluster_manager` role. Point your Ingress and clients at it.
+
+```yaml
+spec:
+  general:
+    coordinatingService: true
+```
+
+Notes:
+
+* The Service gets the annotations from `spec.general.annotations`, like the main Service.
+* A node pool named `coordinating` is rejected while this is on. Its headless Service would have the same name. If the webhook is disabled, the operator skips the coordinating Service and records a `CoordinatingService` warning event.
+* The operator adds the label `opensearch.org/opensearch-cluster-manager: "true"` or `"false"` to every OpenSearch pod. Changing `coordinatingService` changes this label, so it causes one rolling restart.
+* This only helps if you have a dedicated cluster manager node pool. If every pool has the `cluster_manager` role, the coordinating Service has no endpoints.
+* The generated HTTP certificate does not list these Service names. Clients that verify the hostname will fail. Most Ingress controllers do not verify the backend certificate by default.
+
+Switch clients in this order, so they never point at a Service without endpoints:
+
+1. Set `coordinatingService: true`.
+2. Wait for the rolling restart to finish. The Service is created right away, but it only gets endpoints as the restarted pods receive the label.
+3. Point clients at `<serviceName>-coordinating`.
+4. Before you set `coordinatingService: false`, point clients back at the main Service. The operator deletes the coordinating Service on the next reconcile.
+
 ### Customizing probe timeouts and thresholds
 
 If the nodes take longer to start than the probes allow and get restarted, you can configure the probe timeouts and thresholds per node pool:
@@ -1990,7 +2017,7 @@ Note: To change the `diskSize` from `G` to `Gi` or vice-versa, first make sure d
 - `status.componentsStatus`: progress of ongoing operations, such as `Scaler`, `Upgrader`, `RollingRestart` and `Securityconfig` entries.
 - `status.observedGeneration` and `status.conditions`: see [Conditions](#conditions) below.
 
-The operator records Kubernetes events on the `OpenSearchCluster` (`kubectl describe opensearchcluster <name>`). The event reasons include `RollingRestart`, `Upgrade`, `Scaler`, `PVC`, `PDB`, `StatefulSetRecreated`, `DeploymentRecreated`, `BootstrapExclusionFailed`, `EmptyDirRecovery`, `Monitoring`, `Security`, `DashboardsUserUnmapped` and `ConfigDuplicateKey`. With `general.snapshotRepositories` set, snapshot repository registration also records `OpensearchPending`, `OpensearchError`, `OpensearchAPIError` and `OpensearchAPIUpdated` events.
+The operator records Kubernetes events on the `OpenSearchCluster` (`kubectl describe opensearchcluster <name>`). The event reasons include `RollingRestart`, `Upgrade`, `Scaler`, `PVC`, `PDB`, `StatefulSetRecreated`, `DeploymentRecreated`, `BootstrapExclusionFailed`, `EmptyDirRecovery`, `Monitoring`, `CoordinatingService`, `Security`, `DashboardsUserUnmapped` and `ConfigDuplicateKey`. With `general.snapshotRepositories` set, snapshot repository registration also records `OpensearchPending`, `OpensearchError`, `OpensearchAPIError` and `OpensearchAPIUpdated` events.
 
 A few behaviours worth knowing:
 
