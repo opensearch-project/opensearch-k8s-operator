@@ -1061,6 +1061,24 @@ var _ = Describe("Coordinating service reconciliation", func() {
 		Expect(result.Err).NotTo(HaveOccurred())
 	})
 
+	It("should skip the service and warn when a node pool is named coordinating", func() {
+		mockClient := k8s.NewMockK8sClient(GinkgoT())
+		instance := newInstance(true)
+		instance.Spec.NodePools = []opensearchv1.NodePool{{Component: "masters"}, {Component: "coordinating"}}
+		recorder := record.NewFakeRecorder(1)
+		underTest := &ClusterReconciler{client: mockClient, instance: instance, recorder: recorder}
+
+		result := reconciler.CombinedResult{}
+		underTest.reconcileCoordinatingService(&result)
+
+		Expect(result.Err).NotTo(HaveOccurred())
+		mockClient.AssertNotCalled(GinkgoT(), "ReconcileResource", mock.Anything, mock.Anything)
+		Expect(recorder.Events).To(HaveLen(1))
+		event := <-recorder.Events
+		Expect(event).To(HavePrefix("Warning CoordinatingService"))
+		Expect(event).To(ContainSubstring(builders.CoordinatingServiceName(instance)))
+	})
+
 	It("should delete the service when disabled and owned by the cluster", func() {
 		mockClient := k8s.NewMockK8sClient(GinkgoT())
 		instance := newInstance(false)

@@ -146,9 +146,22 @@ func isServiceMonitorCRDMissing(err error) bool {
 // reconcileCoordinatingService creates the coordinating Service when spec.general.coordinatingService
 // is enabled. When it is disabled, it removes the Service only if this cluster owns it and it is
 // not the headless Service of a node pool named "coordinating", which has the same name.
+// The webhook rejects that pool name while the flag is on, but the webhook can be disabled, so
+// the Service is also skipped here to keep both reconciles from writing the same object.
 func (r *ClusterReconciler) reconcileCoordinatingService(result *reconciler.CombinedResult) {
 	service := builders.NewCoordinatingServiceForCR(r.instance)
 	if r.instance.Spec.General.CoordinatingService {
+		for _, nodePool := range r.instance.Spec.NodePools {
+			if builders.NewHeadlessServiceForNodePool(r.instance, &nodePool).Name != service.Name {
+				continue
+			}
+			if r.recorder != nil {
+				r.recorder.Eventf(r.instance, "Warning", "CoordinatingService",
+					"Skipping Service %s: node pool '%s' uses the same name for its headless Service, rename the pool or disable coordinatingService",
+					service.Name, nodePool.Component)
+			}
+			return
+		}
 		result.CombineErr(ctrl.SetControllerReference(r.instance, service, r.client.Scheme()))
 		result.Combine(r.client.ReconcileResource(service, reconciler.StatePresent))
 		return
