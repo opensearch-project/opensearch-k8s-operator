@@ -10,6 +10,12 @@ helm repo update
 helm install [RELEASE_NAME] opensearch-operator/opensearch-cluster
 ```
 
+Or from the OCI registry (no `helm repo add` needed):
+
+```bash
+helm install [RELEASE_NAME] oci://ghcr.io/opensearch-project/charts/opensearch-cluster --version <chart-version>
+```
+
 The `OpenSearchCluster` is named after the release unless you set `cluster.name`.
 
 ## Uninstall Chart
