@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - Added `spec.dashboards.tls.rotateDaysBeforeExpiry` to rotate the generated Dashboards certificate before it expires (default `30`, `-1` disables).
 - Grant the operator RBAC to manage `networking.k8s.io` NetworkPolicies and set `POD_NAMESPACE` on the manager pod so opt-in cluster NetworkPolicies can allow the operator namespace.
+- Added an `affinity` value to set affinity rules (e.g. pod anti-affinity) on the operator pod.
 ### Changed
 ### Deprecated
 - `OpenSearchISMPolicy`, `OpensearchIndexTemplate`, `OpensearchComponentTemplate`, `OpensearchActionGroup`, `OpensearchSnapshotPolicy`, `OpensearchUserRoleBinding`, `OpensearchTenant`, `OpensearchRole`, and `OpensearchUser` CRDs are deprecated and will be removed in v4. The operator is narrowing its scope to core OpenSearch cluster lifecycle management; manage these auxiliary resources with a tool built for declarative OpenSearch config management (e.g. Terraform) instead.
