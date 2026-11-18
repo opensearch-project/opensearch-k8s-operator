@@ -2076,6 +2076,69 @@ Applying a file replaces the whole corresponding document in the security index:
 
 The checksums of the applied files are recorded in the `status.securityConfig` field of the cluster. To make the operator re-apply all files, delete the `<cluster-name>-securityconfig-update` job and remove `status.securityConfig`, for example with `kubectl edit opensearchcluster <cluster-name> --subresource=status`.
 
+#### Referencing secrets from the securityconfig
+
+The security plugin resolves environment variable placeholders in the securityconfig on every node, each time the node loads the securityconfig from the security index. This lets you keep sensitive values, such as LDAP bind passwords or OpenID Connect client secrets, out of the securityconfig:
+
+- `${env.NAME}` is replaced with the value of the variable `NAME`. `${env.NAME:-default}` falls back to `default` when the variable is not set.
+- `${envbc.NAME}` is replaced with the bcrypt hash of the value, for the `hash` of a user in `internal_users.yml`.
+- `${envbase64.NAME}` is replaced with the base64-decoded value.
+
+Provide the variables with `security.config.env`, which the operator adds to every node pool and to the bootstrap pod. A variable with the same name in the `env` of a node pool or of the bootstrap pod takes precedence. As the securityconfig files then hold no secrets, you can provide them in a ConfigMap with `security.config.securityConfigMap` instead of, or in addition to, `securityConfigSecret`. The files are combined file by file: a file in `securityConfigSecret` takes precedence over a file with the same name in the ConfigMap, and files present in only one of them are all applied. Changes to the ConfigMap are applied like changes to the secret.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: my-cluster-securityconfig
+data:
+  config.yml: |-
+    _meta:
+      type: "config"
+      config_version: 2
+    config:
+      dynamic:
+        authc:
+          ldap:
+            http_enabled: true
+            order: 1
+            http_authenticator:
+              type: basic
+              challenge: false
+            authentication_backend:
+              type: ldap
+              config:
+                hosts: ["ldap.example.com:636"]
+                enable_ssl: true
+                bind_dn: "cn=opensearch,ou=services,dc=example,dc=com"
+                password: "${env.LDAP_BIND_PASSWORD}"
+---
+apiVersion: opensearch.org/v1
+kind: OpenSearchCluster
+metadata:
+  name: my-cluster
+spec:
+  security:
+    config:
+      securityConfigMap:
+        name: my-cluster-securityconfig
+      env:
+        - name: LDAP_BIND_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: ldap-credentials
+              key: password
+# ...
+```
+
+Keep in mind:
+
+- The update job applies the placeholders as they are, and the nodes resolve them. The variables must therefore be set on every node: a node without the variable keeps the placeholder text, so, for example, LDAP authentication fails on that node. Changing `security.config.env` restarts the nodes.
+- Kubernetes resolves `valueFrom` references only when a pod starts. Changing the value in a referenced secret, for example to rotate the LDAP bind password, does not restart the nodes, and running nodes keep the old value. After such a change, have the operator do a rolling restart, for example by changing an annotation of the node pools (see [Configuration changes](#configuration-changes)), and keep in mind that until all of them have restarted, nodes resolve the placeholders to different values.
+- The variables are added after the ones the operator sets, so a variable in `security.config.env` with the same name as one set by the operator overrides it. Avoid reusing those names.
+- The security REST API, and therefore OpenSearch Dashboards, returns the resolved values. Saving the configuration through them writes the resolved values to the security index in place of the placeholders. Manage these files through the operator only.
+- The replacement can be turned off with the `plugins.security.disable_envvar_replacement` setting.
+
 #### Applying the securityconfig without HTTP TLS
 
 Clusters that enable transport TLS but disable HTTP TLS (`security.tls.http.enabled: false`) are supported, for example when TLS is terminated by a service mesh:
