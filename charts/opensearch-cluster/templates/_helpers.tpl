@@ -58,3 +58,87 @@ Create the name of the service account to use
 {{- default "default" .Values.serviceAccount.name }}
 {{- end }}
 {{- end }}
+
+{{/*
+HTTPRoute plus optional BackendTLSPolicy for one service. Takes a dict of root, path (values path for errors),
+name, route, service, port and tlsHostname (default validation.hostname, a SAN of the service certificate).
+*/}}
+{{- define "opensearch-cluster.httpRoute" -}}
+{{- $route := .route -}}
+{{- if not (.root.Capabilities.APIVersions.Has "gateway.networking.k8s.io/v1/HTTPRoute") }}
+{{- fail (printf "%s.enabled is true but the cluster does not serve gateway.networking.k8s.io/v1 HTTPRoute; install the Gateway API CRDs (with helm template, pass --api-versions gateway.networking.k8s.io/v1/HTTPRoute)" .path) }}
+{{- end }}
+{{- if not $route.parentRefs }}
+{{- fail (printf "%s.parentRefs must name at least one Gateway when %s.enabled is true" .path .path) }}
+{{- end }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ .name }}
+  namespace: {{ .root.Release.Namespace }}
+  labels:
+    {{- include "opensearch-cluster.labels" .root | nindent 4 }}
+    {{- with $route.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with $route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- toYaml $route.parentRefs | nindent 4 }}
+  {{- with $route.hostnames }}
+  hostnames:
+    {{- range . }}
+    - {{ . | quote }}
+    {{- end }}
+  {{- end }}
+  rules:
+    - matches:
+        {{- if $route.matches }}
+        {{- toYaml $route.matches | nindent 8 }}
+        {{- else }}
+        - path:
+            type: PathPrefix
+            value: /
+        {{- end }}
+      {{- with $route.filters }}
+      filters:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $route.timeouts }}
+      timeouts:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      backendRefs:
+        - name: {{ .service }}
+          port: {{ .port }}
+{{- $tls := $route.backendTLSPolicy | default dict }}
+{{- if $tls.enabled }}
+{{- $apiVersion := $tls.apiVersion | default "gateway.networking.k8s.io/v1" }}
+{{- if not (.root.Capabilities.APIVersions.Has (printf "%s/BackendTLSPolicy" $apiVersion)) }}
+{{- fail (printf "%s.backendTLSPolicy.enabled is true but the cluster does not serve %s BackendTLSPolicy; install the Gateway API CRDs or set %s.backendTLSPolicy.apiVersion" .path $apiVersion .path) }}
+{{- end }}
+{{- $validation := $tls.validation | default dict }}
+{{- if not (or $validation.caCertificateRefs $validation.wellKnownCACertificates) }}
+{{- fail (printf "%s.backendTLSPolicy.validation must set caCertificateRefs or wellKnownCACertificates" .path) }}
+{{- end }}
+---
+apiVersion: {{ $apiVersion }}
+kind: BackendTLSPolicy
+metadata:
+  name: {{ .name }}
+  namespace: {{ .root.Release.Namespace }}
+  labels:
+    {{- include "opensearch-cluster.labels" .root | nindent 4 }}
+spec:
+  targetRefs:
+    - group: ""
+      kind: Service
+      name: {{ .service }}
+  validation:
+    {{- merge (dict) $validation (dict "hostname" .tlsHostname) | toYaml | nindent 4 }}
+{{- end }}
+{{- end }}

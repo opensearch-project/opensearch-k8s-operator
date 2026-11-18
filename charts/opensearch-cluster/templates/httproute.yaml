@@ -1,0 +1,22 @@
+{{- $clusterName := include "opensearch-cluster.cluster-name" . }}
+{{- $svcPort := .Values.cluster.general.httpPort -}}
+{{- $svcName := .Values.cluster.general.serviceName | default $clusterName }}
+{{- $opensearchHost := printf "%s.%s.svc" $clusterName .Release.Namespace }}
+
+{{- range $i, $pool := .Values.cluster.nodePools }}
+{{- if and $pool.httpRoute $pool.httpRoute.enabled }}
+{{ include "opensearch-cluster.httpRoute" (dict "root" $ "path" (printf "cluster.nodePools[%d].httpRoute" $i) "name" (printf "%s-%s" $clusterName $pool.component) "route" $pool.httpRoute "service" (printf "%s-%s" $svcName $pool.component) "port" $svcPort "tlsHostname" $opensearchHost) }}
+{{- end }}
+{{- end }}
+
+{{- with .Values.cluster.httpRoute.opensearch }}
+{{- if .enabled }}
+{{ include "opensearch-cluster.httpRoute" (dict "root" $ "path" "cluster.httpRoute.opensearch" "name" $clusterName "route" . "service" $svcName "port" $svcPort "tlsHostname" $opensearchHost) }}
+{{- end }}
+{{- end }}
+
+{{- with .Values.cluster.httpRoute.dashboards }}
+{{- if and .enabled $.Values.cluster.dashboards.enable }}
+{{ include "opensearch-cluster.httpRoute" (dict "root" $ "path" "cluster.httpRoute.dashboards" "name" (printf "%s-dashboards" $clusterName) "route" . "service" (printf "%s-dashboards" $svcName) "port" 5601 "tlsHostname" (printf "%s-dashboards.%s.svc" $clusterName $.Release.Namespace)) }}
+{{- end }}
+{{- end }}

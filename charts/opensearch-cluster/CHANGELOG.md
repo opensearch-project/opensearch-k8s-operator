@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 ### Added
 - `cluster.general.networkPolicy` to opt in to an operator-managed, ingress-only NetworkPolicy (`enable: false` by default).
+- `cluster.httpRoute` and `cluster.nodePools[].httpRoute` to opt in to Gateway API HTTPRoutes, with optional BackendTLSPolicies, for the OpenSearch, Dashboards and per-nodePool services, as an alternative to the Ingress resources (#1441).
 ### Changed
 ### Deprecated
 ### Removed

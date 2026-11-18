@@ -328,6 +328,17 @@ cluster:
       #         - opensearch-data.example.com
       #       secretName: tls-secret
 
+      # -- Per-nodePool Gateway API HTTPRoute configuration. Creates a separate HTTPRoute targeting this nodePool's service.
+      # Takes the same keys as `cluster.httpRoute.opensearch`.
+      httpRoute:
+        enabled: false
+      #   parentRefs:
+      #     - name: example-gateway
+      #       namespace: default
+      #       sectionName: https
+      #   hostnames:
+      #     - opensearch-data.example.com
+
       # -- These containers will be deployed as sidecars in the same pod as the OpenSearch container
       sidecarContainers: []
       # Example configurations:
@@ -508,6 +519,108 @@ cluster:
       #  - hosts:
       #      - example.com
       #    secretName: tls-secret
+
+  # Gateway API HTTPRoute configuration. Opt-in alternative to the Ingress
+  # resources above for clusters that expose services through the Gateway API.
+  httpRoute:
+    opensearch:
+      # -- Enable a Gateway API HTTPRoute for the Opensearch service
+      enabled: false
+
+      # -- Opensearch HTTPRoute parentRefs (the Gateway(s) the route attaches to). Required when enabled.
+      parentRefs: []
+      #  - name: example-gateway
+      #    namespace: default
+      #    sectionName: https
+
+      # -- Opensearch HTTPRoute hostnames
+      hostnames: []
+      #  - opensearch.example.com
+
+      # -- Opensearch HTTPRoute extra labels
+      labels: {}
+
+      # -- Opensearch HTTPRoute annotations
+      annotations: {}
+
+      # -- Opensearch HTTPRoute rule matches. Defaults to a single PathPrefix `/` match when empty.
+      matches: []
+      #  - path:
+      #      type: PathPrefix
+      #      value: /
+
+      # -- Opensearch HTTPRoute rule filters (e.g. RequestHeaderModifier)
+      filters: []
+
+      # -- Opensearch HTTPRoute rule timeouts
+      timeouts: {}
+      #  request: 120s
+      #  backendRequest: 120s
+
+      backendTLSPolicy:
+        # -- Render a BackendTLSPolicy so the Gateway reaches the Opensearch service over HTTPS. Port 9200 serves HTTPS while `cluster.security.tls.http` is enabled (the default), and the route returns 502 without this policy.
+        enabled: false
+
+        # -- BackendTLSPolicy apiVersion. Use gateway.networking.k8s.io/v1alpha3 with Gateway API v1.2 and v1.3.
+        apiVersion: gateway.networking.k8s.io/v1
+
+        # -- BackendTLSPolicy validation. Requires caCertificateRefs (e.g. a ConfigMap with the cluster CA under ca.crt) or
+        # wellKnownCACertificates. hostname defaults to `<cluster>.<namespace>.svc`, a SAN of the operator-generated certificate.
+        validation: {}
+        #  caCertificateRefs:
+        #    - group: ""
+        #      kind: ConfigMap
+        #      name: opensearch-ca
+
+    # Dashboards HTTPRoute configuration. Rendered only when `cluster.dashboards.enable` is true.
+    dashboards:
+      # -- Enable a Gateway API HTTPRoute for the dashboards service
+      enabled: false
+
+      # -- dashboards HTTPRoute parentRefs (the Gateway(s) the route attaches to). Required when enabled.
+      parentRefs: []
+      #  - name: example-gateway
+      #    namespace: default
+      #    sectionName: https
+
+      # -- dashboards HTTPRoute hostnames
+      hostnames: []
+      #  - dashboards.example.com
+
+      # -- dashboards HTTPRoute extra labels
+      labels: {}
+
+      # -- dashboards HTTPRoute annotations
+      annotations: {}
+
+      # -- dashboards HTTPRoute rule matches. Defaults to a single PathPrefix `/` match when empty.
+      matches: []
+      #  - path:
+      #      type: PathPrefix
+      #      value: /
+
+      # -- dashboards HTTPRoute rule filters (e.g. RequestHeaderModifier)
+      filters: []
+
+      # -- dashboards HTTPRoute rule timeouts
+      timeouts: {}
+      #  request: 120s
+      #  backendRequest: 120s
+
+      backendTLSPolicy:
+        # -- Render a BackendTLSPolicy so the Gateway reaches the dashboards service over HTTPS. Needed when `cluster.dashboards.tls.enable` is true.
+        enabled: false
+
+        # -- BackendTLSPolicy apiVersion. Use gateway.networking.k8s.io/v1alpha3 with Gateway API v1.2 and v1.3.
+        apiVersion: gateway.networking.k8s.io/v1
+
+        # -- BackendTLSPolicy validation. Requires caCertificateRefs (e.g. a ConfigMap with the cluster CA under ca.crt) or
+        # wellKnownCACertificates. hostname defaults to `<cluster>-dashboards.<namespace>.svc`, a SAN of the operator-generated certificate.
+        validation: {}
+        #  caCertificateRefs:
+        #    - group: ""
+        #      kind: ConfigMap
+        #      name: opensearch-ca
 
 # -- List of OpensearchRole. Deprecated and removed in operator v4. See docs/userguide/deprecated-crds-migration.md.
 roles: []

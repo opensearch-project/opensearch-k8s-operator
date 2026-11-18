@@ -38,7 +38,7 @@ spec:
   {{- if .Values.cluster.nodePools }}
   nodePools:
     {{- range .Values.cluster.nodePools }}
-    - {{ omit . "ingress" | toYaml | nindent 6 | trim }}
+    - {{ omit . "ingress" "httpRoute" | toYaml | nindent 6 | trim }}
     {{- end }}
   {{- end }}
   {{- with .Values.cluster.security }}
