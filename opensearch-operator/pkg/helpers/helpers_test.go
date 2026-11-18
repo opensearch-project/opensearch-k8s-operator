@@ -995,7 +995,10 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 			}, nil).Once()
 			expectRemainingLookups()
 
-			secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, adminCreds)
+			source, err := LoadSecurityConfigSource(mockClient, cr)
+			Expect(err).NotTo(HaveOccurred())
+
+			secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, adminCreds, source)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(secret.Data["roles.yml"])).To(Equal("from-configmap"))
 			Expect(string(secret.Data["tenants.yml"])).To(Equal("from-binary-data"))
@@ -1012,7 +1015,10 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 			}, nil).Once()
 			expectRemainingLookups()
 
-			secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, adminCreds)
+			source, err := LoadSecurityConfigSource(mockClient, cr)
+			Expect(err).NotTo(HaveOccurred())
+
+			secret, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, adminCreds, source)
 			Expect(err).NotTo(HaveOccurred())
 			Expect(string(secret.Data["roles.yml"])).To(Equal("from-secret"))
 			Expect(string(secret.Data["tenants.yml"])).To(Equal("from-configmap"))
@@ -1021,7 +1027,7 @@ var _ = Describe("BuildGeneratedSecurityConfigSecret", func() {
 		It("returns an error naming the configmap when it does not exist", func() {
 			mockClient.EXPECT().GetConfigMap("sec-cm", "cmtest").Return(corev1.ConfigMap{}, notFound).Once()
 
-			_, err := BuildGeneratedSecurityConfigSecret(mockClient, cr, adminCreds)
+			_, err := LoadSecurityConfigSource(mockClient, cr)
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring(`securityConfigMap "sec-cm"`))
 			Expect(k8serrors.IsNotFound(err)).To(BeTrue())
