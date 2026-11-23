@@ -18,6 +18,7 @@ package webhook
 
 import (
 	"context"
+	"strings"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -105,6 +106,58 @@ var _ = Describe("OpenSearchClusterValidator", func() {
 			Expect(err).To(HaveOccurred())
 			Expect(err.Error()).To(ContainSubstring("duplicate node pool component name 'masters'"))
 			Expect(warnings).To(BeEmpty())
+		})
+
+		Describe("additional node pool services", func() {
+			newCluster := func(pools ...opensearchv1.NodePool) *opensearchv1.OpenSearchCluster {
+				return &opensearchv1.OpenSearchCluster{
+					ObjectMeta: metav1.ObjectMeta{Name: "test-cluster", Namespace: "default"},
+					Spec: opensearchv1.ClusterSpec{
+						General: opensearchv1.GeneralConfig{Version: "2.19.4", ServiceName: "test-cluster"},
+						NodePools: append([]opensearchv1.NodePool{
+							{Component: "masters", Replicas: 3, Roles: []string{"cluster_manager"}},
+						}, pools...),
+					},
+				}
+			}
+			withService := &opensearchv1.AdditionalServiceConfig{Create: true}
+
+			It("should allow an additional service", func() {
+				_, err := validator.ValidateCreate(ctx, newCluster(
+					opensearchv1.NodePool{Component: "ingest", Replicas: 2, Roles: []string{"ingest"}, Service: withService}))
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reject an additional service named like another pool's headless service", func() {
+				cluster := newCluster(
+					opensearchv1.NodePool{Component: "ingest", Replicas: 2, Roles: []string{"ingest"}, Service: withService},
+					opensearchv1.NodePool{Component: "ingest-lb", Replicas: 2, Roles: []string{"ingest"}})
+				_, err := validator.ValidateCreate(ctx, cluster)
+				Expect(err).To(MatchError(ContainSubstring("'test-cluster-ingest-lb' is already the headless service of node pool 'ingest-lb'")))
+				_, err = validator.ValidateUpdate(ctx, newCluster(), cluster)
+				Expect(err).To(MatchError(ContainSubstring("already the headless service")))
+			})
+
+			It("should allow that pair without service.create", func() {
+				_, err := validator.ValidateCreate(ctx, newCluster(
+					opensearchv1.NodePool{Component: "ingest", Replicas: 2, Roles: []string{"ingest"}},
+					opensearchv1.NodePool{Component: "ingest-lb", Replicas: 2, Roles: []string{"ingest"}}))
+				Expect(err).NotTo(HaveOccurred())
+			})
+
+			It("should reject an additional service name longer than 63 characters", func() {
+				component := strings.Repeat("c", 63-len("test-cluster--lb")+1)
+				_, err := validator.ValidateCreate(ctx, newCluster(
+					opensearchv1.NodePool{Component: component, Replicas: 2, Roles: []string{"ingest"}, Service: withService}))
+				Expect(err).To(MatchError(ContainSubstring("longer than 63 characters")))
+			})
+
+			It("should allow an additional service name of exactly 63 characters", func() {
+				component := strings.Repeat("c", 63-len("test-cluster--lb"))
+				_, err := validator.ValidateCreate(ctx, newCluster(
+					opensearchv1.NodePool{Component: component, Replicas: 2, Roles: []string{"ingest"}, Service: withService}))
+				Expect(err).NotTo(HaveOccurred())
+			})
 		})
 
 		It("should reject transport TLS enabled without generate or secret", func() {
