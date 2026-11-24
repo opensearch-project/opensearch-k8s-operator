@@ -112,6 +112,11 @@ var _ = Describe("Builders", func() {
 			result := NewBootstrapPod(&clusterObject, nil, nil)
 			Expect(len(result.Spec.InitContainers)).To(Equal(1))
 		})
+		It("should disable service links on the bootstrap pod", func() {
+			clusterObject := ClusterDescWithVersion("2.2.1")
+			result := NewBootstrapPod(&clusterObject, nil, nil)
+			Expect(result.Spec.EnableServiceLinks).To(Equal(ptr.To(false)))
+		})
 		It("should skip the init container as SKIP_INIT_CONTAINER is set", func() {
 			_ = os.Setenv(helpers.SkipInitContainerEnvVariable, "true")
 			clusterObject := ClusterDescWithVersion("2.2.1")
