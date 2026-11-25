@@ -1468,6 +1468,8 @@ func NewBootstrapPod(
 			HostAliases:       hostAliases,
 			PriorityClassName: cr.Spec.Bootstrap.PriorityClassName,
 			HostNetwork:       cr.Spec.General.HostNetwork,
+			// The bootstrap pod does not use the Service environment variables, so do not inject them.
+			EnableServiceLinks: ptr.To(false),
 		},
 	}
 
